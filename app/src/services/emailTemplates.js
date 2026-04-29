@@ -309,7 +309,7 @@ ${order && order.orderType === 'exchange_cloning' ? `
 
 ${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
 
-${cgvUrl ? `<div style="margin-top:14px;font-size:12px;line-height:1.6;color:#64748b;">CGV : <a href="${escapeHtml(cgvUrl)}" style="color:#ec1313;text-decoration:none;font-weight:800;">${escapeHtml(cgvUrl)}</a></div>` : ''}
+${cgvUrl ? `<div style="margin-top:14px;font-size:12px;line-height:1.6;color:#64748b;"><a href="${escapeHtml(cgvUrl)}" style="color:#ec1313;text-decoration:none;font-weight:800;">Consulter nos conditions générales de vente</a></div>` : ''}
 
 <div style="margin-top:16px;font-size:12px;line-height:1.6;color:#64748b;">
   Si vous avez une question, répondez directement à cet email.
@@ -521,7 +521,7 @@ ${moreCount ? `<div style="margin-top:10px;font-size:12px;color:#64748b;">+ ${es
 
 ${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
 
-${cgvUrl ? `<div style="margin-top:14px;font-size:12px;line-height:1.6;color:#64748b;">CGV : <a href="${escapeHtml(cgvUrl)}" style="color:#ec1313;text-decoration:none;font-weight:800;">${escapeHtml(cgvUrl)}</a></div>` : ''}
+${cgvUrl ? `<div style="margin-top:14px;font-size:12px;line-height:1.6;color:#64748b;"><a href="${escapeHtml(cgvUrl)}" style="color:#ec1313;text-decoration:none;font-weight:800;">Consulter nos conditions générales de vente</a></div>` : ''}
 
 <div style="margin-top:14px;font-size:12px;line-height:1.6;color:#64748b;">
   Si le suivi met quelques heures à apparaître, c’est normal.
@@ -817,6 +817,7 @@ function buildAbandonedCartReminder1({ cart, baseUrl } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
+  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
 
   const itemsText = renderCartItemRowsSimple(items);
 
@@ -834,17 +835,22 @@ function buildAbandonedCartReminder1({ cart, baseUrl } = {}) {
   <p>Si vous avez une question sur une pi\u00e8ce ou la compatibilit\u00e9 avec votre v\u00e9hicule, r\u00e9pondez \u00e0 cet email, je vous r\u00e9ponds rapidement.</p>
   <p>Bonne journ\u00e9e,<br /><strong>L'\u00e9quipe ${brand.NAME}</strong><br />
   <span style="font-size:12px;color:#64748b;">${brand.PHONE}</span></p>
-</div>`;
+</div>
+${unsubscribeUrl ? `<div style="margin-top:24px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:11px;color:#94a3b8;line-height:1.5;text-align:center;">
+  Vous recevez cet email suite \u00e0 un panier abandonn\u00e9 sur ${brand.NAME}.<br/>
+  <a href="${escapeHtml(unsubscribeUrl)}" style="color:#94a3b8;text-decoration:underline;">Se d\u00e9sinscrire des emails marketing</a>
+</div>` : ''}`;
 
   return {
     subject,
+    unsubscribeUrl,
     html: renderEmailLayout({
       title: subject,
       preheader: '',
       bodyHtml,
       baseUrl,
     }),
-    text: `${greeting},\n\nJe me permets de revenir vers vous car votre commande n'a pas \u00e9t\u00e9 finalis\u00e9e.\n\nReprenez votre commande : ${recoveryUrl}\n\nTotal : ${formatEuro(totalAmountCents)}\n\nL'\u00e9quipe ${brand.NAME}\n${brand.PHONE}`,
+    text: `${greeting},\n\nJe me permets de revenir vers vous car votre commande n'a pas \u00e9t\u00e9 finalis\u00e9e.\n\nReprenez votre commande : ${recoveryUrl}\n\nTotal : ${formatEuro(totalAmountCents)}\n\nL'\u00e9quipe ${brand.NAME}\n${brand.PHONE}${unsubscribeUrl ? `\n\nSe d\u00e9sinscrire : ${unsubscribeUrl}` : ''}`,
   };
 }
 
@@ -856,6 +862,7 @@ function buildAbandonedCartReminder2({ cart, baseUrl } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
+  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
 
   const itemsText = renderCartItemRowsSimple(items);
 
@@ -873,17 +880,22 @@ function buildAbandonedCartReminder2({ cart, baseUrl } = {}) {
   <p>Si vous h\u00e9sitez sur la compatibilit\u00e9 ou si vous avez besoin d'un conseil, n'h\u00e9sitez pas \u00e0 me r\u00e9pondre ou \u00e0 nous appeler.</p>
   <p>Cordialement,<br /><strong>L'\u00e9quipe ${brand.NAME}</strong><br />
   <span style="font-size:12px;color:#64748b;">${brand.PHONE}</span></p>
-</div>`;
+</div>
+${unsubscribeUrl ? `<div style="margin-top:24px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:11px;color:#94a3b8;line-height:1.5;text-align:center;">
+  Vous recevez cet email suite \u00e0 un panier abandonn\u00e9 sur ${brand.NAME}.<br/>
+  <a href="${escapeHtml(unsubscribeUrl)}" style="color:#94a3b8;text-decoration:underline;">Se d\u00e9sinscrire des emails marketing</a>
+</div>` : ''}`;
 
   return {
     subject,
+    unsubscribeUrl,
     html: renderEmailLayout({
       title: subject,
       preheader: '',
       bodyHtml,
       baseUrl,
     }),
-    text: `${greeting},\n\nLes pi\u00e8ces de votre panier sont en stock limit\u00e9. Je ne peux pas garantir leur disponibilit\u00e9.\n\nFinalisez votre commande : ${recoveryUrl}\n\nTotal : ${formatEuro(totalAmountCents)}\n\nL'\u00e9quipe ${brand.NAME}\n${brand.PHONE}`,
+    text: `${greeting},\n\nLes pi\u00e8ces de votre panier sont en stock limit\u00e9. Je ne peux pas garantir leur disponibilit\u00e9.\n\nFinalisez votre commande : ${recoveryUrl}\n\nTotal : ${formatEuro(totalAmountCents)}\n\nL'\u00e9quipe ${brand.NAME}\n${brand.PHONE}${unsubscribeUrl ? `\n\nSe d\u00e9sinscrire : ${unsubscribeUrl}` : ''}`,
   };
 }
 
@@ -895,6 +907,7 @@ function buildAbandonedCartReminder3({ cart, baseUrl, promoCode } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
+  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
   const safePromoCode = getTrimmedString(promoCode);
 
   const itemsText = renderCartItemRowsSimple(items);
@@ -918,17 +931,22 @@ function buildAbandonedCartReminder3({ cart, baseUrl, promoCode } = {}) {
   <p>Si vous avez d\u00e9cid\u00e9 de ne pas commander, pas de souci du tout. Bonne continuation !</p>
   <p>Cordialement,<br /><strong>L'\u00e9quipe ${brand.NAME}</strong><br />
   <span style="font-size:12px;color:#64748b;">${brand.PHONE}</span></p>
-</div>`;
+</div>
+${unsubscribeUrl ? `<div style="margin-top:24px;padding-top:14px;border-top:1px solid #e5e7eb;font-size:11px;color:#94a3b8;line-height:1.5;text-align:center;">
+  Vous recevez cet email suite \u00e0 un panier abandonn\u00e9 sur ${brand.NAME}.<br/>
+  <a href="${escapeHtml(unsubscribeUrl)}" style="color:#94a3b8;text-decoration:underline;">Se d\u00e9sinscrire des emails marketing</a>
+</div>` : ''}`;
 
   return {
     subject,
+    unsubscribeUrl,
     html: renderEmailLayout({
       title: subject,
       preheader: '',
       bodyHtml,
       baseUrl,
     }),
-    text: `${greeting},\n\nDernier message : votre panier va \u00eatre vid\u00e9 prochainement.${safePromoCode ? `\n\nCode promo 5% : ${safePromoCode}` : ''}\n\nLien : ${recoveryUrl}\n\nTotal : ${formatEuro(totalAmountCents)}\n\nL'\u00e9quipe ${brand.NAME}\n${brand.PHONE}`,
+    text: `${greeting},\n\nDernier message : votre panier va \u00eatre vid\u00e9 prochainement.${safePromoCode ? `\n\nCode promo 5% : ${safePromoCode}` : ''}\n\nLien : ${recoveryUrl}\n\nTotal : ${formatEuro(totalAmountCents)}\n\nL'\u00e9quipe ${brand.NAME}\n${brand.PHONE}${unsubscribeUrl ? `\n\nSe d\u00e9sinscrire : ${unsubscribeUrl}` : ''}`,
   };
 }
 

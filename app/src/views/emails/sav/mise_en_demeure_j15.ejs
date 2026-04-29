@@ -1,5 +1,5 @@
 <% const body = `
-  <p>Bonjour,</p>
+  <p>Bonjour <strong>${(ticket.client && ticket.client.nom) || ''}</strong>,</p>
   <p>Nous vous avons relancé à plusieurs reprises sans réponse concernant le règlement de la facture liée au dossier <strong>${ticket.numero}</strong> (149 € TTC).</p>
   <p><strong>La présente vaut mise en demeure de payer sous 8 jours.</strong></p>
   <p>À défaut de règlement à l'issue de ce délai, et conformément à <strong>l'article 2286 du Code civil</strong>, nous exercerons notre <strong>droit de rétention</strong> sur la pièce restée en notre possession jusqu'au paiement complet de notre créance.</p>

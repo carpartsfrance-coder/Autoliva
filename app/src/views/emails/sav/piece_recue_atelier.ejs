@@ -1,5 +1,5 @@
 <% const body = `
-  <p>Bonjour,</p>
+  <p>Bonjour <strong>${(ticket.client && ticket.client.nom) || ''}</strong>,</p>
   <p>Bonne nouvelle : <strong>votre pièce vient d'arriver</strong> dans notre atelier.</p>
   <p>Nous lançons l'analyse sur banc dans les plus brefs délais. Vous recevrez le rapport complet dès qu'elle sera terminée — au plus tard sous 5 jours ouvrés.</p>
 ` %>
