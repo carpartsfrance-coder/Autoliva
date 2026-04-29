@@ -79,6 +79,12 @@
         <span class="material-symbols-outlined">directions_car</span>
         <span class="sidebar-link-text">Véhicules</span>
       </a>
+      <% if (typeof isOwner !== 'undefined' && isOwner) { %>
+        <a class="sidebar-link <%= activeKey === 'vehicle-landings' ? 'sidebar-link--active' : '' %>" href="/admin/landings-vehicule" title="SEO landings véhicule">
+          <span class="material-symbols-outlined">tune</span>
+          <span class="sidebar-link-text">SEO landings</span>
+        </a>
+      <% } %>
     </div>
 
     <div class="sidebar-separator"></div>

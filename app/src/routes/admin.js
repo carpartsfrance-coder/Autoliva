@@ -191,6 +191,13 @@ router.post('/categories/:categoryId', requireAdminAuth, adminController.postAdm
 router.post('/categories/:categoryId/toggle', requireAdminAuth, adminController.postAdminToggleCategory);
 router.post('/categories/:categoryId/supprimer', requireAdminAuth, adminController.postAdminDeleteCategory);
 
+/* SEO landings véhicule (/pieces-auto/:make[/:model[/:type]]) */
+const adminVehicleLandingController = require('../controllers/adminVehicleLandingController');
+router.get('/landings-vehicule', requireAdminAuth, requireAbility('settings.site'), adminVehicleLandingController.listLandings);
+router.get('/landings-vehicule/:id', requireAdminAuth, requireAbility('settings.site'), adminVehicleLandingController.getLandingEdit);
+router.post('/landings-vehicule', requireAdminAuth, requireAbility('settings.site'), adminVehicleLandingController.postLandingSave);
+router.post('/landings-vehicule/:id/supprimer', requireAdminAuth, requireAbility('settings.site'), adminVehicleLandingController.postLandingDelete);
+
 router.get('/vehicules', requireAdminAuth, adminController.getAdminVehicleMakesPage);
 router.post('/vehicules', requireAdminAuth, adminController.postAdminCreateVehicleMake);
 router.post('/vehicules/:makeId', requireAdminAuth, adminController.postAdminUpdateVehicleMake);

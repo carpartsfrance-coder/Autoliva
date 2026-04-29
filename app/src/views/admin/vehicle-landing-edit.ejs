@@ -1,0 +1,100 @@
+<%- include('./partials/head') %>
+<%- include('./partials/sidebar', { active: 'vehicle-landings' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8 max-w-4xl">
+
+    <a class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-primary mb-4" href="/admin/landings-vehicule">
+      <span class="material-symbols-outlined text-base">arrow_back</span>
+      Retour à la liste
+    </a>
+
+    <div class="text-2xl md:text-3xl font-semibold text-slate-900">
+      <%= isNew ? 'Nouvelle landing véhicule' : 'Éditer landing véhicule' %>
+    </div>
+    <% if (!isNew && landing) { %>
+      <div class="mt-1 text-sm text-slate-500">
+        Combo : <strong><%= landing.make %><% if (landing.model) { %> / <%= landing.model %><% } %><% if (landing.partType) { %> / <%= landing.partType %><% } %></strong>
+        — <a class="text-primary hover:underline" href="/pieces-auto/<%= landing.make %><% if (landing.model) { %>/<%= landing.model %><% } %><% if (landing.partType) { %>/<%= landing.partType %><% } %>" target="_blank" rel="noopener">Voir la page publique</a>
+      </div>
+    <% } %>
+
+    <form class="mt-8 bg-white rounded-2xl border border-slate-200 p-6 space-y-6" action="/admin/landings-vehicule" method="POST">
+      <% if (!isNew && landing) { %>
+        <input type="hidden" name="id" value="<%= landing._id %>" />
+      <% } %>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-widest text-slate-600 mb-2">Marque <span class="text-red-500">*</span></label>
+          <select class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" name="make" required <%= !isNew ? 'disabled' : '' %>>
+            <option value="">— Choisir —</option>
+            <% (makes || []).forEach((m) => { %>
+              <option value="<%= m.slug %>" <%= (landing && landing.make === m.slug) ? 'selected' : '' %>><%= m.name %></option>
+            <% }) %>
+          </select>
+          <% if (!isNew && landing) { %>
+            <input type="hidden" name="make" value="<%= landing.make %>" />
+            <div class="text-[11px] text-slate-400 mt-1">La marque ne peut pas être modifiée après création.</div>
+          <% } %>
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-widest text-slate-600 mb-2">Modèle (optionnel)</label>
+          <input type="text" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-mono" name="model" placeholder="ex: q5" value="<%= landing && landing.model ? landing.model : '' %>" <%= !isNew ? 'readonly' : '' %> />
+          <div class="text-[11px] text-slate-400 mt-1">Slug du modèle (minuscules + tirets). Vide = landing marque seulement.</div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold uppercase tracking-widest text-slate-600 mb-2">Type pièce (optionnel)</label>
+          <select class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" name="partType" <%= !isNew ? 'disabled' : '' %>>
+            <option value="">— Toutes —</option>
+            <% (categories || []).forEach((c) => { %>
+              <option value="<%= c.slug %>" <%= (landing && landing.partType === c.slug) ? 'selected' : '' %>><%= c.name %></option>
+            <% }) %>
+          </select>
+          <% if (!isNew && landing) { %>
+            <input type="hidden" name="partType" value="<%= landing.partType || '' %>" />
+          <% } %>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold uppercase tracking-widest text-slate-600 mb-2">Meta title (override)</label>
+        <input type="text" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" name="metaTitle" maxlength="80" placeholder="ex: Boîte de vitesses Audi A4 reconditionnée — Livraison 24h" value="<%= landing && landing.metaTitle ? landing.metaTitle : '' %>" />
+        <div class="text-[11px] text-slate-400 mt-1">≤ 60 caractères pour éviter la troncature SERP. Vide = title auto-généré.</div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold uppercase tracking-widest text-slate-600 mb-2">Meta description (override)</label>
+        <textarea class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" name="metaDescription" rows="2" maxlength="200" placeholder="ex: Boîte de vitesses Audi A4 reconditionnée et garantie 24 mois. Testée sur banc, livraison express. Paiement 3x/4x sans frais."><%= landing && landing.metaDescription ? landing.metaDescription : '' %></textarea>
+        <div class="text-[11px] text-slate-400 mt-1">150-160 caractères idéal. Inclure un signal de confiance (garantie, livraison...).</div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold uppercase tracking-widest text-slate-600 mb-2">H1 override</label>
+        <input type="text" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" name="h1Override" maxlength="120" placeholder="ex: Boîte de vitesses pour Audi A4 reconditionnée" value="<%= landing && landing.h1Override ? landing.h1Override : '' %>" />
+        <div class="text-[11px] text-slate-400 mt-1">Vide = H1 auto-généré. Remplir si tu veux mettre une formulation différente.</div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold uppercase tracking-widest text-slate-600 mb-2">Texte SEO (HTML)</label>
+        <textarea class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-mono" name="seoText" rows="14" placeholder="HTML autorisé. Idéalement 200-400 mots. Mentionner la pièce, la marque, le modèle, les motorisations compatibles, l'utilisation typique de cette pièce, etc."><%= landing && landing.seoText ? landing.seoText : '' %></textarea>
+        <div class="text-[11px] text-slate-400 mt-1">
+          Affiché en bas de la page publique sous H2. Tags HTML simples autorisés (&lt;p&gt;, &lt;strong&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;a href&gt;).
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+        <input type="checkbox" id="isActive" name="isActive" value="true" <%= (!landing || landing.isActive !== false) ? 'checked' : '' %> class="rounded border-slate-300 text-primary focus:ring-primary" />
+        <label for="isActive" class="text-sm font-semibold text-slate-700">Landing active (utilisée par le site)</label>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+        <a class="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-5 py-3 text-sm font-bold text-slate-700" href="/admin/landings-vehicule">Annuler</a>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-primary text-white px-5 py-3 text-sm font-bold hover:bg-red-700">
+          <span class="material-symbols-outlined text-base">save</span>
+          Enregistrer
+        </button>
+      </div>
+    </form>
+  </div>
+</main>

@@ -1,0 +1,96 @@
+<%- include('./partials/head') %>
+<%- include('./partials/sidebar', { active: 'vehicle-landings' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+
+    <div class="flex items-start justify-between gap-4 flex-wrap">
+      <div>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Landings véhicule (SEO)</div>
+        <div class="mt-1 text-sm text-slate-500">Édite le contenu SEO custom des pages /pieces-auto/:make[/:model[/:type]] pour booster le ranking sur les combos stratégiques.</div>
+      </div>
+      <a class="inline-flex items-center gap-2 rounded-xl bg-primary text-white px-4 py-2 text-sm font-bold hover:bg-red-700"
+         href="/admin/landings-vehicule/new">
+        <span class="material-symbols-outlined text-base">add</span>
+        Nouvelle landing
+      </a>
+    </div>
+
+    <% if (typeof successMessage !== 'undefined' && successMessage) { %>
+      <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+        <div class="font-bold">OK</div><div class="mt-1 text-sm"><%= successMessage %></div>
+      </div>
+    <% } %>
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Erreur</div><div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <div class="mt-8 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <% if (!landings || !landings.length) { %>
+        <div class="p-10 text-center">
+          <div class="text-base font-semibold text-slate-700">Aucune landing custom configurée</div>
+          <div class="mt-2 text-sm text-slate-500">
+            Sans landing custom, les pages /pieces-auto utilisent un texte SEO auto-généré.
+            Crée une landing pour les couples stratégiques (Audi, BMW, Renault, Peugeot...) pour booster le ranking.
+          </div>
+        </div>
+      <% } else { %>
+        <table class="w-full text-left">
+          <thead class="bg-slate-50 text-xs font-bold uppercase tracking-wider text-slate-500">
+            <tr>
+              <th class="px-6 py-3">Combo</th>
+              <th class="px-6 py-3">Meta title</th>
+              <th class="px-6 py-3">Status</th>
+              <th class="px-6 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="text-sm">
+            <% landings.forEach((l) => { %>
+              <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <td class="px-6 py-4">
+                  <div class="font-bold text-slate-900"><%= l.label %></div>
+                  <a class="text-xs text-slate-500 hover:text-primary" href="<%= l.previewUrl %>" target="_blank" rel="noopener">
+                    <%= l.previewUrl %>
+                  </a>
+                </td>
+                <td class="px-6 py-4 text-slate-600">
+                  <% if (l.metaTitle) { %>
+                    <span class="block max-w-md truncate"><%= l.metaTitle %></span>
+                  <% } else { %>
+                    <span class="text-slate-400 italic">auto-généré</span>
+                  <% } %>
+                </td>
+                <td class="px-6 py-4">
+                  <% if (l.isActive) { %>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Actif</span>
+                  <% } else { %>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">Inactif</span>
+                  <% } %>
+                </td>
+                <td class="px-6 py-4 text-right">
+                  <a class="text-xs font-bold text-primary hover:underline mr-4" href="/admin/landings-vehicule/<%= l._id %>">Éditer</a>
+                  <form class="inline-block" action="/admin/landings-vehicule/<%= l._id %>/supprimer" method="POST"
+                        onsubmit="return confirm('Supprimer cette landing ? Le texte SEO custom sera perdu, la page reviendra au texte auto-généré.');">
+                    <button type="submit" class="text-xs font-bold text-red-600 hover:underline">Supprimer</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+    </div>
+
+    <div class="mt-8 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900">
+      <div class="font-bold mb-1">💡 Conseils SEO</div>
+      <ul class="list-disc pl-5 space-y-1 text-blue-800">
+        <li>Cible en priorité les <strong>"money pages"</strong> : combos make+model+type (ex: <code>boîte de vitesses + audi + a4</code>) — c'est là que tu convertis le mieux.</li>
+        <li>Le seoText doit faire 200-400 mots, mentionner la pièce, la marque, le modèle, et inclure des mots-clés long-tail.</li>
+        <li>Le meta title doit faire ≤ 60 caractères et inclure la marque + le mot-clé principal.</li>
+        <li>La meta description doit faire 150-160 caractères et inclure un CTA implicite (ex: "Livraison 24-48h", "Garantie 2 ans").</li>
+      </ul>
+    </div>
+  </div>
+</main>
