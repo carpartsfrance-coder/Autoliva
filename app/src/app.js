@@ -399,8 +399,10 @@ app.use((req, res, next) => {
 
   const pathOnly = typeof req.path === 'string' ? req.path : '';
   const noIndex = /^\/(admin|panier|commande|compte)(\/|$)/.test(pathOnly);
-  const siteUrl = (process.env.SITE_URL || '').toLowerCase();
-  const isProduction = process.env.NODE_ENV === 'production' && siteUrl.includes('carpartsfrance.fr');
+  /* En production on indexe par défaut. FORCE_NOINDEX=true permet de forcer
+   * le noindex sur un environnement de prod (preview, staging déguisé en prod,
+   * domaine de test). Ce check est géré plus bas (ligne ~406). */
+  const isProduction = process.env.NODE_ENV === 'production';
   res.locals.metaRobots = noIndex ? 'noindex, nofollow' : (isProduction ? 'index, follow' : 'noindex, nofollow');
 
   if (process.env.FORCE_NOINDEX === 'true') {

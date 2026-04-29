@@ -29,7 +29,7 @@
   "footer.newsletter": "Newsletter",
   "footer.newsletterDesc": "Recevez nos dernières offres techniques et promotions directement dans votre boîte mail.",
   "footer.subscribe": "S'inscrire",
-  "footer.copyright": "Copyright %year% © CAR PARTS FRANCE. Tous droits réservés.",
+  "footer.copyright": "Copyright %year% © %brandName%. Tous droits réservés.",
   "footer.privacy": "Politique de confidentialité",
   "footer.legal": "Mentions légales",
   "footer.cgu": "CGU",

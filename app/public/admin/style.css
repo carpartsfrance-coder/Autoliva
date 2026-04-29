@@ -1815,6 +1815,10 @@ input:where([type='file']):focus {
   height: 1rem;
 }
 
+.h-48 {
+  height: 12rem;
+}
+
 .h-5 {
   height: 1.25rem;
 }
@@ -4650,6 +4654,10 @@ aside nav a {
 
 .hover\:bg-primary\/10:hover {
   background-color: rgb(211 47 47 / 0.1);
+}
+
+.hover\:bg-primary\/5:hover {
+  background-color: rgb(211 47 47 / 0.05);
 }
 
 .hover\:bg-purple-100:hover {
