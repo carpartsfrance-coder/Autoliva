@@ -25,7 +25,9 @@ const EMAIL_TYPES = {
 };
 
 function getBaseUrl() {
-  return getSiteUrlFromEnv();
+  // Fallback to brand.SITE_URL if no SITE_URL env (post-rebrand multi-domain)
+  const brand = require('../config/brand');
+  return getSiteUrlFromEnv() || brand.SITE_URL;
 }
 
 /**
@@ -98,6 +100,11 @@ async function getEmailPreview(req, res, next) {
       return res.status(400).json({ ok: false, error: 'Impossible de générer l\'aperçu pour ce type d\'email.' });
     }
 
+    // Override the global X-Frame-Options: DENY so the admin can preview
+    // this HTML inside the iframe modal of /admin/commandes/:id (same-origin).
+    res.set('X-Frame-Options', 'SAMEORIGIN');
+    res.set('Content-Security-Policy', "frame-ancestors 'self'");
+    res.set('Content-Type', 'text/html; charset=utf-8');
     // Return raw HTML so it can be displayed in an iframe
     return res.send(built.html);
   } catch (err) {
