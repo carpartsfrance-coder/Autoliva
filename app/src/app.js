@@ -482,17 +482,19 @@ app.use('/legal', legalRouter);
 app.use('/compte', accountRouter);
 app.use('/admin', adminRouter);
 
-// English routes (same routers, /en/ prefix — Express strips the mount path)
-app.use('/en', indexRouter);
-app.use('/en/blog', blogRouter);
-app.use('/en/categorie', categoriesRouter);
-app.use('/en/rechercher', searchRouter);
-app.use('/en/produits', productsRouter);
-app.use('/en/panier', cartRouter);
-app.use('/en/newsletter', newsletterRouter);
-app.use('/en/commande', checkoutRouter);
-app.use('/en/legal', legalRouter);
-app.use('/en/compte', accountRouter);
+/* /en/ a été désactivé : la traduction du contenu produit/blog n'était que
+ * partielle et créait du contenu dupliqué quasi-identique au FR (locale dict
+ * ~30% traduit, sitemap ne contenait pas les /en/, hreflang incohérents).
+ * Plutôt qu'une "version anglaise factice", on redirige tout /en/* vers
+ * l'équivalent FR avec un 301. Quand on aura une vraie traduction complète
+ * (et un budget pour la maintenir), on ré-activera proprement.
+ *
+ * Garde en tête : Google a peut-être déjà indexé certaines URLs /en/ ; le 301
+ * leur signale la consolidation vers FR sans perte de PageRank. */
+app.use('/en', (req, res) => {
+  const targetPath = req.originalUrl.replace(/^\/en(\/|$)/, '/') || '/';
+  res.redirect(301, targetPath);
+});
 
 app.use((req, res) => {
   res.status(404).render('errors/404', {

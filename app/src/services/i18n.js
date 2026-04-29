@@ -26,9 +26,17 @@ function t(lang, key, params) {
 
 /**
  * Build hreflang URLs for a given page path (without language prefix).
- * @param {string} baseUrl - e.g. "https://carpartsfrance.fr"
+ *
+ * Site mono-langue (FR) pour le moment : on n'émet plus de hreflang `en` car
+ * la version anglaise a été désactivée (traduction trop partielle générant du
+ * duplicate content). On garde `fr` + `x-default` qui pointent vers la même
+ * URL — c'est la convention pour un site mono-langue.
+ *
+ * Quand on aura une vraie traduction EN complète, ré-ajouter `hreflangEn`.
+ *
+ * @param {string} baseUrl - e.g. "https://autoliva.com"
  * @param {string} pathWithoutLang - e.g. "/produits" or "/product/slug/"
- * @returns {{ hreflangFr: string, hreflangEn: string, hreflangDefault: string }}
+ * @returns {{ hreflangFr: string, hreflangDefault: string }}
  */
 function buildHreflangSet(baseUrl, pathWithoutLang) {
   const base = baseUrl || '';
@@ -37,7 +45,6 @@ function buildHreflangSet(baseUrl, pathWithoutLang) {
 
   return {
     hreflangFr: `${base}${normalizedPath}`,
-    hreflangEn: `${base}/en${normalizedPath === '/' ? '' : normalizedPath}`,
     hreflangDefault: `${base}${normalizedPath}`,
   };
 }
