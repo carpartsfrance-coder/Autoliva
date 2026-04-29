@@ -320,7 +320,7 @@ function mapMollieStatusToPaymentStatus(mollieStatus) {
 function mapScalapayStatusToPaymentStatus(scalapayStatus) {
   const s = getTrimmedString(scalapayStatus).toLowerCase();
   if (s === 'charged' || s === 'captured') return 'paid';
-  if (s === 'approved') return 'paid';
+  if (s === 'approved' || s === 'authorized' || s === 'authorised') return 'paid';
   if (s === 'pending' || s === 'created' || s === 'processing') return 'pending';
   if (s === 'declined' || s === 'canceled' || s === 'cancelled' || s === 'expired' || s === 'void') return 'failed';
   return s ? 'pending' : 'pending';
