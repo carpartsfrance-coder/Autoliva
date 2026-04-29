@@ -16,6 +16,12 @@ const productSchema = new mongoose.Schema(
     },
     inStock: { type: Boolean, default: true },
     stockQty: { type: Number, default: null, min: 0 },
+    /* isPublished : drapeau de publication SEO. true par défaut (compat avec
+     * les produits déjà en base). Si false → exclu du sitemap public. Permet à
+     * l'admin de masquer un brouillon / produit en cours d'édition sans le
+     * supprimer. La page produit elle-même reste accessible (pour preview) ;
+     * c'est seulement le sitemap qui filtre. */
+    isPublished: { type: Boolean, default: true },
     imageUrl: { type: String, default: '' },
 
     shippingClassId: { type: mongoose.Schema.Types.ObjectId, ref: 'ShippingClass', default: null },

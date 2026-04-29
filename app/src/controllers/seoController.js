@@ -40,7 +40,9 @@ async function getSitemapXml(req, res, next) {
     let legalPages = [];
     let blogPosts = [];
     if (dbConnected) {
-      products = await Product.find({})
+      /* Filtre sitemap : seuls les produits publiés (default true) sont inclus.
+       * Évite que Google crawle des brouillons / produits désactivés. */
+      products = await Product.find({ isPublished: { $ne: false } })
         .select('_id slug name updatedAt imageUrl galleryUrls')
         .sort({ updatedAt: -1 })
         .lean();

@@ -92,10 +92,56 @@ router.get('/sav/feedback/:numero', savController.getFeedback);
 router.post('/sav/feedback/:numero', savController.postFeedback);
 
 router.get('/faq', (req, res) => {
+  const { getFaqItems } = require('../services/faqContent');
+  const baseUrl = getSiteUrlFromReq(req);
+  const canonicalUrl = `${baseUrl}/faq`;
+  const faqItems = getFaqItems({ phone: brand.PHONE, phoneIntl: brand.PHONE_INTL });
+
+  /* FAQPage JSON-LD : éligible aux rich results FAQ dans les SERPs Google.
+     mainEntity = liste de Question avec acceptedAnswer.text. On utilise le
+     champ answerPlain (sans HTML) pour éviter que Google rejette le markup. */
+  const jsonLd = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'FAQPage',
+        url: canonicalUrl,
+        mainEntity: faqItems.map((item) => ({
+          '@type': 'Question',
+          name: item.question,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: item.answerPlain,
+          },
+        })),
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Accueil', item: baseUrl ? `${baseUrl}/` : '/' },
+          { '@type': 'ListItem', position: 2, name: 'FAQ', item: canonicalUrl },
+        ],
+      },
+    ],
+  })
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+
+  const title = `FAQ - Questions fréquentes | ${brand.NAME}`;
+  const metaDescription = 'Retrouvez les réponses aux questions les plus fréquentes : livraison, échange standard, garantie, compatibilité, paiement et retours.';
+
   res.render('faq/index', {
-    title: `FAQ - Questions fréquentes | ${brand.NAME}`,
-    metaDescription: 'Retrouvez les réponses aux questions les plus fréquentes : livraison, échange standard, garantie, compatibilité, paiement et retours.',
-    canonicalUrl: `${getSiteUrlFromReq(req)}/faq`,
+    title,
+    metaDescription,
+    canonicalUrl,
+    ogTitle: title,
+    ogDescription: metaDescription,
+    ogUrl: canonicalUrl,
+    ogType: 'website',
+    ogSiteName: brand.NAME,
+    jsonLd,
+    faqItems,
   });
 });
 

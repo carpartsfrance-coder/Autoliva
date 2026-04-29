@@ -311,8 +311,19 @@ async function getHome(req, res, next) {
           '@type': 'WebSite',
           name: brand.NAME,
           url: canonicalUrl,
-          inLanguage: 'fr-FR',
+          inLanguage: req.lang === 'en' ? 'en' : 'fr-FR',
           description: metaDescription,
+          /* Sitelinks Search Box : permet à Google d'afficher un champ de recherche
+             intégré dans les résultats organiques (rich result). Pointe vers le
+             catalogue avec la query précise dans `q`. */
+          potentialAction: {
+            '@type': 'SearchAction',
+            target: {
+              '@type': 'EntryPoint',
+              urlTemplate: `${baseUrl || ''}/produits?q={search_term_string}`,
+            },
+            'query-input': 'required name=search_term_string',
+          },
         },
       ],
     })

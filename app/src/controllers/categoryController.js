@@ -185,8 +185,10 @@ async function getCategory(req, res, next) {
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
 
     /* Robots : on indexe la page catégorie nue (pas de filtres au-delà de la
-     * catégorie présélectionnée). Dès qu'un filtre additionnel est actif ou
-     * qu'on est en page 2+, on noindex pour éviter le contenu dupliqué. */
+     * catégorie présélectionnée). Dès qu'un filtre additionnel est actif, qu'on
+     * est en page 2+, ou que la catégorie est vide, on noindex pour éviter le
+     * contenu dupliqué et le "thin content" signal sur les catégories vides. */
+    const isEmpty = !data.totalCount || data.totalCount === 0;
     const filtersBeyondCategory =
       data.searchQuery
       || data.selectedVehicleMake
@@ -197,7 +199,9 @@ async function getCategory(req, res, next) {
       || (data.maxPriceEuros !== null && data.maxPriceEuros !== undefined)
       || (data.sort && data.sort !== 'newest' && data.sort !== '')
       || data.page > 1;
-    const metaRobots = filtersBeyondCategory ? 'noindex, follow' : (res.locals.metaRobots || undefined);
+    const metaRobots = (filtersBeyondCategory || isEmpty)
+      ? 'noindex, follow'
+      : (res.locals.metaRobots || undefined);
 
     const itemListElements = (data.products || []).map((p, idx) => {
       const productUrl = baseUrl

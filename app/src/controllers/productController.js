@@ -572,9 +572,29 @@ async function getProduct(req, res, next) {
       ? product.seo.metaTitle.trim()
       : '';
 
+    /* Construit un title SEO en tenant dans ~60 caractères (limite SERP Google).
+       Stratégie : on tente la version complète, si trop longue on retire d'abord
+       la SKU (info technique moins recherchée), puis le brand véhicule, puis on
+       tronque le nom pour préserver le suffix marque. */
+    const SEO_TITLE_MAX = 60;
+    function buildSeoTitleFitted(name, brandTxt, skuTxt) {
+      const suffix = ` | ${brand.NAME}`;
+      const variants = [
+        `${name}${brandTxt ? ` - ${brandTxt}` : ''}${skuTxt ? ` (Réf ${skuTxt})` : ''}${suffix}`,
+        `${name}${brandTxt ? ` - ${brandTxt}` : ''}${suffix}`,
+        `${name}${suffix}`,
+      ];
+      for (const v of variants) {
+        if (v.length <= SEO_TITLE_MAX) return v;
+      }
+      // Toutes trop longues → on tronque le nom pour préserver " | Brand"
+      const maxNameLen = Math.max(10, SEO_TITLE_MAX - suffix.length - 1); // -1 pour ellipsis
+      const truncatedName = name.length > maxNameLen ? `${name.slice(0, maxNameLen).trim()}…` : name;
+      return `${truncatedName}${suffix}`;
+    }
     const seoTitle = titleOverride
       ? titleOverride
-      : `${product.name}${brandText ? ` - ${brandText}` : ''}${skuText ? ` (Réf ${skuText})` : ''} | ${brand.NAME}`;
+      : buildSeoTitleFitted(product.name, brandText, skuText);
 
     const descriptionOverride = product.seo && typeof product.seo.metaDescription === 'string'
       ? product.seo.metaDescription.trim()

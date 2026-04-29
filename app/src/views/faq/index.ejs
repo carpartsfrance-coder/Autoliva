@@ -16,77 +16,17 @@
       </div>
 
       <div class="space-y-4">
-
-        <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          <summary class="flex items-center justify-between gap-4 cursor-pointer p-5 font-bold text-sm hover:bg-slate-50 transition-colors">
-            <span>Quels sont les délais de livraison ?</span>
-            <span class="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-180">expand_more</span>
-          </summary>
-          <div class="px-5 pb-5 text-sm text-slate-600 leading-relaxed">
-            Les expéditions sont effectuées sous 24 à 48 h ouvrées après validation de votre commande. La livraison prend ensuite 2 à 5 jours ouvrés selon votre localisation. Vous recevrez un e-mail avec le numéro de suivi dès l'envoi de votre colis.
-          </div>
-        </details>
-
-        <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          <summary class="flex items-center justify-between gap-4 cursor-pointer p-5 font-bold text-sm hover:bg-slate-50 transition-colors">
-            <span>Comment fonctionne l'échange standard ?</span>
-            <span class="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-180">expand_more</span>
-          </summary>
-          <div class="px-5 pb-5 text-sm text-slate-600 leading-relaxed">
-            Vous recevez d'abord votre pièce reconditionnée. Vous disposez ensuite de 30 jours pour nous retourner l'ancienne pièce. Si vous ne renvoyez pas l'ancienne pièce dans le délai imparti, la consigne vous sera facturée.
-          </div>
-        </details>
-
-        <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          <summary class="flex items-center justify-between gap-4 cursor-pointer p-5 font-bold text-sm hover:bg-slate-50 transition-colors">
-            <span>Comment vérifier la compatibilité avec mon véhicule ?</span>
-            <span class="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-180">expand_more</span>
-          </summary>
-          <div class="px-5 pb-5 text-sm text-slate-600 leading-relaxed">
-            Chaque fiche produit indique les véhicules compatibles. En cas de doute, envoyez-nous votre numéro VIN (visible sur votre carte grise, case E) via le formulaire de <a href="/contact" class="text-primary font-bold hover:underline">contact</a> ou par téléphone au <%= brand.PHONE %>. Nous vérifierons la compatibilité gratuitement avant expédition.
-          </div>
-        </details>
-
-        <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          <summary class="flex items-center justify-between gap-4 cursor-pointer p-5 font-bold text-sm hover:bg-slate-50 transition-colors">
-            <span>Quels moyens de paiement acceptez-vous ?</span>
-            <span class="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-180">expand_more</span>
-          </summary>
-          <div class="px-5 pb-5 text-sm text-slate-600 leading-relaxed">
-            Nous acceptons les cartes bancaires (Visa, Mastercard) via Mollie, ainsi que le paiement en 3 ou 4 fois sans frais via Scalapay. Tous les paiements sont sécurisés et chiffrés.
-          </div>
-        </details>
-
-        <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          <summary class="flex items-center justify-between gap-4 cursor-pointer p-5 font-bold text-sm hover:bg-slate-50 transition-colors">
-            <span>Quelle est la durée de la garantie ?</span>
-            <span class="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-180">expand_more</span>
-          </summary>
-          <div class="px-5 pb-5 text-sm text-slate-600 leading-relaxed">
-            Toutes nos pièces reconditionnées sont garanties jusqu'à 24 mois. La durée exacte est indiquée sur chaque fiche produit. La garantie couvre les défauts de reconditionnement, hors usure normale et erreur de montage.
-          </div>
-        </details>
-
-        <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          <summary class="flex items-center justify-between gap-4 cursor-pointer p-5 font-bold text-sm hover:bg-slate-50 transition-colors">
-            <span>Comment effectuer un retour ou une réclamation ?</span>
-            <span class="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-180">expand_more</span>
-          </summary>
-          <div class="px-5 pb-5 text-sm text-slate-600 leading-relaxed">
-            Contactez notre support via le formulaire de <a href="/contact" class="text-primary font-bold hover:underline">contact</a> ou par téléphone. Nous vous fournirons une étiquette de retour et les instructions. Les retours sont acceptés sous 14 jours après réception, à condition que la pièce n'ait pas été montée.
-          </div>
-        </details>
-
-        <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
-          <summary class="flex items-center justify-between gap-4 cursor-pointer p-5 font-bold text-sm hover:bg-slate-50 transition-colors">
-            <span>Livrez-vous en dehors de la France ?</span>
-            <span class="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-180">expand_more</span>
-          </summary>
-          <div class="px-5 pb-5 text-sm text-slate-600 leading-relaxed">
-            Oui, nous livrons dans toute l'Europe. Les frais et délais varient selon la destination. Contactez-nous pour obtenir un devis de livraison personnalisé vers votre pays.
-          </div>
-        </details>
-
+        <% (typeof faqItems !== 'undefined' && Array.isArray(faqItems) ? faqItems : []).forEach((item) => { %>
+          <details class="group rounded-2xl border border-slate-200 bg-white overflow-hidden">
+            <summary class="flex items-center justify-between gap-4 cursor-pointer p-5 font-bold text-sm hover:bg-slate-50 transition-colors">
+              <span><%= item.question %></span>
+              <span class="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-180">expand_more</span>
+            </summary>
+            <div class="px-5 pb-5 text-sm text-slate-600 leading-relaxed">
+              <%- item.answer %>
+            </div>
+          </details>
+        <% }) %>
       </div>
 
       <div class="mt-10 rounded-2xl bg-slate-900 p-6 text-white text-center">
