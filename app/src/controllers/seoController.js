@@ -93,9 +93,12 @@ async function getSitemapXml(req, res, next) {
     urls.push({ loc: resolveUrl('/'), lastmod: '' });
     urls.push({ loc: resolveUrl('/produits'), lastmod: '' });
     urls.push({ loc: resolveUrl('/categorie'), lastmod: '' });
+    urls.push({ loc: resolveUrl('/pieces-auto'), lastmod: '' });
     urls.push({ loc: resolveUrl('/blog'), lastmod: '' });
     urls.push({ loc: resolveUrl('/contact'), lastmod: '' });
     urls.push({ loc: resolveUrl('/devis'), lastmod: '' });
+    urls.push({ loc: resolveUrl('/faq'), lastmod: '' });
+    urls.push({ loc: resolveUrl('/notre-histoire'), lastmod: '' });
     urls.push({ loc: resolveUrl('/legal'), lastmod: '' });
 
     for (const lp of legalPages || []) {
@@ -108,6 +111,34 @@ async function getSitemapXml(req, res, next) {
       const loc = buildCategoryPublicUrl(c, { req });
       if (!loc) continue;
       urls.push({ loc, lastmod: toIsoDate(c.updatedAt) });
+    }
+
+    /* Vehicle landing pages — /pieces-auto/:make et /pieces-auto/:make/:model.
+       On ne liste que les couples qui ont au moins 1 produit compatible
+       (sinon Google trouverait des 404 dans le sitemap). */
+    if (dbConnected) {
+      try {
+        const vehicleService = require('../services/vehicleLandingService');
+        const makes = await vehicleService.listMakes();
+        for (const make of makes) {
+          /* Compte global make (au moins 1 produit compatible) */
+          const makeCount = await vehicleService.countCompatibleProducts({ make: make.name });
+          if (makeCount > 0) {
+            urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}`), lastmod: '' });
+          }
+          /* Pour chaque modèle, on liste si > 0 produit compatible */
+          for (const model of (make.models || [])) {
+            const modelCount = await vehicleService.countCompatibleProducts({ make: make.name, model: model.name });
+            if (modelCount > 0) {
+              urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}`), lastmod: '' });
+            }
+          }
+        }
+      } catch (err) {
+        // Best-effort : si le service véhicule n'est pas dispo (DB incohérente),
+        // on n'inclut juste pas ces URLs. Pas de raison de casser le sitemap entier.
+        console.error('[sitemap] vehicle landings : erreur ignorée :', err && err.message ? err.message : err);
+      }
     }
 
     for (const p of products) {

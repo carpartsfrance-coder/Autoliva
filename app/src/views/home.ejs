@@ -138,8 +138,14 @@
           { label: 'Volkswagen', make: 'Volkswagen', img: '/images/brands/volkswagen-logo.webp' },
           { label: 'Volvo', make: 'Volvo', img: '/images/brands/volvo-logo.webp' },
         ]; %>
+        <% /* Slugify minimal en EJS pour générer /pieces-auto/<slug>.
+              On utilise le même algo que productPublic.slugify côté serveur. */ %>
+        <% function slugifyMakeForHome(s) {
+          return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        } %>
         <% brands.forEach((b) => { %>
-          <a class="shrink-0 w-20 h-20 sm:w-24 sm:h-24 bg-white dark:bg-surface-dark rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-center hover:shadow-md transition-shadow grayscale hover:grayscale-0 cursor-pointer" href="/produits?vehicleMake=<%= encodeURIComponent(b.make) %>" aria-label="Voir les pièces pour <%= b.label %>">
+          <a class="shrink-0 w-20 h-20 sm:w-24 sm:h-24 bg-white dark:bg-surface-dark rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-center hover:shadow-md transition-shadow grayscale hover:grayscale-0 cursor-pointer" href="/pieces-auto/<%= slugifyMakeForHome(b.make) %>" aria-label="Voir les pièces pour <%= b.label %>">
             <img alt="<%= b.label %>" class="w-14 h-14 object-contain" src="<%= b.img %>" loading="lazy" />
           </a>
         <% }) %>

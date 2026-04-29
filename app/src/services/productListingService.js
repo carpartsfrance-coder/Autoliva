@@ -73,6 +73,16 @@ async function prepareProductListingData(req, options = {}) {
     selectedMainCategory = String(options.presetCategoryName).trim();
   }
 
+  /* Preset depuis les pages /pieces-auto/:make et /pieces-auto/:make/:model :
+   * si une marque (et éventuellement un modèle) est encodée dans le path, on
+   * force le filtre. L'utilisateur peut switcher via le filtre vehicleMake. */
+  if (!selectedVehicleMake && options.presetVehicleMake) {
+    selectedVehicleMake = String(options.presetVehicleMake).trim();
+  }
+  if (!selectedVehicleModel && options.presetVehicleModel) {
+    selectedVehicleModel = String(options.presetVehicleModel).trim();
+  }
+
   if (!selectedMainCategory && legacySelectedCategory) {
     const parts = legacySelectedCategory
       .split('>')

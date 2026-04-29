@@ -1,0 +1,59 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 transition-colors duration-300">
+  <div class="max-w-7xl mx-auto px-6 py-12">
+
+    <% if (!dbConnected) { %>
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900 mb-10">
+        <div class="font-bold">Mode démo activé</div>
+        <div class="mt-1 text-sm">Le site fonctionne sans base de données ; la liste des marques sera disponible après connexion DB.</div>
+      </div>
+    <% } %>
+
+    <nav class="flex items-center gap-2 text-[11px] uppercase tracking-wider text-slate-400 mb-8 overflow-x-auto whitespace-nowrap">
+      <a class="hover:text-primary" href="/">Accueil</a>
+      <span class="material-symbols-outlined text-[10px]">chevron_right</span>
+      <span class="font-semibold text-slate-900 dark:text-slate-100">Pièces auto par marque</span>
+    </nav>
+
+    <div class="mb-10">
+      <h1 class="text-3xl md:text-4xl font-black tracking-tight">Pièces auto reconditionnées par marque</h1>
+      <p class="mt-3 text-base text-slate-600 dark:text-slate-300 max-w-3xl">
+        Sélectionnez votre marque pour découvrir l'ensemble de notre catalogue de pièces auto reconditionnées,
+        garanties 24 mois et expédiées sous 24-48h. Paiement en 3x ou 4x sans frais via Scalapay.
+      </p>
+    </div>
+
+    <% if (!makes || !makes.length) { %>
+      <div class="rounded-2xl bg-white dark:bg-surface-dark border border-slate-100 dark:border-slate-800 p-10 shadow-sm">
+        <div class="font-bold text-lg">Aucune marque disponible</div>
+        <div class="mt-2 text-sm text-slate-500">Le catalogue de marques sera bientôt disponible.</div>
+      </div>
+    <% } else { %>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+        <% makes.forEach((m) => { %>
+          <a class="group relative bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-primary hover:shadow-lg transition-all p-5 flex flex-col items-center justify-center text-center min-h-[110px]"
+             href="/pieces-auto/<%= m.slug %>">
+            <span class="text-base font-black text-slate-800 dark:text-slate-100 group-hover:text-primary transition-colors"><%= m.name %></span>
+            <span class="mt-2 text-[10px] uppercase tracking-wider text-slate-400">
+              <%= (m.models && m.models.length) || 0 %> modèle<%= ((m.models && m.models.length) || 0) > 1 ? 's' : '' %>
+            </span>
+          </a>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <section class="mt-16 rounded-2xl bg-white dark:bg-surface-dark border border-slate-100 dark:border-slate-800 p-8">
+      <h2 class="text-xl font-bold mb-3">Pourquoi choisir des pièces reconditionnées <%= brand.NAME %> ?</h2>
+      <ul class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-600 dark:text-slate-300">
+        <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">verified</span> Garantie 24 mois sur l'ensemble de notre catalogue</li>
+        <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">science</span> Pièces testées sur banc avant expédition</li>
+        <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">local_shipping</span> Livraison express 24-48h dans toute la France</li>
+        <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">payments</span> Paiement en 3x ou 4x sans frais via Scalapay</li>
+      </ul>
+    </section>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>
