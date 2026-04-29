@@ -15,11 +15,18 @@
 
 'use strict';
 
-const VehicleMake = require('../models/VehicleMake');
 const { slugify } = require('./productPublic');
 
 /* Cache en mémoire — TTL 5 min. La liste des marques change rarement, on évite
- * de re-query à chaque hit de page. Reset automatiquement après TTL. */
+ * de re-query à chaque hit de page. Reset automatiquement après TTL.
+ *
+ * IMPORTANT — strategy de matching :
+ *   Les noms de modèles dans VehicleMake (ex: "A4 S4 B8 8K") sont plus
+ *   granulaires que ceux cités dans Product.compatibility[] (ex: "A4").
+ *   Pour les landing pages SEO, on veut les modèles RÉELLEMENT cités dans
+ *   les produits, pas la nomenclature complète. On construit donc la liste
+ *   make/model à partir de Product.compatibility, pas de VehicleMake.
+ *   VehicleMake reste utilisé par les filtres /produits (UI de drill-down). */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 let _cache = null;
 let _cacheTimestamp = 0;
@@ -29,20 +36,45 @@ async function loadAllMakesCached() {
   if (_cache && (now - _cacheTimestamp) < CACHE_TTL_MS) {
     return _cache;
   }
-  const docs = await VehicleMake.find({})
-    .select('_id name nameLower models')
-    .sort({ nameLower: 1 })
-    .lean();
-  _cache = (docs || []).map((doc) => ({
-    name: doc.name,
-    nameLower: doc.nameLower,
-    slug: slugify(doc.name),
-    models: (doc.models || []).map((m) => ({
-      name: m.name,
-      nameLower: m.nameLower,
-      slug: slugify(m.name),
-    })).sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })),
-  }));
+  const Product = require('../models/Product');
+  /* Aggrégation : récupère tous les couples (make, model) distincts présents
+   * dans Product.compatibility[], pour les produits publiés uniquement. */
+  const rows = await Product.aggregate([
+    { $match: { isPublished: { $ne: false } } },
+    { $unwind: '$compatibility' },
+    {
+      $project: {
+        make: { $trim: { input: { $ifNull: ['$compatibility.make', ''] } } },
+        model: { $trim: { input: { $ifNull: ['$compatibility.model', ''] } } },
+      },
+    },
+    { $match: { make: { $ne: '' } } },
+    { $group: { _id: { make: '$make', model: '$model' } } },
+  ]);
+
+  /* Group by make */
+  const byMake = new Map();
+  for (const row of rows) {
+    const make = row && row._id && row._id.make;
+    const model = row && row._id && row._id.model;
+    if (!make) continue;
+    if (!byMake.has(make)) byMake.set(make, new Set());
+    if (model) byMake.get(make).add(model);
+  }
+
+  _cache = Array.from(byMake.entries()).map(([makeName, modelsSet]) => ({
+    name: makeName,
+    nameLower: makeName.toLowerCase(),
+    slug: slugify(makeName),
+    models: Array.from(modelsSet)
+      .map((modelName) => ({
+        name: modelName,
+        nameLower: modelName.toLowerCase(),
+        slug: slugify(modelName),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })),
+  })).sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+
   _cacheTimestamp = now;
   return _cache;
 }

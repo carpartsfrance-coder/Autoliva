@@ -13,5 +13,6 @@ const router = express.Router();
 router.get('/', ctrl.listMakes);
 router.get('/:make', ctrl.getMakeLanding);
 router.get('/:make/:model', ctrl.getModelLanding);
+router.get('/:make/:model/:category', ctrl.getModelCategoryLanding);
 
 module.exports = router;

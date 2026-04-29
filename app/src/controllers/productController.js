@@ -624,8 +624,35 @@ async function getProduct(req, res, next) {
     const warrantyYears = extractWarrantyYearsFromText(warrantyText);
     const priceValidUntil = formatDateIso(new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)));
 
+    /* Construit le tableau Vehicle pour le schema isAccessoryOrSparePartFor.
+     * Permet à Google de comprendre EXACTEMENT quels véhicules cette pièce
+     * équipe — critique pour les rich results sur queries véhicule-spécifique
+     * ("boîte de transfert audi q5"). Source : product.compatibility[]. */
+    const fitsVehicles = Array.isArray(product.compatibility)
+      ? product.compatibility
+          .filter((c) => c && c.make)
+          .slice(0, 30) // évite des schemas démesurés
+          .map((c) => {
+            const v = {
+              '@type': 'Vehicle',
+              brand: { '@type': 'Brand', name: String(c.make).trim() },
+            };
+            if (c.model) v.model = String(c.model).trim();
+            if (c.years) v.modelDate = String(c.years).trim();
+            if (c.engine) {
+              v.vehicleEngine = {
+                '@type': 'EngineSpecification',
+                name: String(c.engine).trim(),
+              };
+            }
+            return v;
+          })
+      : [];
+
     const schemaProduct = {
-      '@type': 'Product',
+      /* Multi-type Product + AutomotivePart : signal vertical "auto-parts" à
+       * Google. Multi-type est valide en JSON-LD (tableau de @type). */
+      '@type': ['Product', 'AutomotivePart'],
       name: product.name,
       description: truncateText(descriptionForSchema, 5000),
       sku: skuText || undefined,
@@ -634,6 +661,10 @@ async function getProduct(req, res, next) {
       manufacturer: { '@type': 'Organization', name: brand.NAME },
       itemCondition: schemaCondition || undefined,
       image: ogImage || undefined,
+      /* isAccessoryOrSparePartFor : array de Vehicle objects = THE auto-parts
+       * SEO signal. Permet à Google d'associer la pièce à une combinaison
+       * make/model/engine spécifique pour les rich results. */
+      isAccessoryOrSparePartFor: fitsVehicles.length ? fitsVehicles : undefined,
       additionalProperty: compatibleReferences.length
         ? compatibleReferences.map((r) => ({ '@type': 'PropertyValue', name: 'Référence compatible', value: r }))
         : undefined,

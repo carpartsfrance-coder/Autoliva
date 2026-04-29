@@ -1,0 +1,75 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 transition-colors duration-300">
+  <% const formatMoney = (cents) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round((Number(cents) || 0) / 100)); %>
+  <div class="max-w-7xl mx-auto px-6 py-12">
+
+    <nav class="flex items-center gap-2 text-[11px] uppercase tracking-wider text-slate-400 mb-8 overflow-x-auto whitespace-nowrap">
+      <a class="hover:text-primary" href="/">Accueil</a>
+      <span class="material-symbols-outlined text-[10px]">chevron_right</span>
+      <span class="font-semibold text-slate-900 dark:text-slate-100">Référence <%= reference %></span>
+    </nav>
+
+    <div class="mb-10 flex items-end justify-between gap-6 flex-wrap">
+      <div>
+        <div class="text-[10px] font-bold uppercase tracking-widest text-primary mb-2">Référence pièce</div>
+        <h1 class="text-2xl md:text-3xl font-black tracking-tight">Pièce auto reconditionnée — Réf. <%= reference %></h1>
+        <p class="mt-2 text-sm text-slate-500"><%= products.length.toLocaleString('fr-FR') %> produit<%= products.length > 1 ? 's' : '' %> compatible<%= products.length > 1 ? 's' : '' %> avec cette référence</p>
+      </div>
+      <a class="text-sm font-black uppercase tracking-wider text-primary hover:underline" href="/produits">Voir le catalogue</a>
+    </div>
+
+    <% if (vehicleCompat && vehicleCompat.length) { %>
+      <section class="mb-10 rounded-2xl bg-white dark:bg-surface-dark border border-slate-100 dark:border-slate-800 p-6">
+        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-4">Véhicules compatibles avec la référence <%= reference %></h2>
+        <div class="flex flex-wrap gap-2">
+          <% vehicleCompat.forEach((v) => { %>
+            <span class="inline-block bg-primary/5 border border-primary/20 text-primary text-xs font-bold px-3 py-1 rounded-full"><%= v %></span>
+          <% }) %>
+        </div>
+      </section>
+    <% } %>
+
+    <% if (products.length) { %>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <% products.forEach((p) => { %>
+          <% const productUrl = p.publicPath || ('/produits/' + p._id); %>
+          <a class="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 hover:shadow-lg transition-shadow flex flex-col" href="<%= productUrl %>">
+            <div class="relative aspect-[4/3] overflow-hidden bg-slate-100">
+              <% if (p.imageUrl) { %>
+                <img alt="<%= p.name %>" class="w-full h-full object-cover" decoding="async" loading="lazy" width="400" height="300" src="<%= p.imageUrl %>"/>
+              <% } else { %>
+                <div class="w-full h-full flex items-center justify-center text-slate-400">
+                  <span class="material-symbols-outlined text-5xl">inventory_2</span>
+                </div>
+              <% } %>
+            </div>
+            <div class="p-4 flex flex-col flex-grow">
+              <div class="font-bold text-sm text-slate-800 dark:text-slate-100 leading-snug mb-3 line-clamp-2"><%= p.name %></div>
+              <% if (p.sku) { %>
+                <div class="text-[10px] uppercase tracking-wider text-slate-400 mb-3">Réf. <%= p.sku %></div>
+              <% } %>
+              <div class="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between">
+                <p class="text-lg font-bold text-slate-900 dark:text-white"><%= formatMoney(p.priceCents) %> €</p>
+                <span class="text-[10px] font-bold uppercase tracking-wider <%= p.inStock ? 'text-emerald-600' : 'text-amber-600' %>">
+                  <%= p.inStock ? 'En stock' : 'Sur commande' %>
+                </span>
+              </div>
+            </div>
+          </a>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <section class="mt-16 rounded-2xl bg-slate-50 dark:bg-surface-dark border border-slate-100 dark:border-slate-800 p-8">
+      <h2 class="text-xl font-bold mb-3">À propos de la référence <%= reference %></h2>
+      <div class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed space-y-3">
+        <p>Cette page liste l'ensemble des produits <%= brand.NAME %> compatibles avec la référence d'origine constructeur <strong><%= reference %></strong>. Toutes nos pièces sont reconditionnées dans nos ateliers, testées sur banc et garanties 24 mois.</p>
+        <p>Avant commande, vérifiez la compatibilité avec votre véhicule via le numéro VIN (carte grise, case E) ou contactez notre équipe technique au <%= brand.PHONE %>. Livraison express sous 24-48h, paiement en 3x ou 4x sans frais via Scalapay.</p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

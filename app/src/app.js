@@ -474,6 +474,7 @@ app.use('/', indexRouter);
 app.use('/blog', blogRouter);
 app.use('/categorie', categoriesRouter);
 app.use('/pieces-auto', require('./routes/vehicleLanding'));
+app.get('/reference/:ref', require('./controllers/referenceLandingController').getReferenceLanding);
 app.use('/rechercher', searchRouter);
 app.use('/produits', productsRouter);
 app.use('/panier', cartRouter);

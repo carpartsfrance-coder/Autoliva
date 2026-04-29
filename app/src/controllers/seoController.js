@@ -113,31 +113,61 @@ async function getSitemapXml(req, res, next) {
       urls.push({ loc, lastmod: toIsoDate(c.updatedAt) });
     }
 
-    /* Vehicle landing pages — /pieces-auto/:make et /pieces-auto/:make/:model.
+    /* Vehicle landing pages — /pieces-auto/:make, /:make/:model, /:make/:model/:category.
        On ne liste que les couples qui ont au moins 1 produit compatible
-       (sinon Google trouverait des 404 dans le sitemap). */
+       (sinon Google trouverait des 404 dans le sitemap).
+
+       NOTE perf : les pages /:make/:model/:category sont les "money pages" (forte
+       conversion). Elles génèrent potentiellement beaucoup d'URLs (n_makes ×
+       n_models × n_categories). On limite avec listCategorySlugsForVehicle qui
+       ne retourne que les catégories ayant ≥1 produit pour le couple. */
     if (dbConnected) {
       try {
         const vehicleService = require('../services/vehicleLandingService');
         const makes = await vehicleService.listMakes();
         for (const make of makes) {
-          /* Compte global make (au moins 1 produit compatible) */
           const makeCount = await vehicleService.countCompatibleProducts({ make: make.name });
-          if (makeCount > 0) {
-            urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}`), lastmod: '' });
-          }
-          /* Pour chaque modèle, on liste si > 0 produit compatible */
+          if (makeCount === 0) continue;
+          urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}`), lastmod: '' });
+
           for (const model of (make.models || [])) {
             const modelCount = await vehicleService.countCompatibleProducts({ make: make.name, model: model.name });
-            if (modelCount > 0) {
-              urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}`), lastmod: '' });
+            if (modelCount === 0) continue;
+            urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}`), lastmod: '' });
+
+            /* Money pages : :make/:model/:category. */
+            const cats = await vehicleService.listCategorySlugsForVehicle({ make: make.name, model: model.name });
+            for (const cat of cats) {
+              urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}/${cat.slug}`), lastmod: '' });
             }
           }
         }
       } catch (err) {
-        // Best-effort : si le service véhicule n'est pas dispo (DB incohérente),
-        // on n'inclut juste pas ces URLs. Pas de raison de casser le sitemap entier.
         console.error('[sitemap] vehicle landings : erreur ignorée :', err && err.message ? err.message : err);
+      }
+    }
+
+    /* OEM reference landing pages — /reference/:ref.
+       Une URL par référence unique présente dans compatibleReferences[] de
+       au moins 1 produit publié. Les mécanos pros Googlent ces refs directement,
+       conversion rate très haute. Limit raisonnable pour éviter sitemap énorme. */
+    if (dbConnected) {
+      try {
+        const refRows = await Product.aggregate([
+          { $match: { isPublished: { $ne: false }, compatibleReferences: { $exists: true, $ne: [] } } },
+          { $unwind: '$compatibleReferences' },
+          { $project: { ref: { $trim: { input: '$compatibleReferences' } } } },
+          { $match: { ref: { $regex: /^[A-Za-z0-9._\-/]{4,50}$/ } } },
+          { $group: { _id: { $toUpper: '$ref' } } },
+          { $sort: { _id: 1 } },
+          { $limit: 5000 }, // safety cap
+        ]);
+        for (const row of refRows || []) {
+          if (!row || !row._id) continue;
+          urls.push({ loc: resolveUrl(`/reference/${encodeURIComponent(row._id)}`), lastmod: '' });
+        }
+      } catch (err) {
+        console.error('[sitemap] OEM references : erreur ignorée :', err && err.message ? err.message : err);
       }
     }
 

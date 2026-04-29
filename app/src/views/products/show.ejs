@@ -546,7 +546,33 @@
               </div>
 
               <div>
+                <% /* Helper de slug pour les liens vers landing pages véhicule */ %>
+                <% function slugifyVeh(v) { return String(v||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,''); } %>
                 <% if (compMakes.length) { %>
+                  <%/* Bloc "Voir aussi" avec liens vers landing pages — boost l'internal
+                       linking SEO entre fiches produits et pages véhicule, et améliore
+                       l'expérience client (parcours rapide vers d'autres pièces compatibles). */%>
+                  <div class="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
+                    <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3">Voir aussi nos pièces compatibles</div>
+                    <div class="flex flex-wrap gap-2">
+                      <% compMakes.slice(0, 4).forEach((mk) => { %>
+                        <% const mkSlug = slugifyVeh(mk); %>
+                        <a class="inline-flex items-center gap-1 bg-white border border-slate-200 hover:border-primary hover:text-primary text-xs font-bold text-slate-700 px-3 py-1.5 rounded-full transition-colors" href="/pieces-auto/<%= mkSlug %>">
+                          <span class="material-symbols-outlined text-[14px]">directions_car</span>
+                          Toutes les pièces <%= mk %>
+                        </a>
+                        <% const row = compGrouped[mk]; %>
+                        <% const modelsArr = row ? Array.from(row.models).slice(0, 2) : []; %>
+                        <% modelsArr.forEach((md) => { %>
+                          <% const mdSlug = slugifyVeh(md); %>
+                          <a class="inline-flex items-center gap-1 bg-white border border-slate-200 hover:border-primary hover:text-primary text-xs font-bold text-slate-700 px-3 py-1.5 rounded-full transition-colors" href="/pieces-auto/<%= mkSlug %>/<%= mdSlug %>">
+                            <span class="material-symbols-outlined text-[14px]">car_repair</span>
+                            <%= mk %> <%= md %>
+                          </a>
+                        <% }) %>
+                      <% }) %>
+                    </div>
+                  </div>
                   <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 refined-shadow">
                     <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70">
                       <h2 class="text-lg font-bold uppercase text-slate-900 dark:text-white">Compatibilité véhicules</h2>
@@ -565,9 +591,14 @@
                           <% const row = compGrouped[mk]; %>
                           <% const models = row ? Array.from(row.models) : []; %>
                           <% const engines = row ? Array.from(row.engines) : []; %>
+                          <% const mkSlug = slugifyVeh(mk); %>
                           <tr class="border-t border-slate-100 dark:border-slate-700/50">
-                            <td class="px-5 sm:px-6 py-4 font-bold align-top"><%= mk %></td>
-                            <td class="px-5 sm:px-6 py-4 text-slate-500 align-top"><%= models.join(', ') %></td>
+                            <td class="px-5 sm:px-6 py-4 font-bold align-top">
+                              <a class="hover:text-primary transition-colors" href="/pieces-auto/<%= mkSlug %>"><%= mk %></a>
+                            </td>
+                            <td class="px-5 sm:px-6 py-4 text-slate-500 align-top">
+                              <% models.forEach((md, idx) => { %><a class="hover:text-primary transition-colors" href="/pieces-auto/<%= mkSlug %>/<%= slugifyVeh(md) %>"><%= md %></a><%= idx < models.length - 1 ? ', ' : '' %><% }) %>
+                            </td>
                             <td class="px-5 sm:px-6 py-4 text-slate-400 italic align-top"><%= engines.join(' / ') %></td>
                           </tr>
                         <% }) %>

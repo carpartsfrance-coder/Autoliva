@@ -321,9 +321,54 @@ async function getModelLanding(req, res, next) {
   }
 }
 
+/* GET /pieces-auto/:make/:model/:category — MONEY PAGES.
+ * Capture les requêtes type "boîte de transfert audi q5" qui matchent à la fois
+ * une catégorie de pièce et un véhicule précis. Highest-converting pages. */
+async function getModelCategoryLanding(req, res, next) {
+  try {
+    const makeSlug = String(req.params.make || '').trim().toLowerCase();
+    const modelSlug = String(req.params.model || '').trim().toLowerCase();
+    const categorySlug = String(req.params.category || '').trim().toLowerCase();
+    if (!makeSlug || !modelSlug || !categorySlug) {
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    }
+    const resolved = await vehicleService.resolveModelSlug(makeSlug, modelSlug);
+    if (!resolved) {
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    }
+    /* Résolution catégorie depuis le slug → name complet (ex: "Transmission > Mécatronique") */
+    const Category = require('../models/Category');
+    const catDoc = await Category.findOne({ slug: categorySlug, isActive: { $ne: false } })
+      .select('name slug').lean();
+    if (!catDoc) {
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    }
+    /* Le partTypeName affiché à l'utilisateur est le dernier segment de la
+     * catégorie (ex: "Transmission > Mécatronique" → "Mécatronique") pour un
+     * H1 plus naturel. Mais pour SEO meta on garde le nom complet. */
+    const fullCatName = catDoc.name;
+    const partTypeShort = fullCatName.includes('>')
+      ? fullCatName.split('>').pop().trim()
+      : fullCatName;
+
+    return renderLanding(req, res, {
+      makeName: resolved.make.name,
+      modelName: resolved.model.name,
+      makeSlug: resolved.make.slug,
+      modelSlug: resolved.model.slug,
+      partTypeSlug: catDoc.slug,
+      partTypeName: partTypeShort,
+      presetCategoryName: fullCatName,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   listMakes,
   getMakeLanding,
   getModelLanding,
-  renderLanding, // exposé pour Phase 2 (réutilisé par make/model/partType)
+  getModelCategoryLanding,
+  renderLanding,
 };
