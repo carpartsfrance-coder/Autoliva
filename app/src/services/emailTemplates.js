@@ -105,6 +105,7 @@ function renderEmailLayout({ title, preheader, bodyHtml, baseUrl } = {}) {
   const safeBaseUrl = getTrimmedString(baseUrl);
 
   const brandUrl = safeBaseUrl || '';
+  const logoUrl = brand.SITE_URL + brand.LOGO_URL;
 
   return `<!doctype html>
 <html lang="fr">
@@ -121,11 +122,9 @@ function renderEmailLayout({ title, preheader, bodyHtml, baseUrl } = {}) {
       <td align="center" style="padding:24px 12px;">
         <table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px;max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(15,23,42,0.08);">
           <tr>
-            <td style="padding:22px 24px;border-bottom:1px solid #e5e7eb;">
-              <div style="font-size:20px;font-weight:800;letter-spacing:-0.3px;line-height:1.2;color:#0f172a;">
-                ${escapeHtml(brand.NAME)}
-              </div>
-              <div style="margin-top:4px;font-size:12px;font-weight:600;color:#64748b;">Pièces auto • Catalogue • Devis</div>
+            <td align="center" style="padding:24px 24px 16px;border-bottom:1px solid #e5e7eb;">
+              <img src="${escapeHtml(logoUrl)}" alt="${escapeHtml(brand.NAME)}" height="40" style="display:block;height:40px;width:auto;margin:0 auto;border:0;outline:none;text-decoration:none;" />
+              <div style="margin-top:10px;font-size:12px;font-weight:600;color:#64748b;">Pièces auto • Catalogue • Devis</div>
             </td>
           </tr>
           <tr>
