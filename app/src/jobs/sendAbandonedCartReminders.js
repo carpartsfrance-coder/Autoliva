@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const AbandonedCart = require('../models/AbandonedCart');
+const Order = require('../models/Order');
 const User = require('../models/User');
 const { sendAbandonedCartReminder } = require('../services/emailService');
 const smsService = require('../services/smsService');
@@ -116,6 +117,29 @@ async function sendAbandonedCartReminders() {
         const freshCart = await AbandonedCart.findById(cart._id).select('status').lean();
         if (!freshCart || freshCart.status === 'recovered' || freshCart.status === 'expired') {
           continue;
+        }
+
+        // Défense en profondeur : si le client a passé une commande payée
+        // depuis l'abandon (sans avoir cliqué le lien recovery), on skip et
+        // on marque le panier comme recovered. Évite que le client reçoive
+        // des relances après avoir commandé.
+        if (cart.userId) {
+          try {
+            const subsequentPaidOrder = await Order.findOne({
+              userId: cart.userId,
+              paymentStatus: 'paid',
+              createdAt: { $gte: cart.abandonedAt },
+            }).select('_id number').lean();
+
+            if (subsequentPaidOrder) {
+              await AbandonedCart.updateOne(
+                { _id: cart._id },
+                { $set: { status: 'recovered', recoveredAt: now } }
+              );
+              console.log(`[cart-reminders] Panier ${cart._id} marqué recovered (commande ${subsequentPaidOrder.number || subsequentPaidOrder._id} passée depuis l'abandon)`);
+              continue;
+            }
+          } catch (_) { /* non-bloquant, on continue avec l'envoi normal */ }
         }
 
         // Send the email

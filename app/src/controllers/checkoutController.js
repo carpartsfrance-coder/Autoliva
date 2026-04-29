@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const User = require('../models/User');
 const Order = require('../models/Order');
+const AbandonedCart = require('../models/AbandonedCart');
 const demoProducts = require('../demoProducts');
 
 const mollie = require('../services/mollie');
@@ -326,6 +327,48 @@ function mapScalapayStatusToPaymentStatus(scalapayStatus) {
   return s ? 'pending' : 'pending';
 }
 
+/**
+ * Marque comme 'recovered' tous les paniers abandonnés actifs liés à cet
+ * utilisateur ou à cet email. Appelée quand une commande devient `paid` :
+ * sans ça, un client qui revient sur le site (sans cliquer le lien
+ * /panier/recuperer/<token>) et passe sa commande continue à recevoir
+ * les relances suivantes (J+24h, J+72h) jusqu'à expiration. Match sur
+ * userId ET email pour couvrir les invités.
+ */
+async function markAbandonedCartsAsRecoveredForOrder(order, user) {
+  try {
+    if (!order || !order._id) return;
+    const conditions = [];
+    if (order.userId) {
+      conditions.push({ userId: order.userId });
+    }
+    const email = user && user.email ? String(user.email).trim().toLowerCase() : '';
+    if (email) {
+      conditions.push({ email });
+    }
+    if (!conditions.length) return;
+
+    const result = await AbandonedCart.updateMany(
+      {
+        $or: conditions,
+        status: { $nin: ['recovered', 'expired'] },
+      },
+      {
+        $set: {
+          status: 'recovered',
+          recoveredAt: new Date(),
+        },
+      }
+    );
+
+    if (result && result.modifiedCount) {
+      console.log(`[abandoned-cart] ${result.modifiedCount} panier(s) marqué(s) recovered suite à la commande ${order.number || order._id}`);
+    }
+  } catch (err) {
+    console.error('[abandoned-cart] Erreur marquage recovered:', err && err.message ? err.message : err);
+  }
+}
+
 function applyDiscountToOrderItems(orderItems, discountedItemsTotalCents) {
   const items = Array.isArray(orderItems) ? orderItems.filter(Boolean) : [];
 
@@ -566,6 +609,16 @@ async function applyMolliePaymentToOrder(order, payment) {
     } catch (err) {
       console.error('Erreur email confirmation commande (Mollie) :', err && err.message ? err.message : err);
     }
+
+    // Marque les paniers abandonnés comme récupérés pour ce client/email
+    // (évite que le client reçoive des relances après avoir commandé sans
+    // avoir cliqué le lien /panier/recuperer)
+    try {
+      const userForCleanup = refreshed && refreshed.userId
+        ? await User.findById(refreshed.userId).select('email').lean()
+        : null;
+      await markAbandonedCartsAsRecoveredForOrder(refreshed, userForCleanup);
+    } catch (_) { /* helper handles its own errors */ }
   }
 
   return refreshed;
@@ -766,6 +819,16 @@ async function applyScalapayPaymentToOrder(order, { scalapayStatus, paymentStatu
     } catch (err) {
       console.error('Erreur email confirmation commande (Scalapay) :', err && err.message ? err.message : err);
     }
+
+    // Marque les paniers abandonnés comme récupérés pour ce client/email
+    // (évite que le client reçoive des relances après avoir commandé sans
+    // avoir cliqué le lien /panier/recuperer)
+    try {
+      const userForCleanup = refreshed && refreshed.userId
+        ? await User.findById(refreshed.userId).select('email').lean()
+        : null;
+      await markAbandonedCartsAsRecoveredForOrder(refreshed, userForCleanup);
+    } catch (_) { /* helper handles its own errors */ }
   }
 
   return refreshed;
