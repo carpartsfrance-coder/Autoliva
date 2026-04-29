@@ -95,20 +95,53 @@
           return qs ? `/blog?${qs}` : '/blog';
         }; %>
 
-        <nav class="flex justify-center items-center gap-2 pt-8">
-          <a class="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="<%= buildPageHref(Math.max(1, (page || 1) - 1)) %>">
-            <span class="material-symbols-outlined text-lg">chevron_left</span>
-          </a>
+        <% /* Pagination : ne s'affiche que s'il y a > 1 page. Compaction avec
+              "..." pour éviter de cracher 25+ liens si beaucoup de pages. */ %>
+        <% if ((totalPages || 1) > 1) { %>
+          <% const _current = Number(page) || 1;
+             const _last = Number(totalPages) || 1;
+             const _atFirst = _current <= 1;
+             const _atLast = _current >= _last;
+             /* Construit la liste de pages à afficher : 1, 2, courant-1, courant,
+                courant+1, dernier-1, dernier — puis on compacte avec ellipsis. */
+             const _pagesSet = new Set();
+             _pagesSet.add(1);
+             if (_last >= 2) _pagesSet.add(2);
+             if (_last >= 1) _pagesSet.add(_last);
+             if (_last >= 2) _pagesSet.add(_last - 1);
+             for (let i = Math.max(1, _current - 1); i <= Math.min(_last, _current + 1); i += 1) {
+               _pagesSet.add(i);
+             }
+             const _pagesSorted = Array.from(_pagesSet).filter((p) => p >= 1 && p <= _last).sort((a, b) => a - b);
+          %>
 
-          <% for (let p = 1; p <= totalPages; p += 1) { %>
-            <% const active = (page || 1) === p; %>
-            <a class="w-10 h-10 flex items-center justify-center rounded-lg <%= active ? 'bg-primary text-white' : 'border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800' %> font-bold text-sm transition-colors" href="<%= buildPageHref(p) %>"><%= p %></a>
-          <% } %>
+          <nav class="flex justify-center items-center gap-2 pt-8 flex-wrap" aria-label="Pagination">
+            <a aria-label="Page précédente"
+               class="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 transition-colors <%= _atFirst ? 'opacity-40 pointer-events-none' : 'hover:bg-slate-100 dark:hover:bg-slate-800' %>"
+               href="<%= _atFirst ? '#' : buildPageHref(_current - 1) %>"
+               <%= _atFirst ? 'aria-disabled="true" tabindex="-1"' : '' %>>
+              <span class="material-symbols-outlined text-lg">chevron_left</span>
+            </a>
 
-          <a class="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="<%= buildPageHref(Math.min(totalPages || 1, (page || 1) + 1)) %>">
-            <span class="material-symbols-outlined text-lg">chevron_right</span>
-          </a>
-        </nav>
+            <% _pagesSorted.forEach((p, idx) => { %>
+              <% const prev = idx > 0 ? _pagesSorted[idx - 1] : null; %>
+              <% if (prev !== null && p - prev > 1) { %>
+                <span class="px-2 text-slate-400 select-none" aria-hidden="true">…</span>
+              <% } %>
+              <% const active = _current === p; %>
+              <a class="w-10 h-10 flex items-center justify-center rounded-lg font-bold text-sm transition-colors <%= active ? 'bg-primary text-white' : 'border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800' %>"
+                 href="<%= buildPageHref(p) %>"
+                 <%= active ? 'aria-current="page"' : '' %>><%= p %></a>
+            <% }) %>
+
+            <a aria-label="Page suivante"
+               class="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 transition-colors <%= _atLast ? 'opacity-40 pointer-events-none' : 'hover:bg-slate-100 dark:hover:bg-slate-800' %>"
+               href="<%= _atLast ? '#' : buildPageHref(_current + 1) %>"
+               <%= _atLast ? 'aria-disabled="true" tabindex="-1"' : '' %>>
+              <span class="material-symbols-outlined text-lg">chevron_right</span>
+            </a>
+          </nav>
+        <% } %>
       </div>
 
       <aside class="lg:col-span-4 space-y-8">
