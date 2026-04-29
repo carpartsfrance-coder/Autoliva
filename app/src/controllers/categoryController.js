@@ -1,7 +1,6 @@
 const mongoose = require('mongoose');
 
 const Category = require('../models/Category');
-const Product = require('../models/Product');
 const demoProducts = require('../demoProducts');
 const brand = require('../config/brand');
 const { buildProductPublicPath, slugify: slugifyGeneric } = require('../services/productPublic');
@@ -11,7 +10,6 @@ const {
   getPublicBaseUrlFromReq,
 } = require('../services/categoryPublic');
 const { buildHreflangSet } = require('../services/i18n');
-const { buildSeoMediaUrl } = require('../services/mediaStorage');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -37,43 +35,6 @@ function toSafeJsonLd(value) {
     .replace(/&/g, '\\u0026');
 }
 
-function parsePage(value) {
-  if (typeof value !== 'string') return 1;
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < 1) return 1;
-  return Math.floor(n);
-}
-
-function normalizeProductForList(product) {
-  if (!product) return product;
-  const p = { ...product };
-
-  const stockQty = Number.isFinite(p.stockQty) ? p.stockQty : null;
-  const inStock = stockQty !== null ? stockQty > 0 : p.inStock !== false;
-
-  const rawImage = p.imageUrl
-    || (Array.isArray(p.galleryUrls) && p.galleryUrls.find((u) => typeof u === 'string' && u.trim()))
-    || '';
-
-  return {
-    ...p,
-    inStock,
-    publicPath: buildProductPublicPath(p),
-    imageUrl: buildSeoMediaUrl(rawImage, p.name),
-  };
-}
-
-function buildProductFilterFromCategoryName(categoryName) {
-  const name = getTrimmedString(categoryName);
-  if (!name) return {};
-
-  if (name.includes('>')) {
-    return { category: name };
-  }
-
-  const rx = `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\s*>|$)`;
-  return { category: { $regex: new RegExp(rx) } };
-}
 
 async function listCategories(req, res, next) {
   try {
@@ -180,7 +141,6 @@ async function getCategory(req, res, next) {
     }
 
     let category = null;
-
     if (dbConnected) {
       category = await Category.findOne({ slug, isActive: { $ne: false } })
         .select('_id name slug updatedAt seoText')
@@ -201,50 +161,104 @@ async function getCategory(req, res, next) {
       return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
 
-    const perPage = 24;
-    const page = parsePage(req.query.page);
+    /* Délègue toute la logique de listing/filtrage/pagination au service partagé,
+     * en pré-filtrant la catégorie. L'utilisateur reste libre d'appliquer d'autres
+     * filtres (marque véhicule, prix, stock, tri…) qui se cumuleront avec la
+     * catégorie pré-sélectionnée. */
+    const { prepareProductListingData } = require('../services/productListingService');
+    const data = await prepareProductListingData(req, { presetCategoryName: category.name });
 
-    const filter = buildProductFilterFromCategoryName(category.name);
+    /* Override SEO spécifique à la page catégorie (canonical /categorie/:slug,
+     * title incluant le nom catégorie, JSON-LD CollectionPage + breadcrumb). */
+    const name = getTrimmedString(category.name);
+    const title = `${name} - Pièces auto | ${brand.NAME}`;
+    const metaDescription = buildCategoryMetaDescription(name, data.totalCount);
 
-    let products = [];
-    let totalCount = 0;
+    const canonicalBase = buildCategoryPublicUrl(category, { req });
+    const canonicalUrl = data.page > 1
+      ? `${canonicalBase}?page=${encodeURIComponent(String(data.page))}`
+      : canonicalBase;
 
-    if (dbConnected) {
-      totalCount = await Product.countDocuments(filter);
-      const totalPagesRaw = Math.max(1, Math.ceil(totalCount / perPage));
-      const safePage = Math.min(page, totalPagesRaw);
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const langPrefix = req.lang === 'en' ? '/en' : '';
+    const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
+    const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
 
-      products = await Product.find(filter)
-        .sort({ updatedAt: -1 })
-        .skip((safePage - 1) * perPage)
-        .limit(perPage)
-        .lean();
+    /* Robots : on indexe la page catégorie nue (pas de filtres au-delà de la
+     * catégorie présélectionnée). Dès qu'un filtre additionnel est actif ou
+     * qu'on est en page 2+, on noindex pour éviter le contenu dupliqué. */
+    const filtersBeyondCategory =
+      data.searchQuery
+      || data.selectedVehicleMake
+      || data.selectedVehicleModel
+      || data.selectedSubCategory
+      || data.selectedStock
+      || (data.minPriceEuros !== null && data.minPriceEuros !== undefined)
+      || (data.maxPriceEuros !== null && data.maxPriceEuros !== undefined)
+      || (data.sort && data.sort !== 'newest' && data.sort !== '')
+      || data.page > 1;
+    const metaRobots = filtersBeyondCategory ? 'noindex, follow' : (res.locals.metaRobots || undefined);
 
-      products = (products || []).map(normalizeProductForList);
+    const itemListElements = (data.products || []).map((p, idx) => {
+      const productUrl = baseUrl
+        ? `${baseUrl}${p.publicPath || buildProductPublicPath(p)}`
+        : (p.publicPath || buildProductPublicPath(p));
+      return {
+        '@type': 'ListItem',
+        position: idx + 1,
+        name: getTrimmedString(p.name),
+        url: productUrl,
+      };
+    });
 
-      return renderCategoryPage({ req, res, category, products, totalCount, page: safePage, perPage, totalPages: totalPagesRaw, dbConnected });
-    }
+    const jsonLd = toSafeJsonLd({
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'CollectionPage',
+          name,
+          url: canonicalUrl,
+          description: metaDescription,
+          mainEntity: {
+            '@type': 'ItemList',
+            numberOfItems: data.totalCount,
+            itemListElement: itemListElements,
+          },
+        },
+        {
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Accueil', item: baseUrl ? `${baseUrl}/` : '/' },
+            { '@type': 'ListItem', position: 2, name: 'Catégories', item: baseUrl ? `${baseUrl}/categorie` : '/categorie' },
+            { '@type': 'ListItem', position: 3, name, item: canonicalUrl },
+          ],
+        },
+      ],
+    });
 
-    products = (demoProducts || [])
-      .filter((p) => {
-        if (!p) return false;
-        if (!filter.category) return true;
-        const cat = getTrimmedString(p.category);
-        if (!cat) return false;
-        if (typeof filter.category === 'string') return cat === filter.category;
-        if (filter.category && filter.category.$regex) {
-          return filter.category.$regex.test(cat);
-        }
-        return false;
-      })
-      .map(normalizeProductForList);
-
-    totalCount = products.length;
-    const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
-    const safePage = Math.min(page, totalPages);
-    products = products.slice((safePage - 1) * perPage, safePage * perPage);
-
-    return renderCategoryPage({ req, res, category, products, totalCount, page: safePage, perPage, totalPages, dbConnected });
+    return res.render('products/index', {
+      ...data,
+      // Override SEO spécifique catégorie (écrase les valeurs par défaut du service)
+      title,
+      metaDescription,
+      canonicalUrl,
+      ...hreflang,
+      ogTitle: title,
+      ogDescription: metaDescription,
+      ogUrl: canonicalUrl,
+      ogSiteName: brand.NAME,
+      ogType: 'website',
+      metaRobots,
+      jsonLd,
+      // Contexte page catégorie (pour breadcrumb, H1, bloc SEO en bas et basePath dynamique)
+      basePath: `/categorie/${category.slug}`,
+      categoryContext: {
+        name,
+        slug: category.slug,
+        publicPath: buildCategoryPublicPath(category),
+        seoText: typeof category.seoText === 'string' ? category.seoText : '',
+      },
+    });
   } catch (err) {
     return next(err);
   }
@@ -268,96 +282,6 @@ function buildCategoryMetaDescription(name, totalCount) {
 
   const fallback = `${name} reconditionnées, testées sur banc et garanties 2 ans. ${countText} disponibles, expédition 24/48h. Paiement en 3x/4x.`;
   return truncateText(normalizeMetaText(fallback), 160);
-}
-
-function renderCategoryPage({ req, res, category, products, totalCount, page, perPage, totalPages, dbConnected }) {
-  const name = getTrimmedString(category && category.name ? category.name : 'Catégorie');
-  const title = `${name} - Pièces auto | ${brand.NAME}`;
-  const metaDescription = buildCategoryMetaDescription(name, totalCount);
-
-  const canonicalBase = buildCategoryPublicUrl(category, { req });
-  const canonicalUrl = page > 1 ? `${canonicalBase}?page=${encodeURIComponent(String(page))}` : canonicalBase;
-  const baseUrl = getPublicBaseUrlFromReq(req);
-  const langPrefix = req.lang === 'en' ? '/en' : '';
-  const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
-  const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
-  const metaRobots = page > 1 ? 'noindex, follow' : res.locals.metaRobots;
-
-  const itemListElements = (products || []).map((p, idx) => {
-    const productUrl = baseUrl ? `${baseUrl}${p.publicPath || buildProductPublicPath(p)}` : (p.publicPath || buildProductPublicPath(p));
-    return {
-      '@type': 'ListItem',
-      position: idx + 1,
-      name: getTrimmedString(p.name),
-      url: productUrl,
-    };
-  });
-
-  const jsonLd = toSafeJsonLd({
-    '@context': 'https://schema.org',
-    '@graph': [
-      {
-        '@type': 'CollectionPage',
-        name,
-        url: canonicalUrl,
-        description: metaDescription,
-        mainEntity: {
-          '@type': 'ItemList',
-          numberOfItems: totalCount,
-          itemListElement: itemListElements,
-        },
-      },
-      {
-        '@type': 'BreadcrumbList',
-        itemListElement: [
-          {
-            '@type': 'ListItem',
-            position: 1,
-            name: 'Accueil',
-            item: baseUrl ? `${baseUrl}/` : '/',
-          },
-          {
-            '@type': 'ListItem',
-            position: 2,
-            name: 'Catégories',
-            item: baseUrl ? `${baseUrl}/categorie` : '/categorie',
-          },
-          {
-            '@type': 'ListItem',
-            position: 3,
-            name,
-            item: canonicalUrl,
-          },
-        ],
-      },
-    ],
-  });
-
-  return res.render('categories/show', {
-    title,
-    metaDescription,
-    canonicalUrl,
-    ...hreflang,
-    ogTitle: title,
-    ogDescription: metaDescription,
-    ogUrl: canonicalUrl,
-    ogSiteName: brand.NAME,
-    ogType: 'website',
-    metaRobots,
-    jsonLd,
-    dbConnected,
-    category: {
-      name,
-      slug: category.slug,
-      publicPath: buildCategoryPublicPath(category),
-      seoText: typeof category.seoText === 'string' ? category.seoText : '',
-    },
-    products,
-    page,
-    perPage,
-    totalCount,
-    totalPages,
-  });
 }
 
 module.exports = {

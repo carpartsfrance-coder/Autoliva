@@ -4,6 +4,10 @@
 <%- include('../partials/header') %>
 
 <% const formatMoney = (cents) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round((Number(cents) || 0) / 100)); %>
+<% /* basePath = '/produits' (catalogue global) ou '/categorie/<slug>' (page catégorie).
+      Permet à buildUrl et au form action de pointer sur la bonne URL. */ %>
+<% const _basePath = (typeof basePath === 'string' && basePath) ? basePath : '/produits'; %>
+<% const _categoryContext = (typeof categoryContext !== 'undefined' && categoryContext) ? categoryContext : null; %>
 <% const buildUrl = (overrides = {}) => {
   const params = new URLSearchParams();
   const qVal = overrides.q !== undefined ? overrides.q : (typeof searchQuery !== 'undefined' ? searchQuery : '');
@@ -20,7 +24,10 @@
   if (qVal) params.set('q', qVal);
   if (vehicleMakeVal) params.set('vehicleMake', vehicleMakeVal);
   if (vehicleModelVal) params.set('vehicleModel', vehicleModelVal);
-  if (mainCatVal) params.set('mainCategory', mainCatVal);
+  /* Sur une page catégorie, on n'inclut PAS mainCategory dans l'URL si c'est
+     la même que celle pré-sélectionnée par le slug (sinon URL redondante). */
+  const skipMainCat = _categoryContext && mainCatVal && mainCatVal === _categoryContext.name;
+  if (mainCatVal && !skipMainCat) params.set('mainCategory', mainCatVal);
   if (mainCatVal && subCatVal) params.set('subCategory', subCatVal);
   if (stockVal) params.set('stock', stockVal);
   if (minVal) params.set('minPrice', minVal);
@@ -29,7 +36,7 @@
   if (pageVal && Number(pageVal) > 1) params.set('page', String(pageVal));
 
   const qs = params.toString();
-  return qs ? `/produits?${qs}` : '/produits';
+  return qs ? `${_basePath}?${qs}` : _basePath;
 }; %>
 
 <% const activeFilterCount = [
@@ -58,12 +65,12 @@
                 <% } %>
               </div>
               <div class="flex items-center gap-3">
-                <a class="text-primary text-xs font-bold uppercase tracking-widest hover:underline" href="/produits">Effacer</a>
+                <a class="text-primary text-xs font-bold uppercase tracking-widest hover:underline" href="<%= _basePath %>">Effacer</a>
                 <button class="lg:hidden h-9 px-3 rounded-xl border border-gray-200 text-gray-700 font-bold text-xs" data-filters-close type="button">Fermer</button>
               </div>
             </div>
 
-          <form action="/produits" method="GET">
+          <form action="<%= _basePath %>" method="GET">
             <input name="q" type="hidden" value="<%= typeof searchQuery !== 'undefined' ? searchQuery : '' %>" />
             <input name="sort" type="hidden" value="<%= typeof sort !== 'undefined' ? sort : '' %>" />
             <input name="page" type="hidden" value="1" />
@@ -106,15 +113,29 @@
               <p class="font-semibold text-sm mb-4">Catégorie</p>
               <% const subOptions = (selectedMainCategory && subCategoriesByMain && subCategoriesByMain[selectedMainCategory]) ? subCategoriesByMain[selectedMainCategory] : []; %>
               <div class="space-y-3">
-                <div>
-                  <div class="text-xs font-semibold text-gray-500 mb-2">Catégorie principale</div>
-                  <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="mainCategory" onchange="this.form.subCategory.value=''; this.form.submit();">
-                    <option value="" <%= !selectedMainCategory ? 'selected' : '' %>>Toutes</option>
-                    <% (mainCategories || []).forEach((c) => { %>
-                      <option value="<%= c %>" <%= selectedMainCategory === c ? 'selected' : '' %>><%= c %></option>
-                    <% }) %>
-                  </select>
-                </div>
+                <% if (_categoryContext) { %>
+                  <%/* Page /categorie/<slug> : la catégorie principale est encodée
+                       dans l'URL, on n'affiche pas le select "main" mais on garde
+                       un lien discret pour changer (revient au catalogue global). */%>
+                  <div class="rounded-lg bg-primary/5 border border-primary/20 p-3">
+                    <div class="text-[10px] font-bold uppercase tracking-widest text-primary mb-1">Catégorie active</div>
+                    <div class="text-sm font-semibold text-slate-800"><%= _categoryContext.name %></div>
+                    <a class="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-primary" href="/produits">
+                      <span class="material-symbols-outlined text-[14px]">arrow_back</span>
+                      Voir tout le catalogue
+                    </a>
+                  </div>
+                <% } else { %>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 mb-2">Catégorie principale</div>
+                    <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="mainCategory" onchange="this.form.subCategory.value=''; this.form.submit();">
+                      <option value="" <%= !selectedMainCategory ? 'selected' : '' %>>Toutes</option>
+                      <% (mainCategories || []).forEach((c) => { %>
+                        <option value="<%= c %>" <%= selectedMainCategory === c ? 'selected' : '' %>><%= c %></option>
+                      <% }) %>
+                    </select>
+                  </div>
+                <% } %>
                 <div>
                   <div class="text-xs font-semibold text-gray-500 mb-2">Sous-catégorie</div>
                   <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="subCategory" <%= selectedMainCategory ? '' : 'disabled' %>>
@@ -137,7 +158,7 @@
 
             <div class="mt-6 grid grid-cols-1 gap-3">
               <button class="bg-primary hover:bg-red-700 text-white font-bold py-3 px-6 rounded-xl" type="submit">Appliquer</button>
-              <a class="text-center bg-gray-100 text-gray-700 font-bold py-3 px-6 rounded-xl hover:bg-gray-200" href="/produits">Réinitialiser</a>
+              <a class="text-center bg-gray-100 text-gray-700 font-bold py-3 px-6 rounded-xl hover:bg-gray-200" href="<%= _basePath %>">Réinitialiser</a>
             </div>
           </form>
           </div>
@@ -147,12 +168,26 @@
       <div class="lg:col-span-9">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <nav class="flex items-center gap-2 text-xs text-gray-400 mb-2">
-              <a class="hover:text-primary" href="/">Accueil</a>
-              <span class="material-symbols-outlined text-[10px]">chevron_right</span>
-              <span class="text-gray-600 font-medium"><%= selectedCategoryLabel ? selectedCategoryLabel : 'Catalogue' %></span>
-            </nav>
-            <h1 class="text-xl sm:text-2xl font-bold"><%= typeof totalCount !== 'undefined' ? totalCount.toLocaleString('fr-FR') : products.length %> pièces trouvées</h1>
+            <% if (_categoryContext) { %>
+              <%/* Page catégorie : breadcrumb Accueil > Catégories > <Nom> et H1 = nom catégorie */%>
+              <nav class="flex items-center gap-2 text-xs text-gray-400 mb-2">
+                <a class="hover:text-primary" href="/">Accueil</a>
+                <span class="material-symbols-outlined text-[10px]">chevron_right</span>
+                <a class="hover:text-primary" href="/categorie">Catégories</a>
+                <span class="material-symbols-outlined text-[10px]">chevron_right</span>
+                <span class="text-gray-600 font-medium"><%= _categoryContext.name %></span>
+              </nav>
+              <h1 class="text-2xl sm:text-3xl font-black tracking-tight"><%= _categoryContext.name %></h1>
+              <p class="mt-1 text-sm text-gray-500"><%= typeof totalCount !== 'undefined' ? totalCount.toLocaleString('fr-FR') : products.length %> produits dans cette catégorie</p>
+            <% } else { %>
+              <%/* Catalogue global */%>
+              <nav class="flex items-center gap-2 text-xs text-gray-400 mb-2">
+                <a class="hover:text-primary" href="/">Accueil</a>
+                <span class="material-symbols-outlined text-[10px]">chevron_right</span>
+                <span class="text-gray-600 font-medium"><%= selectedCategoryLabel ? selectedCategoryLabel : 'Catalogue' %></span>
+              </nav>
+              <h1 class="text-xl sm:text-2xl font-bold"><%= typeof totalCount !== 'undefined' ? totalCount.toLocaleString('fr-FR') : products.length %> pièces trouvées</h1>
+            <% } %>
             <% if (!dbConnected) { %>
               <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900 text-sm">
                 <span class="font-bold">Mode démo activé</span> — le catalogue fonctionne avec des produits d'exemple.
@@ -160,11 +195,16 @@
             <% } %>
           </div>
 
-          <form action="/produits" method="GET">
+          <form action="<%= _basePath %>" method="GET">
             <input name="q" type="hidden" value="<%= typeof searchQuery !== 'undefined' ? searchQuery : '' %>" />
             <input name="vehicleMake" type="hidden" value="<%= typeof selectedVehicleMake !== 'undefined' ? selectedVehicleMake : '' %>" />
             <input name="vehicleModel" type="hidden" value="<%= typeof selectedVehicleModel !== 'undefined' ? selectedVehicleModel : '' %>" />
-            <input name="mainCategory" type="hidden" value="<%= typeof selectedMainCategory !== 'undefined' ? selectedMainCategory : '' %>" />
+            <% /* mainCategory absent du form sur les pages /categorie/<slug> :
+                  la catégorie est déjà encodée dans l'URL, l'inclure
+                  produirait /categorie/X?mainCategory=X (redondant). */ %>
+            <% if (!_categoryContext) { %>
+              <input name="mainCategory" type="hidden" value="<%= typeof selectedMainCategory !== 'undefined' ? selectedMainCategory : '' %>" />
+            <% } %>
             <input name="subCategory" type="hidden" value="<%= typeof selectedSubCategory !== 'undefined' ? selectedSubCategory : '' %>" />
             <input name="stock" type="hidden" value="<%= typeof selectedStock !== 'undefined' ? selectedStock : '' %>" />
             <input name="minPrice" type="hidden" value="<%= (minPriceEuros !== null && typeof minPriceEuros !== 'undefined') ? minPriceEuros : '' %>" />
@@ -309,6 +349,19 @@
       </div>
     </div>
   </div>
+
+  <% /* Bloc SEO unique en bas de page CATÉGORIE — préserve le ranking sur les
+        landings catégorie (texte unique, contexte, mots-clés long-tail) */ %>
+  <% if (_categoryContext && _categoryContext.seoText) { %>
+    <section class="seo-text-section" style="background:#f8f9fa;border-top:1px solid #e9ecef;">
+      <div class="max-w-7xl mx-auto px-6 py-16">
+        <h2 class="text-2xl font-bold tracking-tight text-slate-800 mb-6">Tout savoir sur nos <%= _categoryContext.name.toLowerCase() %></h2>
+        <div class="seo-text-content prose prose-slate max-w-none text-slate-600 leading-relaxed" style="font-size:0.95rem;line-height:1.8;">
+          <%- _categoryContext.seoText %>
+        </div>
+      </div>
+    </section>
+  <% } %>
 </main>
 
 <%- include('../partials/footer') %>
