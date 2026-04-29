@@ -6,6 +6,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const wpRedirects = require('./middlewares/wpRedirects');
 const wwwCanonical = require('./middlewares/wwwCanonical');
+const cpfRedirects = require('./middlewares/cpfRedirects');
 const i18nMiddleware = require('./middlewares/i18n');
 const brand = require('./config/brand');
 
@@ -38,6 +39,10 @@ app.use((req, res, next) => {
 if (isProd) {
   app.set('trust proxy', 1);
 }
+
+// carpartsfrance.fr -> autoliva.com 301 redirect (must run before wwwCanonical
+// so we redirect to the new brand directly, without going through www→non-www first).
+app.use(cpfRedirects);
 
 // Canonical www redirect (301) — must be before all other routes
 app.use(wwwCanonical);
