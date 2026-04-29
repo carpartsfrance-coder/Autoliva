@@ -155,7 +155,11 @@ function getMailerSendApiKey() {
 }
 
 function getBaseUrl() {
-  return getSiteUrlFromEnv();
+  return getSiteUrlFromEnv() || brand.SITE_URL;
+}
+
+function commercialReplyTo() {
+  return brand.EMAIL_CONTACT ? { email: brand.EMAIL_CONTACT, name: brand.NAME } : null;
 }
 
 function resolveToEmail(toEmail) {
@@ -301,6 +305,7 @@ async function sendOrderConfirmationEmail({ order, user } = {}) {
     html: built.html,
     text: built.text,
     attachments,
+    replyTo: commercialReplyTo(),
   });
 }
 
@@ -309,14 +314,14 @@ async function sendConsigneStartEmail({ order, user } = {}) {
   const baseUrl = getBaseUrl();
   const built = buildConsigneStartEmail({ order, user, baseUrl });
   if (!built) return { ok: false, reason: 'no_consigne' };
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
 }
 
 async function sendConsigneReceivedEmail({ order, user } = {}) {
   if (!order || !user || !user.email) return { ok: false, reason: 'missing_data' };
   const baseUrl = getBaseUrl();
   const built = buildConsigneReceivedEmail({ order, user, baseUrl });
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
 }
 
 async function sendShipmentTrackingEmail({ order, user, shipment } = {}) {
@@ -362,6 +367,7 @@ async function sendShipmentTrackingEmail({ order, user, shipment } = {}) {
     html: built.html,
     text: built.text,
     attachments,
+    replyTo: commercialReplyTo(),
   });
 }
 
@@ -370,7 +376,7 @@ async function sendConsigneReminderSoonEmail({ order, user } = {}) {
   const baseUrl = getBaseUrl();
   const built = buildConsigneReminderSoonEmail({ order, user, baseUrl });
   if (!built) return { ok: false, reason: 'no_consigne' };
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
 }
 
 async function sendConsigneOverdueEmail({ order, user } = {}) {
@@ -378,7 +384,7 @@ async function sendConsigneOverdueEmail({ order, user } = {}) {
   const baseUrl = getBaseUrl();
   const built = buildConsigneOverdueEmail({ order, user, baseUrl });
   if (!built) return { ok: false, reason: 'no_consigne' };
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
 }
 
 async function sendWelcomeEmail({ user } = {}) {
@@ -486,7 +492,7 @@ async function sendDeliveryConfirmedEmail({ order, user } = {}) {
   const orderWithImages = await addProductImagesToOrder({ order: fullOrder, baseUrl });
 
   const built = buildDeliveryConfirmedEmail({ order: orderWithImages, user: fullUser, baseUrl });
-  return sendEmail({ toEmail: fullUser.email, subject: built.subject, html: built.html, text: built.text });
+  return sendEmail({ toEmail: fullUser.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
 }
 
 async function sendOrderStatusChangeEmail({ order, user, newStatus, message } = {}) {
@@ -496,7 +502,7 @@ async function sendOrderStatusChangeEmail({ order, user, newStatus, message } = 
   const fullUser = await hydrateUserForEmail(user);
 
   const built = buildOrderStatusChangeEmail({ order, user: fullUser, newStatus, message, baseUrl });
-  return sendEmail({ toEmail: fullUser.email, subject: built.subject, html: built.html, text: built.text });
+  return sendEmail({ toEmail: fullUser.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
 }
 
 /**
@@ -552,14 +558,14 @@ async function sendCloningLabelEmail({ order, user, labelPdfBuffer } = {}) {
     html: built.html,
     text: built.text,
     attachments,
+    replyTo: commercialReplyTo(),
   });
 
   await logEmailSent({
     orderId: fullOrder._id,
-    type: 'cloning_label',
+    emailType: 'cloning_label',
     recipientEmail: fullUser.email,
-    ok: result && result.ok,
-    reason: result && !result.ok ? (result.reason || '') : '',
+    result,
   });
 
   return result;
@@ -589,14 +595,14 @@ async function sendCloningStepEmail({ order, user, step } = {}) {
     subject: built.subject,
     html: built.html,
     text: built.text,
+    replyTo: commercialReplyTo(),
   });
 
   await logEmailSent({
     orderId: fullOrder._id,
-    type: `cloning_${step}`,
+    emailType: `cloning_${step}`,
     recipientEmail: fullUser.email,
-    ok: result && result.ok,
-    reason: result && !result.ok ? (result.reason || '') : '',
+    result,
   });
 
   return result;
