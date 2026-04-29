@@ -1,0 +1,88 @@
+<%- include('../partials/head') %>
+<link rel="stylesheet" href="/css/sav.css?v=7">
+<%- include('../partials/header') %>
+
+<main class="sav-module flex-1 bg-background-light text-slate-900">
+  <div class="mx-auto max-w-2xl px-4 sm:px-6 py-8 sm:py-12">
+
+    <% if (!ticket) { %>
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6 text-amber-900">
+        <h1 class="text-xl font-bold">Demande introuvable</h1>
+        <p class="mt-2 text-sm">Aucun dossier SAV ne correspond au numéro <strong><%= numero %></strong>. Vérifiez votre lien ou écrivez-nous à <a class="underline" href="mailto:<%= brand.EMAIL_SAV %>"><%= brand.EMAIL_SAV %></a>.</p>
+        <a href="/sav" class="mt-4 inline-block text-primary underline">Retour au formulaire SAV</a>
+      </div>
+    <% } else { %>
+      <header class="text-center mb-6">
+        <div class="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-100 mb-3">
+          <span class="material-symbols-rounded text-emerald-600 text-4xl" aria-hidden="true">task_alt</span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Demande enregistrée&nbsp;!</h1>
+        <p class="mt-2 text-base text-slate-600">Votre dossier SAV est ouvert. Vous allez recevoir un email de confirmation.</p>
+        <div class="mt-3 inline-block px-4 py-2 rounded-xl bg-slate-900 text-white font-mono font-bold">
+          <%= ticket.numero %>
+        </div>
+      </header>
+
+      <!-- Récapitulatif court -->
+      <section class="rounded-2xl border border-slate-200 bg-white p-5 mb-5">
+        <h2 class="text-lg font-semibold mb-3">Récapitulatif</h2>
+        <dl class="text-sm text-slate-700 space-y-1">
+          <% if (ticket.numeroCommande) { %><div><strong>Commande&nbsp;:</strong> <%= ticket.numeroCommande %></div><% } %>
+          <% if (ticket.pieceType) { %><div><strong>Pièce&nbsp;:</strong> <%= ticket.pieceType %></div><% } %>
+          <% if (ticket.vehicule && (ticket.vehicule.marque || ticket.vehicule.modele)) { %>
+            <div><strong>Véhicule&nbsp;:</strong> <%= [ticket.vehicule.marque, ticket.vehicule.modele, ticket.vehicule.annee].filter(Boolean).join(' ') %></div>
+          <% } %>
+          <% if (ticket.vehicule && ticket.vehicule.vin) { %><div><strong>VIN&nbsp;:</strong> <span class="font-mono"><%= ticket.vehicule.vin %></span></div><% } %>
+          <% if (ticket.vehicule && ticket.vehicule.kilometrage) { %><div><strong>Kilométrage&nbsp;:</strong> <%= ticket.vehicule.kilometrage %> km</div><% } %>
+          <div><strong>Statut&nbsp;:</strong> <span class="px-2 py-0.5 rounded-full bg-slate-100 text-xs"><%= (typeof statutLabel !== 'undefined' && statutLabel) ? statutLabel : ticket.statut %></span></div>
+        </dl>
+      </section>
+
+      <!-- Prochaines étapes -->
+      <section class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 mb-5">
+        <h2 class="text-lg font-semibold text-emerald-900 mb-3">Prochaines étapes</h2>
+        <ol class="space-y-2 text-sm text-emerald-900 list-decimal pl-5">
+          <% (motifSteps && motifSteps.steps || []).forEach(function(s) { %>
+            <li><%- s %></li>
+          <% }) %>
+        </ol>
+      </section>
+
+      <!-- FAQ -->
+      <% var faqItems = (motifSteps && motifSteps.faq) || []; %>
+      <section class="rounded-2xl border border-slate-200 bg-white p-5 mb-5">
+        <h2 class="text-lg font-semibold mb-3">Questions fréquentes</h2>
+        <% faqItems.forEach(function(f) { %>
+          <details class="border-b border-slate-100 py-2">
+            <summary class="cursor-pointer text-sm font-medium"><%- f.q %></summary>
+            <p class="mt-2 text-sm text-slate-600"><%- f.a %></p>
+          </details>
+        <% }) %>
+        <details class="py-2">
+          <summary class="cursor-pointer text-sm font-medium">Comment suivre mon dossier&nbsp;?</summary>
+          <p class="mt-2 text-sm text-slate-600">Connectez-vous à votre compte client et rendez-vous dans <a href="/compte/sav" class="underline text-primary">Mes SAV</a>, ou utilisez le <a href="/sav/suivi?numero=<%= encodeURIComponent(ticket.numero) %>" class="underline text-primary">suivi public</a>.</p>
+        </details>
+      </section>
+
+      <div class="flex flex-col sm:flex-row gap-3">
+        <% if (currentUser) { %>
+          <a href="/compte/sav/<%= encodeURIComponent(ticket.numero) %>" class="flex-1 text-center inline-flex items-center justify-center gap-2 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold px-5 py-3">
+            <span class="material-symbols-rounded" aria-hidden="true">visibility</span>
+            Accéder à mon dossier
+          </a>
+        <% } else { %>
+          <a href="/sav/suivi?numero=<%= encodeURIComponent(ticket.numero) %>" class="flex-1 text-center inline-flex items-center justify-center gap-2 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold px-5 py-3">
+            <span class="material-symbols-rounded" aria-hidden="true">visibility</span>
+            Suivre mon dossier
+          </a>
+        <% } %>
+        <a href="/" class="flex-1 text-center inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 text-slate-700 font-semibold px-5 py-3 hover:bg-slate-50">
+          Retour à l'accueil
+        </a>
+      </div>
+    <% } %>
+
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

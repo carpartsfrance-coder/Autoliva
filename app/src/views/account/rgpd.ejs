@@ -1,0 +1,62 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1">
+  <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-6 sm:py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+      <aside class="lg:col-span-3">
+        <%- include('./_sidebar', { active: 'rgpd' }) %>
+      </aside>
+
+      <section class="lg:col-span-9 space-y-6">
+        <div>
+          <div class="text-2xl md:text-3xl font-black text-slate-900">Mes données personnelles</div>
+          <div class="mt-1 text-sm text-slate-600">Conformément au Règlement Général sur la Protection des Données (RGPD), vous pouvez exporter ou supprimer vos données SAV.</div>
+        </div>
+
+        <% if (typeof exportedAt !== 'undefined' && exportedAt) { %>
+          <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Export généré.</div>
+        <% } %>
+        <% if (typeof deleted !== 'undefined' && deleted) { %>
+          <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">Vos données SAV ont été anonymisées.</div>
+        <% } %>
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
+          <h2 class="text-lg font-semibold">Données traitées</h2>
+          <p class="text-sm text-slate-600">Pour vos demandes SAV, nous conservons : email, nom, numéro de commande, informations véhicule (VIN, plaque), historique des messages, documents fournis, et les preuves d'acceptation des CGV.</p>
+          <p class="text-sm text-slate-600">Vous avez actuellement <strong><%= savCount %></strong> dossier(s) SAV liés à votre compte.</p>
+          <p class="text-xs text-slate-500">Base légale : exécution du contrat (art. 6.1.b RGPD). Durée : 5 ans après la clôture, conformément à la garantie légale + obligations comptables.</p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="rounded-2xl border border-slate-200 bg-white p-5 space-y-3">
+            <h3 class="font-semibold flex items-center gap-2"><span class="material-symbols-outlined text-primary">download</span> Exporter mes données SAV</h3>
+            <p class="text-sm text-slate-600">Téléchargez l'intégralité de vos dossiers au format JSON.</p>
+            <a href="/compte/rgpd/export.json" class="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-700 text-white font-semibold px-4 py-2.5">
+              <span class="material-symbols-outlined">file_download</span> Télécharger l'export
+            </a>
+          </div>
+
+          <div class="rounded-2xl border border-red-200 bg-red-50 p-5 space-y-3">
+            <h3 class="font-semibold text-red-900 flex items-center gap-2"><span class="material-symbols-outlined">delete_forever</span> Supprimer mes données SAV</h3>
+            <p class="text-sm text-red-900">Vos dossiers seront anonymisés (email, nom, IP retirés). Cette action est irréversible.</p>
+            <form method="POST" action="/compte/rgpd/supprimer-sav" class="space-y-2">
+              <label class="block text-xs font-semibold text-red-900">Tapez <strong>SUPPRIMER</strong> pour confirmer&nbsp;:</label>
+              <input name="confirm" type="text" required class="w-full rounded-xl border border-red-300 px-3 py-2 text-sm focus:border-red-500" placeholder="SUPPRIMER">
+              <button class="inline-flex items-center gap-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold px-4 py-2.5">
+                <span class="material-symbols-outlined">delete</span> Supprimer définitivement
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div class="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 space-y-2">
+          <h2 class="text-lg font-semibold text-slate-900">Vos droits</h2>
+          <p>Vous disposez d'un droit d'accès, de rectification, d'effacement, de limitation, de portabilité et d'opposition. Vous pouvez exercer ces droits depuis cette page ou en écrivant à <a href="mailto:rgpd@carpartsfrance.fr" class="underline text-primary">rgpd@carpartsfrance.fr</a>. Vous pouvez aussi déposer une réclamation auprès de la <a href="https://www.cnil.fr" target="_blank" rel="noopener" class="underline">CNIL</a>.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

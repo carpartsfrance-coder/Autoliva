@@ -1,0 +1,12 @@
+<% const settings = typeof siteSettings !== 'undefined' && siteSettings && typeof siteSettings === 'object' ? siteSettings : {}; %>
+<% const promoText = settings && typeof settings.promoBannerText === 'string' ? settings.promoBannerText.trim() : ''; %>
+<% const promoCode = settings && typeof settings.promoBannerCode === 'string' ? settings.promoBannerCode.trim() : ''; %>
+
+<% if (promoText || promoCode) { %>
+  <div class="bg-primary text-white text-center py-2 text-xs sm:text-sm font-medium">
+    <%= promoText %>
+    <% if (promoCode) { %>
+      <span class="font-bold underline"><%= promoCode %></span>
+    <% } %>
+  </div>
+<% } %>

@@ -1,0 +1,309 @@
+<%- include('../partials/head') %>
+<link rel="stylesheet" href="/css/sav.css?v=7">
+<%- include('../partials/header') %>
+
+<%
+  const needsTracking = ['retard_livraison', 'colis_non_recu'].includes(motifKey);
+  const needsPhotos   = ['colis_abime', 'erreur_preparation'].includes(motifKey);
+  const needsDelivery = ['retard_livraison', 'colis_abime', 'colis_non_recu', 'erreur_preparation'].includes(motifKey);
+%>
+
+<main class="sav-module flex-1 bg-background-light text-slate-900">
+  <div class="mx-auto max-w-2xl px-4 sm:px-6 py-8 sm:py-12">
+
+    <div class="mb-4">
+      <a href="/sav" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-primary">
+        <span class="material-symbols-rounded" style="font-size:16px;" aria-hidden="true">arrow_back</span>
+        Changer de motif
+      </a>
+    </div>
+
+    <header class="mb-6">
+      <div class="inline-flex items-center gap-3">
+        <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10">
+          <span class="material-symbols-rounded text-primary text-3xl" aria-hidden="true"><%= motif.icon %></span>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight"><%= motif.title %></h1>
+          <p class="text-sm text-slate-600"><%= motif.desc %></p>
+        </div>
+      </div>
+      <% if (motif.legal) { %>
+        <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          <%= motif.legal %>
+        </div>
+      <% } %>
+    </header>
+
+    <div class="flex items-center gap-3 mb-4 text-[11px] sm:text-xs text-slate-500">
+      <span class="inline-flex items-center gap-1">
+        <span class="material-symbols-rounded text-[14px]" aria-hidden="true">lock</span>
+        Données chiffrées
+      </span>
+      <span class="text-slate-300">·</span>
+      <span class="inline-flex items-center gap-1">
+        <span class="material-symbols-rounded text-[14px]" aria-hidden="true">schedule</span>
+        ~2 min à remplir
+      </span>
+      <span class="text-slate-300">·</span>
+      <span class="inline-flex items-center gap-1">
+        <span class="material-symbols-rounded text-[14px]" aria-hidden="true">support_agent</span>
+        Réponse humaine
+      </span>
+    </div>
+
+    <form id="sav-simple-form" class="space-y-5">
+      <input type="hidden" name="motifSav" value="<%= motifKey %>">
+
+      <!-- Identité -->
+      <section class="sav-status-card">
+        <h2 class="text-base font-semibold mb-3">Vos informations</h2>
+        <% if (currentUser) { %>
+          <input type="hidden" name="email" value="<%= currentUser.email %>">
+          <input type="hidden" name="clientNom" value="<%= [currentUser.firstName, currentUser.lastName].filter(Boolean).join(' ') || currentUser.email %>">
+          <p class="text-sm text-slate-600">Connecté en tant que <strong><%= currentUser.email %></strong></p>
+        <% } else { %>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label class="block">
+              <span class="text-xs text-slate-500">Nom complet</span>
+              <input type="text" name="clientNom" required class="mt-1 w-full sav-input rounded-xl border border-slate-300 px-4 py-3 text-base">
+            </label>
+            <label class="block">
+              <span class="text-xs text-slate-500">Email</span>
+              <input type="email" name="email" required class="mt-1 w-full sav-input rounded-xl border border-slate-300 px-4 py-3 text-base">
+            </label>
+            <label class="block sm:col-span-2">
+              <span class="text-xs text-slate-500">Téléphone (optionnel)</span>
+              <input type="tel" name="telephone" class="mt-1 w-full sav-input rounded-xl border border-slate-300 px-4 py-3 text-base">
+            </label>
+          </div>
+        <% } %>
+      </section>
+
+      <!-- Commande -->
+      <section class="sav-status-card">
+        <h2 class="text-base font-semibold mb-3">Votre commande</h2>
+        <% if (eligibleOrders && eligibleOrders.length) { %>
+          <label class="block mb-2 text-xs text-slate-500">Sélectionnez la commande concernée</label>
+          <select name="numeroCommande" class="w-full sav-input rounded-xl border border-slate-300 px-4 py-3 text-base">
+            <option value="">— Aucune / je n'ai pas le numéro —</option>
+            <% eligibleOrders.forEach(function(o) { %>
+              <option value="<%= o.number %>"><%= o.number %> — <%= new Date(o.date).toLocaleDateString('fr-FR') %><%= o.label ? ' — ' + o.label : '' %></option>
+            <% }) %>
+          </select>
+        <% } else { %>
+          <label class="block">
+            <span class="text-xs text-slate-500">Numéro de commande (si vous l'avez)</span>
+            <input type="text" name="numeroCommande" placeholder="ex : CPF-2026-001234" class="mt-1 w-full sav-input rounded-xl border border-slate-300 px-4 py-3 text-base">
+          </label>
+        <% } %>
+      </section>
+
+      <!-- Bloc livraison conditionnel -->
+      <% if (needsDelivery) { %>
+      <section class="sav-status-card">
+        <h2 class="text-base font-semibold mb-3">Informations de livraison</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="block">
+            <span class="text-xs text-slate-500">Transporteur</span>
+            <select name="transporteur" class="mt-1 w-full sav-input rounded-xl border border-slate-300 px-4 py-3 text-base">
+              <option value="">—</option>
+              <option value="chronopost">Chronopost</option>
+              <option value="colissimo">Colissimo</option>
+              <option value="ups">UPS</option>
+              <option value="dhl">DHL</option>
+              <option value="dpd">DPD</option>
+              <option value="other">Autre</option>
+            </select>
+          </label>
+          <% if (needsTracking) { %>
+            <label class="block">
+              <span class="text-xs text-slate-500">N° de suivi</span>
+              <input type="text" name="numeroSuivi" class="mt-1 w-full sav-input rounded-xl border border-slate-300 px-4 py-3 text-base">
+            </label>
+          <% } %>
+          <% if (motifKey === 'retard_livraison' || motifKey === 'colis_non_recu') { %>
+            <label class="block">
+              <span class="text-xs text-slate-500">Date de livraison annoncée</span>
+              <input type="date" name="dateReceptionPrevue" class="mt-1 w-full sav-input rounded-xl border border-slate-300 px-4 py-3 text-base">
+            </label>
+          <% } %>
+          <% if (motifKey === 'colis_abime' || motifKey === 'erreur_preparation') { %>
+            <label class="block">
+              <span class="text-xs text-slate-500">Date de réception du colis</span>
+              <input type="date" name="dateReceptionReelle" required class="mt-1 w-full sav-input rounded-xl border border-slate-300 px-4 py-3 text-base">
+            </label>
+          <% } %>
+        </div>
+      </section>
+      <% } %>
+
+      <!-- Description -->
+      <section class="sav-status-card">
+        <h2 class="text-base font-semibold mb-3">
+          <% if (motifKey === 'colis_abime') { %>Description des dommages
+          <% } else if (motifKey === 'erreur_preparation') { %>Quelle pièce avez-vous reçue&nbsp;?
+          <% } else if (motifKey === 'non_compatible') { %>Pourquoi la pièce n'est pas compatible&nbsp;?
+          <% } else if (motifKey === 'retractation') { %>Motif de la rétractation (facultatif)
+          <% } else if (motifKey === 'facture_document') { %>Quel document souhaitez-vous&nbsp;?
+          <% } else if (motifKey === 'remboursement') { %>Détails du remboursement attendu
+          <% } else { %>Décrivez votre demande
+          <% } %>
+        </h2>
+        <textarea name="description" rows="5" required minlength="10" maxlength="5000"
+          placeholder="Le plus de détails possible nous aide à traiter rapidement…"
+          class="w-full sav-input rounded-xl border border-slate-300 px-4 py-3 text-base resize-y"></textarea>
+        <div class="mt-3">
+          <label class="block text-xs text-slate-500 mb-1 inline-flex items-center gap-1">
+            <span class="material-symbols-rounded text-[14px]" aria-hidden="true"><%= needsPhotos ? 'photo_camera' : 'attach_file' %></span>
+            <% if (needsPhotos) { %>Photos (recommandé)<% } else { %>Pièces jointes (optionnel)<% } %>
+            — JPG/PNG/WEBP/PDF, 5 fichiers max, 10 Mo chacun
+          </label>
+          <input type="file" name="attachments" id="sav-files-input" multiple accept="image/jpeg,image/png,image/webp,application/pdf"
+            class="block w-full text-xs text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-primary/10 file:text-primary file:font-semibold hover:file:bg-primary/20">
+          <p class="mt-1 text-[11px] text-slate-400">Astuce : recliquez sur « Choisir les fichiers » pour en ajouter d'autres ; les précédents sont conservés.</p>
+          <ul id="sav-files-list" class="mt-2 space-y-1 text-[11px] text-slate-600"></ul>
+        </div>
+      </section>
+
+      <!-- Consentements -->
+      <section class="sav-status-card space-y-2">
+        <label class="flex items-start gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="cgvAccepted" required class="mt-0.5">
+          <span>J'accepte les <a href="/legal/cgv-sav" target="_blank" class="text-primary underline">CGV SAV</a>.</span>
+        </label>
+        <label class="flex items-start gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="rgpdAccepted" required class="mt-0.5">
+          <span>J'accepte le traitement de mes données pour le suivi de cette demande (RGPD).</span>
+        </label>
+      </section>
+
+      <div id="sav-simple-error" class="hidden rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"></div>
+
+      <div class="sav-sticky-cta">
+        <button type="submit" id="sav-simple-submit" class="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-white px-6 py-3 text-base font-semibold hover:bg-primary-dark disabled:opacity-50">
+          <span class="material-symbols-rounded" aria-hidden="true">send</span>
+          Envoyer ma demande
+        </button>
+      </div>
+    </form>
+
+  </div>
+</main>
+
+<script>
+(function () {
+  var form = document.getElementById('sav-simple-form');
+  if (!form) return;
+  var errBox = document.getElementById('sav-simple-error');
+  var submit = document.getElementById('sav-simple-submit');
+
+  // ----- Gestion cumulative des pièces jointes -----
+  var fileInput = document.getElementById('sav-files-input');
+  var filesList = document.getElementById('sav-files-list');
+  var MAX_FILES = 5;
+  var MAX_SIZE = 10 * 1024 * 1024;
+
+  function fileKey(f) { return f.name + ':' + f.size + ':' + (f.lastModified || ''); }
+
+  function syncInputFromDT(dt) {
+    if (typeof DataTransfer === 'undefined') return;
+    fileInput.files = dt.files;
+  }
+
+  function buildDT() {
+    var dt = new DataTransfer();
+    if (fileInput.files) {
+      for (var i = 0; i < fileInput.files.length; i++) dt.items.add(fileInput.files[i]);
+    }
+    return dt;
+  }
+
+  function renderList() {
+    filesList.innerHTML = '';
+    if (!fileInput.files || !fileInput.files.length) return;
+    Array.prototype.forEach.call(fileInput.files, function (f, idx) {
+      var li = document.createElement('li');
+      li.className = 'flex items-center gap-2 rounded-lg bg-slate-50 px-2 py-1';
+      var sizeKb = Math.round(f.size / 1024);
+      li.innerHTML = '<span class="material-symbols-rounded text-[14px] text-slate-400" aria-hidden="true">attach_file</span>' +
+        '<span class="flex-1 truncate">' + (f.name || 'fichier').replace(/[<>&"]/g, '') + '</span>' +
+        '<span class="text-slate-400">' + sizeKb + ' Ko</span>' +
+        '<button type="button" data-idx="' + idx + '" aria-label="Retirer" class="text-red-500 hover:text-red-700"><span class="material-symbols-rounded text-[16px]" aria-hidden="true">close</span></button>';
+      li.querySelector('button').addEventListener('click', function () {
+        var dt = new DataTransfer();
+        Array.prototype.forEach.call(fileInput.files, function (ff, j) {
+          if (j !== idx) dt.items.add(ff);
+        });
+        syncInputFromDT(dt);
+        renderList();
+      });
+      filesList.appendChild(li);
+    });
+  }
+
+  if (fileInput && filesList && typeof DataTransfer !== 'undefined') {
+    fileInput.addEventListener('change', function (e) {
+      var picked = Array.from(e.target.files || []);
+      // On reconstruit la liste cumulative en repartant du DataTransfer existant.
+      // Astuce : on lit d'abord les fichiers déjà présents (avant remplacement par le navigateur).
+      // Comme `change` se déclenche après remplacement, on a perdu les anciens.
+      // On contourne en stockant les anciens dans un attribut data avant le clic.
+      var existing = window.__savExistingFiles || [];
+      var merged = existing.slice();
+      var seen = new Set(merged.map(fileKey));
+      var rejected = [];
+      picked.forEach(function (f) {
+        if (f.size > MAX_SIZE) { rejected.push(f.name + ' (>10 Mo)'); return; }
+        if (seen.has(fileKey(f))) return;
+        if (merged.length >= MAX_FILES) { rejected.push(f.name + ' (max ' + MAX_FILES + ')'); return; }
+        merged.push(f);
+        seen.add(fileKey(f));
+      });
+      var dt = new DataTransfer();
+      merged.forEach(function (f) { dt.items.add(f); });
+      syncInputFromDT(dt);
+      window.__savExistingFiles = merged;
+      renderList();
+      if (rejected.length) {
+        errBox.textContent = 'Fichier(s) ignoré(s) : ' + rejected.join(', ');
+        errBox.classList.remove('hidden');
+      } else {
+        errBox.classList.add('hidden');
+      }
+    });
+    // Avant chaque ouverture du sélecteur, on mémorise les fichiers déjà sélectionnés
+    fileInput.addEventListener('click', function () {
+      window.__savExistingFiles = Array.from(fileInput.files || []);
+    });
+  }
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    errBox.classList.add('hidden');
+    submit.disabled = true;
+    submit.textContent = 'Envoi en cours…';
+    var fd = new FormData(form);
+    fetch('/sav/demande', { method: 'POST', body: fd })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (res.ok && res.j.success) {
+          window.location.href = res.j.data.redirect;
+        } else {
+          errBox.textContent = (res.j && res.j.error) || 'Erreur lors de l\'envoi.';
+          errBox.classList.remove('hidden');
+          submit.disabled = false;
+          submit.innerHTML = '<span class="material-symbols-rounded" aria-hidden="true">send</span> Envoyer ma demande';
+        }
+      })
+      .catch(function () {
+        errBox.textContent = 'Erreur réseau. Réessayez.';
+        errBox.classList.remove('hidden');
+        submit.disabled = false;
+        submit.innerHTML = '<span class="material-symbols-rounded" aria-hidden="true">send</span> Envoyer ma demande';
+      });
+  });
+})();
+</script>
+
+<%- include('../partials/footer') %>

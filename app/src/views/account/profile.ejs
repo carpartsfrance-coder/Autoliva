@@ -1,0 +1,100 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1">
+  <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <aside class="lg:col-span-3">
+        <%- include('./_sidebar', { active: 'profil' }) %>
+      </aside>
+
+      <section class="lg:col-span-9">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-3xl font-bold text-slate-900">Mon profil</h2>
+              <p class="mt-2 text-slate-600">Modifiez vos informations personnelles.</p>
+            </div>
+          </div>
+
+      <% if (errorMessage) { %>
+        <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+          <div class="font-bold">Erreur</div>
+          <div class="mt-1 text-sm"><%= errorMessage %></div>
+        </div>
+      <% } %>
+
+      <form action="/compte/profil" class="mt-8" method="POST">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
+          <div>
+            <label class="block text-sm font-bold text-slate-700" for="firstName">Prénom</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="firstName" name="firstName" required type="text" value="<%= form ? form.firstName : '' %>" />
+          </div>
+
+          <div>
+            <label class="block text-sm font-bold text-slate-700" for="lastName">Nom</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="lastName" name="lastName" required type="text" value="<%= form ? form.lastName : '' %>" />
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="block text-sm font-bold text-slate-700" for="email">Email</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-600" id="email" readonly type="email" value="<%= form ? form.email : '' %>" />
+            <div class="mt-2 text-[12px] text-slate-500">Pour l’instant, l’email n’est pas modifiable.</div>
+          </div>
+        </div>
+
+        <% if (form && form.accountType === 'pro') { %>
+          <div class="mt-8 max-w-3xl">
+            <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+              <div class="font-black text-slate-900">Informations Pro</div>
+              <div class="mt-1 text-sm text-slate-600">Obligatoire pour les comptes Professionnels.</div>
+
+              <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-bold text-slate-700" for="companyName">Société</label>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="companyName" name="companyName" type="text" value="<%= form ? form.companyName : '' %>" />
+                </div>
+
+                <div>
+                  <label class="block text-sm font-bold text-slate-700" for="siret">SIRET</label>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="siret" name="siret" type="text" value="<%= form ? form.siret : '' %>" />
+                </div>
+
+                <div class="flex items-end">
+                  <div class="text-[12px] text-slate-500">(Exemple : 123 456 789 00012)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% } %>
+
+        <div class="mt-8 max-w-3xl">
+          <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div class="font-black text-slate-900">Notifications SMS</div>
+            <div class="mt-1 text-sm text-slate-600">Recevez des SMS de suivi pour vos commandes.</div>
+            <div class="mt-4">
+              <label class="flex items-start gap-3">
+                <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="smsOptIn" type="checkbox" value="true" <%= form && form.smsOptIn ? 'checked' : '' %> />
+                <span class="text-sm text-slate-700">J'accepte de recevoir des SMS de suivi (expedition, livraison, rappels consigne).</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-8 max-w-xl">
+          <button class="w-full rounded-xl bg-primary text-white px-5 py-3 font-black hover:bg-red-700 transition" type="submit">Enregistrer</button>
+          <% if (!dbConnected) { %>
+            <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+              <div class="font-bold">Mode démo</div>
+              <div class="mt-1 text-sm">La base de données est indisponible : l'enregistrement ne peut pas fonctionner.</div>
+            </div>
+          <% } %>
+        </div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

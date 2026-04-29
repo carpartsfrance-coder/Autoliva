@@ -1,0 +1,86 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'settings' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div>
+      <div class="text-2xl md:text-3xl font-semibold text-slate-900">Site</div>
+      <div class="mt-1 text-sm text-slate-500">Bannière promo et texte global.</div>
+    </div>
+
+    <% if (typeof successMessage !== 'undefined' && successMessage) { %>
+      <div class="mt-8 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+        <div class="font-bold">OK</div>
+        <div class="mt-1 text-sm"><%= successMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-8 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <form action="/admin/parametres/site" class="mt-8 bg-white rounded-2xl border border-slate-200 p-6 space-y-6" method="POST">
+      <div>
+        <div class="text-sm font-semibold uppercase tracking-widest text-slate-400">Bannière promo</div>
+        <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="lg:col-span-2">
+            <label class="block text-sm font-medium text-slate-500" for="promoBannerText">Texte</label>
+            <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="promoBannerText" name="promoBannerText" rows="2"><%= form && form.promoBannerText ? form.promoBannerText : '' %></textarea>
+            <div class="mt-2 text-xs text-slate-500">Astuce : laisse vide pour masquer la bannière.</div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-500" for="promoBannerCode">Code (optionnel)</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="promoBannerCode" name="promoBannerCode" type="text" value="<%= form && form.promoBannerCode ? form.promoBannerCode : '' %>" />
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-sm font-semibold uppercase tracking-widest text-slate-400">Accueil - Notre histoire</div>
+        <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="lg:col-span-2">
+            <label class="block text-sm font-medium text-slate-500" for="aboutTitle">Titre</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="aboutTitle" name="aboutTitle" type="text" value="<%= form && form.aboutTitle ? form.aboutTitle : '' %>" />
+          </div>
+          <div class="lg:col-span-2">
+            <label class="block text-sm font-medium text-slate-500" for="aboutText">Texte</label>
+            <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="aboutText" name="aboutText" rows="4"><%= form && form.aboutText ? form.aboutText : '' %></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-sm font-semibold uppercase tracking-widest text-slate-400">Réseaux sociaux</div>
+        <div class="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-500" for="facebookUrl">Facebook</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="facebookUrl" name="facebookUrl" placeholder="https://..." type="url" value="<%= form && form.facebookUrl ? form.facebookUrl : '' %>" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-500" for="instagramUrl">Instagram</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="instagramUrl" name="instagramUrl" placeholder="https://..." type="url" value="<%= form && form.instagramUrl ? form.instagramUrl : '' %>" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-slate-500" for="youtubeUrl">YouTube</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="youtubeUrl" name="youtubeUrl" placeholder="https://..." type="url" value="<%= form && form.youtubeUrl ? form.youtubeUrl : '' %>" />
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
+        <a class="btn btn-secondary" href="/admin/parametres">
+          Retour
+        </a>
+        <button class="btn btn-primary" type="submit" <%= dbConnected ? '' : 'disabled' %>>
+          Enregistrer
+        </button>
+      </div>
+    </form>
+  </div>
+</main>
+
+<%- include('./partials/footer') %>

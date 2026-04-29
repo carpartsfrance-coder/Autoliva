@@ -1,0 +1,40 @@
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node
+node_modules/
+
+# Env files
+.env
+.env.local
+.env.*
+!.env.example
+
+# Claude tooling — CONTIENT DES SECRETS LOCAUX (URI Mongo, etc.)
+.claude/
+
+# Runtime data
+uploads/
+
+# Word temp files
+~$*
+*.tmp
+
+# Build artefacts
+coverage/
+dist/
+.turbo/
+
+# Plan / docs personnels (à committer manuellement si voulus)
+Plan_Action_Autoliva_Mode_Simple.docx

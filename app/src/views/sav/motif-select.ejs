@@ -1,0 +1,48 @@
+<%- include('../partials/head') %>
+<link rel="stylesheet" href="/css/sav.css?v=7">
+<%- include('../partials/header') %>
+
+<main class="sav-module flex-1 bg-background-light text-slate-900">
+  <div class="mx-auto max-w-4xl px-4 sm:px-6 py-8 sm:py-12">
+
+    <header class="mb-8 text-center">
+      <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 mb-3">
+        <span class="material-symbols-rounded text-primary text-3xl" aria-hidden="true">support_agent</span>
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-bold tracking-tight">Quel est votre problème&nbsp;?</h1>
+      <p class="mt-2 text-sm sm:text-base text-slate-600">Sélectionnez le motif qui correspond à votre situation pour un traitement plus rapide.</p>
+    </header>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <% motifs.forEach(function(m) { %>
+        <a href="<%= m.redirect || ('/sav/demande/' + m.key) %>"
+           class="group flex items-start gap-3 rounded-xl border border-slate-200 bg-white p-4 hover:border-primary hover:shadow-md transition-all">
+          <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/10 group-hover:bg-primary/20 flex-shrink-0">
+            <span class="material-symbols-rounded text-primary text-2xl" aria-hidden="true"><%= m.icon %></span>
+          </div>
+          <div class="flex-1 min-w-0">
+            <h2 class="text-base font-semibold text-slate-900 group-hover:text-primary"><%= m.title %></h2>
+            <p class="text-xs text-slate-500 mt-0.5"><%= m.desc %></p>
+            <% if (m.legal) { %>
+              <p class="text-[11px] text-amber-700 font-medium mt-1.5"><%= m.legal %></p>
+            <% } %>
+          </div>
+          <span class="material-symbols-rounded text-slate-300 group-hover:text-primary self-center" aria-hidden="true">chevron_right</span>
+        </a>
+      <% }) %>
+    </div>
+
+    <div class="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+      <div class="flex items-start gap-2">
+        <span class="material-symbols-rounded text-slate-400" aria-hidden="true">help</span>
+        <div>
+          Vous ne trouvez pas votre cas&nbsp;? Choisissez <strong>Autre demande</strong> ou écrivez-nous directement à <a href="mailto:<%= brand.EMAIL_SAV %>" class="text-primary underline"><%= brand.EMAIL_SAV %></a>.
+          <br>
+          Vous avez déjà un ticket&nbsp;? <a href="/sav/suivi" class="text-primary underline">Suivre mon dossier</a>.
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

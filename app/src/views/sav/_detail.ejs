@@ -1,0 +1,189 @@
+<%
+/* Partial: détail ticket SAV (réutilisé par /compte/sav et /sav/suivi)
+   Locals attendus : ticket, STATUTS_LABELS, postUrl, sent (bool), error (str|null) */
+var sm = STATUTS_LABELS[ticket.statut] || [ticket.statut, 'bg-slate-100 text-slate-700'];
+var phases = [
+  { key: 'ouvert',                 label: 'Ouvert' },
+  { key: 'en_attente_documents',   label: 'Documents' },
+  { key: 'retour_demande',         label: 'Retour' },
+  { key: 'recu_atelier',           label: 'Atelier' },
+  { key: 'en_analyse',             label: 'Analyse' },
+  { key: 'analyse_terminee',       label: 'Décision' },
+  { key: 'resolu_garantie',        label: 'Résolu' },
+];
+function phaseIndex(s) {
+  var map = {
+    ouvert: 0, pre_qualification: 0,
+    en_attente_documents: 1, relance_1: 1, relance_2: 1,
+    retour_demande: 2, en_transit_retour: 2,
+    recu_atelier: 3,
+    en_analyse: 4,
+    analyse_terminee: 5, en_attente_decision_client: 5, en_attente_fournisseur: 5,
+    resolu_garantie: 6, resolu_facture: 6, clos: 6, refuse: 6,
+  };
+  return map[s] != null ? map[s] : 0;
+}
+var current = phaseIndex(ticket.statut);
+var publicMsgs = (ticket.messages || []).filter(function(m){ return m.canal !== 'interne'; });
+%>
+
+<% if (sent) { %>
+  <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+    Votre message a bien été envoyé. L'équipe SAV vous répondra rapidement.
+  </div>
+<% } %>
+<% if (error === 'empty') { %>
+  <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+    Veuillez saisir au moins quelques mots avant d'envoyer votre message.
+  </div>
+<% } %>
+
+<div class="rounded-2xl border border-slate-200 bg-white p-5">
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div>
+      <div class="text-xs uppercase tracking-wide text-slate-400">Dossier SAV</div>
+      <div class="text-2xl font-bold font-mono text-slate-900"><%= ticket.numero %></div>
+      <div class="mt-1 text-sm text-slate-600">
+        <%= ticket.pieceType %><% if (ticket.numeroCommande) { %> · Commande <%= ticket.numeroCommande %><% } %>
+      </div>
+    </div>
+    <span class="px-3 py-1 rounded-full text-xs font-semibold <%= sm[1] %>"><%= sm[0] %></span>
+  </div>
+
+  <!-- Barre de progression -->
+  <div class="mt-5">
+    <div class="flex items-center justify-between gap-1">
+      <% phases.forEach(function(p, i) { var done = i < current; var isCur = i === current; %>
+        <div class="flex-1 flex flex-col items-center text-center">
+          <div class="h-2.5 w-full rounded-full <%= done || isCur ? 'bg-primary' : 'bg-slate-200' %>"></div>
+          <div class="mt-1.5 text-[10px] sm:text-[11px] font-medium <%= isCur ? 'text-primary' : (done ? 'text-slate-700' : 'text-slate-400') %>">
+            <%= p.label %>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</div>
+
+<% if (ticket.vehicule && (ticket.vehicule.vin || ticket.vehicule.marque)) { %>
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 mt-4">
+    <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-2">Véhicule</h2>
+    <div class="text-sm text-slate-700 space-y-1">
+      <% if (ticket.vehicule.marque || ticket.vehicule.modele) { %><div><%= [ticket.vehicule.marque, ticket.vehicule.modele, ticket.vehicule.annee].filter(Boolean).join(' ') %></div><% } %>
+      <% if (ticket.vehicule.vin) { %><div><strong>VIN&nbsp;:</strong> <span class="font-mono"><%= ticket.vehicule.vin %></span></div><% } %>
+      <% if (ticket.vehicule.immatriculation) { %><div><strong>Plaque&nbsp;:</strong> <%= ticket.vehicule.immatriculation %></div><% } %>
+      <% if (ticket.vehicule.kilometrage) { %><div><strong>Kilométrage&nbsp;:</strong> <%= ticket.vehicule.kilometrage %> km</div><% } %>
+    </div>
+  </div>
+<% } %>
+
+<!-- Conversation -->
+<div class="rounded-2xl border border-slate-200 bg-white p-5 mt-4" id="sav-conversation">
+  <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Conversation</h2>
+  <% if (!publicMsgs.length) { %>
+    <p class="text-sm text-slate-500">Aucun message pour le moment.</p>
+  <% } else { %>
+    <div class="space-y-3">
+      <% publicMsgs.forEach(function(m) {
+           var isClient = m.auteur === 'client';
+           var isSystem = m.auteur === 'systeme' || /Changement de statut/.test(m.contenu); %>
+        <% if (isSystem) { %>
+          <div class="text-center text-[11px] text-slate-400 py-1">
+            <%= new Date(m.date).toLocaleString('fr-FR') %> · <%= m.contenu %>
+          </div>
+        <% } else { %>
+          <div class="flex <%= isClient ? 'justify-end' : 'justify-start' %>">
+            <div class="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm <%= isClient ? 'bg-primary text-white rounded-br-sm' : 'bg-slate-100 text-slate-800 rounded-bl-sm' %>">
+              <div class="text-[10px] opacity-70 mb-0.5">
+                <%= isClient ? 'Vous' : brand.NAME %> · <%= new Date(m.date).toLocaleString('fr-FR') %><% if (m.editedAt) { %> · <span class="italic" title="Modifié le <%= new Date(m.editedAt).toLocaleString('fr-FR') %>">(modifié)</span><% } %>
+              </div>
+              <div class="whitespace-pre-wrap"><%= m.contenu %></div>
+              <% if (Array.isArray(m.attachments) && m.attachments.length) { %>
+                <div class="mt-2 pt-2 border-t <%= isClient ? 'border-white/30' : 'border-slate-300' %> space-y-1">
+                  <% m.attachments.forEach(function(a) {
+                       var name = a.originalName || 'pièce jointe';
+                       var sizeKb = a.size ? Math.round(a.size / 1024) : 0; %>
+                    <div class="flex items-center gap-1.5 text-xs <%= isClient ? 'text-white/90 hover:text-white' : 'text-slate-700 hover:text-slate-900' %>">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.58 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                      <a href="<%= a.url %>" target="_blank" rel="noopener" class="underline truncate max-w-[200px]" title="<%= name %>"><%= name %></a>
+                      <% if (sizeKb) { %><span class="opacity-70">(<%= sizeKb %> Ko)</span><% } %>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        <% } %>
+      <% }) %>
+    </div>
+  <% } %>
+</div>
+
+<!-- Documents -->
+<% if (ticket.documentsList && ticket.documentsList.length) { %>
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 mt-4">
+    <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Documents joints</h2>
+    <ul class="space-y-1.5 text-sm">
+      <% ticket.documentsList.forEach(function(d) { %>
+        <li>
+          <a href="<%= d.url %>" target="_blank" rel="noopener" class="text-primary hover:underline inline-flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-base">attach_file</span>
+            <%= d.originalName || d.url.split('/').pop() %>
+          </a>
+        </li>
+      <% }) %>
+    </ul>
+  </div>
+<% } %>
+
+<!-- Réponse -->
+<% var clos = ['clos','clos_sans_reponse','refuse','resolu_garantie','resolu_facture'].indexOf(ticket.statut) >= 0; %>
+<% if (!clos) { %>
+  <div class="rounded-2xl border border-slate-200 bg-white p-5 mt-4">
+    <h2 class="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3">Répondre à l'équipe SAV</h2>
+    <form method="POST" action="<%= postUrl %>" enctype="multipart/form-data" class="space-y-3">
+      <textarea name="contenu" rows="4" required minlength="5" maxlength="5000"
+                class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20"
+                placeholder="Posez votre question, ajoutez une précision…"></textarea>
+      <div>
+        <label class="inline-flex items-center gap-2 cursor-pointer text-sm text-slate-600 hover:text-primary">
+          <span class="material-symbols-outlined text-base">attach_file</span>
+          <span>Ajouter des fichiers (JPG, PNG, PDF — 10 Mo, 5 max)</span>
+          <input type="file" name="attachments" multiple accept="image/jpeg,image/png,image/webp,application/pdf" class="hidden" id="sav-attach-input">
+        </label>
+        <div id="sav-attach-list" class="mt-2 text-xs text-slate-500"></div>
+      </div>
+      <button class="inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold px-4 py-2.5">
+        <span class="material-symbols-outlined">send</span>
+        Envoyer
+      </button>
+    </form>
+  </div>
+<% } else { %>
+  <div class="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600 mt-4">
+    Ce dossier est clôturé. Pour toute nouvelle demande, ouvrez un nouveau ticket SAV.
+  </div>
+<% } %>
+
+<script>
+  // Scroll auto sur le dernier message
+  (function () {
+    var box = document.getElementById('sav-conversation');
+    if (box) {
+      var last = box.querySelector('.space-y-3 > div:last-child');
+      if (last && last.scrollIntoView) last.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    // Liste des fichiers sélectionnés
+    var input = document.getElementById('sav-attach-input');
+    var list = document.getElementById('sav-attach-list');
+    if (input && list) {
+      input.addEventListener('change', function () {
+        var files = Array.from(input.files || []);
+        if (!files.length) { list.innerHTML = ''; return; }
+        list.innerHTML = files.map(function (f) {
+          return '<div>📎 ' + f.name + ' (' + Math.round(f.size / 1024) + ' Ko)</div>';
+        }).join('');
+      });
+    }
+  })();
+</script>

@@ -1,0 +1,50 @@
+<%- include('./partials/head') %>
+<link rel="stylesheet" href="/css/sav.css?v=21">
+<%- include('./partials/sidebar', { active: 'sav' }) %>
+
+<main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>">
+  <div class="px-6 lg:px-10 py-8">
+
+    <div class="mb-6">
+      <div class="text-2xl md:text-3xl font-semibold text-slate-900">Réputation — Suivi feedbacks</div>
+      <div class="mt-1 text-sm text-slate-500">Conversion des SAV résolus en avis Google Reviews</div>
+    </div>
+
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="text-xs uppercase text-slate-500">Mails J+7 envoyés</div>
+        <div class="mt-1 text-2xl font-bold text-slate-900" id="rep-sent">—</div>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="text-xs uppercase text-slate-500">Formulaires complétés</div>
+        <div class="mt-1 text-2xl font-bold text-slate-900" id="rep-completed">—</div>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="text-xs uppercase text-slate-500">Note moyenne</div>
+        <div class="mt-1 text-2xl font-bold text-amber-500" id="rep-avg">—</div>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="text-xs uppercase text-slate-500">Redirections Google</div>
+        <div class="mt-1 text-2xl font-bold text-emerald-700" id="rep-redirected">—</div>
+      </div>
+    </div>
+
+    <section class="rounded-2xl border border-slate-200 bg-white">
+      <div class="px-5 py-3 border-b border-slate-100"><h2 class="text-sm font-semibold">Feedbacks privés (note &lt; 4)</h2></div>
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 text-left text-xs">
+          <tr>
+            <th class="px-4 py-2">Date</th>
+            <th class="px-4 py-2">Ticket</th>
+            <th class="px-4 py-2">Note</th>
+            <th class="px-4 py-2">Commentaire</th>
+          </tr>
+        </thead>
+        <tbody id="rep-private-tbody" class="divide-y divide-slate-100"></tbody>
+      </table>
+    </section>
+  </div>
+</main>
+
+<script src="/js/sav-admin.js?v=4" defer></script>
+<%- include('./partials/footer') %>

@@ -1,0 +1,192 @@
+<header class="sticky top-0 z-50 w-full border-b border-slate-200 bg-white px-4 md:px-10 py-3">
+<div class="mx-auto flex max-w-[1440px] items-center gap-6">
+<a class="flex items-center gap-2 text-primary shrink-0" href="<%= typeof langPrefix !== 'undefined' ? langPrefix : '' %>/">
+<img src="<%= brand.LOGO_URL %>" alt="<%= brand.NAME %>" class="h-10 md:h-11 w-auto" loading="eager" />
+</a>
+
+<% const _lp = typeof langPrefix !== 'undefined' ? langPrefix : ''; %>
+<% const _hp = typeof currentPathWithoutLang !== 'undefined' ? currentPathWithoutLang : (typeof currentPath === 'string' ? currentPath : ''); %>
+<% const _hpPathOnly = _hp.split('?')[0].split('#')[0]; %>
+<% const _navActive = (href) => {
+  if (!href) return false;
+  if (href === '/') return _hpPathOnly === '/';
+  return _hpPathOnly === href || _hpPathOnly.startsWith(href + '/');
+}; %>
+
+<nav class="hidden lg:flex items-center gap-6 text-sm font-semibold text-slate-600">
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/" <%= _navActive('/') ? 'aria-current="page"' : '' %>><%= t('nav.home') %></a>
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/produits" <%= _navActive('/produits') ? 'aria-current="page"' : '' %>><%= t('nav.catalog') %></a>
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/blog') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/blog" <%= _navActive('/blog') ? 'aria-current="page"' : '' %>><%= t('nav.blog') %></a>
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/contact') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/contact" <%= _navActive('/contact') ? 'aria-current="page"' : '' %>><%= t('nav.contact') %></a>
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/devis') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/devis" <%= _navActive('/devis') ? 'aria-current="page"' : '' %>><%= t('nav.quote') %></a>
+</nav>
+
+<div class="hidden md:flex flex-1 max-w-2xl">
+<form action="<%= _lp %>/produits" class="relative w-full" method="GET" data-search-autocomplete data-search-autocomplete-view="compact">
+<div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+<span class="material-symbols-outlined text-xl">search</span>
+ </div>
+<input class="block w-full px-3 py-2.5 pl-10 text-sm text-slate-900 border border-slate-200 rounded-lg bg-slate-50 focus:ring-primary focus:border-primary" name="q" placeholder="<%= t('header.searchPlaceholder') %>" type="text" value="<%= typeof searchQuery !== 'undefined' ? searchQuery : '' %>" autocomplete="off" data-search-autocomplete-input />
+
+<div class="absolute left-0 right-0 top-full mt-2 hidden" data-search-autocomplete-panel>
+  <div class="rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden" style="font-family: Arial, sans-serif;">
+    <div class="max-h-[28rem] overflow-y-auto" data-search-autocomplete-sections></div>
+    <a class="block border-t border-slate-100 px-4 py-3 text-xs font-black text-primary hover:bg-slate-50" href="<%= _lp %>/produits" data-search-autocomplete-all>
+      <%= t('header.viewCatalog') %>
+    </a>
+  </div>
+</div>
+</form>
+</div>
+
+<div class="ml-auto flex items-center gap-3">
+<% if (currentUser) { %>
+<% const userAccountType = currentUser.accountType === 'pro' ? 'pro' : 'particulier'; %>
+<% const userDiscountPercent = typeof currentUser.discountPercent === 'number' ? currentUser.discountPercent : 0; %>
+<% const userDisplayName = userAccountType === 'pro' && currentUser.companyName ? currentUser.companyName : `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim(); %>
+<div class="hidden xl:flex items-center bg-slate-100 rounded-full px-4 py-2">
+<div class="flex flex-col leading-tight text-right">
+<div class="text-xs font-bold text-slate-900"><%= userDisplayName || t('nav.account') %></div>
+<div class="text-[10px] font-black uppercase tracking-widest <%= userAccountType === 'pro' ? 'text-primary' : 'text-slate-600' %>">
+<%= userAccountType === 'pro' ? t('header.pro') : t('header.individual') %>
+<% if (userDiscountPercent > 0) { %>
+ • <%= t('header.discount') %> <%= userDiscountPercent %>%
+<% } %>
+</div>
+</div>
+</div>
+<% } %>
+
+<% const _altLangPrefix = typeof alternateLangPrefix !== 'undefined' ? alternateLangPrefix : '/en'; %>
+<% const _curPathNoLang = typeof currentPathWithoutLang !== 'undefined' ? currentPathWithoutLang : '/'; %>
+<% const _isEn = typeof lang !== 'undefined' && lang === 'en'; %>
+<% const _frHref = _curPathNoLang === '/' ? '/' : _curPathNoLang; %>
+<% const _enHref = '/en' + (_curPathNoLang === '/' ? '' : _curPathNoLang); %>
+<div class="hidden sm:flex items-center rounded-lg border border-slate-200 overflow-hidden h-9">
+<a class="flex items-center justify-center px-2.5 h-full text-xs font-black uppercase tracking-wider transition-colors <%= _isEn ? 'text-slate-400 hover:text-primary hover:bg-slate-50' : 'bg-primary text-white' %>" href="<%= _frHref %>">FR</a>
+<a class="flex items-center justify-center px-2.5 h-full text-xs font-black uppercase tracking-wider transition-colors <%= _isEn ? 'bg-primary text-white' : 'text-slate-400 hover:text-primary hover:bg-slate-50' %>" href="<%= _enHref %>">EN</a>
+</div>
+
+<button aria-controls="mobileNavDrawer" aria-expanded="false" aria-label="<%= t('header.menu') %>" class="flex lg:hidden items-center justify-center rounded-lg h-9 w-9 text-slate-700 hover:bg-slate-100 transition-colors" data-mobile-nav-open type="button">
+<span class="material-symbols-outlined">menu</span>
+</button>
+
+<a aria-label="<%= t('nav.search') %>" class="flex md:hidden items-center justify-center rounded-lg h-9 w-9 text-slate-700 hover:bg-slate-100 transition-colors" href="<%= _lp %>/rechercher">
+<span class="material-symbols-outlined">search</span>
+</a>
+
+<a class="relative flex items-center justify-center rounded-lg h-9 w-9 text-slate-700 hover:bg-slate-100 transition-colors" data-cart-link href="<%= _lp %>/panier">
+<span class="material-symbols-outlined" data-cart-icon>shopping_cart</span>
+<span class="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-primary text-[10px] text-white font-semibold" data-cart-count><%= typeof cartItemCount !== 'undefined' ? cartItemCount : 0 %></span>
+</a>
+
+<a class="hidden sm:flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg text-slate-700 font-semibold text-sm hover:bg-slate-50 transition-colors" href="<%= _lp %>/compte">
+<span class="material-symbols-outlined text-xl">account_circle</span>
+<span><%= t('nav.account') %></span>
+</a>
+</div>
+</div>
+</header>
+
+<nav aria-hidden="true" class="hidden fixed inset-0 z-50 lg:hidden" data-mobile-nav-drawer id="mobileNavDrawer" role="dialog">
+  <div class="absolute inset-0 bg-black/40" data-mobile-nav-close></div>
+  <div class="absolute inset-y-0 left-0 w-full max-w-sm overflow-y-auto bg-white p-4">
+    <div class="rounded-3xl border border-slate-200 bg-white p-4">
+      <div class="flex items-center justify-between">
+        <div class="font-black text-slate-900"><%= t('header.menu') %></div>
+        <button class="h-9 px-3 rounded-xl border border-slate-200 text-slate-700 font-bold text-xs" data-mobile-nav-close type="button"><%= t('header.close') %></button>
+      </div>
+
+      <div class="mt-4 grid gap-2">
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/">
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">home</span><%= t('nav.home') %></span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/produits">
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">storefront</span><%= t('nav.catalog') %></span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/blog') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/blog">
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">article</span><%= t('nav.blog') %></span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/contact') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/contact">
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">mail</span><%= t('nav.contact') %></span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/devis') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/devis">
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">request_quote</span><%= t('nav.quote') %></span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/compte') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/compte">
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">account_circle</span><%= t('nav.account') %></span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors hover:bg-slate-50 text-slate-800 border-t border-slate-100 mt-2 pt-4" href="<%= _altLangPrefix %><%= _curPathNoLang === '/' ? '' : _curPathNoLang %><%= _curPathNoLang === '/' && _altLangPrefix === '' ? '/' : '' %>">
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">translate</span><%= (typeof lang !== 'undefined' && lang === 'en') ? 'Français' : 'English' %></span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<script>
+  (function () {
+    var drawer = document.querySelector('[data-mobile-nav-drawer]');
+    var openBtn = document.querySelector('[data-mobile-nav-open]');
+    var closeEls = Array.from(document.querySelectorAll('[data-mobile-nav-close]'));
+    if (!window.__cpOverlayLockCount) window.__cpOverlayLockCount = 0;
+    if (window.__cpPrevOverflow === undefined) window.__cpPrevOverflow = '';
+
+    function lockScroll() {
+      if (window.__cpOverlayLockCount === 0) {
+        window.__cpPrevOverflow = document.documentElement.style.overflow;
+        document.documentElement.style.overflow = 'hidden';
+      }
+      window.__cpOverlayLockCount += 1;
+    }
+
+    function unlockScroll() {
+      window.__cpOverlayLockCount = Math.max(0, (window.__cpOverlayLockCount || 0) - 1);
+      if (window.__cpOverlayLockCount === 0) {
+        document.documentElement.style.overflow = window.__cpPrevOverflow || '';
+      }
+    }
+
+    function openDrawer() {
+      if (!drawer) return;
+      drawer.classList.remove('hidden');
+      drawer.setAttribute('aria-hidden', 'false');
+      drawer.setAttribute('aria-modal', 'true');
+      if (openBtn) openBtn.setAttribute('aria-expanded', 'true');
+      lockScroll();
+    }
+
+    function closeDrawer() {
+      if (!drawer) return;
+      drawer.classList.add('hidden');
+      drawer.setAttribute('aria-hidden', 'true');
+      drawer.removeAttribute('aria-modal');
+      if (openBtn) openBtn.setAttribute('aria-expanded', 'false');
+      unlockScroll();
+    }
+
+    if (openBtn) {
+      openBtn.addEventListener('click', openDrawer);
+    }
+
+    closeEls.forEach(function (el) {
+      el.addEventListener('click', closeDrawer);
+    });
+
+    if (drawer) {
+      drawer.addEventListener('keydown', function (e) {
+        if (e && e.key === 'Escape') closeDrawer();
+      });
+    }
+  })();
+</script>
+
+<script defer src="/js/search-autocomplete.js"></script>

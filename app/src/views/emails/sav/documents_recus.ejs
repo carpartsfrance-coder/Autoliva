@@ -1,0 +1,6 @@
+<% const body = `
+  <p>Bonjour,</p>
+  <p>Nous avons bien reçu vos documents pour la demande <strong>${ticket.numero}</strong>. Merci !</p>
+  <p>Nous attendons maintenant votre pièce à notre atelier. Dès réception, nous vous tiendrons informé.</p>
+` %>
+<%- include('./_layout', { ticket: ticket, subject: 'Documents bien reçus', body: body }) %>

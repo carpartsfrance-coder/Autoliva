@@ -1,0 +1,407 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'categories' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+      <div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Catégories'}] }) %>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Catégories</div>
+        <div class="mt-1 text-sm text-slate-500">Gère les catégories affichées sur le site et dans le catalogue.</div>
+      </div>
+    </div>
+
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <div class="mt-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
+      <section class="xl:col-span-5">
+        <div class="space-y-6">
+          <div class="bg-white rounded-2xl border border-slate-200 p-6">
+            <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Ajouter une catégorie principale</div>
+
+            <form action="/admin/categories" class="mt-4 space-y-4" method="POST">
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="mainNameNew">Nom</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="mainNameNew" name="name" placeholder="Ex: Transmission" required type="text" />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="mainShippingClass">Classe de livraison</label>
+                <select class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="mainShippingClass" name="shippingClassId">
+                  <option value="">Défaut / aucune</option>
+                  <% (shippingClassOptions || []).forEach((opt) => { %>
+                    <option value="<%= opt.id %>"><%= opt.name %> — <%= opt.domicilePrice %></option>
+                  <% }) %>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="mainSortOrder">Ordre (optionnel)</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="mainSortOrder" name="sortOrder" placeholder="0" type="number" />
+                <div class="mt-1 text-xs text-slate-500">Plus le nombre est petit, plus la catégorie remonte dans la liste.</div>
+              </div>
+
+              <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
+                <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="isHomeFeatured" type="checkbox" value="true" />
+                <span>
+                  <span class="block font-semibold text-slate-900">Mettre en avant sur l'accueil</span>
+                  <span class="mt-1 block text-xs font-medium text-slate-500">Cette catégorie pourra apparaître dans la sidebar Catégories de la page d'accueil.</span>
+                </span>
+              </label>
+
+              <button class="btn btn-primary" <%= dbConnected ? '' : 'disabled' %> type="submit">
+                <span class="material-symbols-outlined mr-2 text-base">add</span>
+                Ajouter
+              </button>
+            </form>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 p-6">
+            <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Ajouter une sous-catégorie</div>
+
+            <form action="/admin/categories" class="mt-4 space-y-4" method="POST">
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="mainNameSelect">Catégorie principale</label>
+                <select class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="mainNameSelect" name="mainName" required>
+                  <option value="">Choisir...</option>
+                  <% (mainCategoryOptions || []).forEach((opt) => { %>
+                    <option value="<%= opt %>"><%= opt %></option>
+                  <% }) %>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="subNameNew">Sous-catégorie</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="subNameNew" name="subName" placeholder="Ex: Boîte de vitesses" required type="text" />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="subShippingClass">Classe de livraison</label>
+                <select class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="subShippingClass" name="shippingClassId">
+                  <option value="">Défaut / aucune</option>
+                  <% (shippingClassOptions || []).forEach((opt) => { %>
+                    <option value="<%= opt.id %>"><%= opt.name %> — <%= opt.domicilePrice %></option>
+                  <% }) %>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="subSortOrder">Ordre (optionnel)</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="subSortOrder" name="sortOrder" placeholder="0" type="number" />
+              </div>
+
+              <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-500">
+                <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="isHomeFeatured" type="checkbox" value="true" />
+                <span>
+                  <span class="block font-semibold text-slate-900">Mettre en avant sur l'accueil</span>
+                  <span class="mt-1 block text-xs font-medium text-slate-500">Cette sous-catégorie pourra apparaître dans la sidebar Catégories de la page d'accueil.</span>
+                </span>
+              </label>
+
+              <button class="btn btn-primary" <%= (dbConnected && mainCategoryOptions && mainCategoryOptions.length) ? '' : 'disabled' %> type="submit">
+                <span class="material-symbols-outlined mr-2 text-base">add</span>
+                Ajouter
+              </button>
+            </form>
+          </div>
+
+          <% if (!dbConnected) { %>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+              <div class="font-bold">Mode démo</div>
+              <div class="mt-1 text-sm">La base de données est indisponible : vous ne pouvez pas ajouter / modifier / supprimer de catégories.</div>
+            </div>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="xl:col-span-7">
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
+            <div class="font-semibold text-slate-900">Catégories (2 niveaux)</div>
+            <div class="text-xs font-bold text-slate-500"><%= (categories && categories.length) ? categories.length : 0 %> au total</div>
+          </div>
+
+          <div class="sticky top-0 z-30 px-6 py-4 border-b border-slate-100 bg-white/98 backdrop-blur shadow-lg shadow-slate-200/40">
+            <form action="/admin/categories" class="flex flex-col sm:flex-row sm:items-center gap-3" method="GET">
+              <div class="flex-1">
+                <input class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" name="q" placeholder="Rechercher une catégorie..." type="text" value="<%= (filters && filters.q) ? filters.q : '' %>" />
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="btn btn-primary" type="submit">
+                  Rechercher
+                </button>
+                <% if (filters && filters.q) { %>
+                  <a class="btn btn-secondary" href="/admin/categories">
+                    Réinitialiser
+                  </a>
+                <% } %>
+              </div>
+            </form>
+
+            <div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <form action="/admin/categories/supprimer-multi" id="bulkDeleteForm" method="POST" data-ajax="true" data-confirm="Supprimer toutes les cat\u00e9gories s\u00e9lectionn\u00e9es ?">
+                <button class="btn btn-ghost" disabled id="bulkDeleteBtn" type="submit">
+                  <span class="material-symbols-outlined mr-2 text-base">delete</span>
+                  Supprimer la sélection
+                </button>
+              </form>
+
+              <div class="text-xs font-bold text-slate-500">
+                <span id="bulkSelectedCount">0</span> sélectionnée(s)
+              </div>
+            </div>
+          </div>
+
+          <% if (categoryGroups && categoryGroups.length) { %>
+            <div class="divide-y divide-slate-100">
+              <% categoryGroups.forEach((g) => { %>
+                <div class="p-6" data-row-id="<%= g.mainDoc && g.mainDoc.id ? g.mainDoc.id : '' %>">
+                  <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                    <div>
+                      <div class="text-lg font-semibold text-slate-900"><%= g.main %></div>
+                      <div class="mt-1 text-sm text-slate-500">
+                        Produits dans ce groupe : <span class="font-semibold text-slate-900"><%= typeof g.usedCountTotal !== 'undefined' ? g.usedCountTotal : 0 %></span>
+                      </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                      <% const mainDisabled = !g.mainDoc || !g.mainDoc.id; %>
+                      <% const canDeleteMain = !!(g.mainDoc && g.mainDoc.canDelete && g.mainDoc.id); %>
+                      <% const canSelectMain = !!(dbConnected && canDeleteMain); %>
+
+                      <label class="inline-flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 <%= canSelectMain ? 'cursor-pointer hover:bg-slate-50' : 'opacity-50' %>">
+                        <input class="bulk-category-checkbox rounded border-slate-300 text-primary focus:ring-primary" form="bulkDeleteForm" name="categoryIds" type="checkbox" value="<%= g.mainDoc && g.mainDoc.id ? g.mainDoc.id : '' %>" <%= canSelectMain ? '' : 'disabled' %> />
+                        Sélection
+                      </label>
+
+                      <form action="/admin/categories/<%= g.mainDoc && g.mainDoc.id ? g.mainDoc.id : '' %>/toggle" method="POST" data-ajax="true">
+                        <button class="btn btn-ghost" <%= (!dbConnected || mainDisabled) ? 'disabled' : '' %> type="submit">
+                          <span class="material-symbols-outlined mr-2 text-base">toggle_on</span>
+                          <%= (g.mainDoc && g.mainDoc.isActive) ? 'Désactiver' : 'Activer' %>
+                        </button>
+                      </form>
+
+                      <details class="group">
+                        <summary class="btn btn-secondary">
+                          <span class="material-symbols-outlined mr-2 text-base">edit</span>
+                          Modifier
+                        </summary>
+                        <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <% if (mainDisabled) { %>
+                            <form action="/admin/categories" method="POST" class="space-y-3">
+                              <input type="hidden" name="name" value="<%= g.main %>" />
+                              <input type="hidden" name="sortOrder" value="0" />
+                              <button class="btn btn-primary" <%= dbConnected ? '' : 'disabled' %> type="submit">
+                                Créer la catégorie principale
+                              </button>
+                            </form>
+                          <% } else { %>
+                            <form action="/admin/categories/<%= g.mainDoc.id %>" method="POST" class="space-y-3">
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Nom</label>
+                                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" name="name" required type="text" value="<%= g.mainDoc.name %>" />
+                              </div>
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Classe de livraison</label>
+                                <select class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" name="shippingClassId">
+                                  <option value="">Défaut / aucune</option>
+                                  <% (shippingClassOptions || []).forEach((opt) => { %>
+                                    <option value="<%= opt.id %>" <%= (g.mainDoc.shippingClassId && String(g.mainDoc.shippingClassId) === String(opt.id)) ? 'selected' : '' %>><%= opt.name %> — <%= opt.domicilePrice %></option>
+                                  <% }) %>
+                                </select>
+                              </div>
+                              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div>
+                                  <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Ordre</label>
+                                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" name="sortOrder" type="number" value="<%= typeof g.mainDoc.sortOrder !== 'undefined' ? g.mainDoc.sortOrder : 0 %>" />
+                                </div>
+                                <div>
+                                  <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Statut</label>
+                                  <div class="mt-2">
+                                    <span class="badge <%= g.mainDoc.isActive ? 'badge-success' : 'badge-neutral' %>">
+                                      <%= g.mainDoc.isActive ? 'ACTIVE' : 'INACTIVE' %>
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-500">
+                                <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="isHomeFeatured" type="checkbox" value="true" <%= g.mainDoc.isHomeFeatured ? 'checked' : '' %> />
+                                <span>
+                                  <span class="block font-semibold text-slate-900">Mise en avant accueil</span>
+                                  <span class="mt-1 block text-xs font-medium text-slate-500">Active cette catégorie dans la sidebar Catégories de la page d'accueil.</span>
+                                </span>
+                              </label>
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Texte SEO (HTML)</label>
+                                <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium font-mono" name="seoText" rows="6" placeholder="Texte riche affiché en bas de la page catégorie pour le référencement..."><%= g.mainDoc.seoText || '' %></textarea>
+                                <div class="mt-1 text-xs text-slate-500">HTML autorisé. Idéal : 200-400 mots avec mots-clés et liens internes.</div>
+                              </div>
+                              <button class="btn btn-primary" <%= dbConnected ? '' : 'disabled' %> type="submit">Enregistrer</button>
+                            </form>
+                          <% } %>
+                        </div>
+                      </details>
+
+                      <form action="/admin/categories/<%= g.mainDoc && g.mainDoc.id ? g.mainDoc.id : '' %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette cat\u00e9gorie principale ?">
+                        <button class="btn btn-danger" <%= (!dbConnected || !canDeleteMain) ? 'disabled' : '' %> type="submit">
+                          <span class="material-symbols-outlined mr-2 text-base">delete</span>
+                          Supprimer
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+
+                  <div class="mt-6">
+                    <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Sous-catégories</div>
+                    <% if (g.subs && g.subs.length) { %>
+                      <div class="mt-3 space-y-3">
+                        <% g.subs.forEach((s) => { %>
+                          <div class="rounded-2xl border border-slate-200 p-4" data-row-id="<%= s.id %>">
+                            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                              <div>
+                                <div class="font-semibold text-slate-900"><%= s.subName || s.name %></div>
+                                <div class="mt-1 text-sm text-slate-500">Produits : <span class="font-semibold text-slate-900"><%= typeof s.usedCountExact !== 'undefined' ? s.usedCountExact : 0 %></span></div>
+                              </div>
+
+                              <div class="flex flex-wrap items-center gap-2">
+                                <label class="inline-flex items-center gap-2 rounded-xl bg-white border border-slate-200 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 <%= (dbConnected && s.canDelete) ? 'cursor-pointer hover:bg-slate-50' : 'opacity-50' %>">
+                                  <input class="bulk-category-checkbox rounded border-slate-300 text-primary focus:ring-primary" form="bulkDeleteForm" name="categoryIds" type="checkbox" value="<%= s.id %>" <%= (dbConnected && s.canDelete) ? '' : 'disabled' %> />
+                                  Sélection
+                                </label>
+
+                                <form action="/admin/categories/<%= s.id %>/toggle" method="POST" data-ajax="true">
+                                  <button class="btn btn-ghost" <%= dbConnected ? '' : 'disabled' %> type="submit">
+                                    <span class="material-symbols-outlined mr-2 text-base">toggle_on</span>
+                                    <%= s.isActive ? 'Désactiver' : 'Activer' %>
+                                  </button>
+                                </form>
+
+                                <details class="group">
+                                  <summary class="btn btn-secondary">
+                                    <span class="material-symbols-outlined mr-2 text-base">edit</span>
+                                    Modifier
+                                  </summary>
+                                  <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                    <form action="/admin/categories/<%= s.id %>" method="POST" class="space-y-3">
+                                      <div>
+                                        <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Catégorie principale</label>
+                                        <select class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" name="mainName" required>
+                                          <% (mainCategoryOptions || []).forEach((opt) => { %>
+                                            <option value="<%= opt %>" <%= opt === s.mainName ? 'selected' : '' %>><%= opt %></option>
+                                          <% }) %>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Sous-catégorie</label>
+                                        <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" name="subName" required type="text" value="<%= s.subName %>" />
+                                      </div>
+                                      <div>
+                                        <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Classe de livraison</label>
+                                        <select class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" name="shippingClassId">
+                                          <option value="">Défaut / aucune</option>
+                                          <% (shippingClassOptions || []).forEach((opt) => { %>
+                                            <option value="<%= opt.id %>" <%= (s.shippingClassId && String(s.shippingClassId) === String(opt.id)) ? 'selected' : '' %>><%= opt.name %> — <%= opt.domicilePrice %></option>
+                                          <% }) %>
+                                        </select>
+                                      </div>
+                                      <div>
+                                        <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Ordre</label>
+                                        <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" name="sortOrder" type="number" value="<%= typeof s.sortOrder !== 'undefined' ? s.sortOrder : 0 %>" />
+                                      </div>
+                                      <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-500">
+                                        <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="isHomeFeatured" type="checkbox" value="true" <%= s.isHomeFeatured ? 'checked' : '' %> />
+                                        <span>
+                                          <span class="block font-semibold text-slate-900">Mise en avant accueil</span>
+                                          <span class="mt-1 block text-xs font-medium text-slate-500">Active cette sous-catégorie dans la sidebar Catégories de la page d'accueil.</span>
+                                        </span>
+                                      </label>
+                                      <div>
+                                        <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Texte SEO (HTML)</label>
+                                        <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium font-mono" name="seoText" rows="6" placeholder="Texte riche affiché en bas de la page catégorie pour le référencement..."><%= s.seoText || '' %></textarea>
+                                        <div class="mt-1 text-xs text-slate-500">HTML autorisé. Idéal : 200-400 mots avec mots-clés et liens internes.</div>
+                                      </div>
+                                      <button class="btn btn-primary" <%= dbConnected ? '' : 'disabled' %> type="submit">Enregistrer</button>
+                                    </form>
+                                  </div>
+                                </details>
+
+                                <form action="/admin/categories/<%= s.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette sous-cat\u00e9gorie ?">
+                                  <button class="btn btn-danger" <%= (!dbConnected || !s.canDelete) ? 'disabled' : '' %> type="submit">
+                                    <span class="material-symbols-outlined mr-2 text-base">delete</span>
+                                    Supprimer
+                                  </button>
+                                </form>
+                              </div>
+                            </div>
+                          </div>
+                        <% }) %>
+                      </div>
+                    <% } else { %>
+                      <div class="mt-3 text-sm text-slate-500">Aucune sous-catégorie.</div>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+
+            <% if (pagination && pagination.totalPages > 1) { %>
+              <% const qValue = (filters && filters.q) ? filters.q : ''; %>
+              <% const qPart = qValue ? `q=${encodeURIComponent(qValue)}&` : ''; %>
+              <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div class="text-sm font-bold text-slate-500">Page <%= pagination.page %> / <%= pagination.totalPages %> — <%= pagination.totalItems %> groupe(s)</div>
+                <div class="flex items-center gap-2">
+                  <% if (pagination.hasPrev) { %>
+                    <a class="btn btn-secondary" href="/admin/categories?<%= qPart %>page=<%= pagination.page - 1 %>">
+                      Précédent
+                    </a>
+                  <% } else { %>
+                    <span class="btn btn-secondary">
+                      Précédent
+                    </span>
+                  <% } %>
+
+                  <% if (pagination.hasNext) { %>
+                    <a class="btn btn-secondary" href="/admin/categories?<%= qPart %>page=<%= pagination.page + 1 %>">
+                      Suivant
+                    </a>
+                  <% } else { %>
+                    <span class="btn btn-secondary">
+                      Suivant
+                    </span>
+                  <% } %>
+                </div>
+              </div>
+            <% } %>
+          <% } else { %>
+            <div class="p-6 text-slate-500"><%= (filters && filters.q) ? 'Aucun résultat.' : 'Aucune catégorie.' %></div>
+          <% } %>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+  (function () {
+    const btn = document.getElementById('bulkDeleteBtn');
+    const countEl = document.getElementById('bulkSelectedCount');
+    const inputs = Array.from(document.querySelectorAll('.bulk-category-checkbox'));
+
+    const update = () => {
+      const count = inputs.filter((i) => i && i.checked).length;
+      if (countEl) countEl.textContent = String(count);
+      if (btn) btn.disabled = count === 0;
+    };
+
+    inputs.forEach((i) => i.addEventListener('change', update));
+    update();
+  })();
+</script>
+
+<%- include('./partials/footer') %>

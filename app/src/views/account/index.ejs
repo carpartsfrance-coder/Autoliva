@@ -1,0 +1,203 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1">
+  <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-6 sm:py-8">
+    <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 flex flex-col md:flex-row md:items-end md:justify-between gap-3 sm:gap-4">
+      <div>
+        <div class="flex flex-wrap items-center gap-2">
+          <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Mon compte</h2>
+        </div>
+        <p class="mt-1.5 sm:mt-2 text-sm sm:text-base text-slate-600">Gérez vos informations, vos commandes et vos préférences.</p>
+      </div>
+    </div>
+
+    <% if (!dbConnected) { %>
+      <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
+        <div class="font-bold">Mode démo activé</div>
+        <div class="mt-1 text-sm">Le site fonctionne sans base de données, avec des données d'exemple.</div>
+      </div>
+    <% } %>
+
+    <div class="mt-8 sm:mt-10 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
+      <aside class="lg:col-span-3">
+        <%- include('./_sidebar', { active: 'dashboard' }) %>
+      </aside>
+
+      <section class="lg:col-span-9 space-y-8">
+        <div class="grid grid-cols-3 max-[360px]:grid-cols-1 gap-2 sm:gap-6 md:grid-cols-3">
+          <div class="bg-white p-3 sm:p-6 rounded-2xl border border-slate-200">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-slate-500 text-[10px] sm:text-sm font-semibold leading-tight">Commandes</span>
+              <div class="p-1.5 sm:p-2 bg-blue-50 rounded-lg text-blue-600">
+                <span class="material-symbols-outlined text-[18px] sm:text-[22px]">local_shipping</span>
+              </div>
+            </div>
+            <div class="mt-1 text-xl sm:text-3xl font-black text-slate-900"><%= typeof orderCount !== 'undefined' ? orderCount : 0 %></div>
+          </div>
+
+          <div class="bg-white p-3 sm:p-6 rounded-2xl border border-slate-200">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-slate-500 text-[10px] sm:text-sm font-semibold leading-tight">Véhicules</span>
+              <div class="p-1.5 sm:p-2 bg-green-50 rounded-lg text-green-600">
+                <span class="material-symbols-outlined text-[18px] sm:text-[22px]">garage</span>
+              </div>
+            </div>
+            <div class="mt-1 text-xl sm:text-3xl font-black text-slate-900"><%= typeof vehicleCount !== 'undefined' ? vehicleCount : 0 %></div>
+          </div>
+
+          <div class="bg-white p-3 sm:p-6 rounded-2xl border border-slate-200">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-slate-500 text-[10px] sm:text-sm font-semibold leading-tight">Adresses</span>
+              <div class="p-1.5 sm:p-2 bg-primary/10 rounded-lg text-primary">
+                <span class="material-symbols-outlined text-[18px] sm:text-[22px]">location_on</span>
+              </div>
+            </div>
+            <div class="mt-1 text-xl sm:text-3xl font-black text-slate-900"><%= typeof addressCount !== 'undefined' ? addressCount : 0 %></div>
+            <div class="hidden sm:block mt-3 text-xs text-slate-500">
+              <% if (typeof defaultAddress !== 'undefined' && defaultAddress) { %>
+                Par défaut :
+                <span class="font-bold text-slate-700"><%= defaultAddress.line1 %>, <%= defaultAddress.postalCode %> <%= defaultAddress.city %></span>
+              <% } else { %>
+                Aucune adresse par défaut
+              <% } %>
+              • <a class="text-primary font-bold hover:underline" href="/compte/adresses">Gérer</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center gap-4">
+            <h3 class="text-lg sm:text-xl font-bold text-slate-900">Dernières commandes</h3>
+            <a class="text-primary text-xs sm:text-sm font-bold hover:underline" href="/compte/commandes">Voir tout</a>
+          </div>
+
+          <% if (orders && orders.length) { %>
+            <div class="md:hidden divide-y divide-slate-100">
+              <% orders.forEach((o) => { %>
+                <div class="p-4">
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="min-w-0">
+                      <div class="font-black text-slate-900 text-sm"><%= o.number || '—' %></div>
+                      <div class="mt-1 text-xs text-slate-500"><%= o.date || '—' %></div>
+                      <div class="mt-2">
+                        <span class="text-xs font-bold text-slate-700"><%= o.status || '—' %></span>
+                      </div>
+                    </div>
+
+                    <div class="text-right flex-shrink-0">
+                      <div class="font-black text-slate-900 text-sm"><%= o.total || '—' %></div>
+                      <% if (o.id) { %>
+                        <a class="mt-2 inline-flex items-center justify-center rounded-xl bg-slate-100 px-3 py-2 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-200 transition" href="/compte/commandes/<%= o.id %>">
+                          Détails
+                        </a>
+                      <% } %>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+
+            <div class="hidden md:block overflow-x-auto">
+              <table class="w-full text-left">
+                <thead>
+                  <tr class="text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-50">
+                    <th class="px-6 py-4">Commande</th>
+                    <th class="px-6 py-4">Date</th>
+                    <th class="px-6 py-4">Statut</th>
+                    <th class="px-6 py-4">Total</th>
+                    <th class="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  <% orders.forEach((o) => { %>
+                    <tr>
+                      <td class="px-6 py-4">
+                        <span class="font-black text-slate-900"><%= o.number || '—' %></span>
+                      </td>
+                      <td class="px-6 py-4 text-sm text-slate-500"><%= o.date || '—' %></td>
+                      <td class="px-6 py-4">
+                        <span class="text-sm font-bold text-slate-700"><%= o.status || '—' %></span>
+                      </td>
+                      <td class="px-6 py-4 font-black"><%= o.total || '—' %></td>
+                      <td class="px-6 py-4 text-right">
+                        <% if (o.id) { %>
+                          <a class="inline-flex p-2 hover:bg-slate-100 rounded-lg transition" href="/compte/commandes/<%= o.id %>">
+                            <span class="material-symbols-outlined text-slate-400">visibility</span>
+                          </a>
+                        <% } %>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } else { %>
+            <div class="p-6">
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                <div class="font-black text-slate-900">Aucune commande</div>
+                <div class="mt-1 text-sm text-slate-600">Quand vous passerez une commande, elle apparaîtra ici.</div>
+                <a class="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-2 text-xs font-black uppercase tracking-wider" href="/produits">
+                  <span class="material-symbols-outlined text-base">search</span>
+                  Parcourir le catalogue
+                </a>
+              </div>
+            </div>
+          <% } %>
+        </div>
+
+        <a href="/compte/sav" class="block bg-white rounded-2xl border <%= (savUnread || 0) > 0 ? 'border-primary ring-1 ring-primary/20' : 'border-slate-200' %> p-4 sm:p-6 hover:shadow-md transition">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <span class="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-red-50 text-primary">
+                <span class="material-symbols-outlined">support_agent</span>
+              </span>
+              <div>
+                <div class="font-bold text-slate-900">Mes tickets SAV</div>
+                <div class="text-xs text-slate-500"><%= (savOpen || 0) %> en cours<% if ((savUnread || 0) > 0) { %> · <span class="text-primary font-semibold"><%= savUnread %> nouvelle(s) réponse(s)</span><% } %></div>
+              </div>
+            </div>
+            <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+          </div>
+        </a>
+
+        <div class="grid grid-cols-1 gap-6 sm:gap-8">
+          <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
+            <h3 class="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
+              <span class="material-symbols-outlined text-primary">garage</span>
+              Mon garage
+            </h3>
+
+            <% if (vehicles && vehicles.length) { %>
+              <div class="space-y-4">
+                <% vehicles.forEach((v) => { %>
+                  <div class="p-4 rounded-2xl border border-slate-200 flex items-center gap-4 hover:border-primary/50 transition cursor-pointer group">
+                    <div class="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center">
+                      <span class="material-symbols-outlined text-slate-400 group-hover:text-primary">minor_crash</span>
+                    </div>
+                    <div class="flex-1">
+                      <div class="font-black text-sm text-slate-900"><%= v.name || 'Véhicule' %></div>
+                      <div class="text-xs text-slate-500 uppercase"><%= v.details || '' %></div>
+                    </div>
+                    <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+                  </div>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                <div class="font-black text-slate-900">Aucun véhicule</div>
+                <div class="mt-1 text-sm text-slate-600">Ajoutez votre premier véhicule pour personnaliser les compatibilités.</div>
+                <a class="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-2 text-xs font-black uppercase tracking-wider" href="/compte/garage">
+                  <span class="material-symbols-outlined text-base">add</span>
+                  Ouvrir le garage
+                </a>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

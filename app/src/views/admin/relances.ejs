@@ -1,0 +1,273 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'relances' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+      <div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Relances paniers'}] }) %>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Relances paniers abandonnés</div>
+        <div class="mt-1 text-sm text-slate-500">Suivi des relances automatiques et récupération de paniers.</div>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+
+      <!-- Paniers abandonnés -->
+      <div class="kpi-card">
+        <div class="kpi-card__header">
+          <div class="kpi-card__icon bg-red-50 text-red-600">
+            <span class="material-symbols-outlined">remove_shopping_cart</span>
+          </div>
+        </div>
+        <div class="kpi-card__label">Paniers abandonnés (30j)</div>
+        <div class="kpi-card__value"><%= kpis.abandoned %></div>
+      </div>
+
+      <!-- Emails envoyés -->
+      <div class="kpi-card">
+        <div class="kpi-card__header">
+          <div class="kpi-card__icon bg-blue-50 text-blue-600">
+            <span class="material-symbols-outlined">mail</span>
+          </div>
+        </div>
+        <div class="kpi-card__label">Emails envoyés (30j)</div>
+        <div class="kpi-card__value"><%= kpis.emailsSent %></div>
+      </div>
+
+      <!-- Paniers récupérés -->
+      <div class="kpi-card">
+        <div class="kpi-card__header">
+          <div class="kpi-card__icon bg-green-50 text-green-600">
+            <span class="material-symbols-outlined">shopping_cart_checkout</span>
+          </div>
+        </div>
+        <div class="kpi-card__label">Paniers récupérés (30j)</div>
+        <div class="kpi-card__value"><%= kpis.recovered %></div>
+      </div>
+
+      <!-- Taux de récupération -->
+      <div class="kpi-card">
+        <div class="kpi-card__header">
+          <div class="kpi-card__icon bg-purple-50 text-purple-600">
+            <span class="material-symbols-outlined">trending_up</span>
+          </div>
+        </div>
+        <div class="kpi-card__label">Taux de récupération</div>
+        <div class="kpi-card__value"><%= kpis.recoveryRate %>%</div>
+      </div>
+
+    </div>
+
+    <!-- Filters -->
+    <form action="/admin/relances" class="sticky top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET">
+      <div class="flex flex-col xl:flex-row xl:items-center gap-4">
+
+        <div class="flex flex-col sm:flex-row gap-3 flex-1">
+          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="status">
+            <option value="">Tous les statuts</option>
+            <option value="abandoned" <%= filters && filters.status === 'abandoned' ? 'selected' : '' %>>Abandonné</option>
+            <option value="reminded_1" <%= filters && filters.status === 'reminded_1' ? 'selected' : '' %>>Relance 1</option>
+            <option value="reminded_2" <%= filters && filters.status === 'reminded_2' ? 'selected' : '' %>>Relance 2</option>
+            <option value="reminded_3" <%= filters && filters.status === 'reminded_3' ? 'selected' : '' %>>Relance 3</option>
+            <option value="recovered" <%= filters && filters.status === 'recovered' ? 'selected' : '' %>>Récupéré</option>
+            <option value="expired" <%= filters && filters.status === 'expired' ? 'selected' : '' %>>Expiré</option>
+          </select>
+
+          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="period">
+            <option value="">Toutes périodes</option>
+            <option value="7d" <%= filters && filters.period === '7d' ? 'selected' : '' %>>7 jours</option>
+            <option value="30d" <%= filters && filters.period === '30d' ? 'selected' : '' %>>30 jours</option>
+            <option value="90d" <%= filters && filters.period === '90d' ? 'selected' : '' %>>90 jours</option>
+          </select>
+
+          <button class="btn btn-secondary" type="submit">
+            Filtrer
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <!-- Table -->
+    <div class="mt-8 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
+        <div class="font-semibold text-slate-900">Paniers abandonnés</div>
+        <div class="text-sm text-slate-500"><%= carts.length %> résultat(s)</div>
+      </div>
+
+      <% if (carts && carts.length) { %>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left admin-table">
+            <thead>
+              <tr class="text-xs font-semibold text-slate-400 uppercase tracking-widest bg-white">
+                <th class="px-6 py-4">Date abandon</th>
+                <th class="px-6 py-4">Client</th>
+                <th class="px-6 py-4">Produits</th>
+                <th class="px-6 py-4">Montant</th>
+                <th class="px-6 py-4">Statut</th>
+                <th class="px-6 py-4">Dernière relance</th>
+                <th class="px-6 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <% carts.forEach((c) => { %>
+                <tr>
+                  <td class="px-6 py-4 text-sm text-slate-500 whitespace-nowrap"><%= c.abandonedAt %></td>
+                  <td class="px-6 py-4">
+                    <div class="text-sm font-semibold text-slate-900"><%= c.firstName || '—' %></div>
+                    <div class="mt-0.5 text-xs text-slate-400"><%= c.email %></div>
+                  </td>
+                  <td class="px-6 py-4">
+                    <div class="text-sm text-slate-700 max-w-[240px] truncate" title="<%= c.itemsSummary %>">
+                      <%= c.itemsSummary %>
+                    </div>
+                    <div class="mt-0.5 text-xs text-slate-400"><%= c.itemCount %> article(s)</div>
+                  </td>
+                  <td class="px-6 py-4 font-semibold text-slate-900 whitespace-nowrap"><%= c.totalAmount %></td>
+                  <td class="px-6 py-4">
+                    <span class="inline-flex items-center rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest <%= c.statusBadge.className %>">
+                      <%= c.statusBadge.label %>
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-sm text-slate-500 whitespace-nowrap"><%= c.lastRemindedAt %></td>
+                  <td class="px-6 py-4 text-right whitespace-nowrap">
+                    <div class="flex items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        class="btn btn-ghost text-xs cart-detail-btn"
+                        data-cart-id="<%= c.id %>"
+                        title="Voir le panier"
+                      >
+                        <span class="material-symbols-outlined mr-1 text-base">visibility</span>
+                        Voir
+                      </button>
+                      <% if (c.canRemind) { %>
+                        <form action="/admin/relances/<%= c.id %>/relancer" method="POST" class="inline" onsubmit="return confirm('Envoyer la relance manuellement ?')">
+                          <button type="submit" class="btn btn-ghost text-xs text-primary">
+                            <span class="material-symbols-outlined mr-1 text-base">send</span>
+                            Relancer
+                          </button>
+                        </form>
+                      <% } %>
+                    </div>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } else { %>
+        <div class="p-6 text-slate-500">Aucun panier abandonné.</div>
+      <% } %>
+    </div>
+
+    <% if (!dbConnected) { %>
+      <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+        <div class="font-bold">Mode démo</div>
+        <div class="mt-1 text-sm">La base de données est indisponible : les données de relances ne sont pas disponibles.</div>
+      </div>
+    <% } %>
+  </div>
+</main>
+
+<!-- Cart detail modal -->
+<div id="cart-detail-modal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/50" id="cart-detail-overlay"></div>
+  <div class="absolute right-0 top-0 h-full w-full max-w-lg bg-white shadow-2xl overflow-y-auto">
+    <div class="p-6">
+      <div class="flex items-center justify-between mb-6">
+        <div class="text-lg font-semibold text-slate-900">Détail du panier</div>
+        <button type="button" id="cart-detail-close" class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div id="cart-detail-content">
+        <div class="text-sm text-slate-500">Chargement...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var modal = document.getElementById('cart-detail-modal');
+  var overlay = document.getElementById('cart-detail-overlay');
+  var closeBtn = document.getElementById('cart-detail-close');
+  var content = document.getElementById('cart-detail-content');
+
+  document.querySelectorAll('.cart-detail-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var cartId = this.dataset.cartId;
+      modal.classList.remove('hidden');
+      content.innerHTML = '<div class="text-sm text-slate-500">Chargement...</div>';
+
+      fetch('/admin/relances/' + cartId, {
+        headers: { 'Accept': 'application/json' }
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.ok || !data.cart) {
+            content.innerHTML = '<div class="text-sm text-red-500">Erreur de chargement.</div>';
+            return;
+          }
+          var c = data.cart;
+          var html = '';
+          html += '<div class="space-y-4">';
+          html += '<div class="rounded-xl border border-slate-200 p-4">';
+          html += '<div class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Client</div>';
+          html += '<div class="font-semibold text-slate-900">' + (c.firstName || '—') + '</div>';
+          html += '<div class="text-sm text-slate-500">' + c.email + '</div>';
+          html += '</div>';
+
+          html += '<div class="rounded-xl border border-slate-200 p-4">';
+          html += '<div class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Statut</div>';
+          html += '<div class="font-semibold text-slate-900">' + c.statusLabel + '</div>';
+          html += '<div class="text-sm text-slate-500 mt-1">Abandonné le : ' + c.abandonedAt + '</div>';
+          if (c.lastRemindedAt && c.lastRemindedAt !== '—') {
+            html += '<div class="text-sm text-slate-500">Dernière relance : ' + c.lastRemindedAt + '</div>';
+          }
+          if (c.recoveredAt && c.recoveredAt !== '—') {
+            html += '<div class="text-sm text-green-600 font-semibold">Récupéré le : ' + c.recoveredAt + '</div>';
+          }
+          html += '</div>';
+
+          html += '<div class="rounded-xl border border-slate-200 p-4">';
+          html += '<div class="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">Articles</div>';
+          c.items.forEach(function(item) {
+            html += '<div class="flex items-start gap-3 py-3 border-b border-slate-100 last:border-0">';
+            if (item.image) {
+              html += '<img src="' + item.image + '" alt="" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" />';
+            } else {
+              html += '<div class="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0"></div>';
+            }
+            html += '<div class="flex-1 min-w-0">';
+            html += '<div class="font-semibold text-slate-900 text-sm">' + item.name + '</div>';
+            if (item.sku) html += '<div class="text-xs text-slate-400">Réf : ' + item.sku + '</div>';
+            html += '<div class="text-xs text-slate-500">Qté : ' + item.quantity + ' &mdash; ' + item.price + '</div>';
+            html += '</div>';
+            html += '</div>';
+          });
+          html += '<div class="pt-3 flex justify-between items-center">';
+          html += '<div class="font-semibold text-slate-900">Total</div>';
+          html += '<div class="font-bold text-slate-900">' + c.totalAmount + '</div>';
+          html += '</div>';
+          html += '</div>';
+
+          html += '</div>';
+          content.innerHTML = html;
+        })
+        .catch(function() {
+          content.innerHTML = '<div class="text-sm text-red-500">Erreur de chargement.</div>';
+        });
+    });
+  });
+
+  function closeModal() { modal.classList.add('hidden'); }
+  if (overlay) overlay.addEventListener('click', closeModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+});
+</script>
+
+<%- include('./partials/footer') %>

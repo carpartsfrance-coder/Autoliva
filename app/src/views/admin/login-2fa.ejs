@@ -1,0 +1,36 @@
+<%- include('./partials/head') %>
+
+<div class="flex-1 flex items-center justify-center px-4 py-10">
+  <div class="w-full max-w-md">
+    <div class="text-center">
+      <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary text-white">
+        <span class="material-symbols-outlined text-3xl">verified_user</span>
+      </div>
+      <div class="mt-4 text-2xl font-semibold text-slate-900">Vérification en deux étapes</div>
+      <div class="mt-1 text-sm text-slate-500">Tapez le code à 6 chiffres généré par votre application 2FA.</div>
+    </div>
+
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
+        <%= errorMessage %>
+      </div>
+    <% } %>
+
+    <form action="/admin/connexion/2fa" method="POST" class="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+      <input name="returnTo" type="hidden" value="<%= typeof returnTo !== 'undefined' ? returnTo : '/admin' %>">
+
+      <label class="block text-sm font-medium text-slate-500 mb-2" for="code">Code (6 chiffres ou code de secours)</label>
+      <input id="code" name="code" type="text" required maxlength="9" inputmode="numeric" autocomplete="one-time-code" autofocus
+             class="w-full rounded-xl border border-slate-300 px-4 py-3 text-2xl font-mono text-center tracking-widest focus:border-primary focus:ring-2 focus:ring-primary/20"
+             placeholder="000000">
+
+      <button type="submit" class="btn btn-primary btn-block mt-6">Valider</button>
+
+      <div class="mt-4 text-center text-xs text-slate-500">
+        <a href="/admin/connexion" class="underline">Annuler</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<%- include('./partials/footer') %>

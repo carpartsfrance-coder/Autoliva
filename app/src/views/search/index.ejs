@@ -1,0 +1,47 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 transition-colors duration-300">
+  <div class="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+    <div class="bg-white/80 dark:bg-surface-dark/70 backdrop-blur rounded-3xl border border-slate-100 dark:border-slate-800 p-4 sm:p-6 shadow-premium">
+      <h1 class="text-xl sm:text-2xl font-black tracking-tight">Rechercher</h1>
+      <p class="mt-1 text-xs sm:text-sm text-slate-600 dark:text-slate-300">Tapez le nom d’un produit, une référence (SKU) ou une marque.</p>
+
+      <div class="mt-4 sm:mt-6" data-search-autocomplete data-search-autocomplete-view="page">
+        <form action="/produits" class="relative" method="GET">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+          <input autocomplete="off" class="w-full rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-10 pr-3 py-3 text-sm font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-primary focus:border-primary" data-search-autocomplete-input name="q" placeholder="Ex : démarreur, alternateur, 8200..., BOSCH" type="text" />
+        </form>
+
+        <div class="mt-3 hidden" data-search-autocomplete-panel>
+          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden" style="font-family: Arial, sans-serif;">
+            <div class="max-h-[28rem] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800" data-search-autocomplete-sections></div>
+            <a class="block border-t border-slate-100 px-4 py-3 text-xs font-black text-primary hover:bg-slate-50 dark:hover:bg-slate-800" href="/produits" data-search-autocomplete-all>
+              Voir le catalogue
+            </a>
+          </div>
+          <div class="mt-2 text-[11px] text-slate-500">Astuce : vous pouvez aussi aller au catalogue et utiliser les filtres si vous connaissez la marque ou le modèle.</div>
+        </div>
+
+        <div class="mt-3 hidden" data-search-autocomplete-empty>
+          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-4 text-sm text-slate-600 dark:text-slate-300">
+            Aucun résultat pour le moment.
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 sm:mt-8 flex flex-col sm:flex-row gap-3">
+        <a class="inline-flex items-center justify-center rounded-2xl bg-primary hover:bg-red-700 text-white py-3 px-5 font-black text-xs sm:text-sm shadow-xl shadow-red-500/20 transition-all" href="/produits">
+          Ouvrir le catalogue
+          <span class="material-symbols-outlined ml-2">arrow_forward</span>
+        </a>
+        <a class="inline-flex items-center justify-center rounded-2xl bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 py-3 px-5 font-black text-xs sm:text-sm transition-colors" href="/panier">
+          Voir le panier
+          <span class="material-symbols-outlined ml-2">shopping_cart</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

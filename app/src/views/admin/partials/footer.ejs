@@ -1,0 +1,37 @@
+    </div>
+
+    <script src="/js/toast.js"></script>
+    <script src="/js/btn-loading.js"></script>
+    <script src="/js/admin-ajax.js"></script>
+    <script src="/js/form-validation.js"></script>
+    <script src="/js/notes-widget.js"></script>
+    <script>
+      (function () {
+        /* Mobile sidebar toggle */
+        var toggle = document.getElementById('sidebar-toggle');
+        var sidebar = document.getElementById('admin-sidebar');
+        var overlay = document.getElementById('sidebar-overlay');
+        if (toggle && sidebar && overlay) {
+          toggle.onclick = function () {
+            sidebar.classList.toggle('-translate-x-full');
+            overlay.classList.toggle('hidden');
+          };
+          overlay.onclick = function () {
+            sidebar.classList.add('-translate-x-full');
+            overlay.classList.add('hidden');
+          };
+        }
+
+        /* Desktop sidebar collapse */
+        var collapseBtn = document.getElementById('sidebar-collapse-btn');
+        if (collapseBtn) {
+          collapseBtn.onclick = function () {
+            var html = document.documentElement;
+            var collapsed = html.classList.toggle('sidebar-collapsed');
+            localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0');
+          };
+        }
+      })();
+    </script>
+  </body>
+</html>

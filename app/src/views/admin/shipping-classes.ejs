@@ -1,0 +1,162 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'shipping-classes' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+      <div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Expédition'}] }) %>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Expédition</div>
+        <div class="mt-1 text-sm text-slate-500">Configure les classes d’expédition et leurs tarifs.</div>
+      </div>
+    </div>
+
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (!dbConnected) { %>
+      <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+        <div class="font-bold">Mode démo</div>
+        <div class="mt-1 text-sm">La base de données est indisponible : vous ne pouvez pas modifier les classes d’expédition.</div>
+      </div>
+    <% } %>
+
+    <div class="mt-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
+      <section class="xl:col-span-5">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Ajouter une classe</div>
+
+          <form action="/admin/expedition" class="mt-4 space-y-4" method="POST">
+            <div>
+              <label class="block text-sm font-medium text-slate-500" for="name">Nom</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="name" name="name" placeholder="Ex: Petit colis" required type="text" value="<%= form && form.name ? form.name : '' %>" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-slate-500" for="sortOrder">Ordre (optionnel)</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="sortOrder" name="sortOrder" placeholder="0" type="number" value="<%= form && typeof form.sortOrder !== 'undefined' ? form.sortOrder : '' %>" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-slate-500" for="domicilePrice">Domicile (€)</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="domicilePrice" name="domicilePrice" placeholder="0,00" type="text" value="<%= form && form.domicilePrice ? form.domicilePrice : '' %>" />
+            </div>
+
+            <div class="flex flex-col gap-3">
+              <label class="inline-flex items-center gap-2">
+                <input class="rounded border-slate-300 text-primary focus:ring-primary" name="isActive" type="checkbox" <%= !form || form.isActive ? 'checked' : '' %> />
+                <span class="text-sm font-bold text-slate-500">Active</span>
+              </label>
+
+              <label class="inline-flex items-center gap-2">
+                <input class="rounded border-slate-300 text-primary focus:ring-primary" name="isDefault" type="checkbox" <%= form && form.isDefault ? 'checked' : '' %> />
+                <span class="text-sm font-bold text-slate-500">Définir comme classe par défaut</span>
+              </label>
+            </div>
+
+            <button class="btn btn-primary" <%= dbConnected ? '' : 'disabled' %> type="submit">
+              <span class="material-symbols-outlined mr-2 text-base">add</span>
+              Ajouter
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <section class="xl:col-span-7">
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="px-6 py-4 bg-slate-50">
+            <div class="font-semibold text-slate-900">Classes d’expédition</div>
+            <div class="mt-1 text-xs text-slate-500"><%= shippingClasses && shippingClasses.length ? shippingClasses.length : 0 %> classe(s)</div>
+          </div>
+
+          <% if (shippingClasses && shippingClasses.length) { %>
+            <div class="divide-y divide-slate-100">
+              <% shippingClasses.forEach((c) => { %>
+                <div class="p-6">
+                  <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2">
+                        <div class="text-lg font-semibold text-slate-900 truncate"><%= c.name %></div>
+                        <% if (c.isDefault) { %>
+                          <span class="inline-flex items-center rounded-full bg-primary/10 text-primary px-3 py-1 text-[10px] font-semibold uppercase tracking-widest">Défaut</span>
+                        <% } %>
+                        <% if (!c.isActive) { %>
+                          <span class="badge badge-neutral">Inactive</span>
+                        <% } %>
+                      </div>
+                      <div class="mt-1 text-xs text-slate-500">Slug : <%= c.slug %></div>
+                      <div class="mt-2 text-xs text-slate-500">Utilisée par <%= c.usedCount %> produit(s)</div>
+                    </div>
+
+                    <div class="text-right">
+                      <div class="text-sm text-slate-500">Domicile : <span class="font-semibold text-slate-900"><%= c.domicilePrice %></span></div>
+                    </div>
+                  </div>
+
+                  <form action="/admin/expedition/<%= c.id %>" class="mt-4 grid grid-cols-1 md:grid-cols-12 gap-3" method="POST">
+                    <div class="md:col-span-4">
+                      <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="name-<%= c.id %>">Nom</label>
+                      <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="name-<%= c.id %>" name="name" type="text" value="<%= c.name %>" />
+                    </div>
+
+                    <div class="md:col-span-2">
+                      <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="sort-<%= c.id %>">Ordre</label>
+                      <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="sort-<%= c.id %>" name="sortOrder" type="number" value="<%= c.sortOrder %>" />
+                    </div>
+
+                    <div class="md:col-span-6">
+                      <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="dom-<%= c.id %>">Domicile (€)</label>
+                      <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="dom-<%= c.id %>" name="domicilePrice" type="text" value="<%= c.domicilePriceInput %>" />
+                    </div>
+
+                    <div class="md:col-span-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div class="flex flex-col sm:flex-row gap-4">
+                        <label class="inline-flex items-center gap-2">
+                          <input class="rounded border-slate-300 text-primary focus:ring-primary" name="isActive" type="checkbox" <%= c.isActive ? 'checked' : '' %> />
+                          <span class="text-sm font-bold text-slate-500">Active</span>
+                        </label>
+
+                        <label class="inline-flex items-center gap-2">
+                          <input class="rounded border-slate-300 text-primary focus:ring-primary" name="isDefault" type="checkbox" <%= c.isDefault ? 'checked' : '' %> />
+                          <span class="text-sm font-bold text-slate-500">Par défaut</span>
+                        </label>
+                      </div>
+
+                      <div class="flex items-center gap-2">
+                        <button class="btn btn-primary" type="submit" <%= dbConnected ? '' : 'disabled' %>>
+                          <span class="material-symbols-outlined mr-2 text-base">save</span>
+                          Enregistrer
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+
+                  <div class="mt-3">
+                    <form action="/admin/expedition/<%= c.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette classe ?">
+                      <button class="btn btn-danger" type="submit" <%= (dbConnected && c.canDelete) ? '' : 'disabled' %>>
+                        <span class="material-symbols-outlined mr-2 text-base">delete</span>
+                        Supprimer
+                      </button>
+                      <% if (!c.canDelete) { %>
+                        <span class="ml-3 text-xs text-slate-500">Impossible : utilisée par des produits ou classe par défaut.</span>
+                      <% } %>
+                    </form>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } else { %>
+            <div class="p-6 text-slate-500">Aucune classe d’expédition.</div>
+          <% } %>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<%- include('./partials/footer') %>

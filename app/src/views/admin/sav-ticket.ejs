@@ -1,0 +1,971 @@
+<%- include('./partials/head') %>
+<link rel="stylesheet" href="/css/sav.css?v=32">
+<%- include('./partials/sidebar', { active: 'sav' }) %>
+
+<main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>" data-sav-numero="<%= numero %>" data-current-statut="" data-current-user-id="<%= (typeof currentAdmin !== 'undefined' && currentAdmin && currentAdmin.adminUserId) || '' %>">
+
+  <!-- ═══════════════════════════════════════════════
+       TOP BANNER : Briefing 10s + Stepper inline
+       ═══════════════════════════════════════════════ -->
+  <!-- Breadcrumb + Briefing + Stepper (scrolls with page) -->
+  <div class="bg-white border-b border-slate-200">
+    <!-- Breadcrumb -->
+    <div class="px-6 lg:px-10 pt-3 pb-1">
+      <nav aria-label="Fil d'Ariane" class="text-xs text-slate-500 flex items-center gap-1.5">
+        <a href="/admin" class="hover:text-slate-900">Admin</a>
+        <span class="text-slate-300">/</span>
+        <a href="/admin/sav" class="hover:text-slate-900">SAV</a>
+        <span class="text-slate-300">/</span>
+        <a href="/admin/sav/tickets" class="hover:text-slate-900">Tickets</a>
+        <span class="text-slate-300">/</span>
+        <span class="font-mono text-slate-700"><%= numero %></span>
+      </nav>
+    </div>
+
+    <!-- Briefing + Stepper côte à côte -->
+    <div class="px-6 lg:px-10 pb-3">
+      <div class="sav-briefing-row rounded-xl bg-primary/5 border border-primary/20 px-4 py-3">
+        <div id="sav-briefing" class="sav-briefing-col flex items-start gap-3" aria-busy="true">
+          <span class="material-symbols-outlined text-primary shrink-0 mt-0.5" style="font-size:22px;">bolt</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-[10px] uppercase tracking-wide font-bold text-primary mb-0.5">Briefing 10 secondes</div>
+            <div id="sav-briefing-body" class="text-[13px] text-slate-700 leading-relaxed">
+              <span class="sav-skeleton sav-skeleton--line" style="width:70%;"></span>
+              <span class="sav-skeleton sav-skeleton--line" style="width:85%;"></span>
+            </div>
+          </div>
+        </div>
+        <div class="sav-briefing-sep hidden lg:block"></div>
+        <nav id="sav-stepper" class="sav-stepper sav-stepper--inline sav-stepper-col" aria-label="Cycle de vie du ticket SAV"></nav>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sticky meta bar (ticket#, statut, SLA, assigné) -->
+  <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-sm border-b border-slate-200">
+    <div class="px-6 lg:px-10 py-2">
+      <div class="flex items-center justify-between gap-3 flex-wrap">
+        <div class="flex items-center gap-2 min-w-0">
+          <a href="/admin/sav/tickets" title="Retour à la liste" aria-label="Retour"
+             class="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition">
+            <span class="material-symbols-outlined" style="font-size:18px;" aria-hidden="true">arrow_back</span>
+          </a>
+          <h1 class="text-base font-mono font-bold text-slate-900 truncate"><%= numero %></h1>
+          <button type="button" id="sav-copy-numero" data-copy="<%= numero %>" title="Copier le numéro" aria-label="Copier"
+            class="inline-flex items-center justify-center w-6 h-6 rounded-md text-slate-400 hover:text-primary hover:bg-slate-100 transition">
+            <span class="material-symbols-outlined" style="font-size:14px;">content_copy</span>
+          </button>
+          <div id="sav-statut-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700">—</div>
+          <div id="sav-sla-badge" class="sav-sla-badge sav-sla-badge--ok inline-flex items-center gap-1 text-[11px]">
+            <span class="material-symbols-outlined" style="font-size:13px;">schedule</span>
+            <span>SLA —</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <div id="sav-header-meta" class="text-[11px] text-slate-500 flex items-center gap-2" aria-busy="true">
+            <span class="sav-skeleton sav-skeleton--line" style="width:140px;height:14px;"></span>
+          </div>
+          <button type="button" id="sav-assign-btn" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] border border-slate-300 hover:border-primary hover:text-primary transition">
+            <span id="sav-assign-avatar" class="hidden w-5 h-5 rounded-full bg-primary text-white text-[10px] font-bold items-center justify-center"></span>
+            <span class="material-symbols-outlined" id="sav-assign-icon" style="font-size:14px;">person_add</span>
+            <span id="sav-assign-label">Assigner</span>
+          </button>
+          <button type="button" id="sav-help-btn" title="Raccourcis clavier" aria-label="Raccourcis" class="w-6 h-6 rounded-full border border-slate-300 hover:border-primary text-slate-500 hover:text-primary text-[11px] font-bold">?</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Bannière bienvenue (première visite — dismissible) -->
+  <div id="sav-welcome-banner" class="hidden mx-6 lg:mx-10 mt-3 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-white p-4 relative">
+    <button type="button" id="sav-welcome-close" aria-label="Fermer" class="absolute top-2 right-2 text-slate-400 hover:text-slate-700 w-7 h-7 rounded-full hover:bg-white/50 inline-flex items-center justify-center">
+      <span class="material-symbols-outlined" style="font-size:18px;">close</span>
+    </button>
+    <div class="flex items-center gap-2 text-primary font-bold text-sm mb-2">
+      <span class="material-symbols-outlined">waving_hand</span>
+      Bienvenue dans la fiche ticket SAV
+    </div>
+    <div class="text-xs text-slate-600 mb-3">Voici les 5 choses à savoir :</div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-[11px]">
+      <div class="bg-white rounded-lg p-2 border border-primary/10">
+        <div class="font-bold text-primary mb-0.5">1 · Briefing</div>
+        <div class="text-slate-600">En haut : qui, quoi, à faire maintenant.</div>
+      </div>
+      <div class="bg-white rounded-lg p-2 border border-primary/10">
+        <div class="font-bold text-primary mb-0.5">2 · Action suivante</div>
+        <div class="text-slate-600">Sidebar droite — le bouton te guide.</div>
+      </div>
+      <div class="bg-white rounded-lg p-2 border border-primary/10">
+        <div class="font-bold text-primary mb-0.5">3 · Quick actions</div>
+        <div class="text-slate-600">Photo, remboursement, geste commercial…</div>
+      </div>
+      <div class="bg-white rounded-lg p-2 border border-primary/10">
+        <div class="font-bold text-primary mb-0.5">4 · Chat</div>
+        <div class="text-slate-600">Templates, variables, PJ, étiquette retour.</div>
+      </div>
+      <div class="bg-white rounded-lg p-2 border border-primary/10">
+        <div class="font-bold text-primary mb-0.5">5 · Raccourcis</div>
+        <div class="text-slate-600"><kbd class="px-1 bg-slate-100 rounded text-[9px]">⌘↵</kbd> envoyer · <kbd class="px-1 bg-slate-100 rounded text-[9px]">?</kbd> aide</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       LAYOUT 2 COLONNES : Chat (65%) + Sidebar (35%)
+       ═══════════════════════════════════════════════ -->
+  <div class="px-6 lg:px-10 py-4">
+    <div id="sav-detail-error" class="hidden mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-5">
+
+      <!-- ══════════ COLONNE GAUCHE : COMMUNICATION UNIQUEMENT ══════════ -->
+      <div class="min-w-0 space-y-0">
+        <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden flex flex-col" style="height: calc(100vh - 120px);">
+
+          <!-- Barre filtre : Conversation / Tout + Nouveau message -->
+          <div class="sav-comm-toolbar shrink-0">
+            <div class="flex items-center gap-2">
+              <button type="button" class="sav-comm-filter is-active" data-comm-filter="messages">
+                <span class="material-symbols-outlined" style="font-size:15px;">chat</span> Conversation
+              </button>
+              <button type="button" class="sav-comm-filter" data-comm-filter="all">
+                <span class="material-symbols-outlined" style="font-size:15px;">list</span> Tout
+              </button>
+            </div>
+          </div>
+
+          <!-- Zone messages (chat bubbles) — prend tout l'espace -->
+          <div id="sav-messages" class="sav-chat-area flex-1"></div>
+
+          <!-- Composer — chat-style compact -->
+          <div id="sav-composer-wrap" class="sav-composer">
+
+            <form id="sav-msg-form" class="sav-composer__body">
+              <!-- Row 1: Canal pills + template chips -->
+              <div class="sav-composer__topbar">
+                <div id="sav-canal-pills" class="flex gap-1" role="radiogroup" aria-label="Canal">
+                  <button type="button" data-canal="inapp" class="sav-canal-pill sav-canal-pill--inapp is-active" role="radio" aria-checked="true" title="Réponse visible dans l'espace SAV du client. Une notification email lui est envoyée pour le prévenir.">
+                    <span class="material-symbols-outlined" style="font-size:13px;">forum</span><span>Espace client</span>
+                  </button>
+                  <button type="button" data-canal="interne" class="sav-canal-pill sav-canal-pill--interne" role="radio" aria-checked="false" title="Note privée visible uniquement par l'équipe SAV. Aucun email envoyé.">
+                    <span class="material-symbols-outlined" style="font-size:13px;">lock</span><span>Note interne</span>
+                  </button>
+                </div>
+                <input type="hidden" name="canal" id="sav-canal-input" value="inapp">
+                <div id="sav-templates-chips" class="flex gap-1 flex-wrap">
+                  <% const _tpls = [
+                    ['reception','Piece recue','inventory'],
+                    ['analyse_ok','Defaut confirme','verified'],
+                    ['analyse_neg','Pas de defaut','euro'],
+                    ['relance_doc','Relance docs','description'],
+                    ['rdv','RDV','event'],
+                  ]; %>
+                  <% _tpls.forEach(function(t){ %>
+                    <button type="button" data-template="<%= t[0] %>" title="<%= t[1] %>" class="sav-tpl-chip sav-tpl-chip--sm">
+                      <span>#<%= t[1] %></span>
+                    </button>
+                  <% }); %>
+                </div>
+                <!-- Playbook templates -->
+                <div id="sav-playbook-templates-wrap" class="hidden">
+                  <div id="sav-playbook-templates-chips" class="flex gap-1 flex-wrap"></div>
+                </div>
+              </div>
+
+              <select id="sav-template" class="hidden">
+                <option value=""></option>
+                <option value="reception"></option>
+                <option value="analyse_ok"></option>
+                <option value="analyse_neg"></option>
+                <option value="relance_doc"></option>
+                <option value="rdv"></option>
+              </select>
+
+              <!-- Sujet retiré : toute conversation passe par l'espace SAV (in-app), seules
+                   des notifications courtes sont envoyées par email. Pas de champ sujet utile. -->
+              <input type="hidden" name="sujet" id="sav-msg-subject" value="">
+
+              <!-- Editor area -->
+              <div id="sav-msg-editor" contenteditable="true" class="sav-composer__editor" data-placeholder="Tapez votre réponse..."></div>
+              <input type="hidden" name="contenu" id="sav-msg-contenu">
+              <input type="hidden" name="html" id="sav-msg-html">
+
+              <!-- Encart de prévisualisation de la reformulation IA (caché par défaut) -->
+              <div id="sav-reformulate-panel" class="hidden mx-3 my-2 rounded-xl border border-indigo-200 bg-indigo-50/60">
+                <div class="flex items-center justify-between px-3 py-1.5 border-b border-indigo-100">
+                  <div class="flex items-center gap-1.5 text-xs font-semibold text-indigo-700">
+                    <span class="material-symbols-outlined" style="font-size:14px;">auto_awesome</span>
+                    <span>Proposition reformulée</span>
+                    <span id="sav-reformulate-model" class="text-[10px] font-normal text-indigo-500"></span>
+                  </div>
+                  <button type="button" id="sav-reformulate-close" class="text-indigo-400 hover:text-indigo-700" aria-label="Fermer">
+                    <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+                  </button>
+                </div>
+                <div id="sav-reformulate-text" class="px-3 py-2 text-sm text-slate-800 whitespace-pre-wrap max-h-64 overflow-auto"></div>
+                <div class="flex items-center justify-end gap-1.5 px-3 py-2 border-t border-indigo-100 bg-white/60">
+                  <button type="button" id="sav-reformulate-cancel" class="px-2.5 py-1 text-xs rounded-lg text-slate-600 hover:bg-slate-100">Annuler</button>
+                  <button type="button" id="sav-reformulate-apply" class="px-2.5 py-1 text-xs rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 inline-flex items-center gap-1">
+                    <span class="material-symbols-outlined" style="font-size:14px;">check</span>
+                    Remplacer
+                  </button>
+                </div>
+              </div>
+
+              <!-- Apercu email (collapsed, hidden by default) -->
+              <details id="sav-email-preview-wrap" class="sav-composer__preview hidden">
+                <summary class="cursor-pointer list-none px-3 py-1.5 text-slate-500 flex items-center gap-1.5 select-none hover:text-slate-700 text-xs">
+                  <span class="material-symbols-outlined" style="font-size:14px;">visibility</span>
+                  Apercu email
+                </summary>
+                <div class="p-3 bg-slate-50 border-t border-slate-100">
+                  <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden max-w-2xl mx-auto">
+                    <div class="px-3 py-1.5 border-b border-slate-100 bg-slate-50 text-[11px] text-slate-600 space-y-0.5">
+                      <div class="flex"><span class="font-semibold w-14">De :</span><span>SAV CarParts France &lt;sav@carpartsfrance.fr&gt;</span></div>
+                      <div class="flex"><span class="font-semibold w-14">A :</span><span id="sav-preview-to">--</span></div>
+                      <div class="flex"><span class="font-semibold w-14">Objet :</span><span id="sav-preview-subject" class="font-semibold text-slate-900">--</span></div>
+                      <div class="flex"><span class="font-semibold w-14">Ref. :</span><span id="sav-preview-ref" class="font-mono text-[10px]">--</span></div>
+                    </div>
+                    <div class="p-3 text-sm text-slate-800">
+                      <div id="sav-msg-preview"></div>
+                      <hr class="my-3 border-slate-200">
+                      <div class="text-xs text-slate-500 leading-relaxed">
+                        <div class="font-semibold text-slate-700">L'equipe SAV CarParts France</div>
+                        <div>sav@carpartsfrance.fr -- 04 65 84 54 88</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <!-- Attachment list -->
+              <ul id="sav-attach-list" class="flex gap-1.5 hidden"></ul>
+
+              <!-- Bottom bar: tools left, send right -->
+              <div class="sav-composer__bottombar">
+                <div class="flex items-center gap-1.5">
+                  <button type="button" id="sav-attach-btn" class="sav-composer__icon-btn" title="Joindre un fichier">
+                    <span class="material-symbols-outlined" style="font-size:18px;">attach_file</span>
+                  </button>
+                  <button type="button" id="sav-return-label-btn" class="sav-composer__icon-btn sav-composer__icon-btn--amber" title="Etiquette retour prepayee">
+                    <span class="material-symbols-outlined" style="font-size:18px;">local_shipping</span>
+                  </button>
+                  <button type="button" data-cmd="bold" class="sav-composer__icon-btn" title="Gras">
+                    <span style="font-size:14px;font-weight:700;">B</span>
+                  </button>
+                  <button type="button" id="sav-reformulate-btn" class="sav-composer__icon-btn" title="Reformuler avec l'IA (ton CarParts France)">
+                    <span class="material-symbols-outlined" style="font-size:18px;">auto_awesome</span>
+                  </button>
+                  <input type="file" id="sav-attach-input" class="hidden" multiple accept="application/pdf,image/*">
+                  <input type="file" id="sav-return-label-input" class="hidden" accept="application/pdf">
+                  <span id="sav-draft-status" class="text-[10px] text-slate-400 ml-1"></span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <button class="sav-composer__send-btn" type="submit" data-send-action="send">
+                    Envoyer
+                  </button>
+                  <div class="relative">
+                    <button type="button" id="sav-send-more" class="sav-composer__send-more" aria-haspopup="menu" aria-expanded="false">
+                      <span class="material-symbols-outlined" style="font-size:16px;">arrow_drop_down</span>
+                    </button>
+                    <div id="sav-send-menu" class="hidden absolute right-0 bottom-full mb-1 w-72 rounded-xl border border-slate-200 bg-white shadow-lg z-20 py-1" role="menu">
+                      <button type="button" data-send-action="send_and_status" data-next-statut="analyse_terminee" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2">
+                        <span class="material-symbols-outlined" style="font-size:16px;">flag</span>
+                        Envoyer et passer en « Analyse terminee »
+                      </button>
+                      <button type="button" data-send-action="save_draft" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2">
+                        <span class="material-symbols-outlined" style="font-size:16px;">save</span>
+                        Sauver brouillon
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══════════ COLONNE DROITE : SIDEBAR STICKY ══════════ -->
+      <div class="sav-bottom-actions">
+        <button type="button" id="sav-bottom-toggle" class="sav-bottom-actions__btn lg:hidden" aria-expanded="false" aria-controls="sav-bottom-panel">
+          <span class="material-symbols-outlined" style="font-size:18px;">bolt</span>
+          <span class="flex-1 text-left">Actions & détails</span>
+          <span class="sav-bottom-actions__chev material-symbols-outlined" aria-hidden="true">expand_less</span>
+        </button>
+        <aside id="sav-bottom-panel" class="sav-bottom-actions__panel space-y-3 lg:sticky lg:top-[52px] self-start lg:max-h-[calc(100vh-68px)] lg:overflow-y-auto">
+
+          <!-- ── ALWAYS VISIBLE: Action suivante ── -->
+          <section class="rounded-2xl border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-white p-4">
+            <div class="flex items-center gap-1.5 text-[10px] uppercase tracking-wide font-bold text-primary mb-2">
+              <span class="material-symbols-outlined" style="font-size:14px;">rocket_launch</span>
+              Action suivante
+            </div>
+            <div id="sav-next-action">
+              <div class="sav-skeleton sav-skeleton--line" style="height: 42px; width: 100%;"></div>
+            </div>
+            <div id="sav-next-action-hint" class="mt-2 text-[11px] text-slate-500"></div>
+          </section>
+
+          <!-- ── ALWAYS VISIBLE: Commande liée ── -->
+          <section id="sav-order-context" class="sav-order-card rounded-xl p-3">
+            <h2 class="text-[10px] uppercase tracking-wide font-bold mb-1.5 flex items-center gap-1 sav-order-card__title">
+              <span class="material-symbols-outlined" style="font-size:14px;">local_shipping</span>
+              Commande liée
+            </h2>
+            <div id="sav-order-context-body" class="text-xs">
+              <div class="sav-skeleton sav-skeleton--line" style="height:14px;width:100%;"></div>
+            </div>
+          </section>
+
+          <!-- ── ALWAYS VISIBLE: Quick actions 2×2 ── -->
+          <section class="rounded-xl border border-slate-200 bg-white p-3">
+            <h2 class="text-[10px] uppercase tracking-wide font-bold text-slate-500 mb-2 flex items-center gap-1">
+              <span class="material-symbols-outlined" style="font-size:14px;">flash_on</span>
+              Actions rapides
+            </h2>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button type="button" data-quick-action="ask_photo"
+                      class="sav-quick-action group flex flex-col items-center gap-1 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 px-2 py-2.5 text-[11px] font-medium text-slate-600 hover:text-blue-700 transition text-center">
+                <span class="material-symbols-outlined text-blue-500" style="font-size:20px;">photo_camera</span>
+                Demander photo
+              </button>
+              <button type="button" data-quick-action="approve_refund"
+                      class="sav-quick-action group flex flex-col items-center gap-1 rounded-lg border border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 px-2 py-2.5 text-[11px] font-medium text-slate-600 hover:text-emerald-700 transition text-center">
+                <span class="material-symbols-outlined text-emerald-500" style="font-size:20px;">payments</span>
+                Remboursement
+              </button>
+              <button type="button" data-quick-action="goodwill"
+                      class="sav-quick-action group flex flex-col items-center gap-1 rounded-lg border border-slate-200 hover:border-amber-400 hover:bg-amber-50 px-2 py-2.5 text-[11px] font-medium text-slate-600 hover:text-amber-700 transition text-center">
+                <span class="material-symbols-outlined text-amber-500" style="font-size:20px;">redeem</span>
+                Geste commercial
+              </button>
+              <button type="button" id="sav-open-procedure-picker"
+                      class="sav-quick-action group flex flex-col items-center gap-1 rounded-lg border border-slate-200 hover:border-rose-400 hover:bg-rose-50 px-2 py-2.5 text-[11px] font-medium text-slate-600 hover:text-rose-700 transition text-center">
+                <span class="material-symbols-outlined text-rose-500" style="font-size:20px;">menu_book</span>
+                Procédure
+              </button>
+            </div>
+            <div id="sav-quick-action-feedback" class="hidden mt-2 text-[11px]"></div>
+          </section>
+
+          <!-- ═══ ACCORDÉONS (collapsed par défaut) ═══ -->
+
+          <!-- ▸ Notes épinglées -->
+          <details class="sav-sidebar-accordion rounded-xl border border-slate-200 bg-white" id="sav-pinned-notes-section">
+            <summary class="sav-sidebar-accordion__head">
+              <span class="material-symbols-outlined" style="font-size:16px;">push_pin</span>
+              Notes épinglées
+              <span id="sav-pinned-count" class="ml-1 inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold"></span>
+            </summary>
+            <div class="px-3 pb-3">
+              <div id="sav-pinned-notes-wrap" class="hidden">
+                <div id="sav-pinned-notes" class="flex flex-wrap gap-1.5 mb-2"></div>
+                <button type="button" id="sav-pinned-showall" class="hidden text-[11px] text-primary hover:underline"></button>
+                <div class="flex items-center gap-2">
+                  <button type="button" id="sav-pinned-dense-toggle" class="text-[11px] text-slate-500 hover:text-slate-700" title="Mode dense">
+                    <span class="material-symbols-outlined" style="font-size:14px;">density_small</span>
+                  </button>
+                  <button type="button" id="sav-pinned-history-btn" class="text-[11px] text-slate-500 hover:text-slate-700" title="Historique">
+                    <span class="material-symbols-outlined" style="font-size:14px;">history</span>
+                  </button>
+                </div>
+              </div>
+              <div id="sav-pinned-empty">
+                <button type="button" id="sav-pinned-add-btn-empty" class="inline-flex items-center gap-1 rounded-md border border-dashed border-slate-300 px-2.5 py-1 text-[11px] font-medium text-slate-500 hover:border-primary hover:text-primary w-full justify-center">
+                  <span class="material-symbols-outlined" style="font-size:14px;">push_pin</span>
+                  Épingler une note <kbd class="ml-1 px-1 bg-slate-100 rounded text-[9px]">⇧P</kbd>
+                </button>
+              </div>
+              <button type="button" id="sav-pinned-add-btn-top" class="hidden mt-1 inline-flex items-center gap-1 rounded-md bg-primary text-white px-2.5 py-1 text-[11px] font-semibold hover:bg-primary-dark w-full justify-center">
+                <span class="material-symbols-outlined" style="font-size:14px;">add</span> Épingler
+              </button>
+
+              <!-- Form ajout/édition notes -->
+              <form id="sav-pinned-add-form" class="hidden mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <input type="hidden" id="sav-pinned-edit-id" value="" />
+                <div class="flex flex-wrap gap-1 mb-1.5" id="sav-pinned-templates">
+                  <button type="button" data-tpl="⚠️ Client difficile" class="sav-pinned-tpl text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-slate-300 hover:border-primary">⚠️ Difficile</button>
+                  <button type="button" data-tpl="📞 Rappel promis le " class="sav-pinned-tpl text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-slate-300 hover:border-primary">📞 Rappel</button>
+                  <button type="button" data-tpl="🔗 Dossier lié #SAV-" class="sav-pinned-tpl text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-slate-300 hover:border-primary">🔗 Lié</button>
+                  <button type="button" data-tpl="⚖️ Litige / Avocat" class="sav-pinned-tpl text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-slate-300 hover:border-primary">⚖️ Litige</button>
+                  <button type="button" data-tpl="💰 Geste commercial accordé : " class="sav-pinned-tpl text-[10px] px-1.5 py-0.5 rounded-full bg-white border border-slate-300 hover:border-primary">💰 Geste</button>
+                </div>
+                <textarea id="sav-pinned-input" maxlength="500" rows="2" placeholder="Saisissez une note…" class="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs focus:border-primary focus:ring-1 focus:ring-primary resize-none"></textarea>
+                <div class="mt-1.5 flex items-center gap-1.5 flex-wrap">
+                  <div class="flex gap-1" role="radiogroup" aria-label="Couleur">
+                    <button type="button" data-color="rose" class="sav-pinned-color w-5 h-5 rounded-full border-2 border-transparent" style="background:#e11d48" title="Urgent"></button>
+                    <button type="button" data-color="amber" class="sav-pinned-color w-5 h-5 rounded-full border-2 border-transparent" style="background:#f59e0b" title="Attention"></button>
+                    <button type="button" data-color="blue" class="sav-pinned-color w-5 h-5 rounded-full border-2 border-transparent" style="background:#2563eb" title="Info"></button>
+                    <button type="button" data-color="emerald" class="sav-pinned-color w-5 h-5 rounded-full border-2 border-transparent" style="background:#059669" title="OK"></button>
+                    <button type="button" data-color="slate" class="sav-pinned-color w-5 h-5 rounded-full border-2 border-transparent" style="background:#64748b" title="Neutre"></button>
+                  </div>
+                  <label class="inline-flex items-center gap-1 text-[10px] text-slate-600">
+                    <span class="material-symbols-outlined" style="font-size:12px;">event</span>
+                    <input type="date" id="sav-pinned-expires" class="rounded border border-slate-300 px-1 py-0.5 text-[10px]" />
+                  </label>
+                  <div class="flex-1"></div>
+                  <button type="button" id="sav-pinned-cancel" class="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px]">Annuler</button>
+                  <button type="submit" id="sav-pinned-submit" class="rounded bg-primary text-white px-2 py-0.5 text-[10px] font-semibold">Épingler</button>
+                </div>
+              </form>
+              <div id="sav-pinned-history" class="hidden mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <div class="flex items-center justify-between mb-1">
+                  <div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Notes supprimées</div>
+                  <button type="button" id="sav-pinned-history-close" class="text-[10px] text-slate-500 hover:text-slate-700">Fermer</button>
+                </div>
+                <div id="sav-pinned-history-list" class="space-y-1 max-h-32 overflow-y-auto"></div>
+              </div>
+            </div>
+          </details>
+
+          <!-- ▸ Playbook (actions contextuelles + transitions) -->
+          <details class="sav-sidebar-accordion rounded-xl border border-slate-200 bg-white">
+            <summary class="sav-sidebar-accordion__head">
+              <span class="material-symbols-outlined" style="font-size:16px;">route</span>
+              <span id="sav-playbook-title">Playbook</span>
+              <span id="sav-playbook-owner" class="ml-auto text-[10px] font-normal text-slate-400"></span>
+            </summary>
+            <div id="sav-playbook" class="px-3 pb-3" aria-busy="true">
+              <ol id="sav-playbook-stepper" class="flex items-start gap-1 overflow-x-auto pb-2 mb-2"></ol>
+              <div id="sav-playbook-hint" class="hidden text-xs text-slate-600 bg-slate-50 border-l-2 border-primary px-3 py-2 rounded mb-2"></div>
+              <div class="text-[10px] uppercase tracking-wide font-bold text-slate-500 mb-1">Actions</div>
+              <div id="sav-playbook-macros" class="flex flex-wrap gap-1.5 mb-2"></div>
+              <details class="text-xs">
+                <summary class="cursor-pointer text-slate-500 hover:text-slate-700">Changer de statut…</summary>
+                <div id="sav-playbook-transitions" class="flex flex-wrap gap-1.5 mt-2"></div>
+              </details>
+            </div>
+          </details>
+
+          <!-- ▸ Client info + Véhicule + Montage (dossier cards) -->
+          <details class="sav-sidebar-accordion rounded-xl border border-slate-200 bg-white">
+            <summary class="sav-sidebar-accordion__head">
+              <span class="material-symbols-outlined" style="font-size:16px;">person</span>
+              Dossier client
+            </summary>
+            <div class="px-3 pb-3">
+              <div id="sav-dossier" class="space-y-3" aria-busy="true">
+                <% for (var _si = 0; _si < 4; _si++) { %>
+                <div class="sav-skeleton-card">
+                  <span class="sav-skeleton sav-skeleton--line" style="width:85%;"></span>
+                  <span class="sav-skeleton sav-skeleton--line" style="width:60%;"></span>
+                </div>
+                <% } %>
+              </div>
+            </div>
+          </details>
+
+          <!-- ▸ SLA Tracking -->
+          <details class="sav-sidebar-accordion rounded-xl border border-slate-200 bg-white">
+            <summary class="sav-sidebar-accordion__head">
+              <span class="material-symbols-outlined" style="font-size:16px;">flag</span>
+              SLA & Objectifs
+            </summary>
+            <div class="px-3 pb-3">
+              <div id="sav-sla-objectives" class="space-y-2"></div>
+              <div id="sav-apercu-kpis" class="grid grid-cols-3 gap-2 mt-3">
+                <div class="rounded-lg border border-slate-200 bg-white p-2 text-center">
+                  <div class="text-lg font-bold text-slate-900" data-kpi="duree">—</div>
+                  <div class="text-[10px] text-slate-500">Jours ouvrés</div>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-white p-2 text-center">
+                  <div class="text-lg font-bold text-slate-900" data-kpi="messages">—</div>
+                  <div class="text-[10px] text-slate-500">Messages</div>
+                </div>
+                <div class="rounded-lg border border-slate-200 bg-white p-2 text-center">
+                  <div class="text-lg font-bold text-slate-900" data-kpi="relances">—</div>
+                  <div class="text-[10px] text-slate-500">Relances</div>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <!-- ▸ Documents -->
+          <details class="sav-sidebar-accordion rounded-xl border border-slate-200 bg-white">
+            <summary class="sav-sidebar-accordion__head">
+              <span class="material-symbols-outlined" style="font-size:16px;">folder</span>
+              Documents
+            </summary>
+            <div class="px-3 pb-3">
+              <div id="sav-documents" class="grid grid-cols-2 gap-2" aria-busy="true">
+                <% for (var _di = 0; _di < 4; _di++) { %>
+                <span class="sav-skeleton sav-skeleton--thumb" style="height:60px;"></span>
+                <% } %>
+              </div>
+            </div>
+          </details>
+
+          <!-- ▸ Historique / Timeline -->
+          <details class="sav-sidebar-accordion rounded-xl border border-slate-200 bg-white">
+            <summary class="sav-sidebar-accordion__head">
+              <span class="material-symbols-outlined" style="font-size:16px;">timeline</span>
+              Historique
+            </summary>
+            <div class="px-3 pb-3">
+              <div id="sav-timeline-filters" class="flex flex-wrap gap-1 mb-2">
+                <% const _flt = [
+                  ['all','Tous'],['message','Msg'],['statut','Statuts'],
+                  ['systeme','Système'],['fournisseur','Fourn.'],['diagnostic','Diag.']
+                ]; %>
+                <% _flt.forEach(function(f){ %>
+                  <button type="button" data-tl-filter="<%= f[0] %>"
+                    class="sav-tl-chip<%= f[0]==='all' ? ' is-active' : '' %> text-[10px]"><%= f[1] %></button>
+                <% }); %>
+              </div>
+              <div class="sav-timeline max-h-64 overflow-y-auto" id="sav-timeline" aria-busy="true">
+                <% for (var _ti = 0; _ti < 3; _ti++) { %>
+                <div class="flex items-start gap-2 mb-3">
+                  <span class="sav-skeleton sav-skeleton--circle shrink-0" style="width:24px;height:24px;"></span>
+                  <div class="flex-1 space-y-1">
+                    <span class="sav-skeleton sav-skeleton--line" style="width:60%;"></span>
+                    <span class="sav-skeleton sav-skeleton--line" style="width:85%;"></span>
+                  </div>
+                </div>
+                <% } %>
+              </div>
+            </div>
+          </details>
+
+          <!-- ▸ Diagnostic banc -->
+          <details class="sav-sidebar-accordion rounded-xl border border-slate-200 bg-white">
+            <summary class="sav-sidebar-accordion__head">
+              <span class="material-symbols-outlined" style="font-size:16px;">science</span>
+              Diagnostic banc
+            </summary>
+            <div class="px-3 pb-3">
+              <div id="sav-diag-wizard">
+                <ol class="sav-diag-stepper text-[10px]" role="list">
+                  <li class="sav-diag-step-pill is-current" data-diag-pill="1"><span class="sav-diag-step-pill__num">1</span><span class="sav-diag-step-pill__label">Mesures</span></li>
+                  <li class="sav-diag-step-pill" data-diag-pill="2"><span class="sav-diag-step-pill__num">2</span><span class="sav-diag-step-pill__label">Codes</span></li>
+                  <li class="sav-diag-step-pill" data-diag-pill="3"><span class="sav-diag-step-pill__num">3</span><span class="sav-diag-step-pill__label">Médias</span></li>
+                  <li class="sav-diag-step-pill" data-diag-pill="4"><span class="sav-diag-step-pill__num">4</span><span class="sav-diag-step-pill__label">Conclusion</span></li>
+                </ol>
+                <div class="flex items-center justify-between mb-1 mt-1">
+                  <div class="text-[10px] font-semibold text-slate-600">Étape <span data-diag-current>1</span>/4 · <span data-diag-step-label>Mesures</span></div>
+                  <div class="text-[10px] text-slate-400"><span data-diag-pct>25</span>%</div>
+                </div>
+                <div class="h-1 w-full rounded-full bg-slate-100 overflow-hidden mb-3">
+                  <div data-diag-progress class="h-full bg-primary transition-all" style="width:25%"></div>
+                </div>
+
+                <!-- Step 1: Mesures -->
+                <div class="sav-diag-step" data-diag-step="1">
+                  <div class="grid grid-cols-2 gap-2">
+                    <label class="block text-[11px] font-medium text-slate-600">Pression (bar)
+                      <div class="sav-input-wrap mt-0.5"><input data-diag-field="pressionHydraulique" type="number" step="0.1" min="0" max="15" placeholder="4.5" class="sav-input w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs pr-10"><span class="sav-input-suffix text-[10px]">bar</span></div>
+                      <div class="sav-field-hint text-[9px]">3,5 – 6 bar</div>
+                      <div class="sav-field-error hidden" data-diag-error="pressionHydraulique"></div>
+                    </label>
+                    <label class="block text-[11px] font-medium text-slate-600">Fuite
+                      <select data-diag-field="fuiteInterne" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs"><option value="">—</option><option value="non">Non</option><option value="legere">Légère</option><option value="significative">Significative</option></select>
+                    </label>
+                    <label class="block text-[11px] font-medium text-slate-600">T° avant (°C)
+                      <div class="sav-input-wrap mt-0.5"><input data-diag-field="temperatureAvant" type="number" min="-20" max="150" placeholder="25" class="sav-input w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs pr-10"><span class="sav-input-suffix text-[10px]">°C</span></div>
+                    </label>
+                    <label class="block text-[11px] font-medium text-slate-600">T° après (°C)
+                      <div class="sav-input-wrap mt-0.5"><input data-diag-field="temperatureApres" type="number" min="-20" max="150" placeholder="85" class="sav-input w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs pr-10"><span class="sav-input-suffix text-[10px]">°C</span></div>
+                    </label>
+                  </div>
+                </div>
+                <!-- Step 2: Codes -->
+                <div class="sav-diag-step hidden" data-diag-step="2">
+                  <div class="space-y-2">
+                    <label class="block text-[11px] font-medium text-slate-600">Codes avant reset<input data-diag-field="codesAvantReset" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-mono" placeholder="P0741, P189C"></label>
+                    <label class="block text-[11px] font-medium text-slate-600">Codes après reset<input data-diag-field="codesApresReset" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-mono" placeholder="aucun / P189C"></label>
+                    <label class="block text-[11px] font-medium text-slate-600">Codes généraux<input data-diag-field="codesDefaut" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs font-mono" placeholder="P173E, P0841"></label>
+                  </div>
+                </div>
+                <!-- Step 3: Médias -->
+                <div class="sav-diag-step hidden" data-diag-step="3">
+                  <div class="space-y-2">
+                    <label class="block text-[11px] font-medium text-slate-600">URL vidéo<input data-diag-field="videoUrl" type="url" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" placeholder="https://…"></label>
+                    <label class="block text-[11px] font-medium text-slate-600">URL courbe banc<input data-diag-field="courbeBancUrl" type="url" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" placeholder="https://…"></label>
+                    <label class="block text-[11px] font-medium text-slate-600">URL rapport PDF<input data-diag-field="rapport" type="url" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs" placeholder="https://…"></label>
+                  </div>
+                </div>
+                <!-- Step 4: Conclusion -->
+                <div class="sav-diag-step hidden" data-diag-step="4">
+                  <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-3 text-center" title="Score 0-100 : pression, fuite, température, codes défaut, conclusion.">
+                    <div class="text-[10px] font-semibold text-slate-500 uppercase">Score de risque</div>
+                    <div class="text-3xl font-bold text-primary mt-0.5" data-diag-score-display>—</div>
+                    <div class="text-[10px] text-slate-400">/ 100</div>
+                  </div>
+                  <div class="space-y-2">
+                    <label class="block text-[11px] font-medium text-slate-600">Conclusion
+                      <select data-diag-field="conclusion" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs"><option value="">— Choisir —</option><option value="defaut_produit">Défaut produit</option><option value="mauvais_montage">Mauvais montage</option><option value="usure_normale">Usure normale</option><option value="non_defectueux">Non défectueux</option></select>
+                    </label>
+                    <label class="block text-[11px] font-medium text-slate-600">Avis 2e technicien<textarea data-diag-field="avis2eTechnicienTexte" rows="2" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-xs"></textarea></label>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-between mt-3">
+                  <button type="button" id="sav-diag-prev" class="px-2 py-1 rounded-lg text-[11px] border border-slate-300 hover:bg-slate-50" disabled>← Préc.</button>
+                  <button type="button" id="sav-diag-next" class="px-2 py-1 rounded-lg text-[11px] bg-slate-900 text-white hover:bg-slate-800">Suivant →</button>
+                  <button type="button" id="sav-diag-save" class="hidden btn btn-primary text-xs">Enregistrer</button>
+                </div>
+              </div>
+              <form id="sav-diag-form" class="hidden"></form>
+              <form id="sav-diag-enrichi-form" class="hidden">__LEGACY__</form>
+            </div>
+          </details>
+
+          <!-- ▸ Fournisseur -->
+          <details class="sav-sidebar-accordion rounded-xl border border-slate-200 bg-white" id="panel-fournisseur">
+            <summary class="sav-sidebar-accordion__head">
+              <span class="material-symbols-outlined" style="font-size:16px;">local_shipping</span>
+              Fournisseur
+            </summary>
+            <div class="px-3 pb-3">
+              <button type="button" id="sav-fourn-whatsapp" class="w-full mb-3 btn btn-primary text-xs py-2 inline-flex items-center justify-center gap-1.5">
+                <span class="material-symbols-outlined" style="font-size:16px;">chat</span>
+                📲 WhatsApp fournisseur
+              </button>
+              <form id="sav-fourn-form" class="space-y-2">
+                <label class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                  <div class="text-[11px] font-semibold text-slate-800">Attente fournisseur</div>
+                  <span class="sav-switch sav-switch--sm"><input type="checkbox" name="changeStatutToEnAttente"><span class="sav-switch__slider"></span></span>
+                </label>
+                <details open data-fourn-section="identite" class="rounded-lg border border-slate-200">
+                  <summary class="cursor-pointer flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-slate-700"><span class="material-symbols-outlined text-slate-500" style="font-size:14px;">badge</span>Identité</summary>
+                  <div class="px-3 pb-2 grid grid-cols-2 gap-2">
+                    <label class="block text-[10px] font-medium text-slate-600">Nom<input name="nom" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></label>
+                    <label class="block text-[10px] font-medium text-slate-600">Contact<input name="contact" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></label>
+                    <label class="block text-[10px] font-medium text-slate-600 col-span-2">N° RMA<input name="rmaNumero" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></label>
+                  </div>
+                </details>
+                <details data-fourn-section="expedition" class="rounded-lg border border-slate-200">
+                  <summary class="cursor-pointer flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-slate-700"><span class="material-symbols-outlined text-slate-500" style="font-size:14px;">local_shipping</span>Expédition</summary>
+                  <div class="px-3 pb-2 grid grid-cols-2 gap-2">
+                    <label class="block text-[10px] font-medium text-slate-600">Transporteur
+                      <select name="transporteur" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"><option value="">—</option><option value="chronopost">Chronopost</option><option value="colissimo">Colissimo</option><option value="ups">UPS</option><option value="dhl">DHL</option><option value="other">Autre</option></select>
+                    </label>
+                    <label class="block text-[10px] font-medium text-slate-600">N° colis<input name="colisNumero" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></label>
+                    <label class="block text-[10px] font-medium text-slate-600 col-span-2">URL tracking<input name="trackingUrl" type="url" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></label>
+                    <label class="block text-[10px] font-medium text-slate-600">Envoi<input name="dateEnvoi" type="date" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></label>
+                    <label class="block text-[10px] font-medium text-slate-600">Retour<input name="dateRetour" type="date" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></label>
+                  </div>
+                </details>
+                <details data-fourn-section="couts" class="rounded-lg border border-slate-200">
+                  <summary class="cursor-pointer flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-slate-700"><span class="material-symbols-outlined text-slate-500" style="font-size:14px;">euro</span>Coûts</summary>
+                  <div class="px-3 pb-2 grid grid-cols-2 gap-2">
+                    <label class="block text-[10px] font-medium text-slate-600">Analyse fournisseur (€)<input name="coutAnalyse" type="number" step="0.01" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></label>
+                    <label class="block text-[10px] font-medium text-slate-600">Refacturé client (€)<input name="coutRefacture" type="number" step="0.01" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></label>
+                  </div>
+                </details>
+                <details data-fourn-section="docs" class="rounded-lg border border-slate-200">
+                  <summary class="cursor-pointer flex items-center gap-1.5 px-3 py-2 text-[11px] font-semibold text-slate-700"><span class="material-symbols-outlined text-slate-500" style="font-size:14px;">description</span>Documents</summary>
+                  <div class="px-3 pb-2 space-y-2">
+                    <label class="block text-[10px] font-medium text-slate-600">Rapport URL<input name="rapportUrl" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></label>
+                    <label class="block text-[10px] font-medium text-slate-600">Réponse<textarea name="reponse" rows="2" class="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-xs"></textarea></label>
+                  </div>
+                </details>
+                <div class="flex items-center justify-end gap-2">
+                  <button type="button" id="sav-fourn-track" class="btn btn-secondary text-[10px]">Tracking ↗</button>
+                  <button class="btn btn-secondary text-[10px]" type="submit">Sauvegarder</button>
+                </div>
+              </form>
+            </div>
+          </details>
+
+          <!-- ▸ Toutes les actions (avancé) -->
+          <details class="sav-sidebar-accordion rounded-xl border border-slate-200 bg-white">
+            <summary class="sav-sidebar-accordion__head">
+              <span class="material-symbols-outlined" style="font-size:16px;">tune</span>
+              Toutes les actions
+              <span class="text-[10px] font-normal text-slate-400">(avancé)</span>
+            </summary>
+            <div id="sav-actions" class="px-3 pb-3 space-y-3">
+              <div>
+                <div class="text-[10px] uppercase tracking-wide font-bold text-slate-400 mb-1">Réception</div>
+                <button class="btn btn-secondary w-full text-xs inline-flex items-center justify-start gap-1.5" data-action-statut="recu_atelier">
+                  <span class="material-symbols-outlined" style="font-size:14px;">inventory_2</span>Pièce reçue atelier
+                </button>
+              </div>
+              <div>
+                <div class="text-[10px] uppercase tracking-wide font-bold text-slate-400 mb-1">Analyse</div>
+                <div class="space-y-1">
+                  <button class="btn btn-secondary w-full text-xs inline-flex items-center justify-start gap-1.5" data-action-statut="en_analyse"><span class="material-symbols-outlined" style="font-size:14px;">science</span>Démarrer l'analyse</button>
+                  <button class="btn btn-secondary w-full text-xs inline-flex items-center justify-start gap-1.5" data-action-statut="analyse_terminee"><span class="material-symbols-outlined" style="font-size:14px;">fact_check</span>Conclure analyse</button>
+                  <button class="btn btn-secondary w-full text-xs inline-flex items-center justify-start gap-1.5" data-action-pdf><span class="material-symbols-outlined" style="font-size:14px;">picture_as_pdf</span>Rapport PDF</button>
+                </div>
+              </div>
+              <div>
+                <div class="text-[10px] uppercase tracking-wide font-bold text-slate-400 mb-1">Résolution</div>
+                <div class="space-y-1">
+                  <button class="btn btn-secondary w-full text-xs text-emerald-700 inline-flex items-center justify-start gap-1.5" data-action-resolution="echange"><span class="material-symbols-outlined" style="font-size:14px;">swap_horiz</span>Défaut → échange</button>
+                  <button class="btn btn-secondary w-full text-xs text-emerald-700 inline-flex items-center justify-start gap-1.5" data-action-resolution="remboursement"><span class="material-symbols-outlined" style="font-size:14px;">payments</span>Défaut → remboursement</button>
+                </div>
+              </div>
+              <details class="rounded-lg border border-red-200 bg-red-50 p-3 group">
+                <summary class="flex items-center justify-between gap-1 text-red-700 font-bold text-[10px] uppercase tracking-wide cursor-pointer list-none select-none">
+                  <span class="flex items-center gap-1"><span class="material-symbols-outlined" style="font-size:14px;">warning</span>Zone dangereuse</span>
+                  <span class="material-symbols-outlined text-red-500 transition-transform group-open:rotate-180" style="font-size:16px;">expand_more</span>
+                </summary>
+                <div class="mt-2 space-y-1">
+                  <button class="btn w-full text-xs bg-white text-red-700 border border-red-300 hover:bg-red-100 inline-flex items-center justify-start gap-1.5" data-confirm="Facturer 149 € ?" data-action-facturer><span class="material-symbols-outlined" style="font-size:14px;">euro</span>Facturer 149 €</button>
+                  <button class="btn w-full text-xs bg-white text-red-700 border border-red-300 hover:bg-red-100 inline-flex items-center justify-start gap-1.5" data-confirm="Clôturer ?" data-action-statut="clos"><span class="material-symbols-outlined" style="font-size:14px;">lock</span>Clôturer</button>
+                  <button class="btn w-full text-xs bg-white text-red-700 border border-red-300 hover:bg-red-100 inline-flex items-center justify-start gap-1.5" data-confirm="Refuser la demande ?" data-action-statut="refuse"><span class="material-symbols-outlined" style="font-size:14px;">block</span>Refuser</button>
+                </div>
+              </details>
+            </div>
+          </details>
+
+          <!-- ▸ Paiements -->
+          <details class="sav-sidebar-accordion rounded-xl border border-slate-200 bg-white">
+            <summary class="sav-sidebar-accordion__head">
+              <span class="material-symbols-outlined" style="font-size:16px;">payments</span>
+              Paiements
+            </summary>
+            <div class="px-3 pb-3 space-y-2">
+              <div>
+                <div class="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-0.5">Analyse 149 €</div>
+                <div id="sav-paiement" class="text-xs text-slate-700">—</div>
+              </div>
+              <div class="pt-2 border-t border-slate-100">
+                <div class="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-0.5">Remboursement Mollie</div>
+                <div id="sav-refund-status" class="text-xs text-slate-500 mb-1.5">—</div>
+                <input type="number" id="sav-refund-amount" min="0" step="0.01" placeholder="Montant €"
+                       class="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs mb-1.5">
+                <button type="button" id="sav-refund-btn" class="btn btn-secondary w-full text-[10px] inline-flex items-center justify-center gap-1">
+                  <span class="material-symbols-outlined" style="font-size:14px;">undo</span>Rembourser
+                </button>
+              </div>
+            </div>
+          </details>
+
+          <!-- Decision tree button (was in quick actions) -->
+          <button type="button" id="sav-open-decision-tree"
+                  class="w-full group flex items-center justify-center gap-2 rounded-xl border border-violet-200 hover:border-violet-400 bg-violet-50 hover:bg-violet-100 px-3 py-2.5 text-xs font-medium text-violet-700 transition">
+            <span class="material-symbols-outlined text-violet-600" style="font-size:18px;">account_tree</span>
+            Diagnostic guidé (149€)
+          </button>
+
+        </aside>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<!-- ═══════════════════════════════════════════════
+     MODALS (identiques — aucun changement)
+     ═══════════════════════════════════════════════ -->
+
+<!-- Modale annotations photos -->
+<div id="sav-annotate-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/70 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-annotate-title">
+  <div class="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[92vh] flex flex-col">
+    <div class="flex items-center justify-between p-4 border-b border-slate-200">
+      <h3 id="sav-annotate-title" class="text-lg font-semibold flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary" aria-hidden="true">edit</span>
+        Annoter la photo
+      </h3>
+      <button type="button" data-close-annotate aria-label="Fermer" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+    </div>
+    <div class="p-3 border-b border-slate-200 bg-slate-50 flex items-center gap-2 flex-wrap text-xs">
+      <div class="flex gap-1">
+        <button type="button" data-annotate-tool="pen" class="px-3 py-1.5 rounded-lg bg-primary text-white inline-flex items-center gap-1" title="Crayon"><span class="material-symbols-outlined" style="font-size:16px;">draw</span></button>
+        <button type="button" data-annotate-tool="arrow" class="px-3 py-1.5 rounded-lg bg-slate-100 inline-flex items-center gap-1" title="Flèche"><span class="material-symbols-outlined" style="font-size:16px;">north_east</span></button>
+        <button type="button" data-annotate-tool="rect" class="px-3 py-1.5 rounded-lg bg-slate-100 inline-flex items-center gap-1" title="Rectangle"><span class="material-symbols-outlined" style="font-size:16px;">crop_square</span></button>
+        <button type="button" data-annotate-tool="circle" class="px-3 py-1.5 rounded-lg bg-slate-100 inline-flex items-center gap-1" title="Cercle"><span class="material-symbols-outlined" style="font-size:16px;">circle</span></button>
+        <button type="button" data-annotate-tool="text" class="px-3 py-1.5 rounded-lg bg-slate-100 inline-flex items-center gap-1" title="Texte"><span class="material-symbols-outlined" style="font-size:16px;">title</span></button>
+      </div>
+      <div class="h-6 w-px bg-slate-300 mx-1"></div>
+      <div class="flex gap-1">
+        <button type="button" data-annotate-color="#ef4444" class="w-7 h-7 rounded-full ring-2 ring-offset-2 ring-slate-900" style="background:#ef4444" title="Rouge"></button>
+        <button type="button" data-annotate-color="#f59e0b" class="w-7 h-7 rounded-full" style="background:#f59e0b" title="Orange"></button>
+        <button type="button" data-annotate-color="#10b981" class="w-7 h-7 rounded-full" style="background:#10b981" title="Vert"></button>
+        <button type="button" data-annotate-color="#0ea5e9" class="w-7 h-7 rounded-full" style="background:#0ea5e9" title="Bleu"></button>
+        <button type="button" data-annotate-color="#000000" class="w-7 h-7 rounded-full" style="background:#000000" title="Noir"></button>
+      </div>
+      <div class="ml-auto flex gap-2">
+        <button type="button" data-annotate-clear class="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-white">Effacer</button>
+        <button type="button" data-annotate-save class="px-3 py-1.5 rounded-lg bg-primary text-white font-semibold">Enregistrer</button>
+      </div>
+    </div>
+    <div class="flex-1 overflow-auto p-4 bg-slate-100 flex items-center justify-center">
+      <div class="relative inline-block">
+        <img data-annotate-img alt="" class="block max-w-full max-h-[70vh] rounded-lg shadow-lg pointer-events-none">
+        <canvas data-annotate-canvas class="absolute inset-0 cursor-crosshair"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale rapport PDF -->
+<div id="sav-pdf-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-pdf-modal-title">
+  <div class="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[90vh] flex flex-col">
+    <div class="flex items-center justify-between p-5 border-b border-slate-200">
+      <h3 id="sav-pdf-modal-title" class="text-lg font-semibold flex items-center gap-2"><span class="material-symbols-outlined text-primary">picture_as_pdf</span>Générer un rapport PDF</h3>
+      <button type="button" data-close-pdf aria-label="Fermer" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+    </div>
+    <div class="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-[280px_1fr]">
+      <aside class="border-r border-slate-200 p-4 overflow-y-auto bg-slate-50">
+        <div class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">1 · Choisir un template</div>
+        <div class="space-y-2" data-pdf-templates><div class="text-sm text-slate-400">Chargement…</div></div>
+        <div class="mt-5 text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">2 · Contenu inclus</div>
+        <div data-pdf-summary class="rounded-xl border border-slate-200 bg-white p-3"></div>
+        <button type="button" data-pdf-generate class="mt-4 w-full btn btn-primary">Générer & prévisualiser</button>
+      </aside>
+      <div class="p-4 overflow-hidden flex flex-col">
+        <div class="text-xs font-bold uppercase tracking-wide text-slate-500 mb-2">3 · Aperçu</div>
+        <div data-pdf-preview class="flex-1 rounded-xl border border-dashed border-slate-200 bg-slate-50 min-h-[400px] flex flex-col"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale assignation -->
+<div id="sav-assign-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-assign-modal-title">
+  <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
+    <div class="flex items-center justify-between mb-3">
+      <h3 id="sav-assign-modal-title" class="text-lg font-semibold">Assigner le ticket</h3>
+      <button type="button" data-close-assign aria-label="Fermer" class="text-slate-400 hover:text-slate-700 text-2xl">×</button>
+    </div>
+    <select id="sav-assign-select" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"><option value="">— Personne (désassigner) —</option></select>
+    <button type="button" id="sav-assign-confirm" class="mt-4 btn btn-primary w-full">Confirmer</button>
+  </div>
+</div>
+
+<!-- Modale confirmation -->
+<div id="sav-confirm-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-confirm-modal-title">
+  <div class="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6">
+    <div class="flex items-start gap-3">
+      <span class="material-symbols-outlined text-red-600 text-3xl" aria-hidden="true">warning</span>
+      <div class="flex-1">
+        <h3 id="sav-confirm-modal-title" class="text-lg font-semibold">Confirmer l'action</h3>
+        <p id="sav-confirm-text" class="mt-1 text-sm text-slate-600">Êtes-vous sûr ?</p>
+      </div>
+    </div>
+    <div class="mt-5 flex justify-end gap-2">
+      <button type="button" id="sav-confirm-cancel" class="px-4 py-2 rounded-xl border border-slate-300 text-sm font-medium">Annuler</button>
+      <button type="button" id="sav-confirm-ok" class="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modale WhatsApp fournisseur -->
+<div id="sav-wa-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-wa-modal-title">
+  <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-3">
+      <h3 id="sav-wa-modal-title" class="text-lg font-semibold flex items-center gap-2"><span class="material-symbols-outlined text-emerald-600">chat</span> WhatsApp fournisseur</h3>
+      <button type="button" data-close-wa aria-label="Fermer" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+    </div>
+    <div class="space-y-3">
+      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Numéro (ex: 33612345678)</label><input type="tel" id="sav-wa-phone" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="33612345678"></div>
+      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Message</label><textarea id="sav-wa-text" rows="14" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-mono"></textarea></div>
+      <div class="flex gap-2 flex-wrap">
+        <a id="sav-wa-link" target="_blank" rel="noopener" class="btn btn-secondary text-emerald-700 border-emerald-200">wa.me ↗</a>
+        <button type="button" id="sav-wa-copy" class="btn btn-secondary">Copier</button>
+        <button type="button" id="sav-wa-send" class="btn btn-primary">Envoyer</button>
+      </div>
+      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Réponse fournisseur</label><textarea id="sav-wa-reply" rows="3" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs"></textarea><button type="button" id="sav-wa-save-reply" class="mt-2 btn btn-secondary text-xs">Enregistrer</button></div>
+      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Script client</label><textarea id="sav-wa-client-script" rows="4" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs"></textarea></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modale aide raccourcis -->
+<div id="sav-kbd-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-kbd-modal-title">
+  <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 id="sav-kbd-modal-title" class="text-lg font-semibold">Raccourcis clavier</h3>
+      <button type="button" data-close-kbd aria-label="Fermer" class="text-slate-400 text-2xl leading-none">×</button>
+    </div>
+    <ul class="text-sm space-y-2">
+      <li class="flex justify-between"><span>Composer un message</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">c</kbd></li>
+      <li class="flex justify-between"><span>Statut suivant</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">s</kbd></li>
+      <li class="flex justify-between"><span>Assigner</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">a</kbd></li>
+      <li class="flex justify-between"><span>Épingler une note</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">⇧P</kbd></li>
+      <li class="flex justify-between"><span>Cette aide</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">?</kbd></li>
+      <li class="flex justify-between"><span>Fermer une modale</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">Esc</kbd></li>
+    </ul>
+  </div>
+</div>
+
+<!-- Modal envoi procédure -->
+<div id="sav-proc-modal" class="hidden fixed inset-0 z-[60] items-center justify-center bg-slate-900/60 p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+      <div class="flex items-center gap-2"><span class="material-symbols-outlined text-rose-600">menu_book</span><h3 class="text-base font-semibold text-slate-800">Envoyer une procédure</h3></div>
+      <button type="button" id="sav-proc-close" class="text-slate-400 hover:text-slate-700"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="px-5 py-3 border-b border-slate-200"><input type="search" id="sav-proc-search" placeholder="Rechercher…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></div>
+    <div id="sav-proc-list" class="flex-1 overflow-y-auto p-3"><div class="text-sm text-slate-400 py-6 text-center">Chargement…</div></div>
+    <div id="sav-proc-compose" class="hidden px-5 py-3 border-t border-slate-200">
+      <div class="text-xs font-semibold text-slate-700 mb-1">Procédure : <span id="sav-proc-selected-title"></span></div>
+      <textarea id="sav-proc-message" rows="4" placeholder="Message (optionnel)" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></textarea>
+      <div class="flex items-center justify-end gap-2 mt-2">
+        <button type="button" id="sav-proc-cancel" class="text-xs text-slate-500 hover:text-slate-700">Annuler</button>
+        <button type="button" id="sav-proc-send" class="btn btn-primary text-xs"><span class="material-symbols-outlined mr-1" style="font-size:14px;">send</span>Envoyer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox photos -->
+<div id="sav-lightbox" class="hidden fixed inset-0 z-[70] items-center justify-center bg-black/90 select-none">
+  <button type="button" id="sav-lightbox-close" class="absolute top-4 right-4 text-white/80 hover:text-white p-2" aria-label="Fermer"><span class="material-symbols-outlined" style="font-size:32px;">close</span></button>
+  <button type="button" id="sav-lightbox-prev" class="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white p-2" aria-label="Précédent"><span class="material-symbols-outlined" style="font-size:40px;">chevron_left</span></button>
+  <button type="button" id="sav-lightbox-next" class="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white p-2" aria-label="Suivant"><span class="material-symbols-outlined" style="font-size:40px;">chevron_right</span></button>
+  <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 rounded-full px-3 py-1.5 text-white">
+    <button type="button" id="sav-lb-zoom-out" class="p-1 hover:text-violet-300" title="Zoom -"><span class="material-symbols-outlined" style="font-size:20px;">zoom_out</span></button>
+    <span id="sav-lb-zoom-level" class="text-xs font-mono w-12 text-center">100%</span>
+    <button type="button" id="sav-lb-zoom-in" class="p-1 hover:text-violet-300" title="Zoom +"><span class="material-symbols-outlined" style="font-size:20px;">zoom_in</span></button>
+    <span class="w-px h-4 bg-white/30"></span>
+    <button type="button" id="sav-lb-rot-l" class="p-1 hover:text-violet-300" title="Rotation -90°"><span class="material-symbols-outlined" style="font-size:20px;">rotate_left</span></button>
+    <button type="button" id="sav-lb-rot-r" class="p-1 hover:text-violet-300" title="Rotation +90°"><span class="material-symbols-outlined" style="font-size:20px;">rotate_right</span></button>
+    <span class="w-px h-4 bg-white/30"></span>
+    <button type="button" id="sav-lb-reset" class="p-1 hover:text-violet-300" title="Réinitialiser"><span class="material-symbols-outlined" style="font-size:20px;">restart_alt</span></button>
+    <span class="w-px h-4 bg-white/30"></span>
+    <span id="sav-lb-counter" class="text-[11px] font-mono"></span>
+  </div>
+  <div class="w-full h-full flex items-center justify-center overflow-hidden">
+    <img id="sav-lightbox-img" src="" class="max-w-[90vw] max-h-[85vh] object-contain transition-transform duration-150" style="transform: scale(1) rotate(0deg);" alt="">
+  </div>
+</div>
+
+<!-- Modal arbre de décision 149€ -->
+<div id="sav-decision-modal" class="hidden fixed inset-0 z-[60] items-center justify-center bg-slate-900/60 p-4">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col">
+    <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200">
+      <div class="flex items-center gap-2"><span class="material-symbols-outlined text-violet-600">account_tree</span><h3 class="text-base font-semibold text-slate-800">Diagnostic guidé</h3></div>
+      <button type="button" id="sav-decision-close" class="text-slate-400 hover:text-slate-700"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div id="sav-decision-body" class="flex-1 overflow-y-auto p-5"></div>
+    <div class="px-5 py-3 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500">
+      <button type="button" id="sav-decision-back" class="inline-flex items-center gap-1 hover:text-slate-700 disabled:opacity-30" disabled><span class="material-symbols-outlined" style="font-size:14px;">arrow_back</span> Retour</button>
+      <span id="sav-decision-trail"></span>
+    </div>
+  </div>
+</div>
+
+<!-- Modale Clôture qualifiée -->
+<div id="sav-close-modal" class="hidden fixed inset-0 z-[1200] bg-slate-900/50 backdrop-blur-sm items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="sav-close-title">
+  <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+      <h3 id="sav-close-title" class="text-base font-semibold text-slate-800 flex items-center gap-2"><span class="material-symbols-outlined text-primary">task_alt</span>Clôturer ce ticket</h3>
+      <button type="button" id="sav-close-cancel" class="text-slate-400 hover:text-slate-700"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <form id="sav-close-form" class="p-5 space-y-4 text-sm">
+      <p class="text-slate-600">Confirmez les étapes et la cause racine.</p>
+      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Statut</label><select name="targetStatut" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" required><option value="resolu_garantie">✅ Résolu (garantie)</option><option value="resolu_facture">💶 Résolu (facturé)</option><option value="clos">🔒 Clos</option><option value="refuse">🚫 Refusé</option></select></div>
+      <div class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <label class="flex items-start gap-2 cursor-pointer"><input type="checkbox" name="clientNotified" class="mt-0.5" required><span><strong>Client notifié</strong> <span class="text-red-500">*</span></span></label>
+        <label class="flex items-start gap-2 cursor-pointer"><input type="checkbox" name="refundDone" class="mt-0.5"><span>Remboursement effectué</span></label>
+        <label class="flex items-start gap-2 cursor-pointer"><input type="checkbox" name="docsArchived" class="mt-0.5" required><span><strong>Documents archivés</strong> <span class="text-red-500">*</span></span></label>
+      </div>
+      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Cause racine <span class="text-red-500">*</span></label><select name="rootCause" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" required><option value="">— Sélectionner —</option><option value="defaut_produit">Défaut produit</option><option value="defaut_fournisseur">Défaut fournisseur</option><option value="erreur_preparation">Erreur préparation</option><option value="erreur_client">Erreur client</option><option value="dommage_transport">Dommage transport</option><option value="incompatibilite">Incompatibilité</option><option value="rétractation_client">Rétractation</option><option value="autre">Autre</option></select></div>
+      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Détail (optionnel)</label><textarea name="rootCauseDetail" rows="2" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Ex : Défaut capteur…"></textarea></div>
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+        <button type="button" id="sav-close-cancel-2" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-semibold">Annuler</button>
+        <button type="submit" class="px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover text-white text-sm font-semibold inline-flex items-center gap-1.5"><span class="material-symbols-outlined" style="font-size:16px;">check</span>Clôturer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="sav-toast-root" id="sav-toast-root" aria-live="polite"></div>
+<script src="/js/sav-labels.js?v=3" defer></script>
+<script src="/js/sav-admin.js?v=35" defer></script>
+<%- include('./partials/footer') %>

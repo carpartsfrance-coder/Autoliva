@@ -1,0 +1,29 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1">
+  <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-8">
+    <div class="bg-white rounded-2xl border border-slate-200 p-6">
+      <h1 class="text-3xl font-black text-slate-900">Informations légales</h1>
+      <div class="mt-2 text-slate-600">Retrouvez ici les pages obligatoires (CGV, CGU, mentions légales…).</div>
+
+      <div class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <% (pages || []).forEach((p) => { %>
+          <a class="block rounded-2xl border border-slate-200 p-5 hover:border-primary/50 hover:bg-slate-50 transition" href="/legal/<%= p.slug %>">
+            <div class="font-black text-slate-900"><%= p.title %></div>
+            <div class="mt-1 text-sm text-slate-600">Voir la page</div>
+          </a>
+        <% }) %>
+      </div>
+
+      <% if (!dbConnected) { %>
+        <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <div class="font-bold">Mode démo</div>
+          <div class="mt-1 text-sm">La base de données est indisponible : les textes affichés sont des exemples.</div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

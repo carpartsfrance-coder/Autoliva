@@ -1,0 +1,17 @@
+<%
+  const baseUrl = brand.SITE_URL;
+  const gl = (typeof guestLink !== 'undefined' && guestLink) ? guestLink : (baseUrl + '/sav/suivi');
+  const body = `
+  <p>Bonjour <strong>${(ticket.client && ticket.client.nom) || ''}</strong>,</p>
+  <p>Petit rappel concernant votre dossier <strong>${ticket.numero}</strong> : nous n'avons pas encore reçu le règlement du forfait analyse de <strong>149 € TTC</strong>.</p>
+  <p style="margin:18px 0;text-align:center;">
+    <a href="${gl}"
+       style="display:inline-block;padding:12px 22px;background:#ec1313;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;">
+      Régler maintenant
+    </a>
+  </p>
+  <p style="font-size:13px;color:#475569;text-align:center;">
+    Si vous rencontrez la moindre difficulté, contactez-nous au ${brand.PHONE}.
+  </p>
+` %>
+<%- include('./_layout', { ticket: ticket, subject: 'Rappel — Forfait analyse 149€', body: body }) %>

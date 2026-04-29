@@ -1,0 +1,246 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1">
+  <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-6 sm:py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+      <aside class="lg:col-span-3">
+        <%- include('./_sidebar', { active: 'commandes' }) %>
+      </aside>
+
+      <section class="lg:col-span-9 space-y-6">
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 sm:gap-6">
+          <div>
+            <div class="text-xl sm:text-2xl md:text-3xl font-black text-slate-900">Mes Commandes</div>
+            <div class="mt-1 text-xs sm:text-sm text-slate-600">Gérez et suivez l’historique de vos commandes.</div>
+          </div>
+
+          <div class="w-full lg:max-w-sm">
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+              <input class="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-2.5 sm:py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400" placeholder="N° de commande (#CP-XXXXX)" type="text" />
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4">
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <div class="flex items-center gap-3 flex-wrap">
+              <div class="text-[10px] font-black uppercase tracking-widest text-slate-400">Filtrer par :</div>
+              <select id="filter-status" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900">
+                <option value="">Toutes les commandes</option>
+                <option value="pending_payment">En attente de paiement</option>
+                <option value="paid">Payée</option>
+                <option value="processing">En préparation</option>
+                <option value="shipped">Expédiée</option>
+                <option value="delivered">Livrée</option>
+                <option value="completed">Terminée</option>
+                <option value="cancelled">Annulée</option>
+                <option value="refunded">Remboursée</option>
+              </select>
+
+              <div class="text-[10px] font-black uppercase tracking-widest text-slate-400">Période :</div>
+              <select class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900">
+                <option>30 derniers jours</option>
+                <option>3 derniers mois</option>
+                <option>12 derniers mois</option>
+              </select>
+            </div>
+
+            <button class="hidden sm:inline-flex ml-auto items-center justify-center w-11 h-11 rounded-2xl border border-slate-200 hover:bg-slate-50 transition" type="button">
+              <span class="material-symbols-outlined text-slate-500">tune</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <% if (orders && orders.length) { %>
+            <div class="md:hidden divide-y divide-slate-100" id="orders-mobile">
+              <% orders.forEach((o) => { %>
+                <div class="p-4 order-row" data-status="<%= o.statusKey || '' %>">
+                  <div class="flex items-start justify-between gap-4">
+                    <div class="min-w-0">
+                      <div class="font-black text-slate-900 text-sm"><%= o.number || '—' %></div>
+                      <% if (o.id) { %>
+                        <div class="mt-0.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Ref : <%= String(o.id).slice(-6) %></div>
+                      <% } %>
+                      <div class="mt-1 text-xs text-slate-500">
+                        <div class="font-semibold text-slate-700"><%= o.dateLine1 || o.date || '—' %></div>
+                        <div><%= o.dateLine2 || '' %></div>
+                      </div>
+                    </div>
+
+                    <div class="text-right flex-shrink-0">
+                      <div class="font-black text-slate-900 text-sm"><%= o.total || '—' %></div>
+                      <div class="text-xs text-slate-500"><%= o.itemCount || 0 %> <%= (o.itemCount || 0) > 1 ? 'articles' : 'article' %></div>
+                    </div>
+                  </div>
+
+                  <% if (o.consigne && o.consigne.hasConsigne && o.consigne.label) { %>
+                    <div class="mt-2 text-xs font-black <%= o.consigne.className || 'text-slate-700' %>"><%= o.consigne.label %></div>
+                  <% } %>
+
+                  <div class="mt-3 flex items-center justify-between gap-3">
+                    <div>
+                      <% if (o.statusBadge) { %>
+                        <span class="inline-flex items-center rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-widest <%= o.statusBadge.className %>">
+                          <span class="material-symbols-outlined mr-2 text-[16px]">circle</span>
+                          <%= o.statusBadge.label %>
+                        </span>
+                      <% } else { %>
+                        <span class="text-xs font-bold text-slate-700"><%= o.status || '—' %></span>
+                      <% } %>
+                    </div>
+
+                    <% if (o.id) { %>
+                      <div class="flex items-center gap-2">
+                        <a class="inline-flex items-center justify-center rounded-xl bg-slate-100 px-3 py-2 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-200 transition" href="/compte/commandes/<%= o.id %>">
+                          Détails
+                        </a>
+                        <a class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 transition" href="/compte/commandes/<%= o.id %>/suivi">
+                          Suivi
+                        </a>
+                        <% if (o.invoiceUrl) { %>
+                          <a class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 transition" href="<%= o.invoiceUrl %>" target="_blank" rel="noopener">
+                            Facture
+                          </a>
+                        <% } %>
+                      </div>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+
+            <div class="hidden md:block overflow-x-auto">
+              <table class="w-full text-left">
+                <thead>
+                  <tr class="text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-50">
+                    <th class="px-6 py-4">Commande</th>
+                    <th class="px-6 py-4">Date</th>
+                    <th class="px-6 py-4">Articles</th>
+                    <th class="px-6 py-4">Total</th>
+                    <th class="px-6 py-4">Statut</th>
+                    <th class="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody class="divide-y divide-slate-100" id="orders-desktop">
+                  <% orders.forEach((o) => { %>
+                    <tr class="order-row" data-status="<%= o.statusKey || '' %>">
+                      <td class="px-6 py-5">
+                        <div class="font-black text-slate-900"><%= o.number || '—' %></div>
+                        <% if (o.id) { %>
+                          <div class="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-400">Ref : <%= String(o.id).slice(-6) %></div>
+                        <% } %>
+                        <% if (o.consigne && o.consigne.hasConsigne && o.consigne.label) { %>
+                          <div class="mt-2 text-xs font-black <%= o.consigne.className || 'text-slate-700' %>"><%= o.consigne.label %></div>
+                        <% } %>
+                      </td>
+
+                      <td class="px-6 py-5">
+                        <div class="text-sm font-semibold text-slate-700"><%= o.dateLine1 || o.date || '—' %></div>
+                        <div class="text-sm text-slate-500"><%= o.dateLine2 || '' %></div>
+                      </td>
+
+                      <td class="px-6 py-5">
+                        <div class="text-sm font-black text-slate-900"><%= String(o.itemCount || 0).padStart(2, '0') %></div>
+                        <div class="text-sm text-slate-500"><%= (o.itemCount || 0) > 1 ? 'articles' : 'article' %></div>
+                      </td>
+
+                      <td class="px-6 py-5">
+                        <div class="font-black text-slate-900"><%= o.total || '—' %></div>
+                      </td>
+
+                      <td class="px-6 py-5">
+                        <% if (o.statusBadge) { %>
+                          <span class="inline-flex items-center rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-widest <%= o.statusBadge.className %>">
+                            <span class="material-symbols-outlined mr-2 text-[16px]">circle</span>
+                            <%= o.statusBadge.label %>
+                          </span>
+                        <% } else { %>
+                          <span class="text-sm font-bold text-slate-700"><%= o.status || '—' %></span>
+                        <% } %>
+                      </td>
+
+                      <td class="px-6 py-5 text-right">
+                        <% if (o.id) { %>
+                          <div class="inline-flex flex-col gap-2">
+                            <a class="inline-flex items-center justify-center rounded-xl bg-slate-100 px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-200 transition" href="/compte/commandes/<%= o.id %>">
+                              <span class="material-symbols-outlined mr-2 text-base">visibility</span>
+                              Détails
+                            </a>
+                            <a class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 transition" href="/compte/commandes/<%= o.id %>/suivi">
+                              <span class="material-symbols-outlined mr-2 text-base">local_shipping</span>
+                              Suivi
+                            </a>
+                            <% if (o.invoiceUrl) { %>
+                              <a class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 transition" href="<%= o.invoiceUrl %>" target="_blank" rel="noopener">
+                                <span class="material-symbols-outlined mr-2 text-base">receipt_long</span>
+                                Facture PDF
+                              </a>
+                            <% } %>
+                          </div>
+                        <% } %>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="hidden md:flex px-6 py-5 border-t border-slate-100 flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div class="text-sm text-slate-500">
+                Affichage de 1-<%= orders.length %> sur <%= orders.length %> commandes
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="w-9 h-9 rounded-xl border border-slate-200 text-slate-500" disabled type="button">‹</button>
+                <button class="w-9 h-9 rounded-xl bg-primary text-white font-black" type="button">1</button>
+                <button class="w-9 h-9 rounded-xl border border-slate-200 text-slate-700 font-black" type="button">2</button>
+                <button class="w-9 h-9 rounded-xl border border-slate-200 text-slate-700 font-black" type="button">3</button>
+                <button class="w-9 h-9 rounded-xl border border-slate-200 text-slate-500" type="button">›</button>
+              </div>
+            </div>
+          <% } else { %>
+            <div class="p-6">
+              <div class="rounded-2xl border border-slate-200 bg-slate-50 p-6">
+                <div class="font-black text-slate-900">Aucune commande</div>
+                <div class="mt-1 text-sm text-slate-600">Vous n’avez pas encore passé de commande.</div>
+                <a class="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-2 text-xs font-black uppercase tracking-wider" href="/produits">
+                  <span class="material-symbols-outlined text-base">search</span>
+                  Parcourir le catalogue
+                </a>
+              </div>
+            </div>
+          <% } %>
+        </div>
+
+        <% if (!dbConnected) { %>
+          <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+            <div class="font-bold">Mode démo</div>
+            <div class="mt-1 text-sm">La base de données est indisponible : l’historique réel des commandes n’est pas disponible.</div>
+          </div>
+        <% } %>
+      </section>
+    </div>
+  </div>
+</main>
+
+<script>
+(function() {
+  var filterSelect = document.getElementById('filter-status');
+  if (!filterSelect) return;
+  filterSelect.addEventListener('change', function() {
+    var val = filterSelect.value;
+    document.querySelectorAll('.order-row').forEach(function(row) {
+      if (!val || row.getAttribute('data-status') === val) {
+        row.style.display = '';
+      } else {
+        row.style.display = 'none';
+      }
+    });
+  });
+})();
+</script>
+
+<%- include('../partials/footer') %>

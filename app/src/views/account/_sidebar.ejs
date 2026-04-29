@@ -1,0 +1,60 @@
+<% const activeKey = typeof active !== 'undefined' ? active : ''; %>
+
+<nav class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+  <div class="p-2 flex gap-1 overflow-x-auto no-scrollbar lg:flex-col lg:overflow-visible">
+    <a class="flex items-center gap-2 lg:gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl whitespace-nowrap <%= activeKey === 'dashboard' ? 'bg-primary/10 text-primary text-xs sm:text-sm font-bold' : 'hover:bg-slate-50 transition text-xs sm:text-sm font-semibold text-slate-600' %>" href="/compte">
+      <span class="material-symbols-outlined">dashboard</span>
+      Tableau de bord
+    </a>
+    <a class="flex items-center gap-2 lg:gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl whitespace-nowrap <%= activeKey === 'commandes' ? 'bg-primary/10 text-primary text-xs sm:text-sm font-bold' : 'hover:bg-slate-50 transition text-xs sm:text-sm font-semibold text-slate-600' %>" href="/compte/commandes">
+      <span class="material-symbols-outlined">shopping_bag</span>
+      Mes commandes
+    </a>
+    <a class="flex items-center gap-2 lg:gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl whitespace-nowrap <%= activeKey === 'garage' ? 'bg-primary/10 text-primary text-xs sm:text-sm font-bold' : 'hover:bg-slate-50 transition text-xs sm:text-sm font-semibold text-slate-600' %>" href="/compte/garage">
+      <span class="material-symbols-outlined">directions_car</span>
+      Mon garage
+    </a>
+    <a class="flex items-center gap-2 lg:gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl whitespace-nowrap <%= activeKey === 'adresses' ? 'bg-primary/10 text-primary text-xs sm:text-sm font-bold' : 'hover:bg-slate-50 transition text-xs sm:text-sm font-semibold text-slate-600' %>" href="/compte/adresses">
+      <span class="material-symbols-outlined">location_on</span>
+      Mes adresses
+    </a>
+    <a class="flex items-center gap-2 lg:gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl whitespace-nowrap <%= activeKey === 'factures' ? 'bg-primary/10 text-primary text-xs sm:text-sm font-bold' : 'hover:bg-slate-50 transition text-xs sm:text-sm font-semibold text-slate-600' %>" href="/compte/factures">
+      <span class="material-symbols-outlined">receipt_long</span>
+      Mes factures
+    </a>
+    <div class="hidden lg:block h-px bg-slate-200 my-2 mx-4"></div>
+    <a class="flex items-center gap-2 lg:gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl whitespace-nowrap <%= activeKey === 'profil' ? 'bg-primary/10 text-primary text-xs sm:text-sm font-bold' : 'hover:bg-slate-50 transition text-xs sm:text-sm font-semibold text-slate-600' %>" href="/compte/profil">
+      <span class="material-symbols-outlined">settings</span>
+      Paramètres
+    </a>
+
+    <a class="flex items-center gap-2 lg:gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl whitespace-nowrap <%= activeKey === 'sav' ? 'bg-primary/10 text-primary text-xs sm:text-sm font-bold' : 'hover:bg-slate-50 transition text-xs sm:text-sm font-semibold text-slate-600' %>" href="/compte/sav">
+      <span class="material-symbols-outlined">build_circle</span>
+      Mes SAV
+    </a>
+    <a class="flex items-center gap-2 lg:gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl whitespace-nowrap <%= activeKey === 'rgpd' ? 'bg-primary/10 text-primary text-xs sm:text-sm font-bold' : 'hover:bg-slate-50 transition text-xs sm:text-sm font-semibold text-slate-600' %>" href="/compte/rgpd">
+      <span class="material-symbols-outlined">verified_user</span>
+      Mes données (RGPD)
+    </a>
+    <a class="flex items-center gap-2 lg:gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl whitespace-nowrap <%= activeKey === 'securite' ? 'bg-primary/10 text-primary text-xs sm:text-sm font-bold' : 'hover:bg-slate-50 transition text-xs sm:text-sm font-semibold text-slate-600' %>" href="/compte/securite">
+      <span class="material-symbols-outlined">lock</span>
+      Sécurité
+    </a>
+
+    <form action="/compte/deconnexion" class="px-2" method="POST">
+      <input name="returnTo" type="hidden" value="<%= typeof currentPath !== 'undefined' ? currentPath : '/compte' %>" />
+      <button class="w-full flex items-center gap-2 lg:gap-3 px-3 py-2.5 lg:px-4 lg:py-3 rounded-xl whitespace-nowrap hover:bg-slate-50 transition text-xs sm:text-sm font-semibold text-slate-600" type="submit">
+        <span class="material-symbols-outlined">logout</span>
+        Déconnexion
+      </button>
+    </form>
+  </div>
+</nav>
+
+<div class="hidden lg:block mt-6 rounded-2xl border border-slate-200 bg-slate-900 p-6 text-white">
+  <div class="text-xs font-black uppercase tracking-widest text-white/60">Besoin d'aide ?</div>
+  <div class="mt-3 font-black">Notre équipe est disponible pour vous accompagner sur vos commandes et retours.</div>
+  <a class="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-xs font-black uppercase tracking-wider hover:bg-red-700 transition" href="/contact">
+    Contacter le support
+  </a>
+</div>

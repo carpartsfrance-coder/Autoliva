@@ -1,0 +1,30 @@
+<% if (typeof pb !== 'undefined' && pb && pb.pagination) { %>
+<div class="px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+  <div class="text-xs text-slate-500">
+    <% if (pb.totalLabel) { %>
+      <span class="font-semibold text-slate-700"><%= pb.totalLabel %></span>
+      <span class="mx-2" style="color:#CBD5E1">·</span>
+    <% } %>
+    Page <span class="font-semibold text-slate-700"><%= pb.pagination.page %></span> sur <span class="font-semibold text-slate-700"><%= pb.pagination.totalPages %></span>
+  </div>
+  <% if (pb.pagination.totalPages > 1) { %>
+  <div class="pagination-bar">
+    <a class="btn btn-secondary btn-sm<%= !pb.pagination.hasPrev ? ' pagination-disabled' : '' %>" href="<%= pb.pagination.hasPrev ? pb.prevUrl : '#' %>">
+      <span class="material-symbols-outlined" style="font-size:16px">chevron_left</span>
+      Précédent
+    </a>
+    <% pb.pageItems.forEach(function(item) { %>
+      <% if (item.type === 'ellipsis') { %>
+        <span class="pagination-ellipsis">…</span>
+      <% } else { %>
+        <a class="pagination-page<%= item.page === pb.pagination.page ? ' pagination-page--active' : '' %>" href="<%= pb.pageUrls[item.page] || '#' %>"><%= item.page %></a>
+      <% } %>
+    <% }) %>
+    <a class="btn btn-secondary btn-sm<%= !pb.pagination.hasNext ? ' pagination-disabled' : '' %>" href="<%= pb.pagination.hasNext ? pb.nextUrl : '#' %>">
+      Suivant
+      <span class="material-symbols-outlined" style="font-size:16px">chevron_right</span>
+    </a>
+  </div>
+  <% } %>
+</div>
+<% } %>

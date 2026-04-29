@@ -1,0 +1,264 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1">
+  <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-6 md:py-8">
+    <% if (!order) { %>
+      <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
+        <div class="text-2xl font-black text-slate-900">Suivi de commande</div>
+        <div class="mt-2 text-slate-600">Impossible d’afficher le suivi pour le moment.</div>
+        <% if (!dbConnected) { %>
+          <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+            <div class="font-bold">Mode démo</div>
+            <div class="mt-1 text-sm">La base de données est indisponible : le suivi réel n’est pas disponible.</div>
+          </div>
+        <% } %>
+      </div>
+    <% } else { %>
+      <nav class="flex mb-8 text-sm text-slate-500 font-medium overflow-x-auto whitespace-nowrap pb-2">
+        <a class="hover:text-primary transition-colors" href="/">Accueil</a>
+        <span class="mx-3 text-slate-300">/</span>
+        <a class="hover:text-primary transition-colors" href="/compte/commandes">Mes Commandes</a>
+        <span class="mx-3 text-slate-300">/</span>
+        <span class="text-slate-900">Suivi <%= order.number %></span>
+      </nav>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+        <div class="lg:col-span-8 space-y-8">
+          <div class="bg-white rounded-3xl p-5 md:p-8 border border-slate-100 shadow-sm">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+              <div>
+                <h1 class="text-3xl md:text-4xl font-display font-bold mb-2">Commande <%= order.number %></h1>
+                <div class="flex items-center gap-3">
+                  <span class="inline-flex items-center px-4 py-1.5 rounded-full <%= tracking.statusBadgeClass %> text-sm font-bold">
+                    <span class="w-2 h-2 <%= tracking.statusDotClass %> rounded-full mr-2 <%= tracking.statusDotPulse ? 'animate-pulse' : '' %>"></span>
+                    <%= tracking.statusLabel %>
+                  </span>
+                </div>
+              </div>
+
+              <% if (order.orderType === 'exchange_cloning' && !['shipped', 'delivered', 'completed'].includes(order.statusKey)) { %>
+                <div class="bg-violet-50 p-4 md:p-6 rounded-2xl border border-violet-100 flex flex-col md:text-right">
+                  <span class="text-xs font-bold text-violet-500 uppercase tracking-widest mb-1">Parcours clonage</span>
+                  <%
+                    var _cStepLabels = { pending_label: 'Préparation étiquette', label_sent: 'En attente de votre envoi', client_piece_in_transit: 'Pièce en transit', client_piece_received: 'Reçue, clonage imminent', cloning_in_progress: 'Clonage en cours', cloning_done: 'Prête à expédier', cloning_failed: 'Problème détecté' };
+                  %>
+                  <span class="text-lg md:text-xl font-display font-bold text-violet-700"><%= _cStepLabels[order.cloningStatus] || 'En cours' %></span>
+                  <span class="text-xs text-slate-400 font-medium">Délai total estimé : 7-14 jours</span>
+                </div>
+              <% } else { %>
+                <div class="bg-slate-50 p-4 md:p-6 rounded-2xl border border-slate-100 flex flex-col md:text-right">
+                  <span class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Livraison estimée</span>
+                  <span class="text-xl md:text-2xl font-display font-bold text-primary"><%= tracking.estimatedDateLabel || '—' %></span>
+                  <span class="text-xs text-slate-400 font-medium"><%= tracking.estimatedTimeLabel || '' %></span>
+                </div>
+              <% } %>
+            </div>
+
+            <% if (tracking.parcelErrorMessage) { %>
+              <div class="mb-10 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                <div class="font-bold">Suivi transporteur indisponible</div>
+                <div class="mt-1 text-sm"><%= tracking.parcelErrorMessage %></div>
+              </div>
+            <% } %>
+
+            <div class="relative px-4 pb-4">
+              <div class="tracker-line"></div>
+              <div class="tracker-progress <%= tracking.progressWidthClass %>"></div>
+              <div class="flex justify-between">
+                <% var _isMultiStep = tracking.steps.length > 5; %>
+                <% tracking.steps.forEach((s) => { %>
+                  <div class="step-node <%= s.state %> <%= s.state === 'error' ? 'step-error' : '' %>">
+                    <div class="step-circle <%= s.state === 'error' ? '!bg-red-500 !border-red-500' : '' %>">
+                      <span class="material-symbols-outlined <%= _isMultiStep ? 'text-base md:text-lg' : 'text-lg md:text-xl' %>"><%= s.state === 'error' ? 'warning' : s.icon %></span>
+                    </div>
+                    <span class="mt-2 md:mt-3 <%= _isMultiStep ? 'text-[8px] md:text-[10px]' : 'text-[10px] md:text-xs' %> font-bold uppercase tracking-wider text-center <%= s.state === 'active' ? 'text-primary' : (s.state === 'completed' ? 'text-slate-900' : (s.state === 'error' ? 'text-red-600' : 'text-slate-400')) %>"><%= s.label %></span>
+                  </div>
+                <% }) %>
+              </div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden h-[260px] md:h-[400px] relative">
+            <img alt="Location Map" class="w-full h-full object-cover opacity-60 grayscale" src="https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?q=80&w=1920&auto=format&fit=crop"/>
+            <div class="absolute inset-0 bg-gradient-to-t from-white/40 to-transparent pointer-events-none"></div>
+
+            <div class="absolute bottom-4 md:bottom-6 left-4 md:left-6 right-4 md:right-6 flex flex-col sm:flex-row sm:justify-between items-stretch sm:items-end gap-3">
+              <div class="bg-white/90 backdrop-blur-md p-4 rounded-2xl border border-white shadow-xl max-w-none sm:max-w-xs">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-primary">near_me</span>
+                  </div>
+                  <div>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase">Dernière mise à jour</p>
+                    <p class="text-sm font-bold"><%= tracking.lastUpdateLabel || '—' %></p>
+                  </div>
+                </div>
+              </div>
+
+              <a class="bg-slate-900 text-white p-3 rounded-xl shadow-xl hover:bg-black transition-all self-end" href="/compte/commandes/<%= order.id %>">
+                <span class="material-symbols-outlined">visibility</span>
+              </a>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-3xl p-5 md:p-8 border border-slate-100 shadow-sm">
+            <h3 class="text-xl font-display font-bold mb-8 flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary">history</span>
+              Historique du colis
+            </h3>
+
+            <div class="ml-0 sm:ml-4">
+              <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Suivi transporteur</div>
+
+              <% const carrierTimeline = (tracking && tracking.carrierTimeline && tracking.carrierTimeline.length) ? tracking.carrierTimeline : (tracking && tracking.timeline ? tracking.timeline : []); %>
+              <% if (carrierTimeline && carrierTimeline.length) { %>
+                <% carrierTimeline.forEach((t, idx) => { %>
+                  <div class="timeline-item <%= idx === 0 ? 'active' : '' %>">
+                    <div class="timeline-dot"></div>
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                      <div>
+                        <h4 class="font-bold text-slate-900"><%= t.title %></h4>
+                        <% if (t.description) { %>
+                          <p class="text-sm text-slate-500"><%= t.description %></p>
+                        <% } %>
+                      </div>
+                      <span class="text-xs font-bold text-slate-400 whitespace-nowrap <%= idx === 0 ? 'bg-slate-50 px-3 py-1 rounded-full border border-slate-100' : '' %>"><%= t.timeLabel %></span>
+                    </div>
+                  </div>
+                <% }) %>
+              <% } else { %>
+                <div class="text-slate-600">Aucun évènement de suivi transporteur pour le moment.</div>
+              <% } %>
+
+              <div class="mt-10 text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Historique de la commande</div>
+
+              <% if (tracking.orderTimeline && tracking.orderTimeline.length) { %>
+                <% tracking.orderTimeline.forEach((t, idx) => { %>
+                  <div class="timeline-item <%= idx === 0 ? 'active' : '' %>">
+                    <div class="timeline-dot"></div>
+                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                      <div>
+                        <h4 class="font-bold text-slate-900"><%= t.title %></h4>
+                        <% if (t.description) { %>
+                          <p class="text-sm text-slate-500"><%= t.description %></p>
+                        <% } %>
+                      </div>
+                      <span class="text-xs font-bold text-slate-400 whitespace-nowrap <%= idx === 0 ? 'bg-slate-50 px-3 py-1 rounded-full border border-slate-100' : '' %>"><%= t.timeLabel %></span>
+                    </div>
+                  </div>
+                <% }) %>
+              <% } else { %>
+                <div class="text-slate-600">Aucun évènement de commande pour le moment.</div>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-4 space-y-8">
+          <div class="bg-white rounded-3xl p-5 md:p-8 border border-slate-100 shadow-sm lg:sticky lg:top-24">
+            <h3 class="text-xl font-display font-bold mb-6">Résumé de commande</h3>
+
+            <div class="space-y-6 mb-8">
+              <div>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Adresse de livraison</p>
+                <div class="flex gap-3">
+                  <span class="material-symbols-outlined text-slate-400">location_on</span>
+                  <div class="text-sm text-slate-600 leading-relaxed">
+                    <p class="font-bold text-slate-900"><%= order.shippingAddress && order.shippingAddress.fullName ? order.shippingAddress.fullName : '—' %></p>
+                    <p><%= order.shippingAddress ? order.shippingAddress.line1 : '' %></p>
+                    <% if (order.shippingAddress && order.shippingAddress.line2) { %><p><%= order.shippingAddress.line2 %></p><% } %>
+                    <p><%= order.shippingAddress ? (order.shippingAddress.postalCode + ' ' + order.shippingAddress.city + ', ' + order.shippingAddress.country) : '' %></p>
+                    <% if (order.shippingAddress && order.shippingAddress.phone) { %><p><%= order.shippingAddress.phone %></p><% } %>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Mode d'expédition</p>
+                <div class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-slate-200">
+                    <span class="material-symbols-outlined text-primary">bolt</span>
+                  </div>
+                  <div>
+                    <p class="text-sm font-bold"><%= order.shippingMethodLabel || 'Livraison' %></p>
+                    <p class="text-[10px] text-slate-500"><%= tracking.shippingSubtitle || '' %></p>
+                  </div>
+                </div>
+              </div>
+
+              <% if (tracking.trackingNumber) { %>
+                <div>
+                  <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Numéro de suivi</p>
+                  <div class="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm font-bold text-slate-900">
+                    <%= tracking.trackingNumber %>
+                  </div>
+                </div>
+              <% } %>
+            </div>
+
+            <hr class="border-slate-100 mb-8"/>
+
+            <div class="space-y-4 mb-8">
+              <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Articles (<%= order.itemsCount %>)</p>
+
+              <% if (order.items && order.items.length) { %>
+                <% order.items.forEach((it) => { %>
+                  <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0 border border-slate-100">
+                      <% if (it.imageUrl) { %>
+                        <img alt="<%= it.name %>" class="w-full h-full object-cover" src="<%= it.imageUrl %>"/>
+                      <% } else { %>
+                        <div class="w-full h-full flex items-center justify-center">
+                          <span class="material-symbols-outlined text-slate-400">inventory_2</span>
+                        </div>
+                      <% } %>
+                    </div>
+                    <div class="flex-grow min-w-0">
+                      <h4 class="text-sm font-bold text-slate-900 truncate"><%= it.name %></h4>
+                      <% if (it.optionsSummary) { %>
+                        <p class="text-xs text-slate-500"><%= it.optionsSummary %></p>
+                      <% } %>
+                      <p class="text-xs text-slate-500">Qté: <%= it.quantity %> • <%= it.unitPrice %></p>
+                    </div>
+                  </div>
+                <% }) %>
+              <% } %>
+            </div>
+
+            <div class="pt-6 border-t border-slate-100">
+              <div class="flex justify-between items-center mb-6">
+                <span class="text-sm font-medium text-slate-500">Total payé</span>
+                <span class="text-xl font-display font-bold text-slate-900"><%= order.total %></span>
+              </div>
+
+              <div class="bg-primary/5 rounded-2xl p-6 border border-primary/10">
+                <h4 class="font-bold text-sm mb-2">Besoin d'aide ?</h4>
+                <p class="text-xs text-slate-600 mb-4 leading-relaxed">Une question sur votre livraison ou un article ? Nos experts sont là pour vous.</p>
+                <div class="grid grid-cols-2 gap-3">
+                  <a class="flex items-center justify-center gap-2 bg-white border border-slate-200 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors" href="/faq">
+                    <span class="material-symbols-outlined text-sm">contact_support</span>
+                    FAQ
+                  </a>
+                  <a class="flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-xl text-xs font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20" href="/contact">
+                    <span class="material-symbols-outlined text-sm">chat_bubble</span>
+                    Contact
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <% if (!dbConnected) { %>
+              <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                <div class="font-bold">Mode démo</div>
+                <div class="mt-1 text-sm">La base de données est indisponible : le suivi réel n’est pas disponible.</div>
+              </div>
+            <% } %>
+          </div>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

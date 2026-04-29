@@ -1,0 +1,26 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: '' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div class="flex flex-col items-center justify-center py-20 text-center">
+      <div class="w-20 h-20 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center">
+        <span class="material-symbols-outlined text-5xl">lock</span>
+      </div>
+
+      <div class="mt-6 text-2xl font-semibold text-slate-900">Accès refusé</div>
+      <div class="mt-2 text-sm text-slate-500 max-w-md">
+        Vous n'avez pas les droits nécessaires pour accéder à cette page.
+        Contactez le propriétaire du back-office si vous pensez qu'il s'agit d'une erreur.
+      </div>
+
+      <a class="btn btn-primary mt-8" href="/admin">
+        <span class="material-symbols-outlined mr-2 text-base">arrow_back</span>
+        Retour au tableau de bord
+      </a>
+    </div>
+  </div>
+</main>
+
+<%- include('./partials/footer') %>

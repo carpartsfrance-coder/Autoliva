@@ -1,0 +1,11 @@
+<% const body = `
+  <p>Bonjour,</p>
+  <p>Pour pouvoir traiter votre demande <strong>${ticket.numero}</strong>, nous avons encore besoin de quelques documents :</p>
+  <ul>
+    <li>Facture du garage qui a effectué le montage</li>
+    <li>Confirmation que le réglage de base a bien été effectué</li>
+    <li>Photos de la pièce installée et de la lecture OBD</li>
+  </ul>
+  <p>Sans ces documents, nous ne pourrons malheureusement pas démarrer l'analyse. Vous pouvez les déposer directement depuis votre espace de suivi.</p>
+` %>
+<%- include('./_layout', { ticket: ticket, subject: 'Documents manquants', body: body }) %>

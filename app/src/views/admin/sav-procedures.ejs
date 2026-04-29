@@ -1,0 +1,52 @@
+<%- include('./partials/head') %>
+<link rel="stylesheet" href="/css/sav.css?v=21">
+<%- include('./partials/sidebar', { active: 'sav' }) %>
+
+<main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>">
+  <div class="px-6 lg:px-10 py-6">
+
+    <div class="flex items-start justify-between gap-4 mb-6">
+      <div>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Bibliothèque de procédures</div>
+        <div class="mt-1 text-xs text-slate-500">Procédures de montage, instructions, fiches techniques — réutilisables sur tous les tickets SAV.</div>
+      </div>
+      <a href="/admin/sav/tickets" class="btn btn-secondary">← Tickets</a>
+    </div>
+
+    <!-- Upload form -->
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 mb-6">
+      <h2 class="text-sm font-semibold text-slate-800 mb-3 flex items-center gap-1.5">
+        <span class="material-symbols-outlined text-violet-600" style="font-size:18px;">upload_file</span>
+        Ajouter une procédure
+      </h2>
+      <form id="proc-upload-form" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <input type="text" name="title" required placeholder="Titre (ex: Procédure montage calculateur Renault)" class="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2">
+        <textarea name="description" placeholder="Description (optionnel)" rows="2" class="rounded-lg border border-slate-200 px-3 py-2 text-sm md:col-span-2"></textarea>
+        <input type="text" name="tags" placeholder="Tags (séparés par virgules : renault, calculateur, montage)" class="rounded-lg border border-slate-200 px-3 py-2 text-sm">
+        <input type="file" name="file" required accept=".pdf,application/pdf" class="text-sm">
+        <div class="md:col-span-2 flex items-center justify-end gap-2">
+          <span id="proc-upload-status" class="text-xs text-slate-500"></span>
+          <button type="submit" class="btn btn-primary">
+            <span class="material-symbols-outlined mr-1 text-base">cloud_upload</span>Uploader
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Search + list -->
+    <section class="rounded-2xl border border-slate-200 bg-white p-5">
+      <div class="flex items-center justify-between gap-3 mb-3">
+        <h2 class="text-sm font-semibold text-slate-800">Procédures (<span id="proc-count">0</span>)</h2>
+        <input type="search" id="proc-search" placeholder="Rechercher…" class="rounded-lg border border-slate-200 px-3 py-1.5 text-sm w-64">
+      </div>
+      <div id="proc-list" class="divide-y divide-slate-100">
+        <div class="text-sm text-slate-400 py-6 text-center">Chargement…</div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<div class="sav-toast-root" id="sav-toast-root" aria-live="polite"></div>
+<script src="/js/sav-admin.js?v=17" defer></script>
+<%- include('./partials/footer') %>

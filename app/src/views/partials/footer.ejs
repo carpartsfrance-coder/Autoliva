@@ -1,0 +1,591 @@
+<footer class="w-full bg-slate-900 text-white py-16 px-4 md:px-10 border-t-4 border-primary">
+<div class="mx-auto max-w-[1440px]">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
+<div class="flex flex-col gap-6">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-4xl">precision_manufacturing</span>
+<span class="text-2xl font-black uppercase tracking-tight"><%= brand.NAME %></span>
+</div>
+<% const _flp = typeof langPrefix !== 'undefined' ? langPrefix : ''; %>
+<p class="text-white/70 text-sm leading-relaxed"><%= t('footer.description') %></p>
+<% const _socialSettings = siteSettings && typeof siteSettings === 'object' ? siteSettings : {}; %>
+<div class="flex gap-4">
+<% if (_socialSettings.facebookUrl) { %>
+<a class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors" href="<%= _socialSettings.facebookUrl %>" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><span class="material-symbols-outlined">thumb_up</span></a>
+<% } %>
+<% if (_socialSettings.instagramUrl) { %>
+<a class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors" href="<%= _socialSettings.instagramUrl %>" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><span class="material-symbols-outlined">photo_camera</span></a>
+<% } %>
+<% if (_socialSettings.youtubeUrl) { %>
+<a class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors" href="<%= _socialSettings.youtubeUrl %>" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><span class="material-symbols-outlined">smart_display</span></a>
+<% } %>
+</div>
+</div>
+<div>
+<h4 class="font-bold mb-6 uppercase tracking-widest text-sm text-white"><%= t('footer.navigation') %></h4>
+<ul class="text-sm text-white/70 space-y-4">
+<li><a class="hover:text-white transition-colors" href="<%= _flp %>/notre-histoire"><%= t('footer.ourHistory') %></a></li>
+<li><a class="hover:text-white transition-colors" href="<%= _flp %>/compte"><%= t('nav.account') %></a></li>
+<li><a class="hover:text-white transition-colors" href="<%= _flp %>/compte/garage"><%= t('nav.myGarage') %></a></li>
+<li><a class="hover:text-white transition-colors" href="<%= _flp %>/compte/commandes"><%= t('nav.trackOrder') %></a></li>
+<li><a class="hover:text-white transition-colors" href="<%= _flp %>/contact"><%= t('nav.contact') %></a></li>
+<li><a class="hover:text-white transition-colors" href="<%= _flp %>/devis"><%= t('footer.quoteRequest') %></a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold mb-6 uppercase tracking-widest text-sm text-white"><%= t('footer.info') %></h4>
+<ul class="text-sm text-white/70 space-y-4">
+<li><span class="block"><%= t('footer.hours') %></span></li>
+<li><span class="block"><%= t('footer.address') %></span></li>
+<li><a class="hover:text-white transition-colors flex items-center gap-2" href="mailto:<%= brand.EMAIL_CONTACT %>"><span class="material-symbols-outlined text-sm">mail</span> <%= brand.EMAIL_CONTACT %></a></li>
+<li><a class="hover:text-white transition-colors flex items-center gap-2" href="tel:<%= brand.PHONE_INTL %>"><span class="material-symbols-outlined text-sm">call</span> <%= brand.PHONE %></a></li>
+</ul>
+</div>
+<div>
+<h4 class="font-bold mb-6 uppercase tracking-widest text-sm text-white"><%= t('footer.newsletter') %></h4>
+<p class="text-xs text-white/70 mb-6"><%= t('footer.newsletterDesc') %></p>
+<% if (newsletterError) { %>
+<div class="mb-4 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-xs text-red-100"><%= newsletterError %></div>
+<% } %>
+<% if (newsletterSuccess) { %>
+<div class="mb-4 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-100"><%= newsletterSuccess %></div>
+<% } %>
+<form action="/newsletter" class="flex gap-2" method="POST">
+<input name="returnTo" type="hidden" value="<%= typeof currentPath === 'string' && currentPath ? currentPath : '/' %>"/>
+<input class="w-full bg-white/10 border-white/20 rounded-lg text-sm px-4 focus:ring-white placeholder:text-white/40" name="email" placeholder="votre@email.com" required type="email"/>
+<button class="bg-white text-slate-900 px-4 py-2.5 rounded-lg font-bold hover:bg-white/90 transition-colors" type="submit" aria-label="S'inscrire à la newsletter">
+<span class="material-symbols-outlined">send</span>
+</button>
+</form>
+</div>
+</div>
+<div class="pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-4">
+<% const _currentYear = new Date().getFullYear(); %>
+<div class="text-xs text-white/50">
+                    <%= t('footer.copyright', { year: String(_currentYear) }) %>
+                </div>
+<div class="flex gap-6 text-xs text-white/50">
+<a class="hover:text-white" href="<%= _flp %>/legal/confidentialite"><%= t('footer.privacy') %></a>
+<a class="hover:text-white" href="<%= _flp %>/legal/mentions-legales"><%= t('footer.legal') %></a>
+<a class="hover:text-white" href="<%= _flp %>/legal/cgu"><%= t('footer.cgu') %></a>
+<a class="hover:text-white" href="<%= _flp %>/legal/cgv"><%= t('footer.cgv') %></a>
+</div>
+</div>
+</div>
+</footer>
+
+<% const _cp = typeof currentPathWithoutLang !== 'undefined' ? currentPathWithoutLang : (typeof currentPath === 'string' ? currentPath : ''); %>
+<% const _pathOnly = _cp.split('?')[0].split('#')[0]; %>
+<% const _isActive = (href) => {
+  if (!href) return false;
+  if (href === '/') return _pathOnly === '/';
+  return _pathOnly === href || _pathOnly.startsWith(href + '/');
+}; %>
+<% const _showWhatsAppButton = !/^\/(admin|panier|commande|product)(\/|$)/.test(_pathOnly); %>
+<% const _whatsAppMessage = encodeURIComponent(t('whatsapp.message')); %>
+<% const _whatsAppHref = `https://wa.me/33756875025?text=${_whatsAppMessage}`; %>
+
+<% const _showMobileNav = !/^\/(admin|commande)(\/|$)/.test(_cp); %>
+
+<% if (_showWhatsAppButton) { %>
+  <div class="fixed bottom-28 right-4 z-40 md:bottom-6" data-cpf-contact>
+    <!-- Contact menu (hidden by default) -->
+    <div class="absolute bottom-[calc(100%+12px)] right-0 opacity-0 pointer-events-none scale-95 origin-bottom-right transition-all duration-200" data-cpf-contact-menu>
+      <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden w-56">
+        <div class="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+          <p class="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Besoin d'aide ?</p>
+        </div>
+        <div class="py-1">
+          <a class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="tel:<%= brand.PHONE_INTL %>">
+            <span class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 shrink-0">
+              <span class="material-symbols-outlined text-lg">call</span>
+            </span>
+            <div>
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">Appeler</p>
+              <p class="text-[10px] text-slate-400"><%= brand.PHONE %></p>
+            </div>
+          </a>
+          <a class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="<%= _whatsAppHref %>" rel="noopener noreferrer" target="_blank">
+            <span class="flex h-9 w-9 items-center justify-center rounded-full shrink-0" style="background-color:#25D366">
+              <svg aria-hidden="true" class="h-5 w-5 fill-white" viewBox="0 0 32 32">
+                <path d="M19.11 17.21c-.29-.14-1.71-.84-1.98-.94-.27-.1-.47-.14-.67.15-.19.29-.77.94-.94 1.13-.17.19-.34.22-.63.07-.29-.14-1.2-.44-2.29-1.39-.85-.76-1.42-1.69-1.59-1.98-.17-.29-.02-.45.12-.6.12-.12.29-.31.43-.46.14-.15.19-.26.29-.43.1-.17.05-.31-.02-.46-.07-.14-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.19 0-.49.07-.75.36-.26.29-.98.96-.98 2.34s1 2.72 1.14 2.91c.14.19 1.96 3 4.75 4.2.66.29 1.18.46 1.58.58.66.21 1.25.18 1.72.11.53-.08 1.71-.7 1.95-1.37.24-.67.24-1.25.17-1.37-.07-.12-.26-.19-.55-.33Z"/>
+                <path d="M16.01 3.2c-7.07 0-12.8 5.73-12.8 12.8 0 2.25.58 4.45 1.69 6.39L3.2 28.8l6.58-1.67a12.75 12.75 0 0 0 6.22 1.61h.01c7.06 0 12.79-5.73 12.79-12.8 0-3.43-1.34-6.65-3.77-9.07A12.72 12.72 0 0 0 16.01 3.2Zm0 23.35h-.01a10.6 10.6 0 0 1-5.39-1.47l-.39-.23-3.9.99 1.04-3.8-.26-.39a10.6 10.6 0 1 1 8.91 4.9Z"/>
+              </svg>
+            </span>
+            <div>
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">WhatsApp</p>
+              <p class="text-[10px] text-slate-400">Réponse rapide</p>
+            </div>
+          </a>
+          <a class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="<%= (locals.currentUser ? '/compte/sav' : '/sav/suivi') %>">
+            <span class="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-primary shrink-0">
+              <span class="material-symbols-outlined text-lg">support_agent</span>
+            </span>
+            <div>
+              <p class="text-sm font-semibold text-slate-900 dark:text-white">Suivre mon SAV</p>
+              <p class="text-[10px] text-slate-400">Conversation &amp; statut</p>
+            </div>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main FAB button -->
+    <button
+      aria-label="Contactez-nous"
+      class="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-xl shadow-primary/30 transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-primary/20"
+      data-cpf-contact-toggle
+      title="Contactez-nous"
+      type="button"
+    >
+      <span class="material-symbols-outlined text-3xl text-white transition-opacity duration-200" data-cpf-logo>support_agent</span>
+      <span class="material-symbols-outlined text-2xl text-white absolute inset-0 items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200" style="display:flex" data-cpf-close>close</span>
+    </button>
+  </div>
+
+  <script>
+    (function() {
+      var container = document.querySelector('[data-cpf-contact]');
+      if (!container) return;
+      var toggle = container.querySelector('[data-cpf-contact-toggle]');
+      var menu = container.querySelector('[data-cpf-contact-menu]');
+      var logo = container.querySelector('[data-cpf-logo]');
+      var closeIcon = container.querySelector('[data-cpf-close]');
+      if (!toggle || !menu) return;
+
+      var open = false;
+
+      function setOpen(val) {
+        open = val;
+        if (open) {
+          menu.classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
+          menu.classList.add('opacity-100', 'pointer-events-auto', 'scale-100');
+          if (logo) logo.classList.add('opacity-0');
+          if (closeIcon) { closeIcon.classList.remove('opacity-0', 'pointer-events-none'); closeIcon.classList.add('opacity-100'); }
+        } else {
+          menu.classList.remove('opacity-100', 'pointer-events-auto', 'scale-100');
+          menu.classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+          if (logo) logo.classList.remove('opacity-0');
+          if (closeIcon) { closeIcon.classList.add('opacity-0', 'pointer-events-none'); closeIcon.classList.remove('opacity-100'); }
+        }
+      }
+
+      toggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        setOpen(!open);
+      });
+
+      document.addEventListener('click', function(e) {
+        if (open && !container.contains(e.target)) setOpen(false);
+      });
+
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && open) setOpen(false);
+      });
+    })();
+  </script>
+<% } %>
+
+<% if (_showMobileNav) { %>
+  <nav aria-label="Navigation rapide" class="fixed bottom-0 left-0 right-0 z-50 md:hidden">
+    <div class="mx-auto max-w-[1440px] px-3 pb-[env(safe-area-inset-bottom)]">
+      <div class="grid grid-cols-5 rounded-2xl border border-slate-200 bg-white shadow-lg">
+        <a class="flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flp %>/" <% if (_isActive('/')) { %>aria-current="page"<% } %>>
+          <span class="material-symbols-rounded text-[22px]">home</span>
+          <span><%= t('mobile.home') %></span>
+        </a>
+
+        <a class="flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/rechercher') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flp %>/rechercher" <% if (_isActive('/rechercher')) { %>aria-current="page"<% } %>>
+          <span class="material-symbols-rounded text-[22px]">search</span>
+          <span><%= t('mobile.search') %></span>
+        </a>
+
+        <a class="flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/produits') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flp %>/produits" <% if (_isActive('/produits')) { %>aria-current="page"<% } %>>
+          <span class="material-symbols-rounded text-[22px]">storefront</span>
+          <span><%= t('mobile.catalog') %></span>
+        </a>
+
+        <a class="relative flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/panier') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flp %>/panier" <% if (_isActive('/panier')) { %>aria-current="page"<% } %>>
+          <span class="material-symbols-rounded text-[22px]" data-cart-icon>shopping_cart</span>
+          <% const _cartCount = typeof cartItemCount !== 'undefined' ? Number(cartItemCount) : 0; %>
+          <span class="absolute top-2 right-3 <%= _cartCount > 0 ? 'flex' : 'hidden' %> h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-white" data-cart-count data-cart-count-zero-hidden="true"><%= _cartCount > 99 ? '99+' : _cartCount %></span>
+          <span><%= t('mobile.cart') %></span>
+        </a>
+
+        <a class="flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/compte') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flp %>/compte" <% if (_isActive('/compte')) { %>aria-current="page"<% } %>>
+          <span class="material-symbols-rounded text-[22px]">account_circle</span>
+          <span><%= t('mobile.account') %></span>
+        </a>
+      </div>
+    </div>
+  </nav>
+<% } %>
+
+
+<style>
+  #cartFeedbackRoot {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    right: 1rem;
+    z-index: 60;
+    pointer-events: none;
+  }
+  @media (min-width: 640px) {
+    #cartFeedbackRoot {
+      left: auto;
+      width: min(420px, calc(100vw - 2rem));
+    }
+  }
+  .cart-feedback-toast {
+    pointer-events: auto;
+    display: flex;
+    gap: 0.875rem;
+    align-items: flex-start;
+    border-radius: 1rem;
+    background: #ffffff;
+    border-left: 4px solid #38A169;
+    box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+    padding: 1rem;
+    transform: translateX(110%);
+    opacity: 0;
+    transition: transform 0.28s ease, opacity 0.22s ease;
+  }
+  .cart-feedback-toast.is-visible {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  .cart-feedback-toast.is-leaving {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  .cart-feedback-toast.is-error {
+    border-left-color: #E53E3E;
+  }
+  .cart-feedback-thumb {
+    width: 3rem;
+    height: 3rem;
+    flex-shrink: 0;
+    border-radius: 0.85rem;
+    overflow: hidden;
+    background: #F8FAFC;
+    border: 1px solid #E2E8F0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cart-feedback-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .cart-feedback-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cart-feedback-icon-bounce {
+    animation: cartFeedbackIconBounce 0.5s ease;
+  }
+  .cart-feedback-count-bounce {
+    animation: cartFeedbackCountBounce 0.5s ease;
+  }
+  .cart-submit-success {
+    background: #38A169 !important;
+    border-color: #38A169 !important;
+    color: #ffffff !important;
+    box-shadow: 0 14px 28px rgba(56, 161, 105, 0.28) !important;
+  }
+  .cart-submit-success:hover {
+    background: #38A169 !important;
+    border-color: #38A169 !important;
+    color: #ffffff !important;
+  }
+  @keyframes cartFeedbackIconBounce {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.18) translateY(-2px); }
+    60% { transform: scale(0.96) translateY(0); }
+    100% { transform: scale(1); }
+  }
+  @keyframes cartFeedbackCountBounce {
+    0% { transform: scale(1); }
+    35% { transform: scale(1.28); }
+    100% { transform: scale(1); }
+  }
+</style>
+
+<div id="cartFeedbackRoot" aria-live="polite" aria-atomic="true" data-initial-cart-feedback="<%- encodeURIComponent(JSON.stringify(cartFeedback || null)) %>"></div>
+
+<script>
+  (function () {
+    var root = document.getElementById('cartFeedbackRoot');
+    if (!root) return;
+
+    var initialCartFeedback = null;
+    var initialCartFeedbackRaw = root.getAttribute('data-initial-cart-feedback') || '';
+
+    if (initialCartFeedbackRaw) {
+      try {
+        initialCartFeedback = JSON.parse(decodeURIComponent(initialCartFeedbackRaw));
+      } catch (e) {
+        initialCartFeedback = null;
+      }
+    }
+
+    var activeToast = null;
+    var hideTimer = null;
+
+    function formatCount(count) {
+      var n = Number(count) || 0;
+      if (n > 99) return '99+';
+      if (n < 0) return '0';
+      return String(n);
+    }
+
+    function restartAnimation(node, className) {
+      if (!node) return;
+      node.classList.remove(className);
+      void node.offsetWidth;
+      node.classList.add(className);
+      window.setTimeout(function () {
+        node.classList.remove(className);
+      }, 520);
+    }
+
+    function removeToast(toast) {
+      if (!toast || !toast.parentNode) return;
+      toast.parentNode.removeChild(toast);
+      if (activeToast === toast) activeToast = null;
+    }
+
+    function hideToast(toast) {
+      if (!toast) return;
+      toast.classList.remove('is-visible');
+      toast.classList.add('is-leaving');
+      window.setTimeout(function () {
+        removeToast(toast);
+      }, 220);
+    }
+
+    function updateCartCount(count) {
+      var nodes = Array.prototype.slice.call(document.querySelectorAll('[data-cart-count]') || []);
+      var display = formatCount(count);
+      var n = Number(count) || 0;
+      nodes.forEach(function (node) {
+        node.textContent = display;
+        if (node.dataset && node.dataset.cartCountZeroHidden === 'true') {
+          if (n > 0) {
+            node.classList.remove('hidden');
+            node.classList.add('flex');
+          } else {
+            node.classList.add('hidden');
+            node.classList.remove('flex');
+          }
+        }
+        restartAnimation(node, 'cart-feedback-count-bounce');
+      });
+    }
+
+    function animateCartIcon() {
+      var icons = Array.prototype.slice.call(document.querySelectorAll('[data-cart-icon]') || []);
+      icons.forEach(function (icon) {
+        restartAnimation(icon, 'cart-feedback-icon-bounce');
+      });
+    }
+
+    function buildThumb(imageUrl, isError) {
+      if (imageUrl && !isError) {
+        return '<div class="cart-feedback-thumb"><img alt="Produit" src="' + imageUrl.replace(/"/g, '&quot;') + '" /></div>';
+      }
+      return '<div class="cart-feedback-thumb"><span class="material-symbols-outlined ' + (isError ? 'text-red-500' : 'text-emerald-500') + '">' + (isError ? 'error' : 'check_circle') + '</span></div>';
+    }
+
+    function showToast(options) {
+      var config = options && typeof options === 'object' ? options : {};
+      var isError = config.type === 'error';
+      var message = config.message ? String(config.message) : (isError ? 'Une erreur est survenue.' : 'Produit ajouté au panier');
+      var productName = config.productName ? String(config.productName) : '';
+      var imageUrl = config.imageUrl ? String(config.imageUrl) : '';
+      var actionHref = config.actionHref ? String(config.actionHref) : '/panier';
+      var actionLabel = config.actionLabel ? String(config.actionLabel) : 'Voir le panier';
+      var duration = Number.isFinite(Number(config.duration)) ? Number(config.duration) : 4000;
+
+      if (hideTimer) {
+        window.clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+      if (activeToast) {
+        removeToast(activeToast);
+      }
+
+      var toast = document.createElement('div');
+      toast.className = 'cart-feedback-toast' + (isError ? ' is-error' : '');
+      toast.innerHTML = ''
+        + buildThumb(imageUrl, isError)
+        + '<div class="min-w-0 flex-1">'
+        +   '<div class="flex items-start gap-3">'
+        +     '<div class="min-w-0 flex-1">'
+        +       '<div class="flex items-center gap-2 text-sm font-black ' + (isError ? 'text-red-600' : 'text-emerald-600') + '">'
+        +         '<span class="material-symbols-outlined text-[18px]">' + (isError ? 'error' : 'check_circle') + '</span>'
+        +         '<span>' + message + '</span>'
+        +       '</div>'
+        +       (productName ? '<div class="cart-feedback-title mt-1 text-sm font-semibold text-slate-700">' + productName.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' : '')
+        +     '</div>'
+        +   '</div>'
+        +   (!isError ? '<div class="mt-3"><a class="inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-xs font-black uppercase tracking-wider text-white hover:bg-black transition" href="' + actionHref.replace(/"/g, '&quot;') + '">' + actionLabel.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</a></div>' : '')
+        + '</div>';
+
+      root.appendChild(toast);
+      activeToast = toast;
+
+      window.requestAnimationFrame(function () {
+        toast.classList.add('is-visible');
+      });
+
+      hideTimer = window.setTimeout(function () {
+        hideToast(toast);
+      }, duration);
+
+      return toast;
+    }
+
+    window.CPFCartFeedback = {
+      animateCartIcon: animateCartIcon,
+      showToast: showToast,
+      updateCartCount: updateCartCount,
+      notifyAdded: function (payload) {
+        var data = payload && typeof payload === 'object' ? payload : {};
+        updateCartCount(data.cartItemCount);
+        animateCartIcon();
+        showToast({
+          type: 'success',
+          message: 'Produit ajouté au panier',
+          productName: data.productName,
+          imageUrl: data.imageUrl,
+          actionHref: '/panier',
+          actionLabel: 'Voir le panier',
+          duration: 4000,
+        });
+      },
+      notifyError: function (message) {
+        showToast({
+          type: 'error',
+          message: message || 'Impossible d’ajouter le produit au panier.',
+          duration: 4000,
+        });
+      },
+    };
+
+    if (window.fetch && window.FormData) {
+      var cartForms = Array.prototype.slice.call(document.querySelectorAll('form[action^="/panier/ajouter/"]') || []);
+
+      cartForms.forEach(function (form) {
+        if (!form || form.hasAttribute('data-add-to-cart-form')) return;
+
+        var submitButton = form.querySelector('button[type="submit"]');
+        if (!submitButton) return;
+
+        var pending = false;
+        var originalDisabled = !!submitButton.disabled;
+        var resetTimer = null;
+
+        function resetButton() {
+          if (resetTimer) {
+            window.clearTimeout(resetTimer);
+            resetTimer = null;
+          }
+          submitButton.disabled = originalDisabled;
+          submitButton.classList.remove('cart-submit-success');
+        }
+
+        function setSuccessState() {
+          submitButton.classList.add('cart-submit-success');
+          submitButton.disabled = true;
+        }
+
+        form.addEventListener('submit', function (event) {
+          if (pending) {
+            event.preventDefault();
+            return;
+          }
+
+          event.preventDefault();
+          pending = true;
+          submitButton.disabled = true;
+
+          var startedAt = Date.now();
+          var formData = new FormData(form);
+
+          fetch(form.getAttribute('action'), {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            headers: {
+              'Accept': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          })
+            .then(function (response) {
+              return response.json().catch(function () {
+                return null;
+              }).then(function (data) {
+                if (!response.ok || !data || data.ok !== true) {
+                  throw new Error(data && data.error ? data.error : 'Impossible d’ajouter le produit au panier pour le moment.');
+                }
+                return data;
+              });
+            })
+            .then(function (data) {
+              var payload = data && typeof data === 'object' ? data : {};
+              var productData = payload.product && typeof payload.product === 'object' ? payload.product : {};
+
+              window.CPFCartFeedback.notifyAdded({
+                cartItemCount: payload.cartItemCount,
+                productName: productData.name || 'Produit',
+                imageUrl: productData.imageUrl || ''
+              });
+
+              setSuccessState();
+
+              var minDisableRemaining = Math.max(0, 1000 - (Date.now() - startedAt));
+              window.setTimeout(function () {
+                resetTimer = window.setTimeout(function () {
+                  resetButton();
+                  pending = false;
+                }, 2000);
+              }, minDisableRemaining);
+            })
+            .catch(function (err) {
+              var minDisableRemaining = Math.max(0, 1000 - (Date.now() - startedAt));
+              window.CPFCartFeedback.notifyError(err && err.message ? err.message : 'Impossible d’ajouter le produit au panier pour le moment.');
+              window.setTimeout(function () {
+                resetButton();
+                pending = false;
+              }, minDisableRemaining);
+            });
+        });
+      });
+    }
+
+    if (initialCartFeedback && typeof initialCartFeedback === 'object') {
+      if (initialCartFeedback.type === 'success') {
+        var initialProduct = initialCartFeedback.product && typeof initialCartFeedback.product === 'object' ? initialCartFeedback.product : {};
+        window.setTimeout(function () {
+          window.CPFCartFeedback.notifyAdded({
+            cartItemCount: initialCartFeedback.cartItemCount,
+            productName: initialProduct.name || 'Produit',
+            imageUrl: initialProduct.imageUrl || ''
+          });
+        }, 80);
+      } else if (initialCartFeedback.type === 'error') {
+        window.setTimeout(function () {
+          window.CPFCartFeedback.notifyError(initialCartFeedback.message || 'Impossible d’ajouter le produit au panier.');
+        }, 80);
+      }
+    }
+  })();
+</script>
+</div>
+
+<script src="/js/analytics-tracker.js" defer></script>
+</body></html>

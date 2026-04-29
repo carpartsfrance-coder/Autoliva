@@ -1,0 +1,1282 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-white dark:bg-background-dark text-slate-800 dark:text-slate-200 transition-colors duration-200">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <% if (!dbConnected) { %>
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900 mb-10">
+        <div class="font-bold">Mode démo activé</div>
+        <div class="mt-1 text-sm">Le site fonctionne sans base de données, avec des produits d'exemple.</div>
+      </div>
+    <% } %>
+
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900 mb-10">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (!product) { %>
+      <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-8 refined-shadow">
+        <div class="font-bold text-slate-900 dark:text-white">Produit indisponible</div>
+        <div class="mt-1 text-sm text-slate-500">Ce produit ne peut pas être affiché pour le moment.</div>
+      </div>
+    <% } else { %>
+      <% const ref = product.sku || String(product._id).slice(-10).toUpperCase(); %>
+      <% const rawMedia = []; %>
+      <% if (product.imageUrl) rawMedia.push({ url: product.imageUrl, type: 'image' }); %>
+      <% (product.galleryUrls || []).forEach((u, i) => {
+        if (!u) return;
+        const gt = Array.isArray(product.galleryTypes) ? product.galleryTypes[i] : '';
+        const t = (gt === 'video') ? 'video' : 'image';
+        rawMedia.push({ url: u, type: t });
+      }); %>
+      <% const seenMediaUrls = new Set(); %>
+      <% const mediaItems = rawMedia.filter((m) => {
+        if (!m || !m.url || seenMediaUrls.has(m.url)) return false;
+        seenMediaUrls.add(m.url);
+        return true;
+      }); %>
+      <% const images = mediaItems.map((m) => m.url); %>
+      <% const mainImage = images[0] || ''; %>
+      <% const mainMediaItem = mediaItems[0] || null; %>
+      <% const thumbImages = images; %>
+      <% const thumbMediaItems = mediaItems; %>
+      <% const hasVideo = !!(product.sections && product.sections.showVideo && product.media && product.media.videoUrl); %>
+      <% const topLeftBadge = product.badges && product.badges.topLeft ? product.badges.topLeft : ''; %>
+      <% const conditionBadge = product.badges && product.badges.condition ? product.badges.condition : ''; %>
+      <% const compareAt = product.compareAtPriceCents; %>
+      <% const makes = Array.isArray(product.compatibility)
+        ? Array.from(new Set(product.compatibility.map((c) => (c && c.make ? String(c.make).trim() : '')).filter(Boolean)))
+        : []; %>
+      <% const formatMoney = (cents) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((Number(cents) || 0) / 100); %>
+      <% const findSpec = (label) => {
+        const target = String(label || '').toLowerCase();
+        const list = Array.isArray(product.specs) ? product.specs : [];
+        for (const s of list) {
+          if (!s || !s.label) continue;
+          if (String(s.label).toLowerCase() === target) return s.value || '';
+        }
+        return '';
+      }; %>
+      <% const keyType = findSpec('type') || product.category || ''; %>
+      <% const keyEtat = findSpec('état') || findSpec('etat') || conditionBadge || ''; %>
+      <% const keyProgrammation = findSpec('programmation') || ''; %>
+      <% const keyGarantie = findSpec('garantie') || topLeftBadge || ''; %>
+      <% const optionGroups = Array.isArray(product.displayOptions) ? product.displayOptions : []; %>
+      <% const compGrouped = {}; %>
+      <% (Array.isArray(product.compatibility) ? product.compatibility : []).forEach((c) => {
+        const make = c && c.make ? String(c.make).trim() : '';
+        if (!make) return;
+        if (!compGrouped[make]) compGrouped[make] = { models: new Set(), engines: new Set() };
+        const model = c && c.model ? String(c.model).trim() : '';
+        const years = c && c.years ? String(c.years).trim() : '';
+        const engine = c && c.engine ? String(c.engine).trim() : '';
+        const modelText = [model, years].filter(Boolean).join(' ');
+        if (modelText) compGrouped[make].models.add(modelText);
+        if (engine) compGrouped[make].engines.add(engine);
+      }); %>
+      <% const compMakes = Object.keys(compGrouped); %>
+      <% const compatibleReferences = Array.isArray(product.compatibleReferences)
+        ? product.compatibleReferences.map((v) => String(v || '').trim()).filter(Boolean)
+        : []; %>
+      <% const keyPointsList = Array.isArray(product.keyPoints)
+        ? product.keyPoints.map((v) => String(v || '').trim()).filter(Boolean)
+        : []; %>
+      <% const summaryPoints = keyPointsList.length
+        ? keyPointsList.slice(0, 3)
+        : [
+          keyType ? 'Type : ' + keyType : '',
+          keyProgrammation ? 'Programmation : ' + keyProgrammation : '',
+          keyGarantie ? 'Garantie : ' + keyGarantie : '',
+        ].filter(Boolean); %>
+      <% const normalizeLoose = (value) => String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, ''); %>
+      <% const basePriceCents = Number(product.priceCents) || 0; %>
+      <% const installmentCount = 3; %>
+      <% const installmentMinPriceCents = 10000; %>
+      <% const installmentMaxPriceCents = 200000; %>
+      <% const installmentEligible = basePriceCents >= installmentMinPriceCents && basePriceCents <= installmentMaxPriceCents; %>
+      <% const installmentAmountCents = installmentEligible ? Math.round(basePriceCents / installmentCount) : 0; %>
+      <% const shippingDelayText = product && product.shippingDelayText ? String(product.shippingDelayText).trim() : ''; %>
+      <% const hasConsigne = product && product.consigne && product.consigne.enabled && product.consigne.amountCents > 0; %>
+      <% const stockLabel = product.inStock ? 'En stock' : 'Sur commande'; %>
+      <% const subtitleParts = []; %>
+      <% if (makes.length) { %>
+        <% subtitleParts.push('Pour ' + makes.slice(0, 4).join(', ')); %>
+      <% } else if (product.brand) { %>
+        <% subtitleParts.push('Pour ' + String(product.brand).trim()); %>
+      <% } %>
+      <% if (ref) subtitleParts.push('Série ' + ref); %>
+      <% const productSubtitle = subtitleParts.join(' - '); %>
+      <% const heroBadge = keyEtat || conditionBadge || topLeftBadge || 'Reconditionnement Professionnel'; %>
+      <% const visibleThumbImages = thumbImages.slice(0, 4); %>
+      <% const hiddenThumbImages = thumbImages.slice(4); %>
+      <% const visibleThumbItems = thumbMediaItems.slice(0, 4); %>
+      <% const hiddenThumbItems = thumbMediaItems.slice(4); %>
+      <% const compatibilityPrefillMessage = [
+        'Bonjour,',
+        '',
+        'Je souhaite vérifier la compatibilité de la pièce "' + product.name + '"' + (ref ? ' (référence ' + ref + ')' : '') + ' avec mon véhicule.',
+        '',
+        'Nos experts vérifient la compatibilité et vous répondent sous 24h.',
+        '',
+        'Merci.',
+      ].join('\n'); %>
+      <% const compatibilityContactUrl = '/contact?subject=compatibilite&partRef=' + encodeURIComponent(ref) + '&message=' + encodeURIComponent(compatibilityPrefillMessage); %>
+      <% const qualityHighlights = [
+        { icon: 'verified', label: keyGarantie || 'Garantie 24 Mois' },
+        { icon: 'terminal', label: keyProgrammation || 'Programmation Incluse' },
+        { icon: 'analytics', label: 'Testé sur banc' },
+        { icon: 'lock_open', label: 'Sans caution' },
+      ]; %>
+      <% const faqCount = Array.isArray(product.faqs) ? product.faqs.length : 0; %>
+      <% const faqPreviewCards = Array.isArray(product.faqs)
+        ? product.faqs.filter((f) => f && f.question && f.answer).slice(0, 3)
+        : []; %>
+      <% const technicalSpecs = []; %>
+      <% const pushTechnicalSpec = (label, value) => {
+        const safeLabel = String(label || '').trim();
+        const safeValue = String(value || '').trim();
+        if (!safeLabel || !safeValue) return;
+        const alreadyExists = technicalSpecs.some((entry) => String(entry.label || '').toLowerCase() === safeLabel.toLowerCase());
+        if (alreadyExists) return;
+        technicalSpecs.push({ label: safeLabel, value: safeValue });
+      }; %>
+      <% (Array.isArray(product.specs) ? product.specs : []).forEach((spec) => {
+        if (!spec || technicalSpecs.length >= 6) return;
+        pushTechnicalSpec(spec.label, spec.value);
+      }); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec('Référence', ref); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec('Type', keyType); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec('État', keyEtat); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec('Programmation', keyProgrammation || 'Selon version'); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec('Garantie', keyGarantie || 'Incluse'); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec('Expédition', shippingDelayText || 'Sous 24/48h'); %>
+
+      <nav class="flex items-center gap-1.5 sm:gap-2 mb-6 text-xs sm:text-sm overflow-x-auto no-scrollbar whitespace-nowrap pb-1" aria-label="Fil d'Ariane">
+        <a class="text-slate-500 hover:text-primary transition-colors shrink-0" href="/">Accueil</a>
+        <span class="text-slate-300 shrink-0">/</span>
+        <a class="text-slate-500 hover:text-primary transition-colors shrink-0" href="/produits">Catalogue</a>
+        <% if (typeof categoryUrl !== 'undefined' && categoryUrl && typeof categoryName !== 'undefined' && categoryName) { %>
+          <% const catParts = categoryName.split(/\s*>\s*/); %>
+          <% catParts.forEach((part, i) => { %>
+            <span class="text-slate-300 shrink-0">/</span>
+            <% if (i === catParts.length - 1) { %>
+              <a class="text-slate-500 hover:text-primary transition-colors shrink-0" href="<%= categoryUrl %>"><%= part %></a>
+            <% } else { %>
+              <span class="text-slate-500 shrink-0"><%= part %></span>
+            <% } %>
+          <% }) %>
+        <% } %>
+        <span class="text-slate-300 shrink-0">/</span>
+        <span class="text-slate-400 dark:text-slate-500 font-normal truncate"><%= product.name %></span>
+      </nav>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start lg:items-stretch">
+        <div class="lg:col-span-7 flex flex-col gap-4 h-full">
+          <div class="relative w-full aspect-video rounded-xl bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-800 refined-shadow">
+            <% if (mainMediaItem) { %>
+              <% const _isMainVideo = mainMediaItem.type === 'video'; %>
+              <img alt="<%= product.name %> — photo principale" class="w-full h-full object-cover<%= _isMainVideo ? ' hidden' : '' %>" data-main-image decoding="async" loading="eager" fetchpriority="high" width="800" height="450" <% if (!_isMainVideo) { %>src="<%= mainImage %>"<% } %> />
+              <video class="w-full h-full object-cover<%= _isMainVideo ? '' : ' hidden' %>" data-main-video controls preload="metadata" playsinline<% if (_isMainVideo) { %> src="<%= mainImage %>"<% } %>></video>
+            <% } else { %>
+              <div class="w-full h-full flex items-center justify-center text-slate-400">
+                <span class="material-symbols-outlined text-6xl">inventory_2</span>
+              </div>
+            <% } %>
+
+            <% if (images.length > 1) { %>
+              <button aria-label="Image précédente" class="absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 text-slate-700 flex items-center justify-center refined-shadow hover:bg-white transition-all" data-gallery-prev type="button">
+                <span class="material-symbols-outlined">chevron_left</span>
+              </button>
+              <button aria-label="Image suivante" class="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 text-slate-700 flex items-center justify-center refined-shadow hover:bg-white transition-all" data-gallery-next type="button">
+                <span class="material-symbols-outlined">chevron_right</span>
+              </button>
+            <% } %>
+          </div>
+
+          <% if (visibleThumbItems.length) { %>
+            <div class="grid grid-cols-4 gap-4">
+              <% visibleThumbItems.forEach((item, idx) => { %>
+                <% const remainingItems = thumbMediaItems.length - 4; %>
+                <% const _isThumbVideo = item.type === 'video'; %>
+                <button aria-label="Voir <%= _isThumbVideo ? 'la vidéo' : 'l\'image' %> <%= idx + 1 %>" class="relative aspect-square rounded-lg overflow-hidden cursor-pointer border bg-white dark:bg-slate-900 refined-shadow transition-all <%= idx === 0 ? 'border-primary/20 ring-2 ring-primary' : 'border-slate-200 dark:border-slate-700 hover:border-primary' %>" data-thumb data-index="<%= idx %>" data-src="<%= item.url %>" data-type="<%= item.type %>" type="button">
+                  <% if (_isThumbVideo) { %>
+                    <video class="w-full h-full object-cover" muted playsinline preload="metadata">
+                      <source src="<%= item.url %>" />
+                    </video>
+                    <span class="absolute bottom-1 left-1 bg-black/70 text-white rounded-full p-1 flex items-center justify-center">
+                      <span class="material-symbols-outlined text-sm leading-none">play_arrow</span>
+                    </span>
+                  <% } else { %>
+                    <img alt="<%= product.name %> — vue <%= idx + 1 %>" class="w-full h-full object-cover" decoding="async" loading="lazy" width="200" height="200" src="<%= item.url %>" />
+                  <% } %>
+                  <% if (idx === 3 && remainingItems > 0) { %>
+                    <span class="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white text-xs font-bold uppercase tracking-wider">+<%= remainingItems %> de plus</span>
+                  <% } %>
+                </button>
+              <% }) %>
+            </div>
+          <% } %>
+
+          <% hiddenThumbItems.forEach((item, idx) => { %>
+            <button class="hidden" data-thumb data-index="<%= idx + 4 %>" data-src="<%= item.url %>" data-type="<%= item.type %>" type="button"></button>
+          <% }) %>
+
+          <div class="grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-4 mt-1">
+            <% qualityHighlights.forEach((item) => { %>
+              <div class="flex flex-col items-center p-2 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-center refined-shadow">
+                <span class="material-symbols-outlined text-primary text-2xl sm:text-3xl mb-1 sm:mb-2"><%= item.icon %></span>
+                <span class="text-[10px] sm:text-xs font-bold uppercase tracking-tight text-slate-900 dark:text-white"><%= item.label %></span>
+              </div>
+            <% }) %>
+          </div>
+
+          <% if (hasVideo) { %>
+            <div class="flex justify-start">
+              <a class="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold hover:border-primary hover:text-primary transition-colors" href="<%= product.media.videoUrl %>" rel="noreferrer" target="_blank">
+                <span class="material-symbols-outlined">play_circle</span>
+                Voir la vidéo du produit
+              </a>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="lg:col-span-5 flex flex-col gap-6 h-full">
+          <div>
+            <span class="inline-block px-2 py-1 rounded bg-primary text-white text-[10px] font-black uppercase mb-3 tracking-widest"><%= heroBadge %></span>
+            <h1 class="text-[22px] sm:text-3xl md:text-4xl font-black text-slate-900 dark:text-white leading-tight mb-2 sm:uppercase tracking-tighter"><%= product.name %></h1>
+            <p class="text-slate-500 dark:text-slate-300 text-lg"><%= productSubtitle || ('Série ' + ref) %></p>
+          </div>
+
+          <div class="p-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-700 border-l-4 border-l-primary refined-shadow">
+            <div class="flex flex-col md:flex-row md:justify-between md:items-end gap-1 md:gap-4 mb-1">
+              <div class="hidden md:block">
+                <span class="text-slate-500 text-sm font-medium">Prix public</span>
+                <% if (compareAt && compareAt > product.priceCents) { %>
+                  <div class="mt-1 text-sm text-slate-400 line-through"><%= formatMoney(compareAt) %> €</div>
+                <% } %>
+              </div>
+              <% if (compareAt && compareAt > product.priceCents) { %>
+                <div class="md:hidden text-sm text-slate-400 line-through"><%= formatMoney(compareAt) %> €</div>
+              <% } %>
+              <div class="text-left md:text-right">
+                <span class="text-4xl font-black text-primary" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="<%= installmentCount %>" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(product.priceCents) %> €</span>
+                <div class="text-[11px] uppercase tracking-wide text-slate-400">TTC</div>
+                <div class="mt-1 flex items-center md:justify-end gap-1 text-xs text-slate-500 <%= installmentEligible ? '' : 'hidden' %>" data-installment-wrapper>
+                  <span class="material-symbols-outlined text-sm text-slate-400">credit_card</span>
+                  <span>ou 3 × <span data-installment-amount><%= formatMoney(installmentAmountCents) %> €</span> sans frais</span>
+                </div>
+              </div>
+            </div>
+            <p class="text-left md:text-right text-xs italic <%= hasConsigne ? 'text-emerald-600 font-semibold' : 'text-slate-400' %>"><%= hasConsigne ? 'Échange standard sans caution • Retour ancien organe sous 30 jours' : (shippingDelayText || (product.inStock ? 'Livraison rapide en France' : 'Disponible sur commande')) %></p>
+          </div>
+
+          <form action="/panier/ajouter/<%= product._id %>" class="flex flex-col gap-4 lg:flex-1" data-add-to-cart-form data-product-image="<%= mainImage %>" data-product-name="<%= product.name %>" method="POST">
+            <input name="returnTo" type="hidden" value="<%= typeof returnTo !== 'undefined' ? returnTo : '/panier' %>" />
+            <input data-qty-input name="qty" type="hidden" value="1" />
+
+            <% if (optionGroups && optionGroups.length) { %>
+              <div class="flex flex-col gap-3">
+                <% optionGroups.forEach((g) => { %>
+                  <% const gKey = g && g.key ? String(g.key) : ''; %>
+                  <% if (!gKey) return; %>
+                  <% const fieldName = 'opt_' + gKey; %>
+                  <% const groupLabel = g && g.label ? g.label : gKey; %>
+                  <% const isSupplyModeGroup = normalizeLoose(groupLabel).includes('mode-de-fourniture'); %>
+                  <% const choices = Array.isArray(g && g.choices) ? g.choices : []; %>
+
+                  <div class="p-5 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-700 refined-shadow">
+                    <div class="flex items-center justify-between gap-4">
+                      <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary text-lg">tune</span>
+                        <div class="flex flex-col">
+                          <span class="text-slate-900 dark:text-white font-bold text-sm uppercase tracking-tight"><%= groupLabel %></span>
+                          <span class="text-slate-500 text-[11px] uppercase tracking-wider font-semibold mt-0.5"><%= g && g.helpText ? g.helpText : (g && g.required ? 'Sélectionnez une option' : 'Option produit') %></span>
+                        </div>
+                      </div>
+                      <% if (g && g.required) { %>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-white bg-primary px-2 py-1 rounded-md">Requis</span>
+                      <% } %>
+                    </div>
+
+                    <% if (g && String(g.type) === 'text') { %>
+                      <input
+                        class="mt-4 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-3 text-sm font-semibold focus:ring-primary"
+                        type="text"
+                        name="<%= fieldName %>"
+                        placeholder="<%= g && g.placeholder ? g.placeholder : '' %>"
+                        <%= g && g.required ? 'required' : '' %>
+                        data-option-input
+                        data-option-type="text"
+                        data-price-delta-cents="<%= Number(g.priceDeltaCents) || 0 %>"
+                      />
+                    <% } else if (choices.length && choices.length <= 3) { %>
+                      <div class="mt-4 flex bg-slate-200 dark:bg-slate-800 p-1 rounded-lg border border-slate-300 dark:border-slate-700 gap-1 flex-wrap">
+                        <% choices.forEach((c) => { %>
+                          <% const cKey = c && c.key ? String(c.key) : ''; %>
+                          <% const cAbsoluteRaw = c && c.absolutePriceCents !== null && typeof c.absolutePriceCents !== 'undefined' ? String(c.absolutePriceCents).trim() : ''; %>
+                          <% const hasAbsolutePrice = cAbsoluteRaw !== '' && Number.isFinite(Number(cAbsoluteRaw)) && Number(cAbsoluteRaw) >= 0; %>
+                          <% if (!cKey) return; %>
+                          <label class="choice-toggle relative flex-1 min-w-[120px] cursor-pointer">
+                            <input
+                              type="radio"
+                              name="<%= fieldName %>"
+                              value="<%= cKey %>"
+                              class="text-primary focus:ring-primary"
+                              <%= g && g.required ? 'required' : '' %>
+                              data-option-input
+                              data-option-type="choice"
+                              data-absolute-price-cents="<%= hasAbsolutePrice ? Number(cAbsoluteRaw) : '' %>"
+                              data-price-delta-cents="<%= Number(c.priceDeltaCents) || 0 %>"
+                              <%- isSupplyModeGroup ? (' data-supply-mode-choice="' + normalizeLoose(c && c.label ? c.label : cKey) + '"') : '' %>
+                            />
+                            <span class="flex items-center justify-center rounded-md border border-transparent px-4 py-2 text-xs font-bold uppercase tracking-widest text-slate-500 dark:text-slate-300 transition-all text-center min-h-[44px]">
+                              <span>
+                                <%= c && c.label ? c.label : cKey %>
+                                <% if (hasAbsolutePrice) { %>
+                                  <span class="block normal-case text-[11px] mt-0.5"><%= formatMoney(c.absolutePriceCents) %> €</span>
+                                <% } else if (Number(c && c.priceDeltaCents) > 0) { %>
+                                  <span class="block normal-case text-[11px] mt-0.5">+<%= formatMoney(c.priceDeltaCents) %> €</span>
+                                <% } %>
+                              </span>
+                            </span>
+                          </label>
+                        <% }) %>
+                      </div>
+                    <% } else if (choices.length) { %>
+                      <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <% choices.forEach((c) => { %>
+                          <% const cKey = c && c.key ? String(c.key) : ''; %>
+                          <% const cAbsoluteRaw = c && c.absolutePriceCents !== null && typeof c.absolutePriceCents !== 'undefined' ? String(c.absolutePriceCents).trim() : ''; %>
+                          <% const hasAbsolutePrice = cAbsoluteRaw !== '' && Number.isFinite(Number(cAbsoluteRaw)) && Number(cAbsoluteRaw) >= 0; %>
+                          <% if (!cKey) return; %>
+                          <label class="option-card group flex items-center gap-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-4 py-3.5 cursor-pointer hover:border-primary/50 hover:shadow-md transition-all">
+                            <input
+                              type="radio"
+                              name="<%= fieldName %>"
+                              value="<%= cKey %>"
+                              class="text-primary focus:ring-primary w-4 h-4 shrink-0"
+                              <%= g && g.required ? 'required' : '' %>
+                              data-option-input
+                              data-option-type="choice"
+                              data-absolute-price-cents="<%= hasAbsolutePrice ? Number(cAbsoluteRaw) : '' %>"
+                              data-price-delta-cents="<%= Number(c.priceDeltaCents) || 0 %>"
+                              <%- isSupplyModeGroup ? (' data-supply-mode-choice="' + normalizeLoose(c && c.label ? c.label : cKey) + '"') : '' %>
+                            />
+                            <span class="flex-1 min-w-0 normal-case text-sm font-semibold tracking-normal"><%= c && c.label ? c.label : cKey %></span>
+                            <% if (hasAbsolutePrice) { %>
+                              <span class="text-primary font-black normal-case text-sm"><%= formatMoney(c.absolutePriceCents) %> €</span>
+                            <% } else if (Number(c && c.priceDeltaCents) > 0) { %>
+                              <span class="text-primary font-black normal-case text-sm">+<%= formatMoney(c.priceDeltaCents) %> €</span>
+                            <% } %>
+                          </label>
+                        <% }) %>
+                      </div>
+                    <% } %>
+
+                    <% if (isSupplyModeGroup) { %>
+                      <div class="mt-4 hidden rounded-xl border border-slate-200 bg-slate-50 p-5" data-exchange-standard-panel>
+                        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                          <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-primary">inventory_2</span>
+                            <div>
+                              <div class="text-xs font-black uppercase tracking-widest text-slate-900">Étape 1</div>
+                              <div class="mt-1 text-sm text-slate-600">Vous recevez la pièce reconditionnée et testée.</div>
+                            </div>
+                          </div>
+                          <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-primary">build</span>
+                            <div>
+                              <div class="text-xs font-black uppercase tracking-widest text-slate-900">Étape 2</div>
+                              <div class="mt-1 text-sm text-slate-600">Vous montez la pièce, vous ou votre garagiste.</div>
+                            </div>
+                          </div>
+                          <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-primary">local_shipping</span>
+                            <div>
+                              <div class="text-xs font-black uppercase tracking-widest text-slate-900">Étape 3</div>
+                              <div class="mt-1 text-sm text-slate-600">Contactez-nous pour organiser le retour de l’ancienne pièce, par chauffeur ou point relais, sous 30 jours.</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="mt-4 text-xs text-slate-500">Aucune caution n'est demandée à la commande. En cas de non-retour après 30 jours, la consigne sera facturée.</div>
+                      </div>
+                    <% } %>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+
+            <div class="flex flex-col gap-3 lg:mt-auto">
+              <div class="flex flex-row items-stretch gap-2">
+                <div class="flex items-center justify-center rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-1 shrink-0">
+                  <button class="w-9 h-11 flex items-center justify-center hover:text-primary transition-colors text-sm" data-qty-minus type="button">—</button>
+                  <span class="w-8 text-center font-bold text-sm" data-qty-display>1</span>
+                  <button class="w-9 h-11 flex items-center justify-center hover:text-primary transition-colors text-sm" data-qty-plus type="button">+</button>
+                </div>
+                <button class="flex-1 lg:flex-none lg:min-w-[320px] lg:max-w-[420px] bg-primary hover:bg-primary/90 text-white py-3.5 px-4 rounded-xl font-black uppercase tracking-wide text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20 disabled:opacity-60" data-add-to-cart-submit <%= product.inStock ? '' : 'disabled' %> type="submit">
+                  <span class="material-symbols-outlined text-xl" data-add-to-cart-icon>add_shopping_cart</span>
+                  <span data-add-to-cart-label>Ajouter au panier</span>
+                </button>
+              </div>
+              <div class="flex items-center justify-center gap-6 text-xs text-slate-500 font-medium">
+                <div class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">lock</span> Paiement sécurisé</div>
+                <div class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">local_shipping</span> <%= shippingDelayText || 'Livraison 24/48h' %></div>
+                <a class="flex items-center gap-1 transition hover:text-primary" href="<%= compatibilityContactUrl %>"><span class="material-symbols-outlined text-sm">search</span> Vérifier la compatibilité</a>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="mt-16">
+        <input checked class="hidden" id="tab-description" name="product-tabs" type="radio" />
+        <input class="hidden" id="tab-tech" name="product-tabs" type="radio" />
+        <input class="hidden" id="tab-process" name="product-tabs" type="radio" />
+        <input class="hidden" id="tab-faq" name="product-tabs" type="radio" />
+
+        <div class="tabs-nav flex border-b-2 border-slate-200 dark:border-slate-800 overflow-x-auto whitespace-nowrap no-scrollbar">
+          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-description">Description</label>
+          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-tech">Fiche technique</label>
+          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-process">Processus qualité</label>
+          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-faq">FAQ (<%= faqCount %>)</label>
+        </div>
+
+        <div class="tab-content-container">
+          <div class="tab-content" id="content-description">
+            <div class="py-10 grid grid-cols-1 md:grid-cols-2 gap-12">
+              <div class="flex flex-col gap-6">
+                <h2 class="text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white"><%= keyType || product.name %></h2>
+                <div class="desc-collapse-wrapper relative" data-desc-collapse>
+                  <div class="desc-collapse-inner" data-desc-collapse-inner>
+                    <% const hasSafeHtml = product && typeof product.descriptionHtmlSafe === 'string' && product.descriptionHtmlSafe.trim(); %>
+                    <% if (hasSafeHtml) { %>
+                      <div class="text-slate-700 dark:text-slate-300 leading-relaxed product-html"><%- product.descriptionHtmlSafe %></div>
+                    <% } else { %>
+                      <p class="text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-line"><%= product.descriptionText || product.description || product.shortDescription || '' %></p>
+                    <% } %>
+
+                    <% if (summaryPoints.length) { %>
+                      <ul class="space-y-3 mt-4">
+                        <% summaryPoints.forEach((point) => { %>
+                          <li class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-primary">check_circle</span>
+                            <span class="text-slate-700 dark:text-slate-300"><%= point %></span>
+                          </li>
+                        <% }) %>
+                      </ul>
+                    <% } %>
+                  </div>
+                  <div class="desc-collapse-fade hidden" data-desc-fade>
+                    <button class="w-full pt-10 pb-2 text-center text-sm font-bold text-primary flex items-center justify-center gap-1" data-desc-toggle type="button">
+                      <span data-desc-toggle-label>Lire la suite</span>
+                      <span class="material-symbols-outlined text-base transition-transform" data-desc-toggle-icon>expand_more</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-slate-50 dark:bg-slate-900 rounded-2xl p-8 border border-slate-300 dark:border-slate-700 refined-shadow">
+                <h4 class="text-lg font-bold uppercase text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                  <span class="material-symbols-outlined text-primary">build</span>
+                  Points techniques
+                </h4>
+                <div class="space-y-4">
+                  <% technicalSpecs.slice(0, 6).forEach((entry) => { %>
+                    <div class="flex justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
+                      <span class="text-slate-500 text-sm"><%= entry.label %></span>
+                      <span class="font-bold text-sm text-right text-slate-900 dark:text-white"><%= entry.value %></span>
+                    </div>
+                  <% }) %>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-content" id="content-tech">
+            <div class="py-10 grid grid-cols-1 xl:grid-cols-[minmax(0,0.92fr)_minmax(340px,1.08fr)] gap-10">
+              <div class="space-y-8">
+                <div class="bg-slate-50 dark:bg-slate-900 rounded-2xl p-8 border border-slate-300 dark:border-slate-700 refined-shadow">
+                  <h4 class="text-lg font-bold uppercase text-slate-900 dark:text-white mb-6">Fiche produit</h4>
+                  <div class="space-y-4">
+                    <% technicalSpecs.forEach((entry) => { %>
+                      <div class="flex justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
+                        <span class="text-slate-500 text-sm"><%= entry.label %></span>
+                        <span class="font-bold text-sm text-right text-slate-900 dark:text-white"><%= entry.value %></span>
+                      </div>
+                    <% }) %>
+                  </div>
+                </div>
+
+                <% if (compatibleReferences.length) { %>
+                  <div>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">Références OEM compatibles</h2>
+                    <div class="flex flex-wrap gap-2">
+                      <% compatibleReferences.forEach((r) => { %>
+                        <span class="px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"><%= r %></span>
+                      <% }) %>
+                    </div>
+                  </div>
+                <% } %>
+
+                <% if (product.sections && product.sections.showSupportBox) { %>
+                  <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 refined-shadow">
+                    <div class="flex items-start gap-4">
+                      <div class="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+                        <span class="material-symbols-outlined">support_agent</span>
+                      </div>
+                      <div>
+                        <h4 class="text-base font-bold text-slate-900 dark:text-white">Besoin d'une validation avant achat ?</h4>
+                        <p class="mt-2 text-sm text-slate-500">Nos techniciens peuvent confirmer la bonne référence avec votre VIN ou les informations de votre pièce d'origine.</p>
+                        <div class="mt-4 flex flex-wrap gap-3">
+                          <a class="inline-flex items-center justify-center rounded-lg bg-primary text-white px-4 py-2 text-xs font-black uppercase tracking-wider hover:bg-primary/90 transition-colors" href="/devis">Contacter un technicien</a>
+                          <a class="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-black uppercase tracking-wider hover:border-primary hover:text-primary transition-colors" href="/compte">Demander une vérification</a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                <% } %>
+              </div>
+
+              <div>
+                <% if (compMakes.length) { %>
+                  <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 refined-shadow">
+                    <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70">
+                      <h2 class="text-lg font-bold uppercase text-slate-900 dark:text-white">Compatibilité véhicules</h2>
+                      <p class="mt-1 text-sm text-slate-500">Comparez toujours la référence de votre pièce et votre VIN avant validation finale.</p>
+                    </div>
+                    <table class="w-full text-left border-collapse compatibility-table">
+                      <thead class="bg-white dark:bg-slate-950 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        <tr>
+                          <th class="px-5 sm:px-6 py-4">Marque</th>
+                          <th class="px-5 sm:px-6 py-4">Modèles</th>
+                          <th class="px-5 sm:px-6 py-4">Motorisations</th>
+                        </tr>
+                      </thead>
+                      <tbody class="text-[13px]">
+                        <% compMakes.forEach((mk) => { %>
+                          <% const row = compGrouped[mk]; %>
+                          <% const models = row ? Array.from(row.models) : []; %>
+                          <% const engines = row ? Array.from(row.engines) : []; %>
+                          <tr class="border-t border-slate-100 dark:border-slate-700/50">
+                            <td class="px-5 sm:px-6 py-4 font-bold align-top"><%= mk %></td>
+                            <td class="px-5 sm:px-6 py-4 text-slate-500 align-top"><%= models.join(', ') %></td>
+                            <td class="px-5 sm:px-6 py-4 text-slate-400 italic align-top"><%= engines.join(' / ') %></td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                <% } else { %>
+                  <div class="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center text-sm text-slate-500 refined-shadow">Aucune compatibilité renseignée pour ce produit.</div>
+                <% } %>
+              </div>
+            </div>
+
+            <div class="mt-10 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 refined-shadow">
+              <h2 class="text-lg font-bold uppercase text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">build_circle</span>
+                Montage et garantie
+              </h2>
+              <p class="text-slate-700 dark:text-slate-300 leading-relaxed mb-4">
+                Toutes nos pièces sont reconditionnées en atelier spécialisé, testées sur banc d'essai et expédiées avec une <strong>garantie de <%= typeof keyGarantie !== 'undefined' && keyGarantie ? keyGarantie : '24 mois' %></strong>.
+                Nous recommandons un montage par un professionnel qualifié pour garantir un fonctionnement optimal.
+              </p>
+              <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> Vérifier la référence OEM avant montage</li>
+                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> Effectuer un réglage de base / adaptation après installation (si applicable)</li>
+                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> Vidanger et remplacer l'huile selon les préconisations constructeur</li>
+                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> Conserver la facture pour faire valoir la garantie</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="tab-content" id="content-process">
+            <% if (product.sections && product.sections.showReconditioning && Array.isArray(product.reconditioningSteps) && product.reconditioningSteps.length) { %>
+              <div class="py-10">
+                <div class="mb-8">
+                  <h2 class="text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Notre processus qualité</h3>
+                  <p class="mt-2 text-sm text-slate-500">Chaque étape vise à garantir une pièce contrôlée, durable et prête à être montée.</p>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                  <% product.reconditioningSteps.slice(0, 4).forEach((st, idx) => { %>
+                    <div class="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 refined-shadow space-y-3">
+                      <div class="text-3xl font-black text-slate-200 dark:text-slate-700"><%= String(idx + 1).padStart(2, '0') %></div>
+                      <h4 class="text-sm font-bold uppercase tracking-wider text-slate-900 dark:text-white"><%= st.title %></h4>
+                      <p class="text-sm text-slate-500 leading-relaxed"><%= st.description %></p>
+                    </div>
+                  <% }) %>
+                </div>
+              </div>
+            <% } else { %>
+              <div class="py-10 text-center text-slate-500 text-sm">Aucune information de reconditionnement pour ce produit.</div>
+            <% } %>
+          </div>
+
+          <div class="tab-content" id="content-faq">
+            <% if (product.sections && product.sections.showFaq && Array.isArray(product.faqs) && product.faqs.length) { %>
+              <div class="py-10 max-w-5xl space-y-4">
+                <% product.faqs.forEach((f) => { %>
+                  <details class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl refined-shadow group">
+                    <summary class="p-5 flex justify-between items-center cursor-pointer">
+                      <span class="font-bold text-sm text-slate-900 dark:text-white"><%= f.question %></span>
+                      <span class="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors">add</span>
+                    </summary>
+                    <div class="px-5 pb-5">
+                      <p class="text-sm text-slate-500 leading-relaxed whitespace-pre-line"><%= f.answer %></p>
+                    </div>
+                  </details>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <div class="py-10 text-center text-slate-500 text-sm">Aucune FAQ pour ce produit.</div>
+            <% } %>
+          </div>
+        </div>
+      </div>
+
+      <% if (product.sections && product.sections.showRelatedProducts && Array.isArray(relatedProducts) && relatedProducts.length) { %>
+        <section class="mt-16">
+          <h2 class="text-xl font-black uppercase mb-8 tracking-wider text-slate-900 dark:text-white border-b-2 border-slate-200 dark:border-slate-800 pb-4">Souvent achetés ensemble</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <% relatedProducts.slice(0, 3).forEach((p) => { %>
+              <% const productUrl = (p && p.publicPath) ? p.publicPath : ('/produits/' + p._id); %>
+              <% const relatedBadge = p && p.category ? String(p.category).trim() : 'Pièce liée'; %>
+              <article class="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 flex gap-4 group hover:border-primary hover:shadow-md transition-all">
+                <a class="w-24 h-24 bg-slate-100 dark:bg-slate-950 rounded-lg overflow-hidden flex-shrink-0" href="<%= productUrl %>">
+                  <% if (p.imageUrl) { %>
+                    <img alt="<%= p.name %>" class="w-full h-full object-cover group-hover:scale-105 transition-transform" decoding="async" loading="lazy" width="96" height="96" src="<%= p.imageUrl %>" />
+                  <% } else { %>
+                    <span class="w-full h-full flex items-center justify-center text-slate-400">
+                      <span class="material-symbols-outlined text-4xl">inventory_2</span>
+                    </span>
+                  <% } %>
+                </a>
+                <div class="flex flex-col justify-between py-1 flex-1 min-w-0">
+                  <div>
+                    <h4 class="text-xs font-bold uppercase text-slate-400"><%= relatedBadge %></h4>
+                    <a class="text-sm font-bold text-slate-900 dark:text-white line-clamp-2 hover:text-primary transition-colors" href="<%= productUrl %>"><%= p.name %></a>
+                  </div>
+                  <div class="flex items-center justify-between gap-3">
+                    <span class="text-primary font-black"><%= formatMoney(p.priceCents) %> €</span>
+                    <form action="/panier/ajouter/<%= p._id %>" method="POST">
+                      <input name="returnTo" type="hidden" value="<%= typeof returnTo !== 'undefined' ? returnTo : '/produits' %>" />
+                      <input name="qty" type="hidden" value="1" />
+                      <button class="text-primary hover:bg-primary hover:text-white rounded-full p-1 transition-all disabled:opacity-60" <%= p.inStock ? '' : 'disabled' %> type="submit">
+                        <span class="material-symbols-outlined">add_circle</span>
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              </article>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+
+      <% if (faqPreviewCards.length) { %>
+        <section class="mt-20">
+          <div class="flex flex-col md:flex-row md:items-end justify-between mb-8 border-b-2 border-slate-200 dark:border-slate-800 pb-4 gap-4">
+            <div class="flex items-center gap-4">
+              <h2 class="text-xl font-black uppercase tracking-wider text-slate-900 dark:text-white">Questions fréquentes</h3>
+              <div class="flex items-center gap-1.5 bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20">
+                <span class="font-black text-[10px] text-primary tracking-tighter uppercase italic">Produit</span>
+                <div class="w-4 h-4 bg-primary rounded-full flex items-center justify-center">
+                  <span class="text-[8px] font-black text-white">FAQ</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <div class="flex text-primary">
+                <span class="material-symbols-outlined fill-1">check_circle</span>
+                <span class="material-symbols-outlined fill-1">check_circle</span>
+                <span class="material-symbols-outlined fill-1">check_circle</span>
+              </div>
+              <span class="text-lg font-black text-slate-900 dark:text-white"><%= faqPreviewCards.length %></span>
+              <span class="text-slate-400 text-sm font-medium">réponses utiles</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <% faqPreviewCards.forEach((f) => { %>
+              <% const initials = String(f.question || 'FAQ').replace(/[^A-Za-zÀ-ÿ0-9 ]/g, ' ').trim().split(/\s+/).slice(0, 2).map((part) => part.charAt(0).toUpperCase()).join('') || 'FAQ'; %>
+              <article class="bg-slate-50 dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 refined-shadow">
+                <div class="flex text-primary mb-3 scale-75 -ml-3">
+                  <span class="material-symbols-outlined fill-1">star</span>
+                  <span class="material-symbols-outlined fill-1">star</span>
+                  <span class="material-symbols-outlined fill-1">star</span>
+                </div>
+                <p class="text-slate-700 dark:text-slate-300 italic text-sm leading-relaxed mb-4 line-clamp-5"><%= f.answer %></p>
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-500 dark:text-slate-200"><%= initials %></div>
+                  <div>
+                    <p class="text-xs font-bold text-slate-900 dark:text-white uppercase"><%= f.question %></p>
+                    <div class="flex items-center gap-1.5">
+                      <p class="text-[10px] text-slate-400 uppercase">Information utile</p>
+                      <div class="flex items-center gap-1 bg-primary/10 border border-primary/20 px-1 rounded-sm">
+                        <span class="text-[8px] font-bold text-primary uppercase">CarParts</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+
+      <% if (Array.isArray(relatedBlogPosts) && relatedBlogPosts.length) { %>
+        <section class="mt-24 border-t-2 border-slate-200 dark:border-slate-800 pt-16">
+          <div class="flex items-center justify-between mb-8 gap-4">
+            <h2 class="text-xl font-black uppercase tracking-wider text-slate-900 dark:text-white">Articles de blog</h3>
+            <a class="text-xs font-black uppercase text-primary hover:underline flex items-center gap-1" href="/blog">Voir tous les articles <span class="material-symbols-outlined text-sm">chevron_right</span></a>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <% relatedBlogPosts.slice(0, 4).forEach((a) => { %>
+              <article class="group cursor-pointer">
+                <a class="block" href="<%= a.url %>">
+                  <div class="aspect-[16/10] bg-slate-100 dark:bg-slate-900 rounded-lg overflow-hidden mb-4 border border-slate-200 dark:border-slate-800">
+                    <% if (a.imageUrl) { %>
+                      <img alt="<%= a.title %>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" decoding="async" width="400" height="250" src="<%= a.imageUrl %>" />
+                    <% } else { %>
+                      <div class="w-full h-full flex items-center justify-center text-slate-400">
+                        <span class="material-symbols-outlined text-5xl">article</span>
+                      </div>
+                    <% } %>
+                  </div>
+                  <h4 class="text-sm font-bold text-slate-900 dark:text-white mb-2 leading-tight group-hover:text-primary transition-colors"><%= a.title %></h4>
+                  <p class="text-xs text-slate-500 line-clamp-2 leading-relaxed"><%= a.excerpt %></p>
+                </a>
+              </article>
+            <% }) %>
+          </div>
+        </section>
+      <% } %>
+
+      <script>
+        (function () {
+          var mainImg = document.querySelector('[data-main-image]');
+          var mainVid = document.querySelector('[data-main-video]');
+          var thumbs = Array.prototype.slice.call(document.querySelectorAll('[data-thumb]') || []);
+          var prevBtn = document.querySelector('[data-gallery-prev]');
+          var nextBtn = document.querySelector('[data-gallery-next]');
+          var currentIndex = 0;
+
+          var qtyInput = document.querySelector('[data-qty-input]');
+          var qtyDisplay = document.querySelector('[data-qty-display]');
+          var minus = document.querySelector('[data-qty-minus]');
+          var plus = document.querySelector('[data-qty-plus]');
+          var addToCartForm = document.querySelector('[data-add-to-cart-form]');
+          var addToCartSubmit = addToCartForm ? addToCartForm.querySelector('[data-add-to-cart-submit]') : null;
+          var addToCartIcon = addToCartForm ? addToCartForm.querySelector('[data-add-to-cart-icon]') : null;
+          var addToCartLabel = addToCartForm ? addToCartForm.querySelector('[data-add-to-cart-label]') : null;
+          var addToCartPending = false;
+          var addToCartResetTimer = null;
+          var originalSubmitIcon = addToCartIcon ? addToCartIcon.textContent : 'add_shopping_cart';
+          var originalSubmitLabel = addToCartLabel ? addToCartLabel.textContent : 'Ajouter au panier';
+          var originalSubmitDisabled = !!(addToCartSubmit && addToCartSubmit.disabled);
+
+          var priceEl = document.querySelector('[data-price-display]');
+          var installmentWrapper = document.querySelector('[data-installment-wrapper]');
+          var installmentAmountEl = document.querySelector('[data-installment-amount]');
+          var optionInputs = Array.prototype.slice.call(document.querySelectorAll('[data-option-input]') || []);
+          var exchangeStandardPanel = document.querySelector('[data-exchange-standard-panel]');
+          var supplyModeInputs = Array.prototype.slice.call(document.querySelectorAll('[data-supply-mode-choice]') || []);
+
+          function formatMoney(cents) {
+            try {
+              return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format((Number(cents) || 0) / 100);
+            } catch (e) {
+              return ((Number(cents) || 0) / 100).toFixed(2).replace('.', ',');
+            }
+          }
+
+          function computeOptionPricing() {
+            var total = 0;
+            var absolute = null;
+            optionInputs.forEach(function (el) {
+              if (!el) return;
+              var type = el.getAttribute('data-option-type') || '';
+              var delta = Number(el.getAttribute('data-price-delta-cents') || '0');
+              var absoluteRaw = el.getAttribute('data-absolute-price-cents');
+              var absolutePrice = absoluteRaw === '' || absoluteRaw === null ? null : Number(absoluteRaw);
+              if (!Number.isFinite(delta)) delta = 0;
+
+              if (type === 'choice') {
+                if (el.checked) {
+                  if (Number.isFinite(absolutePrice) && absolutePrice >= 0) absolute = absolutePrice;
+                  else total += delta;
+                }
+              } else if (type === 'text') {
+                var v = (el.value || '').trim();
+                if (v) total += delta;
+              }
+            });
+            return { delta: total, absolute: absolute };
+          }
+
+          function syncDisplayedPrice() {
+            if (!priceEl) return;
+            var base = Number(priceEl.getAttribute('data-base-price-cents') || '0');
+            if (!Number.isFinite(base)) base = 0;
+            var pricing = computeOptionPricing();
+            var next = (pricing.absolute !== null ? pricing.absolute : base) + pricing.delta;
+            priceEl.textContent = formatMoney(next) + ' €';
+            syncInstallmentDisplay(next);
+          }
+
+          function syncInstallmentDisplay(totalCents) {
+            if (!installmentWrapper || !priceEl) return;
+            var count = Number(priceEl.getAttribute('data-installment-count') || '3');
+            var min = Number(priceEl.getAttribute('data-installment-min-cents') || '0');
+            var max = Number(priceEl.getAttribute('data-installment-max-cents') || '0');
+            if (!Number.isFinite(count) || count <= 0) count = 3;
+            if (!Number.isFinite(min) || min < 0) min = 0;
+            if (!Number.isFinite(max) || max < min) max = Number.MAX_SAFE_INTEGER;
+            var eligible = Number.isFinite(totalCents) && totalCents >= min && totalCents <= max;
+            installmentWrapper.classList.toggle('hidden', !eligible);
+            if (eligible && installmentAmountEl) {
+              installmentAmountEl.textContent = formatMoney(Math.round(totalCents / count)) + ' €';
+            }
+          }
+
+          function syncExchangeStandardPanel() {
+            if (!exchangeStandardPanel) return;
+            var selectedInput = null;
+            supplyModeInputs.forEach(function (el) {
+              if (el && el.checked) selectedInput = el;
+            });
+            var selectedMode = selectedInput ? String(selectedInput.getAttribute('data-supply-mode-choice') || '') : '';
+            var showPanel = selectedMode.indexOf('echange-standard') !== -1;
+            exchangeStandardPanel.classList.toggle('hidden', !showPanel);
+          }
+
+          function clamp(v) {
+            if (!Number.isFinite(v)) return 1;
+            if (v < 1) return 1;
+            if (v > 99) return 99;
+            return v;
+          }
+
+          function getQty() {
+            if (!qtyInput) return 1;
+            var n = parseInt(qtyInput.value, 10);
+            if (!Number.isFinite(n)) return 1;
+            return clamp(n);
+          }
+
+          function setQty(nextQty) {
+            var v = clamp(nextQty);
+            if (qtyInput) qtyInput.value = String(v);
+            if (qtyDisplay) qtyDisplay.textContent = String(v);
+          }
+
+          function resetAddToCartButton() {
+            if (addToCartResetTimer) {
+              window.clearTimeout(addToCartResetTimer);
+              addToCartResetTimer = null;
+            }
+            if (!addToCartSubmit) return;
+            addToCartSubmit.classList.remove('cart-submit-success');
+            addToCartSubmit.disabled = originalSubmitDisabled;
+            if (addToCartIcon) addToCartIcon.textContent = originalSubmitIcon;
+            if (addToCartLabel) addToCartLabel.textContent = originalSubmitLabel;
+          }
+
+          function setAddToCartSuccessState() {
+            if (!addToCartSubmit) return;
+            addToCartSubmit.classList.add('cart-submit-success');
+            addToCartSubmit.disabled = true;
+            if (addToCartIcon) addToCartIcon.textContent = 'check';
+            if (addToCartLabel) addToCartLabel.textContent = 'Ajouté';
+          }
+
+          function scheduleAddToCartReset(delayMs) {
+            if (addToCartResetTimer) {
+              window.clearTimeout(addToCartResetTimer);
+            }
+            addToCartResetTimer = window.setTimeout(function () {
+              resetAddToCartButton();
+              addToCartPending = false;
+            }, delayMs);
+          }
+
+          function setActiveThumb(index) {
+            if (!thumbs || !thumbs.length) return;
+
+            thumbs.forEach(function (b, idx) {
+              b.classList.remove('ring-2', 'ring-primary', 'border-primary/20', 'border-slate-200', 'dark:border-slate-700');
+              b.classList.add('border');
+              if (idx === index) {
+                b.classList.add('border-primary/20', 'ring-2', 'ring-primary');
+              } else {
+                b.classList.add('border-slate-200', 'dark:border-slate-700');
+              }
+            });
+
+            var btn = thumbs[index];
+            if (!btn) return;
+            try {
+              btn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+            } catch (e) {
+              btn.scrollIntoView(true);
+            }
+          }
+
+          function setIndex(nextIndex) {
+            if ((!mainImg && !mainVid) || !thumbs || !thumbs.length) return;
+            var max = thumbs.length;
+            var idx = nextIndex % max;
+            if (idx < 0) idx = max + idx;
+
+            var btn = thumbs[idx];
+            if (!btn) return;
+            var src = btn.getAttribute('data-src');
+            var type = btn.getAttribute('data-type') || 'image';
+            if (!src) return;
+
+            if (type === 'video') {
+              if (mainImg) {
+                mainImg.classList.add('hidden');
+                mainImg.removeAttribute('src');
+              }
+              if (mainVid) {
+                mainVid.classList.remove('hidden');
+                try { mainVid.pause(); } catch (e) {}
+                mainVid.setAttribute('src', src);
+                try { mainVid.load(); } catch (e) {}
+              }
+            } else {
+              if (mainVid) {
+                try { mainVid.pause(); } catch (e) {}
+                mainVid.classList.add('hidden');
+                mainVid.removeAttribute('src');
+              }
+              if (mainImg) {
+                mainImg.classList.remove('hidden');
+                mainImg.setAttribute('src', src);
+              }
+            }
+
+            currentIndex = idx;
+            setActiveThumb(currentIndex);
+          }
+
+          if (minus) {
+            minus.addEventListener('click', function () {
+              setQty(getQty() - 1);
+            });
+          }
+          if (plus) {
+            plus.addEventListener('click', function () {
+              setQty(getQty() + 1);
+            });
+          }
+
+          if (thumbs && thumbs.length && mainImg) {
+            thumbs.forEach(function (btn, idx) {
+              btn.addEventListener('click', function () {
+                setIndex(idx);
+              });
+            });
+
+            if (prevBtn) {
+              prevBtn.addEventListener('click', function () {
+                setIndex(currentIndex - 1);
+              });
+            }
+            if (nextBtn) {
+              nextBtn.addEventListener('click', function () {
+                setIndex(currentIndex + 1);
+              });
+            }
+
+            mainImg.addEventListener('click', function () {
+              setIndex(currentIndex + 1);
+            });
+
+            document.addEventListener('keydown', function (e) {
+              if (!e) return;
+              if (e.altKey || e.ctrlKey || e.metaKey) return;
+              var tag = (e.target && e.target.tagName) ? String(e.target.tagName).toLowerCase() : '';
+              if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+              if (e.key === 'ArrowLeft') {
+                setIndex(currentIndex - 1);
+              }
+              if (e.key === 'ArrowRight') {
+                setIndex(currentIndex + 1);
+              }
+            });
+
+            setIndex(0);
+          }
+
+          if (optionInputs && optionInputs.length) {
+            optionInputs.forEach(function (el) {
+              el.addEventListener('change', syncDisplayedPrice);
+              el.addEventListener('input', syncDisplayedPrice);
+              el.addEventListener('change', syncExchangeStandardPanel);
+              el.addEventListener('input', syncExchangeStandardPanel);
+            });
+          }
+
+          if (addToCartForm && addToCartSubmit && window.fetch && window.FormData && window.CPFCartFeedback) {
+            addToCartForm.addEventListener('submit', function (event) {
+              if (addToCartPending) {
+                event.preventDefault();
+                return;
+              }
+
+              event.preventDefault();
+              addToCartPending = true;
+              addToCartSubmit.disabled = true;
+
+              var startedAt = Date.now();
+              var formData = new FormData(addToCartForm);
+
+              fetch(addToCartForm.getAttribute('action'), {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {
+                  'Accept': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest'
+                }
+              })
+                .then(function (response) {
+                  return response.json().catch(function () {
+                    return null;
+                  }).then(function (data) {
+                    if (!response.ok || !data || data.ok !== true) {
+                      throw new Error(data && data.error ? data.error : 'Impossible d’ajouter le produit au panier pour le moment.');
+                    }
+                    return data;
+                  });
+                })
+                .then(function (data) {
+                  var payload = data && typeof data === 'object' ? data : {};
+                  var productData = payload.product && typeof payload.product === 'object' ? payload.product : {};
+                  window.CPFCartFeedback.notifyAdded({
+                    cartItemCount: payload.cartItemCount,
+                    productName: productData.name || addToCartForm.getAttribute('data-product-name') || 'Produit',
+                    imageUrl: productData.imageUrl || addToCartForm.getAttribute('data-product-image') || ''
+                  });
+
+                  setAddToCartSuccessState();
+
+                  var minDisableRemaining = Math.max(0, 1000 - (Date.now() - startedAt));
+                  window.setTimeout(function () {
+                    scheduleAddToCartReset(2000);
+                  }, minDisableRemaining);
+                })
+                .catch(function (err) {
+                  var minDisableRemaining = Math.max(0, 1000 - (Date.now() - startedAt));
+                  window.CPFCartFeedback.notifyError(err && err.message ? err.message : 'Impossible d’ajouter le produit au panier pour le moment.');
+                  window.setTimeout(function () {
+                    resetAddToCartButton();
+                    addToCartPending = false;
+                  }, minDisableRemaining);
+                });
+            });
+          }
+
+          setQty(getQty());
+          syncDisplayedPrice();
+          syncExchangeStandardPanel();
+        })();
+      </script>
+    <% } %>
+  </div>
+
+  <!-- Sticky Add-to-Cart bar (mobile only) — populated by JS -->
+  <div class="fixed bottom-[85px] left-0 right-0 z-40 md:hidden transition-all duration-300 opacity-0 pointer-events-none" data-sticky-atc id="stickyAtcBar" style="display:none">
+    <div class="mx-3 mb-2 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-sm px-4 py-3 shadow-xl">
+      <div class="flex flex-col min-w-0 flex-1">
+        <span class="text-xs font-bold text-slate-900 truncate" data-sticky-atc-name></span>
+        <span class="text-primary font-black text-sm" data-sticky-atc-price></span>
+      </div>
+      <button class="shrink-0 bg-primary hover:bg-primary/90 text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-primary/20 transition-all" data-sticky-atc-btn type="button">
+        <span class="material-symbols-outlined text-lg">add_shopping_cart</span>
+        Ajouter
+      </button>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var stickyBar = document.querySelector('[data-sticky-atc]');
+      var realBtn = document.querySelector('[data-add-to-cart-submit]');
+      var stickyBtn = document.querySelector('[data-sticky-atc-btn]');
+      if (!stickyBar || !realBtn) return;
+
+      /* Populate name & price from existing DOM */
+      var h1 = document.querySelector('h1');
+      var priceEl = document.querySelector('[data-price-display]');
+      var nameSpan = stickyBar.querySelector('[data-sticky-atc-name]');
+      var priceSpan = stickyBar.querySelector('[data-sticky-atc-price]');
+      if (h1 && nameSpan) nameSpan.textContent = h1.textContent.trim();
+      if (priceEl && priceSpan) priceSpan.textContent = priceEl.textContent.trim();
+
+      stickyBar.style.display = '';
+
+      /* Show custom validation error for missing required options */
+      function showOptionError(form) {
+        var firstInvalid = form.querySelector(':invalid');
+        if (!firstInvalid) return false;
+
+        /* Find the parent option group */
+        var group = firstInvalid.closest('.refined-shadow') || firstInvalid.closest('.rounded-xl');
+        if (!group) { form.reportValidity(); return true; }
+
+        /* Scroll to the group */
+        group.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        /* Add error ring */
+        group.classList.add('ring-2', 'ring-red-500', 'ring-offset-2');
+
+        /* Remove any existing error message in this group */
+        var existing = group.querySelector('[data-option-error]');
+        if (existing) existing.remove();
+
+        /* Get option label */
+        var labelEl = group.querySelector('.uppercase.tracking-tight');
+        var optionName = labelEl ? labelEl.textContent.trim() : 'une option';
+
+        /* Insert custom error message */
+        var errorDiv = document.createElement('div');
+        errorDiv.setAttribute('data-option-error', '');
+        errorDiv.className = 'mt-3 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-2.5 text-red-700 text-sm font-semibold animate-pulse';
+        errorDiv.innerHTML = '<span class="material-symbols-outlined text-base">error</span> Veuillez sélectionner : ' + optionName;
+        group.appendChild(errorDiv);
+
+        /* Auto-cleanup after 4s */
+        setTimeout(function() {
+          group.classList.remove('ring-2', 'ring-red-500', 'ring-offset-2');
+          if (errorDiv.parentNode) {
+            errorDiv.style.transition = 'opacity 0.3s';
+            errorDiv.style.opacity = '0';
+            setTimeout(function() { errorDiv.remove(); }, 300);
+          }
+        }, 4000);
+
+        /* Remove error on selection */
+        var inputs = group.querySelectorAll('input, select');
+        inputs.forEach(function(input) {
+          input.addEventListener('change', function handler() {
+            group.classList.remove('ring-2', 'ring-red-500', 'ring-offset-2');
+            if (errorDiv.parentNode) errorDiv.remove();
+            input.removeEventListener('change', handler);
+          });
+        });
+
+        return true;
+      }
+
+      /* Click on sticky → check options then submit or scroll to options */
+      if (stickyBtn) {
+        stickyBtn.addEventListener('click', function() {
+          var form = realBtn.closest('form');
+          if (form && !form.checkValidity()) {
+            showOptionError(form);
+            return;
+          }
+          realBtn.click();
+        });
+      }
+
+      /* Also intercept the real submit button for consistent error UX */
+      realBtn.addEventListener('click', function(e) {
+        var form = realBtn.closest('form');
+        if (form && !form.checkValidity()) {
+          e.preventDefault();
+          showOptionError(form);
+        }
+      });
+
+      /* Show/hide sticky bar based on real button visibility */
+      var visible = false;
+      var observer = new IntersectionObserver(function(entries) {
+        var isInView = entries[0].isIntersecting;
+        if (!isInView && !visible) {
+          stickyBar.classList.remove('opacity-0', 'pointer-events-none');
+          stickyBar.classList.add('opacity-100', 'pointer-events-auto');
+          visible = true;
+        } else if (isInView && visible) {
+          stickyBar.classList.remove('opacity-100', 'pointer-events-auto');
+          stickyBar.classList.add('opacity-0', 'pointer-events-none');
+          visible = false;
+        }
+      }, { threshold: 0 });
+
+      observer.observe(realBtn);
+    })();
+  </script>
+
+  <!-- Description read-more collapse (mobile only) -->
+  <script>
+    (function() {
+      var wrapper = document.querySelector('[data-desc-collapse]');
+      if (!wrapper) return;
+      var inner = wrapper.querySelector('[data-desc-collapse-inner]');
+      var fade = wrapper.querySelector('[data-desc-fade]');
+      var toggleBtn = wrapper.querySelector('[data-desc-toggle]');
+      var toggleLabel = wrapper.querySelector('[data-desc-toggle-label]');
+      var toggleIcon = wrapper.querySelector('[data-desc-toggle-icon]');
+      if (!inner || !fade || !toggleBtn) return;
+
+      var THRESHOLD = 250; /* px - only collapse if taller than this */
+      var expanded = false;
+      var userToggled = false; /* true once user clicks — prevents resize from re-collapsing */
+
+      function checkSize() {
+        if (userToggled) return; /* respect user's explicit choice */
+        var isMobile = window.innerWidth < 768;
+        var naturalHeight = inner.scrollHeight;
+
+        if (isMobile && naturalHeight > THRESHOLD) {
+          inner.classList.add('is-collapsed');
+          inner.classList.remove('is-expanded');
+          fade.classList.remove('hidden');
+          expanded = false;
+          if (toggleLabel) toggleLabel.textContent = 'Lire la suite';
+          if (toggleIcon) toggleIcon.style.transform = '';
+        } else {
+          inner.classList.remove('is-collapsed');
+          inner.classList.add('is-expanded');
+          fade.classList.add('hidden');
+        }
+      }
+
+      toggleBtn.addEventListener('click', function() {
+        expanded = !expanded;
+        userToggled = true;
+        if (expanded) {
+          inner.classList.remove('is-collapsed');
+          inner.classList.add('is-expanded');
+          fade.classList.add('hidden');
+          if (toggleLabel) toggleLabel.textContent = 'Réduire';
+          if (toggleIcon) toggleIcon.style.transform = 'rotate(180deg)';
+        } else {
+          inner.classList.add('is-collapsed');
+          inner.classList.remove('is-expanded');
+          fade.classList.remove('hidden');
+          if (toggleLabel) toggleLabel.textContent = 'Lire la suite';
+          if (toggleIcon) toggleIcon.style.transform = '';
+          wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+
+      checkSize();
+      window.addEventListener('resize', checkSize);
+    })();
+  </script>
+</main>
+
+<%- include('../partials/footer') %>

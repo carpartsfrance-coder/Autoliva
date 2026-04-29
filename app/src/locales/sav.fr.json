@@ -1,0 +1,109 @@
+{
+  "common": {
+    "previous": "Retour",
+    "next": "Continuer",
+    "submit": "Envoyer ma demande",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "skip_to_main": "Aller au contenu principal",
+    "loading": "Chargement…"
+  },
+  "wizard": {
+    "page_title": "Ouvrir une demande SAV",
+    "page_subtitle": "Quelques étapes pour démarrer. Vous ne payez rien à l'ouverture.",
+    "step_labels": {
+      "1": "Commande",
+      "2": "Pièce",
+      "3": "Symptômes",
+      "4": "Documents",
+      "5": "Engagement",
+      "6": "Récapitulatif"
+    },
+    "draft_restored": "Brouillon restauré.",
+    "draft_restored_hint": "Vos réponses ont été récupérées. Merci de redéposer vos documents.",
+    "reset_button": "Recommencer à zéro",
+    "reset_modal_title": "Recommencer à zéro ?",
+    "reset_modal_text": "Supprimer toutes vos réponses et recommencer ? Cette action est irréversible.",
+    "reset_modal_confirm": "Tout effacer",
+    "reset_done": "Formulaire réinitialisé"
+  },
+  "step1": {
+    "title": "Quelle commande ?",
+    "logged_in_intro": "Sélectionnez la commande concernée.",
+    "guest_intro": "Indiquez l'email utilisé lors de l'achat et votre numéro de commande.",
+    "no_orders": "Aucune commande éligible (payée, < 24 mois) trouvée.",
+    "manual_link": "Je ne trouve pas ma commande",
+    "search_placeholder": "Rechercher par n° ou nom de produit…"
+  },
+  "step2": {
+    "title": "Votre pièce et son montage",
+    "subtitle": "On en a besoin pour démarrer le diagnostic.",
+    "page_subtitle_short": "On en a besoin pour démarrer le diagnostic.",
+    "piece_type": "Type de pièce",
+    "piece_type_placeholder": "— Sélectionner —",
+    "montage_date": "Date du montage",
+    "garage_name": "Nom du garage",
+    "garage_address": "Adresse du garage (facultatif)",
+    "reglage_question": "Le réglage de base a-t-il été effectué après le montage ?",
+    "reglage_yes": "Oui, le garage a effectué le réglage de base",
+    "reglage_no": "Non",
+    "reglage_unknown": "Je ne sais pas",
+    "reglage_help_title": "Pourquoi le réglage de base est indispensable",
+    "reglage_help_body": "Sans le réglage de base après remplacement, la mécatronique apprend de mauvais points et tombe en mode dégradé."
+  },
+  "step3": {
+    "title": "Décrivez le problème",
+    "subtitle": "Plus c'est précis, plus l'analyse va vite.",
+    "symptoms_legend": "Symptômes observés",
+    "obd_label": "Codes défaut OBD (format P0741)",
+    "obd_placeholder": "Tapez un code puis Entrée…",
+    "description_label": "Décrivez ce que vous constatez",
+    "description_placeholder": "Quand cela arrive, depuis quand, dans quelles conditions… (20 caractères minimum)"
+  },
+  "step4": {
+    "title": "Documents et véhicule",
+    "subtitle": "Ces documents sont obligatoires pour ouvrir votre dossier.",
+    "drop_title": "Glissez vos fichiers ici ou cliquez pour parcourir",
+    "drop_hint": "PDF, JPG, PNG, HEIC · 10 Mo max par fichier · 5 fichiers max",
+    "vin_label": "VIN (17 caractères)",
+    "plate_label": "Immatriculation",
+    "make": "Marque",
+    "model": "Modèle",
+    "year": "Année",
+    "engine": "Motorisation",
+    "km": "Kilométrage actuel"
+  },
+  "step5": {
+    "title": "Comment ça se passe ensuite",
+    "rules_title": "Une analyse sur banc est nécessaire pour diagnostiquer votre pièce.",
+    "rule_defect": "Si défaut produit confirmé : 0 € pour vous, échange ou remboursement intégral, retour offert.",
+    "rule_no_defect": "Mauvais montage / usure / non défectueux : 149 € TTC à votre charge.",
+    "rule_no_payment": "Vous ne payez RIEN à l'ouverture.",
+    "cgv_label": "J'accepte les conditions générales du SAV (version cgv-sav-v2-2026-04).",
+    "accept_149_label": "J'accepte que 149 € TTC me soient facturés uniquement si l'analyse conclut que la pièce n'est pas défectueuse.",
+    "rgpd_label": "J'accepte le traitement de mes données personnelles aux fins du traitement de ma demande SAV (politique RGPD)."
+  },
+  "step6": {
+    "title": "Récapitulatif avant envoi",
+    "subtitle": "Vérifiez vos réponses. Vous pouvez modifier chaque section.",
+    "edit": "Modifier"
+  },
+  "confirmation": {
+    "title": "Demande enregistrée !",
+    "subtitle": "Votre dossier SAV est ouvert. Vous allez recevoir un email de confirmation.",
+    "next_steps_title": "Prochaines étapes",
+    "next_steps": [
+      "Notre équipe pré-qualifie votre dossier sous 48 h ouvrées.",
+      "Vous recevez un bon de retour gratuit pour nous expédier la pièce.",
+      "Une fois en atelier, l'analyse sur banc démarre sous 5 jours ouvrés.",
+      "Vous recevez le rapport et la décision (garantie ou forfait 149 €)."
+    ]
+  },
+  "feedback": {
+    "title": "Comment s'est passée votre expérience ?",
+    "rate_label": "Votre note globale",
+    "comment_label": "Un commentaire (facultatif)",
+    "submit": "Envoyer mon retour",
+    "thanks": "Merci pour votre retour !"
+  }
+}

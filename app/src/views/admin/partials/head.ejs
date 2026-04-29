@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html class="light" lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title><%= typeof title !== 'undefined' ? title : 'CarParts Admin' %></title>
+    <meta name="robots" content="noindex, nofollow" />
+    <link rel="icon" type="image/png" href="/images/favicon.png" />
+    <script>
+      (function () {
+        document.documentElement.classList.add('js');
+        if (localStorage.getItem('sidebar-collapsed') === '1') {
+          document.documentElement.classList.add('sidebar-collapsed');
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="/admin/style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet" />
+    <script>
+      (function () {
+        var el = document.documentElement;
+        if (!el.classList.contains('js')) el.classList.add('js');
+        if (!document.fonts || typeof document.fonts.load !== 'function') {
+          el.classList.add('icons-ready');
+          return;
+        }
+
+        var done = false;
+        function markReady() {
+          if (done) return;
+          done = true;
+          el.classList.add('icons-ready');
+        }
+
+        Promise.all([
+          document.fonts.load('1em "Material Symbols Outlined"'),
+        ])
+          .then(markReady)
+          .catch(markReady);
+
+        setTimeout(markReady, 2000);
+      })();
+    </script>
+  </head>
+  <body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-gray-200 transition-colors duration-300 font-display antialiased">
+    <!-- Mobile hamburger -->
+    <button id="sidebar-toggle" class="lg:hidden fixed top-4 left-4 z-50 inline-flex items-center justify-center w-11 h-11 rounded-xl bg-slate-900 text-white shadow-lg hover:bg-slate-800 transition" type="button" aria-label="Menu">
+      <span class="material-symbols-outlined text-xl">menu</span>
+    </button>
+    <div id="admin-main" class="relative min-h-screen overflow-x-clip ml-0 lg:ml-72 w-full lg:w-[calc(100vw-18rem)] transition-all duration-300">

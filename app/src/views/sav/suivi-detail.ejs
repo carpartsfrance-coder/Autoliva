@@ -1,0 +1,15 @@
+<%- include('../partials/head') %>
+<link rel="stylesheet" href="/css/sav.css?v=7">
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-slate-50">
+  <div class="mx-auto max-w-3xl px-4 sm:px-6 py-8">
+    <div class="flex items-center justify-between mb-4">
+      <a href="/sav/suivi" class="text-sm text-slate-500 hover:text-slate-900">← Changer de dossier</a>
+      <span class="text-xs text-slate-400">Connecté en tant que <%= guestEmail %></span>
+    </div>
+    <%- include('./_detail', { ticket: ticket, STATUTS_LABELS: STATUTS_LABELS, postUrl: '/sav/suivi/' + encodeURIComponent(ticket.numero) + '/messages', sent: sent, error: error }) %>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

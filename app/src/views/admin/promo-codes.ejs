@@ -1,0 +1,281 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'promo-codes' }) %>
+
+<main class="flex-1">
+  <% const formatMoney = (cents) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.round((Number(cents) || 0)) / 100); %>
+  <div class="px-6 lg:px-10 py-8 space-y-8">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+      <div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Codes promo'}] }) %>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Codes promo</div>
+        <div class="mt-1 text-sm text-slate-500">Créez et gérez vos codes promotionnels (période, limites d’utilisation…).</div>
+      </div>
+    </div>
+
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <div class="mt-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
+      <section class="xl:col-span-5 space-y-6">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Créer un code promo</div>
+
+          <form action="/admin/codes-promo" class="mt-4 space-y-4" method="POST">
+            <div>
+              <label class="block text-sm font-medium text-slate-500" for="newCode">Code</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newCode" name="code" placeholder="EX: BIENVENUE10" required type="text" minlength="3" maxlength="30" data-validate data-pattern="^[A-Za-z0-9_-]{3,30}$" data-error="3 à 30 caractères, lettres/chiffres/- ou _" />
+              <div class="mt-1 text-xs text-slate-500">Lettres/chiffres uniquement, - ou _. (3 à 30 caractères)</div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-slate-500" for="newLabel">Nom (optionnel)</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newLabel" name="label" placeholder="Ex: Offre de bienvenue" type="text" />
+            </div>
+
+            <div class="flex items-center gap-2">
+              <input class="rounded border-slate-300 text-primary focus:ring-primary" id="newActive" name="isActive" type="checkbox" value="true" checked />
+              <label class="text-sm font-medium text-slate-500" for="newActive">Actif</label>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="newDiscountType">Type de remise</label>
+                <select class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newDiscountType" name="discountType" required>
+                  <option value="percent">Pourcentage</option>
+                  <option value="fixed">Montant fixe</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="newDiscountPercent">Pourcentage (%)</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newDiscountPercent" name="discountPercent" placeholder="10" step="0.01" type="number" data-validate data-min="0" data-max="100" />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="newDiscountAmount">Montant fixe (€)</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newDiscountAmount" name="discountAmount" placeholder="10,00" type="text" />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="newMinSubtotal">Minimum commande (€) (optionnel)</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newMinSubtotal" name="minSubtotal" placeholder="0" type="text" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="newStartsAt">Début (optionnel)</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newStartsAt" name="startsAt" type="datetime-local" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="newEndsAt">Fin (optionnel)</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newEndsAt" name="endsAt" type="datetime-local" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="newMaxTotalUses">Utilisations max (total) (optionnel)</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newMaxTotalUses" name="maxTotalUses" placeholder="Ex: 100" type="number" min="1" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="newMaxUsesPerUser">Utilisations max par client (optionnel)</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newMaxUsesPerUser" name="maxUsesPerUser" placeholder="Ex: 1" type="number" min="1" />
+              </div>
+            </div>
+
+            <button class="btn btn-primary" <%= dbConnected ? '' : 'disabled' %> type="submit">
+              <span class="material-symbols-outlined mr-2 text-base">add</span>
+              Créer
+            </button>
+          </form>
+        </div>
+
+        <% if (!dbConnected) { %>
+          <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+            <div class="font-bold">Mode démo</div>
+            <div class="mt-1 text-sm">La base de données est indisponible : vous ne pouvez pas créer / modifier / supprimer de codes promo.</div>
+          </div>
+        <% } %>
+      </section>
+
+      <section class="xl:col-span-7">
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
+            <div class="font-semibold text-slate-900">Liste des codes</div>
+            <div class="text-xs font-bold text-slate-500"><%= (promoCodes && promoCodes.length) ? promoCodes.length : 0 %> au total</div>
+          </div>
+
+          <% if (promoCodes && promoCodes.length) { %>
+            <div class="divide-y divide-slate-100">
+              <% promoCodes.forEach((p) => { %>
+                <div class="p-6" data-row-id="<%= p.id %>">
+                  <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                    <div>
+                      <div class="flex flex-wrap items-center gap-3">
+                        <div class="text-lg font-semibold text-slate-900"><%= p.code %></div>
+                        <span class="badge <%= p.isActive ? 'badge-success' : 'badge-neutral' %>">
+                          <%= p.isActive ? 'ACTIF' : 'INACTIF' %>
+                        </span>
+                        <span class="badge badge-admin">
+                          <%= p.discountType === 'fixed' ? 'MONTANT' : 'POURCENT' %>
+                        </span>
+                      </div>
+
+                      <% if (p.label) { %>
+                        <div class="mt-1 text-sm text-slate-500"><%= p.label %></div>
+                      <% } %>
+
+                      <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Remise</div>
+                          <div class="mt-1 font-semibold text-slate-900">
+                            <% if (p.discountType === 'fixed') { %>
+                              <%= formatMoney(p.discountAmountCents) %> €
+                            <% } else { %>
+                              <%= (Number(p.discountPercent) || 0).toString().replace('.', ',') %> %
+                            <% } %>
+                          </div>
+                        </div>
+
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Utilisations</div>
+                          <div class="mt-1 font-semibold text-slate-900">
+                            <% if (p.maxTotalUses) { %>
+                              <%= p.usedCount %> / <%= p.maxTotalUses %>
+                            <% } else { %>
+                              <%= p.usedCount %>
+                            <% } %>
+                          </div>
+                        </div>
+
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Minimum commande</div>
+                          <div class="mt-1 font-semibold text-slate-900"><%= formatMoney(p.minSubtotalCents) %> €</div>
+                        </div>
+
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                          <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Période</div>
+                          <div class="mt-1 font-bold text-slate-900">
+                            <% if (p.startsAt || p.endsAt) { %>
+                              <div>
+                                <span class="text-slate-500">Début:</span> <span class="font-semibold"><%= p.startsAt ? p.startsAt.replace('T', ' ') : '—' %></span>
+                              </div>
+                              <div class="mt-1">
+                                <span class="text-slate-500">Fin:</span> <span class="font-semibold"><%= p.endsAt ? p.endsAt.replace('T', ' ') : '—' %></span>
+                              </div>
+                            <% } else { %>
+                              —
+                            <% } %>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="mt-3 text-xs text-slate-500">
+                        Créé : <span class="font-bold text-slate-500"><%= p.createdAt %></span>
+                        <% if (p.maxUsesPerUser) { %>
+                          · Max/client : <span class="font-bold text-slate-500"><%= p.maxUsesPerUser %></span>
+                        <% } %>
+                      </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-2">
+                      <details class="group">
+                        <summary class="btn btn-secondary">
+                          <span class="material-symbols-outlined mr-2 text-base">edit</span>
+                          Modifier
+                        </summary>
+                        <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                          <form action="/admin/codes-promo/<%= p.id %>" class="space-y-3" method="POST">
+                            <div>
+                              <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="code-<%= p.id %>">Code</label>
+                              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="code-<%= p.id %>" name="code" required type="text" value="<%= p.code %>" minlength="3" maxlength="30" data-validate data-pattern="^[A-Za-z0-9_-]{3,30}$" data-error="3 à 30 caractères, lettres/chiffres/- ou _" />
+                            </div>
+
+                            <div>
+                              <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="label-<%= p.id %>">Nom</label>
+                              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="label-<%= p.id %>" name="label" type="text" value="<%= p.label %>" />
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                              <input class="rounded border-slate-300 text-primary focus:ring-primary" id="active-<%= p.id %>" name="isActive" type="checkbox" value="true" <%= p.isActive ? 'checked' : '' %> />
+                              <label class="text-sm font-medium text-slate-500" for="active-<%= p.id %>">Actif</label>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="dtype-<%= p.id %>">Type</label>
+                                <select class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="dtype-<%= p.id %>" name="discountType" required>
+                                  <option value="percent" <%= p.discountType === 'percent' ? 'selected' : '' %>>Pourcentage</option>
+                                  <option value="fixed" <%= p.discountType === 'fixed' ? 'selected' : '' %>>Montant fixe</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="dpercent-<%= p.id %>">Pourcentage (%)</label>
+                                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="dpercent-<%= p.id %>" name="discountPercent" step="0.01" type="number" value="<%= p.discountPercent || '' %>" data-validate data-min="0" data-max="100" />
+                              </div>
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="damount-<%= p.id %>">Montant fixe (€)</label>
+                                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="damount-<%= p.id %>" name="discountAmount" type="text" value="<%= p.discountAmountCents ? formatMoney(p.discountAmountCents).replace('.', ',') : '' %>" />
+                              </div>
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="min-<%= p.id %>">Minimum commande (€)</label>
+                                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="min-<%= p.id %>" name="minSubtotal" type="text" value="<%= p.minSubtotalCents ? formatMoney(p.minSubtotalCents).replace('.', ',') : '0' %>" />
+                              </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="start-<%= p.id %>">Début</label>
+                                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="start-<%= p.id %>" name="startsAt" type="datetime-local" value="<%= p.startsAt %>" />
+                              </div>
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="end-<%= p.id %>">Fin</label>
+                                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="end-<%= p.id %>" name="endsAt" type="datetime-local" value="<%= p.endsAt %>" />
+                              </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="mtu-<%= p.id %>">Utilisations max (total)</label>
+                                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="mtu-<%= p.id %>" name="maxTotalUses" type="number" min="1" value="<%= p.maxTotalUses || '' %>" />
+                              </div>
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="muu-<%= p.id %>">Max par client</label>
+                                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="muu-<%= p.id %>" name="maxUsesPerUser" type="number" min="1" value="<%= p.maxUsesPerUser || '' %>" />
+                              </div>
+                            </div>
+
+                            <button class="btn btn-primary" type="submit">
+                              Enregistrer
+                            </button>
+                          </form>
+                        </div>
+                      </details>
+
+                      <form action="/admin/codes-promo/<%= p.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer ce code promo ?">
+                        <button class="btn btn-danger" type="submit">
+                          <span class="material-symbols-outlined mr-2 text-base">delete</span>
+                          Supprimer
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } else { %>
+            <div class="p-6 text-slate-500">Aucun code promo.</div>
+          <% } %>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<%- include('./partials/footer') %>

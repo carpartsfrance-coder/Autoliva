@@ -1,0 +1,1337 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'orders' }) %>
+
+<main class="flex-1 relative">
+  <div class="px-6 lg:px-10 py-8">
+    <!-- Header -->
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+      <div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Commandes', url: '/admin/commandes'}, {label: 'Nouvelle commande'}] }) %>
+        <h1 class="text-2xl md:text-3xl font-semibold text-slate-900">Nouvelle commande</h1>
+        <p class="mt-1 text-sm text-slate-500">Cr&eacute;er une commande manuelle (t&eacute;l&eacute;phone, email, etc.)</p>
+      </div>
+    </div>
+
+    <!-- Quote banner (when coming from a quote) -->
+    <div id="from-quote-banner" class="hidden mt-6 rounded-2xl border border-indigo-200 bg-indigo-50 p-4 flex items-start gap-3">
+      <span class="material-symbols-outlined text-indigo-600 mt-0.5">description</span>
+      <div>
+        <div class="font-semibold text-indigo-900">Cr&eacute;ation depuis un devis</div>
+        <div class="text-sm text-indigo-700 mt-0.5">Remplissez les informations du devis pour cr&eacute;er la commande correspondante. La r&eacute;f&eacute;rence du devis sera li&eacute;e &agrave; la commande.</div>
+      </div>
+    </div>
+
+    <!-- Stepper -->
+    <div class="mt-8 flex items-center justify-center gap-0" id="order-stepper">
+      <% const steps = ['Client', 'Articles', 'Livraison', 'R&eacute;capitulatif']; %>
+      <% steps.forEach(function(label, idx) { %>
+        <div class="flex items-center">
+          <div class="flex items-center gap-2">
+            <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold <%= idx === 0 ? 'bg-red-600 text-white' : 'bg-slate-200 text-slate-500' %>" data-step-circle="<%= idx + 1 %>">
+              <%= idx + 1 %>
+            </div>
+            <span class="text-sm font-semibold <%= idx === 0 ? 'text-slate-900' : 'text-slate-400' %>" data-step-label="<%= idx + 1 %>"><%- label %></span>
+          </div>
+          <% if (idx < steps.length - 1) { %>
+            <div class="w-12 lg:w-20 h-px bg-slate-200 mx-3"></div>
+          <% } %>
+        </div>
+      <% }) %>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         STEP 1 — Client
+         ═══════════════════════════════════════════ -->
+    <div id="step-1" class="mt-8 max-w-2xl mx-auto">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6">
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
+          <div>
+            <h2 class="text-lg font-semibold text-slate-900 mb-1">S&eacute;lection du client</h2>
+            <p class="text-sm text-slate-500">Recherchez un client existant ou cr&eacute;ez-en un nouveau.</p>
+          </div>
+          <div class="shrink-0 w-full sm:w-auto">
+            <label class="block text-xs font-bold text-slate-600 mb-1">Canal de la commande</label>
+            <select id="source-channel" class="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500">
+              <option value="phone">T&eacute;l&eacute;phone</option>
+              <option value="email">Email</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="leboncoin">Leboncoin</option>
+              <option value="marketplace">Marketplace</option>
+              <option value="salon">Salon / Foire</option>
+              <option value="other">Autre</option>
+            </select>
+            <input type="text" id="source-detail" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Pr&eacute;cision (optionnel)" />
+            <label class="block text-xs font-bold text-slate-600 mt-3 mb-1">R&eacute;f. devis <span class="text-slate-400">(optionnel)</span></label>
+            <input type="text" id="quote-reference" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Ex: D2026-001, Devis Qonto #123..." />
+          </div>
+        </div>
+
+        <!-- Search zone -->
+        <div id="client-search-zone">
+          <div class="relative" id="client-search-wrapper">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+            <input type="text" id="client-search-input" class="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Rechercher un client existant (nom, email, soci&eacute;t&eacute;)..." autocomplete="off" />
+            <div id="client-search-spinner" class="absolute right-3 top-1/2 -translate-y-1/2 hidden">
+              <div class="w-5 h-5 border-2 border-slate-300 border-t-red-600 rounded-full animate-spin"></div>
+            </div>
+            <div id="client-search-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 hidden max-h-64 overflow-y-auto"></div>
+          </div>
+          <div class="mt-3 text-center">
+            <button type="button" id="toggle-create-form" class="text-sm text-red-600 hover:text-red-700 font-medium hover:underline">Ou cr&eacute;er un nouveau client</button>
+          </div>
+        </div>
+
+        <!-- Selected client card -->
+        <div id="client-selected-card" class="hidden">
+          <div class="flex items-start justify-between p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <span class="material-symbols-outlined text-red-600">person</span>
+              </div>
+              <div>
+                <div class="flex items-center gap-2">
+                  <span class="font-semibold text-slate-900" id="selected-client-name"></span>
+                  <span class="text-xs font-bold px-2 py-0.5 rounded-full" id="selected-client-badge"></span>
+                </div>
+                <div class="text-sm text-slate-500 mt-0.5" id="selected-client-email"></div>
+                <div class="text-sm text-slate-500" id="selected-client-address"></div>
+              </div>
+            </div>
+            <button type="button" id="change-client-btn" class="text-sm text-red-600 hover:text-red-700 font-medium hover:underline shrink-0">Changer</button>
+          </div>
+        </div>
+
+        <!-- Create client form -->
+        <div id="client-create-form" class="hidden mt-4">
+          <div class="border border-slate-200 rounded-xl p-5 bg-slate-50/50">
+            <h3 class="text-sm font-semibold text-slate-900 mb-4">Nouveau client</h3>
+            <div class="mb-4">
+              <label class="block text-xs font-bold text-slate-600 mb-2">Type de compte</label>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="newAccountType" value="particulier" checked class="accent-red-600" /><span class="text-sm font-medium text-slate-700">Particulier</span></label>
+                <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="newAccountType" value="pro" class="accent-red-600" /><span class="text-sm font-medium text-slate-700">Professionnel</span></label>
+              </div>
+            </div>
+            <div id="pro-fields" class="hidden mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label class="block text-xs font-bold text-slate-600 mb-1">Soci&eacute;t&eacute; <span class="text-red-500">*</span></label><input type="text" id="new-companyName" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Nom de la soci&eacute;t&eacute;" /></div>
+              <div><label class="block text-xs font-bold text-slate-600 mb-1">SIRET <span class="text-slate-400">(optionnel)</span></label><input type="text" id="new-siret" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="N&deg; SIRET" /></div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div><label class="block text-xs font-bold text-slate-600 mb-1">Pr&eacute;nom <span class="text-red-500">*</span></label><input type="text" id="new-firstName" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Pr&eacute;nom" /></div>
+              <div><label class="block text-xs font-bold text-slate-600 mb-1">Nom <span class="text-red-500">*</span></label><input type="text" id="new-lastName" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Nom" /></div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div><label class="block text-xs font-bold text-slate-600 mb-1">Email <span class="text-red-500">*</span></label><input type="email" id="new-email" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="email@exemple.com" /></div>
+              <div><label class="block text-xs font-bold text-slate-600 mb-1">T&eacute;l&eacute;phone <span class="text-slate-400">(optionnel)</span></label><input type="tel" id="new-phone" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="06 12 34 56 78" /></div>
+            </div>
+            <div id="create-client-error" class="hidden mb-3 text-sm text-red-600 font-medium"></div>
+            <div class="flex items-center gap-3">
+              <button type="button" id="create-client-btn" class="btn btn-primary flex items-center gap-2"><span class="material-symbols-outlined text-lg">person_add</span>Cr&eacute;er et s&eacute;lectionner</button>
+              <button type="button" id="cancel-create-btn" class="btn btn-secondary">Annuler</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nav step 1 -->
+      <div class="mt-6 flex justify-between items-center">
+        <a href="/admin/commandes" class="btn btn-secondary flex items-center gap-2"><span class="material-symbols-outlined text-lg">arrow_back</span>Retour</a>
+        <button type="button" id="next-step-1" class="btn btn-primary flex items-center gap-2 opacity-50 cursor-not-allowed" disabled>Suivant<span class="material-symbols-outlined text-lg">arrow_forward</span></button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         STEP 2 — Articles
+         ═══════════════════════════════════════════ -->
+    <div id="step-2" class="mt-8 max-w-4xl mx-auto hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 p-6">
+        <h2 class="text-lg font-semibold text-slate-900 mb-1">Articles de la commande</h2>
+        <p class="text-sm text-slate-500 mb-6">Ajoutez des produits du catalogue ou des articles libres.</p>
+
+        <!-- Product search -->
+        <div class="relative mb-4" id="product-search-wrapper">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">inventory_2</span>
+          <input type="text" id="product-search-input" class="w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Ajouter un produit du catalogue (nom, SKU, marque)..." autocomplete="off" />
+          <div id="product-search-spinner" class="absolute right-3 top-1/2 -translate-y-1/2 hidden">
+            <div class="w-5 h-5 border-2 border-slate-300 border-t-red-600 rounded-full animate-spin"></div>
+          </div>
+          <div id="product-search-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-50 hidden max-h-72 overflow-y-auto"></div>
+        </div>
+
+        <div class="mb-4">
+          <button type="button" id="add-free-item-btn" class="text-sm text-red-600 hover:text-red-700 font-medium hover:underline flex items-center gap-1">
+            <span class="material-symbols-outlined text-base">add_circle</span>Ajouter un article libre
+          </button>
+        </div>
+
+        <!-- Items table -->
+        <div id="items-empty" class="py-8 text-center text-sm text-slate-400">
+          <span class="material-symbols-outlined text-4xl text-slate-300 mb-2 block">shopping_cart</span>
+          Aucun article ajout&eacute;. Recherchez un produit ci-dessus.
+        </div>
+
+        <div id="items-table-wrapper" class="hidden">
+          <div class="overflow-x-auto -mx-6">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-slate-200 text-left">
+                  <th class="px-6 py-3 text-xs font-bold text-slate-500 uppercase">Produit</th>
+                  <th class="px-3 py-3 text-xs font-bold text-slate-500 uppercase w-28">Prix unit. HT</th>
+                  <th class="px-3 py-3 text-xs font-bold text-slate-500 uppercase w-20">Qt&eacute;</th>
+                  <th class="px-3 py-3 text-xs font-bold text-slate-500 uppercase w-36">Remise</th>
+                  <th class="px-3 py-3 text-xs font-bold text-slate-500 uppercase text-right w-28">Sous-total</th>
+                  <th class="px-3 py-3 w-10"></th>
+                </tr>
+              </thead>
+              <tbody id="items-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Totals -->
+        <div id="totals-section" class="hidden mt-6 border-t border-slate-200 pt-6">
+          <div class="max-w-sm ml-auto space-y-3">
+            <div class="flex justify-between text-sm">
+              <span class="text-slate-600">Sous-total HT</span>
+              <span class="font-semibold text-slate-900" id="subtotal-ht">0,00 &euro;</span>
+            </div>
+            <div class="flex justify-between items-center text-sm">
+              <div class="flex items-center gap-2">
+                <span class="text-slate-600">TVA</span>
+                <select id="tva-rate" class="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-red-500/20">
+                  <option value="20" selected>20%</option>
+                  <option value="10">10%</option>
+                  <option value="5.5">5,5%</option>
+                  <option value="0">0% (export)</option>
+                </select>
+              </div>
+              <span class="font-semibold text-slate-900" id="tva-amount">0,00 &euro;</span>
+            </div>
+            <div class="flex justify-between items-start text-sm">
+              <div>
+                <span class="text-slate-600">Frais de port</span>
+                <div class="mt-2 space-y-1.5">
+                  <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="shippingOption" value="free" checked class="accent-red-600" /><span class="text-xs text-slate-700">Offerts (0 &euro;)</span></label>
+                  <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="shippingOption" value="standard" class="accent-red-600" /><span class="text-xs text-slate-700">Forfait standard (9,90 &euro;)</span></label>
+                  <label class="flex items-center gap-2 cursor-pointer"><input type="radio" name="shippingOption" value="custom" class="accent-red-600" /><span class="text-xs text-slate-700">Montant personnalis&eacute;</span></label>
+                  <div id="custom-shipping-wrapper" class="hidden pl-6">
+                    <input type="number" id="custom-shipping-input" class="w-24 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20" min="0" step="0.01" placeholder="0.00" /> <span class="text-xs text-slate-500">&euro;</span>
+                  </div>
+                </div>
+              </div>
+              <span class="font-semibold text-slate-900 pt-0.5" id="shipping-amount">0,00 &euro;</span>
+            </div>
+            <div class="flex justify-between border-t border-slate-200 pt-3">
+              <span class="font-bold text-slate-900">TOTAL TTC</span>
+              <span class="text-lg font-extrabold text-red-600" id="total-ttc">0,00 &euro;</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Nav step 2 -->
+      <div class="mt-6 flex justify-between items-center">
+        <button type="button" id="prev-step-2" class="btn btn-secondary flex items-center gap-2"><span class="material-symbols-outlined text-lg">arrow_back</span>Pr&eacute;c&eacute;dent</button>
+        <button type="button" id="next-step-2" class="btn btn-primary flex items-center gap-2 opacity-50 cursor-not-allowed" disabled>Suivant<span class="material-symbols-outlined text-lg">arrow_forward</span></button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         STEP 3 — Livraison & Facturation
+         ═══════════════════════════════════════════ -->
+    <div id="step-3" class="mt-8 max-w-4xl mx-auto hidden">
+
+      <!-- Addresses: 2 columns desktop, stacked mobile -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Shipping address -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 class="text-lg font-semibold text-slate-900 mb-1 flex items-center gap-2">
+            <span class="material-symbols-outlined text-red-600">local_shipping</span>Adresse de livraison
+          </h2>
+          <p class="text-sm text-slate-500 mb-4">O&ugrave; exp&eacute;dier la commande.</p>
+
+          <!-- Existing addresses dropdown -->
+          <div id="shipping-existing-wrapper" class="hidden mb-4">
+            <label class="block text-xs font-bold text-slate-600 mb-1">Adresse existante du client</label>
+            <select id="shipping-existing-select" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500">
+              <option value="">Saisir une nouvelle adresse</option>
+            </select>
+          </div>
+
+          <div id="shipping-form" class="space-y-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">Nom complet <span class="text-red-500">*</span></label>
+              <input type="text" id="ship-fullName" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Pr&eacute;nom Nom" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">Adresse <span class="text-red-500">*</span></label>
+              <input type="text" id="ship-line1" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="N&deg; et rue" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">Compl&eacute;ment <span class="text-slate-400">(optionnel)</span></label>
+              <input type="text" id="ship-line2" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="B&acirc;timent, &eacute;tage..." />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Code postal <span class="text-red-500">*</span></label>
+                <input type="text" id="ship-postalCode" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="75001" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Ville <span class="text-red-500">*</span></label>
+                <input type="text" id="ship-city" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Paris" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Pays</label>
+                <select id="ship-country" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500">
+                  <option value="France" selected>France</option>
+                  <option value="Belgique">Belgique</option>
+                  <option value="Suisse">Suisse</option>
+                  <option value="Luxembourg">Luxembourg</option>
+                  <option value="Allemagne">Allemagne</option>
+                  <option value="Espagne">Espagne</option>
+                  <option value="Italie">Italie</option>
+                  <option value="Pays-Bas">Pays-Bas</option>
+                  <option value="Portugal">Portugal</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">T&eacute;l&eacute;phone <span class="text-red-500">*</span></label>
+                <input type="tel" id="ship-phone" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="06 12 34 56 78" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Billing address -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 class="text-lg font-semibold text-slate-900 mb-1 flex items-center gap-2">
+            <span class="material-symbols-outlined text-red-600">receipt_long</span>Adresse de facturation
+          </h2>
+          <p class="text-sm text-slate-500 mb-4">Pour la facture de la commande.</p>
+
+          <label class="flex items-center gap-2 cursor-pointer mb-4">
+            <input type="checkbox" id="billing-same-checkbox" checked class="accent-red-600 w-4 h-4" />
+            <span class="text-sm font-medium text-slate-700">Identique &agrave; l'adresse de livraison</span>
+          </label>
+
+          <div id="billing-form" class="space-y-3 hidden">
+            <!-- Pro fields: company + siret -->
+            <div id="billing-pro-fields" class="hidden">
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                  <label class="block text-xs font-bold text-slate-600 mb-1">Soci&eacute;t&eacute;</label>
+                  <input type="text" id="bill-company" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Nom de la soci&eacute;t&eacute;" />
+                </div>
+                <div>
+                  <label class="block text-xs font-bold text-slate-600 mb-1">SIRET / TVA intracom.</label>
+                  <input type="text" id="bill-siret" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="N&deg; SIRET ou TVA" />
+                </div>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">Nom complet <span class="text-red-500">*</span></label>
+              <input type="text" id="bill-fullName" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Pr&eacute;nom Nom" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">Adresse <span class="text-red-500">*</span></label>
+              <input type="text" id="bill-line1" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="N&deg; et rue" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 mb-1">Compl&eacute;ment <span class="text-slate-400">(optionnel)</span></label>
+              <input type="text" id="bill-line2" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="B&acirc;timent, &eacute;tage..." />
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Code postal <span class="text-red-500">*</span></label>
+                <input type="text" id="bill-postalCode" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="75001" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Ville <span class="text-red-500">*</span></label>
+                <input type="text" id="bill-city" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Paris" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Pays</label>
+                <select id="bill-country" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500">
+                  <option value="France" selected>France</option>
+                  <option value="Belgique">Belgique</option>
+                  <option value="Suisse">Suisse</option>
+                  <option value="Luxembourg">Luxembourg</option>
+                  <option value="Allemagne">Allemagne</option>
+                  <option value="Espagne">Espagne</option>
+                  <option value="Italie">Italie</option>
+                  <option value="Pays-Bas">Pays-Bas</option>
+                  <option value="Portugal">Portugal</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">T&eacute;l&eacute;phone</label>
+                <input type="tel" id="bill-phone" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="06 12 34 56 78" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notes & options -->
+      <div class="mt-6 bg-white rounded-2xl border border-slate-200 p-6">
+        <h2 class="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined text-red-600">notes</span>Notes et options
+        </h2>
+        <div class="mb-4">
+          <label class="block text-xs font-bold text-slate-600 mb-1">Type de commande</label>
+          <select id="order-type-select" class="w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500">
+            <option value="standard">Vente simple</option>
+            <option value="exchange">Échange standard (retour J+30)</option>
+            <option value="exchange_cloning">Échange + Clonage (récupération pièce client)</option>
+          </select>
+          <div id="order-type-cloning-info" class="hidden mt-2 rounded-xl border border-purple-200 bg-purple-50 p-3 text-xs text-purple-700">
+            <span class="material-symbols-outlined align-middle mr-1" style="font-size:14px">science</span>
+            <strong>Parcours clonage :</strong> Étiquette récup envoyée &rarr; Pièce client en transit &rarr; Reçue chez CPF &rarr; Clonage &rarr; Expédition pièce clonée
+          </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">Note interne <span class="text-slate-400">(admin uniquement)</span></label>
+            <textarea id="note-internal" rows="3" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Visible uniquement dans l'admin..."></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">Note pour le client <span class="text-slate-400">(visible sur la confirmation)</span></label>
+            <textarea id="note-client" rows="3" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500" placeholder="Sera visible par le client..."></textarea>
+          </div>
+        </div>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" id="skip-email-checkbox" class="accent-red-600 w-4 h-4" />
+          <span class="text-sm font-medium text-slate-700">Ne pas envoyer d'email de confirmation au client</span>
+          <span class="text-xs text-slate-400">(utile pour les commandes r&eacute;tro-saisies)</span>
+        </label>
+      </div>
+
+      <!-- Nav step 3 -->
+      <div class="mt-6 flex justify-between items-center">
+        <button type="button" id="prev-step-3" class="btn btn-secondary flex items-center gap-2"><span class="material-symbols-outlined text-lg">arrow_back</span>Pr&eacute;c&eacute;dent</button>
+        <button type="button" id="next-step-3" class="btn btn-primary flex items-center gap-2">Suivant<span class="material-symbols-outlined text-lg">arrow_forward</span></button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         STEP 4 — R&eacute;capitulatif & Validation
+         ═══════════════════════════════════════════ -->
+    <div id="step-4" class="mt-8 max-w-4xl mx-auto hidden">
+
+      <!-- Client card -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-4">
+        <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+          <span class="material-symbols-outlined text-base">person</span>Client
+        </h2>
+        <div id="recap-client" class="text-sm text-slate-700"></div>
+      </div>
+
+      <!-- Articles card -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-4">
+        <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+          <span class="material-symbols-outlined text-base">inventory_2</span>Articles
+        </h2>
+        <div class="overflow-x-auto -mx-6">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-200 text-left">
+                <th class="px-6 py-2 text-xs font-bold text-slate-500">Produit</th>
+                <th class="px-3 py-2 text-xs font-bold text-slate-500 text-right">Prix unit.</th>
+                <th class="px-3 py-2 text-xs font-bold text-slate-500 text-center">Qt&eacute;</th>
+                <th class="px-3 py-2 text-xs font-bold text-slate-500 text-right">Remise</th>
+                <th class="px-3 py-2 text-xs font-bold text-slate-500 text-right">Sous-total</th>
+              </tr>
+            </thead>
+            <tbody id="recap-items-tbody"></tbody>
+          </table>
+        </div>
+        <div class="mt-4 border-t border-slate-200 pt-4 max-w-sm ml-auto space-y-2 text-sm">
+          <div class="flex justify-between"><span class="text-slate-600">Sous-total HT</span><span class="font-semibold" id="recap-subtotal">—</span></div>
+          <div class="flex justify-between"><span class="text-slate-600">TVA (<span id="recap-tva-label">20</span>%)</span><span class="font-semibold" id="recap-tva">—</span></div>
+          <div class="flex justify-between"><span class="text-slate-600">Frais de port</span><span class="font-semibold" id="recap-shipping">—</span></div>
+          <div class="flex justify-between border-t border-slate-200 pt-2"><span class="font-bold text-slate-900">TOTAL TTC</span><span class="text-lg font-extrabold text-red-600" id="recap-total">—</span></div>
+        </div>
+      </div>
+
+      <!-- Addresses side by side -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+            <span class="material-symbols-outlined text-base">local_shipping</span>Livraison
+          </h2>
+          <div id="recap-shipping-addr" class="text-sm text-slate-700 whitespace-pre-line"></div>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+            <span class="material-symbols-outlined text-base">receipt_long</span>Facturation
+          </h2>
+          <div id="recap-billing-addr" class="text-sm text-slate-700 whitespace-pre-line"></div>
+        </div>
+      </div>
+
+      <!-- Notes (if any) -->
+      <div id="recap-notes-card" class="mb-4 hidden">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+            <span class="material-symbols-outlined text-base">notes</span>Notes
+          </h2>
+          <div id="recap-note-internal" class="hidden mb-3 rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+            <div class="text-xs font-bold text-amber-600 mb-1">Note interne (admin)</div>
+            <div id="recap-note-internal-text"></div>
+          </div>
+          <div id="recap-note-client" class="hidden rounded-xl bg-slate-50 border border-slate-200 p-3 text-sm text-slate-700">
+            <div class="text-xs font-bold text-slate-500 mb-1">Note client</div>
+            <div id="recap-note-client-text"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Initial status & post-creation options -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-4">
+        <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wide mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined text-base">tune</span>Options de cr&eacute;ation
+        </h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-xs font-bold text-slate-600 mb-1">Statut initial de la commande</label>
+            <select id="initial-status" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500">
+              <option value="draft">Brouillon (non comptabilis&eacute;e)</option>
+              <option value="pending_payment" selected>En attente paiement</option>
+              <option value="paid">Pay&eacute;e</option>
+              <option value="processing">En pr&eacute;paration</option>
+            </select>
+          </div>
+          <div class="space-y-3 pt-5">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="opt-send-email" class="accent-red-600 w-4 h-4" />
+              <span class="text-sm text-slate-700">Envoyer un email de confirmation au client</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Error message -->
+      <div id="create-order-error" class="hidden mb-4 rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 font-medium"></div>
+
+      <!-- Action buttons -->
+      <div class="flex flex-col sm:flex-row justify-between items-center gap-3">
+        <button type="button" id="prev-step-4" class="btn btn-secondary flex items-center gap-2">
+          <span class="material-symbols-outlined text-lg">arrow_back</span>Modifier
+        </button>
+        <div class="flex items-center gap-3">
+          <button type="button" id="submit-order-btn" class="btn btn-primary px-8 py-3 text-base font-bold flex items-center gap-2">
+            <span class="material-symbols-outlined">check_circle</span>Cr&eacute;er la commande
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+(function () {
+  /* ═══════════════════════════════════
+   *  Shared state
+   * ═══════════════════════════════════ */
+  var formData = JSON.parse(sessionStorage.getItem('newOrder_formData') || 'null') || {
+    client: null,
+    source: { channel: 'phone', detail: '' },
+    items: [],
+    shipping: { option: 'free', customAmount: 0 },
+    tvaRate: 20,
+    shippingAddress: { fullName: '', line1: '', line2: '', postalCode: '', city: '', country: 'France', phone: '' },
+    billingAddress: { fullName: '', line1: '', line2: '', postalCode: '', city: '', country: 'France', phone: '', company: '', siret: '' },
+    billingSameAsShipping: true,
+    noteInternal: '',
+    noteClient: '',
+    orderType: 'standard',
+    skipConfirmationEmail: false,
+    quoteReference: '',
+  };
+  function saveFormData() { sessionStorage.setItem('newOrder_formData', JSON.stringify(formData)); }
+
+  var currentStep = 1;
+  var itemIdCounter = formData.items.reduce(function (m, it) { return Math.max(m, it._uid || 0); }, 0) + 1;
+
+  /* ═══════════════════════════════════
+   *  Step navigation
+   * ═══════════════════════════════════ */
+  function goToStep(n) {
+    currentStep = n;
+    document.getElementById('step-1').classList.toggle('hidden', n !== 1);
+    document.getElementById('step-2').classList.toggle('hidden', n !== 2);
+    document.getElementById('step-3').classList.toggle('hidden', n !== 3);
+    document.getElementById('step-4').classList.toggle('hidden', n !== 4);
+    if (n === 4) renderRecap();
+    for (var i = 1; i <= 4; i++) {
+      var circle = document.querySelector('[data-step-circle="' + i + '"]');
+      var label = document.querySelector('[data-step-label="' + i + '"]');
+      if (circle) {
+        circle.className = 'w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold ' +
+          (i <= n ? 'bg-red-600 text-white' : 'bg-slate-200 text-slate-500');
+      }
+      if (label) {
+        label.className = 'text-sm font-semibold ' + (i <= n ? 'text-slate-900' : 'text-slate-400');
+      }
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  /* ═══════════════════════════════════
+   *  STEP 1 — Client
+   * ═══════════════════════════════════ */
+  var selectedClient = formData.client;
+  var debounceTimer = null;
+  var searchInput = document.getElementById('client-search-input');
+  var searchDropdown = document.getElementById('client-search-dropdown');
+  var searchSpinner = document.getElementById('client-search-spinner');
+  var searchZone = document.getElementById('client-search-zone');
+  var selectedCard = document.getElementById('client-selected-card');
+  var createForm = document.getElementById('client-create-form');
+  var toggleCreateBtn = document.getElementById('toggle-create-form');
+  var cancelCreateBtn = document.getElementById('cancel-create-btn');
+  var changeClientBtn = document.getElementById('change-client-btn');
+  var createClientBtn = document.getElementById('create-client-btn');
+  var createErrorEl = document.getElementById('create-client-error');
+  var nextBtn1 = document.getElementById('next-step-1');
+  var proFields = document.getElementById('pro-fields');
+  var sourceChannelSelect = document.getElementById('source-channel');
+  var sourceDetailInput = document.getElementById('source-detail');
+  var accountTypeRadios = document.querySelectorAll('input[name="newAccountType"]');
+  var highlightedClientIdx = -1;
+
+  var quoteReferenceInput = document.getElementById('quote-reference');
+
+  sourceChannelSelect.value = formData.source.channel || 'phone';
+  sourceDetailInput.value = formData.source.detail || '';
+  quoteReferenceInput.value = formData.quoteReference || '';
+
+  sourceChannelSelect.addEventListener('change', function () { formData.source.channel = this.value; saveFormData(); });
+  sourceDetailInput.addEventListener('input', function () { formData.source.detail = this.value.trim(); saveFormData(); });
+  quoteReferenceInput.addEventListener('input', function () { formData.quoteReference = this.value.trim(); saveFormData(); });
+
+  /* ── Handle ?from_quote URL param ── */
+  (function () {
+    var params = new URLSearchParams(window.location.search);
+    var fromQuote = params.get('from_quote');
+    if (fromQuote && !formData.quoteReference) {
+      formData.quoteReference = fromQuote;
+      quoteReferenceInput.value = fromQuote;
+      saveFormData();
+      document.getElementById('from-quote-banner').classList.remove('hidden');
+    } else if (formData.quoteReference) {
+      document.getElementById('from-quote-banner').classList.remove('hidden');
+    }
+  })();
+
+  accountTypeRadios.forEach(function (r) {
+    r.addEventListener('change', function () { proFields.classList.toggle('hidden', this.value !== 'pro'); });
+  });
+
+  searchInput.addEventListener('input', function () {
+    var q = this.value.trim();
+    clearTimeout(debounceTimer);
+    highlightedClientIdx = -1;
+    if (q.length < 2) { searchDropdown.classList.add('hidden'); searchDropdown.innerHTML = ''; searchSpinner.classList.add('hidden'); return; }
+    searchSpinner.classList.remove('hidden');
+    debounceTimer = setTimeout(function () {
+      fetch('/admin/api/clients/search?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          searchSpinner.classList.add('hidden');
+          if (!data.ok || !data.clients.length) { searchDropdown.innerHTML = '<div class="px-4 py-3 text-sm text-slate-400">Aucun r\u00e9sultat</div>'; searchDropdown.classList.remove('hidden'); return; }
+          renderClientDropdown(data.clients);
+        })
+        .catch(function () { searchSpinner.classList.add('hidden'); searchDropdown.classList.add('hidden'); });
+    }, 300);
+  });
+
+  searchInput.addEventListener('keydown', function (e) {
+    var items = searchDropdown.querySelectorAll('[data-client-idx]');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); highlightedClientIdx = Math.min(highlightedClientIdx + 1, items.length - 1); highlightClientItems(items); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); highlightedClientIdx = Math.max(highlightedClientIdx - 1, 0); highlightClientItems(items); }
+    else if (e.key === 'Enter' && highlightedClientIdx >= 0) { e.preventDefault(); items[highlightedClientIdx].click(); }
+    else if (e.key === 'Escape') { searchDropdown.classList.add('hidden'); }
+  });
+
+  function highlightClientItems(items) { items.forEach(function (el, i) { el.classList.toggle('bg-red-50', i === highlightedClientIdx); }); }
+
+  function renderClientDropdown(clients) {
+    var html = '';
+    clients.forEach(function (c, i) {
+      var badge = c.accountType === 'pro' ? '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">PRO</span>' : '<span class="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600">PART.</span>';
+      html += '<div class="px-4 py-3 hover:bg-red-50 cursor-pointer flex items-center justify-between gap-2 border-b border-slate-100 last:border-0 transition-colors" data-client-idx="' + i + '" data-client=\'' + JSON.stringify(c).replace(/'/g, '&#39;') + '\'>'
+        + '<div class="min-w-0"><div class="text-sm font-semibold text-slate-900 truncate">' + escHtml(c.firstName + ' ' + c.lastName) + (c.companyName ? ' \u2014 ' + escHtml(c.companyName) : '') + '</div><div class="text-xs text-slate-500 truncate">' + escHtml(c.email) + '</div></div>'
+        + '<div class="shrink-0">' + badge + '</div></div>';
+    });
+    searchDropdown.innerHTML = html;
+    searchDropdown.classList.remove('hidden');
+    searchDropdown.querySelectorAll('[data-client-idx]').forEach(function (el) {
+      el.addEventListener('click', function () { selectClient(JSON.parse(this.getAttribute('data-client'))); });
+    });
+  }
+
+  function selectClient(client) {
+    selectedClient = client;
+    searchDropdown.classList.add('hidden');
+    searchInput.value = '';
+    searchZone.classList.add('hidden');
+    createForm.classList.add('hidden');
+    var name = client.firstName + ' ' + client.lastName;
+    if (client.companyName) name = client.companyName + ' \u2014 ' + name;
+    document.getElementById('selected-client-name').textContent = name;
+    document.getElementById('selected-client-email').textContent = client.email;
+    var badge = document.getElementById('selected-client-badge');
+    if (client.accountType === 'pro') { badge.textContent = 'PRO'; badge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700'; }
+    else { badge.textContent = 'PARTICULIER'; badge.className = 'text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600'; }
+    var addrEl = document.getElementById('selected-client-address');
+    addrEl.textContent = (client.address && client.address.city) ? ((client.address.postalCode || '') + ' ' + client.address.city) : '';
+    selectedCard.classList.remove('hidden');
+    nextBtn1.disabled = false;
+    nextBtn1.classList.remove('opacity-50', 'cursor-not-allowed');
+    formData.client = client;
+    saveFormData();
+  }
+
+  changeClientBtn.addEventListener('click', function () {
+    selectedClient = null;
+    selectedCard.classList.add('hidden');
+    searchZone.classList.remove('hidden');
+    nextBtn1.disabled = true;
+    nextBtn1.classList.add('opacity-50', 'cursor-not-allowed');
+    formData.client = null;
+    saveFormData();
+    searchInput.focus();
+  });
+
+  toggleCreateBtn.addEventListener('click', function () { createForm.classList.toggle('hidden'); if (!createForm.classList.contains('hidden')) document.getElementById('new-firstName').focus(); });
+  cancelCreateBtn.addEventListener('click', function () { createForm.classList.add('hidden'); createErrorEl.classList.add('hidden'); });
+
+  createClientBtn.addEventListener('click', function () {
+    var at = document.querySelector('input[name="newAccountType"]:checked').value;
+    var fn = document.getElementById('new-firstName').value.trim();
+    var ln = document.getElementById('new-lastName').value.trim();
+    var em = document.getElementById('new-email').value.trim();
+    var ph = document.getElementById('new-phone').value.trim();
+    var cn = document.getElementById('new-companyName') ? document.getElementById('new-companyName').value.trim() : '';
+    var si = document.getElementById('new-siret') ? document.getElementById('new-siret').value.trim() : '';
+    createErrorEl.classList.add('hidden');
+    if (!fn || !ln || !em) { createErrorEl.textContent = 'Pr\u00e9nom, nom et email sont obligatoires.'; createErrorEl.classList.remove('hidden'); return; }
+    if (at === 'pro' && !cn) { createErrorEl.textContent = 'Le nom de soci\u00e9t\u00e9 est obligatoire pour un compte pro.'; createErrorEl.classList.remove('hidden'); return; }
+    createClientBtn.disabled = true;
+    createClientBtn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Cr\u00e9ation...';
+    fetch('/admin/api/clients', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ accountType: at, firstName: fn, lastName: ln, email: em, phone: ph, companyName: cn, siret: si }) })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        createClientBtn.disabled = false;
+        createClientBtn.innerHTML = '<span class="material-symbols-outlined text-lg">person_add</span> Cr\u00e9er et s\u00e9lectionner';
+        if (!data.ok) { createErrorEl.textContent = data.error || 'Erreur.'; createErrorEl.classList.remove('hidden'); return; }
+        selectClient(data.client);
+      })
+      .catch(function () { createClientBtn.disabled = false; createClientBtn.innerHTML = '<span class="material-symbols-outlined text-lg">person_add</span> Cr\u00e9er et s\u00e9lectionner'; createErrorEl.textContent = 'Erreur r\u00e9seau.'; createErrorEl.classList.remove('hidden'); });
+  });
+
+  nextBtn1.addEventListener('click', function () { if (selectedClient) goToStep(2); });
+
+  document.addEventListener('click', function (e) {
+    if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) searchDropdown.classList.add('hidden');
+  });
+
+  /* Restore step 1 */
+  if (formData.client) { try { selectClient(formData.client); } catch (e) { /* ignore */ } }
+
+  /* ═══════════════════════════════════
+   *  STEP 2 — Articles
+   * ═══════════════════════════════════ */
+  var productSearchInput = document.getElementById('product-search-input');
+  var productDropdown = document.getElementById('product-search-dropdown');
+  var productSpinner = document.getElementById('product-search-spinner');
+  var itemsTbody = document.getElementById('items-tbody');
+  var itemsEmpty = document.getElementById('items-empty');
+  var itemsTableWrapper = document.getElementById('items-table-wrapper');
+  var totalsSection = document.getElementById('totals-section');
+  var nextBtn2 = document.getElementById('next-step-2');
+  var prevBtn2 = document.getElementById('prev-step-2');
+  var tvaRateSelect = document.getElementById('tva-rate');
+  var customShippingWrapper = document.getElementById('custom-shipping-wrapper');
+  var customShippingInput = document.getElementById('custom-shipping-input');
+  var debounceTimerProduct = null;
+  var highlightedProductIdx = -1;
+
+  prevBtn2.addEventListener('click', function () { goToStep(1); });
+
+  /* ── Product search ── */
+  productSearchInput.addEventListener('input', function () {
+    var q = this.value.trim();
+    clearTimeout(debounceTimerProduct);
+    highlightedProductIdx = -1;
+    if (q.length < 2) { productDropdown.classList.add('hidden'); productDropdown.innerHTML = ''; productSpinner.classList.add('hidden'); return; }
+    productSpinner.classList.remove('hidden');
+    debounceTimerProduct = setTimeout(function () {
+      fetch('/admin/api/produits/search?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          productSpinner.classList.add('hidden');
+          if (!data.ok || !data.items.length) { productDropdown.innerHTML = '<div class="px-4 py-3 text-sm text-slate-400">Aucun produit trouv\u00e9</div>'; productDropdown.classList.remove('hidden'); return; }
+          renderProductDropdown(data.items);
+        })
+        .catch(function () { productSpinner.classList.add('hidden'); productDropdown.classList.add('hidden'); });
+    }, 300);
+  });
+
+  productSearchInput.addEventListener('keydown', function (e) {
+    var items = productDropdown.querySelectorAll('[data-product-idx]');
+    if (!items.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); highlightedProductIdx = Math.min(highlightedProductIdx + 1, items.length - 1); items.forEach(function (el, i) { el.classList.toggle('bg-red-50', i === highlightedProductIdx); }); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); highlightedProductIdx = Math.max(highlightedProductIdx - 1, 0); items.forEach(function (el, i) { el.classList.toggle('bg-red-50', i === highlightedProductIdx); }); }
+    else if (e.key === 'Enter' && highlightedProductIdx >= 0) { e.preventDefault(); items[highlightedProductIdx].click(); }
+    else if (e.key === 'Escape') { productDropdown.classList.add('hidden'); }
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!productSearchInput.contains(e.target) && !productDropdown.contains(e.target)) productDropdown.classList.add('hidden');
+  });
+
+  function renderProductDropdown(products) {
+    var html = '';
+    products.forEach(function (p, i) {
+      var price = p.priceCents != null ? formatEur(p.priceCents) : '—';
+      var stockLabel = p.inStock ? (p.stockQty != null ? '<span class="text-green-600">' + p.stockQty + ' en stock</span>' : '<span class="text-green-600">En stock</span>') : '<span class="text-orange-500">Rupture</span>';
+      html += '<div class="px-4 py-3 hover:bg-red-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors" data-product-idx="' + i + '" data-product=\'' + JSON.stringify(p).replace(/'/g, '&#39;') + '\'>'
+        + '<div class="flex items-center justify-between gap-3">'
+        + '<div class="min-w-0"><div class="text-sm font-semibold text-slate-900 truncate">' + escHtml(p.name) + '</div>'
+        + '<div class="text-xs text-slate-500">' + escHtml(p.sku || '') + (p.brand ? ' &middot; ' + escHtml(p.brand) : '') + '</div></div>'
+        + '<div class="shrink-0 text-right"><div class="text-sm font-bold text-slate-900">' + price + '</div>'
+        + '<div class="text-[10px] font-medium">' + stockLabel + '</div></div>'
+        + '</div></div>';
+    });
+    productDropdown.innerHTML = html;
+    productDropdown.classList.remove('hidden');
+    productDropdown.querySelectorAll('[data-product-idx]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        var p = JSON.parse(this.getAttribute('data-product'));
+        addItem({
+          _uid: itemIdCounter++,
+          productId: p.id,
+          name: p.name || '',
+          sku: p.sku || '',
+          brand: p.brand || '',
+          unitPriceCents: p.priceCents || 0,
+          quantity: 1,
+          discountType: 'eur',
+          discountValue: 0,
+          isFreeItem: false,
+        });
+        productSearchInput.value = '';
+        productDropdown.classList.add('hidden');
+      });
+    });
+  }
+
+  /* ── Free item ── */
+  document.getElementById('add-free-item-btn').addEventListener('click', function () {
+    addItem({
+      _uid: itemIdCounter++,
+      productId: null,
+      name: '',
+      sku: '',
+      brand: '',
+      unitPriceCents: 0,
+      quantity: 1,
+      discountType: 'eur',
+      discountValue: 0,
+      isFreeItem: true,
+    });
+  });
+
+  /* ── Add / render / remove items ── */
+  function addItem(item) {
+    formData.items.push(item);
+    saveFormData();
+    renderItems();
+  }
+
+  function removeItem(uid) {
+    formData.items = formData.items.filter(function (it) { return it._uid !== uid; });
+    saveFormData();
+    renderItems();
+  }
+
+  function renderItems() {
+    var hasItems = formData.items.length > 0;
+    itemsEmpty.classList.toggle('hidden', hasItems);
+    itemsTableWrapper.classList.toggle('hidden', !hasItems);
+    totalsSection.classList.toggle('hidden', !hasItems);
+    nextBtn2.disabled = !hasItems;
+    nextBtn2.classList.toggle('opacity-50', !hasItems);
+    nextBtn2.classList.toggle('cursor-not-allowed', !hasItems);
+
+    itemsTbody.innerHTML = '';
+    formData.items.forEach(function (item) {
+      var tr = document.createElement('tr');
+      tr.className = 'border-b border-slate-100 align-top';
+      tr.setAttribute('data-item-uid', item._uid);
+
+      var nameCell = item.isFreeItem
+        ? '<input type="text" class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20" placeholder="Nom / description" value="' + escAttr(item.name) + '" data-field="name" />'
+          + '<input type="text" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500/20" placeholder="R\u00e9f\u00e9rence (optionnel)" value="' + escAttr(item.sku) + '" data-field="sku" />'
+        : '<div class="text-sm font-medium text-slate-900">' + escHtml(item.name) + '</div>'
+          + '<div class="text-xs text-slate-500">' + escHtml(item.sku) + (item.brand ? ' \u00b7 ' + escHtml(item.brand) : '') + '</div>';
+
+      var priceVal = (item.unitPriceCents / 100).toFixed(2);
+      var discountToggleEur = item.discountType === 'eur' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200';
+      var discountTogglePct = item.discountType === 'pct' ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200';
+
+      tr.innerHTML =
+        '<td class="px-6 py-3">' + nameCell + '</td>'
+        + '<td class="px-3 py-3"><input type="number" class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-right text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20" min="0" step="0.01" value="' + priceVal + '" data-field="unitPrice" /></td>'
+        + '<td class="px-3 py-3"><input type="number" class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-center text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20" min="1" step="1" value="' + item.quantity + '" data-field="quantity" /></td>'
+        + '<td class="px-3 py-3"><div class="flex items-center gap-1">'
+          + '<input type="number" class="w-16 rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-right text-slate-900 focus:outline-none focus:ring-2 focus:ring-red-500/20" min="0" step="0.01" value="' + (item.discountValue || 0) + '" data-field="discountValue" />'
+          + '<div class="flex rounded-lg overflow-hidden border border-slate-200">'
+            + '<button type="button" class="px-2 py-1 text-[10px] font-bold transition-colors ' + discountToggleEur + '" data-discount-type="eur">\u20ac</button>'
+            + '<button type="button" class="px-2 py-1 text-[10px] font-bold transition-colors ' + discountTogglePct + '" data-discount-type="pct">%</button>'
+          + '</div>'
+        + '</div></td>'
+        + '<td class="px-3 py-3 text-right"><span class="text-sm font-semibold text-slate-900" data-line-total>—</span></td>'
+        + '<td class="px-3 py-3"><button type="button" class="text-slate-400 hover:text-red-600 transition-colors" data-remove-item><span class="material-symbols-outlined text-lg">delete</span></button></td>';
+
+      itemsTbody.appendChild(tr);
+
+      /* Bind events for this row */
+      var uid = item._uid;
+      tr.querySelectorAll('input[data-field]').forEach(function (inp) {
+        inp.addEventListener('input', function () { updateItemField(uid, this.getAttribute('data-field'), this.value); });
+      });
+      tr.querySelectorAll('[data-discount-type]').forEach(function (btn) {
+        btn.addEventListener('click', function () { updateItemField(uid, 'discountType', this.getAttribute('data-discount-type')); renderItems(); });
+      });
+      tr.querySelector('[data-remove-item]').addEventListener('click', function () { removeItem(uid); });
+    });
+
+    recalcTotals();
+  }
+
+  function updateItemField(uid, field, value) {
+    var item = formData.items.find(function (it) { return it._uid === uid; });
+    if (!item) return;
+    if (field === 'unitPrice') item.unitPriceCents = Math.round(parseFloat(value || 0) * 100);
+    else if (field === 'quantity') item.quantity = Math.max(1, parseInt(value || 1, 10));
+    else if (field === 'discountValue') item.discountValue = parseFloat(value || 0);
+    else if (field === 'discountType') item.discountType = value;
+    else if (field === 'name') item.name = value;
+    else if (field === 'sku') item.sku = value;
+    saveFormData();
+    recalcTotals();
+  }
+
+  /* ── Totals ── */
+  function getLineTotal(item) {
+    var base = item.unitPriceCents * item.quantity;
+    var disc = 0;
+    if (item.discountType === 'eur') disc = Math.round((item.discountValue || 0) * 100);
+    else if (item.discountType === 'pct') disc = Math.round(base * (item.discountValue || 0) / 100);
+    return Math.max(0, base - disc);
+  }
+
+  function getShippingCents() {
+    var checked = document.querySelector('input[name="shippingOption"]:checked');
+    if (!checked) return 0;
+    if (checked.value === 'free') return 0;
+    if (checked.value === 'standard') return 990;
+    if (checked.value === 'custom') return Math.round(parseFloat(customShippingInput.value || 0) * 100);
+    return 0;
+  }
+
+  function recalcTotals() {
+    var subtotalCents = 0;
+    formData.items.forEach(function (item) {
+      var lt = getLineTotal(item);
+      subtotalCents += lt;
+      var tr = itemsTbody.querySelector('[data-item-uid="' + item._uid + '"]');
+      if (tr) {
+        var el = tr.querySelector('[data-line-total]');
+        if (el) el.textContent = formatEur(lt);
+      }
+    });
+
+    var tvaRate = parseFloat(tvaRateSelect.value) || 0;
+    var tvaCents = Math.round(subtotalCents * tvaRate / 100);
+    var shippingCents = getShippingCents();
+    var totalTtcCents = subtotalCents + tvaCents + shippingCents;
+
+    document.getElementById('subtotal-ht').textContent = formatEur(subtotalCents);
+    document.getElementById('tva-amount').textContent = formatEur(tvaCents);
+    document.getElementById('shipping-amount').textContent = formatEur(shippingCents);
+    document.getElementById('total-ttc').textContent = formatEur(totalTtcCents);
+
+    formData.tvaRate = tvaRate;
+    formData.shipping = { option: (document.querySelector('input[name="shippingOption"]:checked') || {}).value || 'free', customAmount: parseFloat(customShippingInput.value || 0) };
+    saveFormData();
+  }
+
+  tvaRateSelect.addEventListener('change', function () { recalcTotals(); });
+  if (formData.tvaRate != null) tvaRateSelect.value = String(formData.tvaRate);
+
+  document.querySelectorAll('input[name="shippingOption"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      customShippingWrapper.classList.toggle('hidden', this.value !== 'custom');
+      recalcTotals();
+    });
+  });
+  customShippingInput.addEventListener('input', function () { recalcTotals(); });
+
+  /* Restore shipping option */
+  if (formData.shipping && formData.shipping.option) {
+    var radio = document.querySelector('input[name="shippingOption"][value="' + formData.shipping.option + '"]');
+    if (radio) { radio.checked = true; if (formData.shipping.option === 'custom') { customShippingWrapper.classList.remove('hidden'); customShippingInput.value = formData.shipping.customAmount || ''; } }
+  }
+
+  nextBtn2.addEventListener('click', function () {
+    if (!formData.items.length) return;
+    initStep3();
+    goToStep(3);
+  });
+
+  /* ── Render items on load ── */
+  renderItems();
+
+  /* ═══════════════════════════════════
+   *  STEP 3 — Livraison & Facturation
+   * ═══════════════════════════════════ */
+  var billingSameCheckbox = document.getElementById('billing-same-checkbox');
+  var billingForm = document.getElementById('billing-form');
+  var billingProFields = document.getElementById('billing-pro-fields');
+  var shippingExistingWrapper = document.getElementById('shipping-existing-wrapper');
+  var shippingExistingSelect = document.getElementById('shipping-existing-select');
+  var prevBtn3 = document.getElementById('prev-step-3');
+  var nextBtn3 = document.getElementById('next-step-3');
+
+  var shipFields = ['fullName', 'line1', 'line2', 'postalCode', 'city', 'country', 'phone'];
+  var billFields = ['fullName', 'line1', 'line2', 'postalCode', 'city', 'country', 'phone', 'company', 'siret'];
+
+  prevBtn3.addEventListener('click', function () { saveStep3(); goToStep(2); });
+  nextBtn3.addEventListener('click', function () {
+    if (!validateStep3()) return;
+    saveStep3();
+    goToStep(4);
+  });
+
+  billingSameCheckbox.addEventListener('change', function () {
+    billingForm.classList.toggle('hidden', this.checked);
+    formData.billingSameAsShipping = this.checked;
+    saveFormData();
+  });
+
+  /* Populate existing addresses dropdown from client */
+  function populateExistingAddresses() {
+    var client = formData.client;
+    if (!client) return;
+    var addresses = client.addresses || (client.address ? [client.address] : []);
+    if (!addresses.length) { shippingExistingWrapper.classList.add('hidden'); return; }
+
+    shippingExistingSelect.innerHTML = '<option value="">Saisir une nouvelle adresse</option>';
+    addresses.forEach(function (addr, i) {
+      var lbl = (addr.label ? addr.label + ' \u2014 ' : '') + (addr.fullName || '') + ', ' + (addr.line1 || '') + ', ' + (addr.postalCode || '') + ' ' + (addr.city || '');
+      var opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = lbl;
+      shippingExistingSelect.appendChild(opt);
+    });
+    shippingExistingWrapper.classList.remove('hidden');
+
+    shippingExistingSelect.addEventListener('change', function () {
+      var idx = parseInt(this.value, 10);
+      if (isNaN(idx)) return;
+      var addr = addresses[idx];
+      if (!addr) return;
+      setShipField('fullName', addr.fullName || '');
+      setShipField('line1', addr.line1 || '');
+      setShipField('line2', addr.line2 || '');
+      setShipField('postalCode', addr.postalCode || '');
+      setShipField('city', addr.city || '');
+      setShipField('country', addr.country || 'France');
+      setShipField('phone', addr.phone || '');
+    });
+  }
+
+  function setShipField(name, val) {
+    var el = document.getElementById('ship-' + name);
+    if (el) el.value = val;
+  }
+
+  function initStep3() {
+    var client = formData.client;
+    if (!client) return;
+
+    populateExistingAddresses();
+
+    /* Show pro billing fields if client is pro */
+    var isPro = client.accountType === 'pro';
+    billingProFields.classList.toggle('hidden', !isPro);
+
+    /* Pre-fill shipping name from client */
+    var shipName = document.getElementById('ship-fullName');
+    if (shipName && !shipName.value && !formData.shippingAddress.fullName) {
+      var name = (client.firstName || '') + ' ' + (client.lastName || '');
+      shipName.value = name.trim();
+    }
+
+    /* Pre-fill billing company/siret for pro */
+    if (isPro) {
+      var billCompany = document.getElementById('bill-company');
+      var billSiret = document.getElementById('bill-siret');
+      if (billCompany && !billCompany.value && !formData.billingAddress.company) billCompany.value = client.companyName || '';
+      if (billSiret && !billSiret.value && !formData.billingAddress.siret) billSiret.value = client.siret || '';
+    }
+
+    /* Restore saved values */
+    restoreStep3();
+  }
+
+  function restoreStep3() {
+    var sa = formData.shippingAddress || {};
+    var ba = formData.billingAddress || {};
+
+    shipFields.forEach(function (f) {
+      var el = document.getElementById('ship-' + f);
+      if (el && sa[f]) el.value = sa[f];
+    });
+    billFields.forEach(function (f) {
+      var el = document.getElementById('bill-' + f);
+      if (el && ba[f]) el.value = ba[f];
+    });
+
+    billingSameCheckbox.checked = formData.billingSameAsShipping !== false;
+    billingForm.classList.toggle('hidden', formData.billingSameAsShipping !== false);
+
+    document.getElementById('note-internal').value = formData.noteInternal || '';
+    document.getElementById('note-client').value = formData.noteClient || '';
+    document.getElementById('skip-email-checkbox').checked = !!formData.skipConfirmationEmail;
+    var otSel = document.getElementById('order-type-select');
+    if (otSel) {
+      otSel.value = formData.orderType || 'standard';
+      var clInfo = document.getElementById('order-type-cloning-info');
+      if (clInfo) clInfo.classList.toggle('hidden', otSel.value !== 'exchange_cloning');
+      otSel.addEventListener('change', function() {
+        if (clInfo) clInfo.classList.toggle('hidden', otSel.value !== 'exchange_cloning');
+      });
+    }
+  }
+
+  function saveStep3() {
+    formData.shippingAddress = {};
+    shipFields.forEach(function (f) {
+      var el = document.getElementById('ship-' + f);
+      formData.shippingAddress[f] = el ? el.value.trim() : '';
+    });
+
+    formData.billingSameAsShipping = billingSameCheckbox.checked;
+    if (!formData.billingSameAsShipping) {
+      formData.billingAddress = {};
+      billFields.forEach(function (f) {
+        var el = document.getElementById('bill-' + f);
+        formData.billingAddress[f] = el ? el.value.trim() : '';
+      });
+    } else {
+      formData.billingAddress = Object.assign({}, formData.shippingAddress);
+    }
+
+    formData.noteInternal = (document.getElementById('note-internal').value || '').trim();
+    formData.noteClient = (document.getElementById('note-client').value || '').trim();
+    formData.orderType = (document.getElementById('order-type-select') || {}).value || 'standard';
+    formData.skipConfirmationEmail = document.getElementById('skip-email-checkbox').checked;
+    saveFormData();
+  }
+
+  function validateStep3() {
+    var required = ['fullName', 'line1', 'postalCode', 'city', 'phone'];
+    for (var i = 0; i < required.length; i++) {
+      var el = document.getElementById('ship-' + required[i]);
+      if (!el || !el.value.trim()) {
+        el && el.focus();
+        el && el.classList.add('border-red-500');
+        if (window.__toast) window.__toast('error', 'Veuillez remplir tous les champs obligatoires de l\'adresse de livraison.');
+        return false;
+      }
+      el.classList.remove('border-red-500');
+    }
+    if (!billingSameCheckbox.checked) {
+      var billRequired = ['fullName', 'line1', 'postalCode', 'city'];
+      for (var j = 0; j < billRequired.length; j++) {
+        var bel = document.getElementById('bill-' + billRequired[j]);
+        if (!bel || !bel.value.trim()) {
+          bel && bel.focus();
+          bel && bel.classList.add('border-red-500');
+          if (window.__toast) window.__toast('error', 'Veuillez remplir tous les champs obligatoires de l\'adresse de facturation.');
+          return false;
+        }
+        bel.classList.remove('border-red-500');
+      }
+    }
+    return true;
+  }
+
+  /* ═══════════════════════════════════
+   *  STEP 4 — Récapitulatif & Validation
+   * ═══════════════════════════════════ */
+  var prevBtn4 = document.getElementById('prev-step-4');
+  var submitBtn = document.getElementById('submit-order-btn');
+  var createOrderError = document.getElementById('create-order-error');
+
+  var channelLabels = { phone: 'T\u00e9l\u00e9phone', email: 'Email', whatsapp: 'WhatsApp', leboncoin: 'Leboncoin', marketplace: 'Marketplace', salon: 'Salon / Foire', other: 'Autre', manual: 'Manuel', website: 'Site web' };
+  var channelIcons = { phone: 'call', email: 'mail', whatsapp: 'chat', leboncoin: 'storefront', marketplace: 'shopping_bag', salon: 'groups', other: 'more_horiz', manual: 'edit', website: 'language' };
+
+  prevBtn4.addEventListener('click', function () { goToStep(3); });
+
+  function renderRecap() {
+    /* Client */
+    var c = formData.client;
+    if (c) {
+      var chLabel = channelLabels[formData.source.channel] || formData.source.channel;
+      var chIcon = channelIcons[formData.source.channel] || 'circle';
+      var badge = c.accountType === 'pro'
+        ? '<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">PRO</span>'
+        : '<span class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">PARTICULIER</span>';
+      var html = '<div class="flex items-center justify-between">'
+        + '<div><span class="font-semibold text-slate-900">' + escHtml(c.firstName + ' ' + c.lastName) + '</span> ' + badge
+        + (c.companyName ? '<div class="text-xs text-slate-500">' + escHtml(c.companyName) + '</div>' : '')
+        + '<div class="text-xs text-slate-500">' + escHtml(c.email) + '</div></div>'
+        + '<div class="flex items-center gap-1.5 text-sm text-slate-600 bg-slate-50 rounded-lg px-3 py-1.5 border border-slate-200">'
+        + '<span class="material-symbols-outlined text-base">' + chIcon + '</span>' + escHtml(chLabel)
+        + (formData.source.detail ? ' \u2014 ' + escHtml(formData.source.detail) : '') + '</div>'
+        + '</div>';
+      if (formData.quoteReference) {
+        html += '<div class="mt-2 flex items-center gap-1.5 text-sm text-indigo-600"><span class="material-symbols-outlined text-base">description</span>Devis : <span class="font-semibold">' + escHtml(formData.quoteReference) + '</span></div>';
+      }
+      document.getElementById('recap-client').innerHTML = html;
+    }
+
+    /* Items */
+    var tbody = document.getElementById('recap-items-tbody');
+    tbody.innerHTML = '';
+    var subtotalCents = 0;
+    formData.items.forEach(function (item) {
+      var lt = getLineTotal(item);
+      subtotalCents += lt;
+      var discLabel = '';
+      if (item.discountValue > 0) {
+        discLabel = item.discountType === 'pct' ? ('-' + item.discountValue + '%') : ('-' + formatEur(Math.round(item.discountValue * 100)));
+      }
+      var tr = document.createElement('tr');
+      tr.className = 'border-b border-slate-100';
+      tr.innerHTML = '<td class="px-6 py-2"><div class="font-medium text-slate-900">' + escHtml(item.name) + '</div><div class="text-xs text-slate-500">' + (item.productId ? escHtml(item.sku || '') : '<em>Article libre</em>') + '</div></td>'
+        + '<td class="px-3 py-2 text-right">' + formatEur(item.unitPriceCents) + '</td>'
+        + '<td class="px-3 py-2 text-center">' + item.quantity + '</td>'
+        + '<td class="px-3 py-2 text-right text-slate-500">' + (discLabel || '\u2014') + '</td>'
+        + '<td class="px-3 py-2 text-right font-semibold">' + formatEur(lt) + '</td>';
+      tbody.appendChild(tr);
+    });
+
+    var tvaRate = formData.tvaRate || 20;
+    var tvaCents = Math.round(subtotalCents * tvaRate / 100);
+    var shippingCents = getShippingCents();
+    var totalTtcCents = subtotalCents + tvaCents + shippingCents;
+
+    document.getElementById('recap-subtotal').textContent = formatEur(subtotalCents);
+    document.getElementById('recap-tva-label').textContent = String(tvaRate).replace('.', ',');
+    document.getElementById('recap-tva').textContent = formatEur(tvaCents);
+    document.getElementById('recap-shipping').textContent = formatEur(shippingCents);
+    document.getElementById('recap-total').textContent = formatEur(totalTtcCents);
+
+    /* Addresses */
+    var sa = formData.shippingAddress || {};
+    document.getElementById('recap-shipping-addr').textContent =
+      (sa.fullName || '') + '\n' + (sa.line1 || '') + (sa.line2 ? '\n' + sa.line2 : '') + '\n' + (sa.postalCode || '') + ' ' + (sa.city || '') + '\n' + (sa.country || 'France') + (sa.phone ? '\nT\u00e9l: ' + sa.phone : '');
+
+    var ba = formData.billingSameAsShipping ? sa : (formData.billingAddress || {});
+    var billText = (ba.company ? ba.company + '\n' : '') + (ba.fullName || '') + '\n' + (ba.line1 || '') + (ba.line2 ? '\n' + ba.line2 : '') + '\n' + (ba.postalCode || '') + ' ' + (ba.city || '') + '\n' + (ba.country || 'France') + (ba.phone ? '\nT\u00e9l: ' + ba.phone : '');
+    if (ba.siret) billText += '\nSIRET: ' + ba.siret;
+    document.getElementById('recap-billing-addr').textContent = billText;
+
+    /* Notes */
+    var hasNotes = false;
+    var niEl = document.getElementById('recap-note-internal');
+    if (formData.noteInternal) { niEl.classList.remove('hidden'); document.getElementById('recap-note-internal-text').textContent = formData.noteInternal; hasNotes = true; }
+    else { niEl.classList.add('hidden'); }
+    var ncEl = document.getElementById('recap-note-client');
+    if (formData.noteClient) { ncEl.classList.remove('hidden'); document.getElementById('recap-note-client-text').textContent = formData.noteClient; hasNotes = true; }
+    else { ncEl.classList.add('hidden'); }
+    document.getElementById('recap-notes-card').classList.toggle('hidden', !hasNotes);
+
+    /* Restore skip-email into opt-send-email (inverse logic) */
+    document.getElementById('opt-send-email').checked = !formData.skipConfirmationEmail;
+
+    createOrderError.classList.add('hidden');
+  }
+
+  /* ── Submit order ── */
+  submitBtn.addEventListener('click', function () {
+    createOrderError.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Cr\u00e9ation en cours...';
+
+    var shippingCents = getShippingCents();
+    var payload = {
+      clientId: formData.client ? formData.client._id : '',
+      items: formData.items.map(function (it) {
+        return { productId: it.productId || null, name: it.name, sku: it.sku, unitPriceCents: it.unitPriceCents, quantity: it.quantity, discountType: it.discountType, discountValue: it.discountValue };
+      }),
+      shippingAddress: formData.shippingAddress,
+      billingAddress: formData.billingSameAsShipping ? formData.shippingAddress : formData.billingAddress,
+      shippingCostCents: shippingCents,
+      tvaRate: formData.tvaRate || 20,
+      source: formData.source,
+      initialStatus: document.getElementById('initial-status').value,
+      orderType: formData.orderType || 'standard',
+      noteInternal: formData.noteInternal || '',
+      noteClient: formData.noteClient || '',
+      quoteReference: formData.quoteReference || '',
+      sendConfirmationEmail: document.getElementById('opt-send-email').checked,
+    };
+
+    fetch('/admin/api/commandes/manuelle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Cr\u00e9er la commande';
+          createOrderError.textContent = data.error || 'Erreur lors de la cr\u00e9ation.';
+          createOrderError.classList.remove('hidden');
+          return;
+        }
+        /* Success — clear session and redirect */
+        sessionStorage.removeItem('newOrder_formData');
+        if (window.__toast) window.__toast('success', 'Commande ' + data.orderNumber + ' cr\u00e9\u00e9e avec succ\u00e8s');
+        window.location.href = data.redirectUrl;
+      })
+      .catch(function () {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Cr\u00e9er la commande';
+        createOrderError.textContent = 'Erreur r\u00e9seau.';
+        createOrderError.classList.remove('hidden');
+      });
+  });
+
+  /* ═══════════════════════════════════
+   *  Utils
+   * ═══════════════════════════════════ */
+  function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function escAttr(s) { return String(s || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function formatEur(cents) { return (cents / 100).toFixed(2).replace('.', ',') + ' \u20ac'; }
+})();
+</script>
+
+<%- include('./partials/footer') %>

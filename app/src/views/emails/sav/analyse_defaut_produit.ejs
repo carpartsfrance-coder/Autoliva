@@ -1,0 +1,22 @@
+<%
+  const baseUrl = brand.SITE_URL;
+  const gl = (typeof guestLink !== 'undefined' && guestLink) ? guestLink : (baseUrl + '/sav/suivi');
+  const body = `
+  <p>Bonjour <strong>${(ticket.client && ticket.client.nom) || ''}</strong>,</p>
+  <p><strong>Bonne nouvelle :</strong> notre analyse confirme un <strong>défaut produit</strong>. Nous prenons votre dossier en charge à 100 %.</p>
+  <p>Vous n'avez <strong>rien à payer</strong>. Vous pouvez choisir :</p>
+  <ul>
+    <li><strong>Échange</strong> : nous vous envoyons une nouvelle pièce reconditionnée et testée.</li>
+    <li><strong>Remboursement intégral</strong> : nous vous remboursons sous 5 jours ouvrés.</li>
+  </ul>
+  <p style="margin:18px 0;text-align:center;">
+    <a href="${gl}"
+       style="display:inline-block;padding:12px 22px;background:#ec1313;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;">
+      Choisir mon option
+    </a>
+  </p>
+  <p style="font-size:13px;color:#475569;text-align:center;">
+    Ce lien est personnel et vous permet d'accéder directement à votre dossier sans connexion.
+  </p>
+` %>
+<%- include('./_layout', { ticket: ticket, subject: 'Bonne nouvelle : défaut produit confirmé', body: body }) %>

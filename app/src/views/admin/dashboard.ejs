@@ -1,0 +1,487 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'dashboard' }) %>
+
+<main class="flex-1 relative">
+  <%- include('./partials/skeleton-dashboard') %>
+  <div class="px-6 lg:px-10 py-8">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+      <div>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Tableau de Bord Global</div>
+        <div class="mt-1 text-sm text-slate-500">Aperçu des performances de CarParts France</div>
+      </div>
+
+      <% if (showFinancials) { %>
+        <div class="flex items-center gap-3">
+          <button class="btn btn-secondary" type="button">
+            <span class="material-symbols-outlined mr-2 text-base">event</span>
+            7 derniers jours
+          </button>
+          <button class="btn btn-primary" type="button">
+            <span class="material-symbols-outlined mr-2 text-base">download</span>
+            Exporter Rapport
+          </button>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- KPI Cards Row 1 -->
+    <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 <%= showFinancials ? 'xl:grid-cols-4' : 'xl:grid-cols-2' %> gap-6">
+
+      <% if (showFinancials) { %>
+        <!-- Chiffre d'affaires (jour) -->
+        <a class="kpi-card" href="/admin/commandes">
+          <div class="kpi-card__header">
+            <div class="kpi-card__icon bg-green-50 text-green-600">
+              <span class="material-symbols-outlined">payments</span>
+            </div>
+            <span class="badge badge-success">+12%</span>
+          </div>
+          <div class="kpi-card__label">Chiffre d'affaires (jour)</div>
+          <div class="kpi-card__value"><%= kpis && kpis.revenueToday ? kpis.revenueToday : '—' %></div>
+          <div class="kpi-card__compare">
+            <span class="kpi-trend-up">↑ +12%</span> vs jour précédent
+          </div>
+          <div class="kpi-card__sparkline">
+            <svg viewBox="0 0 100 36" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="spark1-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#059669" stop-opacity="0.15"/>
+                  <stop offset="100%" stop-color="#059669" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,30 L16.7,24 L33.3,27 L50,19 L66.7,14 L83.3,9 L100,4" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M0,30 L16.7,24 L33.3,27 L50,19 L66.7,14 L83.3,9 L100,4 L100,36 L0,36 Z" fill="url(#spark1-fill)"/>
+              <circle cx="100" cy="4" r="3" fill="#059669"/>
+            </svg>
+          </div>
+        </a>
+
+        <!-- C.A. (mois en cours) -->
+        <a class="kpi-card" href="/admin/commandes">
+          <div class="kpi-card__header">
+            <div class="kpi-card__icon bg-blue-50 text-blue-600">
+              <span class="material-symbols-outlined">monitoring</span>
+            </div>
+            <span class="badge badge-admin">+5.2%</span>
+          </div>
+          <div class="kpi-card__label">C.A. (mois en cours)</div>
+          <div class="kpi-card__value"><%= kpis && kpis.revenueMonth ? kpis.revenueMonth : '—' %></div>
+          <div class="kpi-card__compare">
+            <span class="kpi-trend-up">↑ +5.2%</span> vs mois précédent
+          </div>
+          <div class="kpi-card__sparkline">
+            <svg viewBox="0 0 100 36" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="spark2-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#2563EB" stop-opacity="0.12"/>
+                  <stop offset="100%" stop-color="#2563EB" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,32 L16.7,28 L33.3,25 L50,21 L66.7,23 L83.3,15 L100,8" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M0,32 L16.7,28 L33.3,25 L50,21 L66.7,23 L83.3,15 L100,8 L100,36 L0,36 Z" fill="url(#spark2-fill)"/>
+              <circle cx="100" cy="8" r="3" fill="#2563EB"/>
+            </svg>
+          </div>
+        </a>
+
+        <!-- Panier moyen -->
+        <a class="kpi-card" href="/admin/commandes">
+          <div class="kpi-card__header">
+            <div class="kpi-card__icon bg-violet-50 text-violet-600">
+              <span class="material-symbols-outlined">shopping_basket</span>
+            </div>
+          </div>
+          <div class="kpi-card__label">Panier moyen</div>
+          <div class="kpi-card__value"><%= kpis && kpis.averageBasket ? kpis.averageBasket : '—' %></div>
+          <div class="kpi-card__compare">
+            <%= kpis && kpis.ordersThisMonth ? kpis.ordersThisMonth : 0 %> commandes ce mois
+          </div>
+          <div class="kpi-card__sparkline">
+            <svg viewBox="0 0 100 36" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <linearGradient id="spark3-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#7C3AED" stop-opacity="0.12"/>
+                  <stop offset="100%" stop-color="#7C3AED" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <path d="M0,22 L16.7,26 L33.3,20 L50,23 L66.7,17 L83.3,20 L100,12" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M0,22 L16.7,26 L33.3,20 L50,23 L66.7,17 L83.3,20 L100,12 L100,36 L0,36 Z" fill="url(#spark3-fill)"/>
+              <circle cx="100" cy="12" r="3" fill="#7C3AED"/>
+            </svg>
+          </div>
+        </a>
+      <% } %>
+
+      <!-- Commandes en attente (visible par tous) -->
+      <a class="kpi-card" href="/admin/commandes?status=pending_payment">
+        <div class="kpi-card__header">
+          <div class="kpi-card__icon bg-orange-50 text-orange-600">
+            <span class="material-symbols-outlined">inventory</span>
+          </div>
+          <div class="w-2 h-2 rounded-full bg-orange-500 mt-1"></div>
+        </div>
+        <div class="kpi-card__label">Commandes en attente</div>
+        <div class="kpi-card__value"><%= kpis && typeof kpis.pendingOrdersCount !== 'undefined' ? kpis.pendingOrdersCount : 0 %></div>
+        <div class="kpi-card__compare">
+          À traiter dès que possible
+        </div>
+        <div class="kpi-card__sparkline">
+          <svg viewBox="0 0 100 36" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="spark4-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#EA580C" stop-opacity="0.12"/>
+                <stop offset="100%" stop-color="#EA580C" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0,18 L16.7,24 L33.3,16 L50,28 L66.7,20 L83.3,24 L100,14" stroke="#EA580C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M0,18 L16.7,24 L33.3,16 L50,28 L66.7,20 L83.3,24 L100,14 L100,36 L0,36 Z" fill="url(#spark4-fill)"/>
+            <circle cx="100" cy="14" r="3" fill="#EA580C"/>
+          </svg>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- KPI Cards Row 2 -->
+    <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 <%= showFinancials ? 'xl:grid-cols-4' : 'xl:grid-cols-1' %> gap-6">
+      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between">
+          <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <span class="material-symbols-outlined">warning</span>
+          </div>
+          <div class="w-2 h-2 rounded-full bg-amber-500"></div>
+        </div>
+        <div class="mt-4 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Alertes stock</div>
+        <div class="mt-2 text-2xl font-semibold text-primary"><%= kpis && typeof kpis.stockAlertsCount !== 'undefined' ? kpis.stockAlertsCount : 0 %> articles</div>
+      </div>
+
+      <% if (showFinancials) { %>
+        <!-- Top 3 Products -->
+        <div class="xl:col-span-3 bg-white rounded-2xl border border-slate-200 p-5">
+          <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-3">Top 3 produits vendus (ce mois)</div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <% const topProducts = kpis && Array.isArray(kpis.topProducts) ? kpis.topProducts : []; %>
+            <% if (topProducts.length) { %>
+              <% topProducts.forEach((p, idx) => { %>
+                <div class="flex items-center gap-3 p-3 rounded-xl bg-slate-50">
+                  <div class="w-8 h-8 rounded-lg flex items-center justify-center font-semibold text-sm <%= idx === 0 ? 'bg-amber-100 text-amber-700' : idx === 1 ? 'bg-slate-200 text-slate-500' : 'bg-orange-100 text-orange-600' %>">
+                    #<%= idx + 1 %>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-bold text-slate-900 truncate"><%= p.name %></div>
+                    <div class="text-xs text-slate-500"><%= p.qty %> vendus &middot; <%= p.revenue %></div>
+                  </div>
+                </div>
+              <% }) %>
+            <% } else { %>
+              <div class="text-sm text-slate-500 col-span-3">Aucune vente ce mois.</div>
+            <% } %>
+          </div>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- Pipeline Clonage Widget -->
+    <%
+      var _pl = typeof pipeline !== 'undefined' && pipeline ? pipeline : {};
+      var _plTotal = (_pl.pendingLabel || 0) + (_pl.labelSent || 0) + (_pl.pieceInTransit || 0) + (_pl.pieceReceived || 0) + (_pl.cloningInProgress || 0) + (_pl.cloningDone || 0) + (_pl.cloningFailed || 0);
+    %>
+    <% if (_plTotal > 0) { %>
+      <div class="mt-8 bg-white rounded-2xl border border-slate-200 p-6">
+        <div class="flex items-center gap-2 mb-5">
+          <span class="material-symbols-outlined text-lg text-purple-600">science</span>
+          <span class="font-semibold text-slate-900">Pipeline Clonage</span>
+          <span class="text-xs text-slate-400">(<%= _plTotal %> commande<%= _plTotal > 1 ? 's' : '' %> en cours)</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-<%= _pl.cloningFailed > 0 ? '7' : '6' %> gap-4">
+          <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=pending_label" class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-center hover:bg-amber-100 transition">
+            <div class="text-2xl font-bold text-amber-700"><%= _pl.pendingLabel || 0 %></div>
+            <div class="mt-1 text-[11px] font-semibold text-amber-600">Étiquette à envoyer</div>
+          </a>
+          <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=label_sent" class="rounded-xl border border-orange-200 bg-orange-50 p-4 text-center hover:bg-orange-100 transition">
+            <div class="text-2xl font-bold text-orange-700"><%= (_pl.labelSent || 0) + (_pl.pieceInTransit || 0) %></div>
+            <div class="mt-1 text-[11px] font-semibold text-orange-600">Pièce en transit</div>
+          </a>
+          <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=client_piece_received" class="rounded-xl border border-blue-200 bg-blue-50 p-4 text-center hover:bg-blue-100 transition">
+            <div class="text-2xl font-bold text-blue-700"><%= _pl.pieceReceived || 0 %></div>
+            <div class="mt-1 text-[11px] font-semibold text-blue-600">Pièce reçue</div>
+          </a>
+          <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=cloning_in_progress" class="rounded-xl border border-purple-200 bg-purple-50 p-4 text-center hover:bg-purple-100 transition">
+            <div class="text-2xl font-bold text-purple-700"><%= _pl.cloningInProgress || 0 %></div>
+            <div class="mt-1 text-[11px] font-semibold text-purple-600">Clonage en cours</div>
+          </a>
+          <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=cloning_done" class="rounded-xl border border-green-200 bg-green-50 p-4 text-center hover:bg-green-100 transition">
+            <div class="text-2xl font-bold text-green-700"><%= _pl.cloningDone || 0 %></div>
+            <div class="mt-1 text-[11px] font-semibold text-green-600">Prêt à expédier</div>
+          </a>
+          <% if (_pl.cloningFailed > 0) { %>
+            <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=cloning_failed" class="rounded-xl border border-red-300 bg-red-50 p-4 text-center hover:bg-red-100 transition">
+              <div class="text-2xl font-bold text-red-700"><%= _pl.cloningFailed %></div>
+              <div class="mt-1 text-[11px] font-semibold text-red-600">Échoué<%= _pl.cloningFailed > 1 ? 's' : '' %></div>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (showFinancials) { %>
+      <!-- Charts -->
+      <div class="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <!-- Weekly Bar Chart -->
+        <div class="xl:col-span-2 bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div class="font-semibold text-slate-900">Ventes hebdomadaires</div>
+            <div class="flex items-center gap-4 text-xs">
+              <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-primary inline-block"></span> Cette semaine</span>
+              <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-slate-300 inline-block"></span> Semaine précédente</span>
+            </div>
+          </div>
+          <div class="h-64">
+            <canvas id="weeklyChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Activities -->
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold text-slate-900">Activités Récentes</div>
+          </div>
+
+          <div class="mt-6 space-y-4">
+            <% (activities || []).forEach((a) => { %>
+              <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-slate-500">shopping_bag</span>
+                </div>
+                <div class="flex-1">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="font-semibold text-slate-900"><%= a.number %></div>
+                    <div class="flex items-center gap-2">
+                      <% if (a.statusBadge) { %><span class="<%= a.statusBadge.className %>"><%= a.statusBadge.label %></span><% } %>
+                      <span class="badge <%= a.accountType === 'pro' ? 'badge-pro' : 'badge-particulier' %>"><%= a.accountType === 'pro' ? 'PRO' : 'PARTICULIER' %></span>
+                    </div>
+                  </div>
+                  <div class="mt-1 text-sm text-slate-500"><%= a.customer %><% if (a.total) { %> · <%= a.total %><% } %></div>
+                  <div class="mt-1 text-xs text-slate-400"><%= a.when %></div>
+                </div>
+              </div>
+            <% }) %>
+
+            <% if (!activities || activities.length === 0) { %>
+              <div class="text-sm text-slate-500">Aucune activité.</div>
+            <% } %>
+
+            <a class="btn btn-secondary btn-block" href="/admin/commandes">
+              Voir toutes les activités
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- Monthly Line Chart -->
+      <div class="mt-6 bg-white rounded-2xl border border-slate-200 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div class="font-semibold text-slate-900">Évolution du C.A. (6 derniers mois)</div>
+          <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Mensuel</div>
+        </div>
+        <div class="h-64">
+          <canvas id="monthlyChart"></canvas>
+        </div>
+      </div>
+    <% } else { %>
+      <!-- Activités récentes (vue employé sans graphiques financiers) -->
+      <div class="mt-8 bg-white rounded-2xl border border-slate-200 p-6">
+        <div class="flex items-center justify-between">
+          <div class="font-semibold text-slate-900">Activités Récentes</div>
+        </div>
+
+        <div class="mt-6 space-y-4">
+          <% (activities || []).forEach((a) => { %>
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+                <span class="material-symbols-outlined text-slate-500">shopping_bag</span>
+              </div>
+              <div class="flex-1">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="font-semibold text-slate-900"><%= a.number %></div>
+                  <div class="flex items-center gap-2">
+                    <% if (a.statusBadge) { %><span class="<%= a.statusBadge.className %>"><%= a.statusBadge.label %></span><% } %>
+                    <span class="badge <%= a.accountType === 'pro' ? 'badge-pro' : 'badge-particulier' %>"><%= a.accountType === 'pro' ? 'PRO' : 'PARTICULIER' %></span>
+                  </div>
+                </div>
+                <div class="mt-1 text-sm text-slate-500"><%= a.customer %></div>
+                <div class="mt-1 text-xs text-slate-400"><%= a.when %></div>
+              </div>
+            </div>
+          <% }) %>
+
+          <% if (!activities || activities.length === 0) { %>
+            <div class="text-sm text-slate-500">Aucune activité.</div>
+          <% } %>
+
+          <a class="btn btn-secondary btn-block" href="/admin/commandes">
+            Voir toutes les activités
+          </a>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="mt-8 rounded-2xl border border-slate-200 bg-rose-50 p-6 flex items-start justify-between gap-6">
+      <div class="flex items-start gap-4">
+        <div class="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center">
+          <span class="material-symbols-outlined">campaign</span>
+        </div>
+        <div>
+          <div class="font-semibold text-slate-900">Maintenance Serveur</div>
+          <div class="mt-1 text-sm text-slate-500">Une maintenance est prévue ce dimanche entre 02:00 et 04:00 du matin.</div>
+        </div>
+      </div>
+      <button class="btn btn-primary" type="button">
+        En savoir plus
+      </button>
+    </div>
+  </div>
+</main>
+
+<% if (showFinancials) { %>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+  (function () {
+    var weeklyData = <%- JSON.stringify(typeof weeklyChart !== 'undefined' ? weeklyChart : { labels: [], values: [], prevValues: [] }) %>;
+    var monthlyData = <%- JSON.stringify(typeof monthlyChart !== 'undefined' ? monthlyChart : { labels: [], values: [] }) %>;
+
+    var style = getComputedStyle(document.documentElement);
+    var primaryColor = style.getPropertyValue('--color-danger').trim() || '#DC2626';
+    var slateColor = style.getPropertyValue('--text-muted').trim() || '#94A3B8';
+    var gridColor = style.getPropertyValue('--surface-hover').trim() || '#F1F5F9';
+    var tickColor = style.getPropertyValue('--text-muted').trim() || '#94A3B8';
+
+    /* Weekly Bar Chart */
+    var weeklyCtx = document.getElementById('weeklyChart');
+    if (weeklyCtx) {
+      new Chart(weeklyCtx, {
+        type: 'bar',
+        data: {
+          labels: weeklyData.labels,
+          datasets: [
+            {
+              label: 'Cette semaine',
+              data: weeklyData.values,
+              backgroundColor: primaryColor,
+              borderRadius: 6,
+              barPercentage: 0.6,
+            },
+            {
+              label: 'Semaine précédente',
+              data: weeklyData.prevValues,
+              backgroundColor: slateColor,
+              borderRadius: 6,
+              barPercentage: 0.6,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 800, easing: 'easeOutQuart' },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toLocaleString('fr-FR') + ' \u20AC'; },
+              },
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: gridColor },
+              ticks: {
+                callback: function (v) { return v.toLocaleString('fr-FR') + ' \u20AC'; },
+                font: { size: 11, weight: 'bold' },
+                color: tickColor,
+              },
+            },
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 11, weight: 'bold' }, color: tickColor },
+            },
+          },
+        },
+      });
+    }
+
+    /* Monthly Line Chart */
+    var monthlyCtx = document.getElementById('monthlyChart');
+    if (monthlyCtx) {
+      new Chart(monthlyCtx, {
+        type: 'line',
+        data: {
+          labels: monthlyData.labels,
+          datasets: [
+            {
+              label: 'Chiffre d\'affaires',
+              data: monthlyData.values,
+              borderColor: primaryColor,
+              backgroundColor: 'rgba(220, 38, 38, 0.08)',
+              fill: true,
+              tension: 0.4,
+              pointBackgroundColor: primaryColor,
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              borderWidth: 3,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 1000, easing: 'easeOutQuart' },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function (ctx) { return ctx.parsed.y.toLocaleString('fr-FR') + ' \u20AC'; },
+              },
+            },
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: gridColor },
+              ticks: {
+                callback: function (v) { return v.toLocaleString('fr-FR') + ' \u20AC'; },
+                font: { size: 11, weight: 'bold' },
+                color: tickColor,
+              },
+            },
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 11, weight: 'bold' }, color: tickColor },
+            },
+          },
+        },
+      });
+    }
+  })();
+</script>
+<% } %>
+
+<script>
+  (function () {
+    function revealPage() {
+      var sk = document.getElementById('page-skeleton');
+      if (!sk) return;
+      sk.classList.add('is-hidden');
+      setTimeout(function () { sk.remove(); }, 200);
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', revealPage);
+    } else {
+      revealPage();
+    }
+  })();
+</script>
+
+<%- include('./partials/footer') %>

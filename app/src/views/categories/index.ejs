@@ -1,0 +1,66 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 transition-colors duration-300">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+    <% if (!dbConnected) { %>
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900 mb-10">
+        <div class="font-bold">Mode démo activé</div>
+        <div class="mt-1 text-sm">Le site fonctionne sans base de données, avec des catégories dérivées des produits d'exemple.</div>
+      </div>
+    <% } %>
+
+    <div class="flex items-end justify-between gap-6 flex-wrap">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Catégories</h1>
+        <p class="mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300">Choisissez une catégorie pour voir toutes les pièces disponibles.</p>
+      </div>
+      <a class="text-xs sm:text-sm font-black uppercase tracking-wider text-primary hover:underline" href="/produits">Voir tout le catalogue</a>
+    </div>
+
+    <% if (!categories || !categories.length) { %>
+      <div class="mt-10 rounded-3xl bg-white dark:bg-surface-dark border border-slate-100 dark:border-slate-800 p-10 shadow-sm">
+        <div class="font-bold text-lg">Aucune catégorie</div>
+        <div class="mt-2 text-sm text-slate-500">Aucune catégorie n’est disponible pour le moment.</div>
+      </div>
+    <% } else { %>
+      <% const initialMobileVisibleCount = 8; %>
+      <div class="mt-6 sm:mt-10 grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6" data-categories-grid>
+        <% categories.forEach((c, idx) => { %>
+          <a class="group rounded-2xl sm:rounded-3xl bg-white/70 dark:bg-surface-dark/60 backdrop-blur-xl border border-white/40 dark:border-slate-700/70 p-4 sm:p-6 shadow-premium hover:shadow-premium-hover transition-all <%= idx >= initialMobileVisibleCount ? 'hidden md:block' : '' %>" data-category-card href="<%= c.publicPath %>">
+            <div class="flex items-center justify-between gap-4">
+              <div class="min-w-0">
+                <div class="text-[10px] font-black uppercase tracking-widest text-slate-400">Catégorie</div>
+                <div class="mt-2 text-sm sm:text-lg font-black text-slate-900 dark:text-white line-clamp-2 group-hover:text-primary transition-colors"><%= c.name %></div>
+              </div>
+              <span class="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors">chevron_right</span>
+            </div>
+          </a>
+        <% }) %>
+      </div>
+
+      <% if (categories.length > initialMobileVisibleCount) { %>
+        <div class="mt-6 md:hidden">
+          <button class="w-full rounded-2xl bg-white/80 dark:bg-surface-dark/70 border border-slate-200/60 dark:border-slate-700/60 py-3 text-sm font-bold hover:border-primary hover:text-primary transition-colors" data-show-all-categories type="button">
+            Afficher toutes les catégories
+          </button>
+        </div>
+      <% } %>
+    <% } %>
+  </div>
+</main>
+
+<script>
+  (function () {
+    const btn = document.querySelector('[data-show-all-categories]');
+    if (!btn) return;
+
+    btn.addEventListener('click', () => {
+      const cards = Array.from(document.querySelectorAll('[data-category-card].hidden'));
+      cards.forEach((c) => c.classList.remove('hidden'));
+      btn.remove();
+    });
+  })();
+</script>
+
+<%- include('../partials/footer') %>

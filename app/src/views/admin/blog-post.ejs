@@ -1,0 +1,1298 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'blog' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+      <div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Blog', url: '/admin/blog'}, {label: mode === 'new' ? 'Nouvel article' : (form && form.title ? form.title : 'Article')}] }) %>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900"><%= mode === 'new' ? 'Nouvel article' : 'Modifier article' %></div>
+        <div class="mt-1 text-sm text-slate-500">Contenu + SEO + publication.</div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <% if (mode === 'edit' && typeof publicUrl !== 'undefined' && publicUrl) { %>
+          <a class="btn btn-secondary" href="<%= publicUrl %>" target="_blank" rel="noopener">
+            Voir l’article
+          </a>
+        <% } %>
+        <a class="btn btn-primary" href="/admin/blog">
+          Retour
+        </a>
+      </div>
+    </div>
+
+    <% if (errorMessage) { %>
+      <div class="mt-6 rounded-2xl bg-red-50 border border-red-200 px-5 py-4 text-sm text-red-800 font-semibold"><%= errorMessage %></div>
+    <% } %>
+
+    <% if (typeof successMessage !== 'undefined' && successMessage) { %>
+      <div class="mt-6 rounded-2xl bg-green-50 border border-green-200 px-5 py-4 text-sm text-green-800 font-semibold"><%= successMessage %></div>
+    <% } %>
+
+    <% const actionUrl = mode === 'new' ? '/admin/blog/nouveau' : (`/admin/blog/${encodeURIComponent(String(postId || ''))}`); %>
+
+    <form action="<%= actionUrl %>" class="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6" method="POST" enctype="multipart/form-data">
+      <section class="xl:col-span-2 bg-white rounded-2xl border border-slate-200 p-6">
+        <div class="font-semibold text-slate-900">Contenu</div>
+
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="md:col-span-2">
+            <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Titre</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="title" type="text" value="<%= form && form.title ? form.title : '' %>" />
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Catégorie (libellé)</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="categoryLabel" type="text" value="<%= form && form.categoryLabel ? form.categoryLabel : '' %>" placeholder="Technique, Entretien..." />
+          </div>
+
+          <div>
+            <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Catégorie (slug)</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="categorySlug" type="text" value="<%= form && form.categorySlug ? form.categorySlug : '' %>" placeholder="technique" />
+            <div class="mt-2 text-xs text-slate-500">Optionnel : si vide, il est généré automatiquement.</div>
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Image de couverture (upload)</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="coverImage" type="file" accept="image/*" />
+            <div class="mt-2 text-xs text-slate-500">Optionnel : si vous uploadez une image, elle remplacera l’URL.</div>
+            <% if (form && form.coverImageUrl) { %>
+              <div class="mt-3 flex items-center gap-3">
+                <img class="w-20 h-14 object-cover rounded-lg border border-slate-200" src="<%= form.coverImageUrl %>" alt="Couverture" />
+                <div class="min-w-0">
+                  <div class="text-xs font-semibold text-slate-900">Image actuelle</div>
+                  <div class="mt-0.5 text-[11px] text-slate-500 break-all"><%= form.coverImageUrl %></div>
+                </div>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Image de couverture (URL - optionnel)</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="coverImageUrl" type="text" value="<%= form && form.coverImageUrl ? form.coverImageUrl : '' %>" placeholder="/uploads/... ou https://..." />
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Extrait</label>
+            <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900" name="excerpt" rows="3"><%= form && form.excerpt ? form.excerpt : '' %></textarea>
+          </div>
+
+          <div class="md:col-span-2">
+            <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Contenu (texte simple / Markdown)</label>
+            <textarea id="contentMarkdown" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 font-mono" name="contentMarkdown" rows="16"><%= form && form.contentMarkdown ? form.contentMarkdown : '' %></textarea>
+            <div class="mt-2 text-xs text-slate-500 leading-relaxed">
+              Syntaxes supportées :
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded"># Titre</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">## Sous-titre</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">**gras**</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">*italique*</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">- liste</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">1. liste numérotée</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">[lien](url)</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">![alt](url)</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">&gt; citation</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">| tableau |</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">:::product</code>
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">---</code>
+              <br/>
+              Blockquotes spéciales :
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">&gt; ⚠️ Attention</code> (bordure orange) —
+              <code class="bg-slate-100 dark:bg-slate-800 px-1 rounded">&gt; 💡 Bon à savoir</code> (bordure bleue)
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+              <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Médias</div>
+              <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
+                <div>
+                  <label class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Insérer une image dans l’article</label>
+                  <input id="blogMediaFile" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-900" type="file" accept="image/*" />
+                </div>
+                <div class="flex gap-2">
+                  <button id="blogMediaUploadBtn" type="button" class="flex-1 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800 transition">Uploader & insérer</button>
+                  <button id="blogMediaCopyBtn" type="button" class="btn btn-secondary" disabled>Copier</button>
+                </div>
+              </div>
+              <div id="blogMediaStatus" class="mt-2 text-[11px] text-slate-500"></div>
+              <div class="mt-2 text-xs text-slate-500">Vidéo YouTube : colle simplement le lien YouTube sur une ligne seule dans le texte.</div>
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Aperçu</div>
+              <div id="contentPreview" class="mt-3 prose max-w-none"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="space-y-6">
+        <section class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="font-semibold text-slate-900">Publication</div>
+
+          <div class="mt-5 grid grid-cols-1 gap-4">
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Slug (URL)</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="slug" type="text" value="<%= form && form.slug ? form.slug : '' %>" placeholder="auto" />
+              <div class="mt-2 text-xs text-slate-500">Optionnel : si vide, il est généré et restera stable.</div>
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Auteur</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="authorName" type="text" value="<%= form && form.authorName ? form.authorName : '' %>" />
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Temps de lecture (minutes)</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="readingTimeMinutes" type="number" min="0" value="<%= form && form.readingTimeMinutes ? form.readingTimeMinutes : '' %>" placeholder="auto" />
+              <div class="mt-2 text-xs text-slate-500">Optionnel (0 = auto sur la page publique).</div>
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Produits liés</label>
+
+              <input
+                id="relatedProductSearch"
+                class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900"
+                type="text"
+                placeholder="Rechercher un produit par nom, marque ou SKU..."
+                autocomplete="off"
+              />
+
+              <div id="relatedProductResults" class="mt-2 max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white"></div>
+
+              <div class="mt-4">
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Sélection</div>
+                <div id="relatedProductSelected" class="mt-2 space-y-2"></div>
+              </div>
+
+              <textarea id="relatedProductIds" class="hidden" name="relatedProductIds" rows="4"><%= form && form.relatedProductIds ? form.relatedProductIds : '' %></textarea>
+              <div class="mt-2 text-xs text-slate-500">Tapez au moins 2 lettres, puis cliquez sur un produit pour l’ajouter.</div>
+            </div>
+
+            <label class="inline-flex items-center gap-3 text-sm font-medium text-slate-500">
+              <input <%= form && form.isFeatured ? 'checked' : '' %> class="h-4 w-4" name="isFeatured" type="checkbox" />
+              À la une
+            </label>
+
+            <label class="inline-flex items-center gap-3 text-sm font-medium text-slate-500">
+              <input <%= form && form.isHomeFeatured ? 'checked' : '' %> class="h-4 w-4" name="isHomeFeatured" type="checkbox" />
+              En avant sur la home
+            </label>
+
+            <label class="inline-flex items-center gap-3 text-sm font-medium text-slate-500">
+              <input <%= form && form.isPublished ? 'checked' : '' %> class="h-4 w-4" name="isPublished" type="checkbox" />
+              Publié
+            </label>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Date de publication (optionnel)</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="publishedAt" type="date" value="<%= form && form.publishedAt ? form.publishedAt : '' %>" />
+            </div>
+
+            <button class="btn btn-primary" type="submit">
+              Enregistrer
+            </button>
+
+            <% if (mode === 'edit') { %>
+              <button
+                class="btn btn-danger btn-block"
+                type="submit"
+                formaction="/admin/blog/<%= encodeURIComponent(String(postId || '')) %>/supprimer"
+                formmethod="POST"
+                onclick="return confirm('Supprimer cet article ?');"
+              >
+                Supprimer
+              </button>
+            <% } %>
+          </div>
+        </section>
+
+        <section class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="font-semibold text-slate-900">SEO</div>
+
+          <% if (typeof seoAssistant !== 'undefined' && seoAssistant) { %>
+            <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Score SEO</div>
+                  <div id="seoScoreValue" class="mt-1 text-2xl font-semibold text-slate-900"><%= seoAssistant.score %>/100</div>
+                </div>
+                <div class="w-40">
+                  <div class="h-2 rounded-full bg-slate-200 overflow-hidden">
+                    <div id="seoProgressFill" class="h-2 bg-primary" data-width="<%= Math.max(0, Math.min(100, seoAssistant.score)) %>"></div>
+                  </div>
+                  <div class="mt-2 text-[10px] font-bold text-slate-500">Objectif : 85+</div>
+                </div>
+              </div>
+
+              <div class="mt-4">
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Prévisualisation Google</div>
+                <div class="mt-2 rounded-xl border border-slate-200 bg-white p-4">
+                  <div id="seoPreviewTitle" class="text-[#1a0dab] text-sm font-bold leading-snug"><%= seoAssistant.preview && seoAssistant.preview.title ? seoAssistant.preview.title : '' %></div>
+                  <div id="seoPreviewUrl" class="mt-1 text-[11px] text-[#006621] break-all"><%= seoAssistant.preview && seoAssistant.preview.url ? seoAssistant.preview.url : '' %></div>
+                  <div id="seoPreviewDescription" class="mt-2 text-[12px] text-slate-500 leading-snug"><%= seoAssistant.preview && seoAssistant.preview.description ? seoAssistant.preview.description : '' %></div>
+                </div>
+              </div>
+
+              <div class="mt-4">
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Checklist</div>
+                <div id="seoChecklist" class="mt-2 space-y-2">
+                  <% (seoAssistant.checks || []).forEach((c) => { %>
+                    <div class="flex items-start gap-2">
+                      <span class="material-symbols-outlined text-base <%= c.ok ? 'text-green-600' : 'text-red-600' %>"><%= c.ok ? 'check_circle' : 'cancel' %></span>
+                      <div class="flex-1">
+                        <div class="text-xs font-bold text-slate-900"><%= c.label %></div>
+                        <% if (c.detail) { %>
+                          <div class="mt-0.5 text-[11px] text-slate-500"><%= c.detail %></div>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              </div>
+            </div>
+          <% } %>
+
+          <div class="mt-5 grid grid-cols-1 gap-4">
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Mot-clé principal (optionnel)</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="seoPrimaryKeyword" type="text" value="<%= form && form.seoPrimaryKeyword ? form.seoPrimaryKeyword : '' %>" placeholder="ex: boîte de transfert ATC700" />
+              <div class="mt-2 text-xs text-slate-500">L’assistant vérifiera si ce mot-clé est bien présent dans le title et la description.</div>
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Meta title</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="seoMetaTitle" type="text" value="<%= form && form.seoMetaTitle ? form.seoMetaTitle : '' %>" />
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Meta description</label>
+              <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900" name="seoMetaDescription" rows="3"><%= form && form.seoMetaDescription ? form.seoMetaDescription : '' %></textarea>
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Canonical (path ou URL)</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="seoCanonicalPath" type="text" value="<%= form && form.seoCanonicalPath ? form.seoCanonicalPath : '' %>" placeholder="/blog/mon-article" />
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">OG image (URL)</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="seoOgImageUrl" type="text" value="<%= form && form.seoOgImageUrl ? form.seoOgImageUrl : '' %>" />
+            </div>
+
+            <div>
+              <label class="text-xs font-semibold uppercase tracking-widest text-slate-400">Meta robots</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900" name="seoMetaRobots" type="text" value="<%= form && form.seoMetaRobots ? form.seoMetaRobots : '' %>" placeholder="index, follow" />
+              <div class="mt-2 text-xs text-slate-500">Laisse vide pour le comportement par défaut.</div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </form>
+  </div>
+</main>
+
+<style>
+  #contentPreview h2 { margin-top: 1rem; margin-bottom: 0.5rem; font-weight: 800; font-size: 1.25rem; color: var(--text-primary); }
+  #contentPreview h3 { margin-top: 0.75rem; margin-bottom: 0.5rem; font-weight: 800; font-size: 1.1rem; color: var(--text-primary); }
+  #contentPreview h4 { margin-top: 0.75rem; margin-bottom: 0.4rem; font-weight: 800; font-size: 1rem; color: var(--text-primary); }
+  #contentPreview p { margin-bottom: 0.75rem; color: var(--text-secondary); line-height: 1.6; }
+  #contentPreview ul { margin: 0.5rem 0 0.75rem; padding-left: 1.25rem; list-style: disc; color: var(--text-secondary); }
+  #contentPreview li { margin-bottom: 0.25rem; }
+  #contentPreview hr { margin: 1rem 0; border: 0; border-top: 1px solid var(--border-color); }
+  #contentPreview blockquote { margin: 0.75rem 0; padding: 0.75rem 1rem; border-left: 4px solid var(--color-danger); background: var(--surface-card); border-radius: 0.75rem; color: var(--text-primary); }
+  #contentPreview pre { margin: 0.75rem 0; padding: 0.9rem; background: #0b1220; color: #e5e7eb; border-radius: 0.75rem; overflow: auto; font-size: 0.875rem; }
+  #contentPreview code { background: var(--surface-hover); padding: 0.1rem 0.35rem; border-radius: 0.4rem; }
+  #contentPreview pre code { background: transparent; padding: 0; }
+</style>
+
+<script>
+  (function () {
+    function getValueByName(name) {
+      var el = document.querySelector('[name="' + name + '"]');
+      if (!el) return '';
+      return String(el.value || '').trim();
+    }
+
+    function getCheckedByName(name) {
+      var el = document.querySelector('[name="' + name + '"]');
+      if (!el) return false;
+      return Boolean(el.checked);
+    }
+
+    function normalizeMetaText(value) {
+      return String(value || '').replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    }
+
+    function slugify(value) {
+      var input = String(value || '').trim().toLowerCase();
+      if (!input) return '';
+      try {
+        input = input.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      } catch (e) {
+      }
+      input = input.replace(/[^a-z0-9\s-]/g, ' ');
+      input = input.replace(/\s+/g, '-');
+      input = input.replace(/-+/g, '-');
+      input = input.replace(/^-|-$/g, '');
+      return input;
+    }
+
+    function stripHtml(value) {
+      return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    }
+
+    function truncateText(value, max) {
+      var input = String(value || '').trim();
+      if (!input) return '';
+      if (!Number.isFinite(max) || max <= 0) return input;
+      if (input.length <= max) return input;
+      return input.slice(0, Math.max(0, max - 1)).trim() + '…';
+    }
+
+    function countWords(value) {
+      var plain = stripHtml(value);
+      if (!plain) return 0;
+      return plain.split(/\s+/).filter(Boolean).length;
+    }
+
+    var fill = document.getElementById('seoProgressFill');
+    var scoreValueEl = document.getElementById('seoScoreValue');
+    var previewTitleEl = document.getElementById('seoPreviewTitle');
+    var previewUrlEl = document.getElementById('seoPreviewUrl');
+    var previewDescEl = document.getElementById('seoPreviewDescription');
+    var checklistEl = document.getElementById('seoChecklist');
+
+    var input = document.getElementById('contentMarkdown');
+    var preview = document.getElementById('contentPreview');
+    if (!input || !preview) return;
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderInline(text) {
+      var out = escapeHtml(text || '');
+      out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      out = out.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+      out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, label, url) {
+        var u = String(url || '').trim();
+        if (!(u.startsWith('/') || u.startsWith('http://') || u.startsWith('https://'))) return escapeHtml(label);
+        return '<a class="text-primary underline" href="' + escapeHtml(u) + '">' + escapeHtml(label) + '</a>';
+      });
+      return out;
+    }
+
+    function mdToHtml(md) {
+      var lines = String(md || '').replace(/\r\n?/g, '\n').split('\n');
+      var blocks = [];
+      var para = [];
+      var inList = false;
+      var list = [];
+      var inCode = false;
+      var code = [];
+      var inQuote = false;
+      var quote = [];
+
+      function flushPara() {
+        if (!para.length) return;
+        var t = para.join(' ').trim();
+        if (t) blocks.push('<p>' + renderInline(t) + '</p>');
+        para = [];
+      }
+
+      function flushList() {
+        if (!inList) return;
+        var items = list.map(function (li) { return '<li>' + renderInline(li) + '</li>'; }).join('');
+        blocks.push('<ul>' + items + '</ul>');
+        inList = false;
+        list = [];
+      }
+
+      function flushCode() {
+        if (!inCode) return;
+        var content = escapeHtml(code.join('\n'));
+        blocks.push('<pre><code>' + content + '</code></pre>');
+        inCode = false;
+        code = [];
+      }
+
+      function flushQuote() {
+        if (!inQuote) return;
+        var joined = quote.join('\n').trim();
+        if (joined) {
+          var html = joined.split('\n').map(function (l) {
+            return renderInline(String(l || '').trim());
+          }).join('<br/>');
+          blocks.push('<blockquote>' + html + '</blockquote>');
+        }
+        inQuote = false;
+        quote = [];
+      }
+
+      for (var i = 0; i < lines.length; i += 1) {
+        var line = (lines[i] || '').trim();
+        if (!line) {
+          flushPara();
+          flushList();
+          flushQuote();
+          continue;
+        }
+
+        if (line.startsWith('```')) {
+          flushPara();
+          flushList();
+          flushQuote();
+          if (inCode) {
+            flushCode();
+          } else {
+            inCode = true;
+            code = [];
+          }
+          continue;
+        }
+
+        if (inCode) {
+          code.push(String(lines[i] || '').replace(/\t/g, '  '));
+          continue;
+        }
+
+        if (line === '---' || line === '***') {
+          flushPara();
+          flushList();
+          flushQuote();
+          blocks.push('<hr/>');
+          continue;
+        }
+
+        var imageMatch = /^!\[([^\]]*)\]\(([^)]+)\)\s*$/.exec(line);
+        if (imageMatch) {
+          flushPara();
+          flushList();
+          flushQuote();
+          var alt = String(imageMatch[1] || '').trim();
+          var url = String(imageMatch[2] || '').trim();
+          var safe = (url.startsWith('/') || url.startsWith('http://') || url.startsWith('https://')) ? url : '';
+          if (safe) {
+            blocks.push('<p><img src="' + escapeHtml(safe) + '" alt="' + escapeHtml(alt) + '" loading="lazy"/></p>');
+          }
+          continue;
+        }
+
+        var yt = /^(https?:\/\/)(www\.)?(youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{6,})/.exec(line);
+        if (yt) {
+          var videoId = yt[4] ? String(yt[4]).split(/[?&]/)[0] : '';
+          if (videoId) {
+            flushPara();
+            flushList();
+            flushQuote();
+            blocks.push(
+              '<div class="relative aspect-video my-4 rounded-xl overflow-hidden">'
+              + '<iframe src="https://www.youtube-nocookie.com/embed/' + escapeHtml(videoId) + '" '
+              + 'title="YouTube video" class="absolute inset-0 w-full h-full border-0" '
+              + 'allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>'
+              + '</div>'
+            );
+          }
+          continue;
+        }
+
+        var boldTitle = /^\*\*([^*]+)\*\*$/.exec(line);
+        if (boldTitle) {
+          flushPara();
+          flushList();
+          flushQuote();
+          var value = String(boldTitle[1] || '').trim();
+          if (value) {
+            var isNum = /^\d+[).]\s+/.test(value);
+            blocks.push('<' + (isNum ? 'h4' : 'h3') + '>' + renderInline(value) + '</' + (isNum ? 'h4' : 'h3') + '>');
+          }
+          continue;
+        }
+
+        var numberedTitle = /^\d+[).]\s+.+$/.test(line);
+        if (numberedTitle) {
+          flushPara();
+          flushList();
+          flushQuote();
+          blocks.push('<h4>' + renderInline(line) + '</h4>');
+          continue;
+        }
+
+        if (line.startsWith('### ')) {
+          flushPara();
+          flushList();
+          flushQuote();
+          blocks.push('<h4>' + renderInline(line.slice(4).trim()) + '</h4>');
+          continue;
+        }
+        if (line.startsWith('## ')) {
+          flushPara();
+          flushList();
+          flushQuote();
+          blocks.push('<h3>' + renderInline(line.slice(3).trim()) + '</h3>');
+          continue;
+        }
+        if (line.startsWith('# ')) {
+          flushPara();
+          flushList();
+          flushQuote();
+          blocks.push('<h2>' + renderInline(line.slice(2).trim()) + '</h2>');
+          continue;
+        }
+
+        var q = /^>\s*(.*)$/.exec(line);
+        if (q) {
+          flushPara();
+          flushList();
+          inQuote = true;
+          quote.push(q[1]);
+          continue;
+        }
+
+        if (inQuote) flushQuote();
+
+        var m = /^(-|\*)\s+(.+)$/.exec(line);
+        if (m) {
+          flushPara();
+          inList = true;
+          list.push(m[2].trim());
+          continue;
+        }
+
+        if (inList) flushList();
+        para.push(line);
+      }
+
+      flushPara();
+      flushList();
+      flushQuote();
+      flushCode();
+      return blocks.join('\n');
+    }
+
+    function applyProgress(score) {
+      if (!fill) return;
+      var w = Number(score);
+      if (!Number.isFinite(w)) w = 0;
+      if (w < 0) w = 0;
+      if (w > 100) w = 100;
+      fill.style.width = w + '%';
+      fill.setAttribute('data-width', String(w));
+    }
+
+    function updateSeoAssistant() {
+      if (!scoreValueEl || !previewTitleEl || !previewUrlEl || !previewDescEl || !checklistEl) return;
+
+      var siteName = 'CarParts France';
+      var baseUrl = window.location && window.location.origin ? window.location.origin : '';
+
+      var title = getValueByName('title');
+      var slugInput = getValueByName('slug');
+      var slugAuto = slugify(title);
+      var slug = slugify(slugInput) || slugInput || slugAuto;
+
+      var urlPath = slug ? '/blog/' + encodeURIComponent(slug) : '/blog';
+      var url = baseUrl ? (baseUrl + urlPath) : urlPath;
+
+      var metaTitle = normalizeMetaText(getValueByName('seoMetaTitle'));
+      var metaDescription = normalizeMetaText(getValueByName('seoMetaDescription'));
+      var primaryKeyword = getValueByName('seoPrimaryKeyword');
+
+      var excerpt = getValueByName('excerpt');
+      var coverImageUrl = getValueByName('coverImageUrl');
+      var ogImageUrl = getValueByName('seoOgImageUrl') || coverImageUrl;
+
+      var canonicalPath = getValueByName('seoCanonicalPath');
+      var canonical = '';
+      if (canonicalPath) {
+        if (canonicalPath.toLowerCase().startsWith('http')) {
+          canonical = canonicalPath;
+        } else if (baseUrl) {
+          canonical = baseUrl + (canonicalPath.startsWith('/') ? canonicalPath : '/' + canonicalPath);
+        } else {
+          canonical = canonicalPath;
+        }
+      } else {
+        canonical = url;
+      }
+
+      var contentHtml = mdToHtml(input.value || '');
+      var fallbackDesc = truncateText(stripHtml(excerpt || contentHtml), 160);
+
+      var finalTitle = metaTitle || (title ? (title + ' - ' + siteName) : siteName);
+      var finalDescription = metaDescription || fallbackDesc;
+
+      var metaTitleLen = finalTitle.length;
+      var metaDescLen = finalDescription.length;
+      var contentWords = countWords(contentHtml);
+      var isPublished = getCheckedByName('isPublished') === true;
+
+      var checks = [];
+
+      checks.push({
+        key: 'title',
+        label: 'Titre renseigné',
+        ok: Boolean(title),
+        detail: title ? '' : 'Ajoutez un titre clair et descriptif.',
+      });
+
+      checks.push({
+        key: 'slug',
+        label: 'URL propre (slug)',
+        ok: Boolean(slug),
+        detail: slug ? '' : 'Le slug est généré automatiquement à partir du titre.',
+      });
+
+      checks.push({
+        key: 'metaTitle',
+        label: 'Meta title (50–60 caractères)',
+        ok: metaTitleLen >= 45 && metaTitleLen <= 65,
+        detail: metaTitle ? ('Longueur actuelle : ' + metaTitleLen) : ('Auto : ' + metaTitleLen + ' (vous pouvez optimiser)'),
+      });
+
+      checks.push({
+        key: 'metaDescription',
+        label: 'Meta description (120–160 caractères)',
+        ok: metaDescLen >= 110 && metaDescLen <= 170,
+        detail: metaDescription ? ('Longueur actuelle : ' + metaDescLen) : ('Auto : ' + metaDescLen + ' (vous pouvez optimiser)'),
+      });
+
+      checks.push({
+        key: 'cover',
+        label: 'Image de couverture',
+        ok: Boolean(coverImageUrl),
+        detail: coverImageUrl ? '' : "Ajoutez une image pour améliorer le clic (et l'aperçu social).",
+      });
+
+      checks.push({
+        key: 'og',
+        label: 'Image OpenGraph (réseaux sociaux)',
+        ok: Boolean(ogImageUrl),
+        detail: ogImageUrl ? '' : "Sans image OG, l'aperçu sur Facebook/WhatsApp est moins attractif.",
+      });
+
+      checks.push({
+        key: 'canonical',
+        label: 'Canonical',
+        ok: Boolean(canonical),
+        detail: canonical ? '' : 'Le canonical aide Google à comprendre la page principale.',
+      });
+
+      checks.push({
+        key: 'content',
+        label: 'Contenu suffisant (300+ mots)',
+        ok: contentWords >= 300,
+        detail: 'Mots : ' + contentWords,
+      });
+
+      if (primaryKeyword) {
+        var kw = primaryKeyword.toLowerCase();
+        var titleOk = finalTitle.toLowerCase().includes(kw);
+        var descOk = finalDescription.toLowerCase().includes(kw);
+        checks.push({
+          key: 'keywordTitle',
+          label: 'Mot-clé dans le title',
+          ok: titleOk,
+          detail: titleOk ? '' : ('Ajoutez "' + primaryKeyword + '" dans le title.'),
+        });
+        checks.push({
+          key: 'keywordDesc',
+          label: 'Mot-clé dans la meta description',
+          ok: descOk,
+          detail: descOk ? '' : ('Ajoutez "' + primaryKeyword + '" dans la description.'),
+        });
+      }
+
+      checks.push({
+        key: 'published',
+        label: 'Publié',
+        ok: isPublished,
+        detail: isPublished ? '' : "Un brouillon n'est pas indexé tant qu'il n'est pas publié.",
+      });
+
+      var score = 100;
+      for (var i = 0; i < checks.length; i += 1) {
+        if (!checks[i].ok) score -= 12;
+      }
+      if (score < 0) score = 0;
+      if (score > 100) score = 100;
+
+      scoreValueEl.textContent = score + '/100';
+      applyProgress(score);
+
+      previewTitleEl.textContent = finalTitle;
+      previewUrlEl.textContent = url;
+      previewDescEl.textContent = finalDescription;
+
+      checklistEl.innerHTML = checks.map(function (c) {
+        var icon = c.ok ? 'check_circle' : 'cancel';
+        var color = c.ok ? 'text-green-600' : 'text-red-600';
+        var detail = c.detail ? ('<div class="mt-0.5 text-[11px] text-slate-500">' + escapeHtml(c.detail) + '</div>') : '';
+        return (
+          '<div class="flex items-start gap-2">'
+          + '<span class="material-symbols-outlined text-base ' + color + '">' + icon + '</span>'
+          + '<div class="flex-1">'
+          + '<div class="text-xs font-bold text-slate-900">' + escapeHtml(c.label) + '</div>'
+          + detail
+          + '</div>'
+          + '</div>'
+        );
+      }).join('');
+    }
+
+    function update() {
+      preview.innerHTML = mdToHtml(input.value || '');
+      updateSeoAssistant();
+    }
+
+    input.addEventListener('input', update);
+
+    function insertAtCursor(textarea, text) {
+      var start = Number.isFinite(textarea.selectionStart) ? textarea.selectionStart : 0;
+      var end = Number.isFinite(textarea.selectionEnd) ? textarea.selectionEnd : start;
+      var before = textarea.value.slice(0, start);
+      var after = textarea.value.slice(end);
+      textarea.value = before + text + after;
+      var nextPos = start + text.length;
+      textarea.selectionStart = nextPos;
+      textarea.selectionEnd = nextPos;
+      textarea.focus();
+    }
+
+    function setupBlogMediaUploader() {
+      var fileInput = document.getElementById('blogMediaFile');
+      var uploadBtn = document.getElementById('blogMediaUploadBtn');
+      var copyBtn = document.getElementById('blogMediaCopyBtn');
+      var statusEl = document.getElementById('blogMediaStatus');
+
+      if (!fileInput || !uploadBtn || !copyBtn || !statusEl) return;
+
+      var lastMarkdown = '';
+
+      function setStatus(text, isError) {
+        statusEl.textContent = text || '';
+        statusEl.className = 'mt-2 text-[11px] ' + (isError ? 'text-red-600' : 'text-slate-500');
+      }
+
+      function setLoading(loading) {
+        uploadBtn.disabled = !!loading;
+        uploadBtn.textContent = loading ? 'Upload…' : 'Uploader & insérer';
+      }
+
+      uploadBtn.addEventListener('click', function () {
+        var file = fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+        if (!file) {
+          setStatus('Choisissez une image.', true);
+          return;
+        }
+
+        setLoading(true);
+        copyBtn.disabled = true;
+        setStatus('Upload en cours…');
+
+        var fd = new FormData();
+        fd.append('file', file);
+
+        fetch('/admin/api/blog/upload', {
+          method: 'POST',
+          body: fd,
+          headers: { 'Accept': 'application/json' },
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data || data.ok !== true || !data.url) {
+              setStatus((data && data.error) ? data.error : 'Erreur upload.', true);
+              return;
+            }
+
+            var alt = String(file.name || '').replace(/\.[a-z0-9]+$/i, '').trim();
+            lastMarkdown = '![' + alt + '](' + data.url + ')';
+
+            insertAtCursor(input, lastMarkdown + '\n');
+            update();
+
+            copyBtn.disabled = false;
+            setStatus('Image insérée dans le texte.');
+          })
+          .catch(function () {
+            setStatus('Erreur upload.', true);
+          })
+          .finally(function () {
+            setLoading(false);
+            fileInput.value = '';
+          });
+      });
+
+      copyBtn.addEventListener('click', function () {
+        if (!lastMarkdown) return;
+        try {
+          navigator.clipboard.writeText(lastMarkdown);
+          setStatus('Texte copié.');
+        } catch (e) {
+          setStatus('Impossible de copier automatiquement.', true);
+        }
+      });
+    }
+
+    function normalizePlainTextToMarkdown(text) {
+      var raw = String(text || '').replace(/\r\n?/g, '\n');
+      raw = raw.replace(/^\s*[•·]\s+/gm, '- ');
+      raw = raw.replace(/^\s*\d+\.\s+/gm, '- ');
+
+      var parts = raw.split(/\n{2,}/);
+      var out = [];
+
+      for (var i = 0; i < parts.length; i += 1) {
+        var part = String(parts[i] || '').trim();
+        if (!part) continue;
+
+        var lines = part.split('\n').map(function (l) {
+          return String(l || '').trim();
+        }).filter(Boolean);
+
+        var looksLikeList = lines.length > 0 && lines.every(function (l) {
+          return /^(-|\*)\s+/.test(l);
+        });
+
+        if (looksLikeList) {
+          out.push(lines.map(function (l) {
+            return l.replace(/^(\*|-)\s+/, '- ');
+          }).join('\n'));
+        } else {
+          out.push(lines.join(' ').replace(/\s{2,}/g, ' ').trim());
+        }
+      }
+
+      return out.join('\n\n').trim();
+    }
+
+    function htmlToMarkdown(html) {
+      var src = String(html || '').trim();
+      if (!src) return '';
+
+      var doc;
+      try {
+        doc = new DOMParser().parseFromString(src, 'text/html');
+      } catch (e) {
+        return '';
+      }
+
+      if (!doc || !doc.body) return '';
+
+      var bad = doc.body.querySelectorAll('script,style,noscript');
+      for (var i = 0; i < bad.length; i += 1) {
+        bad[i].remove();
+      }
+
+      function inlineText(node) {
+        var out = '';
+        if (!node) return out;
+
+        if (node.nodeType === 3) {
+          return String(node.nodeValue || '');
+        }
+
+        if (node.nodeType !== 1) return out;
+
+        var tag = String(node.tagName || '').toUpperCase();
+        if (tag === 'BR') return '\n';
+
+        if (tag === 'A') {
+          var href = String(node.getAttribute('href') || '').trim();
+          var label = '';
+          for (var c0 = 0; c0 < node.childNodes.length; c0 += 1) {
+            label += inlineText(node.childNodes[c0]);
+          }
+          label = label.replace(/\s{2,}/g, ' ').trim();
+          if (!href) return label;
+          if (!(href.startsWith('/') || href.startsWith('http://') || href.startsWith('https://'))) return label;
+          return '[' + label + '](' + href + ')';
+        }
+
+        if (tag === 'CODE') {
+          var codeInner = '';
+          for (var cCode = 0; cCode < node.childNodes.length; cCode += 1) {
+            codeInner += inlineText(node.childNodes[cCode]);
+          }
+          codeInner = codeInner.replace(/\s{2,}/g, ' ').trim();
+          return codeInner ? ('`' + codeInner + '`') : '';
+        }
+
+        if (tag === 'STRONG' || tag === 'B') {
+          var strongInner = '';
+          for (var c1 = 0; c1 < node.childNodes.length; c1 += 1) {
+            strongInner += inlineText(node.childNodes[c1]);
+          }
+          strongInner = strongInner.replace(/\s{2,}/g, ' ').trim();
+          return strongInner ? ('**' + strongInner + '**') : '';
+        }
+
+        if (tag === 'EM' || tag === 'I') {
+          var emInner = '';
+          for (var c2 = 0; c2 < node.childNodes.length; c2 += 1) {
+            emInner += inlineText(node.childNodes[c2]);
+          }
+          emInner = emInner.replace(/\s{2,}/g, ' ').trim();
+          return emInner ? ('*' + emInner + '*') : '';
+        }
+
+        var joined = '';
+        for (var c3 = 0; c3 < node.childNodes.length; c3 += 1) {
+          joined += inlineText(node.childNodes[c3]);
+        }
+        return joined;
+      }
+
+      function blockToMd(node) {
+        if (!node) return '';
+        if (node.nodeType === 3) {
+          return String(node.nodeValue || '').replace(/\s{2,}/g, ' ');
+        }
+        if (node.nodeType !== 1) return '';
+
+        var tag = String(node.tagName || '').toUpperCase();
+
+        if (tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'H4') {
+          var level = tag === 'H1' ? '# ' : tag === 'H2' ? '## ' : tag === 'H3' ? '### ' : '#### ';
+          var head = inlineText(node).replace(/\s{2,}/g, ' ').trim();
+          return head ? (level + head + '\n\n') : '';
+        }
+
+        if (tag === 'HR') {
+          return '---\n\n';
+        }
+
+        if (tag === 'BLOCKQUOTE') {
+          var qt = String(node.textContent || '').replace(/\r\n?/g, '\n').trim();
+          if (!qt) return '';
+          var qLines = qt.split('\n').map(function (l) {
+            var t = String(l || '').trim();
+            return t ? ('> ' + t) : '';
+          }).filter(Boolean);
+          return qLines.join('\n') + '\n\n';
+        }
+
+        if (tag === 'PRE') {
+          var preText = String(node.textContent || '').replace(/\r\n?/g, '\n');
+          preText = preText.replace(/\s+$/g, '').replace(/^\n+/g, '');
+          if (!preText.trim()) return '';
+          return '```\n' + preText + '\n```\n\n';
+        }
+
+        if (tag === 'LI') {
+          var liText = inlineText(node).replace(/\s{2,}/g, ' ').trim();
+          return liText ? ('- ' + liText + '\n') : '';
+        }
+
+        if (tag === 'UL' || tag === 'OL') {
+          var listMd = '';
+          var children = node.children || [];
+          for (var i0 = 0; i0 < children.length; i0 += 1) {
+            if (String(children[i0].tagName || '').toUpperCase() === 'LI') {
+              listMd += blockToMd(children[i0]);
+            }
+          }
+          return listMd ? (listMd + '\n') : '';
+        }
+
+        if (tag === 'P' || tag === 'DIV') {
+          var txt = inlineText(node).replace(/\s{2,}/g, ' ').trim();
+          return txt ? (txt + '\n\n') : '';
+        }
+
+        if (tag === 'BR') return '\n';
+
+        var md = '';
+        for (var c = 0; c < node.childNodes.length; c += 1) {
+          md += blockToMd(node.childNodes[c]);
+        }
+        return md;
+      }
+
+      var result = '';
+      for (var j = 0; j < doc.body.childNodes.length; j += 1) {
+        result += blockToMd(doc.body.childNodes[j]);
+      }
+
+      result = result.replace(/\n{3,}/g, '\n\n').trim();
+      return result;
+    }
+
+    input.addEventListener('paste', function (e) {
+      if (!e || !e.clipboardData) return;
+
+      var html = e.clipboardData.getData('text/html');
+      var plain = e.clipboardData.getData('text/plain');
+
+      if (html && String(html).trim()) {
+        var mdFromHtml = htmlToMarkdown(html);
+        if (mdFromHtml) {
+          e.preventDefault();
+          insertAtCursor(input, mdFromHtml + '\n');
+          update();
+        }
+        return;
+      }
+
+      if (plain && String(plain).includes('\n')) {
+        var rawPlain = String(plain || '').replace(/\r\n?/g, '\n');
+        var looksLikeMarkdown = /(^|\n)\s*```/.test(rawPlain)
+          || /(^|\n)\s*>\s+/.test(rawPlain)
+          || /(^|\n)\s*#{1,4}\s+/.test(rawPlain)
+          || /(^|\n)\s*(-|\*)\s+/.test(rawPlain);
+
+        var mdFromPlain = looksLikeMarkdown ? rawPlain.trim() : normalizePlainTextToMarkdown(rawPlain);
+        if (mdFromPlain) {
+          e.preventDefault();
+          insertAtCursor(input, mdFromPlain + '\n');
+          update();
+        }
+      }
+    });
+
+    ['title', 'slug', 'excerpt', 'coverImageUrl', 'seoPrimaryKeyword', 'seoMetaTitle', 'seoMetaDescription', 'seoMetaRobots', 'seoOgImageUrl', 'seoCanonicalPath'].forEach(function (name) {
+      var el = document.querySelector('[name="' + name + '"]');
+      if (!el) return;
+      el.addEventListener('input', updateSeoAssistant);
+      el.addEventListener('change', updateSeoAssistant);
+    });
+
+    var pub = document.querySelector('[name="isPublished"]');
+    if (pub) {
+      pub.addEventListener('change', updateSeoAssistant);
+    }
+
+    function isObjectId(value) {
+      return /^[a-f0-9]{24}$/i.test(String(value || '').trim());
+    }
+
+    function parseIdsFromTextarea(textarea) {
+      if (!textarea) return [];
+      return String(textarea.value || '')
+        .split(/\r?\n/)
+        .map(function (l) { return String(l || '').trim(); })
+        .filter(Boolean)
+        .filter(isObjectId);
+    }
+
+    function writeIdsToTextarea(textarea, ids) {
+      if (!textarea) return;
+      var out = Array.isArray(ids) ? ids.filter(isObjectId) : [];
+      textarea.value = out.join('\n');
+    }
+
+    function formatPriceCents(priceCents) {
+      var n = Number(priceCents);
+      if (!Number.isFinite(n) || n < 0) return '';
+      var euros = (n / 100).toFixed(2).replace('.', ',');
+      return euros + ' €';
+    }
+
+    function escapeHtmlBasic(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function setupRelatedProductsPicker() {
+      var searchInput = document.getElementById('relatedProductSearch');
+      var resultsEl = document.getElementById('relatedProductResults');
+      var selectedEl = document.getElementById('relatedProductSelected');
+      var idsTextarea = document.getElementById('relatedProductIds');
+
+      if (!searchInput || !resultsEl || !selectedEl || !idsTextarea) return;
+
+      var selectedIds = parseIdsFromTextarea(idsTextarea);
+      var selectedMap = {}; // id -> item
+      var lastQuery = '';
+      var debounceTimer = null;
+
+      function setResults(html) {
+        resultsEl.innerHTML = html || '';
+      }
+
+      function renderSelected() {
+        if (!selectedIds.length) {
+          selectedEl.innerHTML = '<div class="text-xs text-slate-500">Aucun produit lié.</div>';
+          return;
+        }
+
+        selectedEl.innerHTML = selectedIds.map(function (id) {
+          var item = selectedMap[id] || null;
+          var title = item && item.name ? item.name : ('Produit ' + id);
+          var metaParts = [];
+          if (item && item.brand) metaParts.push(item.brand);
+          if (item && item.sku) metaParts.push('SKU: ' + item.sku);
+          var meta = metaParts.length ? metaParts.join(' • ') : '';
+          var price = item && item.priceCents !== null ? formatPriceCents(item.priceCents) : '';
+
+          return (
+            '<div class="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">'
+            + '<div class="min-w-0">'
+            + '<div class="text-xs font-semibold text-slate-900 truncate">' + escapeHtmlBasic(title) + '</div>'
+            + (meta ? '<div class="mt-0.5 text-[11px] text-slate-500 truncate">' + escapeHtmlBasic(meta) + '</div>' : '')
+            + (price ? '<div class="mt-0.5 text-[11px] font-bold text-slate-500">' + escapeHtmlBasic(price) + '</div>' : '')
+            + '</div>'
+            + '<button type="button" class="shrink-0 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-100" data-related-remove="' + escapeHtmlBasic(id) + '">Retirer</button>'
+            + '</div>'
+          );
+        }).join('');
+      }
+
+      function syncTextarea() {
+        writeIdsToTextarea(idsTextarea, selectedIds);
+      }
+
+      function addId(id, item) {
+        var clean = String(id || '').trim();
+        if (!isObjectId(clean)) return;
+        if (selectedIds.indexOf(clean) !== -1) return;
+        selectedIds.push(clean);
+        if (item) selectedMap[clean] = item;
+        syncTextarea();
+        renderSelected();
+      }
+
+      function removeId(id) {
+        var clean = String(id || '').trim();
+        selectedIds = selectedIds.filter(function (v) { return v !== clean; });
+        delete selectedMap[clean];
+        syncTextarea();
+        renderSelected();
+      }
+
+      function fetchJson(url, cb) {
+        fetch(url, { headers: { 'Accept': 'application/json' } })
+          .then(function (r) { return r.json(); })
+          .then(function (data) { cb(null, data); })
+          .catch(function (err) { cb(err || new Error('fetch error')); });
+      }
+
+      function loadSelectedDetails() {
+        if (!selectedIds.length) {
+          renderSelected();
+          return;
+        }
+
+        var url = '/admin/api/products/search?ids=' + encodeURIComponent(selectedIds.join(','));
+        fetchJson(url, function (_err, data) {
+          if (!data || data.ok !== true || !Array.isArray(data.items)) {
+            renderSelected();
+            return;
+          }
+          for (var i = 0; i < data.items.length; i += 1) {
+            var it = data.items[i];
+            if (it && it.id && isObjectId(it.id)) {
+              selectedMap[String(it.id)] = it;
+            }
+          }
+          renderSelected();
+        });
+      }
+
+      function renderResults(items) {
+        if (!Array.isArray(items) || !items.length) {
+          setResults('<div class="px-3 py-3 text-xs text-slate-500">Aucun résultat.</div>');
+          return;
+        }
+
+        setResults(items.map(function (it) {
+          if (!it || !it.id) return '';
+          var id = String(it.id);
+          var disabled = selectedIds.indexOf(id) !== -1;
+          var title = it.name || '';
+          var metaParts = [];
+          if (it.brand) metaParts.push(it.brand);
+          if (it.sku) metaParts.push('SKU: ' + it.sku);
+          var meta = metaParts.length ? metaParts.join(' • ') : '';
+          var price = it.priceCents !== null ? formatPriceCents(it.priceCents) : '';
+
+          return (
+            '<button type="button" class="w-full text-left px-3 py-2 border-b border-slate-100 hover:bg-slate-50 ' + (disabled ? 'opacity-50 cursor-not-allowed' : '') + '" '
+            + (disabled ? '' : ('data-related-add="' + escapeHtmlBasic(id) + '"'))
+            + '>'
+            + '<div class="text-xs font-semibold text-slate-900">' + escapeHtmlBasic(title) + '</div>'
+            + (meta ? '<div class="mt-0.5 text-[11px] text-slate-500">' + escapeHtmlBasic(meta) + '</div>' : '')
+            + (price ? '<div class="mt-0.5 text-[11px] font-bold text-slate-500">' + escapeHtmlBasic(price) + '</div>' : '')
+            + '</button>'
+          );
+        }).join(''));
+      }
+
+      function search(q) {
+        var query = String(q || '').trim();
+        if (query.length < 2) {
+          setResults('');
+          return;
+        }
+
+        lastQuery = query;
+        setResults('<div class="px-3 py-3 text-xs text-slate-500">Recherche…</div>');
+
+        var url = '/admin/api/products/search?q=' + encodeURIComponent(query) + '&limit=10';
+        fetchJson(url, function (_err, data) {
+          if (String(searchInput.value || '').trim() !== lastQuery) return;
+          if (!data || data.ok !== true) {
+            setResults('<div class="px-3 py-3 text-xs text-red-600">Erreur de recherche.</div>');
+            return;
+          }
+          renderResults(data.items || []);
+        });
+      }
+
+      resultsEl.addEventListener('click', function (e) {
+        var btn = e && e.target ? e.target.closest('[data-related-add]') : null;
+        if (!btn) return;
+        var id = btn.getAttribute('data-related-add');
+        if (!id) return;
+
+        var titleEl = btn.querySelector('div');
+        var name = titleEl ? titleEl.textContent.trim() : '';
+        addId(id, { id: id, name: name, brand: '', sku: '', priceCents: null, imageUrl: '', slug: '' });
+        searchInput.value = '';
+        setResults('');
+        searchInput.focus();
+      });
+
+      selectedEl.addEventListener('click', function (e) {
+        var btn = e && e.target ? e.target.closest('[data-related-remove]') : null;
+        if (!btn) return;
+        var id = btn.getAttribute('data-related-remove');
+        if (!id) return;
+        removeId(id);
+      });
+
+      searchInput.addEventListener('input', function () {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(function () {
+          search(searchInput.value);
+        }, 250);
+      });
+
+      searchInput.addEventListener('keydown', function (e) {
+        if (e && e.key === 'Escape') {
+          searchInput.value = '';
+          setResults('');
+        }
+      });
+
+      loadSelectedDetails();
+    }
+
+    setupRelatedProductsPicker();
+    setupBlogMediaUploader();
+
+    update();
+  })();
+</script>

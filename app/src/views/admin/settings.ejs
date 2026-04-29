@@ -1,0 +1,254 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'settings' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div>
+      <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Paramètres'}] }) %>
+      <div class="text-2xl md:text-3xl font-semibold text-slate-900">Paramètres</div>
+      <div class="mt-1 text-sm text-slate-500">Configuration du back office.</div>
+    </div>
+
+    <% if (!dbConnected) { %>
+      <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+        <div class="font-bold">Base de données indisponible</div>
+        <div class="mt-1 text-sm">La gestion des comptes back-office et des mots de passe nécessite MongoDB.</div>
+      </div>
+    <% } %>
+
+    <% if (typeof isDevFallback !== 'undefined' && isDevFallback) { %>
+      <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+        <div class="font-bold">Attention</div>
+        <div class="mt-1 text-sm">Le back office utilise encore un accès de secours en mode développement tant que la base n'est pas disponible.</div>
+      </div>
+    <% } %>
+
+    <details class="mt-8 bg-white rounded-2xl border border-slate-200">
+      <summary class="p-6 cursor-pointer select-none flex items-center justify-between">
+        <div class="text-sm font-semibold uppercase tracking-widest text-slate-400">Informations techniques (avancées)</div>
+        <span class="material-symbols-outlined text-slate-400 transition-transform">expand_more</span>
+      </summary>
+      <div class="px-6 pb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Base de données</div>
+          <div class="mt-2 text-sm font-bold text-slate-900">Les comptes back-office sont stockés en base de données.</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Session</div>
+          <div class="mt-2 text-sm font-bold text-slate-900">Clé de session configurée côté serveur.</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Récupération d'urgence</div>
+          <div class="mt-2 text-sm font-bold text-slate-900">Code de récupération configuré côté serveur.</div>
+        </div>
+        <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Connexion BDD</div>
+          <div class="mt-2 text-sm font-bold text-slate-900"><%= dbConnected ? 'Connectée' : 'Déconnectée' %></div>
+        </div>
+      </div>
+    </details>
+
+    <% if (typeof teamSuccessMessage !== 'undefined' && teamSuccessMessage) { %>
+      <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+        <div class="font-bold">Équipe</div>
+        <div class="mt-1 text-sm"><%= teamSuccessMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (typeof teamErrorMessage !== 'undefined' && teamErrorMessage) { %>
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Équipe</div>
+        <div class="mt-1 text-sm"><%= teamErrorMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (typeof passwordSuccessMessage !== 'undefined' && passwordSuccessMessage) { %>
+      <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+        <div class="font-bold">Mot de passe</div>
+        <div class="mt-1 text-sm"><%= passwordSuccessMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (typeof passwordErrorMessage !== 'undefined' && passwordErrorMessage) { %>
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Mot de passe</div>
+        <div class="mt-1 text-sm"><%= passwordErrorMessage %></div>
+      </div>
+    <% } %>
+
+    <div class="mt-6 grid grid-cols-1 xl:grid-cols-12 gap-6">
+      <section class="xl:col-span-5 space-y-6">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="text-sm font-semibold uppercase tracking-widest text-slate-400">Compte connecté</div>
+          <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+            <div class="text-sm font-bold text-slate-900"><%= currentAdminSession && currentAdminSession.email ? currentAdminSession.email : 'Compte admin' %></div>
+            <div class="mt-1 text-sm text-slate-500">
+              <%= currentAdminSession && currentAdminSession.role === 'owner' ? 'Administrateur principal' : 'Employé back-office' %>
+            </div>
+          </div>
+
+          <form action="/admin/parametres/mot-de-passe" class="mt-4 space-y-4" method="POST">
+            <div>
+              <label class="block text-sm font-medium text-slate-500" for="currentPassword">Mot de passe actuel</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="currentPassword" name="currentPassword" placeholder="••••••••" type="password" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-slate-500" for="nextPassword">Nouveau mot de passe</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="nextPassword" name="nextPassword" placeholder="Minimum 8 caractères" type="password" minlength="8" data-validate />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-slate-500" for="nextPasswordConfirm">Confirmer le nouveau mot de passe</label>
+              <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="nextPasswordConfirm" name="nextPasswordConfirm" placeholder="Retape le nouveau mot de passe" type="password" data-validate data-match="#nextPassword" />
+            </div>
+
+            <button class="btn btn-primary" type="submit" <%= dbConnected ? '' : 'disabled' %>>
+              Mettre à jour mon mot de passe
+            </button>
+          </form>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="text-sm font-semibold uppercase tracking-widest text-slate-400">Équipe back-office</div>
+          <div class="mt-2 text-sm text-slate-500">Créez des accès dédiés pour vos employés, sans partager votre compte principal.</div>
+
+          <% if (!canManageAdminUsers) { %>
+            <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+              Seul le compte administrateur principal peut créer ou désactiver des comptes d'équipe.
+            </div>
+          <% } else { %>
+            <form action="/admin/parametres/equipe" class="mt-4 space-y-4" method="POST">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-slate-500" for="staffFirstName">Prénom</label>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="staffFirstName" name="firstName" placeholder="Ex: Lucas" type="text" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-500" for="staffLastName">Nom</label>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="staffLastName" name="lastName" placeholder="Ex: Martin" type="text" />
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="staffEmail">Email</label>
+                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="staffEmail" name="email" placeholder="employe@carpartsfrance.fr" type="email" />
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-slate-500" for="staffPassword">Mot de passe</label>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="staffPassword" name="password" placeholder="Minimum 8 caractères" type="password" />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-500" for="staffPasswordConfirm">Confirmation</label>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="staffPasswordConfirm" name="passwordConfirm" placeholder="Retape le mot de passe" type="password" />
+                </div>
+              </div>
+
+              <button class="btn btn-primary" type="submit" <%= dbConnected ? '' : 'disabled' %>>
+                Créer un compte employé
+              </button>
+            </form>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="xl:col-span-7 space-y-6">
+        <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div class="px-6 py-4 bg-slate-50 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <div class="font-semibold text-slate-900">Comptes back-office</div>
+              <div class="mt-1 text-xs text-slate-500"><%= backofficeUsers && backofficeUsers.length ? backofficeUsers.length : 0 %> compte(s)</div>
+            </div>
+          </div>
+
+          <% if (backofficeUsers && backofficeUsers.length) { %>
+            <div class="divide-y divide-slate-100">
+              <% backofficeUsers.forEach((user) => { %>
+                <div class="px-6 py-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  <div>
+                    <div class="text-sm font-semibold text-slate-900"><%= user.fullName || user.email %></div>
+                    <div class="mt-1 text-sm text-slate-500"><%= user.email %></div>
+                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <% if (user.role === 'owner') { %>
+                        <span class="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-semibold">Propriétaire</span>
+                      <% } else { %>
+                        <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-semibold">Employé</span>
+                      <% } %>
+                      <span class="badge <%= user.isActive ? 'badge-actif' : 'badge-inactive' %>"><%= user.isActive ? 'Actif' : 'Désactivé' %></span>
+                    </div>
+                    <div class="mt-3 text-xs text-slate-500">
+                      Créé le <span class="font-semibold text-slate-500"><%= user.createdAtLabel %></span>
+                      · Dernière connexion <span class="font-semibold text-slate-500"><%= user.lastLoginAtLabel %></span>
+                    </div>
+
+                    <% if (canManageAdminUsers && user.canToggle) { %>
+                      <form action="/admin/parametres/equipe/<%= user.id %>/mot-de-passe" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3" method="POST">
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="resetPassword-<%= user.id %>">Nouveau mot de passe</label>
+                          <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="resetPassword-<%= user.id %>" name="nextPassword" placeholder="Minimum 8 caractères" type="password" />
+                        </div>
+                        <div>
+                          <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="resetPasswordConfirm-<%= user.id %>">Confirmation</label>
+                          <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="resetPasswordConfirm-<%= user.id %>" name="nextPasswordConfirm" placeholder="Retape le mot de passe" type="password" />
+                        </div>
+                        <div class="md:col-span-2 flex flex-wrap items-center gap-3">
+                          <button class="btn btn-primary" type="submit">
+                            Réinitialiser le mot de passe
+                          </button>
+                        </div>
+                      </form>
+                    <% } %>
+                  </div>
+
+                  <div class="flex items-center gap-3">
+                    <% if (canManageAdminUsers && user.canToggle) { %>
+                      <form action="/admin/parametres/equipe/<%= user.id %>/toggle" method="POST" data-ajax="true">
+                        <input name="isActive" type="hidden" value="<%= user.isActive ? 'false' : 'true' %>" />
+                        <button class="inline-flex items-center justify-center rounded-xl px-4 py-2 text-xs font-semibold uppercase tracking-wider transition <%= user.isActive ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' %>" type="submit">
+                          <%= user.isActive ? 'Désactiver' : 'Réactiver' %>
+                        </button>
+                      </form>
+                    <% } %>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          <% } else { %>
+            <div class="px-6 py-6 text-sm text-slate-500">Aucun compte back-office enregistré pour le moment.</div>
+          <% } %>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div class="text-sm font-semibold uppercase tracking-widest text-slate-400">Facturation</div>
+              <div class="mt-2 text-sm font-bold text-slate-900">Mentions légales, logo, textes</div>
+              <div class="mt-1 text-sm text-slate-500">Modifiez les informations affichées sur les factures PDF.</div>
+            </div>
+            <a class="btn btn-primary" href="/admin/parametres/facturation">
+              Ouvrir
+            </a>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div class="text-sm font-semibold uppercase tracking-widest text-slate-400">Site</div>
+              <div class="mt-2 text-sm font-bold text-slate-900">Bannière promo</div>
+              <div class="mt-1 text-sm text-slate-500">Modifiez le texte affiché en haut du site.</div>
+            </div>
+            <a class="btn btn-primary" href="/admin/parametres/site">
+              Ouvrir
+            </a>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<%- include('./partials/footer') %>

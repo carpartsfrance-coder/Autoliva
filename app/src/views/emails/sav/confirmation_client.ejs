@@ -1,0 +1,94 @@
+<%
+  const baseUrl = brand.SITE_URL;
+  const gl = (typeof guestLink !== 'undefined' && guestLink) ? guestLink : (baseUrl + '/sav/suivi');
+  const v = (ticket && ticket.vehicule) || {};
+  const motif = ticket.motifSav || 'autre';
+
+  // Prochaines étapes par motif (aligné avec la page /sav/confirmation)
+  const STEPS_BY_MOTIF = {
+    piece_defectueuse: [
+      "Notre équipe pré-qualifie votre dossier sous <strong>48 h ouvrées</strong>.",
+      "Vous recevrez par email un bon de retour gratuit pour nous envoyer la pièce.",
+      "Une fois en atelier, l'analyse sur banc démarre sous 5 jours ouvrés.",
+      "Vous recevrez le rapport et la décision (garantie ou forfait 149 €).",
+    ],
+    colis_abime: [
+      "Nous avons enregistré votre <strong>réserve transporteur</strong>.",
+      "Conservez le colis, l'emballage et les photos — nous pouvons vous les redemander.",
+      "Notre équipe logistique vous recontacte sous <strong>48 h ouvrées</strong>.",
+      "Aucun frais à votre charge pour un colis endommagé au transport.",
+    ],
+    colis_non_recu: [
+      "Nous ouvrons immédiatement une enquête auprès du transporteur.",
+      "Délai habituel : <strong>24 à 72 h ouvrées</strong>.",
+      "Dès la réponse du transporteur, nous vous proposons un renvoi ou un remboursement.",
+    ],
+    retard_livraison: [
+      "Nous interrogeons le transporteur pour localiser votre colis.",
+      "Vous recevez un retour sous <strong>24 h ouvrées</strong>.",
+    ],
+    erreur_preparation: [
+      "Nous vérifions votre commande et la pièce reçue.",
+      "Retour de notre équipe logistique sous <strong>48 h ouvrées</strong>.",
+      "Aucun frais à votre charge : retour prépayé et renvoi de la bonne pièce.",
+    ],
+    retractation: [
+      "Votre rétractation est enregistrée (délai légal 14 jours).",
+      "Vous recevez les instructions de retour sous 24 h ouvrées.",
+      "Remboursement sous 14 jours après réception de la pièce.",
+      "Les frais de retour restent à votre charge (rétractation).",
+    ],
+    non_compatible: [
+      "Notre équipe vérifie la compatibilité avec votre véhicule.",
+      "Retour sous <strong>5 jours ouvrés</strong>.",
+    ],
+    facture_document: [
+      "Notre service comptabilité traite votre demande sous <strong>24 h ouvrées</strong>.",
+      "Vous recevez le document par email.",
+    ],
+    remboursement: [
+      "Notre service comptabilité étudie votre demande sous <strong>48 h ouvrées</strong>.",
+      "Vous êtes informé par email de la suite donnée.",
+    ],
+    autre: [
+      "Notre équipe SAV prend connaissance de votre message.",
+      "Vous recevez une réponse sous <strong>48 h ouvrées</strong>.",
+    ],
+  };
+  const steps = STEPS_BY_MOTIF[motif] || STEPS_BY_MOTIF.autre;
+  const stepsHtml = steps.map(function(s) { return '<li>' + s + '</li>'; }).join('');
+  const intro = (typeof motifIntro !== 'undefined' && motifIntro) ? motifIntro : '';
+
+  const body = `
+    <p>Bonjour <strong>${(ticket.client && ticket.client.nom) || ''}</strong>,</p>
+    <p>Votre demande SAV <strong>${ticket.numero}</strong> est bien enregistrée. Vous trouverez en pièce jointe le justificatif <strong>"Acceptation des CGV SAV"</strong> horodaté pour vos archives.</p>
+    ${intro ? `<p style="color:#0f172a;">${intro}</p>` : ''}
+
+    <div style="margin:18px 0;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:14px;color:#0f172a;">
+      <div style="font-weight:700;margin-bottom:6px;">Récapitulatif</div>
+      <div><strong>N° dossier :</strong> ${ticket.numero}</div>
+      ${ticket.numeroCommande ? `<div><strong>Commande :</strong> ${ticket.numeroCommande}</div>` : ''}
+      ${ticket.pieceType ? `<div><strong>Pièce :</strong> ${ticket.pieceType}</div>` : ''}
+      ${(v.marque || v.modele) ? `<div><strong>Véhicule :</strong> ${[v.marque, v.modele, v.annee].filter(Boolean).join(' ')}</div>` : ''}
+      ${v.vin ? `<div><strong>VIN :</strong> ${v.vin}</div>` : ''}
+      ${v.kilometrage ? `<div><strong>Kilométrage :</strong> ${v.kilometrage} km</div>` : ''}
+    </div>
+
+    <div style="margin:18px 0;padding:14px;background:#ecfdf5;border-left:4px solid #10b981;border-radius:8px;font-size:14px;">
+      <strong>Prochaines étapes :</strong>
+      <ul style="margin:8px 0 0 18px;padding:0;">${stepsHtml}</ul>
+    </div>
+
+    <p style="margin:18px 0;text-align:center;">
+      <a href="${gl}"
+         style="display:inline-block;padding:12px 22px;background:#ec1313;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;">
+        Accéder à mon dossier
+      </a>
+    </p>
+
+    <p style="font-size:13px;color:#475569;text-align:center;">
+      Ce lien est personnel et vous permet d'accéder directement à votre dossier sans connexion.
+    </p>
+  `;
+%>
+<%- include('./_layout', { ticket: ticket, subject: 'Votre demande SAV est enregistrée', body: body }) %>

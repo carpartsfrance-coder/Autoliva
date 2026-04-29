@@ -1,0 +1,342 @@
+<%- include('./partials/head') %>
+<link rel="stylesheet" href="/css/sav.css?v=21">
+<%- include('./partials/sidebar', { active: 'sav' }) %>
+
+<main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>" data-current-user-id="<%= (typeof currentAdmin !== 'undefined' && currentAdmin && currentAdmin.adminUserId) || '' %>">
+  <div class="px-6 lg:px-10 py-6">
+
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Tickets SAV</div>
+        <div class="mt-1 text-xs text-slate-500">Raccourcis : <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">j</kbd>/<kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">k</kbd> nav · <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">↵</kbd> ouvrir · <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">/</kbd> recherche · <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">?</kbd> aide</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" id="sav-new-ticket-btn" class="btn btn-primary">
+          <span class="material-symbols-outlined mr-1 text-base">add</span>Nouveau ticket
+        </button>
+        <a id="sav-export-csv" href="#" class="btn btn-secondary" aria-label="Exporter les tickets en CSV"><span class="material-symbols-outlined mr-1 text-base" aria-hidden="true">download</span>Exporter CSV</a>
+        <a href="/admin/sav/procedures" class="btn btn-secondary"><span class="material-symbols-outlined mr-1 text-base">menu_book</span>Procédures</a>
+        <a href="/admin/sav" class="btn btn-secondary">← Tableau de bord</a>
+      </div>
+    </div>
+
+    <!-- Mini KPIs en tête de liste -->
+    <div id="sav-list-kpis" class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
+      <button type="button" data-mini-kpi-filter="" class="sav-mini-kpi">
+        <div class="sav-mini-kpi__icon bg-slate-100 text-slate-600"><span class="material-symbols-outlined text-base">list_alt</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="total">—</div><div class="sav-mini-kpi__label">Total</div></div>
+      </button>
+      <button type="button" data-mini-kpi-filter="statut=ouvert,pre_qualification,recu_atelier,en_analyse,analyse_terminee,en_transit_retour" class="sav-mini-kpi">
+        <div class="sav-mini-kpi__icon bg-sky-100 text-sky-700"><span class="material-symbols-outlined text-base">inbox</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="ouverts">—</div><div class="sav-mini-kpi__label">Ouverts</div></div>
+      </button>
+      <button type="button" data-mini-kpi-filter="statut=en_attente_decision_client,en_attente_documents,relance_1,relance_2" class="sav-mini-kpi">
+        <div class="sav-mini-kpi__icon bg-amber-100 text-amber-700"><span class="material-symbols-outlined text-base">hourglass_empty</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="attenteClient">—</div><div class="sav-mini-kpi__label">Attente client</div></div>
+      </button>
+      <button type="button" data-mini-kpi-filter="statut=en_attente_fournisseur" class="sav-mini-kpi">
+        <div class="sav-mini-kpi__icon bg-purple-100 text-purple-700"><span class="material-symbols-outlined text-base">local_shipping</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="attenteFournisseur">—</div><div class="sav-mini-kpi__label">Attente fournisseur</div></div>
+      </button>
+      <button type="button" data-mini-kpi-filter="sla_depasse=true" class="sav-mini-kpi sav-mini-kpi--danger">
+        <div class="sav-mini-kpi__icon bg-red-100 text-red-700"><span class="material-symbols-outlined text-base">warning</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="slaDepasse">—</div><div class="sav-mini-kpi__label">SLA dépassé</div></div>
+      </button>
+      <button type="button" data-mini-kpi-filter="awaitingClient=true" class="sav-mini-kpi">
+        <div class="sav-mini-kpi__icon bg-rose-100 text-rose-700"><span class="material-symbols-outlined text-base">mark_unread_chat_alt</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="awaitingClient">—</div><div class="sav-mini-kpi__label">Réponse client</div></div>
+      </button>
+    </div>
+
+    <!-- KPI par équipe -->
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
+      <button type="button" data-mini-kpi-filter="assignedTeam=atelier" class="sav-mini-kpi">
+        <div class="sav-mini-kpi__icon bg-rose-100 text-rose-700"><span class="text-base">🔧</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="teamAtelier">—</div><div class="sav-mini-kpi__label">Atelier</div></div>
+      </button>
+      <button type="button" data-mini-kpi-filter="assignedTeam=logistique" class="sav-mini-kpi">
+        <div class="sav-mini-kpi__icon bg-amber-100 text-amber-700"><span class="text-base">📦</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="teamLogistique">—</div><div class="sav-mini-kpi__label">Logistique</div></div>
+      </button>
+      <button type="button" data-mini-kpi-filter="assignedTeam=commercial" class="sav-mini-kpi">
+        <div class="sav-mini-kpi__icon bg-blue-100 text-blue-700"><span class="text-base">💼</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="teamCommercial">—</div><div class="sav-mini-kpi__label">Commercial</div></div>
+      </button>
+      <button type="button" data-mini-kpi-filter="assignedTeam=compta" class="sav-mini-kpi">
+        <div class="sav-mini-kpi__icon bg-emerald-100 text-emerald-700"><span class="text-base">💰</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="teamCompta">—</div><div class="sav-mini-kpi__label">Compta</div></div>
+      </button>
+      <button type="button" data-mini-kpi-filter="assignedTeam=sav_general" class="sav-mini-kpi">
+        <div class="sav-mini-kpi__icon bg-slate-100 text-slate-700"><span class="text-base">🎧</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="teamGeneral">—</div><div class="sav-mini-kpi__label">SAV général</div></div>
+      </button>
+    </div>
+
+    <!-- Filtres + recherche -->
+    <form id="sav-filters" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
+      <input type="hidden" name="awaitingClient">
+      <input type="hidden" name="sla_depasse">
+      <div class="lg:col-span-2 relative">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base">search</span>
+        <input id="sav-search" type="text" name="search" placeholder="N°, email, VIN, plaque…" autocomplete="off"
+               class="w-full rounded-xl border border-slate-300 pl-9 pr-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20">
+        <div id="sav-search-suggest" class="hidden absolute z-30 left-0 right-0 top-full mt-1 rounded-xl border border-slate-200 bg-white shadow-lg max-h-72 overflow-y-auto"></div>
+      </div>
+      <!-- Multi-select statut -->
+      <div class="sav-multiselect" data-multiselect="statut">
+        <button type="button" class="sav-multiselect__btn" aria-haspopup="listbox" aria-expanded="false">
+          <span class="sav-multiselect__label">Tous statuts</span>
+          <span class="sav-multiselect__count hidden" data-multi-count></span>
+          <span class="material-symbols-outlined text-base">expand_more</span>
+        </button>
+        <div class="sav-multiselect__dropdown hidden" role="listbox" aria-label="Filtre statut">
+          <% const STATUT_LIST_FR = {
+            ouvert:'Ouvert', pre_qualification:'Pré-qualification', en_attente_documents:'En attente de documents',
+            relance_1:'Relance 1', relance_2:'Relance 2', retour_demande:'Retour demandé', en_transit_retour:'En transit retour',
+            recu_atelier:'Reçu atelier', en_analyse:'En analyse', analyse_terminee:'Analyse terminée',
+            en_attente_decision_client:'Attente décision client', en_attente_fournisseur:'Attente fournisseur',
+            resolu_garantie:'Résolu (garantie)', resolu_facture:'Résolu (facturé)', clos:'Clôturé',
+            clos_sans_reponse:'Clos (sans réponse)', refuse:'Refusé'
+          }; Object.keys(STATUT_LIST_FR).forEach(function(s){ %>
+            <label class="sav-multiselect__option">
+              <input type="checkbox" name="statut" value="<%= s %>" class="rounded">
+              <span><%= STATUT_LIST_FR[s] %></span>
+            </label>
+          <% }); %>
+        </div>
+      </div>
+      <!-- Multi-select pieceType -->
+      <div class="sav-multiselect" data-multiselect="pieceType">
+        <button type="button" class="sav-multiselect__btn" aria-haspopup="listbox" aria-expanded="false">
+          <span class="sav-multiselect__label">Tous types</span>
+          <span class="sav-multiselect__count hidden" data-multi-count></span>
+          <span class="material-symbols-outlined text-base">expand_more</span>
+        </button>
+        <div class="sav-multiselect__dropdown hidden" role="listbox" aria-label="Filtre type pièce">
+          <% const PIECE_LIST_FR = {
+            mecatronique_dq200:'Mécatronique DQ200', mecatronique_dq250:'Mécatronique DQ250',
+            mecatronique_dq381:'Mécatronique DQ381', mecatronique_dq500:'Mécatronique DQ500',
+            boite_transfert:'Boîte de transfert', pont:'Pont', differentiel:'Différentiel',
+            haldex:'Haldex', reducteur:'Réducteur', cardan:'Cardan', autre:'Autre'
+          }; Object.keys(PIECE_LIST_FR).forEach(function(t){ %>
+            <label class="sav-multiselect__option">
+              <input type="checkbox" name="pieceType" value="<%= t %>" class="rounded">
+              <span><%= PIECE_LIST_FR[t] %></span>
+            </label>
+          <% }); %>
+        </div>
+      </div>
+      <select name="motifSav" id="sav-filter-motif" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
+        <option value="">Tous motifs</option>
+        <option value="piece_defectueuse">🔧 Pièce défectueuse</option>
+        <option value="retard_livraison">🚚 Retard livraison</option>
+        <option value="colis_abime">📦 Colis abîmé</option>
+        <option value="colis_non_recu">📭 Colis non reçu</option>
+        <option value="erreur_preparation">🔀 Erreur préparation</option>
+        <option value="retractation">↩️ Rétractation</option>
+        <option value="non_compatible">❌ Non compatible</option>
+        <option value="facture_document">📄 Facture/document</option>
+        <option value="remboursement">💳 Remboursement</option>
+        <option value="autre">❓ Autre</option>
+      </select>
+      <select name="assignedTeam" id="sav-filter-team" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
+        <option value="">Toutes équipes</option>
+        <option value="atelier">🔧 Atelier</option>
+        <option value="logistique">📦 Logistique</option>
+        <option value="commercial">💼 Commercial</option>
+        <option value="compta">💰 Compta</option>
+        <option value="sav_general">🎧 SAV général</option>
+      </select>
+      <select name="assignedToUserId" id="sav-filter-assignee" class="rounded-xl border border-slate-300 px-3 py-2 text-sm">
+        <option value="">Assigné : tous</option>
+        <option value="__none__">Non assigné</option>
+      </select>
+      <label class="sav-filter-pill" title="Afficher uniquement les tickets dont l'échéance SLA est dépassée">
+        <input type="checkbox" name="sla_depasse" value="true" class="peer sr-only">
+        <span class="sav-filter-pill__dot sav-filter-pill__dot--late" aria-hidden="true"></span>
+        <span>Urgents (SLA dépassé)</span>
+      </label>
+      <label class="sav-filter-pill" title="Afficher uniquement les tickets qui me sont assignés">
+        <input type="checkbox" name="assignedToMe" value="true" class="peer sr-only">
+        <span class="material-symbols-outlined text-base" aria-hidden="true">person</span>
+        <span>Mes tickets</span>
+      </label>
+      <label class="sav-filter-pill" title="Trier tous les tickets par priorité calculée (SLA + motif + montant)">
+        <input type="checkbox" name="priority" value="true" class="peer sr-only">
+        <span class="material-symbols-outlined text-base" aria-hidden="true">bolt</span>
+        <span>Ma queue (priorité)</span>
+      </label>
+    </form>
+
+    <!-- Toggle vue table / kanban -->
+    <div class="flex items-center justify-between mb-3">
+      <div class="inline-flex rounded-xl border border-slate-300 bg-white text-sm overflow-hidden">
+        <button type="button" id="sav-view-table" class="px-3 py-1.5 font-semibold bg-primary text-white" data-view="table" aria-label="Afficher la vue tableau">
+          <span class="material-symbols-outlined text-base align-middle mr-1" aria-hidden="true">table_rows</span>Tableau
+        </button>
+        <button type="button" id="sav-view-kanban" class="px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50" data-view="kanban" aria-label="Afficher la vue colonnes">
+          <span class="material-symbols-outlined text-base align-middle mr-1" aria-hidden="true">view_column</span>Colonnes
+        </button>
+      </div>
+    </div>
+
+    <!-- Bulk actions bar (visible si sélection) -->
+    <div id="sav-bulk-bar" class="hidden mb-3 flex items-center gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm">
+      <span class="font-semibold"><span id="sav-bulk-count">0</span> ticket(s) sélectionné(s)</span>
+      <select id="sav-bulk-statut" class="rounded-lg border border-slate-300 px-2 py-1 text-xs">
+        <option value="">— Statut —</option>
+        <option value="recu_atelier">Reçu atelier</option>
+        <option value="en_analyse">En analyse</option>
+        <option value="en_attente_documents">En attente de documents</option>
+        <option value="clos">Clôturé</option>
+        <option value="refuse">Refusé</option>
+      </select>
+      <button type="button" id="sav-bulk-statut-apply" class="rounded-lg bg-primary text-white px-3 py-1 text-xs font-semibold">Appliquer</button>
+      <select id="sav-bulk-assign" class="rounded-lg border border-slate-300 px-2 py-1 text-xs"></select>
+      <button type="button" id="sav-bulk-assign-apply" class="rounded-lg bg-slate-900 text-white px-3 py-1 text-xs font-semibold">Assigner</button>
+      <button type="button" id="sav-bulk-export" class="ml-auto rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold">Exporter sélection</button>
+      <button type="button" id="sav-bulk-delete" class="rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 text-xs font-semibold inline-flex items-center gap-1">
+        <span class="material-symbols-outlined text-base">delete</span>
+        Supprimer la sélection
+      </button>
+    </div>
+
+    <div id="sav-tickets-error" class="hidden rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800 mb-3"></div>
+
+    <div id="sav-tickets-wrap" class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+      <!-- Vue table desktop / tablet (scrollable horizontalement) -->
+      <div class="hidden md:block sav-table-scroll">
+      <table class="w-full text-sm sav-tickets-table">
+        <thead class="bg-slate-50 text-left">
+          <tr>
+            <th class="px-3 py-3 w-8 sav-col-sticky-l"><input type="checkbox" id="sav-bulk-all" class="rounded"></th>
+            <th class="px-3 py-3 font-semibold text-slate-600 cursor-pointer select-none sav-col-sticky-l2" data-sort="numero">N° <span class="text-slate-300" data-sort-icon="numero">⇅</span></th>
+            <th class="px-3 py-3 font-semibold text-slate-600 cursor-pointer select-none" data-sort="client">Client</th>
+            <th class="px-3 py-3 font-semibold text-slate-600 cursor-pointer select-none" data-sort="pieceType">Pièce</th>
+            <th class="px-3 py-3 font-semibold text-slate-600">Véhicule</th>
+            <th class="px-3 py-3 font-semibold text-slate-600 cursor-pointer select-none" data-sort="assignedTo">Assigné</th>
+            <th class="px-3 py-3 font-semibold text-slate-600 cursor-pointer select-none sav-col-sticky-r2" data-sort="statut">Statut</th>
+            <th class="px-3 py-3 font-semibold text-slate-600 cursor-pointer select-none sav-col-sticky-r" data-sort="sla">SLA</th>
+            <th class="px-3 py-3 font-semibold text-slate-600 cursor-pointer select-none" data-sort="createdAt">Ouvert le</th>
+            <th class="px-3 py-3 font-semibold text-slate-600 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="sav-tickets-tbody" class="divide-y divide-slate-100">
+          <tr><td colspan="10" class="px-4 py-10 text-center text-slate-500">Chargement…</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <!-- Vue Kanban (desktop) -->
+      <div id="sav-kanban" class="hidden p-4 overflow-x-auto">
+        <div id="sav-kanban-columns" class="flex gap-3 min-w-max"></div>
+      </div>
+
+      <!-- Vue cards mobile -->
+      <div id="sav-tickets-cards" class="md:hidden divide-y divide-slate-100">
+        <div class="p-4 text-center text-sm text-slate-500">Chargement…</div>
+      </div>
+
+      <div class="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50 text-xs text-slate-600 gap-3 flex-wrap">
+        <span id="sav-pagination-info">—</span>
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-1.5 text-slate-600">
+            Par page
+            <select id="sav-page-size" class="rounded border border-slate-300 px-2 py-1 text-xs bg-white">
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </label>
+          <div class="flex items-center gap-2">
+            <button type="button" id="sav-page-prev" class="px-2 py-1 rounded border border-slate-300 disabled:opacity-50 hover:bg-white">‹ Précédent</button>
+            <span id="sav-page-current">1</span> / <span id="sav-page-total">1</span>
+            <button type="button" id="sav-page-next" class="px-2 py-1 rounded border border-slate-300 disabled:opacity-50 hover:bg-white">Suivant ›</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- Modale création ticket (interne) -->
+<div id="sav-new-ticket-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-new-ticket-title">
+  <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h3 id="sav-new-ticket-title" class="text-lg font-semibold flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary">add_circle</span>
+        Nouveau ticket SAV
+      </h3>
+      <button type="button" data-close-new-ticket aria-label="Fermer" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+    </div>
+    <form id="sav-new-ticket-form" class="space-y-3">
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Type de pièce *</label>
+        <select name="pieceType" required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+          <option value="">— Choisir —</option>
+          <% Object.keys(PIECE_LIST_FR).forEach(function(t){ %>
+            <option value="<%= t %>"><%= PIECE_LIST_FR[t] %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Nom client *</label>
+          <input name="client.nom" required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Email client *</label>
+          <input name="client.email" type="email" required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">Téléphone</label>
+          <input name="client.telephone" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">N° commande</label>
+          <input name="numeroCommande" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-2">
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">Marque</label>
+          <input name="vehicule.marque" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">Modèle</label>
+          <input name="vehicule.modele" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></div>
+        <div><label class="block text-xs font-medium text-slate-600 mb-1">VIN</label>
+          <input name="vehicule.vin" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm font-mono"></div>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-slate-600 mb-1">Description du problème</label>
+        <textarea name="description" rows="3" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="Symptômes rapportés par le client au téléphone…"></textarea>
+      </div>
+      <div class="flex items-center justify-end gap-2 pt-2">
+        <button type="button" data-close-new-ticket class="btn btn-secondary">Annuler</button>
+        <button type="submit" class="btn btn-primary">Créer le ticket</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modale d'aide raccourcis clavier -->
+<div id="sav-kbd-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4">
+  <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-lg font-semibold">Raccourcis clavier</h3>
+      <button type="button" data-close-kbd class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+    </div>
+    <ul class="text-sm space-y-2">
+      <li class="flex justify-between"><span>Naviguer dans la liste</span><span><kbd class="px-2 py-0.5 rounded border bg-slate-50">j</kbd> / <kbd class="px-2 py-0.5 rounded border bg-slate-50">k</kbd></span></li>
+      <li class="flex justify-between"><span>Ouvrir le ticket sélectionné</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">↵</kbd></li>
+      <li class="flex justify-between"><span>Focus recherche</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">/</kbd></li>
+      <li class="flex justify-between"><span>Cette aide</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">?</kbd></li>
+      <li class="flex justify-between"><span>Cocher / décocher la ligne</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">x</kbd></li>
+      <li class="flex justify-between"><span>Fermer une modale</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">Esc</kbd></li>
+    </ul>
+  </div>
+</div>
+
+<script src="/js/sav-labels.js?v=3" defer></script>
+<script src="/js/sav-admin.js?v=18" defer></script>
+<%- include('./partials/footer') %>

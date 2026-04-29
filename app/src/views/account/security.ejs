@@ -1,0 +1,66 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1">
+  <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <aside class="lg:col-span-3">
+        <%- include('./_sidebar', { active: 'securite' }) %>
+      </aside>
+
+      <section class="lg:col-span-9">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-3xl font-bold text-slate-900">Sécurité</h2>
+              <p class="mt-2 text-slate-600">Changez votre mot de passe.</p>
+            </div>
+          </div>
+
+      <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+        <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+          <div class="font-bold">Erreur</div>
+          <div class="mt-1 text-sm"><%= errorMessage %></div>
+        </div>
+      <% } %>
+
+      <% if (typeof successMessage !== 'undefined' && successMessage) { %>
+        <div class="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-green-900">
+          <div class="font-bold">OK</div>
+          <div class="mt-1 text-sm"><%= successMessage %></div>
+        </div>
+      <% } %>
+
+      <form action="/compte/securite" class="mt-8 max-w-xl grid grid-cols-1 gap-4" method="POST">
+        <div>
+          <label class="block text-sm font-bold text-slate-700" for="currentPassword">Mot de passe actuel</label>
+          <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="currentPassword" name="currentPassword" required type="password" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-bold text-slate-700" for="newPassword">Nouveau mot de passe</label>
+          <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="newPassword" name="newPassword" required type="password" />
+          <div class="mt-2 text-[12px] text-slate-500">Minimum 6 caractères.</div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-bold text-slate-700" for="confirmPassword">Confirmer le nouveau mot de passe</label>
+          <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="confirmPassword" name="confirmPassword" required type="password" />
+        </div>
+
+        <button class="mt-2 rounded-xl bg-primary text-white px-5 py-3 font-black hover:bg-red-700 transition" type="submit">Mettre à jour</button>
+
+        <% if (!dbConnected) { %>
+          <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+            <div class="font-bold">Mode démo</div>
+            <div class="mt-1 text-sm">La base de données est indisponible : le changement de mot de passe ne peut pas fonctionner.</div>
+          </div>
+        <% } %>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

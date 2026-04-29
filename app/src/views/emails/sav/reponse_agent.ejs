@@ -1,0 +1,31 @@
+<%
+  // Notification only — no content, all replies happen in-app via the secure link.
+  const fallbackUrl = brand.SITE_URL + '/sav/suivi';
+  const gl = (typeof guestLink !== 'undefined' && guestLink) ? guestLink : fallbackUrl;
+  const nom = (ticket.client && ticket.client.nom) || '';
+
+  const body = `
+    <p>Bonjour <strong>${nom}</strong>,</p>
+    <p>Notre équipe SAV vient de vous répondre sur votre dossier <strong>${ticket.numero}</strong>.</p>
+
+    <p style="margin:14px 0;color:#475569;font-size:14px;">
+      Pour des raisons de sécurité et de traçabilité, l'intégralité de votre conversation SAV se déroule dans votre espace personnel. Cliquez sur le bouton ci-dessous pour consulter la réponse et y répondre.
+    </p>
+
+    <p style="margin:24px 0;text-align:center;">
+      <a href="${gl}"
+         style="display:inline-block;padding:14px 28px;background:#ec1313;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;font-size:15px;">
+        Consulter la réponse
+      </a>
+    </p>
+
+    <p style="font-size:13px;color:#475569;text-align:center;">
+      Ce lien est personnel — il vous donne un accès direct à votre dossier sans création de compte.
+    </p>
+
+    <p style="margin-top:24px;padding:12px;background:#fef3c7;border-radius:8px;font-size:12px;color:#78350f;">
+      <strong>Note :</strong> les réponses envoyées par email à cette adresse ne sont pas traitées. Merci de bien utiliser votre espace SAV via le bouton ci-dessus.
+    </p>
+  `;
+%>
+<%- include('./_layout', { ticket: ticket, subject: 'Nouvelle réponse SAV — ' + ticket.numero, body: body }) %>

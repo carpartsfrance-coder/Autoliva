@@ -1,0 +1,211 @@
+<% const activeKey = typeof active !== 'undefined' ? active : ''; %>
+<% const pendingCount = typeof sidebarPendingCount !== 'undefined' ? sidebarPendingCount : 0; %>
+<% const returnsCount = typeof sidebarReturnsCount !== 'undefined' ? sidebarReturnsCount : 0; %>
+<% const savCount = typeof sidebarSavCount !== 'undefined' ? sidebarSavCount : 0; %>
+
+<!-- Overlay -->
+<div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden"></div>
+
+<aside id="admin-sidebar" class="fixed top-0 left-0 h-full w-72 bg-slate-900 text-white flex flex-col z-40 -translate-x-full lg:translate-x-0 transition-all duration-300">
+
+  <!-- Logo -->
+  <div class="sidebar-header relative px-6 py-6 border-b border-white/10 flex items-center justify-between">
+    <a class="sidebar-brand flex items-center gap-3 min-w-0" href="/admin" aria-label="Accueil — CarParts France Back office">
+      <div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 font-black text-white text-lg" aria-hidden="true">
+        CP
+      </div>
+      <div class="sidebar-brand-text leading-tight overflow-hidden">
+        <div class="font-semibold tracking-tight text-lg whitespace-nowrap">CARPARTS<span class="text-primary">ADMIN</span></div>
+        <div class="text-xs text-white/60 whitespace-nowrap">Back office</div>
+      </div>
+    </a>
+    <button id="sidebar-collapse-btn" class="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/10 transition flex-shrink-0" type="button" title="Réduire la barre latérale">
+      <span class="material-symbols-outlined text-lg sidebar-collapse-icon">chevron_left</span>
+    </button>
+  </div>
+
+  <nav class="flex-1 px-4 py-4 overflow-y-auto">
+
+    <!-- COMMERCE -->
+    <div class="sidebar-group-label">Commerce</div>
+    <div class="space-y-0.5">
+      <a class="sidebar-link <%= activeKey === 'dashboard' ? 'sidebar-link--active' : '' %>" href="/admin" title="Tableau de bord">
+        <span class="material-symbols-outlined">grid_view</span>
+        <span class="sidebar-link-text">Tableau de bord</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'orders' ? 'sidebar-link--active' : '' %>" href="/admin/commandes" title="Commandes">
+        <span class="material-symbols-outlined">shopping_cart</span>
+        <span class="sidebar-link-text flex-1">Commandes</span>
+        <% if (pendingCount > 0) { %>
+          <span class="sidebar-badge"><%= pendingCount %></span>
+        <% } %>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'analytics' ? 'sidebar-link--active' : '' %>" href="/admin/analytics" title="Analytics">
+        <span class="material-symbols-outlined">analytics</span>
+        <span class="sidebar-link-text">Analytics</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'clients' ? 'sidebar-link--active' : '' %>" href="/admin/clients" title="Clients">
+        <span class="material-symbols-outlined">group</span>
+        <span class="sidebar-link-text">Clients</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'promo-codes' ? 'sidebar-link--active' : '' %>" href="/admin/codes-promo" title="Codes promo">
+        <span class="material-symbols-outlined">sell</span>
+        <span class="sidebar-link-text">Codes promo</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'cart-activity' ? 'sidebar-link--active' : '' %>" href="/admin/activite-panier" title="Activité panier">
+        <span class="material-symbols-outlined">add_shopping_cart</span>
+        <span class="sidebar-link-text">Activité panier</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'relances' ? 'sidebar-link--active' : '' %>" href="/admin/relances" title="Relances paniers">
+        <span class="material-symbols-outlined">schedule_send</span>
+        <span class="sidebar-link-text">Relances</span>
+      </a>
+    </div>
+
+    <div class="sidebar-separator"></div>
+
+    <!-- CATALOGUE -->
+    <div class="sidebar-group-label">Catalogue</div>
+    <div class="space-y-0.5">
+      <a class="sidebar-link <%= activeKey === 'catalog' ? 'sidebar-link--active' : '' %>" href="/admin/catalogue" title="Produits">
+        <span class="material-symbols-outlined">inventory_2</span>
+        <span class="sidebar-link-text">Produits</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'categories' ? 'sidebar-link--active' : '' %>" href="/admin/categories" title="Catégories">
+        <span class="material-symbols-outlined">category</span>
+        <span class="sidebar-link-text">Catégories</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'vehicle-makes' ? 'sidebar-link--active' : '' %>" href="/admin/vehicules" title="Véhicules">
+        <span class="material-symbols-outlined">directions_car</span>
+        <span class="sidebar-link-text">Véhicules</span>
+      </a>
+    </div>
+
+    <div class="sidebar-separator"></div>
+
+    <!-- CONTENU -->
+    <div class="sidebar-group-label">Contenu</div>
+    <div class="space-y-0.5">
+      <a class="sidebar-link <%= activeKey === 'blog' ? 'sidebar-link--active' : '' %>" href="/admin/blog" title="Blog">
+        <span class="material-symbols-outlined">article</span>
+        <span class="sidebar-link-text">Blog</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'legal-pages' ? 'sidebar-link--active' : '' %>" href="/admin/pages-legales" title="Pages légales">
+        <span class="material-symbols-outlined">gavel</span>
+        <span class="sidebar-link-text">Pages légales</span>
+      </a>
+    </div>
+
+    <div class="sidebar-separator"></div>
+
+    <!-- CONFIGURATION -->
+    <div class="sidebar-group-label">Configuration</div>
+    <div class="space-y-0.5">
+      <% if (typeof isOwner !== 'undefined' && isOwner) { %>
+        <a class="sidebar-link <%= activeKey === 'shipping-classes' ? 'sidebar-link--active' : '' %>" href="/admin/expedition" title="Expédition">
+          <span class="material-symbols-outlined">local_shipping</span>
+          <span class="sidebar-link-text">Expédition</span>
+        </a>
+      <% } %>
+      <a class="sidebar-link <%= activeKey === 'sav' ? 'sidebar-link--active' : '' %>" href="/admin/sav" title="SAV">
+        <span class="material-symbols-outlined">build_circle</span>
+        <span class="sidebar-link-text flex-1">SAV</span>
+        <% if (typeof savCount !== 'undefined' && savCount > 0) { %>
+          <span class="sidebar-badge"><%= savCount %></span>
+        <% } %>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'returns' ? 'sidebar-link--active' : '' %>" href="/admin/retours" title="Consignes & retours">
+        <span class="material-symbols-outlined">assignment_return</span>
+        <span class="sidebar-link-text flex-1">Consignes & retours</span>
+        <% if (returnsCount > 0) { %>
+          <span class="sidebar-badge"><%= returnsCount %></span>
+        <% } %>
+      </a>
+      <% if (typeof isOwner !== 'undefined' && isOwner) { %>
+        <a class="sidebar-link <%= activeKey === 'settings' ? 'sidebar-link--active' : '' %>" href="/admin/parametres" title="Paramètres">
+          <span class="material-symbols-outlined">settings</span>
+          <span class="sidebar-link-text">Paramètres</span>
+        </a>
+      <% } %>
+    </div>
+
+  </nav>
+
+  <!-- Notification bell -->
+  <div class="px-4 py-3" style="border-top: 1px solid rgba(255,255,255,0.06)">
+    <a href="/admin/commandes?sort=urgency" id="admin-notif-bell" class="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-white/10 transition text-white/70 hover:text-white">
+      <span class="relative">
+        <span class="material-symbols-outlined text-lg">notifications</span>
+        <span id="notif-badge" class="hidden absolute -top-1 -right-1 min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1">0</span>
+      </span>
+      <span class="text-sm font-medium" id="notif-label">Aucune alerte</span>
+    </a>
+  </div>
+  <script>
+  (function() {
+    function refreshNotifs() {
+      fetch('/admin/api/alerts', { headers: { 'Accept': 'application/json' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.ok || !data.alerts) return;
+          var a = data.alerts;
+          var total = (a.overdueReturns || 0) + (a.failedClonings || 0) + (a.pieceWaiting || 0) + (a.cloningLong || 0) + (a.readyToShip || 0);
+          var badge = document.getElementById('notif-badge');
+          var label = document.getElementById('notif-label');
+          if (total > 0) {
+            badge.textContent = total;
+            badge.classList.remove('hidden');
+            var parts = [];
+            if (a.overdueReturns > 0) parts.push(a.overdueReturns + ' retour(s) en retard');
+            if (a.failedClonings > 0) parts.push(a.failedClonings + ' clonage(s) échoué(s)');
+            if (a.readyToShip > 0) parts.push(a.readyToShip + ' à expédier');
+            if (a.pieceWaiting > 0) parts.push(a.pieceWaiting + ' pièce(s) > 10j');
+            if (a.cloningLong > 0) parts.push(a.cloningLong + ' clonage(s) > 5j');
+            label.textContent = parts[0] || total + ' alerte(s)';
+          } else {
+            badge.classList.add('hidden');
+            label.textContent = 'Aucune alerte';
+          }
+        })
+        .catch(function() {});
+    }
+    refreshNotifs();
+    setInterval(refreshNotifs, 5 * 60 * 1000);
+  })();
+  </script>
+
+  <!-- Zone utilisateur -->
+  <div class="p-4" style="border-top: 1px solid rgba(255,255,255,0.06)">
+    <%
+      const adminFirstName = currentAdmin && currentAdmin.firstName ? currentAdmin.firstName : '';
+      const adminLastName  = currentAdmin && currentAdmin.lastName  ? currentAdmin.lastName  : '';
+      const adminInitials  = (adminFirstName.charAt(0) + adminLastName.charAt(0)).toUpperCase() || '?';
+      const adminFullName  = (adminFirstName + ' ' + adminLastName).trim() || (currentAdmin && currentAdmin.email) || 'Admin';
+      const sidebarIsOwner = currentAdmin && currentAdmin.role === 'owner';
+    %>
+    <form action="/admin/deconnexion" method="POST">
+      <div class="flex items-center gap-3">
+        <!-- Avatar initiales -->
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0" style="background: rgba(255,255,255,0.15)">
+          <%= adminInitials %>
+        </div>
+        <!-- Nom + rôle badge -->
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <div class="text-sm font-medium text-white truncate"><%= adminFullName %></div>
+            <% if (sidebarIsOwner) { %>
+              <span class="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">Propriétaire</span>
+            <% } else { %>
+              <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full">Employé</span>
+            <% } %>
+          </div>
+        </div>
+        <!-- Logout -->
+        <button class="sidebar-logout-btn" type="submit" title="Déconnexion">
+          <span class="material-symbols-outlined">logout</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+</aside>

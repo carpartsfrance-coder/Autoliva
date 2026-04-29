@@ -1,0 +1,65 @@
+<%
+/**
+ * Skeleton overlay for Product edit page.
+ * Sits under the sticky header + stepper — covers the scrollable form body.
+ * Removed by JS on DOMContentLoaded — see skeleton-init inline script.
+ */
+%>
+<div id="page-skeleton" class="absolute left-0 right-0 bottom-0 z-[5] bg-white px-8 py-8 pointer-events-none" style="top:109px;">
+
+  <!-- Section 1 — Infos essentielles -->
+  <div class="bg-slate-50 rounded-2xl border border-slate-100 p-6 mb-6">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="skeleton" style="width:32px;height:32px;border-radius:8px;flex-shrink:0;"></div>
+      <div class="skeleton skeleton-title" style="width:200px;margin-bottom:0;"></div>
+    </div>
+    <!-- 2-col grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <% for (let i = 0; i < 4; i++) { %>
+        <div>
+          <div class="skeleton" style="width:80px;height:12px;border-radius:4px;margin-bottom:6px;"></div>
+          <div class="skeleton" style="width:100%;height:42px;border-radius:10px;"></div>
+        </div>
+      <% } %>
+    </div>
+    <!-- full-width row -->
+    <div class="mt-4">
+      <div class="skeleton" style="width:60px;height:12px;border-radius:4px;margin-bottom:6px;"></div>
+      <div class="skeleton" style="width:100%;height:42px;border-radius:10px;"></div>
+    </div>
+  </div>
+
+  <!-- Section 2 — Description -->
+  <div class="bg-slate-50 rounded-2xl border border-slate-100 p-6 mb-6">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="skeleton" style="width:32px;height:32px;border-radius:8px;flex-shrink:0;"></div>
+      <div class="skeleton skeleton-title" style="width:160px;margin-bottom:0;"></div>
+    </div>
+    <!-- 2-col small fields -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <% for (let i = 0; i < 4; i++) { %>
+        <div>
+          <div class="skeleton" style="width:70px;height:12px;border-radius:4px;margin-bottom:6px;"></div>
+          <div class="skeleton" style="width:100%;height:42px;border-radius:10px;"></div>
+        </div>
+      <% } %>
+    </div>
+    <!-- Rich text editor area -->
+    <div class="skeleton" style="width:100%;height:180px;border-radius:10px;"></div>
+  </div>
+
+  <!-- Section 3 — Médias -->
+  <div class="bg-slate-50 rounded-2xl border border-slate-100 p-6">
+    <div class="flex items-center gap-3 mb-6">
+      <div class="skeleton" style="width:32px;height:32px;border-radius:8px;flex-shrink:0;"></div>
+      <div class="skeleton skeleton-title" style="width:100px;margin-bottom:0;"></div>
+    </div>
+    <!-- Image grid -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+      <% for (let i = 0; i < 4; i++) { %>
+        <div class="skeleton" style="width:100%;padding-top:100%;border-radius:12px;"></div>
+      <% } %>
+    </div>
+  </div>
+
+</div>

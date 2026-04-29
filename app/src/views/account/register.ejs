@@ -1,0 +1,391 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<% const initialIsPro = !!(form && form.accountType === 'pro'); %>
+
+<main class="flex-1 bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-200 transition-colors duration-300">
+  <div class="container mx-auto px-4 py-12 max-w-6xl">
+    <div class="text-center mb-10">
+      <h1 class="text-3xl font-extrabold text-gray-900 dark:text-white mb-2" id="registerTitle"><%= initialIsPro ? 'Créez votre compte professionnel' : 'Créez votre compte' %></h1>
+      <p class="text-gray-600 dark:text-gray-400" id="registerSubtitle"><%= initialIsPro ? 'Accédez à des tarifs HT et un support technique dédié.' : 'Choisissez Particulier ou Pro, puis remplissez vos informations.' %></p>
+    </div>
+
+    <% if (errorMessage) { %>
+      <div class="mb-10 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <form action="/compte/inscription" method="POST">
+      <input name="returnTo" type="hidden" value="<%= typeof returnTo !== 'undefined' ? returnTo : '/compte' %>" />
+      <input id="accountType" name="accountType" type="hidden" value="<%= form && form.accountType === 'pro' ? 'pro' : 'particulier' %>" />
+      <input name="website" type="text" value="" autocomplete="off" tabindex="-1" aria-hidden="true" class="hidden" />
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+        <div class="lg:col-span-7 space-y-8">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button class="type-card flex flex-col items-start p-5 rounded-xl border-2 border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark transition-all hover:grayscale-0 hover:opacity-100 text-left <%= initialIsPro ? 'opacity-60 grayscale' : 'border-primary ring-2 ring-primary/10 bg-primary/5' %>" data-account-type-card data-type="particulier" type="button" aria-pressed="<%= initialIsPro ? 'false' : 'true' %>">
+              <div class="icon-container w-10 h-10 rounded-lg flex items-center justify-center mb-4 <%= initialIsPro ? 'bg-gray-100 dark:bg-gray-800 text-gray-500' : 'bg-primary text-white' %>" data-icon-container>
+                <span class="material-symbols-outlined">person</span>
+              </div>
+              <span class="font-bold text-gray-900 dark:text-white mb-1">Particulier</span>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Pour l'entretien de votre véhicule personnel.</p>
+            </button>
+
+            <button class="type-card flex flex-col items-start p-5 rounded-xl border-2 border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark transition-all hover:grayscale-0 hover:opacity-100 text-left <%= initialIsPro ? 'border-primary ring-2 ring-primary/10 bg-primary/5' : 'opacity-60 grayscale' %>" data-account-type-card data-type="pro" type="button" aria-pressed="<%= initialIsPro ? 'true' : 'false' %>">
+              <div class="icon-container w-10 h-10 rounded-lg flex items-center justify-center mb-4 <%= initialIsPro ? 'bg-primary text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500' %>" data-icon-container>
+                <span class="material-symbols-outlined">handyman</span>
+              </div>
+              <span class="font-bold text-gray-900 dark:text-white mb-1">Professionnel</span>
+              <p class="text-xs text-gray-500 dark:text-gray-400">Garages, revendeurs et flottes d'entreprises.</p>
+            </button>
+          </div>
+
+          <div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-8 border border-border-light dark:border-border-dark shadow-sm">
+            <div class="space-y-6">
+              <div class="space-y-4 <%= initialIsPro ? '' : 'hidden' %>" data-pro-only>
+                <h3 class="text-sm font-bold text-primary uppercase tracking-wider">Informations de l'entreprise</h3>
+
+                <div class="space-y-1.5">
+                  <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1" for="companyName">Nom de l'entreprise</label>
+                  <input class="w-full rounded-lg border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 focus:border-primary focus:ring-primary/20 text-sm" id="companyName" name="companyName" placeholder="Ex: Garage AutoPro Lyon" type="text" value="<%= form ? form.companyName : '' %>" <%= initialIsPro ? 'required' : '' %> />
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div class="space-y-1.5">
+                    <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1" for="siret">Numéro de SIRET</label>
+                    <input class="w-full rounded-lg border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 focus:border-primary focus:ring-primary/20 text-sm" id="siret" name="siret" placeholder="123 456 789 00012" type="text" value="<%= form ? form.siret : '' %>" <%= initialIsPro ? 'required' : '' %> />
+                    <div class="text-[11px] text-gray-500">(Exemple : 123 456 789 00012)</div>
+                  </div>
+                  <div class="space-y-1.5">
+                    <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1">Type d'activité <span class="text-gray-400 font-normal">(optionnel)</span></label>
+                    <select class="w-full rounded-lg border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 focus:border-primary focus:ring-primary/20 text-sm" aria-label="Type d'activité">
+                      <option>Mécanique générale</option>
+                      <option>Carrosserie</option>
+                      <option>Flotte de transport</option>
+                      <option>Revendeur de pièces</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <hr class="border-border-light dark:border-border-dark <%= initialIsPro ? '' : 'hidden' %>" data-pro-only />
+
+              <div class="space-y-4">
+                <h3 class="text-sm font-bold text-primary uppercase tracking-wider">Vos informations</h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div class="space-y-1.5">
+                    <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1" for="firstName">Prénom</label>
+                    <input class="w-full rounded-lg border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 focus:border-primary focus:ring-primary/20 text-sm" id="firstName" name="firstName" placeholder="Jean" required type="text" value="<%= form ? form.firstName : '' %>" />
+                  </div>
+
+                  <div class="space-y-1.5">
+                    <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1" for="lastName">Nom</label>
+                    <input class="w-full rounded-lg border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 focus:border-primary focus:ring-primary/20 text-sm" id="lastName" name="lastName" placeholder="Dupont" required type="text" value="<%= form ? form.lastName : '' %>" />
+                  </div>
+                </div>
+
+                <div class="space-y-1.5">
+                  <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1" for="email">Email</label>
+                  <input class="w-full rounded-lg border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 focus:border-primary focus:ring-primary/20 text-sm" id="email" name="email" placeholder="votre@email.com" required type="email" value="<%= form ? form.email : '' %>" />
+                </div>
+
+                <div class="space-y-1.5">
+                  <label class="text-sm font-semibold text-gray-700 dark:text-gray-300 ml-1" for="password">Mot de passe</label>
+                  <input class="w-full rounded-lg border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-800/50 focus:border-primary focus:ring-primary/20 text-sm" id="password" name="password" placeholder="••••••••" required type="password" />
+                  <div class="mt-2 text-[11px] text-gray-500">Minimum 6 caractères.</div>
+                  <div class="flex gap-1 mt-2" aria-hidden="true" id="passwordMeters">
+                    <div class="h-1.5 rounded-full transition-all duration-500 w-1/4 bg-gray-200 dark:bg-gray-700" data-meter></div>
+                    <div class="h-1.5 rounded-full transition-all duration-500 w-1/4 bg-gray-200 dark:bg-gray-700" data-meter></div>
+                    <div class="h-1.5 rounded-full transition-all duration-500 w-1/4 bg-gray-200 dark:bg-gray-700" data-meter></div>
+                    <div class="h-1.5 rounded-full transition-all duration-500 w-1/4 bg-gray-200 dark:bg-gray-700" data-meter></div>
+                  </div>
+                  <p class="text-[11px] text-gray-500 font-medium flex items-center gap-1 mt-1" id="passwordStrengthText"></p>
+                </div>
+              </div>
+
+              <div class="flex items-start gap-3 py-2">
+                <input class="mt-1 rounded border-gray-300 text-primary focus:ring-primary" id="acceptTerms" name="acceptTerms" required type="checkbox" value="true" />
+                <label class="text-xs text-gray-500 dark:text-gray-400 leading-normal" for="acceptTerms">
+                  J'accepte les <a class="text-primary hover:underline" href="/legal/cgv" target="_blank" rel="noreferrer">Conditions Générales de Vente</a> et la <a class="text-primary hover:underline" href="/legal/confidentialite" target="_blank" rel="noreferrer">Politique de Confidentialité</a>.
+                </label>
+              </div>
+
+              <button class="w-full bg-primary hover:bg-primary-hover text-white font-bold py-4 rounded-lg shadow-lg shadow-primary/20 transition-all active:scale-[0.98] uppercase tracking-wide" id="registerSubmitBtn" type="submit"><%= initialIsPro ? 'Créer mon compte professionnel' : 'Créer mon compte' %></button>
+
+              <div class="text-center">
+                <p class="text-sm text-gray-500">
+                  Déjà inscrit ?
+                  <a class="text-primary font-bold hover:underline" href="/compte/connexion?returnTo=<%= encodeURIComponent(typeof returnTo !== 'undefined' ? returnTo : '/compte') %>">Connectez-vous ici</a>
+                </p>
+              </div>
+
+              <% if (!dbConnected) { %>
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                  <div class="font-bold">Mode démo</div>
+                  <div class="mt-1 text-sm">La base de données est indisponible : l'inscription ne peut pas fonctionner.</div>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-5 space-y-6">
+          <div class="bg-primary/5 dark:bg-primary/10 rounded-2xl p-8 relative overflow-hidden border border-primary/10">
+            <div class="relative z-10 <%= initialIsPro ? '' : 'hidden' %>" data-benefits="pro">
+              <div class="flex items-center gap-3 mb-6">
+                <span class="material-symbols-outlined text-primary text-3xl">verified</span>
+                <h2 class="text-xl font-bold uppercase tracking-wide text-gray-900 dark:text-white">Vos avantages Pro</h2>
+              </div>
+              <ul class="space-y-5">
+                <li class="flex items-start gap-4">
+                  <div class="w-6 flex justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-green-600 dark:text-green-500 mt-0.5">percent</span>
+                  </div>
+                  <div>
+                    <p class="font-bold text-gray-900 dark:text-white">Prix remisés &amp; affichage HT</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 leading-snug">Profitez de tarifs préférentiels exclusifs et d'une visibilité immédiate sur les prix hors taxes.</p>
+                  </div>
+                </li>
+                <li class="flex items-start gap-4">
+                  <div class="w-6 flex justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-blue-600 dark:text-blue-500 mt-0.5">payments</span>
+                  </div>
+                  <div>
+                    <p class="font-bold text-gray-900 dark:text-white">Paiement à 30 jours</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 leading-snug">Solution de financement flexible après validation de votre dossier.</p>
+                  </div>
+                </li>
+                <li class="flex items-start gap-4">
+                  <div class="w-6 flex justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-orange-600 dark:text-orange-500 mt-0.5">priority_high</span>
+                  </div>
+                  <div>
+                    <p class="font-bold text-gray-900 dark:text-white">Support technique prioritaire</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 leading-snug">Ligne directe avec nos experts pour vos demandes complexes.</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <div class="relative z-10 <%= initialIsPro ? 'hidden' : '' %>" data-benefits="particulier">
+              <div class="flex items-center gap-3 mb-6">
+                <span class="material-symbols-outlined text-primary text-3xl">verified</span>
+                <h2 class="text-xl font-bold uppercase tracking-wide text-gray-900 dark:text-white">Vos avantages</h2>
+              </div>
+              <ul class="space-y-5">
+                <li class="flex items-start gap-4">
+                  <div class="w-6 flex justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-green-600 dark:text-green-500 mt-0.5">local_shipping</span>
+                  </div>
+                  <div>
+                    <p class="font-bold text-gray-900 dark:text-white">Expédition rapide</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 leading-snug">Livraison rapide partout en France.</p>
+                  </div>
+                </li>
+                <li class="flex items-start gap-4">
+                  <div class="w-6 flex justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-blue-600 dark:text-blue-500 mt-0.5">verified_user</span>
+                  </div>
+                  <div>
+                    <p class="font-bold text-gray-900 dark:text-white">Pièces testées &amp; garanties</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 leading-snug">Des pièces contrôlées pour rouler serein.</p>
+                  </div>
+                </li>
+                <li class="flex items-start gap-4">
+                  <div class="w-6 flex justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-orange-600 dark:text-orange-500 mt-0.5">support_agent</span>
+                  </div>
+                  <div>
+                    <p class="font-bold text-gray-900 dark:text-white">Support à votre écoute</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 leading-snug">Une équipe dispo pour vous aider avant achat.</p>
+                  </div>
+                </li>
+              </ul>
+            </div>
+
+            <span class="material-symbols-outlined absolute -right-8 -bottom-8 text-primary/10 text-[180px] rotate-12 pointer-events-none">handyman</span>
+          </div>
+
+          <div class="bg-surface-light dark:bg-surface-dark rounded-2xl p-8 border border-border-light dark:border-border-dark space-y-8">
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest text-center">Engagement Qualité</h3>
+            <div class="space-y-6">
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-green-50 dark:bg-green-900/20 flex items-center justify-center text-green-600 flex-shrink-0">
+                  <span class="material-symbols-outlined text-2xl">security</span>
+                </div>
+                <div>
+                  <p class="font-bold text-sm text-gray-900 dark:text-white">Sécurité</p>
+                  <p class="text-xs text-gray-500 leading-snug">Navigation sécurisée et protection des données.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600 flex-shrink-0">
+                  <span class="material-symbols-outlined text-2xl">verified_user</span>
+                </div>
+                <div>
+                  <p class="font-bold text-sm text-gray-900 dark:text-white">Conformité RGPD</p>
+                  <p class="text-xs text-gray-500 leading-snug">Gestion responsable de vos données.</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-xl bg-red-50 dark:bg-red-900/20 flex items-center justify-center text-primary flex-shrink-0">
+                  <span class="material-symbols-outlined text-2xl">workspace_premium</span>
+                </div>
+                <div>
+                  <p class="font-bold text-sm text-gray-900 dark:text-white">Expertise</p>
+                  <p class="text-xs text-gray-500 leading-snug">Des pièces sélectionnées et vérifiées.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-6 border-t border-border-light dark:border-border-dark flex justify-center gap-6 opacity-60">
+              <span class="text-[10px] font-bold">VISA</span>
+              <span class="text-[10px] font-bold">MASTERCARD</span>
+              <span class="text-[10px] font-bold">PAYPAL</span>
+              <span class="text-[10px] font-bold">STRIPE</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script>
+  (function () {
+    var root = document;
+    var hidden = root.getElementById('accountType');
+    var cards = root.querySelectorAll('[data-account-type-card]');
+    var proOnly = root.querySelectorAll('[data-pro-only]');
+    var proBenefits = root.querySelectorAll('[data-benefits="pro"]');
+    var partBenefits = root.querySelectorAll('[data-benefits="particulier"]');
+    var title = root.getElementById('registerTitle');
+    var subtitle = root.getElementById('registerSubtitle');
+    var submitBtn = root.getElementById('registerSubmitBtn');
+    var companyNameInput = root.getElementById('companyName');
+    var siretInput = root.getElementById('siret');
+    var passwordInput = root.getElementById('password');
+    var strengthText = root.getElementById('passwordStrengthText');
+    var meters = root.querySelectorAll('[data-meter]');
+
+    function setRequired(isRequired) {
+      if (companyNameInput) companyNameInput.required = !!isRequired;
+      if (siretInput) siretInput.required = !!isRequired;
+    }
+
+    function updatePasswordStrength(value) {
+      var v = String(value || '');
+      var score = 0;
+      if (v.length >= 6) score += 1;
+      if (v.length >= 10) score += 1;
+      if (/[A-Z]/.test(v) && /[a-z]/.test(v)) score += 1;
+      if (/\d/.test(v) || /[^A-Za-z0-9]/.test(v)) score += 1;
+
+      var colors = ['bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500'];
+      var labels = ['Faible', 'Moyen', 'Bon', 'Robuste'];
+
+      if (meters && meters.length) {
+        meters.forEach(function (m, i) {
+          m.classList.remove('bg-red-500', 'bg-orange-500', 'bg-yellow-500', 'bg-green-500');
+          m.classList.remove('bg-gray-200');
+          m.classList.remove('dark:bg-gray-700');
+          if (i < score) {
+            m.classList.add(colors[Math.max(0, Math.min(score - 1, colors.length - 1))]);
+          } else {
+            m.classList.add('bg-gray-200');
+            m.classList.add('dark:bg-gray-700');
+          }
+        });
+      }
+
+      if (strengthText) {
+        if (!v) {
+          strengthText.textContent = '';
+        } else {
+          strengthText.textContent = 'Force du mot de passe : ' + labels[Math.max(0, Math.min(score - 1, labels.length - 1))];
+          strengthText.classList.remove('text-red-600', 'text-orange-600', 'text-yellow-600', 'text-green-600');
+          strengthText.classList.add(score <= 1 ? 'text-red-600' : score === 2 ? 'text-orange-600' : score === 3 ? 'text-yellow-600' : 'text-green-600');
+        }
+      }
+    }
+
+    function setType(type) {
+      if (!hidden) return;
+      hidden.value = type === 'pro' ? 'pro' : 'particulier';
+      var isPro = hidden.value === 'pro';
+
+      if (title) title.textContent = isPro ? 'Créez votre compte professionnel' : 'Créez votre compte';
+      if (subtitle) subtitle.textContent = isPro
+        ? 'Accédez à des tarifs HT et un support technique dédié.'
+        : 'Créez votre compte pour commander plus rapidement.';
+
+      if (submitBtn) submitBtn.textContent = isPro ? 'Créer mon compte professionnel' : 'Créer mon compte';
+
+      if (proOnly && proOnly.length) {
+        proOnly.forEach(function (el) {
+          el.classList.toggle('hidden', !isPro);
+        });
+      }
+
+      if (proBenefits && proBenefits.length) {
+        proBenefits.forEach(function (el) {
+          el.classList.toggle('hidden', !isPro);
+        });
+      }
+      if (partBenefits && partBenefits.length) {
+        partBenefits.forEach(function (el) {
+          el.classList.toggle('hidden', isPro);
+        });
+      }
+
+      setRequired(isPro);
+
+      if (cards && cards.length) {
+        cards.forEach(function (card) {
+          var cardType = card.getAttribute('data-type');
+          var isActive = cardType === hidden.value;
+          var icon = card.querySelector('[data-icon-container]');
+
+          card.classList.toggle('opacity-60', !isActive);
+          card.classList.toggle('grayscale', !isActive);
+          card.classList.toggle('border-primary', isActive);
+          card.classList.toggle('ring-2', isActive);
+          card.classList.toggle('ring-primary/10', isActive);
+          card.classList.toggle('bg-primary/5', isActive);
+
+          if (icon) {
+            icon.classList.toggle('bg-primary', isActive);
+            icon.classList.toggle('text-white', isActive);
+            icon.classList.toggle('bg-gray-100', !isActive);
+            icon.classList.toggle('dark:bg-gray-800', !isActive);
+            icon.classList.toggle('text-gray-500', !isActive);
+          }
+
+          card.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+      }
+    }
+
+    if (cards && cards.length) {
+      cards.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          setType(btn.getAttribute('data-type'));
+        });
+      });
+    }
+
+    if (passwordInput) {
+      passwordInput.addEventListener('input', function () {
+        updatePasswordStrength(passwordInput.value);
+      });
+      updatePasswordStrength(passwordInput.value);
+    }
+
+    setType(hidden && hidden.value ? hidden.value : 'particulier');
+  })();
+</script>
+
+<%- include('../partials/footer') %>

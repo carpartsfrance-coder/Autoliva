@@ -1,0 +1,3504 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'catalog' }) %>
+
+<style>
+  .field-review-empty {
+    border-color: rgb(252 165 165) !important;
+    background-color: rgb(254 242 242) !important;
+    box-shadow: 0 0 0 3px rgba(252, 165, 165, 0.18);
+  }
+
+  .field-review-ai {
+    border-color: rgb(167 139 250) !important;
+    background-color: rgb(245 243 255) !important;
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.18);
+  }
+
+  .field-review-validated {
+    border-color: rgb(74 222 128) !important;
+    background-color: rgb(240 253 244) !important;
+    box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.18);
+  }
+
+  .field-review-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+  }
+
+  /* Drag-and-drop visual feedback on the media grid */
+  #mediaGrid.is-dropzone-active {
+    outline: 2px dashed rgb(59 130 246);
+    outline-offset: 4px;
+    background-color: rgba(59, 130, 246, 0.06);
+    border-radius: 0.75rem;
+  }
+  .media-tile.sortable-ghost {
+    opacity: 0.4;
+  }
+  .media-tile.sortable-chosen {
+    cursor: grabbing !important;
+  }
+  .media-tile [data-action="drag-handle"] {
+    cursor: grab;
+  }
+  .media-tile.sortable-drag {
+    cursor: grabbing !important;
+  }
+</style>
+
+<main class="flex-1 relative">
+  <% const pageTitle = mode === 'new' ? 'New Product' : 'Edit Product'; %>
+  <% const productName = form && form.name ? form.name : (mode === 'new' ? 'New product' : 'Product'); %>
+  <% const liveUrl = mode === 'edit' && productId ? ('/produits/' + productId) : null; %>
+  <% const currentAiDraftJob = typeof latestAiDraftJob !== 'undefined' ? latestAiDraftJob : null; %>
+  <% const singleAiProfiles = typeof aiSingleProfiles !== 'undefined' && Array.isArray(aiSingleProfiles) && aiSingleProfiles.length ? aiSingleProfiles : [
+    { key: 'single_standard', label: 'Standard', description: 'Bonne qualité avec un budget plus raisonnable.', defaultModel: 'gpt-4.1' },
+    { key: 'single_balanced', label: 'Avancé', description: 'gpt-5.4 plus qualitatif que Standard, sans aller aussi loin que Premium.', defaultModel: 'gpt-5.4' },
+    { key: 'single_premium', label: 'Premium', description: 'Recherche plus approfondie.', defaultModel: 'gpt-5.4' },
+  ]; %>
+  <% const defaultSingleAiProfileKey = typeof defaultAiSingleProfileKey !== 'undefined' && defaultAiSingleProfileKey ? defaultAiSingleProfileKey : 'single_premium'; %>
+  <% const currentAiDraftJobEncoded = encodeURIComponent(JSON.stringify(currentAiDraftJob || null)); %>
+  <% const galleryPreview = (form && form.galleryUrls ? String(form.galleryUrls).split(/\r?\n/).map((s) => s.trim()).filter(Boolean) : []).slice(0, 5); %>
+  <% const specsText = form && typeof form.specs !== 'undefined' ? String(form.specs || '') : ''; %>
+  <% const findSpecValue = (label) => {
+    const target = String(label || '').trim().toLowerCase();
+    if (!target) return '';
+    const lines = String(specsText || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    for (const line of lines) {
+      const sepIndex = line.indexOf(':') >= 0 ? line.indexOf(':') : (line.indexOf('=') >= 0 ? line.indexOf('=') : line.indexOf('|'));
+      if (sepIndex <= 0) continue;
+      const rawLabel = line.slice(0, sepIndex).trim().toLowerCase();
+      if (rawLabel !== target) continue;
+      return line.slice(sepIndex + 1).trim();
+    }
+    return '';
+  }; %>
+  <% const specTypeValue = findSpecValue('type'); %>
+  <% const specProgrammationValue = findSpecValue('programmation'); %>
+  <div id="adminProductRuntimeData" class="hidden" data-product-id="<%= typeof productId !== 'undefined' ? productId : '' %>" data-latest-ai-draft-job="<%= currentAiDraftJobEncoded %>"></div>
+
+  <header class="bg-surface-light dark:bg-surface-dark border-b border-border-light dark:border-border-dark sticky top-0 z-50">
+    <div class="px-8 py-4 flex items-center justify-between">
+      <div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Produits', url: '/admin/catalogue'}, {label: productName}] }) %>
+        <h1 class="text-xl font-bold text-slate-900 dark:text-white"><%= productName %></h1>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <button class="px-4 py-2 text-sm font-semibold border border-border-light dark:border-border-dark rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all flex items-center gap-2" type="button" <%= liveUrl ? '' : 'disabled' %> onclick="if (this.disabled) return; window.open('<%= liveUrl || '' %>', '_blank', 'noopener');">
+          <span class="material-symbols-outlined text-lg">visibility</span>
+          Voir en ligne
+        </button>
+
+        <button class="btn btn-primary" form="productForm" type="submit" <%= dbConnected ? '' : 'disabled' %>>
+          <span class="material-symbols-outlined text-lg">save</span>
+          Enregistrer
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Product Stepper -->
+  <nav id="product-stepper" class="bg-white border-b border-slate-200 sticky z-40 overflow-x-auto" style="top:0">
+    <div class="flex items-center min-w-max">
+      <button class="stepper-step stepper-step--active" data-target="section-essential" type="button">
+        <span class="stepper-check material-symbols-outlined">check_circle</span>
+        <span class="stepper-dot"></span>
+        <span>1. Infos essentielles</span>
+      </button>
+      <button class="stepper-step" data-target="section-description" type="button">
+        <span class="stepper-check material-symbols-outlined">check_circle</span>
+        <span class="stepper-dot"></span>
+        <span>2. Description</span>
+      </button>
+      <button class="stepper-step" data-target="section-media" type="button">
+        <span class="stepper-check material-symbols-outlined">check_circle</span>
+        <span class="stepper-dot"></span>
+        <span>3. Médias</span>
+      </button>
+      <button class="stepper-step" data-target="section-compat" type="button">
+        <span class="stepper-check material-symbols-outlined">check_circle</span>
+        <span class="stepper-dot"></span>
+        <span>4. Compatibilité</span>
+      </button>
+      <button class="stepper-step" data-target="section-seo" type="button">
+        <span class="stepper-check material-symbols-outlined">check_circle</span>
+        <span class="stepper-dot"></span>
+        <span>5. SEO</span>
+      </button>
+      <button class="stepper-step" data-target="section-options" type="button">
+        <span class="stepper-check material-symbols-outlined">check_circle</span>
+        <span class="stepper-dot"></span>
+        <span>6. Options avancées</span>
+      </button>
+    </div>
+  </nav>
+
+  <%- include('./partials/skeleton-product') %>
+
+  <div class="p-8 max-w-6xl mx-auto space-y-8">
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (!dbConnected) { %>
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+        <div class="font-bold">Mode démo</div>
+        <div class="mt-1 text-sm">La base de données est indisponible : vous ne pouvez pas enregistrer de produit.</div>
+      </div>
+    <% } %>
+
+    <div class="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sky-900">
+      <div class="font-bold">Aide rapide pour créer un produit</div>
+      <div class="mt-2 text-sm space-y-1">
+        <div><span class="font-bold text-red-600">*</span> = champ obligatoire pour créer le produit.</div>
+        <div><span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-red-700">Obligatoire</span> = nécessaire pour enregistrer le produit.</div>
+        <div><span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-700">Recommandé</span> = fortement conseillé pour une fiche produit complète.</div>
+        <div><span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Optionnel</span> = utile selon le produit, mais non bloquant.</div>
+        <div>Minimum demandé aujourd'hui : <span class="font-semibold">Nom du produit</span> et <span class="font-semibold">Prix</span>.</div>
+        <div>Si vous laissez le <span class="font-semibold">slug</span> vide, il sera créé automatiquement à partir du nom du produit.</div>
+        <div>Les autres champs peuvent être remplis maintenant ou plus tard pour améliorer la fiche produit.</div>
+      </div>
+    </div>
+
+    <div class="rounded-xl border border-violet-200 bg-violet-50 p-4 text-violet-950">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div class="font-bold">Assistant IA pour pré-remplir la fiche</div>
+          <div class="mt-2 text-sm space-y-1">
+            <div>1. Renseignez au minimum le nom du produit ou la référence.</div>
+            <div>2. Ajoutez des notes si vous voulez orienter la recherche.</div>
+            <div>3. Cliquez sur <span class="font-semibold">Générer avec l'IA</span> : la page se remplit, mais rien n'est enregistré automatiquement.</div>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <button class="btn btn-primary" id="aiGenerateBtn" type="button">
+            <span class="material-symbols-outlined mr-2 text-lg">auto_awesome</span>
+            Générer avec l'IA
+          </button>
+          <button class="<%= currentAiDraftJob && (currentAiDraftJob.status === 'queued' || currentAiDraftJob.status === 'processing') ? '' : 'hidden ' %>inline-flex items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-900 shadow-sm transition hover:bg-amber-100 disabled:opacity-60" id="aiCancelBtn" type="button">
+            <span class="material-symbols-outlined mr-2 text-lg">stop_circle</span>
+            Arrêter l'IA
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,320px)_1fr] lg:items-start">
+        <div>
+          <label class="block text-xs font-medium uppercase tracking-widest text-violet-900" for="aiProfile">Mode IA</label>
+          <select class="mt-2 w-full rounded-lg border border-violet-200 bg-white/90 px-4 py-3 text-sm text-slate-900 focus:border-violet-400 focus:ring-violet-400" id="aiProfile">
+            <% singleAiProfiles.forEach((profile) => { %>
+              <option value="<%= profile.key %>" <%= profile.key === defaultSingleAiProfileKey ? 'selected' : '' %>><%= profile.label %> — <%= profile.defaultModel %></option>
+            <% }) %>
+          </select>
+          <div class="mt-2 text-xs text-violet-900/75">Standard = plus rapide. Avancé = gpt-5.4 équilibré. Premium = le plus approfondi, mais aussi le plus lent.</div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium uppercase tracking-widest text-violet-900" for="aiSourceNotes">Notes complémentaires pour l'IA</label>
+          <textarea class="mt-2 w-full rounded-lg border border-violet-200 bg-white/90 px-4 py-3 text-sm text-slate-900 focus:border-violet-400 focus:ring-violet-400" id="aiSourceNotes" rows="4" placeholder="Ex : calculateur moteur Bosch pour Audi A3 2.0 TDI, priorité SEO, style rassurant, éviter les affirmations non vérifiées."></textarea>
+        </div>
+      </div>
+
+      <div class="mt-3 text-sm text-violet-900/80" id="aiGenerateStatus">L'IA utilisera le nom du produit, la référence, la marque, la catégorie et les notes ci-dessus.</div>
+
+      <div class="mt-3 hidden rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900" id="aiGenerateWarnings"></div>
+
+      <% if (currentAiDraftJob) { %>
+        <div class="mt-4 rounded-lg border border-white/70 bg-white/80 p-4 text-slate-900">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div class="font-bold">Dernier brouillon IA enregistré</div>
+              <div class="mt-2 text-sm space-y-1">
+                <div>
+                  Statut :
+                  <% if (currentAiDraftJob.status === 'completed') { %>
+                    <span class="font-semibold text-emerald-700">prêt à relire</span>
+                  <% } else if (currentAiDraftJob.status === 'processing') { %>
+                    <span class="font-semibold text-violet-700">génération en cours</span>
+                  <% } else if (currentAiDraftJob.status === 'queued') { %>
+                    <span class="font-semibold text-sky-700">en file d'attente</span>
+                  <% } else if (currentAiDraftJob.status === 'canceled') { %>
+                    <span class="font-semibold text-slate-500">arrêtée</span>
+                  <% } else if (currentAiDraftJob.status === 'failed') { %>
+                    <span class="font-semibold text-red-700">en erreur</span>
+                  <% } else { %>
+                    <span class="font-semibold"><%= currentAiDraftJob.status || 'inconnu' %></span>
+                  <% } %>
+                </div>
+                <% if (currentAiDraftJob.createdAtLabel) { %>
+                  <div>Demandé le <span class="font-semibold"><%= currentAiDraftJob.createdAtLabel %></span></div>
+                <% } %>
+                <% if (currentAiDraftJob.completedAtLabel) { %>
+                  <div>Terminé le <span class="font-semibold"><%= currentAiDraftJob.completedAtLabel %></span></div>
+                <% } %>
+                <% if (currentAiDraftJob.model) { %>
+                  <div>Modèle : <span class="font-semibold"><%= currentAiDraftJob.model %></span></div>
+                <% } %>
+                <% if (currentAiDraftJob.profileLabel) { %>
+                  <div>Mode IA : <span class="font-semibold"><%= currentAiDraftJob.profileLabel %></span></div>
+                <% } %>
+                <% if (currentAiDraftJob.status === 'processing' || currentAiDraftJob.status === 'queued') { %>
+                  <div class="text-slate-500">Recharge cette page dans quelques instants pour récupérer le brouillon automatiquement préparé en arrière-plan.</div>
+                <% } %>
+                <% if ((currentAiDraftJob.status === 'failed' || currentAiDraftJob.status === 'canceled') && currentAiDraftJob.errorMessage) { %>
+                  <div class="text-red-700"><%= currentAiDraftJob.errorMessage %></div>
+                <% } %>
+              </div>
+            </div>
+
+            <% if (currentAiDraftJob.status === 'completed' && currentAiDraftJob.hasDraft) { %>
+              <button class="inline-flex items-center justify-center rounded-lg border border-violet-200 bg-violet-100 px-4 py-2 text-sm font-bold text-violet-900 transition hover:bg-violet-200" id="applyLatestAiDraftBtn" type="button">
+                <span class="material-symbols-outlined mr-2 text-lg">download</span>
+                Appliquer le dernier brouillon IA
+              </button>
+            <% } %>
+          </div>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950" id="fieldReviewPanel">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div class="font-bold">Suivi simple de la fiche produit</div>
+          <div class="mt-2 text-sm space-y-1">
+            <div>Les champs encore vides ressortent en rouge.</div>
+            <div>Les champs remplis par l'IA reçoivent un badge <span class="font-semibold">IA</span>.</div>
+            <div>Vous pouvez cocher <span class="font-semibold">Validé</span> après relecture pour vous repérer facilement.</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 text-center text-xs font-semibold uppercase tracking-widest">
+          <div class="rounded-lg border border-red-200 bg-white px-3 py-2 text-red-700">
+            <div>À remplir</div>
+            <div class="mt-1 text-lg" id="fieldReviewEmptyCount">0</div>
+          </div>
+          <div class="rounded-lg border border-violet-200 bg-white px-3 py-2 text-violet-700">
+            <div>IA</div>
+            <div class="mt-1 text-lg" id="fieldReviewAiCount">0</div>
+          </div>
+          <div class="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-emerald-700">
+            <div>Validés</div>
+            <div class="mt-1 text-lg" id="fieldReviewValidatedCount">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-3 text-xs text-emerald-900/80">Les mini coches sont maintenant directement affichées à côté des champs et blocs importants.</div>
+    </div>
+
+    <div class="mt-4 rounded-lg border border-sky-200 bg-white/70 px-4 py-3 text-sm">
+      <div class="font-bold text-sky-900">Ordre conseillé pour un novice</div>
+      <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2 text-sky-900/90">
+        <div><span class="font-semibold">1.</span> Informations essentielles</div>
+        <div><span class="font-semibold">2.</span> Description produit</div>
+        <div><span class="font-semibold">3.</span> Médias</div>
+        <div><span class="font-semibold">4.</span> Compatibilité véhicule</div>
+        <div><span class="font-semibold">5.</span> SEO</div>
+        <div><span class="font-semibold">6.</span> Options et réglages avancés</div>
+      </div>
+    </div>
+
+    <form id="productForm" action="<%= mode === 'new' ? '/admin/catalogue/nouveau' : ('/admin/catalogue/' + productId) %>" enctype="multipart/form-data" method="POST" class="flex flex-col gap-8">
+      <section id="section-essential" class="order-1 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark shadow-sm">
+        <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+          <div>
+            <h2 class="font-bold flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400">info</span>
+              Étape 1 · Informations essentielles
+              <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-red-700">Obligatoire</span>
+            </h2>
+            <div class="mt-2 text-xs text-slate-500">Commence par cette section : c'est ici que se trouvent les champs minimums pour créer le produit.</div>
+          </div>
+        </div>
+
+        <div class="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div class="md:col-span-2 md:order-1">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="name">Nom du produit <span class="text-red-600">*</span></label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="name" name="name" required type="text" value="<%= form && form.name ? form.name : '' %>" data-validate />
+            <div class="mt-2 text-xs text-slate-500">Obligatoire pour créer le produit.</div>
+          </div>
+
+          <div class="md:order-2">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="price">Prix (€) <span class="text-red-600">*</span></label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="price" name="price" placeholder="Ex: 199,90" required type="text" value="<%= form && form.price ? form.price : '' %>" data-validate data-min="0.01" data-error="Prix requis, doit être supérieur à 0" />
+            <div class="mt-2 text-xs text-slate-500">Obligatoire pour créer le produit.</div>
+          </div>
+
+          <div class="md:order-3">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="category">Catégorie</label>
+            <% if (typeof categories !== 'undefined' && categories && categories.length) { %>
+              <select class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="category" name="category">
+                <option value="">Autre</option>
+                <% categories.forEach((c) => { %>
+                  <option value="<%= c.name %>" <%= form && form.category === c.name ? 'selected' : '' %>><%= c.name %></option>
+                <% }) %>
+              </select>
+            <% } else { %>
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="category" name="category" placeholder="Ex: Freinage" type="text" value="<%= form && form.category ? form.category : '' %>" />
+            <% } %>
+            <div class="mt-2 text-xs text-slate-500">Recommandé pour bien classer le produit dans le catalogue.</div>
+          </div>
+
+          <div class="md:order-4">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="brand">Marque</label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="brand" name="brand" type="text" value="<%= form && form.brand ? form.brand : '' %>" />
+            <div class="mt-2 text-xs text-slate-500">Recommandé pour aider la recherche et la compréhension du produit.</div>
+          </div>
+
+          <div class="md:col-span-2 md:order-5">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="slug">Slug (URL)</label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="slug" name="slug" placeholder="Ex: moteur-complet-porsche-cayenne" type="text" value="<%= form && typeof form.slug !== 'undefined' ? (form.slug || '') : '' %>" />
+            <div class="mt-2 text-xs text-slate-500">Optionnel. Si vous ne le remplissez pas, il sera généré automatiquement.</div>
+          </div>
+
+          <div class="md:order-6">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="sku">SKU</label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="sku" name="sku" type="text" value="<%= form && form.sku ? form.sku : '' %>" data-validate data-pattern="^[A-Za-z0-9_.:-]*$" data-error="Lettres, chiffres, - ou _ uniquement" />
+            <div class="mt-2 text-xs text-slate-500">Recommandé si vous gérez beaucoup de produits.</div>
+          </div>
+
+          <div class="md:order-7">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="stockQty">Stock</label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="stockQty" name="stockQty" placeholder="Laisse vide si non géré" type="number" min="0" value="<%= form && typeof form.stockQty !== 'undefined' ? form.stockQty : '' %>" />
+          </div>
+
+          <div class="flex items-center gap-3 md:col-span-4 md:order-8">
+            <input class="rounded border-gray-300 text-primary focus:ring-primary" id="inStock" name="inStock" type="checkbox" <%= form && form.inStock ? 'checked' : '' %> />
+            <label class="text-sm font-semibold text-slate-500 dark:text-gray-300" for="inStock">Produit en stock</label>
+          </div>
+
+          <div class="md:order-9">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="shippingDelayText">Délai d'expédition (affiché sur la fiche produit)</label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="shippingDelayText" name="shippingDelayText" placeholder="Ex: Expédition sous 24/48h • Expédition sous 3 jours • Sur commande" type="text" value="<%= form && typeof form.shippingDelayText !== 'undefined' ? form.shippingDelayText : '' %>" />
+          </div>
+
+          <div class="md:order-10">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="shippingClassId">Classe d'expédition</label>
+            <% if (typeof shippingClasses !== 'undefined' && shippingClasses && shippingClasses.length) { %>
+              <select class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="shippingClassId" name="shippingClassId">
+                <option value="">Par défaut</option>
+                <% shippingClasses.forEach((c) => { %>
+                  <% const optLabel = `${c.name || ''}${c.isDefault ? ' (défaut)' : ''}${c.isActive === false ? ' (inactive)' : ''}`; %>
+                  <option value="<%= c.id %>" <%= form && form.shippingClassId === c.id ? 'selected' : '' %>><%= optLabel %></option>
+                <% }) %>
+              </select>
+            <% } else { %>
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm opacity-70" disabled id="shippingClassId" name="shippingClassId" placeholder="Par défaut" type="text" value="Par défaut" />
+            <% } %>
+          </div>
+
+          <div class="md:order-11">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="compareAtPrice">Prix barré</label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="compareAtPrice" name="compareAtPrice" placeholder="Ex: 249,90" type="text" value="<%= form && form.compareAtPrice ? form.compareAtPrice : '' %>" />
+          </div>
+
+          <div class="md:col-span-4 md:order-12">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="compatibleReferences">Références compatibles (1 par ligne)</label>
+            <textarea class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary min-h-[90px]" id="compatibleReferences" name="compatibleReferences" placeholder="Ex: 0281011234 (une par ligne)"><%= form && typeof form.compatibleReferences !== 'undefined' ? form.compatibleReferences : '' %></textarea>
+          </div>
+
+          <div class="md:col-span-4 md:order-13">
+            <div class="flex items-center gap-3">
+              <input class="rounded border-gray-300 text-primary focus:ring-primary" id="consigneEnabled" name="consigneEnabled" type="checkbox" <%= form && form.consigneEnabled ? 'checked' : '' %> />
+              <label class="text-sm font-semibold text-slate-500 dark:text-gray-300" for="consigneEnabled">Activer la consigne (ancienne pièce à retourner)</label>
+            </div>
+            <div class="mt-4 grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div>
+                <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="consigneAmount">Montant consigne (€)</label>
+                <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="consigneAmount" name="consigneAmount" placeholder="Ex: 150,00" type="text" value="<%= form && typeof form.consigneAmount !== 'undefined' ? form.consigneAmount : '' %>" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="consigneDelayDays">Délai retour (jours)</label>
+                <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="consigneDelayDays" name="consigneDelayDays" type="number" min="0" max="3650" value="<%= form && typeof form.consigneDelayDays !== 'undefined' ? form.consigneDelayDays : '30' %>" />
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <input id="videoUrl" name="videoUrl" type="hidden" value="<%= form && form.videoUrl ? form.videoUrl : '' %>" />
+      <textarea id="specs" name="specs" class="hidden"><%= form && form.specs ? form.specs : '' %></textarea>
+
+      <section id="section-media" class="order-3 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark shadow-sm">
+        <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+          <div>
+            <h2 class="font-bold flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400">imagesmode</span>
+              Étape 3 · Médias
+              <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-red-700">Obligatoire</span>
+            </h2>
+            <div class="mt-2 text-xs text-slate-500">Une image principale est obligatoire pour enregistrer le produit.</div>
+          </div>
+          <button class="text-primary text-sm font-bold flex items-center gap-1 hover:underline" id="mediaAddNew" type="button">
+            <span class="material-symbols-outlined text-lg">add_a_photo</span>
+            Ajouter
+          </button>
+        </div>
+
+        <div class="p-6">
+          <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4" id="mediaGrid">
+            <% if (form && form.imageUrl) { %>
+              <div class="relative group aspect-square rounded-lg border border-primary overflow-hidden bg-white" data-kind="main" data-url="<%= form.imageUrl %>">
+                <img alt="Product" class="w-full h-full object-cover" src="<%= form.imageUrl %>" />
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <button class="p-1.5 bg-white text-slate-900 rounded-full hover:text-primary" type="button" title="Image principale fixe"><span class="material-symbols-outlined text-sm">star</span></button>
+                  <button class="p-1.5 bg-white text-slate-900 rounded-full hover:text-red-600" type="button" data-action="remove"><span class="material-symbols-outlined text-sm">delete</span></button>
+                </div>
+                <span class="absolute top-1 left-1 bg-primary text-white text-[8px] font-bold px-1.5 py-0.5 rounded">PRINCIPALE</span>
+              </div>
+            <% } %>
+
+            <%
+              const __galleryUrlsArr = (form && form.galleryUrls) ? String(form.galleryUrls).split(/\r?\n/).map((s) => s.trim()).filter(Boolean) : [];
+              const __galleryTypesArr = (form && form.galleryTypes) ? String(form.galleryTypes).split(/\r?\n/).map((s) => s.trim().toLowerCase()) : [];
+              __galleryUrlsArr.forEach((u, __i) => {
+                const __t = (__galleryTypesArr[__i] === 'video') ? 'video' : 'image';
+            %>
+              <div class="relative group aspect-square rounded-lg border border-border-light dark:border-border-dark overflow-hidden bg-white media-tile" data-kind="gallery" data-url="<%= u %>" data-type="<%= __t %>">
+                <% if (__t === 'video') { %>
+                  <video class="w-full h-full object-cover" muted playsinline preload="metadata">
+                    <source src="<%= u %>" />
+                  </video>
+                  <span class="absolute top-1 left-1 bg-black/70 text-white text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                    <span class="material-symbols-outlined text-[10px] leading-none">play_circle</span>VIDÉO
+                  </span>
+                <% } else { %>
+                  <img alt="Product" class="w-full h-full object-cover" src="<%= u %>" />
+                <% } %>
+                <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <button class="p-1.5 bg-white text-slate-900 rounded-full cursor-grab" type="button" data-action="drag-handle" title="Glisser pour réordonner"><span class="material-symbols-outlined text-sm">drag_indicator</span></button>
+                  <button class="p-1.5 bg-white text-slate-900 rounded-full" type="button" data-action="move-left" title="Déplacer à gauche"><span class="material-symbols-outlined text-sm">arrow_back</span></button>
+                  <button class="p-1.5 bg-white text-slate-900 rounded-full" type="button" data-action="move-right" title="Déplacer à droite"><span class="material-symbols-outlined text-sm">arrow_forward</span></button>
+                  <button class="p-1.5 bg-white text-slate-900 rounded-full" type="button" data-action="remove"><span class="material-symbols-outlined text-sm">delete</span></button>
+                </div>
+              </div>
+            <% }) %>
+
+            <button class="aspect-square rounded-lg border-2 border-dashed border-border-light dark:border-border-dark flex flex-col items-center justify-center text-slate-400 hover:border-primary hover:text-primary transition-all" id="mediaUploadBtn" type="button">
+              <span class="material-symbols-outlined text-3xl mb-1">add</span>
+              <span class="text-[10px] font-bold">AJOUTER</span>
+            </button>
+          </div>
+
+          <div class="mt-4 text-xs text-slate-500">Glissez-déposez vos fichiers (images ou vidéos) sur la grille, ou cliquez sur « Ajouter ». Vous pouvez réordonner par glisser-déposer ou avec les flèches. Vidéos : MP4 / WEBM / MOV (50 Mo max). Images : 5 Mo max.</div>
+
+          <input id="image" name="image" accept="image/*,video/mp4,video/webm,video/quicktime" type="file" multiple class="hidden" />
+          <input id="imageUrl" name="imageUrl" type="hidden" value="<%= form && form.imageUrl ? form.imageUrl : '' %>" />
+          <input id="removeMainImage" name="removeMainImage" type="hidden" value="false" />
+          <textarea id="galleryUrls" name="galleryUrls" class="hidden"><%= form && form.galleryUrls ? form.galleryUrls : '' %></textarea>
+          <textarea id="galleryTypes" name="galleryTypes" class="hidden"><%= form && form.galleryTypes ? form.galleryTypes : '' %></textarea>
+        </div>
+      </section>
+
+      <section id="section-description" class="order-2 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+          <div>
+            <h2 class="font-bold flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400">description</span>
+              Étape 2 · Description du produit
+              <span class="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-red-700">Obligatoire</span>
+            </h2>
+            <div class="mt-2 text-xs text-slate-500">Tous les champs de cette section sont obligatoires.</div>
+          </div>
+        </div>
+
+        <div class="p-6 space-y-6">
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-border-light dark:border-border-dark flex flex-col items-center text-center">
+              <div class="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center mb-2">
+                <span class="material-symbols-outlined">settings_input_component</span>
+              </div>
+              <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1">Badge haut</span>
+              <span class="text-sm font-semibold"><%= form && form.badgeTopLeft ? form.badgeTopLeft : '—' %></span>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-border-light dark:border-border-dark flex flex-col items-center text-center">
+              <div class="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center mb-2">
+                <span class="material-symbols-outlined">history</span>
+              </div>
+              <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1">État</span>
+              <span class="text-sm font-semibold"><%= form && form.badgeCondition ? form.badgeCondition : '—' %></span>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-border-light dark:border-border-dark flex flex-col items-center text-center">
+              <div class="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center mb-2">
+                <span class="material-symbols-outlined">cable</span>
+              </div>
+              <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1">SKU</span>
+              <span class="text-sm font-semibold"><%= form && form.sku ? form.sku : '—' %></span>
+            </div>
+            <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-border-light dark:border-border-dark flex flex-col items-center text-center">
+              <div class="w-10 h-10 rounded-full bg-white dark:bg-gray-800 shadow-sm flex items-center justify-center mb-2">
+                <span class="material-symbols-outlined">verified</span>
+              </div>
+              <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 mb-1">Catégorie</span>
+              <span class="text-sm font-semibold"><%= form && form.category ? form.category : '—' %></span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="specType">Type (Caractéristiques principales) <span class="text-red-600">*</span></label>
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="specType" name="specType" required type="text" placeholder="Ex: Boîte de vitesses" value="<%= specTypeValue %>" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="specProgrammation">Programmation (Caractéristiques principales) <span class="text-red-600">*</span></label>
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="specProgrammation" name="specProgrammation" required type="text" placeholder="Ex: Oui / Non / À coder" value="<%= specProgrammationValue %>" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="badgeTopLeft">Garantie (affiché sur la fiche produit) <span class="text-red-600">*</span></label>
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="badgeTopLeft" name="badgeTopLeft" placeholder="Ex: Garantie 24 mois" required type="text" value="<%= form && form.badgeTopLeft ? form.badgeTopLeft : '' %>" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="badgeCondition">État (affiché sur la fiche produit) <span class="text-red-600">*</span></label>
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="badgeCondition" name="badgeCondition" placeholder="Ex: Reconditionné" required type="text" value="<%= form && form.badgeCondition ? form.badgeCondition : '' %>" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="shortDescription">Résumé <span class="text-red-600">*</span></label>
+            <textarea class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary resize-none" id="shortDescription" name="shortDescription" required rows="2"><%= form && form.shortDescription ? form.shortDescription : '' %></textarea>
+            <div class="mt-2 text-xs text-slate-500">Obligatoire : un résumé court et clair visible rapidement par le client.</div>
+          </div>
+
+          <div class="border border-border-light dark:border-border-dark rounded-lg overflow-hidden">
+            <div class="bg-gray-50 dark:bg-gray-800/50 px-4 py-2 border-b border-border-light dark:border-border-dark flex gap-2">
+              <button class="p-1 hover:bg-white dark:hover:bg-gray-700 rounded" type="button"><span class="material-symbols-outlined text-lg">format_bold</span></button>
+              <button class="p-1 hover:bg-white dark:hover:bg-gray-700 rounded" type="button"><span class="material-symbols-outlined text-lg">format_italic</span></button>
+              <button class="p-1 hover:bg-white dark:hover:bg-gray-700 rounded" type="button"><span class="material-symbols-outlined text-lg">format_list_bulleted</span></button>
+              <div class="w-px h-6 bg-border-light dark:bg-border-dark mx-1"></div>
+              <button class="p-1 hover:bg-white dark:hover:bg-gray-700 rounded" type="button"><span class="material-symbols-outlined text-lg">link</span></button>
+            </div>
+            <textarea class="w-full bg-transparent border-none focus:ring-0 p-4 text-sm resize-none" id="description" name="description" placeholder="Description du produit..." required rows="8"><%= form && form.description ? form.description : '' %></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section id="section-options" class="order-6 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+          <div>
+            <h2 class="font-bold flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400">tune</span>
+              Étape 6 · Options / Variantes
+              <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Optionnel</span>
+            </h2>
+            <div class="mt-2 text-xs text-slate-500">À utiliser seulement si le client doit choisir une variante, une programmation, une consigne ou un complément.</div>
+          </div>
+
+          <a class="inline-flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition" href="/admin/catalogue/options">
+            <span class="material-symbols-outlined mr-2 text-sm">inventory</span>
+            Bibliothèque d'options
+          </a>
+        </div>
+
+        <div class="p-6 space-y-6">
+          <div class="rounded-2xl border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-900/50 p-5">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <div class="text-sm font-bold text-slate-900 dark:text-white">Options réutilisables</div>
+                <div class="mt-1 text-xs text-slate-500">Créez vos options une fois dans la bibliothèque, puis appliquez-les ici en un clic.</div>
+              </div>
+              <a class="inline-flex items-center justify-center rounded-lg bg-white dark:bg-gray-800 border border-border-light dark:border-border-dark px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition" href="/admin/catalogue/options">
+                <span class="material-symbols-outlined mr-2 text-sm">settings</span>
+                Gérer la bibliothèque
+              </a>
+            </div>
+
+            <% if (productOptionTemplates && productOptionTemplates.length) { %>
+              <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3" id="templateLibrary"></div>
+            <% } else { %>
+              <div class="mt-4 rounded-xl border border-dashed border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-4 text-sm text-slate-500">
+                Aucune option réutilisable pour le moment. Créez-les depuis la bibliothèque, puis revenez ici.
+              </div>
+            <% } %>
+          </div>
+
+          <div class="rounded-2xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-950/40 p-5">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <div class="text-sm font-bold text-slate-900 dark:text-white">Options de ce produit</div>
+                <div class="mt-1 text-xs text-slate-500">Vous pouvez ajouter une option manuelle ou partir d'une option réutilisable.</div>
+              </div>
+
+              <button class="btn btn-secondary" id="addCustomOptionBtn" type="button">
+                <span class="material-symbols-outlined mr-2 text-sm">add</span>
+                Ajouter une option
+              </button>
+            </div>
+
+            <div class="mt-4 space-y-4" id="productOptionsBuilder"></div>
+            <div class="mt-4 rounded-xl border border-dashed border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-900/50 px-4 py-4 text-sm text-slate-500" id="productOptionsEmpty">
+              Aucune option pour ce produit pour le moment.
+            </div>
+          </div>
+
+          <details class="rounded-2xl border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-900/50 overflow-hidden">
+            <summary class="cursor-pointer px-5 py-4 text-sm font-bold text-slate-900 dark:text-white">Mode expert (JSON)</summary>
+            <div class="border-t border-border-light dark:border-border-dark p-5 space-y-4">
+              <div class="text-xs text-slate-500">Si besoin, vous pouvez toujours modifier le JSON brut puis recharger l'éditeur visuel.</div>
+              <label class="block text-xs font-medium text-slate-500 uppercase" for="optionsJson">Options (JSON)</label>
+              <textarea class="w-full bg-white dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary font-mono min-h-[220px]" id="optionsJson" name="optionsJson" placeholder='[{"key":"programmation","label":"Programmation","type":"choice","required":true,"choices":[{"key":"avec","label":"Avec programmation","priceDeltaCents":5000},{"key":"sans","label":"Sans programmation","priceDeltaCents":0}]}]'><%= form && typeof form.optionsJson !== 'undefined' ? form.optionsJson : '' %></textarea>
+              <div class="flex justify-end">
+                <button class="inline-flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800 transition" id="applyOptionsJsonBtn" type="button">
+                  Recharger depuis le JSON
+                </button>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section class="order-7 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark shadow-sm">
+        <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center justify-between gap-4">
+          <div>
+            <h2 class="font-bold flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400">autorenew</span>
+              Étape 7 · Étapes de reconditionnement
+              <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Optionnel</span>
+            </h2>
+            <div class="mt-2 text-xs text-slate-500">Utile si vous voulez détailler le processus de reconditionnement ou de contrôle qualité.</div>
+          </div>
+
+          <button class="px-4 py-2 text-xs font-bold bg-gray-900 dark:bg-white dark:text-gray-900 text-white rounded-lg flex items-center gap-1 hover:bg-black transition-colors" id="stepsPrefillBtn" type="button">
+            <span class="material-symbols-outlined text-sm">auto_fix</span>
+            Pré-remplir (4 étapes)
+          </button>
+        </div>
+
+        <div class="p-6 grid grid-cols-1 md:grid-cols-4 gap-6" id="stepsGrid">
+          <% for (let i = 1; i <= 4; i += 1) { %>
+            <div class="space-y-3" data-step>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-bold text-slate-400 uppercase">Step <%= i %></span>
+                <button class="text-slate-400 hover:text-primary" type="button"><span class="material-symbols-outlined text-sm">settings</span></button>
+              </div>
+              <select class="w-full text-xs font-bold bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded p-2" data-step-title-select>
+                <option value="">Choisir...</option>
+                <option value="Diagnostic">Diagnostic</option>
+                <option value="Nettoyage">Nettoyage</option>
+                <option value="Remplacement">Remplacement</option>
+                <option value="Test Banc">Test Banc</option>
+                <option value="Programmation">Programmation</option>
+                <option value="Contrôle Qualité">Contrôle Qualité</option>
+                <option value="Garantie">Garantie</option>
+                <option value="Expédition">Expédition</option>
+                <option value="__custom__">Autre (personnalisé)</option>
+              </select>
+              <input class="w-full text-xs font-bold bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded p-2 hidden" type="text" data-step-title-custom placeholder="Titre personnalisé" />
+              <textarea class="w-full text-xs bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded p-2 h-20" data-step-description></textarea>
+            </div>
+          <% } %>
+        </div>
+
+        <textarea id="reconditioningSteps" name="reconditioningSteps" class="hidden"><%= form && form.reconditioningSteps ? form.reconditioningSteps : '' %></textarea>
+      </section>
+
+      <section id="section-compat" class="order-4 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark shadow-sm">
+        <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center justify-between">
+          <div>
+            <h2 class="font-bold flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400">directions_car</span>
+              Étape 4 · Compatibilité véhicules
+              <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-700">Recommandé</span>
+            </h2>
+            <div class="mt-2 text-xs text-slate-500">Très utile pour les pièces auto : cela aide le client à savoir si la pièce correspond à son véhicule.</div>
+          </div>
+          <button class="text-primary text-sm font-bold flex items-center gap-1 hover:underline" id="compatAddBtn" type="button">
+            <span class="material-symbols-outlined text-lg">add</span>
+            Lier un modèle
+          </button>
+        </div>
+        <div class="p-6 space-y-8">
+          <div class="p-5 bg-primary/5 border border-primary/10 rounded-xl">
+            <div class="flex flex-col md:flex-row items-center gap-4">
+              <div class="flex-1">
+                <h4 class="text-sm font-bold flex items-center gap-2">
+                  <span class="material-symbols-outlined text-primary text-lg">verified</span>
+                  Vérifier compatibilité VIN
+                </h4>
+                <p class="text-[11px] text-slate-500 mt-0.5">Test real-time matching with chassis numbers</p>
+              </div>
+              <div class="relative flex-1 w-full">
+                <input class="w-full bg-white dark:bg-gray-900 border-primary rounded-lg py-2 pl-4 pr-10 text-sm focus:ring-0 uppercase font-mono tracking-widest" placeholder="WVWZZZ1KXXXXXXXXX" type="text" />
+                <span class="material-symbols-outlined absolute right-3 top-2 text-green-600 hidden" id="vinCheckIcon">check_circle</span>
+              </div>
+              <div class="text-xs font-bold text-green-600 px-3 py-2 bg-green-50 rounded-lg border border-green-100 hidden md:block" id="vinMatchBox">
+                CORRESPONDANCE TROUVÉE
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-6">
+            <div class="space-y-3">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-widest">Sélectionner une marque</label>
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <label class="block text-[10px] font-medium text-slate-400 uppercase tracking-widest mb-2" for="compatMakeSelect">Marque</label>
+                  <select class="w-full bg-white dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-3 text-sm" id="compatMakeSelect"></select>
+                  <input class="w-full bg-white dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-3 text-sm hidden mt-2" id="compatMakeCustom" type="text" placeholder="Nouvelle marque (ex: Audi)" autocomplete="off" />
+                </div>
+
+                <div>
+                  <label class="block text-[10px] font-medium text-slate-400 uppercase tracking-widest mb-2" for="compatModelSelect">Modèle</label>
+                  <select class="w-full bg-white dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-3 text-sm" id="compatModelSelect"></select>
+                  <input class="w-full bg-white dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-3 text-sm hidden mt-2" id="compatModelCustom" type="text" placeholder="Nouveau modèle (ex: A3 (8V))" autocomplete="off" />
+                </div>
+
+                <div>
+                  <label class="block text-[10px] font-medium text-slate-400 uppercase tracking-widest mb-2" for="compatYears">Années</label>
+                  <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-3 text-sm" id="compatYears" type="text" placeholder="Ex: 2012-2019" />
+                </div>
+
+                <div class="md:col-span-2">
+                  <label class="block text-[10px] font-medium text-slate-400 uppercase tracking-widest mb-2" for="compatEngine">Moteur</label>
+                  <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-3 text-sm" id="compatEngine" type="text" placeholder="Ex: 1.0 / 1.4 / 1.5" />
+                </div>
+
+                <div class="md:col-span-2 flex items-end justify-end">
+                  <button class="px-4 py-2 text-xs font-bold bg-gray-900 dark:bg-white dark:text-gray-900 text-white rounded-lg flex items-center gap-1 hover:bg-black transition-colors" id="compatAddItemBtn" type="button">
+                    <span class="material-symbols-outlined text-sm">add</span>
+                    Ajouter la compatibilité
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="space-y-3">
+              <label class="block text-xs font-medium text-slate-400 uppercase tracking-widest" id="compatModelsLabel">Compatible Models</label>
+              <div class="flex flex-wrap gap-3" id="compatModels"></div>
+            </div>
+          </div>
+        </div>
+
+        <textarea id="compatibility" name="compatibility" class="hidden"><%= form && form.compatibility ? form.compatibility : '' %></textarea>
+      </section>
+
+      <section class="order-8 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark shadow-sm">
+        <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h2 class="font-bold flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400">quiz</span>
+              Étape 8 · Questions fréquentes
+              <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Optionnel</span>
+            </h2>
+            <div class="mt-2 text-xs text-slate-500">Pratique pour répondre aux questions courantes sans avoir à les répéter aux clients.</div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="relative w-64">
+              <input class="w-full text-xs py-2 pl-9 pr-4 bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg focus:ring-primary focus:border-primary" placeholder="Search questions..." type="text" id="faqSearch" />
+              <span class="material-symbols-outlined absolute left-2.5 top-1.5 text-slate-400 text-lg">search</span>
+            </div>
+            <button class="px-4 py-2 text-xs font-bold bg-gray-900 dark:bg-white dark:text-gray-900 text-white rounded-lg flex items-center gap-1 hover:bg-black transition-colors" id="faqAddBtn" type="button">
+              <span class="material-symbols-outlined text-sm">add</span> Add New
+            </button>
+          </div>
+        </div>
+
+        <div class="p-6 space-y-1" id="faqList"></div>
+
+        <textarea id="faqs" name="faqs" class="hidden"><%= form && form.faqs ? form.faqs : '' %></textarea>
+      </section>
+
+      <section class="order-9 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark shadow-sm">
+        <div class="p-6 border-b border-border-light dark:border-border-dark flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <h2 class="font-bold flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400">article</span>
+              Étape 9 · Articles de blog liés
+              <span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-slate-500">Optionnel</span>
+            </h2>
+            <div class="mt-2 text-xs text-slate-500">Utile si vous voulez enrichir la fiche avec un article d'explication ou de conseil.</div>
+          </div>
+          <div class="text-[11px] text-slate-500">Ces articles apparaîtront sur la fiche produit.</div>
+        </div>
+
+        <div class="p-6 space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-400 uppercase tracking-widest">Rechercher un article</label>
+            <input
+              id="relatedBlogSearch"
+              class="mt-2 w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm"
+              type="text"
+              placeholder="Tapez au moins 2 lettres (titre, slug, extrait...)"
+              autocomplete="off"
+            />
+            <div id="relatedBlogResults" class="mt-2 max-h-56 overflow-auto rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900"></div>
+          </div>
+
+          <div>
+            <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Sélection</div>
+            <div id="relatedBlogSelected" class="mt-2 space-y-2"></div>
+          </div>
+
+          <textarea id="relatedBlogPostIds" class="hidden" name="relatedBlogPostIds" rows="4"><%= form && form.relatedBlogPostIds ? form.relatedBlogPostIds : '' %></textarea>
+          <div class="text-xs text-slate-500">Astuce : si vous ne sélectionnez rien ici, vous pouvez quand même lier un produit depuis l'article (admin blog).</div>
+        </div>
+      </section>
+
+      <section id="section-seo" class="order-5 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark shadow-sm">
+        <div class="p-6 border-b border-border-light dark:border-border-dark">
+          <div>
+            <h2 class="font-bold flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400">language</span>
+              Étape 5 · SEO &amp; Meta Tags
+              <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-emerald-700">Recommandé</span>
+            </h2>
+            <div class="mt-2 text-xs text-slate-500">Cette section aide votre produit à être mieux compris par Google et mieux présenté dans les résultats de recherche.</div>
+          </div>
+        </div>
+        <div class="p-6 space-y-6">
+          <% if (typeof seoAssistant !== 'undefined' && seoAssistant) { %>
+            <div class="rounded-xl border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-900/40 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Score SEO</div>
+                  <div id="seoScoreValue" class="mt-1 text-2xl font-semibold text-slate-900 dark:text-white"><%= seoAssistant.score %>/100</div>
+                </div>
+                <div class="w-40">
+                  <div class="h-2 rounded-full bg-gray-200 dark:bg-gray-800 overflow-hidden">
+                    <div id="seoProgressFill" class="h-2 bg-primary" data-width="<%= Math.max(0, Math.min(100, seoAssistant.score)) %>"></div>
+                  </div>
+                  <div class="mt-2 text-[10px] font-bold text-slate-500">Objectif : 85+</div>
+                </div>
+              </div>
+
+              <div class="mt-4">
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Prévisualisation Google</div>
+                <div class="mt-2 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 p-4">
+                  <div id="seoPreviewTitle" class="text-[#1a0dab] text-sm font-bold leading-snug"><%= seoAssistant.preview && seoAssistant.preview.title ? seoAssistant.preview.title : '' %></div>
+                  <div id="seoPreviewUrl" class="mt-1 text-[11px] text-[#006621] break-all"><%= seoAssistant.preview && seoAssistant.preview.url ? seoAssistant.preview.url : '' %></div>
+                  <div id="seoPreviewDescription" class="mt-2 text-[12px] text-slate-500 dark:text-gray-300 leading-snug"><%= seoAssistant.preview && seoAssistant.preview.description ? seoAssistant.preview.description : '' %></div>
+                </div>
+              </div>
+
+              <div class="mt-4">
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Checklist</div>
+                <div id="seoChecklist" class="mt-2 space-y-2">
+                  <% (seoAssistant.checks || []).forEach((c) => { %>
+                    <div class="flex items-start gap-2">
+                      <span class="material-symbols-outlined text-base <%= c.ok ? 'text-green-600' : 'text-red-600' %>"><%= c.ok ? 'check_circle' : 'cancel' %></span>
+                      <div class="flex-1">
+                        <div class="text-xs font-bold text-slate-900 dark:text-white"><%= c.label %></div>
+                        <% if (c.detail) { %>
+                          <div class="mt-0.5 text-[11px] text-slate-500 dark:text-gray-400"><%= c.detail %></div>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              </div>
+            </div>
+          <% } %>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="metaTitle">Meta Title</label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="metaTitle" name="metaTitle" type="text" value="<%= form && form.metaTitle ? form.metaTitle : '' %>"/>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="metaDescription">Meta Description</label>
+            <textarea class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary resize-none" id="metaDescription" name="metaDescription" rows="3"><%= form && form.metaDescription ? form.metaDescription : '' %></textarea>
+          </div>
+        </div>
+      </section>
+    </form>
+
+    <script id="compatIndexJson" type="application/json"><%- JSON.stringify((typeof compatIndex !== 'undefined' && compatIndex) ? compatIndex : { makes: [], modelsByMake: {} }) %></script>
+
+    <script id="productOptionTemplatesJson" type="application/json"><%- JSON.stringify((typeof productOptionTemplates !== 'undefined' && productOptionTemplates) ? productOptionTemplates : []) %></script>
+
+    <script id="seoAssistantSeed" type="application/json"><%- JSON.stringify({
+      baseUrl: (typeof seoAssistant !== 'undefined' && seoAssistant && seoAssistant.computed && seoAssistant.computed.baseUrl) ? seoAssistant.computed.baseUrl : '',
+      productId: productId ? String(productId) : 'ID',
+    }) %></script>
+
+    <script src="/js/sortable.min.js"></script>
+
+    <script>
+      (function () {
+        /* Local aliases — btn-loading.js is loaded in footer */
+        const btnSetLoading   = function (b, t) { if (window.btnSetLoading)   window.btnSetLoading(b, t);   else if (b) b.disabled = true; };
+        const btnResetLoading = function (b)    { if (window.btnResetLoading) window.btnResetLoading(b);    else if (b) b.disabled = false; };
+
+        const fileInput = document.getElementById('image');
+        const addNewBtn = document.getElementById('mediaAddNew');
+        const uploadBtn = document.getElementById('mediaUploadBtn');
+        const grid = document.getElementById('mediaGrid');
+        const galleryField = document.getElementById('galleryUrls');
+        const galleryTypesField = document.getElementById('galleryTypes');
+        const canUseMedia = !!(fileInput && addNewBtn && uploadBtn && grid && galleryField && galleryTypesField);
+
+        const selected = [];
+
+        const VIDEO_MIMES = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
+        const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+        const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+        const isVideoFile = (f) => !!(f && f.type && VIDEO_MIMES.has(String(f.type).toLowerCase()));
+        const isImageFile = (f) => !!(f && f.type && String(f.type).toLowerCase().startsWith('image/'));
+        const isAcceptedFile = (f) => isImageFile(f) || isVideoFile(f);
+
+        const sameFile = (a, b) => a && b && a.name === b.name && a.size === b.size && a.lastModified === b.lastModified;
+        const getMediaTiles = () => Array.from(grid.querySelectorAll('[data-kind]')).filter((el) => el && !el.id);
+        const syncGalleryFieldFromGrid = () => {
+          const galleryTiles = getMediaTiles().filter((el) => el.getAttribute('data-kind') === 'gallery');
+          const orderedGalleryUrls = galleryTiles
+            .map((el) => String(el.getAttribute('data-url') || '').trim())
+            .filter(Boolean);
+          const orderedGalleryTypes = galleryTiles
+            .map((el) => (el.getAttribute('data-type') === 'video' ? 'video' : 'image'));
+          galleryField.value = orderedGalleryUrls.join('\n');
+          galleryTypesField.value = orderedGalleryTypes.join('\n');
+          refreshFieldReviewPanel();
+        };
+        const syncPreviewOrderFromGrid = () => {
+          const previewTiles = getMediaTiles().filter((el) => el.getAttribute('data-kind') === 'preview');
+          const nextSelected = previewTiles
+            .map((el) => {
+              const idx = Number(el.getAttribute('data-preview-idx'));
+              return Number.isFinite(idx) && idx >= 0 && idx < selected.length ? selected[idx] : null;
+            })
+            .filter(Boolean);
+
+          selected.splice(0, selected.length, ...nextSelected);
+          previewTiles.forEach((el, i) => el.setAttribute('data-preview-idx', String(i)));
+          syncInputFiles();
+        };
+        const syncMediaOrder = () => {
+          syncGalleryFieldFromGrid();
+          syncPreviewOrderFromGrid();
+        };
+        const moveTile = (tile, direction) => {
+          if (!tile || !grid || !uploadBtn) return;
+          const kind = tile.getAttribute('data-kind');
+          if (!kind || kind === 'main') return;
+
+          const movableTiles = getMediaTiles().filter((el) => {
+            const currentKind = el.getAttribute('data-kind');
+            return currentKind === 'gallery' || currentKind === 'preview';
+          });
+          const currentIndex = movableTiles.indexOf(tile);
+          if (currentIndex < 0) return;
+
+          const targetIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1;
+          if (targetIndex < 0 || targetIndex >= movableTiles.length) return;
+
+          const targetTile = movableTiles[targetIndex];
+          if (!targetTile || targetTile === tile) return;
+
+          if (direction === 'left') {
+            grid.insertBefore(tile, targetTile);
+          } else {
+            const nextSibling = targetTile.nextSibling === tile ? tile.nextSibling : targetTile.nextSibling;
+            grid.insertBefore(tile, nextSibling || uploadBtn);
+          }
+
+          syncMediaOrder();
+        };
+        const syncInputFiles = () => {
+          const dt = new DataTransfer();
+          selected.forEach((f) => dt.items.add(f));
+          fileInput.files = dt.files;
+          refreshFieldReviewPanel();
+        };
+
+        const openPicker = () => fileInput.click();
+        if (canUseMedia) {
+          addNewBtn.addEventListener('click', openPicker);
+          uploadBtn.addEventListener('click', openPicker);
+        }
+
+        const removeGalleryUrl = (url) => {
+          const lines = String(galleryField.value || '')
+            .split(/\r?\n/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          const next = lines.filter((l) => l !== url);
+          galleryField.value = next.join('\n');
+          refreshFieldReviewPanel();
+        };
+
+        if (canUseMedia) {
+          grid.addEventListener('click', (e) => {
+            const moveBtn = e.target && e.target.closest ? e.target.closest('button[data-action="move-left"], button[data-action="move-right"]') : null;
+            if (moveBtn) {
+              const tile = moveBtn.closest('[data-kind]');
+              if (!tile) return;
+              moveTile(tile, moveBtn.getAttribute('data-action') === 'move-left' ? 'left' : 'right');
+              return;
+            }
+
+            const btn = e.target && e.target.closest ? e.target.closest('button[data-action="remove"]') : null;
+            if (!btn) return;
+            const tile = btn.closest('[data-kind]');
+            if (!tile) return;
+            const kind = tile.getAttribute('data-kind');
+            const url = tile.getAttribute('data-url') || '';
+            const previewIdx = tile.getAttribute('data-preview-idx');
+            if (previewIdx !== null && previewIdx !== '') {
+              const idx = Number(previewIdx);
+              if (Number.isFinite(idx) && idx >= 0 && idx < selected.length) {
+                selected.splice(idx, 1);
+                syncInputFiles();
+              }
+            } else if (kind === 'gallery' && url) {
+              removeGalleryUrl(url);
+            } else if (kind === 'main') {
+              const imageUrlField = document.getElementById('imageUrl');
+              if (imageUrlField && imageUrlField.value === url) imageUrlField.value = '';
+              const removeMainImageField = document.getElementById('removeMainImage');
+              if (removeMainImageField) removeMainImageField.value = 'true';
+            }
+            tile.remove();
+            syncMediaOrder();
+          });
+        }
+
+        const renderPreviewTiles = () => {
+          Array.from(grid.querySelectorAll('[data-preview="true"]')).forEach((el) => el.remove());
+
+          const beforeNode = uploadBtn;
+          selected.forEach((f, idx) => {
+            const url = URL.createObjectURL(f);
+            const isVid = isVideoFile(f);
+            const wrapper = document.createElement('div');
+            wrapper.className = 'relative group aspect-square rounded-lg border border-border-light dark:border-border-dark overflow-hidden bg-white media-tile';
+            wrapper.setAttribute('data-kind', 'preview');
+            wrapper.setAttribute('data-preview', 'true');
+            wrapper.setAttribute('data-preview-idx', String(idx));
+            wrapper.setAttribute('data-url', url);
+            wrapper.setAttribute('data-type', isVid ? 'video' : 'image');
+
+            let thumb;
+            if (isVid) {
+              thumb = document.createElement('video');
+              thumb.className = 'w-full h-full object-cover';
+              thumb.muted = true;
+              thumb.playsInline = true;
+              thumb.preload = 'metadata';
+              const src = document.createElement('source');
+              src.src = url;
+              src.type = f.type || '';
+              thumb.appendChild(src);
+
+              const badge = document.createElement('span');
+              badge.className = 'absolute top-1 left-1 bg-black/70 text-white text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1';
+              badge.innerHTML = '<span class="material-symbols-outlined text-[10px] leading-none">play_circle</span>VIDÉO';
+              wrapper.appendChild(thumb);
+              wrapper.appendChild(badge);
+            } else {
+              thumb = document.createElement('img');
+              thumb.alt = 'Product';
+              thumb.className = 'w-full h-full object-cover';
+              thumb.src = url;
+              wrapper.appendChild(thumb);
+            }
+
+            const overlay = document.createElement('div');
+            overlay.className = 'absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2';
+
+            const handleBtn = document.createElement('button');
+            handleBtn.type = 'button';
+            handleBtn.className = 'p-1.5 bg-white text-slate-900 rounded-full cursor-grab';
+            handleBtn.setAttribute('data-action', 'drag-handle');
+            handleBtn.setAttribute('title', 'Glisser pour réordonner');
+            handleBtn.innerHTML = '<span class="material-symbols-outlined text-sm">drag_indicator</span>';
+
+            const moveLeftBtn = document.createElement('button');
+            moveLeftBtn.type = 'button';
+            moveLeftBtn.className = 'p-1.5 bg-white text-slate-900 rounded-full';
+            moveLeftBtn.setAttribute('data-action', 'move-left');
+            moveLeftBtn.setAttribute('title', 'Déplacer à gauche');
+            moveLeftBtn.innerHTML = '<span class="material-symbols-outlined text-sm">arrow_back</span>';
+
+            const moveRightBtn = document.createElement('button');
+            moveRightBtn.type = 'button';
+            moveRightBtn.className = 'p-1.5 bg-white text-slate-900 rounded-full';
+            moveRightBtn.setAttribute('data-action', 'move-right');
+            moveRightBtn.setAttribute('title', 'Déplacer à droite');
+            moveRightBtn.innerHTML = '<span class="material-symbols-outlined text-sm">arrow_forward</span>';
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'p-1.5 bg-white text-slate-900 rounded-full';
+            delBtn.setAttribute('data-action', 'remove');
+            delBtn.innerHTML = '<span class="material-symbols-outlined text-sm">delete</span>';
+
+            overlay.appendChild(handleBtn);
+            overlay.appendChild(moveLeftBtn);
+            overlay.appendChild(moveRightBtn);
+            overlay.appendChild(delBtn);
+            wrapper.appendChild(overlay);
+            grid.insertBefore(wrapper, beforeNode);
+          });
+        };
+
+        const ingestFiles = (incoming) => {
+          if (!incoming || !incoming.length) return;
+          const removeMainImageField = document.getElementById('removeMainImage');
+          if (removeMainImageField) removeMainImageField.value = 'false';
+
+          const errors = [];
+          Array.from(incoming).forEach((f) => {
+            if (!f) return;
+            if (!isAcceptedFile(f)) {
+              errors.push(`Fichier non supporté : ${f.name || ''}`);
+              return;
+            }
+            if (isImageFile(f) && f.size > MAX_IMAGE_BYTES) {
+              errors.push(`Image trop volumineuse : ${f.name} (${Math.round(f.size / 1024 / 1024)} Mo, max 5 Mo).`);
+              return;
+            }
+            if (isVideoFile(f) && f.size > MAX_VIDEO_BYTES) {
+              errors.push(`Vidéo trop volumineuse : ${f.name} (${Math.round(f.size / 1024 / 1024)} Mo, max 50 Mo).`);
+              return;
+            }
+            if (selected.some((x) => sameFile(x, f))) return;
+            selected.push(f);
+          });
+
+          if (errors.length) {
+            try { alert(errors.join('\n')); } catch (_) {}
+          }
+
+          syncInputFiles();
+          renderPreviewTiles();
+          syncMediaOrder();
+        };
+
+        if (canUseMedia) fileInput.addEventListener('change', () => {
+          ingestFiles(fileInput.files);
+        });
+
+        // Drag-and-drop dropzone on the media grid
+        if (canUseMedia) {
+          let dragDepth = 0;
+          const isFileDrag = (e) => {
+            if (!e || !e.dataTransfer) return false;
+            const types = e.dataTransfer.types;
+            if (!types) return false;
+            for (let i = 0; i < types.length; i++) {
+              if (types[i] === 'Files') return true;
+            }
+            return false;
+          };
+
+          grid.addEventListener('dragenter', (e) => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragDepth++;
+            grid.classList.add('is-dropzone-active');
+          });
+          grid.addEventListener('dragover', (e) => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            try { e.dataTransfer.dropEffect = 'copy'; } catch (_) {}
+          });
+          grid.addEventListener('dragleave', (e) => {
+            if (!isFileDrag(e)) return;
+            dragDepth = Math.max(0, dragDepth - 1);
+            if (dragDepth === 0) grid.classList.remove('is-dropzone-active');
+          });
+          grid.addEventListener('drop', (e) => {
+            if (!isFileDrag(e)) return;
+            e.preventDefault();
+            dragDepth = 0;
+            grid.classList.remove('is-dropzone-active');
+            const dropped = e.dataTransfer && e.dataTransfer.files;
+            if (dropped && dropped.length) ingestFiles(dropped);
+          });
+        }
+
+        // SortableJS for drag-to-reorder (excludes main image and upload button)
+        if (canUseMedia && typeof Sortable !== 'undefined') {
+          try {
+            new Sortable(grid, {
+              animation: 150,
+              draggable: '.media-tile',
+              filter: '[data-kind="main"]',
+              preventOnFilter: false,
+              ghostClass: 'sortable-ghost',
+              chosenClass: 'sortable-chosen',
+              dragClass: 'sortable-drag',
+              onMove: (evt) => {
+                // Block dropping before the main image (must stay first) or after the upload button
+                if (evt.related && evt.related.id === 'mediaUploadBtn') return false;
+                if (evt.related && evt.related.getAttribute && evt.related.getAttribute('data-kind') === 'main') return false;
+                return true;
+              },
+              onEnd: () => {
+                // Ensure upload button stays last
+                if (uploadBtn && uploadBtn.parentNode === grid) {
+                  grid.appendChild(uploadBtn);
+                }
+                syncMediaOrder();
+              },
+            });
+          } catch (_) { /* noop */ }
+        }
+
+        const stepsGrid = document.getElementById('stepsGrid');
+        const stepsField = document.getElementById('reconditioningSteps');
+        const compatField = document.getElementById('compatibility');
+        const compatMakeSelect = document.getElementById('compatMakeSelect');
+        const compatMakeCustom = document.getElementById('compatMakeCustom');
+        const compatModelSelect = document.getElementById('compatModelSelect');
+        const compatModelCustom = document.getElementById('compatModelCustom');
+        const compatYears = document.getElementById('compatYears');
+        const compatEngine = document.getElementById('compatEngine');
+        const compatAddItemBtn = document.getElementById('compatAddItemBtn');
+        const compatModels = document.getElementById('compatModels');
+        const compatModelsLabel = document.getElementById('compatModelsLabel');
+        const compatAddBtn = document.getElementById('compatAddBtn');
+        const faqField = document.getElementById('faqs');
+        const faqList = document.getElementById('faqList');
+        const faqAddBtn = document.getElementById('faqAddBtn');
+        const faqSearch = document.getElementById('faqSearch');
+        const optionsField = document.getElementById('optionsJson');
+        const templateLibrary = document.getElementById('templateLibrary');
+        const optionsBuilder = document.getElementById('productOptionsBuilder');
+        const optionsEmpty = document.getElementById('productOptionsEmpty');
+        const addCustomOptionBtn = document.getElementById('addCustomOptionBtn');
+        const applyOptionsJsonBtn = document.getElementById('applyOptionsJsonBtn');
+        const aiGenerateBtn = document.getElementById('aiGenerateBtn');
+        const aiCancelBtn = document.getElementById('aiCancelBtn');
+        const aiProfileSelect = document.getElementById('aiProfile');
+        const aiSourceNotes = document.getElementById('aiSourceNotes');
+        const aiGenerateStatus = document.getElementById('aiGenerateStatus');
+        const aiGenerateWarnings = document.getElementById('aiGenerateWarnings');
+        const applyLatestAiDraftBtn = document.getElementById('applyLatestAiDraftBtn');
+        const fieldReviewEmptyCount = document.getElementById('fieldReviewEmptyCount');
+        const fieldReviewAiCount = document.getElementById('fieldReviewAiCount');
+        const fieldReviewValidatedCount = document.getElementById('fieldReviewValidatedCount');
+        const runtimeDataEl = document.getElementById('adminProductRuntimeData');
+        const currentProductId = runtimeDataEl ? String(runtimeDataEl.getAttribute('data-product-id') || '').trim() : '';
+        let latestAiDraftJob = null;
+        const latestAiDraftJobRaw = runtimeDataEl ? String(runtimeDataEl.getAttribute('data-latest-ai-draft-job') || '') : '';
+        if (latestAiDraftJobRaw) {
+          try {
+            latestAiDraftJob = JSON.parse(decodeURIComponent(latestAiDraftJobRaw));
+          } catch (e) {
+            latestAiDraftJob = null;
+          }
+        }
+
+        let hydrateStepsGridFromField = function () {};
+        const aiTouchedFields = new Set();
+        const validatedFields = new Set();
+
+        const FIELD_REVIEW_DEFS = [
+          { id: 'name', label: 'Nom du produit', focusId: 'name', highlightId: 'name' },
+          { id: 'price', label: 'Prix', focusId: 'price', highlightId: 'price' },
+          { id: 'category', label: 'Catégorie', focusId: 'category', highlightId: 'category' },
+          { id: 'brand', label: 'Marque', focusId: 'brand', highlightId: 'brand' },
+          { id: 'slug', label: 'Slug', focusId: 'slug', highlightId: 'slug' },
+          { id: 'sku', label: 'SKU', focusId: 'sku', highlightId: 'sku' },
+          { id: 'shippingDelayText', label: 'Délai d\'expédition', focusId: 'shippingDelayText', highlightId: 'shippingDelayText' },
+          { id: 'compatibleReferences', label: 'Références compatibles', focusId: 'compatibleReferences', highlightId: 'compatibleReferences' },
+          {
+            id: 'imageUrl',
+            label: 'Image principale',
+            focusId: 'mediaAddNew',
+            highlightId: 'mediaGrid',
+            mountSelector: '#mediaAddNew',
+            getValue: () => {
+              const imageUrlField = document.getElementById('imageUrl');
+              const mainImage = String((imageUrlField || {}).value || '').trim();
+              const previewCount = fileInput && fileInput.files ? Array.from(fileInput.files).length : 0;
+              return mainImage || previewCount ? 'ok' : '';
+            },
+          },
+          { id: 'specType', label: 'Type', focusId: 'specType', highlightId: 'specType' },
+          { id: 'specProgrammation', label: 'Programmation', focusId: 'specProgrammation', highlightId: 'specProgrammation' },
+          { id: 'badgeTopLeft', label: 'Garantie', focusId: 'badgeTopLeft', highlightId: 'badgeTopLeft' },
+          { id: 'badgeCondition', label: 'État', focusId: 'badgeCondition', highlightId: 'badgeCondition' },
+          { id: 'shortDescription', label: 'Résumé', focusId: 'shortDescription', highlightId: 'shortDescription' },
+          { id: 'description', label: 'Description longue', focusId: 'description', highlightId: 'description' },
+          { id: 'compatibility', label: 'Compatibilité véhicules', focusId: 'compatMakeSelect', highlightId: 'compatMakeSelect', mountSelector: '#compatAddBtn' },
+          { id: 'faqs', label: 'FAQ', focusId: 'faqAddBtn', highlightId: 'faqList', mountSelector: '#faqAddBtn' },
+          { id: 'reconditioningSteps', label: 'Étapes de reconditionnement', focusId: 'stepsPrefillBtn', highlightId: 'stepsGrid', mountSelector: '#stepsPrefillBtn' },
+          { id: 'optionsJson', label: 'Options produit', focusId: 'addCustomOptionBtn', highlightId: 'productOptionsBuilder', mountSelector: '#addCustomOptionBtn' },
+          { id: 'metaTitle', label: 'Meta title', focusId: 'metaTitle', highlightId: 'metaTitle' },
+          { id: 'metaDescription', label: 'Meta description', focusId: 'metaDescription', highlightId: 'metaDescription' },
+        ];
+
+        function getFieldReviewValue(def) {
+          if (!def) return '';
+          if (typeof def.getValue === 'function') return String(def.getValue() || '').trim();
+          const el = document.getElementById(def.id);
+          if (!el) return '';
+          if (el.type === 'checkbox') return el.checked ? 'true' : '';
+          return String(el.value || '').trim();
+        }
+
+        function findFieldReviewMount(def) {
+          if (!def) return null;
+          if (def.mountSelector) return document.querySelector(def.mountSelector);
+          return document.querySelector(`label[for="${def.id}"]`);
+        }
+
+        function getFieldHighlightElement(def) {
+          return document.getElementById(def && def.highlightId ? def.highlightId : (def ? def.id : ''));
+        }
+
+        function syncFieldReviewInline(def, { hasValue, isAi, isValidated } = {}) {
+          const mount = findFieldReviewMount(def);
+          if (!mount) return;
+
+          let inline = document.querySelector(`[data-field-review-inline="${def.id}"]`);
+          if (!inline) {
+            inline = document.createElement('span');
+            inline.className = 'field-review-inline';
+            inline.setAttribute('data-field-review-inline', def.id);
+
+            const aiBadge = document.createElement('span');
+            aiBadge.className = 'hidden rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-violet-700';
+            aiBadge.setAttribute('data-field-review-ai-badge', def.id);
+            aiBadge.textContent = 'IA';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'h-3.5 w-3.5 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500';
+            checkbox.title = `Valider ${def.label}`;
+            checkbox.setAttribute('data-field-review-checkbox', def.id);
+            checkbox.addEventListener('change', () => {
+              if (checkbox.checked) validatedFields.add(def.id);
+              else validatedFields.delete(def.id);
+              refreshFieldReviewPanel();
+            });
+
+            inline.appendChild(aiBadge);
+            inline.appendChild(checkbox);
+
+            if (mount.tagName === 'LABEL') {
+              mount.appendChild(inline);
+            } else {
+              mount.insertAdjacentElement('afterend', inline);
+            }
+          }
+
+          const aiBadge = inline.querySelector(`[data-field-review-ai-badge="${def.id}"]`);
+          const checkbox = inline.querySelector(`[data-field-review-checkbox="${def.id}"]`);
+          if (aiBadge) aiBadge.classList.toggle('hidden', !isAi);
+          if (checkbox) {
+            checkbox.checked = !!isValidated;
+            checkbox.disabled = !hasValue;
+          }
+          inline.classList.toggle('opacity-50', !hasValue);
+        }
+
+        function applyFieldReviewHighlight(def, state) {
+          const target = getFieldHighlightElement(def);
+          if (!target) return;
+          target.classList.remove('field-review-empty', 'field-review-ai', 'field-review-validated');
+          if (state === 'empty') target.classList.add('field-review-empty');
+          if (state === 'ai') target.classList.add('field-review-ai');
+          if (state === 'validated') target.classList.add('field-review-validated');
+        }
+
+        function refreshFieldReviewPanel() {
+          let emptyCount = 0;
+          let aiCount = 0;
+          let validatedCount = 0;
+
+          FIELD_REVIEW_DEFS.forEach((def) => {
+            const value = getFieldReviewValue(def);
+            const hasValue = !!value;
+            if (!hasValue) {
+              aiTouchedFields.delete(def.id);
+              validatedFields.delete(def.id);
+            }
+
+            const isAi = hasValue && aiTouchedFields.has(def.id);
+            const isValidated = hasValue && validatedFields.has(def.id);
+
+            if (!hasValue) emptyCount += 1;
+            if (isAi) aiCount += 1;
+            if (isValidated) validatedCount += 1;
+
+            applyFieldReviewHighlight(def, !hasValue ? 'empty' : (isValidated ? 'validated' : (isAi ? 'ai' : 'filled')));
+            syncFieldReviewInline(def, { hasValue, isAi, isValidated });
+          });
+
+          if (fieldReviewEmptyCount) fieldReviewEmptyCount.textContent = String(emptyCount);
+          if (fieldReviewAiCount) fieldReviewAiCount.textContent = String(aiCount);
+          if (fieldReviewValidatedCount) fieldReviewValidatedCount.textContent = String(validatedCount);
+        }
+
+        const compatIndexEl = document.getElementById('compatIndexJson');
+        let SERVER_COMPAT_INDEX = { makes: [], modelsByMake: {} };
+        try {
+          SERVER_COMPAT_INDEX = compatIndexEl && compatIndexEl.textContent
+            ? JSON.parse(compatIndexEl.textContent)
+            : { makes: [], modelsByMake: {} };
+        } catch (e) {
+          SERVER_COMPAT_INDEX = { makes: [], modelsByMake: {} };
+        }
+
+        const seoSeedEl = document.getElementById('seoAssistantSeed');
+        let SEO_SEED = { baseUrl: '', productId: 'ID' };
+        try {
+          SEO_SEED = seoSeedEl && seoSeedEl.textContent
+            ? JSON.parse(seoSeedEl.textContent)
+            : { baseUrl: '', productId: 'ID' };
+        } catch (e) {
+          SEO_SEED = { baseUrl: '', productId: 'ID' };
+        }
+
+        const productOptionTemplatesEl = document.getElementById('productOptionTemplatesJson');
+        let PRODUCT_OPTION_TEMPLATES = [];
+        try {
+          PRODUCT_OPTION_TEMPLATES = productOptionTemplatesEl && productOptionTemplatesEl.textContent
+            ? JSON.parse(productOptionTemplatesEl.textContent)
+            : [];
+        } catch (e) {
+          PRODUCT_OPTION_TEMPLATES = [];
+        }
+
+        const DEFAULT_MAKES = [
+          'Audi',
+          'BMW',
+          'Citroën',
+          'Dacia',
+          'Fiat',
+          'Ford',
+          'Hyundai',
+          'Kia',
+          'Mercedes',
+          'Nissan',
+          'Opel',
+          'Peugeot',
+          'Renault',
+          'Seat',
+          'Skoda',
+          'Toyota',
+          'Volkswagen',
+          'Volvo',
+        ];
+
+        const parseLinesValue = (value) => String(value || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+
+        const specsField = document.getElementById('specs');
+        const specTypeInput = document.getElementById('specType');
+        const specProgrammationInput = document.getElementById('specProgrammation');
+
+        const parseSpecPairs = (value) => {
+          const lines = parseLinesValue(value);
+          const pairs = [];
+
+          lines.forEach((line) => {
+            const sepIndex = line.indexOf(':') >= 0
+              ? line.indexOf(':')
+              : (line.indexOf('=') >= 0 ? line.indexOf('=') : line.indexOf('|'));
+            if (sepIndex <= 0) return;
+
+            const label = line.slice(0, sepIndex).trim();
+            const val = line.slice(sepIndex + 1).trim();
+            if (!label || !val) return;
+
+            pairs.push({ label, value: val });
+          });
+
+          return pairs;
+        };
+
+        const upsertSpec = (pairs, key, displayLabel, value) => {
+          const k = String(key || '').toLowerCase();
+          const v = String(value || '').trim();
+          const idx = pairs.findIndex((p) => p && p.label && String(p.label).trim().toLowerCase() === k);
+
+          if (!v) {
+            if (idx >= 0) pairs.splice(idx, 1);
+            return;
+          }
+
+          if (idx >= 0) pairs[idx].value = v;
+          else pairs.push({ label: displayLabel, value: v });
+        };
+
+        const syncSpecsFromKeyFields = () => {
+          if (!specsField) return;
+          const pairs = parseSpecPairs(specsField.value);
+          if (specTypeInput) upsertSpec(pairs, 'type', 'Type', specTypeInput.value);
+          if (specProgrammationInput) upsertSpec(pairs, 'programmation', 'Programmation', specProgrammationInput.value);
+          specsField.value = pairs.map((p) => `${p.label}: ${p.value}`.trim()).filter(Boolean).join('\n');
+        };
+
+        if (specsField && (specTypeInput || specProgrammationInput)) {
+          if (specTypeInput) specTypeInput.addEventListener('input', syncSpecsFromKeyFields);
+          if (specProgrammationInput) specProgrammationInput.addEventListener('input', syncSpecsFromKeyFields);
+          syncSpecsFromKeyFields();
+        }
+
+        const slugifyOptionKey = (value) => {
+          let s = String(value || '');
+          try {
+            s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          } catch (e) {}
+          return s
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+/, '')
+            .replace(/-+$/, '');
+        };
+
+        const parsePriceInputToCents = (value) => {
+          const trimmed = String(value || '').trim();
+          if (!trimmed) return 0;
+          const normalized = trimmed.replace(/€/g, '').replace(/\s+/g, '').replace(',', '.');
+          const num = Number(normalized);
+          if (!Number.isFinite(num) || num < 0) return null;
+          return Math.round(num * 100);
+        };
+
+        const formatPriceInputFromCents = (value) => {
+          const cents = Number(value);
+          if (!Number.isFinite(cents) || cents <= 0) return '';
+          return (cents / 100).toFixed(2).replace('.', ',');
+        };
+
+        const parseOptionalPriceInputToCents = (value) => {
+          const trimmed = String(value || '').trim();
+          if (!trimmed) return null;
+          return parsePriceInputToCents(trimmed);
+        };
+
+        const normalizeOptionalStoredPriceCents = (value) => {
+          if (value === null || typeof value === 'undefined') return null;
+          const trimmed = String(value).trim();
+          if (!trimmed) return null;
+          const parsed = Number(trimmed);
+          return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : null;
+        };
+
+        const createChoiceState = (choice) => ({
+          key: String(choice && choice.key ? choice.key : '').trim(),
+          label: String(choice && choice.label ? choice.label : '').trim(),
+          priceDeltaCents: Number.isFinite(Number(choice && choice.priceDeltaCents)) ? Math.round(Number(choice.priceDeltaCents)) : 0,
+          absolutePriceCents: normalizeOptionalStoredPriceCents(choice && choice.absolutePriceCents),
+          triggersCloning: choice && choice.triggersCloning === true,
+        });
+
+        const createEmptyOptionState = () => ({
+          templateId: '',
+          key: '',
+          label: '',
+          type: 'choice',
+          required: false,
+          placeholder: '',
+          helpText: '',
+          priceDeltaCents: 0,
+          choices: [createChoiceState({})],
+        });
+
+        const normalizeOptionState = (option, index) => {
+          const src = option && typeof option === 'object' ? option : {};
+          const label = String(src.label || '').trim();
+          const rawKey = slugifyOptionKey(String(src.key || '').trim());
+          if (!label && !rawKey) return null;
+          const key = rawKey || slugifyOptionKey(label) || `option-${index + 1}`;
+
+          const type = String(src.type || '') === 'text' ? 'text' : 'choice';
+          const normalized = {
+            templateId: String(src.templateId || '').trim(),
+            key,
+            label: label || key,
+            type,
+            required: src.required === true,
+            placeholder: String(src.placeholder || '').trim(),
+            helpText: String(src.helpText || '').trim(),
+            priceDeltaCents: Number.isFinite(Number(src.priceDeltaCents)) ? Math.round(Number(src.priceDeltaCents)) : 0,
+            choices: [],
+          };
+
+          if (type === 'choice') {
+            normalized.choices = Array.isArray(src.choices)
+              ? src.choices.map(createChoiceState).filter((choice, choiceIndex) => {
+                  const choiceLabel = String(choice.label || '').trim();
+                  choice.key = slugifyOptionKey(choice.key || choiceLabel || `choix-${choiceIndex + 1}`);
+                  return !!choiceLabel;
+                })
+              : [];
+            normalized.priceDeltaCents = 0;
+          } else {
+            normalized.choices = [];
+          }
+
+          return normalized;
+        };
+
+        const createOptionState = (option, index) => {
+          const normalized = normalizeOptionState(option, index);
+          if (!normalized) return createEmptyOptionState();
+          return {
+            templateId: normalized.templateId,
+            key: normalized.key,
+            label: normalized.label,
+            type: normalized.type,
+            required: normalized.required,
+            placeholder: normalized.placeholder,
+            helpText: normalized.helpText,
+            priceDeltaCents: normalized.priceDeltaCents,
+            choices: normalized.type === 'choice' && normalized.choices.length ? normalized.choices.map(createChoiceState) : [createChoiceState({})],
+          };
+        };
+
+        const buildOptionStateFromTemplate = (template) => createOptionState({
+          templateId: template && template.id ? template.id : '',
+          key: template && template.key ? template.key : '',
+          label: template && template.name ? template.name : '',
+          type: template && template.type ? template.type : 'choice',
+          required: !!(template && template.required),
+          placeholder: template && template.placeholder ? template.placeholder : '',
+          helpText: template && template.helpText ? template.helpText : '',
+          priceDeltaCents: template && Number.isFinite(Number(template.priceDeltaCents)) ? Number(template.priceDeltaCents) : 0,
+          choices: template && Array.isArray(template.choices) ? template.choices : [],
+        }, 0);
+
+        const parseInitialOptionsState = () => {
+          if (!optionsField) return [];
+          const raw = String(optionsField.value || '').trim();
+          if (!raw) return [];
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed.map((option, index) => createOptionState(option, index)) : [];
+          } catch (e) {
+            return [];
+          }
+        };
+
+        let productOptionsState = parseInitialOptionsState();
+
+        const syncOptionsField = () => {
+          if (!optionsField) return;
+          const normalized = productOptionsState
+            .map((option, index) => normalizeOptionState(option, index))
+            .filter(Boolean);
+          optionsField.value = JSON.stringify(normalized, null, 2);
+          if (optionsEmpty) optionsEmpty.classList.toggle('hidden', productOptionsState.length > 0);
+          refreshFieldReviewPanel();
+        };
+
+        const renderTemplateLibrary = () => {
+          if (!templateLibrary) return;
+          templateLibrary.innerHTML = '';
+
+          PRODUCT_OPTION_TEMPLATES.forEach((template) => {
+            const templateId = String(template && template.id ? template.id : '');
+            const checked = productOptionsState.some((option) => String(option && option.templateId ? option.templateId : '') === templateId);
+            const disabled = template && template.isActive === false && !checked;
+
+            const card = document.createElement('label');
+            card.className = `flex items-start gap-3 rounded-xl border px-4 py-4 transition ${checked ? 'border-primary bg-primary/5' : 'border-border-light dark:border-border-dark bg-white dark:bg-gray-900'} ${disabled ? 'opacity-60' : 'cursor-pointer hover:border-primary/60'}`;
+
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.className = 'mt-1 rounded border-gray-300 text-primary focus:ring-primary';
+            input.checked = checked;
+            input.disabled = disabled;
+
+            const content = document.createElement('div');
+            content.className = 'min-w-0 flex-1';
+
+            const top = document.createElement('div');
+            top.className = 'flex flex-wrap items-center gap-2';
+
+            const name = document.createElement('div');
+            name.className = 'text-sm font-bold text-slate-900 dark:text-white';
+            name.textContent = template && template.name ? template.name : 'Option';
+
+            const type = document.createElement('span');
+            type.className = `inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-widest ${template && template.type === 'text' ? 'bg-sky-50 text-sky-700' : 'bg-violet-50 text-violet-700'}`;
+            type.textContent = template && template.type === 'text' ? 'Texte' : 'Liste';
+
+            top.appendChild(name);
+            top.appendChild(type);
+
+            if (template && template.required) {
+              const required = document.createElement('span');
+              required.className = 'inline-flex items-center rounded-full bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-amber-800';
+              required.textContent = 'Obligatoire';
+              top.appendChild(required);
+            }
+
+            if (template && template.isActive === false) {
+              const inactive = document.createElement('span');
+              inactive.className = 'inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-slate-500';
+              inactive.textContent = 'Inactive';
+              top.appendChild(inactive);
+            }
+
+            const meta = document.createElement('div');
+            meta.className = 'mt-2 text-xs text-slate-500';
+            meta.textContent = template && template.helpText
+              ? template.helpText
+              : (template && template.type === 'text'
+                ? 'Champ texte libre pour le client.'
+                : 'Choix proposés au client.');
+
+            content.appendChild(top);
+            content.appendChild(meta);
+
+            if (template && Array.isArray(template.choices) && template.choices.length) {
+              const choices = document.createElement('div');
+              choices.className = 'mt-2 flex flex-wrap gap-2';
+              template.choices.slice(0, 3).forEach((choice) => {
+                const badge = document.createElement('span');
+                badge.className = 'inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-[10px] font-bold text-slate-500';
+                badge.textContent = choice && choice.label ? choice.label : 'Choix';
+                choices.appendChild(badge);
+              });
+              content.appendChild(choices);
+            }
+
+            input.addEventListener('change', () => {
+              if (!templateId) return;
+              productOptionsState = productOptionsState.filter((option) => String(option && option.templateId ? option.templateId : '') !== templateId);
+              if (input.checked) {
+                productOptionsState.push(buildOptionStateFromTemplate(template));
+              }
+              renderProductOptionsEditor();
+              renderTemplateLibrary();
+              syncOptionsField();
+            });
+
+            card.appendChild(input);
+            card.appendChild(content);
+            templateLibrary.appendChild(card);
+          });
+        };
+
+        const createField = (labelText, wide) => {
+          const wrap = document.createElement('div');
+          if (wide) wrap.className = 'md:col-span-2';
+
+          const label = document.createElement('label');
+          label.className = 'block text-[11px] font-bold uppercase tracking-widest text-slate-500';
+          label.textContent = labelText;
+          wrap.appendChild(label);
+          return { wrap, label };
+        };
+
+        function renderProductOptionsEditor() {
+          if (!optionsBuilder) return;
+          optionsBuilder.innerHTML = '';
+
+          productOptionsState.forEach((option, index) => {
+            const card = document.createElement('div');
+            card.className = 'rounded-2xl border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-900/50 p-5';
+
+            const header = document.createElement('div');
+            header.className = 'flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4';
+
+            const headerLeft = document.createElement('div');
+            const title = document.createElement('div');
+            title.className = 'text-sm font-bold text-slate-900 dark:text-white';
+            title.textContent = option && option.label ? option.label : `Option ${index + 1}`;
+
+            const badges = document.createElement('div');
+            badges.className = 'mt-2 flex flex-wrap items-center gap-2';
+
+            const typeBadge = document.createElement('span');
+            typeBadge.className = `inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-widest ${option && option.type === 'text' ? 'bg-sky-50 text-sky-700' : 'bg-violet-50 text-violet-700'}`;
+            typeBadge.textContent = option && option.type === 'text' ? 'Texte libre' : 'Liste de choix';
+            badges.appendChild(typeBadge);
+
+            if (option && option.templateId) {
+              const fromTemplate = document.createElement('span');
+              fromTemplate.className = 'inline-flex items-center rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-widest text-primary';
+              fromTemplate.textContent = 'Issue de la bibliothèque';
+              badges.appendChild(fromTemplate);
+            }
+
+            headerLeft.appendChild(title);
+            headerLeft.appendChild(badges);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-600 hover:bg-red-50 transition';
+            removeBtn.innerHTML = '<span class="material-symbols-outlined mr-2 text-sm">delete</span>Retirer';
+            removeBtn.addEventListener('click', () => {
+              productOptionsState.splice(index, 1);
+              renderProductOptionsEditor();
+              renderTemplateLibrary();
+              syncOptionsField();
+            });
+
+            header.appendChild(headerLeft);
+            header.appendChild(removeBtn);
+            card.appendChild(header);
+
+            const fields = document.createElement('div');
+            fields.className = 'mt-5 grid grid-cols-1 md:grid-cols-2 gap-4';
+
+            const labelField = createField('Nom affiché');
+            const labelInput = document.createElement('input');
+            labelInput.className = 'mt-2 w-full rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-3 text-sm';
+            labelInput.type = 'text';
+            labelInput.value = option && option.label ? option.label : '';
+            labelInput.placeholder = 'Ex: Programmation';
+            labelField.wrap.appendChild(labelInput);
+
+            const keyField = createField('Clé technique');
+            const keyInput = document.createElement('input');
+            keyInput.className = 'mt-2 w-full rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-3 text-sm';
+            keyInput.type = 'text';
+            keyInput.value = option && option.key ? option.key : '';
+            keyInput.placeholder = 'Ex: programmation';
+            keyField.wrap.appendChild(keyInput);
+
+            const typeField = createField('Type');
+            const typeSelect = document.createElement('select');
+            typeSelect.className = 'mt-2 w-full rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-3 text-sm';
+            typeSelect.innerHTML = '<option value="choice">Liste de choix</option><option value="text">Texte libre</option>';
+            typeSelect.value = option && option.type === 'text' ? 'text' : 'choice';
+            typeField.wrap.appendChild(typeSelect);
+
+            const requiredWrap = document.createElement('div');
+            requiredWrap.className = 'flex items-end';
+            const requiredLabel = document.createElement('label');
+            requiredLabel.className = 'inline-flex items-center gap-3 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-3 text-sm font-semibold text-slate-500 dark:text-gray-200';
+            const requiredInput = document.createElement('input');
+            requiredInput.className = 'rounded border-gray-300 text-primary focus:ring-primary';
+            requiredInput.type = 'checkbox';
+            requiredInput.checked = !!(option && option.required);
+            const requiredText = document.createElement('span');
+            requiredText.textContent = 'Champ obligatoire';
+            requiredLabel.appendChild(requiredInput);
+            requiredLabel.appendChild(requiredText);
+            requiredWrap.appendChild(requiredLabel);
+
+            const placeholderField = createField('Placeholder');
+            const placeholderInput = document.createElement('input');
+            placeholderInput.className = 'mt-2 w-full rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-3 text-sm';
+            placeholderInput.type = 'text';
+            placeholderInput.value = option && option.placeholder ? option.placeholder : '';
+            placeholderInput.placeholder = 'Ex : Tapez la référence';
+            placeholderField.wrap.appendChild(placeholderInput);
+
+            const helpField = createField('Texte d\'aide', true);
+            const helpInput = document.createElement('input');
+            helpInput.className = 'mt-2 w-full rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-3 text-sm';
+            helpInput.type = 'text';
+            helpInput.value = option && option.helpText ? option.helpText : '';
+            helpInput.placeholder = 'Ex : Choisissez si la pièce doit être programmée';
+            helpField.wrap.appendChild(helpInput);
+
+            const priceField = createField('Supplément prix (€)');
+            const priceInput = document.createElement('input');
+            priceInput.className = 'mt-2 w-full rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-3 text-sm';
+            priceInput.type = 'text';
+            priceInput.value = formatPriceInputFromCents(option && option.priceDeltaCents ? option.priceDeltaCents : 0);
+            priceInput.placeholder = 'Ex: 49,90';
+            priceField.wrap.appendChild(priceInput);
+
+            fields.appendChild(labelField.wrap);
+            fields.appendChild(keyField.wrap);
+            fields.appendChild(typeField.wrap);
+            fields.appendChild(requiredWrap);
+            fields.appendChild(placeholderField.wrap);
+            fields.appendChild(priceField.wrap);
+            fields.appendChild(helpField.wrap);
+            card.appendChild(fields);
+
+            const choicesWrap = document.createElement('div');
+            choicesWrap.className = 'mt-5';
+            card.appendChild(choicesWrap);
+
+            const renderChoices = () => {
+              choicesWrap.innerHTML = '';
+              priceField.wrap.style.display = option && option.type === 'text' ? '' : 'none';
+              if (!option || option.type !== 'choice') return;
+
+              const top = document.createElement('div');
+              top.className = 'flex items-center justify-between gap-4';
+
+              const titleChoices = document.createElement('div');
+              titleChoices.className = 'text-xs font-bold uppercase tracking-widest text-slate-500';
+              titleChoices.textContent = 'Choix proposés';
+              top.appendChild(titleChoices);
+
+              const addChoiceBtn = document.createElement('button');
+              addChoiceBtn.type = 'button';
+              addChoiceBtn.className = 'inline-flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800 transition';
+              addChoiceBtn.innerHTML = '<span class="material-symbols-outlined mr-2 text-sm">add</span>Ajouter un choix';
+              addChoiceBtn.addEventListener('click', () => {
+                option.choices = Array.isArray(option.choices) ? option.choices : [];
+                option.choices.push(createChoiceState({}));
+                renderProductOptionsEditor();
+                syncOptionsField();
+              });
+              top.appendChild(addChoiceBtn);
+              choicesWrap.appendChild(top);
+
+              const list = document.createElement('div');
+              list.className = 'mt-3 space-y-3';
+
+              const choices = Array.isArray(option.choices) && option.choices.length ? option.choices : [createChoiceState({})];
+              option.choices = choices;
+
+              choices.forEach((choice, choiceIndex) => {
+                const row = document.createElement('div');
+                row.className = 'grid grid-cols-1 md:grid-cols-[1fr_150px_150px_auto_auto] gap-3 items-end rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 p-4';
+
+                const choiceLabelField = createField('Libellé');
+                const choiceLabelInput = document.createElement('input');
+                choiceLabelInput.className = 'mt-2 w-full rounded-xl border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-950 px-4 py-3 text-sm';
+                choiceLabelInput.type = 'text';
+                choiceLabelInput.value = choice && choice.label ? choice.label : '';
+                choiceLabelInput.placeholder = 'Ex: Avec programmation';
+                choiceLabelField.wrap.appendChild(choiceLabelInput);
+
+                const choiceAbsolutePriceField = createField('Prix final (€)');
+                const choiceAbsolutePriceInput = document.createElement('input');
+                choiceAbsolutePriceInput.className = 'mt-2 w-full rounded-xl border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-950 px-4 py-3 text-sm';
+                choiceAbsolutePriceInput.type = 'text';
+                choiceAbsolutePriceInput.value = formatPriceInputFromCents(choice && choice.absolutePriceCents);
+                choiceAbsolutePriceInput.placeholder = 'Ex: 199,90';
+                choiceAbsolutePriceField.wrap.appendChild(choiceAbsolutePriceInput);
+
+                const choicePriceField = createField('Supplément (€)');
+                const choicePriceInput = document.createElement('input');
+                choicePriceInput.className = 'mt-2 w-full rounded-xl border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-950 px-4 py-3 text-sm';
+                choicePriceInput.type = 'text';
+                choicePriceInput.value = formatPriceInputFromCents(choice && choice.priceDeltaCents ? choice.priceDeltaCents : 0);
+                choicePriceInput.placeholder = 'Ex: 49,90';
+                choicePriceField.wrap.appendChild(choicePriceInput);
+
+                const removeChoiceBtn = document.createElement('button');
+                removeChoiceBtn.type = 'button';
+                removeChoiceBtn.className = 'inline-flex items-center justify-center rounded-lg border border-red-200 bg-white px-4 py-3 text-xs font-bold uppercase tracking-wider text-red-600 hover:bg-red-50 transition';
+                removeChoiceBtn.textContent = 'Supprimer';
+                removeChoiceBtn.addEventListener('click', () => {
+                  option.choices.splice(choiceIndex, 1);
+                  if (!option.choices.length) option.choices.push(createChoiceState({}));
+                  renderProductOptionsEditor();
+                  syncOptionsField();
+                });
+
+                choiceLabelInput.addEventListener('input', () => {
+                  const previousLabel = choice.label || '';
+                  choice.label = choiceLabelInput.value;
+                  if (!choice.key || choice.key === slugifyOptionKey(previousLabel)) {
+                    choice.key = slugifyOptionKey(choice.label);
+                  }
+                  syncOptionsField();
+                });
+
+                choiceAbsolutePriceInput.addEventListener('blur', () => {
+                  const parsed = parseOptionalPriceInputToCents(choiceAbsolutePriceInput.value);
+                  if (parsed !== null || !String(choiceAbsolutePriceInput.value || '').trim()) {
+                    choice.absolutePriceCents = parsed;
+                  }
+                  choiceAbsolutePriceInput.value = formatPriceInputFromCents(choice.absolutePriceCents);
+                  syncOptionsField();
+                });
+
+                choicePriceInput.addEventListener('blur', () => {
+                  const parsed = parsePriceInputToCents(choicePriceInput.value);
+                  if (parsed !== null) choice.priceDeltaCents = parsed;
+                  choicePriceInput.value = formatPriceInputFromCents(choice.priceDeltaCents);
+                  syncOptionsField();
+                });
+
+                const cloningField = document.createElement('div');
+                cloningField.className = 'flex flex-col items-center justify-end pb-1';
+                const cloningLabel = document.createElement('label');
+                cloningLabel.className = 'text-[10px] font-semibold uppercase tracking-widest text-slate-500 mb-2';
+                cloningLabel.textContent = 'Clonage';
+                const cloningCheckbox = document.createElement('input');
+                cloningCheckbox.type = 'checkbox';
+                cloningCheckbox.className = 'w-5 h-5 rounded border-slate-300 text-red-600 focus:ring-red-500';
+                cloningCheckbox.checked = choice && choice.triggersCloning === true;
+                cloningCheckbox.addEventListener('change', () => {
+                  choice.triggersCloning = cloningCheckbox.checked;
+                  syncOptionsField();
+                });
+                cloningField.appendChild(cloningLabel);
+                cloningField.appendChild(cloningCheckbox);
+
+                row.appendChild(choiceLabelField.wrap);
+                row.appendChild(choiceAbsolutePriceField.wrap);
+                row.appendChild(choicePriceField.wrap);
+                row.appendChild(cloningField);
+                row.appendChild(removeChoiceBtn);
+                list.appendChild(row);
+              });
+
+              choicesWrap.appendChild(list);
+            };
+
+            labelInput.addEventListener('input', () => {
+              const previousLabel = option.label || '';
+              const previousKey = option.key || '';
+              option.label = labelInput.value;
+              if (!previousKey || previousKey === slugifyOptionKey(previousLabel)) {
+                option.key = slugifyOptionKey(option.label);
+                keyInput.value = option.key;
+              }
+              title.textContent = option.label ? option.label : `Option ${index + 1}`;
+              syncOptionsField();
+            });
+
+            keyInput.addEventListener('input', () => {
+              option.key = keyInput.value;
+              syncOptionsField();
+            });
+
+            typeSelect.addEventListener('change', () => {
+              option.type = typeSelect.value === 'text' ? 'text' : 'choice';
+              if (option.type === 'choice' && (!Array.isArray(option.choices) || !option.choices.length)) {
+                option.choices = [createChoiceState({})];
+              }
+              if (option.type === 'text') {
+                option.choices = [createChoiceState({})];
+              }
+              renderProductOptionsEditor();
+              syncOptionsField();
+            });
+
+            requiredInput.addEventListener('change', () => {
+              option.required = requiredInput.checked;
+              syncOptionsField();
+            });
+
+            placeholderInput.addEventListener('input', () => {
+              option.placeholder = placeholderInput.value;
+              syncOptionsField();
+            });
+
+            helpInput.addEventListener('input', () => {
+              option.helpText = helpInput.value;
+              syncOptionsField();
+            });
+
+            priceInput.addEventListener('blur', () => {
+              const parsed = parsePriceInputToCents(priceInput.value);
+              if (parsed !== null) option.priceDeltaCents = parsed;
+              priceInput.value = formatPriceInputFromCents(option.priceDeltaCents);
+              syncOptionsField();
+            });
+
+            renderChoices();
+            optionsBuilder.appendChild(card);
+          });
+
+          if (optionsEmpty) optionsEmpty.classList.toggle('hidden', productOptionsState.length > 0);
+        }
+
+        if (addCustomOptionBtn) {
+          addCustomOptionBtn.addEventListener('click', () => {
+            productOptionsState.push(createEmptyOptionState());
+            renderProductOptionsEditor();
+            renderTemplateLibrary();
+            syncOptionsField();
+          });
+        }
+
+        if (applyOptionsJsonBtn) {
+          applyOptionsJsonBtn.addEventListener('click', () => {
+            if (!optionsField) return;
+            const raw = String(optionsField.value || '').trim();
+            if (!raw) {
+              productOptionsState = [];
+              renderProductOptionsEditor();
+              renderTemplateLibrary();
+              syncOptionsField();
+              return;
+            }
+
+            try {
+              const parsed = JSON.parse(raw);
+              if (!Array.isArray(parsed)) throw new Error('invalid');
+              productOptionsState = parsed.map((option, index) => createOptionState(option, index));
+              renderProductOptionsEditor();
+              renderTemplateLibrary();
+              syncOptionsField();
+            } catch (e) {
+              toast.error('Le JSON des options est invalide.');
+            }
+          });
+        }
+
+        renderProductOptionsEditor();
+        renderTemplateLibrary();
+        syncOptionsField();
+
+        const parseSteps = () => {
+          const lines = parseLinesValue(stepsField ? stepsField.value : '');
+          const out = [];
+          lines.forEach((line) => {
+            const idx = line.indexOf(':');
+            if (idx === -1) return;
+            const title = line.slice(0, idx).trim();
+            const description = line.slice(idx + 1).trim();
+            if (!title && !description) return;
+            out.push({ title, description });
+          });
+          while (out.length < 4) out.push({ title: '', description: '' });
+          return out.slice(0, 4);
+        };
+
+        const syncStepsField = () => {
+          if (!stepsField || !stepsGrid) return;
+          const blocks = Array.from(stepsGrid.querySelectorAll('[data-step]'));
+          const lines = blocks
+            .map((b) => {
+              const sel = b.querySelector('[data-step-title-select]');
+              const custom = b.querySelector('[data-step-title-custom]');
+              const selValue = sel && sel.value ? String(sel.value) : '';
+              const t = selValue === '__custom__'
+                ? ((custom || {}).value || '')
+                : selValue;
+              const d = (b.querySelector('[data-step-description]') || {}).value || '';
+              const title = String(t).trim();
+              const desc = String(d).trim();
+              if (!title && !desc) return '';
+              return `${title}: ${desc}`.trim();
+            })
+            .filter(Boolean);
+          stepsField.value = lines.join('\n');
+          refreshFieldReviewPanel();
+        };
+
+        if (stepsGrid && stepsField) {
+          const STEP_PRESETS = {
+            Diagnostic: 'Contrôle visuel et lecture des défauts initiaux.',
+            Nettoyage: 'Démontage complet et nettoyage ultrason.',
+            Remplacement: 'Électrovannes, joints et capteurs critiques changés.',
+            'Test Banc': 'Simulation conditions réelles et programmation.',
+          };
+
+          const applyStepTitle = (block, title) => {
+            const sel = block ? block.querySelector('[data-step-title-select]') : null;
+            const custom = block ? block.querySelector('[data-step-title-custom]') : null;
+            const exists = sel ? Array.from(sel.options || []).some((o) => o && o.value === title) : false;
+
+            if (!sel) return;
+
+            if (exists || title === '') {
+              sel.value = title;
+              if (custom) {
+                custom.classList.add('hidden');
+                custom.value = '';
+              }
+              return;
+            }
+
+            sel.value = '__custom__';
+            if (custom) {
+              custom.classList.remove('hidden');
+              custom.value = title;
+            }
+          };
+
+          const applyPresetSteps = () => {
+            const blocks = Array.from(stepsGrid.querySelectorAll('[data-step]'));
+            const titles = ['Diagnostic', 'Nettoyage', 'Remplacement', 'Test Banc'];
+
+            blocks.slice(0, 4).forEach((b, i) => {
+              const title = titles[i] || '';
+              applyStepTitle(b, title);
+              const d = b.querySelector('[data-step-description]');
+              if (d) d.value = STEP_PRESETS[title] || '';
+            });
+
+            syncStepsField();
+          };
+
+          const stepsPrefillBtn = document.getElementById('stepsPrefillBtn');
+          if (stepsPrefillBtn) {
+            stepsPrefillBtn.addEventListener('click', () => {
+              const current = String(stepsField.value || '').trim();
+              if (current) {
+                const ok = window.confirm('Remplacer les étapes déjà remplies par le modèle (4 étapes) ?');
+                if (!ok) return;
+              }
+              applyPresetSteps();
+            });
+          }
+
+          hydrateStepsGridFromField = function () {
+            const initial = parseSteps();
+            const blocks = Array.from(stepsGrid.querySelectorAll('[data-step]'));
+            blocks.forEach((b, i) => {
+              const sel = b.querySelector('[data-step-title-select]');
+              const custom = b.querySelector('[data-step-title-custom]');
+              const d = b.querySelector('[data-step-description]');
+              const initialTitle = initial[i] ? String(initial[i].title || '').trim() : '';
+
+              if (sel) {
+                const exists = Array.from(sel.options || []).some((o) => o && o.value === initialTitle);
+                if (exists || initialTitle === '') {
+                  sel.value = initialTitle;
+                  if (custom) custom.classList.add('hidden');
+                } else {
+                  sel.value = '__custom__';
+                  if (custom) {
+                    custom.classList.remove('hidden');
+                    custom.value = initialTitle;
+                  }
+                }
+              }
+              if (d) d.value = initial[i] ? initial[i].description : '';
+            });
+          };
+
+          hydrateStepsGridFromField();
+          stepsGrid.addEventListener('input', syncStepsField);
+          stepsGrid.addEventListener('change', (e) => {
+            const target = e && e.target ? e.target : null;
+            if (!target) return;
+            if (target.matches && target.matches('[data-step-title-select]')) {
+              const block = target.closest('[data-step]');
+              if (!block) return;
+              const custom = block.querySelector('[data-step-title-custom]');
+              if (!custom) return;
+              if (String(target.value) === '__custom__') custom.classList.remove('hidden');
+              else custom.classList.add('hidden');
+
+              const selectedTitle = String(target.value || '').trim();
+              const descField = block.querySelector('[data-step-description]');
+              const currentDesc = descField ? String(descField.value || '').trim() : '';
+              if (descField && !currentDesc && STEP_PRESETS[selectedTitle]) {
+                descField.value = STEP_PRESETS[selectedTitle];
+              }
+
+              syncStepsField();
+            }
+          });
+        }
+
+        const parseCompatibility = () => {
+          const lines = parseLinesValue(compatField ? compatField.value : '');
+          return lines
+            .map((line) => {
+              const parts = line.split('|').map((p) => String(p || '').trim());
+              return {
+                make: parts[0] || '',
+                model: parts[1] || '',
+                years: parts[2] || '',
+                engine: parts[3] || '',
+              };
+            })
+            .filter((x) => x.make || x.model || x.years || x.engine);
+        };
+
+        const syncCompatibilityField = (items) => {
+          if (!compatField) return;
+          compatField.value = items
+            .map((x) => `${x.make} | ${x.model} | ${x.years} | ${x.engine}`.trim())
+            .join('\n');
+
+          if (typeof updateSeoAssistant === 'function') updateSeoAssistant();
+          refreshFieldReviewPanel();
+        };
+
+        let compatItems = parseCompatibility();
+        let selectedMake = compatItems.length ? (compatItems[0].make || '') : '';
+
+        const makeList = () => {
+          const fromData = compatItems.map((x) => x.make).filter(Boolean);
+          const fromServer = SERVER_COMPAT_INDEX && Array.isArray(SERVER_COMPAT_INDEX.makes) ? SERVER_COMPAT_INDEX.makes : [];
+          const all = Array.from(new Set([...DEFAULT_MAKES, ...fromServer, ...fromData])).sort((a, b) => String(a).localeCompare(String(b), 'fr'));
+          return all;
+        };
+
+        const resolveMakeKey = (value) => {
+          const raw = String(value || '').trim();
+          if (!raw) return '';
+          const low = raw.toLowerCase();
+          const all = makeList();
+          const exact = all.find((m) => String(m).toLowerCase() === low);
+          return exact || raw;
+        };
+
+        const setSelectMakeOptions = (select, values) => {
+          if (!select) return;
+          const current = select.value;
+          select.innerHTML = '';
+
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = 'Choisir une marque...';
+          select.appendChild(placeholder);
+
+          values.forEach((v) => {
+            const o = document.createElement('option');
+            o.value = v;
+            o.textContent = v;
+            select.appendChild(o);
+          });
+
+          const custom = document.createElement('option');
+          custom.value = '__custom__';
+          custom.textContent = 'Autre (nouvelle marque)';
+          select.appendChild(custom);
+
+          if (current) select.value = current;
+        };
+
+        const setSelectModelOptions = (select, values) => {
+          if (!select) return;
+          const current = select.value;
+          select.innerHTML = '';
+
+          const placeholder = document.createElement('option');
+          placeholder.value = '';
+          placeholder.textContent = 'Choisir un modèle...';
+          select.appendChild(placeholder);
+
+          values.forEach((v) => {
+            const o = document.createElement('option');
+            o.value = v;
+            o.textContent = v;
+            select.appendChild(o);
+          });
+
+          const custom = document.createElement('option');
+          custom.value = '__custom__';
+          custom.textContent = 'Autre (nouveau modèle)';
+          select.appendChild(custom);
+
+          if (current) select.value = current;
+        };
+
+        const modelsForMake = (mk) => {
+          const fromData = compatItems
+            .filter((x) => x.make && mk && x.make === mk && x.model)
+            .map((x) => x.model);
+          const fromServer = SERVER_COMPAT_INDEX && SERVER_COMPAT_INDEX.modelsByMake && SERVER_COMPAT_INDEX.modelsByMake[mk]
+            ? SERVER_COMPAT_INDEX.modelsByMake[mk]
+            : [];
+          const all = Array.from(new Set([...(Array.isArray(fromServer) ? fromServer : []), ...fromData]))
+            .sort((a, b) => String(a).localeCompare(String(b), 'fr'));
+          return all;
+        };
+
+        const renderModelsList = () => {
+          if (!compatModels || !compatModelsLabel) return;
+          compatModelsLabel.textContent = selectedMake ? `Compatible Models (${selectedMake})` : 'Compatible Models';
+          compatModels.innerHTML = '';
+          const models = compatItems.filter((x) => (selectedMake ? x.make === selectedMake : true));
+          models.forEach((x, idx) => {
+            const card = document.createElement('div');
+            card.className = 'group px-4 py-3 bg-white dark:bg-gray-900 border border-border-light dark:border-border-dark rounded-xl hover:shadow-md transition-all relative' + (idx === 0 ? ' border-l-4 border-l-primary' : '');
+            const row = document.createElement('div');
+            row.className = 'flex items-center justify-between gap-4';
+            const left = document.createElement('div');
+            const title = document.createElement('p');
+            title.className = 'font-bold text-sm';
+            title.textContent = x.model || '(Sans modèle)';
+            const sub = document.createElement('p');
+            sub.className = 'text-[10px] text-slate-500';
+            sub.textContent = x.engine || x.years || '';
+            left.appendChild(title);
+            left.appendChild(sub);
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'opacity-0 group-hover:opacity-100 text-slate-400 hover:text-primary transition-opacity';
+            del.innerHTML = '<span class="material-symbols-outlined text-lg">delete</span>';
+            del.addEventListener('click', () => {
+              const realIdx = compatItems.findIndex((it) => it === x);
+              if (realIdx === -1) return;
+              compatItems.splice(realIdx, 1);
+              syncCompatibilityField(compatItems);
+              renderCompatibilityUI();
+            });
+            row.appendChild(left);
+            row.appendChild(del);
+            card.appendChild(row);
+            compatModels.appendChild(card);
+          });
+        };
+
+        const renderCompatibilityUI = () => {
+          if (!compatMakeSelect || !compatModelSelect) return;
+          const makes = makeList();
+          setSelectMakeOptions(compatMakeSelect, makes);
+
+          let canonicalMake = '';
+          if (compatMakeSelect.value === '__custom__') {
+            if (compatMakeCustom) compatMakeCustom.classList.remove('hidden');
+            canonicalMake = resolveMakeKey(String((compatMakeCustom || {}).value || '').trim());
+          } else {
+            if (compatMakeCustom) compatMakeCustom.classList.add('hidden');
+            canonicalMake = resolveMakeKey(String(compatMakeSelect.value || '').trim());
+          }
+
+          if (canonicalMake) selectedMake = canonicalMake;
+
+          const models = canonicalMake ? modelsForMake(canonicalMake) : [];
+          setSelectModelOptions(compatModelSelect, models);
+
+          if (compatModelSelect.value !== '__custom__') {
+            if (compatModelCustom) compatModelCustom.classList.add('hidden');
+          } else {
+            if (compatModelCustom) compatModelCustom.classList.remove('hidden');
+          }
+
+          renderModelsList();
+        };
+
+        const readMakeFromUI = () => {
+          if (!compatMakeSelect) return '';
+          if (compatMakeSelect.value === '__custom__') return resolveMakeKey(String((compatMakeCustom || {}).value || '').trim());
+          return resolveMakeKey(String(compatMakeSelect.value || '').trim());
+        };
+        const readModelFromUI = () => {
+          if (!compatModelSelect) return '';
+          if (compatModelSelect.value === '__custom__') return String((compatModelCustom || {}).value || '').trim();
+          return String(compatModelSelect.value || '').trim();
+        };
+
+        if (compatMakeSelect) {
+          compatMakeSelect.addEventListener('change', () => {
+            selectedMake = readMakeFromUI();
+            if (compatModelSelect) compatModelSelect.value = '';
+            if (compatModelCustom) {
+              compatModelCustom.value = '';
+              compatModelCustom.classList.add('hidden');
+            }
+
+            if (compatMakeSelect.value !== '__custom__') {
+              if (compatMakeCustom) {
+                compatMakeCustom.value = '';
+                compatMakeCustom.classList.add('hidden');
+              }
+            } else {
+              if (compatMakeCustom) compatMakeCustom.classList.remove('hidden');
+              if (compatMakeCustom) compatMakeCustom.focus();
+            }
+
+            renderCompatibilityUI();
+          });
+        }
+
+        if (compatMakeCustom) {
+          compatMakeCustom.addEventListener('input', () => {
+            selectedMake = readMakeFromUI();
+            if (compatModelSelect) compatModelSelect.value = '';
+            if (compatModelCustom) {
+              compatModelCustom.value = '';
+              compatModelCustom.classList.add('hidden');
+            }
+            renderCompatibilityUI();
+          });
+        }
+        if (compatModelSelect) {
+          compatModelSelect.addEventListener('change', () => {
+            if (compatModelSelect.value !== '__custom__') {
+              if (compatModelCustom) {
+                compatModelCustom.value = '';
+                compatModelCustom.classList.add('hidden');
+              }
+            } else {
+              if (compatModelCustom) compatModelCustom.classList.remove('hidden');
+              if (compatModelCustom) compatModelCustom.focus();
+            }
+            renderCompatibilityUI();
+          });
+        }
+        if (compatModelCustom) {
+          compatModelCustom.addEventListener('input', renderCompatibilityUI);
+        }
+
+        if (compatAddItemBtn) {
+          compatAddItemBtn.addEventListener('click', () => {
+            const make = readMakeFromUI();
+            const model = readModelFromUI();
+            const years = String((compatYears || {}).value || '').trim();
+            const engine = String((compatEngine || {}).value || '').trim();
+
+            if (!make) {
+              toast.warning('Choisissez une marque (ou ajoutez une nouvelle marque).');
+              if (compatMakeSelect) compatMakeSelect.focus();
+              return;
+            }
+
+            if (!model) {
+              toast.warning('Choisissez un modèle (ou ajoutez un nouveau modèle).');
+              if (compatModelSelect && compatModelSelect.value !== '__custom__') compatModelSelect.focus();
+              else if (compatModelCustom) compatModelCustom.focus();
+              return;
+            }
+
+            compatItems.push({ make, model, years, engine });
+            syncCompatibilityField(compatItems);
+            selectedMake = make;
+
+            if (compatYears) compatYears.value = '';
+            if (compatEngine) compatEngine.value = '';
+            if (compatMakeSelect) compatMakeSelect.value = make;
+            if (compatMakeCustom) {
+              compatMakeCustom.value = '';
+              compatMakeCustom.classList.add('hidden');
+            }
+            if (compatModelSelect) compatModelSelect.value = '';
+            if (compatModelCustom) {
+              compatModelCustom.value = '';
+              compatModelCustom.classList.add('hidden');
+            }
+
+            renderCompatibilityUI();
+          });
+        }
+
+        if (compatAddBtn) {
+          compatAddBtn.addEventListener('click', () => {
+            if (compatMakeSelect) compatMakeSelect.focus();
+          });
+        }
+
+        if (compatMakeSelect && compatModelSelect) {
+          if (selectedMake && !compatMakeSelect.value) {
+            const hasMakeInList = makeList().some((m) => String(m) === String(selectedMake));
+            if (hasMakeInList) {
+              compatMakeSelect.value = selectedMake;
+            } else {
+              compatMakeSelect.value = '__custom__';
+              if (compatMakeCustom) {
+                compatMakeCustom.classList.remove('hidden');
+                compatMakeCustom.value = selectedMake;
+              }
+            }
+          }
+
+          renderCompatibilityUI();
+        }
+
+        const parseFaqs = () => {
+          const lines = parseLinesValue(faqField ? faqField.value : '');
+          return lines
+            .map((line) => {
+              const parts = line.split('|').map((p) => String(p || '').trim());
+              return { tag: 'FAQ', question: parts[0] || '', answer: parts[1] || '' };
+            })
+            .filter((x) => x.question || x.answer);
+        };
+
+        const syncFaqField = (items) => {
+          if (!faqField) return;
+          faqField.value = items.map((x) => `${x.question} | ${x.answer}`.trim()).join('\n');
+
+          if (typeof updateSeoAssistant === 'function') updateSeoAssistant();
+          refreshFieldReviewPanel();
+        };
+
+        let faqItems = parseFaqs();
+
+        const renderFaqs = () => {
+          if (!faqList) return;
+          const q = faqSearch ? String(faqSearch.value || '').trim().toLowerCase() : '';
+          const filtered = q
+            ? faqItems.filter((x) => (`${x.question} ${x.answer}`).toLowerCase().includes(q))
+            : faqItems;
+
+          faqList.innerHTML = '';
+          filtered.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'group py-4 border-b border-gray-100 dark:border-gray-800 last:border-0 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors px-4 -mx-4 rounded-lg';
+
+            const top = document.createElement('div');
+            top.className = 'flex items-start justify-between';
+
+            const left = document.createElement('div');
+            left.className = 'space-y-2 flex-1';
+            const hrow = document.createElement('div');
+            hrow.className = 'flex items-center gap-2';
+            const tag = document.createElement('span');
+            tag.className = 'text-[10px] font-bold text-primary uppercase';
+            tag.textContent = item.tag;
+            const title = document.createElement('h4');
+            title.className = 'font-semibold text-sm';
+            title.textContent = item.question;
+            hrow.appendChild(tag);
+            hrow.appendChild(title);
+            const desc = document.createElement('p');
+            desc.className = 'text-xs text-slate-500 dark:text-gray-400 line-clamp-1';
+            desc.textContent = item.answer;
+            left.appendChild(hrow);
+            left.appendChild(desc);
+
+            const actions = document.createElement('div');
+            actions.className = 'flex items-center gap-2 ml-4';
+
+            const editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'p-2 text-slate-400 hover:text-primary hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all';
+            editBtn.innerHTML = '<span class="material-symbols-outlined text-lg">edit</span>';
+            editBtn.addEventListener('click', () => {
+              const qv = window.prompt('Question', item.question);
+              if (qv === null) return;
+              const av = window.prompt('Réponse', item.answer);
+              if (av === null) return;
+              item.question = String(qv).trim();
+              item.answer = String(av).trim();
+              syncFaqField(faqItems);
+              renderFaqs();
+            });
+
+            const delBtn = document.createElement('button');
+            delBtn.type = 'button';
+            delBtn.className = 'p-2 text-slate-400 hover:text-red-600 hover:bg-white dark:hover:bg-gray-700 rounded-lg transition-all';
+            delBtn.innerHTML = '<span class="material-symbols-outlined text-lg">delete</span>';
+            delBtn.addEventListener('click', () => {
+              const idx = faqItems.findIndex((x) => x === item);
+              if (idx === -1) return;
+              faqItems.splice(idx, 1);
+              syncFaqField(faqItems);
+              renderFaqs();
+            });
+
+            actions.appendChild(editBtn);
+            actions.appendChild(delBtn);
+
+            top.appendChild(left);
+            top.appendChild(actions);
+            row.appendChild(top);
+            faqList.appendChild(row);
+          });
+        };
+
+        if (faqAddBtn) {
+          faqAddBtn.addEventListener('click', () => {
+            const qv = window.prompt('Question');
+            if (!qv) return;
+            const av = window.prompt('Réponse') || '';
+            faqItems.push({ tag: 'FAQ', question: String(qv).trim(), answer: String(av).trim() });
+            syncFaqField(faqItems);
+            renderFaqs();
+          });
+        }
+        if (faqSearch) {
+          faqSearch.addEventListener('input', renderFaqs);
+        }
+        if (faqField && faqList) {
+          renderFaqs();
+        }
+
+        function setAiStatus(message, tone) {
+          if (!aiGenerateStatus) return;
+          aiGenerateStatus.className = 'mt-3 text-sm ' + (
+            tone === 'error'
+              ? 'text-red-700'
+              : tone === 'success'
+                ? 'text-emerald-700'
+                : 'text-violet-900/80'
+          );
+          aiGenerateStatus.textContent = message;
+        }
+
+        function renderAiWarnings(items) {
+          if (!aiGenerateWarnings) return;
+          const warnings = Array.isArray(items) ? items.filter(Boolean) : [];
+          aiGenerateWarnings.innerHTML = '';
+          aiGenerateWarnings.classList.toggle('hidden', warnings.length === 0);
+          if (!warnings.length) return;
+
+          const title = document.createElement('div');
+          title.className = 'font-bold';
+          title.textContent = 'Points à vérifier';
+          aiGenerateWarnings.appendChild(title);
+
+          const list = document.createElement('ul');
+          list.className = 'mt-2 space-y-1 text-sm';
+          warnings.forEach((warning) => {
+            const item = document.createElement('li');
+            item.textContent = '• ' + String(warning);
+            list.appendChild(item);
+          });
+          aiGenerateWarnings.appendChild(list);
+        }
+
+        function dispatchFieldUpdates(el) {
+          if (!el) return;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          refreshFieldReviewPanel();
+        }
+
+        function setInputValue(id, value) {
+          const el = document.getElementById(id);
+          const safeValue = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+            ? String(value)
+            : '';
+          const nextValue = safeValue.trim();
+          if (!el || !nextValue) return;
+
+          aiTouchedFields.add(id);
+          validatedFields.delete(id);
+
+          if (el.tagName === 'SELECT') {
+            const existing = Array.from(el.options || []).find((option) => String(option.value || '').toLowerCase() === nextValue.toLowerCase());
+            if (existing) {
+              el.value = existing.value;
+            } else {
+              const temp = document.createElement('option');
+              temp.value = nextValue;
+              temp.textContent = nextValue;
+              el.appendChild(temp);
+              el.value = nextValue;
+            }
+          } else {
+            el.value = safeValue;
+          }
+
+          dispatchFieldUpdates(el);
+        }
+
+        function hasMeaningfulAiTargetContent() {
+          const ids = ['shortDescription', 'description', 'metaTitle', 'metaDescription', 'compatibility', 'faqs', 'optionsJson'];
+          return ids.some((id) => {
+            const el = document.getElementById(id);
+            return !!(el && String(el.value || '').trim());
+          });
+        }
+
+        function sleep(ms) {
+          return new Promise((resolve) => window.setTimeout(resolve, ms));
+        }
+
+        function getSelectedAiProfileLabel() {
+          if (!aiProfileSelect) return 'Premium';
+          const selectedOption = aiProfileSelect.options[aiProfileSelect.selectedIndex];
+          if (!selectedOption) return 'Premium';
+          return String(selectedOption.text || '').split('—')[0].trim() || 'Premium';
+        }
+
+        function isCancelableAiJob(job) {
+          return !!(job && job.jobId && (job.status === 'queued' || job.status === 'processing'));
+        }
+
+        function updateAiCancelButton() {
+          if (!aiCancelBtn) return;
+          if (isCancelableAiJob(latestAiDraftJob)) {
+            aiCancelBtn.classList.remove('hidden');
+            aiCancelBtn.disabled = false;
+            return;
+          }
+          aiCancelBtn.classList.add('hidden');
+          aiCancelBtn.disabled = true;
+        }
+
+        function applyGeneratedDraft(data) {
+          const draft = data && data.draft ? data.draft : null;
+          if (!draft) throw new Error('Brouillon IA introuvable.');
+
+          setInputValue('name', draft.name);
+          setInputValue('slug', draft.slug);
+          setInputValue('brand', draft.brand);
+          setInputValue('category', draft.category);
+          setInputValue('shippingDelayText', draft.shippingDelayText);
+          setInputValue('specType', draft.specType);
+          setInputValue('specProgrammation', draft.specProgrammation);
+          setInputValue('badgeTopLeft', draft.badgeTopLeft);
+          setInputValue('badgeCondition', draft.badgeCondition);
+          setInputValue('shortDescription', draft.shortDescription);
+          setInputValue('description', draft.description);
+          setInputValue('compatibleReferences', draft.compatibleReferences);
+          setInputValue('metaTitle', draft.metaTitle);
+          setInputValue('metaDescription', draft.metaDescription);
+
+          if (typeof syncSpecsFromKeyFields === 'function') syncSpecsFromKeyFields();
+
+          if (compatField && typeof draft.compatibility === 'string') {
+            compatField.value = draft.compatibility;
+            aiTouchedFields.add('compatibility');
+            validatedFields.delete('compatibility');
+            compatItems = parseCompatibility();
+            selectedMake = compatItems.length ? (compatItems[0].make || '') : '';
+            if (compatMakeSelect) compatMakeSelect.value = selectedMake || '';
+            renderCompatibilityUI();
+          }
+
+          if (faqField && typeof draft.faqs === 'string') {
+            faqField.value = draft.faqs;
+            aiTouchedFields.add('faqs');
+            validatedFields.delete('faqs');
+            faqItems = parseFaqs();
+            renderFaqs();
+          }
+
+          if (stepsField && typeof draft.reconditioningSteps === 'string') {
+            stepsField.value = draft.reconditioningSteps;
+            aiTouchedFields.add('reconditioningSteps');
+            validatedFields.delete('reconditioningSteps');
+            hydrateStepsGridFromField();
+          }
+
+          if (optionsField) {
+            optionsField.value = typeof draft.optionsJson === 'string' ? draft.optionsJson : '';
+            if (String(optionsField.value || '').trim()) {
+              aiTouchedFields.add('optionsJson');
+              validatedFields.delete('optionsJson');
+            }
+            if (!String(optionsField.value || '').trim()) {
+              productOptionsState = [];
+            } else {
+              try {
+                const parsed = JSON.parse(optionsField.value);
+                productOptionsState = Array.isArray(parsed) ? parsed.map((option, index) => createOptionState(option, index)) : [];
+              } catch (e) {
+                productOptionsState = [];
+              }
+            }
+            renderProductOptionsEditor();
+            renderTemplateLibrary();
+            syncOptionsField();
+          }
+
+          if (typeof updateSeoAssistant === 'function') updateSeoAssistant();
+          renderAiWarnings(Array.isArray(draft.warnings) ? draft.warnings : []);
+          if (latestAiDraftJob) latestAiDraftJob.status = 'completed';
+          updateAiCancelButton();
+          setAiStatus(`Brouillon IA généré${data && data.model ? ' avec ' + data.model : ''}. Relisez puis cliquez sur "Enregistrer" si tout vous convient.`, 'success');
+          toast.success('Génération terminée !');
+        }
+
+        async function waitForDraftJob(jobId) {
+          const maxWaitMs = 10 * 60 * 1000;
+          const startedAt = Date.now();
+          let attempt = 0;
+
+          while ((Date.now() - startedAt) < maxWaitMs) {
+            if (attempt > 0) {
+              await sleep(3000);
+            }
+            attempt += 1;
+
+            const statusResponse = await fetch(`/admin/api/products/generate-draft/${encodeURIComponent(jobId)}`, {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+              },
+            });
+
+            const statusData = await statusResponse.json().catch(() => ({}));
+            if (!statusResponse.ok || !statusData || statusData.ok !== true) {
+              throw new Error(statusData && statusData.error ? statusData.error : 'Impossible de suivre la génération IA.');
+            }
+
+            if (statusData.status === 'completed' && statusData.draft) {
+              return statusData;
+            }
+
+            if (statusData.status === 'failed') {
+              throw new Error(statusData.error || 'La génération IA a échoué.');
+            }
+
+            if (statusData.status === 'canceled') {
+              throw new Error(statusData.error || 'Génération IA arrêtée à la demande.');
+            }
+
+            setAiStatus(`Recherche web et génération approfondie en cours… ${attempt > 1 ? 'Toujours en cours, merci de patienter.' : 'La page attend le résultat en arrière-plan.'}`, 'loading');
+          }
+
+          throw new Error('La génération IA prend vraiment trop de temps. Réessayez dans quelques instants.');
+        }
+
+        if (applyLatestAiDraftBtn) {
+          applyLatestAiDraftBtn.addEventListener('click', function () {
+            if (!latestAiDraftJob || !latestAiDraftJob.draft) {
+              setAiStatus('Le brouillon IA enregistré est introuvable.', 'error');
+              return;
+            }
+
+            if (hasMeaningfulAiTargetContent()) {
+              const shouldReplace = window.confirm('Des contenus sont déjà remplis dans la fiche. Souhaitez-vous les remplacer par le dernier brouillon IA enregistré ?');
+              if (!shouldReplace) return;
+            }
+
+            applyGeneratedDraft(latestAiDraftJob);
+          });
+        }
+
+        if (aiCancelBtn) {
+          aiCancelBtn.addEventListener('click', async function () {
+            if (!isCancelableAiJob(latestAiDraftJob)) {
+              setAiStatus('Aucune génération IA en cours à arrêter.', 'error');
+              updateAiCancelButton();
+              return;
+            }
+
+            const shouldCancel = window.confirm('Arrêter la génération IA en cours ?');
+            if (!shouldCancel) return;
+
+            btnSetLoading(aiCancelBtn, 'Arrêt\u2026');
+
+            try {
+              const response = await fetch(`/admin/api/products/generate-draft/${encodeURIComponent(latestAiDraftJob.jobId)}/cancel`, {
+                method: 'POST',
+                headers: {
+                  'Accept': 'application/json',
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({}),
+              });
+
+              const data = await response.json().catch(() => ({}));
+              if (!response.ok || !data || data.ok !== true) {
+                throw new Error(data && data.error ? data.error : 'Impossible d\'arrêter la génération IA.');
+              }
+
+              if (!latestAiDraftJob) latestAiDraftJob = {};
+              latestAiDraftJob.status = 'canceled';
+              latestAiDraftJob.errorMessage = data && data.message ? String(data.message) : 'Génération IA arrêtée à la demande.';
+              updateAiCancelButton();
+              setAiStatus(latestAiDraftJob.errorMessage, 'success');
+            } catch (err) {
+              btnResetLoading(aiCancelBtn);
+              setAiStatus(err && err.message ? err.message : 'Impossible d\'arrêter la génération IA.', 'error');
+              return;
+            }
+
+            btnResetLoading(aiCancelBtn);
+          });
+        }
+
+        if (aiGenerateBtn) {
+          aiGenerateBtn.addEventListener('click', async () => {
+            const payload = {
+              productId: String(currentProductId || '').trim(),
+              name: String((document.getElementById('name') || {}).value || '').trim(),
+              sku: String((document.getElementById('sku') || {}).value || '').trim(),
+              brand: String((document.getElementById('brand') || {}).value || '').trim(),
+              category: String((document.getElementById('category') || {}).value || '').trim(),
+              compatibleReferences: String((document.getElementById('compatibleReferences') || {}).value || '').trim(),
+              sourceNotes: String((aiSourceNotes || {}).value || '').trim(),
+              aiProfile: String((aiProfileSelect || {}).value || '').trim(),
+            };
+
+            if (!payload.name && !payload.sku && !payload.compatibleReferences && !payload.sourceNotes) {
+              setAiStatus('Renseignez au moins un nom, une référence ou une note avant de lancer l\'IA.', 'error');
+              toast.warning('Renseignez au moins un nom de produit, une référence ou quelques notes.');
+              return;
+            }
+
+            if (hasMeaningfulAiTargetContent()) {
+              const shouldReplace = window.confirm('Des contenus sont déjà remplis dans la fiche. Souhaitez-vous les remplacer par la proposition IA ?');
+              if (!shouldReplace) return;
+            }
+
+            btnSetLoading(aiGenerateBtn, 'Génération en cours\u2026');
+            setAiStatus(`Mode ${getSelectedAiProfileLabel()} : génération en cours… La page va attendre le résultat en arrière-plan.`, 'loading');
+            renderAiWarnings([]);
+            toast.info('Génération IA en cours\u2026');
+
+            try {
+              const response = await fetch('/admin/api/products/generate-draft', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Accept': 'application/json',
+                },
+                body: JSON.stringify(payload),
+              });
+
+              const data = await response.json().catch(() => ({}));
+              if (!response.ok || !data || data.ok !== true || !data.jobId) {
+                throw new Error(data && data.error ? data.error : 'Impossible de générer la fiche avec l\'IA.');
+              }
+              latestAiDraftJob = {
+                jobId: String(data.jobId),
+                status: String(data.status || 'queued'),
+                profile: String(data.profile || payload.aiProfile || ''),
+                profileLabel: String(data.profileLabel || getSelectedAiProfileLabel()),
+                errorMessage: '',
+                draft: null,
+              };
+              updateAiCancelButton();
+              const finalData = await waitForDraftJob(data.jobId);
+              latestAiDraftJob = Object.assign({}, latestAiDraftJob || {}, finalData || {}, {
+                jobId: String((finalData && finalData.jobId) || data.jobId),
+                status: String((finalData && finalData.status) || 'completed'),
+              });
+              applyGeneratedDraft(finalData);
+            } catch (err) {
+              updateAiCancelButton();
+              setAiStatus(err && err.message ? err.message : 'Erreur pendant la génération IA.', 'error');
+              toast.error(err && err.message ? err.message : 'Erreur pendant la génération IA.');
+            } finally {
+              btnResetLoading(aiGenerateBtn);
+            }
+          });
+        }
+
+        updateAiCancelButton();
+
+        var scoreValueEl = document.getElementById('seoScoreValue');
+        var fill = document.getElementById('seoProgressFill');
+        var previewTitleEl = document.getElementById('seoPreviewTitle');
+        var previewUrlEl = document.getElementById('seoPreviewUrl');
+        var previewDescEl = document.getElementById('seoPreviewDescription');
+        var checklistEl = document.getElementById('seoChecklist');
+
+        function normalizeMetaText(value) {
+          return String(value || '').replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+        }
+
+        function stripHtml(value) {
+          return String(value || '').replace(/<[^>]*>/g, ' ').replace(/\s{2,}/g, ' ').trim();
+        }
+
+        function stripMarkdown(value) {
+          return String(value || '')
+            .replace(/\*\*([^*]+)\*\*/g, '$1')
+            .replace(/`([^`]+)`/g, '$1')
+            .replace(/^\s*[-*]\s+/gm, '')
+            .replace(/^\s*\d+[).]\s+/gm, '')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+        }
+
+        function countWords(value) {
+          var plain = stripMarkdown(stripHtml(value));
+          if (!plain) return 0;
+          return plain.split(/\s+/).filter(Boolean).length;
+        }
+
+        function truncateText(value, max) {
+          var s = String(value || '').trim();
+          if (!s) return '';
+          if (!Number.isFinite(max) || max <= 0) return s;
+          if (s.length <= max) return s;
+          return s.slice(0, Math.max(0, max - 1)).trim() + '…';
+        }
+
+        function slugify(value) {
+          var s = String(value || '');
+          try {
+            s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          } catch (e) {}
+          return s
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+/, '')
+            .replace(/-+$/, '');
+        }
+
+        function updateSeoAssistant() {
+          if (!scoreValueEl || !previewTitleEl || !previewUrlEl || !previewDescEl || !checklistEl) return;
+
+          var siteName = 'CarParts France';
+          var nameEl = document.getElementById('name');
+          var skuEl = document.getElementById('sku');
+          var brandEl = document.getElementById('brand');
+          var categoryEl = document.getElementById('category');
+          var imageUrlEl = document.getElementById('imageUrl');
+          var galleryUrlsEl = document.getElementById('galleryUrls');
+          var shortDescEl = document.getElementById('shortDescription');
+          var descEl = document.getElementById('description');
+          var metaTitleEl = document.getElementById('metaTitle');
+          var metaDescEl = document.getElementById('metaDescription');
+          var faqsEl = document.getElementById('faqs');
+          var compatEl = document.getElementById('compatibility');
+
+          var name = String((nameEl || {}).value || '').trim();
+          var sku = String((skuEl || {}).value || '').trim();
+          var brand = String((brandEl || {}).value || '').trim();
+          var category = String((categoryEl || {}).value || '').trim();
+          var imageUrl = String((imageUrlEl || {}).value || '').trim();
+          var galleryUrls = String((galleryUrlsEl || {}).value || '').trim();
+          var shortDescription = String((shortDescEl || {}).value || '').trim();
+          var description = String((descEl || {}).value || '').trim();
+          var metaTitle = normalizeMetaText(String((metaTitleEl || {}).value || ''));
+          var metaDescription = normalizeMetaText(String((metaDescEl || {}).value || ''));
+          var faqsText = String((faqsEl || {}).value || '');
+          var compatText = String((compatEl || {}).value || '');
+
+          var galleryCount = parseLinesValue(galleryUrls).length + (imageUrl ? 1 : 0);
+          var words = countWords(description || shortDescription);
+          var faqCount = parseLinesValue(faqsText).filter(function (l) { return l.indexOf('|') !== -1; }).length;
+          var compatCount = parseLinesValue(compatText).filter(function (l) { return l.indexOf('|') !== -1; }).length;
+          var hasRef = !!sku || /\b[A-Z0-9]{5,}\b/i.test(name);
+
+          var urlId = (SEO_SEED && SEO_SEED.productId) ? SEO_SEED.productId : 'ID';
+          var urlPath = '/produits/' + encodeURIComponent(slugify(name) || 'produit') + '-' + encodeURIComponent(String(urlId));
+          var baseUrl = (SEO_SEED && SEO_SEED.baseUrl) ? SEO_SEED.baseUrl : '';
+          var url = baseUrl ? (String(baseUrl).replace(/\/$/, '') + urlPath) : urlPath;
+
+          var autoTitle = ((name || siteName)
+            + (brand ? ' - ' + brand : '')
+            + (sku ? ' (Réf ' + sku + ')' : '')
+            + ' | ' + siteName).trim();
+          var finalTitle = metaTitle || autoTitle;
+
+          var fallbackDesc = truncateText(stripMarkdown(stripHtml(shortDescription || description)), 160);
+          var finalDesc = metaDescription || fallbackDesc;
+
+          var checks = [];
+          checks.push({ key: 'name', label: 'Nom du produit', ok: !!name, detail: name ? '' : 'Ajoutez un nom clair (idéalement avec la référence OEM).', weight: 20 });
+          checks.push({ key: 'brand', label: 'Marque', ok: !!brand, detail: brand ? '' : 'Ajoutez la marque (Volkswagen, Audi…).', weight: 5 });
+          checks.push({ key: 'category', label: 'Catégorie', ok: !!category, detail: category ? '' : 'Choisissez une catégorie.', weight: 5 });
+          checks.push({ key: 'ref', label: 'Référence (SKU / OEM) présente', ok: hasRef, detail: hasRef ? '' : 'Ajoutez un SKU ou une référence OEM dans le nom.', weight: 8 });
+          checks.push({
+            key: 'metaTitle',
+            label: 'Meta title (50–60 caractères)',
+            ok: finalTitle.length >= 45 && finalTitle.length <= 65,
+            detail: metaTitle ? ('Longueur actuelle : ' + finalTitle.length) : ('Auto : ' + finalTitle.length + ' (vous pouvez optimiser)'),
+            weight: 10,
+          });
+          checks.push({
+            key: 'metaDescription',
+            ok: finalDesc.length >= 110 && finalDesc.length <= 170,
+            detail: metaDescription ? ('Longueur actuelle : ' + finalDesc.length) : ('Auto : ' + finalDesc.length + ' (vous pouvez l\'optimiser)'),
+            weight: 10,
+          });
+          checks.push({
+            key: 'image', label: 'Image principale', ok: !!imageUrl, detail: imageUrl ? '' : 'Ajoutez une image principale (importante pour le clic).', weight: 10 });
+          checks.push({ key: 'gallery', label: 'Plusieurs images (2+)', ok: galleryCount >= 2, detail: 'Images détectées : ' + galleryCount, weight: 4 });
+          checks.push({ key: 'content', label: 'Description suffisante (200+ mots)', ok: words >= 200, detail: 'Mots : ' + words, weight: 12 });
+          checks.push({ key: 'faq', label: 'FAQ (4+ questions)', ok: faqCount >= 4, detail: 'FAQ : ' + faqCount, weight: 10 });
+          checks.push({ key: 'compat', label: 'Compatibilité (3+ lignes)', ok: compatCount >= 3, detail: 'Compatibilités : ' + compatCount, weight: 8 });
+          var score = 100;
+          checks.forEach(function (c) { if (!c.ok) score -= (Number.isFinite(c.weight) ? c.weight : 10); });
+          if (score < 0) score = 0;
+          if (score > 100) score = 100;
+
+          scoreValueEl.textContent = String(score) + '/100';
+          previewTitleEl.textContent = finalTitle;
+          previewUrlEl.textContent = url;
+          previewDescEl.textContent = finalDesc;
+
+          if (fill) {
+            var w = Math.max(0, Math.min(100, score));
+            fill.style.width = w + '%';
+            fill.setAttribute('data-width', String(w));
+          }
+
+          checklistEl.innerHTML = '';
+          checks.forEach(function (c) {
+            var row = document.createElement('div');
+            row.className = 'flex items-start gap-2';
+
+            var icon = document.createElement('span');
+            icon.className = 'material-symbols-outlined text-base ' + (c.ok ? 'text-green-600' : 'text-red-600');
+            icon.textContent = c.ok ? 'check_circle' : 'cancel';
+
+            var right = document.createElement('div');
+            right.className = 'flex-1';
+
+            var title = document.createElement('div');
+            title.className = 'text-xs font-bold text-slate-900 dark:text-white';
+            title.textContent = c.label;
+
+            right.appendChild(title);
+            if (c.detail) {
+              var detail = document.createElement('div');
+              detail.className = 'mt-0.5 text-[11px] text-slate-500 dark:text-gray-400';
+              detail.textContent = c.detail;
+              right.appendChild(detail);
+            }
+
+            row.appendChild(icon);
+            row.appendChild(right);
+            checklistEl.appendChild(row);
+          });
+        }
+
+        updateSeoAssistant();
+        ['name', 'sku', 'brand', 'category', 'imageUrl', 'galleryUrls', 'shortDescription', 'description', 'metaTitle', 'metaDescription', 'faqs', 'compatibility'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('input', updateSeoAssistant);
+          el.addEventListener('change', updateSeoAssistant);
+        });
+
+        FIELD_REVIEW_DEFS.forEach(function (def) {
+          var el = document.getElementById(def.id);
+          if (!el) return;
+          el.addEventListener('input', refreshFieldReviewPanel);
+          el.addEventListener('change', refreshFieldReviewPanel);
+        });
+
+        refreshFieldReviewPanel();
+
+        function fetchJson(url, cb) {
+          fetch(url, { headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) { cb(null, data); })
+            .catch(function (err) { cb(err); });
+        }
+
+        function setupRelatedBlogPostsPicker() {
+          var searchInput = document.getElementById('relatedBlogSearch');
+          var resultsEl = document.getElementById('relatedBlogResults');
+          var selectedEl = document.getElementById('relatedBlogSelected');
+          var idsTextarea = document.getElementById('relatedBlogPostIds');
+
+          if (!searchInput || !resultsEl || !selectedEl || !idsTextarea) return;
+
+          function getSelectedIds() {
+            return String(idsTextarea.value || '')
+              .split(/\r?\n/)
+              .map(function (s) { return String(s || '').trim(); })
+              .filter(Boolean);
+          }
+
+          function setSelectedIds(ids) {
+            idsTextarea.value = (ids || []).join('\n');
+            if (typeof updateSeoAssistant === 'function') updateSeoAssistant();
+          }
+
+          function badge(html) {
+            var wrap = document.createElement('span');
+            wrap.className = 'inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-widest bg-slate-100 text-slate-500';
+            wrap.innerHTML = html;
+            return wrap;
+          }
+
+          function renderSelected(itemsById) {
+            var ids = getSelectedIds();
+            selectedEl.innerHTML = '';
+            ids.forEach(function (id) {
+              var it = itemsById && itemsById[id] ? itemsById[id] : null;
+
+              var row = document.createElement('div');
+              row.className = 'flex items-center justify-between gap-3 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-3';
+
+              var left = document.createElement('div');
+              left.className = 'min-w-0';
+
+              var title = document.createElement('div');
+              title.className = 'font-bold text-sm text-slate-900 dark:text-white truncate';
+              title.textContent = it ? (it.title || it.slug || id) : id;
+
+              var meta = document.createElement('div');
+              meta.className = 'mt-1 text-[11px] text-slate-500 truncate';
+              meta.textContent = it ? ((it.categoryLabel ? it.categoryLabel : 'Blog') + (it.isPublished ? ' • publié' : ' • brouillon')) : '';
+
+              left.appendChild(title);
+              left.appendChild(meta);
+
+              var del = document.createElement('button');
+              del.type = 'button';
+              del.className = 'text-slate-400 hover:text-red-600 transition-colors';
+              del.innerHTML = '<span class="material-symbols-outlined">close</span>';
+              del.addEventListener('click', function () {
+                var next = getSelectedIds().filter(function (x) { return x !== id; });
+                setSelectedIds(next);
+                hydrateSelected();
+              });
+
+              row.appendChild(left);
+              row.appendChild(del);
+              selectedEl.appendChild(row);
+            });
+          }
+
+          function hydrateSelected() {
+            var ids = getSelectedIds();
+            if (!ids.length) {
+              selectedEl.innerHTML = '<div class="text-xs text-slate-500">Aucun article lié.</div>';
+              return;
+            }
+
+            var url = '/admin/api/blog/search?ids=' + encodeURIComponent(ids.join(','));
+            fetchJson(url, function (_err, data) {
+              var map = {};
+              if (data && data.ok === true && Array.isArray(data.items)) {
+                data.items.forEach(function (it) { map[String(it.id)] = it; });
+              }
+              renderSelected(map);
+            });
+          }
+
+          function setResults(html) {
+            resultsEl.innerHTML = html;
+          }
+
+          var lastQuery = '';
+          function runSearch() {
+            var query = String(searchInput.value || '').trim();
+            if (query.length < 2) {
+              setResults('<div class="px-3 py-3 text-xs text-slate-500">Tapez au moins 2 lettres.</div>');
+              return;
+            }
+
+            lastQuery = query;
+            setResults('<div class="px-3 py-3 text-xs text-slate-500">Recherche…</div>');
+            var url = '/admin/api/blog/search?q=' + encodeURIComponent(query) + '&limit=10';
+            fetchJson(url, function (_err, data) {
+              if (String(searchInput.value || '').trim() !== lastQuery) return;
+              if (!data || data.ok !== true || !Array.isArray(data.items)) {
+                setResults('<div class="px-3 py-3 text-xs text-red-600">Erreur de recherche.</div>');
+                return;
+              }
+
+              var selected = new Set(getSelectedIds());
+              if (!data.items.length) {
+                setResults('<div class="px-3 py-3 text-xs text-slate-500">Aucun résultat.</div>');
+                return;
+              }
+
+              resultsEl.innerHTML = '';
+              data.items.forEach(function (it) {
+                var row = document.createElement('button');
+                row.type = 'button';
+                row.className = 'w-full text-left px-3 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition border-b border-border-light dark:border-border-dark last:border-0';
+
+                var top = document.createElement('div');
+                top.className = 'flex items-start justify-between gap-3';
+
+                var left = document.createElement('div');
+                left.className = 'min-w-0';
+
+                var title = document.createElement('div');
+                title.className = 'font-bold text-sm text-slate-900 dark:text-white truncate';
+                title.textContent = it.title || it.slug;
+
+                var meta = document.createElement('div');
+                meta.className = 'mt-1 text-[11px] text-slate-500 truncate';
+                meta.textContent = (it.categoryLabel ? it.categoryLabel : 'Blog') + (it.isPublished ? ' • publié' : ' • brouillon');
+
+                left.appendChild(title);
+                left.appendChild(meta);
+
+                var right = document.createElement('div');
+                right.className = 'shrink-0';
+                var already = selected.has(String(it.id));
+                var tag = document.createElement('span');
+                tag.className = 'inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-widest ' + (already ? 'bg-slate-100 text-slate-500' : 'bg-primary/10 text-primary');
+                tag.textContent = already ? 'Déjà ajouté' : 'Ajouter';
+                right.appendChild(tag);
+
+                top.appendChild(left);
+                top.appendChild(right);
+                row.appendChild(top);
+
+                row.addEventListener('click', function () {
+                  var ids = getSelectedIds();
+                  var id = String(it.id);
+                  if (!ids.includes(id)) ids.push(id);
+                  setSelectedIds(ids);
+                  hydrateSelected();
+                  runSearch();
+                });
+
+                resultsEl.appendChild(row);
+              });
+            });
+          }
+
+          var t = null;
+          searchInput.addEventListener('input', function () {
+            if (t) window.clearTimeout(t);
+            t = window.setTimeout(runSearch, 220);
+          });
+
+          hydrateSelected();
+          setResults('<div class="px-3 py-3 text-xs text-slate-500">Tapez au moins 2 lettres.</div>');
+        }
+
+        setupRelatedBlogPostsPicker();
+      })();
+    </script>
+  </div>
+</main>
+
+  <script>
+  (function () {
+    var stepper = document.getElementById('product-stepper');
+    if (!stepper) return;
+
+    var header = document.querySelector('header.sticky');
+    var steps = stepper.querySelectorAll('.stepper-step');
+
+    /* Position stepper below sticky header */
+    function positionStepper() {
+      stepper.style.top = (header ? header.offsetHeight : 0) + 'px';
+    }
+    positionStepper();
+    window.addEventListener('resize', positionStepper);
+
+    /* Click → smooth scroll to section */
+    steps.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var target = document.getElementById(btn.dataset.target);
+        if (!target) return;
+        var offset = (header ? header.offsetHeight : 0) + stepper.offsetHeight + 12;
+        var top = target.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top: top, behavior: 'smooth' });
+      });
+    });
+
+    /* IntersectionObserver → active step */
+    var sectionOrder = ['section-essential', 'section-description', 'section-media', 'section-compat', 'section-seo', 'section-options'];
+    var visible = {};
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        visible[e.target.id] = e.isIntersecting;
+      });
+      updateActive();
+    }, { rootMargin: '-15% 0px -55% 0px', threshold: 0 });
+
+    sectionOrder.forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+
+    function updateActive() {
+      var activeId = null;
+      for (var i = 0; i < sectionOrder.length; i++) {
+        if (visible[sectionOrder[i]]) { activeId = sectionOrder[i]; break; }
+      }
+      steps.forEach(function (btn) {
+        var isActive = btn.dataset.target === activeId;
+        btn.classList.toggle('stepper-step--active', isActive);
+      });
+    }
+
+    /* Completion detection */
+    function checkCompletion() {
+      steps.forEach(function (btn) {
+        var section = document.getElementById(btn.dataset.target);
+        if (!section) return;
+        var required = section.querySelectorAll('[required]');
+        var hasErrors = section.querySelectorAll('.fv-error');
+        var errorVisible = false;
+        hasErrors.forEach(function (e) { if (e.textContent.trim()) errorVisible = true; });
+        var allFilled = required.length > 0;
+        required.forEach(function (inp) { if (!inp.value.trim()) allFilled = false; });
+        btn.classList.remove('stepper-step--done', 'stepper-step--error');
+        if (errorVisible) {
+          btn.classList.add('stepper-step--error');
+        } else if (allFilled) {
+          btn.classList.add('stepper-step--done');
+        }
+      });
+    }
+
+    document.addEventListener('input', checkCompletion);
+    document.addEventListener('change', checkCompletion);
+    checkCompletion();
+  })();
+  </script>
+
+<script>
+  (function () {
+    function revealPage() {
+      var sk = document.getElementById('page-skeleton');
+      if (!sk) return;
+      sk.classList.add('is-hidden');
+      setTimeout(function () { sk.remove(); }, 200);
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', revealPage);
+    } else {
+      revealPage();
+    }
+  })();
+</script>
+
+<%- include('./partials/footer') %>

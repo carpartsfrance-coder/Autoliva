@@ -1,0 +1,166 @@
+<%- include('../partials/head') %>
+<%- include('../partials/promo-banner') %>
+
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 transition-colors duration-300">
+  <div class="container mx-auto px-4 lg:px-8 py-8">
+
+    <nav class="flex items-center gap-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-6" aria-label="Fil d'Ariane">
+      <a class="hover:text-primary transition-colors" href="/">Accueil</a>
+      <span class="material-symbols-outlined text-[12px]">chevron_right</span>
+      <span class="text-slate-600 dark:text-slate-200">Blog</span>
+    </nav>
+
+    <% if (featured) { %>
+      <section class="mb-10 group">
+        <a class="block cursor-pointer" href="<%= featured.url %>">
+          <div class="relative h-[450px] rounded-2xl overflow-hidden shadow-xl border border-slate-200 dark:border-slate-800">
+            <% if (featured.imageUrl) { %>
+              <img alt="<%= featured.title %>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" loading="eager" decoding="async" fetchpriority="high" width="1200" height="450" src="<%= featured.imageUrl %>"/>
+            <% } else { %>
+              <div class="w-full h-full bg-slate-100 dark:bg-slate-800"></div>
+            <% } %>
+            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
+            <div class="absolute bottom-0 left-0 p-8 lg:p-12 w-full lg:w-3/4">
+              <span class="inline-block bg-primary text-white text-[10px] font-bold px-3 py-1 rounded mb-4 uppercase tracking-widest">À la une</span>
+              <h1 class="text-3xl lg:text-5xl font-display font-bold text-white mb-4 leading-tight"><%= featured.title %></h1>
+              <p class="text-slate-300 text-sm lg:text-base mb-6 line-clamp-2 max-w-2xl"><%= featured.excerpt %></p>
+              <div class="flex items-center gap-6 text-[11px] font-bold text-white/70 uppercase tracking-wider">
+                <span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-primary">calendar_today</span> <%= featured.dateLabel %></span>
+                <span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-primary">schedule</span> <%= featured.readTimeLabel %> de lecture</span>
+              </div>
+            </div>
+          </div>
+        </a>
+      </section>
+    <% } %>
+
+    <div class="flex items-center gap-4 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+      <a class="category-tag <%= !currentCategory ? 'active' : '' %>" href="<%= q ? ('/blog?q=' + encodeURIComponent(q)) : '/blog' %>">Toutes</a>
+      <% (categories || []).forEach((c) => { %>
+        <% const active = currentCategory === c.slug; %>
+        <% const href = q ? `/blog?category=${encodeURIComponent(c.slug)}&q=${encodeURIComponent(q)}` : `/blog?category=${encodeURIComponent(c.slug)}`; %>
+        <a class="category-tag <%= active ? 'active' : '' %>" href="<%= href %>"><%= c.label %></a>
+      <% }) %>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+      <div class="lg:col-span-8 space-y-10">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <% if (!articles || !articles.length) { %>
+            <div class="md:col-span-2 bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-8 text-center">
+              <div class="text-sm font-bold text-slate-900 dark:text-white">Aucun article publié pour le moment.</div>
+              <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">Reviens bientôt, ou publie un article depuis l’admin.</div>
+            </div>
+          <% } %>
+          <% (articles || []).forEach((a) => { %>
+            <article class="article-card group bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden hover:-translate-y-1 transition-all duration-300">
+              <a href="<%= a.url %>">
+                <div class="relative aspect-[16/10] overflow-hidden">
+                  <% if (a.imageUrl) { %>
+                    <img alt="<%= a.title %>" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" decoding="async" width="400" height="250" src="<%= a.imageUrl %>"/>
+                  <% } else { %>
+                    <div class="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                      <span class="material-symbols-outlined text-5xl">article</span>
+                    </div>
+                  <% } %>
+                  <div class="absolute top-4 left-4">
+                    <span class="bg-white/90 backdrop-blur text-slate-900 text-[9px] font-bold px-2 py-1 rounded uppercase tracking-wider"><%= a.category && a.category.label ? a.category.label : '' %></span>
+                  </div>
+                  <div class="read-more-btn absolute inset-0 bg-primary/20 backdrop-blur-sm flex items-center justify-center opacity-0 transition-all duration-300 translate-y-4">
+                    <span class="bg-white text-primary px-6 py-2 rounded-full text-xs font-bold uppercase shadow-lg">Lire la suite</span>
+                  </div>
+                </div>
+                <div class="p-5">
+                  <div class="flex items-center gap-3 text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-3">
+                    <span><%= a.dateLabel %></span>
+                    <span class="w-1 h-1 bg-slate-300 rounded-full"></span>
+                    <span><%= a.readTimeLabel %></span>
+                  </div>
+                  <h3 class="text-lg font-display font-bold text-slate-900 dark:text-white mb-2 leading-snug group-hover:text-primary transition-colors"><%= a.title %></h3>
+                  <p class="text-slate-500 dark:text-slate-400 text-xs leading-relaxed line-clamp-2"><%= a.excerpt %></p>
+                </div>
+              </a>
+            </article>
+          <% }) %>
+        </div>
+
+        <% const buildPageHref = (targetPage) => {
+          const params = new URLSearchParams();
+          if (currentCategory) params.set('category', currentCategory);
+          if (q) params.set('q', q);
+          if (targetPage && Number(targetPage) > 1) params.set('page', String(targetPage));
+          const qs = params.toString();
+          return qs ? `/blog?${qs}` : '/blog';
+        }; %>
+
+        <nav class="flex justify-center items-center gap-2 pt-8">
+          <a class="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="<%= buildPageHref(Math.max(1, (page || 1) - 1)) %>">
+            <span class="material-symbols-outlined text-lg">chevron_left</span>
+          </a>
+
+          <% for (let p = 1; p <= totalPages; p += 1) { %>
+            <% const active = (page || 1) === p; %>
+            <a class="w-10 h-10 flex items-center justify-center rounded-lg <%= active ? 'bg-primary text-white' : 'border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800' %> font-bold text-sm transition-colors" href="<%= buildPageHref(p) %>"><%= p %></a>
+          <% } %>
+
+          <a class="w-10 h-10 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" href="<%= buildPageHref(Math.min(totalPages || 1, (page || 1) + 1)) %>">
+            <span class="material-symbols-outlined text-lg">chevron_right</span>
+          </a>
+        </nav>
+      </div>
+
+      <aside class="lg:col-span-4 space-y-8">
+        <div class="bg-white dark:bg-surface-dark p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+          <h3 class="font-display font-bold text-sm uppercase tracking-widest text-slate-900 dark:text-white mb-4">Rechercher un article</h3>
+          <form action="/blog" class="relative" method="GET">
+            <% if (currentCategory) { %>
+              <input name="category" type="hidden" value="<%= currentCategory %>" />
+            <% } %>
+            <input class="w-full bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-lg py-2.5 pl-4 pr-10 text-xs focus:ring-primary focus:border-primary outline-none transition-all" name="q" placeholder="Sujet, pièce, symptôme..." type="text" value="<%= q || '' %>"/>
+            <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+          </form>
+        </div>
+
+        <div class="bg-white dark:bg-surface-dark p-6 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
+          <h3 class="font-display font-bold text-sm uppercase tracking-widest text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+            <span class="w-1.5 h-1.5 bg-primary rounded-full"></span> Articles les plus lus
+          </h3>
+          <div class="space-y-6">
+            <% (popularArticles || []).forEach((pa) => { %>
+              <a class="flex gap-4 group" href="<%= pa.url %>">
+                <span class="text-2xl font-display font-bold text-slate-100 dark:text-slate-800 group-hover:text-primary/20 transition-colors"><%= pa.rank %></span>
+                <div>
+                  <h4 class="text-xs font-bold text-slate-900 dark:text-white leading-tight group-hover:text-primary transition-colors"><%= pa.title %></h4>
+                  <p class="text-[10px] text-slate-400 mt-1 uppercase tracking-wider"><%= pa.meta %></p>
+                </div>
+              </a>
+            <% }) %>
+          </div>
+        </div>
+
+        <div class="bg-accent-dark text-white p-6 rounded-xl relative overflow-hidden group">
+          <div class="absolute -right-10 -bottom-10 opacity-10 group-hover:scale-110 transition-transform duration-700">
+            <span class="material-symbols-outlined text-[150px]">mail</span>
+          </div>
+          <div class="relative z-10">
+            <h3 class="text-xl font-display font-bold mb-3">Recevez nos conseils d'experts</h3>
+            <p class="text-xs text-slate-400 mb-6 leading-relaxed">
+              Plus de 10 000 passionnés reçoivent chaque mois nos guides techniques et offres exclusives. Rejoignez-nous !
+            </p>
+            <form class="space-y-3" onsubmit="return false;">
+              <input class="w-full bg-white/10 border-white/20 rounded-lg py-2.5 px-4 text-xs focus:ring-primary focus:border-primary placeholder-slate-500" placeholder="Votre adresse email" type="email"/>
+              <button class="w-full bg-primary hover:bg-red-700 text-white font-bold py-3 rounded-lg text-xs transition-all uppercase tracking-widest shadow-lg shadow-primary/20" type="submit">
+                S'abonner gratuitement
+              </button>
+            </form>
+            <p class="text-[9px] text-slate-500 mt-4 text-center italic">Désinscription possible à tout moment.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

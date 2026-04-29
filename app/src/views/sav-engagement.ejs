@@ -1,0 +1,169 @@
+<%- include('./partials/head') %>
+<link rel="stylesheet" href="/css/sav.css">
+<%- include('./partials/header') %>
+
+<main class="sav-module flex-1 bg-background-light text-slate-900">
+
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-white to-slate-50 border-b border-slate-200">
+    <div class="mx-auto max-w-5xl px-4 sm:px-6 py-12 sm:py-16 text-center">
+      <div class="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 mb-4">
+        <span class="material-symbols-rounded text-primary text-4xl" aria-hidden="true">handshake</span>
+      </div>
+      <h1 class="text-3xl sm:text-4xl font-bold tracking-tight">Notre engagement SAV</h1>
+      <p class="mt-3 text-base sm:text-lg text-slate-600 max-w-2xl mx-auto">
+        Quand une pièce reconditionnée pose problème, nous mettons tout en œuvre pour identifier l'origine
+        et vous apporter une réponse claire, juste et rapide.
+      </p>
+      <div class="mt-6">
+        <a href="/sav" class="inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold px-6 py-3 min-h-[48px]">
+          Ouvrir une demande SAV
+          <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 promesses -->
+  <section class="mx-auto max-w-5xl px-4 sm:px-6 py-12">
+    <h2 class="text-2xl font-bold text-center mb-8">Nos 5 engagements concrets</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <% const engagements = [
+        { icon:'visibility', title:'Transparence totale', text:'Vous savez à chaque étape ce qui se passe. Aucun frais caché : 0 € à l\'ouverture, 149 € uniquement si l\'analyse écarte un défaut produit.' },
+        { icon:'science',    title:'Expertise sur banc', text:'Banc DQ200 interne et partenariats spécialisés. Les hypothèses ne suffisent pas : seule la mesure tranche.' },
+        { icon:'schedule',   title:'Réponse sous 5 jours', text:'5 jours ouvrés maximum entre la réception de votre pièce et notre verdict, rapport à l\'appui.' },
+        { icon:'balance',    title:'Équité', text:'Si c\'est notre pièce qui est en cause : 0 €, échange ou remboursement intégral, retour offert. Sans discussion.' },
+        { icon:'history',    title:'Traçabilité', text:'Chaque dossier garde son historique complet : photos banc, mesures, communications. Tout est consigné.' },
+      ]; %>
+      <% engagements.forEach(function(e){ %>
+        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+          <div class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary mb-3">
+            <span class="material-symbols-rounded" aria-hidden="true"><%= e.icon %></span>
+          </div>
+          <h3 class="font-semibold text-slate-900"><%= e.title %></h3>
+          <p class="mt-1 text-sm text-slate-600"><%= e.text %></p>
+        </div>
+      <% }); %>
+    </div>
+  </section>
+
+  <!-- Schéma process -->
+  <section class="bg-white border-y border-slate-200">
+    <div class="mx-auto max-w-5xl px-4 sm:px-6 py-12">
+      <h2 class="text-2xl font-bold text-center mb-8">Comment ça se passe, étape par étape</h2>
+      <ol class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <% const steps = [
+          { n:'1', icon:'fact_check', title:'Pré-qualification', text:'Vous remplissez un formulaire en ligne en 5 minutes.' },
+          { n:'2', icon:'local_shipping', title:'Retour offert', text:'Bon de retour fourni, transport pris en charge.' },
+          { n:'3', icon:'science', title:'Analyse banc', text:'Tests rigoureux selon les valeurs constructeur.' },
+          { n:'4', icon:'verified', title:'Décision sous 5j', text:'Rapport écrit, conclusion claire, actions à mener.' },
+        ]; %>
+        <% steps.forEach(function(s, i){ %>
+          <li class="relative rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div class="absolute -top-3 -left-3 h-8 w-8 rounded-full bg-primary text-white text-sm font-bold flex items-center justify-center"><%= s.n %></div>
+            <span class="material-symbols-rounded text-primary text-3xl" aria-hidden="true"><%= s.icon %></span>
+            <h3 class="mt-2 font-semibold"><%= s.title %></h3>
+            <p class="mt-1 text-sm text-slate-600"><%= s.text %></p>
+          </li>
+        <% }); %>
+      </ol>
+    </div>
+  </section>
+
+  <!-- Atelier -->
+  <section class="mx-auto max-w-5xl px-4 sm:px-6 py-12">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+      <div>
+        <h2 class="text-2xl font-bold mb-3">Notre atelier et notre banc DQ200</h2>
+        <p class="text-slate-600">
+          Nous opérons un banc DQ200 dédié pour les mécatroniques les plus courantes du marché.
+          Pour les autres pièces (DQ250, DQ381, DQ500, boîtes de transfert, ponts…), nous travaillons
+          avec des partenaires reconnus pour garantir un diagnostic incontestable.
+        </p>
+        <p class="mt-3 text-sm text-slate-500">
+          Photos atelier à venir — emplacements réservés ci-contre.
+        </p>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="aspect-square rounded-2xl border border-slate-200 bg-slate-100 flex items-center justify-center text-slate-400">
+          <span class="material-symbols-rounded text-5xl" aria-hidden="true">photo</span>
+        </div>
+        <div class="aspect-square rounded-2xl border border-slate-200 bg-slate-100 flex items-center justify-center text-slate-400">
+          <span class="material-symbols-rounded text-5xl" aria-hidden="true">build</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats live -->
+  <section class="bg-slate-900 text-white">
+    <div class="mx-auto max-w-5xl px-4 sm:px-6 py-12">
+      <h2 class="text-2xl font-bold text-center mb-8">Nos chiffres en temps réel</h2>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-6 text-center" id="sav-stats">
+        <div>
+          <div class="text-4xl font-bold" data-stat="taux">—</div>
+          <div class="mt-1 text-sm text-slate-300">% de défauts produits confirmés</div>
+        </div>
+        <div>
+          <div class="text-4xl font-bold" data-stat="delai">5j</div>
+          <div class="mt-1 text-sm text-slate-300">délai moyen d'analyse</div>
+        </div>
+        <div>
+          <div class="text-4xl font-bold" data-stat="ouverts">—</div>
+          <div class="mt-1 text-sm text-slate-300">dossiers en cours</div>
+        </div>
+      </div>
+      <p class="mt-4 text-center text-xs text-slate-400">Chiffres mis à jour automatiquement.</p>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="mx-auto max-w-3xl px-4 sm:px-6 py-12">
+    <h2 class="text-2xl font-bold text-center mb-8">10 questions fréquentes</h2>
+    <% const faq = [
+      ['Pourquoi 149 € si je ne paie rien à l\'ouverture ?','C\'est un engagement contractuel, pas un paiement immédiat. Ce forfait n\'est facturé que si l\'analyse écarte formellement un défaut produit. Si la pièce est défectueuse, vous ne payez rien.'],
+      ['Pourquoi pas de diagnostic à distance ?','Pour les mécatroniques et organes de transmission, seul le passage sur banc permet de mesurer pressions, courants et températures. Sans cela, on bascule dans des hypothèses qui ne servent personne.'],
+      ['Combien de temps prend l\'analyse ?','Maximum 5 jours ouvrés à compter de la réception de votre pièce à notre atelier. Souvent moins.'],
+      ['Qui paie le retour de ma pièce vers vous ?','C\'est offert. Vous recevez un bon de retour à coller sur le colis.'],
+      ['Et si je refuse de payer le forfait après analyse négative ?','Conformément à l\'article 2286 du Code civil, nous exerçons notre droit de rétention sur la pièce jusqu\'au paiement. Au-delà de 90 jours sans règlement, nous pourrons en disposer.'],
+      ['Puis-je avoir le rapport d\'analyse ?','Oui, systématiquement. Le rapport vous est envoyé par email et reste consultable depuis votre espace de suivi.'],
+      ['J\'ai monté la pièce moi-même, est-ce que ça pose problème ?','Non. La seule exigence est que le réglage de base ait été effectué après le montage. Sans ce réglage, nous ne pouvons pas démarrer.'],
+      ['Que se passe-t-il si je récupère ma pièce après analyse négative ?','Vous récupérez votre pièce moyennant 25 € de frais de retour, en plus du forfait d\'analyse de 149 €.'],
+      ['Êtes-vous couverts par la garantie légale de 2 ans ?','Oui, conformément aux articles L.217-3 et suivants du Code de la consommation, nos pièces bénéficient de la garantie légale de conformité de 2 ans.'],
+      ['Comment vous joindre ?',`Email : ${brand.EMAIL_SAV} · Téléphone : ${brand.PHONE} · ou directement depuis votre espace de suivi.`],
+    ]; %>
+    <div class="space-y-3">
+      <% faq.forEach(function(q){ %>
+        <details class="rounded-xl border border-slate-200 bg-white p-4">
+          <summary class="cursor-pointer font-semibold text-slate-900"><%= q[0] %></summary>
+          <p class="mt-2 text-sm text-slate-600"><%= q[1] %></p>
+        </details>
+      <% }); %>
+    </div>
+  </section>
+
+  <!-- CTA final -->
+  <section class="bg-primary text-white">
+    <div class="mx-auto max-w-3xl px-4 sm:px-6 py-12 text-center">
+      <h2 class="text-2xl sm:text-3xl font-bold">Un problème avec votre pièce ?</h2>
+      <p class="mt-2 text-white/90">Ouvrez votre demande en moins de 5 minutes. Vous ne payez rien à cette étape.</p>
+      <a href="/sav" class="mt-6 inline-flex items-center gap-2 rounded-xl bg-white text-primary font-bold px-6 py-3 min-h-[48px] hover:bg-slate-100">
+        Ouvrir un ticket SAV
+        <span class="material-symbols-rounded" aria-hidden="true">arrow_forward</span>
+      </a>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Stats live (dashboard public minimal — pas de Bearer côté visiteur :
+  // les chiffres exposés ici sont volontairement publics et anodins)
+  fetch('/api/sav/stats-publiques').then(function(r){ return r.json(); }).then(function(j){
+    if (!j || !j.success) return;
+    var d = j.data || {};
+    var t = document.querySelector('[data-stat="taux"]');     if (t) t.textContent = (d.taux_defaut_produit || 0) + ' %';
+    var o = document.querySelector('[data-stat="ouverts"]');  if (o) o.textContent = d.ouverts || '—';
+  }).catch(function(){});
+</script>
+
+<%- include('./partials/footer') %>

@@ -1,0 +1,43 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1">
+  <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <aside class="lg:col-span-3">
+        <%- include('./_sidebar', { active: 'garage' }) %>
+      </aside>
+
+      <section class="lg:col-span-9">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h2 class="text-3xl font-bold text-slate-900">Mon garage</h2>
+              <p class="mt-2 text-slate-600">Ajoutez vos véhicules pour filtrer les pièces compatibles.</p>
+            </div>
+          </div>
+
+      <% if (vehicles && vehicles.length) { %>
+        <div class="mt-8 space-y-4">
+          <% vehicles.forEach((v) => { %>
+            <div class="p-5 rounded-2xl border border-slate-200">
+              <div class="font-black text-slate-900"><%= v.name || 'Véhicule' %></div>
+              <div class="mt-1 text-sm text-slate-600"><%= v.details || '' %></div>
+            </div>
+          <% }) %>
+        </div>
+      <% } %>
+
+          <% if (!dbConnected) { %>
+            <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+              <div class="font-bold">Mode démo</div>
+              <div class="mt-1 text-sm">La base de données est indisponible : le garage ne peut pas enregistrer des véhicules.</div>
+            </div>
+          <% } %>
+        </div>
+      </section>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

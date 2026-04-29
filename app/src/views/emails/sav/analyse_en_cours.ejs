@@ -1,0 +1,6 @@
+<% const body = `
+  <p>Bonjour,</p>
+  <p>Votre pièce est actuellement <strong>sur notre banc d'analyse</strong>. Nos techniciens effectuent les tests nécessaires pour identifier l'origine du problème.</p>
+  <p>Nous revenons vers vous dès que l'analyse est terminée.</p>
+` %>
+<%- include('./_layout', { ticket: ticket, subject: 'Analyse en cours', body: body }) %>

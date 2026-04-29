@@ -1,0 +1,134 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 transition-colors duration-300">
+  <% const formatMoney = (cents) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round((Number(cents) || 0) / 100)); %>
+  <div class="max-w-7xl mx-auto px-6 py-12">
+    <% if (!dbConnected) { %>
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900 mb-10">
+        <div class="font-bold">Mode démo activé</div>
+        <div class="mt-1 text-sm">Le site fonctionne sans base de données, avec des produits d'exemple.</div>
+      </div>
+    <% } %>
+
+    <nav class="flex items-center gap-2 text-[11px] uppercase tracking-wider text-slate-400 mb-8 overflow-x-auto whitespace-nowrap">
+      <a class="hover:text-primary" href="/">Accueil</a>
+      <span class="material-symbols-outlined text-[10px]">chevron_right</span>
+      <a class="hover:text-primary" href="/categorie">Catégories</a>
+      <span class="material-symbols-outlined text-[10px]">chevron_right</span>
+      <span class="font-semibold text-slate-900 dark:text-slate-100"><%= category.name %></span>
+    </nav>
+
+    <div class="flex items-end justify-between gap-6 flex-wrap">
+      <div>
+        <h1 class="text-3xl font-black tracking-tight"><%= category.name %></h1>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-300"><%= (totalCount || 0).toLocaleString('fr-FR') %> produits dans cette catégorie</p>
+      </div>
+      <a class="text-sm font-black uppercase tracking-wider text-primary hover:underline" href="/produits">Voir tout le catalogue</a>
+    </div>
+
+    <% if (!products || !products.length) { %>
+      <div class="mt-10 rounded-3xl bg-white dark:bg-surface-dark border border-slate-100 dark:border-slate-800 p-10 shadow-sm">
+        <div class="font-bold text-lg">Aucun produit</div>
+        <div class="mt-2 text-sm text-slate-500">Aucun produit n’est disponible dans cette catégorie pour le moment.</div>
+      </div>
+    <% } else { %>
+      <div class="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <% products.forEach((p) => { %>
+          <% const imgUrl = (p && typeof p.imageUrl === 'string' && p.imageUrl.trim()) ? p.imageUrl.trim() : (Array.isArray(p.galleryUrls) && p.galleryUrls[0] ? p.galleryUrls[0] : ''); %>
+          <% const badge = (p && p.badges && p.badges.topLeft) ? p.badges.topLeft : 'GARANTIE'; %>
+          <% const productUrl = (p && p.publicPath) ? p.publicPath : ('/produits/' + p._id); %>
+
+          <div class="bg-white/70 dark:bg-surface-dark/60 backdrop-blur-xl rounded-3xl overflow-hidden border border-white/40 dark:border-slate-700/70 transition-all duration-500 shadow-premium hover:shadow-premium-hover flex flex-col">
+            <div class="relative aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-slate-800">
+              <a href="<%= productUrl %>">
+                <% if (imgUrl) { %>
+                  <img alt="<%= p.name %>" class="w-full h-full object-cover hover:scale-110 transition-transform duration-700" decoding="async" loading="lazy" width="400" height="300" src="<%= imgUrl %>"/>
+                <% } else { %>
+                  <div class="w-full h-full flex items-center justify-center text-slate-400">
+                    <span class="material-symbols-outlined text-5xl">inventory_2</span>
+                  </div>
+                <% } %>
+              </a>
+              <span class="absolute top-3 left-3 bg-primary text-[9px] text-white font-bold px-2.5 py-1 rounded-full shadow-lg"><%= badge %></span>
+            </div>
+
+            <div class="p-4 flex flex-col flex-grow">
+              <a class="font-bold text-slate-800 dark:text-slate-100 leading-snug mb-4 hover:text-primary transition-colors h-12 overflow-hidden text-sm" href="<%= productUrl %>">
+                <%= p.name %>
+              </a>
+
+              <div class="mt-auto pt-4 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <p class="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Prix TTC</p>
+                  <p class="text-lg font-display font-bold text-slate-900 dark:text-white"><%= formatMoney(p.priceCents) %> €</p>
+                </div>
+                <form action="/panier/ajouter/<%= p._id %>" method="POST">
+                  <input name="returnTo" type="hidden" value="<%= typeof canonicalUrl !== 'undefined' ? canonicalUrl : '/categorie' %>" />
+                  <input name="qty" type="hidden" value="1" />
+                  <button class="bg-slate-50 dark:bg-slate-800/80 p-2.5 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 text-slate-700 dark:text-slate-300 hover:bg-primary hover:border-primary hover:text-white hover:shadow-xl hover:shadow-red-500/30 transition-all duration-300 disabled:opacity-60" <%= p.inStock ? '' : 'disabled' %> type="submit">
+                    <span class="material-symbols-outlined text-xl">shopping_cart</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+
+      <% if (totalPages && totalPages > 1) { %>
+        <div class="mt-12 flex flex-col sm:flex-row items-center justify-between gap-6 py-10 border-t border-slate-100 dark:border-slate-800">
+          <% const prevPage = Math.max(1, (page || 1) - 1); %>
+          <% const nextPage = Math.min((totalPages || 1), (page || 1) + 1); %>
+          <% const basePath = category.publicPath; %>
+
+          <a class="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-primary transition-colors <%= (page || 1) <= 1 ? 'pointer-events-none opacity-40' : '' %>" href="<%= (page || 1) <= 1 ? '#' : (basePath + '?page=' + prevPage) %>">
+            <span class="material-symbols-outlined">chevron_left</span>
+            Précédent
+          </a>
+
+          <div class="flex items-center gap-2">
+            <% const current = Number(page) || 1;
+               const last = Number(totalPages) || 1;
+               const pagesToShow = [];
+               for (let i = 1; i <= Math.min(3, last); i++) pagesToShow.push(i);
+               if (last > 1) {
+                 if (!pagesToShow.includes(current) && current > 1 && current < last) pagesToShow.push(current);
+                 if (!pagesToShow.includes(last) && last <= current + 2) {
+                   for (let i = Math.max(1, last - 2); i <= last; i++) pagesToShow.push(i);
+                 }
+               }
+               const uniq = Array.from(new Set(pagesToShow)).sort((a,b) => a-b);
+            %>
+
+            <% uniq.forEach((pNum, idx) => { %>
+              <% const prev = idx > 0 ? uniq[idx - 1] : null; %>
+              <% if (prev !== null && pNum - prev > 1) { %>
+                <span class="px-2 text-slate-400">...</span>
+              <% } %>
+              <a class="w-10 h-10 rounded-full font-bold text-sm transition-colors flex items-center justify-center <%= pNum === current ? 'bg-primary text-white' : 'hover:bg-slate-100 dark:hover:bg-slate-800' %>" href="<%= pNum === 1 ? basePath : (basePath + '?page=' + pNum) %>"><%= pNum %></a>
+            <% }) %>
+          </div>
+
+          <a class="flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-primary transition-colors <%= (page || 1) >= (totalPages || 1) ? 'pointer-events-none opacity-40' : '' %>" href="<%= (page || 1) >= (totalPages || 1) ? '#' : (basePath + '?page=' + nextPage) %>">
+            Suivant
+            <span class="material-symbols-outlined">chevron_right</span>
+          </a>
+        </div>
+      <% } %>
+    <% } %>
+  </div>
+
+  <% if (category.seoText) { %>
+    <section class="seo-text-section" style="background:#f8f9fa;border-top:1px solid #e9ecef;">
+      <div class="max-w-7xl mx-auto px-6 py-16">
+        <h2 class="text-2xl font-bold tracking-tight text-slate-800 mb-6">Tout savoir sur nos <%= category.name.toLowerCase() %></h2>
+        <div class="seo-text-content prose prose-slate max-w-none text-slate-600 leading-relaxed" style="font-size:0.95rem;line-height:1.8;">
+          <%- category.seoText %>
+        </div>
+      </div>
+    </section>
+  <% } %>
+</main>
+
+<%- include('../partials/footer') %>

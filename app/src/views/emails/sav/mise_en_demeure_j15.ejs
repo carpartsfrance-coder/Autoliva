@@ -1,0 +1,9 @@
+<% const body = `
+  <p>Bonjour,</p>
+  <p>Nous vous avons relancé à plusieurs reprises sans réponse concernant le règlement de la facture liée au dossier <strong>${ticket.numero}</strong> (149 € TTC).</p>
+  <p><strong>La présente vaut mise en demeure de payer sous 8 jours.</strong></p>
+  <p>À défaut de règlement à l'issue de ce délai, et conformément à <strong>l'article 2286 du Code civil</strong>, nous exercerons notre <strong>droit de rétention</strong> sur la pièce restée en notre possession jusqu'au paiement complet de notre créance.</p>
+  <p>Pour régulariser dès maintenant ou nous transmettre toute information utile, appelez-nous au <strong>${brand.PHONE}</strong>.</p>
+  <p style="font-size:13px;color:#64748b;">Conformément à l'article L612-1 du Code de la consommation, en cas de litige non résolu, vous pouvez recourir gratuitement au médiateur de la consommation dont les coordonnées figurent dans nos Conditions Générales de Vente.</p>
+` %>
+<%- include('./_layout', { ticket: ticket, subject: 'Mise en demeure — Facture impayée', body: body }) %>

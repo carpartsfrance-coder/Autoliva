@@ -1,0 +1,30 @@
+<%
+  const baseUrl = brand.SITE_URL;
+  const gl = (typeof guestLink !== 'undefined' && guestLink) ? guestLink : (baseUrl + '/sav/suivi');
+  const nom = (ticket.client && ticket.client.nom) || '';
+  const h = typeof heading !== 'undefined' ? heading : 'Mise à jour de votre dossier SAV';
+  const introHtml = typeof intro !== 'undefined' ? intro : '';
+  const items = Array.isArray(typeof bullets !== 'undefined' ? bullets : null) ? bullets : [];
+  const cta = typeof callToAction !== 'undefined' ? callToAction : 'Accéder à mon dossier';
+  const bullets_html = items.map(function(b){ return '<li style="margin:4px 0;">' + b + '</li>'; }).join('');
+  const body = `
+    <p>Bonjour <strong>${nom}</strong>,</p>
+    <p><strong>${h}</strong></p>
+    ${introHtml ? `<p>${introHtml}</p>` : ''}
+    ${items.length ? `
+      <div style="margin:18px 0;padding:14px;background:#f8fafc;border-left:4px solid #ec1313;border-radius:8px;font-size:14px;">
+        <ul style="margin:4px 0 0 18px;padding:0;">${bullets_html}</ul>
+      </div>
+    ` : ''}
+    <p style="margin:18px 0;text-align:center;">
+      <a href="${gl}"
+         style="display:inline-block;padding:12px 22px;background:#ec1313;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;">
+        ${cta}
+      </a>
+    </p>
+    <p style="font-size:13px;color:#475569;text-align:center;">
+      Ce lien est personnel et vous permet d'accéder directement à votre dossier sans connexion.
+    </p>
+  `;
+%>
+<%- include('./_layout', { ticket: ticket, subject: h, body: body }) %>

@@ -1,0 +1,353 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1">
+  <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-8">
+    <div class="flex items-center justify-center gap-4 text-xs font-black uppercase tracking-widest text-slate-400">
+      <div class="flex items-center gap-3">
+        <div class="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center">1</div>
+        <div class="text-slate-500">Panier</div>
+      </div>
+      <div class="h-px w-10 bg-slate-200"></div>
+      <div class="flex items-center gap-3">
+        <div class="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center">2</div>
+        <div class="text-slate-500">Livraison</div>
+      </div>
+      <div class="h-px w-10 bg-slate-200"></div>
+      <div class="flex items-center gap-3">
+        <div class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center">3</div>
+        <div class="text-primary">Paiement</div>
+      </div>
+    </div>
+
+    <% if (errorMessage) { %>
+      <div class="mt-8 rounded-xl border border-red-200 bg-red-50 p-5 text-red-900">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <div class="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <section class="lg:col-span-8 space-y-8">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="text-lg font-black text-slate-900">Récapitulatif</div>
+          <div class="mt-1 text-sm text-slate-600">Vérifiez les informations avant de valider.</div>
+
+          <div class="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="rounded-2xl border border-slate-200 p-5">
+              <div class="text-xs font-black uppercase tracking-widest text-slate-400">Mode de livraison</div>
+              <div class="mt-3 font-black text-slate-900"><%= shippingMethod.title %></div>
+              <div class="mt-1 text-sm text-slate-600"><%= shippingMethod.description %></div>
+              <div class="mt-3 font-black <%= shippingMethod.priceCents === 0 ? 'text-green-600' : 'text-primary' %>">
+                <%= shippingMethod.priceCents === 0 ? 'GRATUIT' : (shippingMethod.priceCents / 100).toFixed(2).replace('.', ',') + ' €' %>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 p-5">
+              <div class="text-xs font-black uppercase tracking-widest text-slate-400">Adresse de livraison</div>
+              <div class="mt-3">
+                <% if (address.fullName) { %><div class="font-black text-slate-900"><%= address.fullName %></div><% } %>
+                <div class="text-sm text-slate-600"><%= address.line1 %></div>
+                <% if (address.line2) { %><div class="text-sm text-slate-600"><%= address.line2 %></div><% } %>
+                <div class="text-sm text-slate-600"><%= address.postalCode %> <%= address.city %> • <%= address.country || 'France' %></div>
+                <% if (address.phone) { %><div class="mt-1 text-xs text-slate-500">Téléphone : <%= address.phone %></div><% } %>
+              </div>
+            </div>
+
+            <div class="rounded-2xl border border-slate-200 p-5">
+              <div class="text-xs font-black uppercase tracking-widest text-slate-400">Adresse de facturation</div>
+              <% if (billingSameAsShipping) { %>
+                <div class="mt-3 text-sm text-slate-600">Identique à l’adresse de livraison.</div>
+              <% } %>
+
+              <% if (billingAddress) { %>
+                <div class="mt-3">
+                  <% if (billingAddress.fullName) { %><div class="font-black text-slate-900"><%= billingAddress.fullName %></div><% } %>
+                  <div class="text-sm text-slate-600"><%= billingAddress.line1 %></div>
+                  <% if (billingAddress.line2) { %><div class="text-sm text-slate-600"><%= billingAddress.line2 %></div><% } %>
+                  <div class="text-sm text-slate-600"><%= billingAddress.postalCode %> <%= billingAddress.city %> • <%= billingAddress.country || 'France' %></div>
+                  <% if (billingAddress.phone) { %><div class="mt-1 text-xs text-slate-500">Téléphone : <%= billingAddress.phone %></div><% } %>
+                </div>
+              <% } %>
+            </div>
+          </div>
+
+          <% if (guestCheckout) { %>
+            <div class="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-5 text-sm text-slate-700">
+              Une fois la commande validée, nous créerons automatiquement votre compte et vous recevrez un email pour définir votre mot de passe.
+            </div>
+          <% } %>
+
+          <% if (localMolliePaymentSimulation || localScalapayPaymentSimulation) { %>
+            <div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+              Mode test local activé : en l’absence de clé de paiement, la commande sera validée automatiquement pour vous permettre de tester le tunnel jusqu’au bout.
+            </div>
+          <% } %>
+
+          <div class="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <div class="text-sm font-black text-slate-900">Paiement</div>
+            <div class="mt-1 text-sm text-slate-600">Choisissez votre moyen de paiement.</div>
+
+            <form action="/commande/paiement" method="POST" class="mt-4 space-y-3">
+              <label class="block">
+                <input class="peer sr-only" type="radio" name="paymentMethod" value="mollie" checked />
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 peer-checked:border-primary peer-checked:ring-2 peer-checked:ring-primary/20">
+                  <div class="flex items-start gap-4">
+                    <div class="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                      <span class="material-symbols-outlined">credit_card</span>
+                    </div>
+                    <div class="flex-1">
+                      <div class="flex items-center justify-between gap-3">
+                        <div class="font-black text-slate-900">Carte bancaire</div>
+                      </div>
+                      <div class="mt-1 text-sm text-slate-600">Paiement sécurisé via Mollie (Visa, Mastercard…).</div>
+
+                      <div class="mt-3 flex items-center gap-2">
+                        <div class="h-7 w-11 rounded-lg border border-slate-200 bg-white flex items-center justify-center">
+                          <div class="flex items-center">
+                            <div class="w-3.5 h-3.5 rounded-full bg-red-500 -mr-1"></div>
+                            <div class="w-3.5 h-3.5 rounded-full bg-amber-400 opacity-90"></div>
+                          </div>
+                        </div>
+                        <div class="h-7 w-11 rounded-lg border border-slate-200 bg-white flex items-center justify-center">
+                          <div class="text-[10px] font-black text-slate-700">VISA</div>
+                        </div>
+                        <div class="text-xs font-black text-slate-500">+ d’autres moyens selon votre banque</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </label>
+
+              <label class="block">
+                <input class="peer sr-only" type="radio" name="paymentMethod" value="scalapay_pay_in_3" />
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 peer-checked:border-primary peer-checked:ring-2 peer-checked:ring-primary/20">
+                  <div class="flex items-start gap-4">
+                    <div class="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                      <span class="material-symbols-outlined">payments</span>
+                    </div>
+                    <div class="flex-1">
+                      <div class="flex items-center justify-between gap-3">
+                        <div class="font-black text-slate-900">Scalapay</div>
+                        <span class="inline-flex items-center rounded-full bg-slate-900 text-white text-xs font-black px-3 py-1">3x</span>
+                      </div>
+                      <div class="mt-1 text-sm text-slate-600">Payez en 3 fois sans frais.</div>
+                      <div class="mt-3 flex items-center gap-2 text-xs font-black text-slate-500">
+                        <span class="material-symbols-outlined text-base text-slate-400">schedule</span>
+                        Échéancier automatique
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </label>
+
+              <label class="block">
+                <input class="peer sr-only" type="radio" name="paymentMethod" value="scalapay_pay_in_4" />
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 peer-checked:border-primary peer-checked:ring-2 peer-checked:ring-primary/20">
+                  <div class="flex items-start gap-4">
+                    <div class="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+                      <span class="material-symbols-outlined">request_quote</span>
+                    </div>
+                    <div class="flex-1">
+                      <div class="flex items-center justify-between gap-3">
+                        <div class="font-black text-slate-900">Scalapay</div>
+                        <span class="inline-flex items-center rounded-full bg-slate-900 text-white text-xs font-black px-3 py-1">4x</span>
+                      </div>
+                      <div class="mt-1 text-sm text-slate-600">Payez en 4 fois sans frais.</div>
+                      <div class="mt-3 flex items-center gap-2 text-xs font-black text-slate-500">
+                        <span class="material-symbols-outlined text-base text-slate-400">shield_lock</span>
+                        Paiement protégé
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </label>
+
+              <% const _veh = (typeof vehicle !== 'undefined' && vehicle) ? vehicle : null; %>
+              <% const _vehType = _veh && _veh.identifierType === 'vin' ? 'vin' : 'plate'; %>
+              <% const _vehPlate = _veh && _veh.plate ? _veh.plate : ''; %>
+              <% const _vehVin = _veh && _veh.vin ? _veh.vin : ''; %>
+              <% const _vehConsentChecked = Boolean(_veh && _veh.consentAt); %>
+
+              <div class="mt-2 rounded-2xl border border-slate-200 bg-white p-4">
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <div class="font-black text-slate-900">VIN du véhicule / plaque</div>
+                    <div class="mt-1 text-xs text-slate-600">Facultatif mais recommandé pour un contrôle de compatibilité avant expédition. Vous pouvez renseigner soit la plaque FR, soit le VIN.</div>
+                  </div>
+                  <div class="w-10 h-10 rounded-xl bg-slate-900/5 text-slate-700 flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined">directions_car</span>
+                  </div>
+                </div>
+
+                <input name="vehicleIdentifierType" type="hidden" value="<%= _vehType %>" data-vehicle-type />
+
+                <div class="mt-4 <%= _vehType === 'plate' ? '' : 'hidden' %>" data-vehicle-panel="plate">
+                  <label class="block text-xs font-black uppercase tracking-widest text-slate-400" for="vehiclePlate">Plaque (France)</label>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="vehiclePlate" name="vehiclePlate" placeholder="Ex : AB-123-CD" type="text" value="<%= _vehPlate %>" />
+                  <button class="mt-2 text-xs font-black text-primary hover:underline" data-vehicle-switch="vin" type="button">Plaque non française / je n’ai pas la plaque → utiliser le VIN</button>
+                </div>
+
+                <div class="mt-4 <%= _vehType === 'vin' ? '' : 'hidden' %>" data-vehicle-panel="vin">
+                  <label class="block text-xs font-black uppercase tracking-widest text-slate-400" for="vehicleVin">VIN (numéro de châssis)</label>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="vehicleVin" name="vehicleVin" placeholder="Ex : VF1..." type="text" value="<%= _vehVin %>" />
+                  <button class="mt-2 text-xs font-black text-primary hover:underline" data-vehicle-switch="plate" type="button">Revenir à la plaque France</button>
+                </div>
+
+                <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <label class="flex items-start gap-3">
+                    <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="vehicleConsent" type="checkbox" value="true" <%= _vehConsentChecked ? 'checked' : '' %> />
+                    <span class="text-xs text-slate-600 leading-normal">
+                      J’accepte que la plaque/VIN soit utilisée uniquement pour vérifier la compatibilité et/ou programmer la pièce si nécessaire.
+                      <span class="block mt-1 text-[11px] text-slate-500">Si vous ne le souhaitez pas, laissez le champ vide.</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <label class="flex items-start gap-3">
+                  <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="acceptCgv" required type="checkbox" value="true" />
+                  <span class="text-xs text-slate-600 leading-normal">
+                    J'accepte les <a class="text-primary font-black hover:underline" href="/legal/cgv" target="_blank" rel="noreferrer">Conditions Générales de Vente (CGV)</a>.
+                  </span>
+                </label>
+              </div>
+
+              <div class="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <label class="flex items-start gap-3">
+                  <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="smsOptIn" type="checkbox" value="true" />
+                  <span class="text-xs text-slate-600 leading-normal">
+                    J'accepte de recevoir des SMS de suivi pour ma commande (expedition, livraison, rappels).
+                    <span class="block mt-1 text-[11px] text-slate-500">Vous pouvez vous desinscrire a tout moment depuis votre espace client.</span>
+                  </span>
+                </label>
+              </div>
+
+              <button class="w-full mt-3 inline-flex items-center justify-center rounded-xl bg-primary text-white px-6 py-3 font-black hover:bg-red-700 transition" type="submit">
+                Continuer
+              </button>
+            </form>
+          </div>
+
+          <div class="mt-8 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
+            <a class="inline-flex items-center justify-center rounded-xl bg-slate-100 text-slate-700 px-5 py-3 font-black hover:bg-slate-200 transition" href="/commande/livraison">Retour livraison</a>
+          </div>
+        </div>
+      </section>
+
+      <aside class="lg:col-span-4">
+        <div class="bg-white rounded-2xl border border-slate-200 p-6 sticky top-6">
+          <div class="font-black text-slate-900">Résumé de la commande</div>
+
+          <div class="mt-5 space-y-4">
+            <% items.forEach((it) => { %>
+              <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center flex-shrink-0">
+                  <% if (it.product.imageUrl) { %>
+                    <img alt="<%= it.product.name %>" class="w-full h-full object-cover" src="<%= it.product.imageUrl %>" />
+                  <% } else { %>
+                    <span class="material-symbols-outlined text-slate-400">inventory_2</span>
+                  <% } %>
+                </div>
+                <div class="flex-1">
+                  <div class="text-sm font-black text-slate-900"><%= it.product.name %></div>
+                  <% if (it.optionsSummary) { %>
+                    <div class="text-xs text-slate-500"><%= it.optionsSummary %></div>
+                  <% } %>
+                  <div class="text-xs text-slate-500">Qté : <%= it.quantity %></div>
+                </div>
+                <div class="text-sm font-black text-slate-900"><%= (it.lineTotalCents / 100).toFixed(2).replace('.', ',') %> €</div>
+              </div>
+            <% }) %>
+          </div>
+
+          <div class="mt-6 pt-6 border-t border-slate-200 space-y-2 text-sm">
+            <div class="flex items-center justify-between">
+              <div class="text-slate-600">Sous-total</div>
+              <div class="font-black text-slate-900"><%= ((typeof itemsSubtotalCents !== 'undefined' ? itemsSubtotalCents : itemsTotalCents) / 100).toFixed(2).replace('.', ',') %> €</div>
+            </div>
+
+            <% if (typeof clientDiscountCents !== 'undefined' && clientDiscountCents > 0) { %>
+              <div class="flex items-center justify-between">
+                <div class="text-slate-600">Remise compte (<%= typeof clientDiscountPercent !== 'undefined' ? String(clientDiscountPercent).replace('.', ',') : '' %>%)</div>
+                <div class="font-black text-slate-900">- <%= (clientDiscountCents / 100).toFixed(2).replace('.', ',') %> €</div>
+              </div>
+            <% } %>
+
+            <% if (typeof promoDiscountCents !== 'undefined' && promoDiscountCents > 0) { %>
+              <div class="flex items-center justify-between">
+                <div class="text-slate-600">Code promo <%= typeof promoCode !== 'undefined' && promoCode ? '(' + promoCode + ')' : '' %></div>
+                <div class="font-black text-slate-900">- <%= (promoDiscountCents / 100).toFixed(2).replace('.', ',') %> €</div>
+              </div>
+            <% } %>
+
+            <% if ((typeof clientDiscountCents !== 'undefined' && clientDiscountCents > 0) || (typeof promoDiscountCents !== 'undefined' && promoDiscountCents > 0)) { %>
+              <div class="flex items-center justify-between">
+                <div class="text-slate-600">Sous-total après remise</div>
+                <div class="font-black text-slate-900"><%= ((typeof itemsTotalAfterDiscountCents !== 'undefined' ? itemsTotalAfterDiscountCents : itemsTotalCents) / 100).toFixed(2).replace('.', ',') %> €</div>
+              </div>
+            <% } %>
+
+            <div class="flex items-center justify-between">
+              <div class="text-slate-600">Livraison</div>
+              <div class="font-black text-slate-900"><%= shippingCostCents === 0 ? 'GRATUIT' : (shippingCostCents / 100).toFixed(2).replace('.', ',') + ' €' %></div>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between">
+            <div class="text-slate-600 font-black">Total</div>
+            <div class="text-primary font-black text-2xl"><%= (totalCents / 100).toFixed(2).replace('.', ',') %> €</div>
+          </div>
+
+          <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 space-y-2">
+            <div class="flex items-center gap-2 text-xs font-black text-slate-700">
+              <span class="material-symbols-outlined text-base text-slate-400">verified</span>
+              Qualité vérifiée
+            </div>
+            <div class="flex items-center gap-2 text-xs font-black text-slate-700">
+              <span class="material-symbols-outlined text-base text-slate-400">lock</span>
+              Paiement sécurisé (Mollie / Scalapay)
+            </div>
+            <div class="flex items-center gap-2 text-xs font-black text-slate-700">
+              <span class="material-symbols-outlined text-base text-slate-400">autorenew</span>
+              Retours faciles
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<script>
+  (function () {
+    var typeInput = document.querySelector('[data-vehicle-type]');
+    var panelPlate = document.querySelector('[data-vehicle-panel="plate"]');
+    var panelVin = document.querySelector('[data-vehicle-panel="vin"]');
+    var switches = document.querySelectorAll('[data-vehicle-switch]');
+
+    if (!typeInput || !panelPlate || !panelVin || !switches || !switches.length) return;
+
+    function setType(type) {
+      var t = type === 'vin' ? 'vin' : 'plate';
+      typeInput.value = t;
+
+      if (t === 'vin') {
+        panelPlate.classList.add('hidden');
+        panelVin.classList.remove('hidden');
+      } else {
+        panelVin.classList.add('hidden');
+        panelPlate.classList.remove('hidden');
+      }
+    }
+
+    switches.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        setType(btn.getAttribute('data-vehicle-switch'));
+      });
+    });
+  })();
+</script>
+
+<%- include('../partials/footer') %>

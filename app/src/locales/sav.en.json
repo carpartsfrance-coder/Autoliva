@@ -1,0 +1,108 @@
+{
+  "common": {
+    "previous": "Back",
+    "next": "Continue",
+    "submit": "Submit my request",
+    "save": "Save",
+    "cancel": "Cancel",
+    "skip_to_main": "Skip to main content",
+    "loading": "Loading…"
+  },
+  "wizard": {
+    "page_title": "Open a service request",
+    "page_subtitle": "A few steps to get started. Nothing to pay upfront.",
+    "step_labels": {
+      "1": "Order",
+      "2": "Part",
+      "3": "Symptoms",
+      "4": "Documents",
+      "5": "Terms",
+      "6": "Review"
+    },
+    "draft_restored": "Draft restored.",
+    "draft_restored_hint": "Your answers are back. Please re-upload your documents.",
+    "reset_button": "Start over",
+    "reset_modal_title": "Start over?",
+    "reset_modal_text": "Delete all your answers and start over? This action is irreversible.",
+    "reset_modal_confirm": "Delete everything",
+    "reset_done": "Form reset"
+  },
+  "step1": {
+    "title": "Let's find your order",
+    "logged_in_intro": "Select the relevant order.",
+    "guest_intro": "Enter the email used for the purchase and your order number.",
+    "no_orders": "No eligible order (paid, < 24 months) found.",
+    "manual_link": "I can't find my order",
+    "search_placeholder": "Search by order # or product name…"
+  },
+  "step2": {
+    "title": "Your part and its installation",
+    "subtitle": "We need this to start the diagnosis.",
+    "piece_type": "Part type",
+    "piece_type_placeholder": "— Select —",
+    "montage_date": "Installation date",
+    "garage_name": "Garage name",
+    "garage_address": "Garage address (optional)",
+    "reglage_question": "Was the basic adjustment performed after installation?",
+    "reglage_yes": "Yes, the garage performed the basic adjustment",
+    "reglage_no": "No",
+    "reglage_unknown": "I don't know",
+    "reglage_help_title": "Why the basic adjustment is essential",
+    "reglage_help_body": "Without the basic adjustment after replacement, the mechatronics learns wrong points and falls into limp mode."
+  },
+  "step3": {
+    "title": "What's happening with your part?",
+    "subtitle": "The more accurate you are, the faster the analysis will be.",
+    "symptoms_legend": "Observed symptoms",
+    "obd_label": "OBD fault codes (format P0741)",
+    "obd_placeholder": "Type a code then Enter…",
+    "description_label": "Describe what you're seeing",
+    "description_placeholder": "When it happens, since when, in which conditions… (20 characters minimum)"
+  },
+  "step4": {
+    "title": "Documents and vehicle",
+    "subtitle": "These documents are mandatory to open your file.",
+    "drop_title": "Drop your files here or click to browse",
+    "drop_hint": "PDF, JPG, PNG, HEIC · 10 MB max per file · 5 files max",
+    "vin_label": "VIN (17 characters)",
+    "plate_label": "License plate",
+    "make": "Make",
+    "model": "Model",
+    "year": "Year",
+    "engine": "Engine",
+    "km": "Current mileage"
+  },
+  "step5": {
+    "title": "What happens next",
+    "rules_title": "A bench analysis is required to diagnose your part.",
+    "rule_defect": "If a product defect is confirmed: €0 for you, full exchange or refund, return shipping covered.",
+    "rule_no_defect": "Wrong installation / wear / no defect: €149 incl. VAT charged to you.",
+    "rule_no_payment": "You pay NOTHING upfront.",
+    "cgv_label": "I accept the after-sales terms (version cgv-sav-v2-2026-04).",
+    "accept_149_label": "I agree to be charged €149 incl. VAT only if the analysis concludes that the part is not defective.",
+    "rgpd_label": "I accept the processing of my personal data for handling my service request (privacy policy)."
+  },
+  "step6": {
+    "title": "Review before sending",
+    "subtitle": "Check your answers. You can edit each section.",
+    "edit": "Edit"
+  },
+  "confirmation": {
+    "title": "Request submitted!",
+    "subtitle": "Your service file is open. You'll receive a confirmation email.",
+    "next_steps_title": "Next steps",
+    "next_steps": [
+      "Our team pre-qualifies your file within 48 working hours.",
+      "You receive a free return label to ship us the part.",
+      "Once at the workshop, the bench analysis starts within 5 working days.",
+      "You receive the report and the decision (warranty or €149 fee)."
+    ]
+  },
+  "feedback": {
+    "title": "How was your experience?",
+    "rate_label": "Your overall rating",
+    "comment_label": "A comment (optional)",
+    "submit": "Send my feedback",
+    "thanks": "Thank you for your feedback!"
+  }
+}

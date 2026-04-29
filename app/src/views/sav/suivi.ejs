@@ -1,0 +1,25 @@
+<%- include('../partials/head') %>
+<link rel="stylesheet" href="/css/sav.css">
+<%- include('../partials/header') %>
+
+<main class="sav-module flex-1 bg-background-light text-slate-900">
+  <div class="mx-auto max-w-2xl px-4 sm:px-6 py-8 sm:py-12">
+    <div class="sav-status-card text-center">
+      <div class="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 mb-3">
+        <span class="material-symbols-rounded text-emerald-600 text-4xl" aria-hidden="true">check_circle</span>
+      </div>
+      <h1 class="text-2xl sm:text-3xl font-bold">Votre demande est enregistrée</h1>
+      <p class="mt-2 text-slate-600">Numéro de votre demande</p>
+      <p class="mt-1 text-2xl font-mono font-bold text-primary"><%= numero %></p>
+      <p class="mt-4 text-sm text-slate-600">
+        Vous allez recevoir un email avec votre <strong>bon de retour offert</strong>.
+        Réponse garantie sous <strong>5 jours ouvrés</strong> après réception de votre pièce.
+      </p>
+      <a href="/" class="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold px-5 py-3 min-h-[44px]">
+        Retour à l'accueil
+      </a>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

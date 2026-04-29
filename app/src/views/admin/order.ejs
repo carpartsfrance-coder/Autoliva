@@ -1,0 +1,1703 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'orders' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div class="flex items-start justify-between gap-6">
+      <div class="flex items-start gap-4">
+        <a class="w-10 h-10 rounded-xl border border-slate-200 hover:bg-slate-50 transition flex items-center justify-center bg-white" href="/admin/commandes">
+          <span class="material-symbols-outlined text-slate-500">arrow_back</span>
+        </a>
+        <div>
+          <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Commandes', url: '/admin/commandes'}, {label: order ? order.number : 'Commande'}] }) %>
+          <div class="text-2xl md:text-3xl font-semibold text-slate-900"><%= order ? order.number : 'Commande' %></div>
+          <div class="mt-1 text-sm text-slate-500"><%= order ? (order.dateTime || '') : '' %></div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <% if (order && order.allDocuments && order.allDocuments.length > 0) { %>
+          <%
+            var printableDocs = order.allDocuments.filter(function(d) {
+              return d.source === 'direct' ? d.docType === 'etiquette_envoi' : (d.label === 'Envoi' || d.label === 'Envoi partiel');
+            });
+            var allPrintable = order.allDocuments;
+          %>
+          <% if (printableDocs.length === 1) { %>
+            <button class="btn btn-primary" type="button" id="printLabelBtn" data-url="<%= printableDocs[0].viewUrl %>">
+              <span class="material-symbols-outlined mr-2 text-base">print</span>
+              Imprimer étiquette
+            </button>
+          <% } else if (printableDocs.length > 1) { %>
+            <div class="relative" id="printLabelDropdown">
+              <button class="btn btn-primary" type="button" id="printLabelToggle">
+                <span class="material-symbols-outlined mr-2 text-base">print</span>
+                Imprimer étiquette
+                <span class="material-symbols-outlined ml-1 text-sm">expand_more</span>
+              </button>
+              <div id="printLabelMenu" class="hidden absolute right-0 mt-1 w-64 bg-white rounded-xl border border-slate-200 shadow-lg z-50 py-1">
+                <% printableDocs.forEach(function(d, idx) { %>
+                  <button type="button" class="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 print-label-item" data-url="<%= d.viewUrl %>">
+                    <span class="material-symbols-outlined text-sm text-red-500">picture_as_pdf</span>
+                    <span class="truncate flex-1"><%= d.originalName %></span>
+                  </button>
+                <% }) %>
+              </div>
+            </div>
+          <% } else if (allPrintable.length > 0) { %>
+            <%
+              var firstDoc = allPrintable[0];
+            %>
+            <button class="btn btn-primary" type="button" id="printLabelBtn" data-url="<%= firstDoc.viewUrl %>">
+              <span class="material-symbols-outlined mr-2 text-base">print</span>
+              Imprimer document
+            </button>
+          <% } %>
+        <% } %>
+
+        <button class="btn btn-secondary" onclick="window.print()" type="button">
+          <span class="material-symbols-outlined mr-2 text-base">print</span>
+          Imprimer page
+        </button>
+
+        <% if (order && order.id) { %>
+          <% if (!order.deletedAtRaw) { %>
+            <form action="/admin/commandes/<%= order.id %>/retour" method="POST">
+              <button class="btn btn-secondary" type="submit">
+                <span class="material-symbols-outlined mr-2 text-base">assignment_return</span>
+                Créer un retour
+              </button>
+            </form>
+          <% } %>
+
+          <% const _detailReturn = '/admin/commandes/' + order.id; %>
+          <% if (order.deletedAtRaw) { %>
+            <%/* Commande dans la corbeille : Restaurer + Supprimer définitivement */ %>
+            <form action="/admin/commandes/<%= order.id %>/restaurer" method="POST">
+              <input type="hidden" name="returnTo" value="<%= _detailReturn %>" />
+              <button class="btn btn-secondary" type="submit">
+                <span class="material-symbols-outlined mr-2 text-base">restore</span>
+                Restaurer
+              </button>
+            </form>
+            <form action="/admin/commandes/<%= order.id %>/supprimer-definitivement" method="POST" onsubmit="return confirm('Supprimer définitivement cette commande ? Cette action est irréversible.')">
+              <%/* Pas de returnTo ici : la commande n'existera plus, le handler redirige vers la corbeille */ %>
+              <button class="btn btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200" type="submit">
+                <span class="material-symbols-outlined mr-2 text-base">delete_forever</span>
+                Supprimer définitivement
+              </button>
+            </form>
+          <% } else if (order.archived) { %>
+            <%/* Commande archivée : Désarchiver + Corbeille */ %>
+            <form action="/admin/commandes/<%= order.id %>/desarchiver" method="POST">
+              <input type="hidden" name="returnTo" value="<%= _detailReturn %>" />
+              <button class="btn btn-secondary" type="submit">
+                <span class="material-symbols-outlined mr-2 text-base">unarchive</span>
+                Désarchiver
+              </button>
+            </form>
+            <form action="/admin/commandes/<%= order.id %>/supprimer" method="POST" onsubmit="return confirm('Envoyer cette commande à la corbeille ?')">
+              <input type="hidden" name="returnTo" value="<%= _detailReturn %>" />
+              <button class="btn btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200" type="submit">
+                <span class="material-symbols-outlined mr-2 text-base">delete</span>
+                Mettre à la corbeille
+              </button>
+            </form>
+          <% } else { %>
+            <%/* Commande active : Archiver + Corbeille */ %>
+            <form action="/admin/commandes/<%= order.id %>/archiver" method="POST">
+              <input type="hidden" name="returnTo" value="<%= _detailReturn %>" />
+              <button class="btn btn-secondary" type="submit">
+                <span class="material-symbols-outlined mr-2 text-base">inventory_2</span>
+                Archiver
+              </button>
+            </form>
+            <form action="/admin/commandes/<%= order.id %>/supprimer" method="POST" onsubmit="return confirm('Envoyer cette commande à la corbeille ?')">
+              <input type="hidden" name="returnTo" value="<%= _detailReturn %>" />
+              <button class="btn btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200" type="submit">
+                <span class="material-symbols-outlined mr-2 text-base">delete</span>
+                Mettre à la corbeille
+              </button>
+            </form>
+          <% } %>
+        <% } %>
+
+        <% if (order && order.statusBadge) { %>
+          <span class="<%= order.statusBadge.className %>"><%= order.statusBadge.label %></span>
+        <% } %>
+      </div>
+    </div>
+
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (typeof successMessage !== 'undefined' && successMessage) { %>
+      <div class="mt-6 rounded-xl border border-green-200 bg-green-50 p-4 text-green-900">
+        <div class="font-bold">OK</div>
+        <div class="mt-1 text-sm"><%= successMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (order && order.deletedAtRaw) { %>
+      <div class="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="flex items-start gap-3">
+          <span class="material-symbols-outlined">delete</span>
+          <div class="flex-1">
+            <div class="font-bold">Commande dans la corbeille</div>
+            <div class="mt-1 text-sm">
+              Envoyée à la corbeille le <strong><%= order.deletedAt %></strong><% if (order.deletedBy) { %> par <%= order.deletedBy %><% } %>.
+              <% if (order.deleteReason) { %><br/>Motif : <em><%= order.deleteReason %></em><% } %>
+              <br/>Cette commande n'apparaît plus dans les listes ni les statistiques. Elle sera purgée automatiquement dans 30 jours (sauf commande payée).
+            </div>
+          </div>
+        </div>
+      </div>
+    <% } else if (order && order.archived) { %>
+      <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-slate-700">
+        <div class="flex items-start gap-3">
+          <span class="material-symbols-outlined">inventory_2</span>
+          <div class="flex-1">
+            <div class="font-bold">Commande archivée</div>
+            <div class="mt-1 text-sm">
+              Archivée le <strong><%= order.archivedAt %></strong><% if (order.archivedBy) { %> par <%= order.archivedBy %><% } %>.
+              Exclue de la liste principale et des statistiques. Réversible à tout moment.
+            </div>
+          </div>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (!order) { %>
+      <div class="mt-8 bg-white rounded-2xl border border-slate-200 p-6">
+        <div class="text-slate-500">Aucune donnée de commande à afficher.</div>
+      </div>
+    <% } else { %>
+
+      <% if (order.statusKey === 'draft') { %>
+        <div class="mt-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div class="flex items-start gap-3">
+            <span class="material-symbols-outlined text-amber-600 text-xl mt-0.5">warning</span>
+            <div>
+              <div class="font-semibold text-amber-900">Cette commande est en brouillon</div>
+              <div class="text-sm text-amber-700 mt-0.5">Elle n'est pas comptabilis&eacute;e, le stock n'est pas d&eacute;cr&eacute;ment&eacute; et aucun email n'a &eacute;t&eacute; envoy&eacute;.</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <select id="draft-target-status" class="rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400/30">
+              <option value="pending_payment">En attente paiement</option>
+              <option value="paid">Pay&eacute;e</option>
+              <option value="processing">En pr&eacute;paration</option>
+            </select>
+            <label class="flex items-center gap-1.5 text-xs text-amber-800 cursor-pointer whitespace-nowrap">
+              <input type="checkbox" id="draft-send-email" class="accent-amber-600 w-3.5 h-3.5" />
+              Envoyer email
+            </label>
+            <button type="button" id="validate-draft-btn" class="btn btn-primary flex items-center gap-2" data-order-id="<%= order.id %>">
+              <span class="material-symbols-outlined text-lg">check_circle</span>Valider
+            </button>
+          </div>
+        </div>
+        <script>
+          (function() {
+            var btn = document.getElementById('validate-draft-btn');
+            if (!btn) return;
+            btn.addEventListener('click', function() {
+              var orderId = this.getAttribute('data-order-id');
+              var status = document.getElementById('draft-target-status').value;
+              var sendEmail = document.getElementById('draft-send-email').checked;
+              btn.disabled = true;
+              btn.innerHTML = '<div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>';
+              fetch('/admin/api/commandes/' + orderId + '/valider-brouillon', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ status: status, sendEmail: sendEmail }),
+              })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                  if (data.ok) {
+                    if (window.__toast) window.__toast('success', 'Commande valid\u00e9e avec succ\u00e8s');
+                    window.location.reload();
+                  } else {
+                    btn.disabled = false;
+                    btn.innerHTML = '<span class="material-symbols-outlined text-lg">check_circle</span>Valider';
+                    if (window.__toast) window.__toast('error', data.error || 'Erreur');
+                  }
+                })
+                .catch(function() {
+                  btn.disabled = false;
+                  btn.innerHTML = '<span class="material-symbols-outlined text-lg">check_circle</span>Valider';
+                  if (window.__toast) window.__toast('error', 'Erreur r\u00e9seau');
+                });
+            });
+          })();
+        </script>
+      <% } %>
+
+      <div class="mt-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
+        <section class="xl:col-span-8 space-y-6">
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
+              <div class="font-semibold text-slate-900">Informations</div>
+            </div>
+
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Client</div>
+                <div class="mt-2 font-semibold text-slate-900"><%= order.customer %></div>
+                <% if (order.customerEmail) { %>
+                  <div class="mt-1 text-sm text-slate-500"><%= order.customerEmail %></div>
+                <% } %>
+                <div class="mt-2 flex items-center gap-2 flex-wrap">
+                  <span class="badge <%= order.accountType === 'pro' ? 'badge-pro' : 'badge-particulier' %>">
+                    <%= order.accountType === 'pro' ? 'PRO' : 'PARTICULIER' %>
+                  </span>
+                  <% if (order.customerSmsOptIn) { %>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-[11px] font-bold text-green-700" title="<%= order.customerSmsOptInAt ? 'Opt-in le ' + order.customerSmsOptInAt : 'SMS actif' %>">
+                      <span class="material-symbols-outlined text-[13px]">sms</span> SMS
+                    </span>
+                  <% } else { %>
+                    <span class="inline-flex items-center gap-1 rounded-full bg-slate-50 border border-slate-200 px-2.5 py-0.5 text-[11px] font-bold text-slate-400">
+                      <span class="material-symbols-outlined text-[13px]">sms</span> SMS off
+                    </span>
+                  <% } %>
+                </div>
+
+                <%
+                  var _detailSrcIcons = { phone: 'call', email: 'mail', whatsapp: 'chat', leboncoin: 'storefront', marketplace: 'shopping_bag', salon: 'groups', manual: 'edit_note', other: 'more_horiz', website: 'language' };
+                  var _detailSrcLabels = { phone: 'T\u00e9l\u00e9phone', email: 'Email', whatsapp: 'WhatsApp', leboncoin: 'Leboncoin', marketplace: 'Marketplace', salon: 'Salon / Foire', manual: 'Manuel', other: 'Autre', website: 'Site web' };
+                  var _detailCh = order.sourceChannel || 'website';
+                %>
+                <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Source</div>
+                  <div class="mt-2 flex items-center gap-2 text-sm text-slate-700">
+                    <span class="material-symbols-outlined text-base text-slate-500"><%= _detailSrcIcons[_detailCh] || 'circle' %></span>
+                    <span class="font-semibold"><%= _detailSrcLabels[_detailCh] || _detailCh %></span>
+                    <% if (order.sourceDetail) { %>
+                      <span class="text-slate-400">&mdash;</span>
+                      <span class="text-slate-500"><%= order.sourceDetail %></span>
+                    <% } %>
+                  </div>
+                  <% if (order.isManual && order.createdBy) { %>
+                    <div class="mt-1 text-xs text-slate-500">
+                      Cr&eacute;&eacute;e par <span class="font-semibold text-slate-700"><%= order.createdBy %></span>
+                      <% if (order.createdAt) { %> le <%= order.createdAt %><% } %>
+                    </div>
+                  <% } %>
+                  <% if (order.isManual) { %>
+                    <div class="mt-2">
+                      <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                        <span class="material-symbols-outlined" style="font-size:12px">edit_note</span>Commande manuelle
+                      </span>
+                    </div>
+                  <% } %>
+                  <% if (order.quoteReference) { %>
+                    <div class="mt-2 flex items-center gap-1.5 text-sm text-slate-600">
+                      <span class="material-symbols-outlined text-base text-indigo-500">description</span>
+                      <span>Cr&eacute;&eacute;e depuis le devis <span class="font-semibold text-indigo-700"><%= order.quoteReference %></span></span>
+                    </div>
+                  <% } %>
+                </div>
+
+                <% if (order.noteInternal) { %>
+                  <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                    <div class="text-[10px] font-semibold uppercase tracking-widest text-amber-600">Note interne</div>
+                    <div class="mt-1 text-sm text-amber-900 whitespace-pre-line"><%= order.noteInternal %></div>
+                  </div>
+                <% } %>
+
+                <% if (order.noteClient) { %>
+                  <div class="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Note client</div>
+                    <div class="mt-1 text-sm text-slate-700 whitespace-pre-line"><%= order.noteClient %></div>
+                  </div>
+                <% } %>
+
+                <% if (order.vehicle && (order.vehicle.plate || order.vehicle.vin)) { %>
+                  <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Véhicule</div>
+                    <% if (order.vehicle.plate) { %>
+                      <div class="mt-2 text-sm text-slate-500">Plaque : <span class="font-semibold text-slate-900"><%= order.vehicle.plate %></span></div>
+                    <% } %>
+                    <% if (order.vehicle.vin) { %>
+                      <div class="mt-1 text-sm text-slate-500">VIN : <span class="font-semibold text-slate-900"><%= order.vehicle.vin %></span></div>
+                    <% } %>
+                    <% if (order.vehicle.consentAt) { %>
+                      <div class="mt-2 text-xs text-slate-500">Accord donné le : <span class="font-semibold text-slate-500"><%= order.vehicle.consentAt %></span></div>
+                    <% } %>
+                  </div>
+                <% } %>
+
+                <% if (order.legal && (order.legal.cgvAcceptedAt || order.legal.cgvUpdatedAt)) { %>
+                  <div class="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">CGV</div>
+                    <% if (order.legal.cgvAcceptedAt) { %>
+                      <div class="mt-2 text-sm text-slate-500">Acceptées le : <span class="font-semibold text-slate-900"><%= order.legal.cgvAcceptedAt %></span></div>
+                    <% } %>
+                    <% if (order.legal.cgvUpdatedAt) { %>
+                      <div class="mt-1 text-xs text-slate-500">Version (mise à jour) : <span class="font-semibold text-slate-500"><%= order.legal.cgvUpdatedAt %></span></div>
+                    <% } %>
+                  </div>
+                <% } %>
+              </div>
+
+              <div>
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Type de commande</div>
+                <div class="mt-2">
+                  <% if (order.orderType === 'exchange_cloning') { %>
+                    <span class="inline-flex items-center gap-1 text-sm font-bold px-3 py-1.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                      <span class="material-symbols-outlined" style="font-size:16px">science</span>Échange + Clonage
+                    </span>
+                  <% } else if (order.orderType === 'exchange') { %>
+                    <span class="inline-flex items-center gap-1 text-sm font-bold px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                      Échange standard
+                    </span>
+                  <% } else { %>
+                    <span class="inline-flex items-center gap-1 text-sm font-bold px-3 py-1.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
+                      Vente simple
+                    </span>
+                  <% } %>
+                </div>
+
+                <div class="mt-6">
+                  <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Statut actuel</div>
+                  <div class="mt-2">
+                    <span class="<%= order.statusBadge.className %> text-sm"><%= order.statusBadge.label %></span>
+                    <% if (order.cloningStatusBadge) { %>
+                      <span class="ml-2 inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold <%= order.cloningStatusBadge.className %>"><%= order.cloningStatusBadge.label %></span>
+                    <% } %>
+                  </div>
+                </div>
+
+                <!-- Changement manuel (avancé) -->
+                <div class="mt-6">
+                  <button type="button" id="toggle-manual-status-btn" class="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition cursor-pointer" style="position:relative;z-index:5;">
+                    <span class="material-symbols-outlined" style="font-size:14px">tune</span>
+                    Changement manuel de statut (avancé)
+                  </button>
+                  <div id="manual-status-section" class="hidden mt-3 p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
+                    <form action="/admin/commandes/<%= order.id %>/statut" class="flex flex-col sm:flex-row gap-3" method="POST" data-ajax="true">
+                      <select class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900" name="status">
+                        <% (statusOptions || []).forEach((s) => { %>
+                          <option value="<%= s.key %>" <%= s.key === order.statusKey ? 'selected' : '' %>><%= s.label %></option>
+                        <% }) %>
+                      </select>
+                      <button class="rounded-xl bg-slate-800 text-white px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-slate-700 transition" type="submit">Mettre à jour</button>
+                    </form>
+                    <form action="/admin/commandes/<%= order.id %>/type" class="flex flex-col sm:flex-row gap-3" method="POST" data-ajax="true" data-confirm="Changer le type de commande ? Cela modifiera le suivi (clonage, retour J+30, etc.)">
+                      <select class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900" name="orderType">
+                        <option value="standard" <%= order.orderType === 'standard' ? 'selected' : '' %>>Vente simple</option>
+                        <option value="exchange" <%= order.orderType === 'exchange' ? 'selected' : '' %>>Échange standard</option>
+                        <option value="exchange_cloning" <%= order.orderType === 'exchange_cloning' ? 'selected' : '' %>>Échange + Clonage</option>
+                      </select>
+                      <button class="rounded-xl bg-slate-800 text-white px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-slate-700 transition" type="submit">Mettre à jour</button>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══════ TIMELINE PARCOURS COMMANDE ═══════ -->
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden" id="timeline-section">
+            <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
+              <div class="flex items-center gap-2 font-semibold text-slate-900">
+                <span class="material-symbols-outlined text-base text-indigo-500">timeline</span>
+                Parcours de la commande
+                <% if (order.orderType === 'exchange_cloning') { %>
+                  <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200"><span class="material-symbols-outlined" style="font-size:11px">science</span>Clonage</span>
+                <% } else if (order.orderType === 'exchange') { %>
+                  <span class="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Échange</span>
+                <% } %>
+              </div>
+            </div>
+
+            <div class="p-6" id="timeline-container">
+              <style>
+                @keyframes timelinePulse {
+                  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
+                  50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
+                }
+                .timeline-node-current { animation: timelinePulse 2s ease-in-out infinite; }
+              </style>
+
+              <div class="relative" id="timeline-steps">
+                <% if (typeof timelineSteps !== 'undefined' && timelineSteps && timelineSteps.length) { %>
+                  <% timelineSteps.forEach(function(step, idx) { %>
+                    <% var isLast = idx === timelineSteps.length - 1; %>
+                    <div class="relative flex gap-4 <%= isLast ? '' : 'pb-8' %>">
+                      <!-- Vertical line -->
+                      <% if (!isLast) { %>
+                        <div class="absolute left-[15px] top-[30px] w-0.5 bottom-0 <%= step.state === 'done' ? 'bg-green-400' : (step.state === 'current' ? 'bg-blue-400' : 'bg-slate-200') %>"></div>
+                      <% } %>
+
+                      <!-- Node circle -->
+                      <div class="relative z-10 shrink-0 w-[30px] h-[30px] rounded-full flex items-center justify-center
+                        <%= step.state === 'done' ? 'bg-green-500 text-white' : '' %>
+                        <%= step.state === 'current' ? 'bg-blue-500 text-white timeline-node-current' : '' %>
+                        <%= step.state === 'future' ? 'bg-white border-2 border-slate-300 text-slate-400' : '' %>
+                        <%= step.state === 'error' ? 'bg-red-500 text-white' : '' %>
+                      ">
+                        <% if (step.state === 'done') { %>
+                          <span class="material-symbols-outlined" style="font-size:16px">check</span>
+                        <% } else if (step.state === 'error') { %>
+                          <span class="material-symbols-outlined" style="font-size:16px">warning</span>
+                        <% } else { %>
+                          <span class="material-symbols-outlined" style="font-size:16px"><%= step.icon || 'circle' %></span>
+                        <% } %>
+                      </div>
+
+                      <!-- Content -->
+                      <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <span class="text-sm <%= step.state === 'current' ? 'font-bold text-slate-900' : (step.state === 'future' ? 'text-slate-400' : (step.state === 'error' ? 'font-bold text-red-700' : 'font-semibold text-slate-700')) %>"><%= step.label %></span>
+                          <% if (step.date) { %>
+                            <span class="text-[11px] text-slate-400"><%= step.date %></span>
+                          <% } %>
+                        </div>
+
+                        <%/* Tracking info */ %>
+                        <% if (step.trackingNumber && step.state !== 'future') { %>
+                          <div class="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+                            <span class="material-symbols-outlined" style="font-size:13px">pin</span>
+                            <% if (step.trackingUrl) { %>
+                              <a href="<%= step.trackingUrl %>" target="_blank" class="font-mono text-indigo-600 hover:underline"><%= step.trackingNumber %></a>
+                            <% } else { %>
+                              <span class="font-mono"><%= step.trackingNumber %></span>
+                            <% } %>
+                            <% if (step.carrier) { %>
+                              <span class="text-slate-400">(<%= step.carrier %>)</span>
+                            <% } %>
+                          </div>
+                        <% } %>
+
+                        <%/* Failure note */ %>
+                        <% if (step.isFailed && step.failureNote) { %>
+                          <div class="mt-2 rounded-xl border border-red-200 bg-red-50 p-3">
+                            <div class="text-xs font-bold text-red-700 flex items-center gap-1">
+                              <span class="material-symbols-outlined" style="font-size:14px">error</span> Clonage échoué
+                            </div>
+                            <div class="mt-1 text-xs text-red-600"><%= step.failureNote %></div>
+                            <div class="mt-3 flex flex-wrap gap-2">
+                              <button type="button" class="timeline-action-btn rounded-lg bg-blue-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-blue-700 transition" data-action="retry_cloning">
+                                <span class="material-symbols-outlined mr-1" style="font-size:13px">refresh</span>Réessayer le clonage
+                              </button>
+                              <button type="button" class="timeline-action-btn rounded-lg bg-amber-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-amber-700 transition" data-action="skip_cloning">
+                                <span class="material-symbols-outlined mr-1" style="font-size:13px">fast_forward</span>Envoyer sans clonage (VIN)
+                              </button>
+                              <a href="/admin/commandes/<%= order.id %>" class="rounded-lg bg-red-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-red-700 transition inline-flex items-center" onclick="if(confirm('Annuler et rembourser cette commande ?')){document.querySelector('#manual-status-section').classList.remove('hidden');return false;}return false;">
+                                <span class="material-symbols-outlined mr-1" style="font-size:13px">block</span>Annuler / Rembourser
+                              </a>
+                            </div>
+                          </div>
+                        <% } %>
+
+                        <%/* Action buttons for current step */ %>
+                        <% if (step.state === 'current' && step.action && !step.isFailed) { %>
+                          <div class="mt-2">
+                            <% if (step.action === 'mark_label_sent') { %>
+                              <div class="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2">
+                                <div class="flex flex-wrap gap-2">
+                                  <select class="timeline-field-carrier rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900">
+                                    <option value="">Transporteur</option>
+                                    <option value="Chronopost">Chronopost</option>
+                                    <option value="Colissimo">Colissimo</option>
+                                    <option value="DHL">DHL</option>
+                                    <option value="UPS">UPS</option>
+                                    <option value="Mondial Relay">Mondial Relay</option>
+                                    <option value="Autre">Autre</option>
+                                  </select>
+                                  <input type="text" class="timeline-field-tracking rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 w-44" placeholder="N° de suivi (optionnel)" />
+                                </div>
+                                <button type="button" class="timeline-action-btn rounded-lg bg-blue-600 text-white px-4 py-2 text-xs font-semibold hover:bg-blue-700 transition flex items-center gap-1" data-action="mark_label_sent">
+                                  <span class="material-symbols-outlined" style="font-size:14px">send</span> Marquer étiquette envoyée
+                                </button>
+                              </div>
+                            <% } else if (step.action === 'mark_piece_received') { %>
+                              <button type="button" class="timeline-action-btn rounded-lg bg-cyan-600 text-white px-4 py-2 text-xs font-semibold hover:bg-cyan-700 transition flex items-center gap-1" data-action="mark_piece_received">
+                                <span class="material-symbols-outlined" style="font-size:14px">inventory_2</span> Marquer pièce reçue
+                              </button>
+                            <% } else if (step.action === 'start_cloning') { %>
+                              <div class="flex flex-wrap gap-2">
+                                <button type="button" class="timeline-action-btn rounded-lg bg-purple-600 text-white px-4 py-2 text-xs font-semibold hover:bg-purple-700 transition flex items-center gap-1" data-action="start_cloning">
+                                  <span class="material-symbols-outlined" style="font-size:14px">play_arrow</span> Démarrer le clonage
+                                </button>
+                              </div>
+                            <% } else if (step.action === 'mark_cloning_done') { %>
+                              <div class="flex flex-wrap gap-2">
+                                <button type="button" class="timeline-action-btn rounded-lg bg-green-600 text-white px-4 py-2 text-xs font-semibold hover:bg-green-700 transition flex items-center gap-1" data-action="mark_cloning_done">
+                                  <span class="material-symbols-outlined" style="font-size:14px">check_circle</span> Clonage terminé
+                                </button>
+                                <button type="button" class="timeline-fail-btn rounded-lg bg-red-600 text-white px-4 py-2 text-xs font-semibold hover:bg-red-700 transition flex items-center gap-1">
+                                  <span class="material-symbols-outlined" style="font-size:14px">warning</span> Clonage impossible
+                                </button>
+                              </div>
+                              <div class="hidden mt-2 rounded-xl border border-red-200 bg-red-50 p-3" id="cloning-fail-form">
+                                <textarea class="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-xs text-slate-900" rows="2" placeholder="Raison de l'échec (obligatoire)" id="cloning-fail-note"></textarea>
+                                <button type="button" class="timeline-action-btn mt-2 rounded-lg bg-red-600 text-white px-4 py-2 text-xs font-semibold hover:bg-red-700 transition" data-action="mark_cloning_failed">
+                                  Confirmer l'échec
+                                </button>
+                              </div>
+                            <% } else if (step.action === 'mark_shipped') { %>
+                              <button type="button" class="timeline-action-btn rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-semibold hover:bg-indigo-700 transition flex items-center gap-1" data-action="mark_shipped">
+                                <span class="material-symbols-outlined" style="font-size:14px">local_shipping</span> Marquer comme expédiée
+                              </button>
+                            <% } %>
+                          </div>
+
+                          <%/* Cloning fail button next to start_cloning */ %>
+                          <% if (step.action === 'start_cloning' && step.failAction) { %>
+                            <div class="mt-2 flex flex-wrap gap-2">
+                              <button type="button" class="timeline-fail-btn rounded-lg bg-red-100 text-red-700 px-3 py-1.5 text-xs font-semibold hover:bg-red-200 transition flex items-center gap-1 border border-red-200">
+                                <span class="material-symbols-outlined" style="font-size:13px">warning</span> Clonage impossible
+                              </button>
+                            </div>
+                            <div class="hidden mt-2 rounded-xl border border-red-200 bg-red-50 p-3" id="cloning-fail-form">
+                              <textarea class="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-xs text-slate-900" rows="2" placeholder="Raison de l'échec (obligatoire)" id="cloning-fail-note"></textarea>
+                              <button type="button" class="timeline-action-btn mt-2 rounded-lg bg-red-600 text-white px-4 py-2 text-xs font-semibold hover:bg-red-700 transition" data-action="mark_cloning_failed">
+                                Confirmer l'échec
+                              </button>
+                            </div>
+                          <% } %>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% }); %>
+                <% } %>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white rounded-2xl border border-slate-200 p-6">
+              <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                <span class="material-symbols-outlined text-base text-primary">local_shipping</span>
+                Livraison
+              </div>
+              <% if (order.shippingAddress) { %>
+                <div class="mt-4">
+                  <% if (order.shippingAddress.fullName) { %><div class="text-sm font-semibold text-slate-900"><%= order.shippingAddress.fullName %></div><% } %>
+                  <div class="mt-2 text-sm text-slate-500"><%= order.shippingAddress.line1 %></div>
+                  <% if (order.shippingAddress.line2) { %><div class="text-sm text-slate-500"><%= order.shippingAddress.line2 %></div><% } %>
+                  <div class="text-sm text-slate-500"><%= order.shippingAddress.postalCode %> <%= order.shippingAddress.city %></div>
+                  <div class="text-sm text-slate-500"><%= order.shippingAddress.country %></div>
+                  <% if (order.shippingAddress.phone) { %><div class="mt-1 text-xs text-slate-500">Téléphone : <%= order.shippingAddress.phone %></div><% } %>
+                </div>
+              <% } else { %>
+                <div class="mt-4 text-sm text-slate-500">Non renseignée</div>
+              <% } %>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-slate-200 p-6">
+              <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                <span class="material-symbols-outlined text-base text-primary">receipt_long</span>
+                Facturation
+              </div>
+              <% if (order.billingAddress) { %>
+                <div class="mt-4">
+                  <% if (order.billingAddress.fullName) { %><div class="text-sm font-semibold text-slate-900"><%= order.billingAddress.fullName %></div><% } %>
+                  <div class="mt-2 text-sm text-slate-500"><%= order.billingAddress.line1 %></div>
+                  <% if (order.billingAddress.line2) { %><div class="text-sm text-slate-500"><%= order.billingAddress.line2 %></div><% } %>
+                  <div class="text-sm text-slate-500"><%= order.billingAddress.postalCode %> <%= order.billingAddress.city %></div>
+                  <div class="text-sm text-slate-500"><%= order.billingAddress.country %></div>
+                  <% if (order.billingAddress.phone) { %><div class="mt-1 text-xs text-slate-500">Téléphone : <%= order.billingAddress.phone %></div><% } %>
+                </div>
+              <% } else { %>
+                <div class="mt-4 text-sm text-slate-500">Non renseignée</div>
+              <% } %>
+            </div>
+          </div>
+
+          <!-- ═══════ SECTION DOCUMENTS ═══════ -->
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
+              <div class="flex items-center gap-2 font-semibold text-slate-900">
+                <span class="material-symbols-outlined text-base text-slate-500">attach_file</span>
+                Documents
+                <span class="text-xs font-normal text-slate-500">(<%= order.allDocuments ? order.allDocuments.length : 0 %> fichier<%= (order.allDocuments && order.allDocuments.length > 1) ? 's' : '' %>)</span>
+              </div>
+              <button type="button" id="toggleDocUploadBtn" class="btn btn-ghost text-xs">
+                <span class="material-symbols-outlined text-sm mr-1">add</span>Ajouter
+              </button>
+            </div>
+
+            <% if (order.allDocuments && order.allDocuments.length > 0) { %>
+              <div class="divide-y divide-slate-100">
+                <% order.allDocuments.forEach((doc) => { %>
+                  <%
+                    var docTypeBadge = { label: 'Autre', className: 'bg-slate-100 text-slate-600' };
+                    if (doc.source === 'shipment') {
+                      if (doc.label === 'Envoi' || doc.label === 'Envoi partiel') docTypeBadge = { label: doc.label, className: 'bg-blue-50 text-blue-700 border border-blue-200' };
+                      else if (doc.label === 'Retour' || doc.label === 'Renvoi SAV') docTypeBadge = { label: doc.label, className: 'bg-orange-50 text-orange-700 border border-orange-200' };
+                      else if (doc.label === 'Récupération clonage') docTypeBadge = { label: 'Récup. clonage', className: 'bg-purple-50 text-purple-700 border border-purple-200' };
+                      else docTypeBadge = { label: doc.label || 'Autre', className: 'bg-slate-100 text-slate-600' };
+                    } else {
+                      var directTypeMap = {
+                        etiquette_envoi: { label: 'Étiquette envoi', className: 'bg-blue-50 text-blue-700 border border-blue-200' },
+                        bon_retour: { label: 'Bon de retour', className: 'bg-orange-50 text-orange-700 border border-orange-200' },
+                        recuperation_clonage: { label: 'Récup. clonage', className: 'bg-purple-50 text-purple-700 border border-purple-200' },
+                        facture: { label: 'Facture', className: 'bg-green-50 text-green-700 border border-green-200' },
+                        bon_commande: { label: 'Bon de commande', className: 'bg-cyan-50 text-cyan-700 border border-cyan-200' },
+                        autre: { label: 'Autre', className: 'bg-slate-100 text-slate-600' },
+                      };
+                      docTypeBadge = directTypeMap[doc.docType] || directTypeMap.autre;
+                    }
+                  %>
+                  <div class="px-6 py-3 flex items-center gap-3">
+                    <span class="material-symbols-outlined text-lg text-red-500 shrink-0">picture_as_pdf</span>
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-sm font-semibold text-slate-900 truncate max-w-[180px]"><%= doc.originalName %></span>
+                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold <%= docTypeBadge.className %>"><%= docTypeBadge.label %></span>
+                        <% if (doc.stamped) { %>
+                          <span class="inline-flex items-center gap-0.5 rounded-full bg-green-50 border border-green-200 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                            <span class="material-symbols-outlined text-[10px]">verified</span>N° commande
+                          </span>
+                        <% } %>
+                      </div>
+                      <div class="flex items-center gap-3 mt-0.5 text-[11px] text-slate-400">
+                        <% if (doc.trackingNumber) { %>
+                          <span>Suivi : <span class="font-mono"><%= doc.trackingNumber %></span></span>
+                        <% } %>
+                        <% if (doc.note) { %>
+                          <span><%= doc.note %></span>
+                        <% } %>
+                        <span><%= doc.uploadedAt %></span>
+                        <% if (doc.uploadedBy) { %>
+                          <span>par <%= doc.uploadedBy %></span>
+                        <% } %>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <a href="<%= doc.viewUrl %>" target="_blank" class="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-100 transition" title="Voir">
+                        <span class="material-symbols-outlined text-sm text-slate-500">visibility</span>
+                      </a>
+                      <a href="<%= doc.downloadUrl %>" class="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-100 transition" title="Télécharger">
+                        <span class="material-symbols-outlined text-sm text-slate-500">download</span>
+                      </a>
+                      <a href="<%= doc.viewUrl %>" target="_blank" onclick="window.open(this.href).print(); return false;" class="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-100 transition" title="Imprimer">
+                        <span class="material-symbols-outlined text-sm text-slate-500">print</span>
+                      </a>
+                      <% if (doc.source === 'direct' && doc.deleteUrl) { %>
+                        <form action="<%= doc.deleteUrl %>" method="POST" data-ajax="true" data-confirm="Supprimer ce document ?">
+                          <button type="submit" class="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-50 transition" title="Supprimer">
+                            <span class="material-symbols-outlined text-sm text-red-400">delete</span>
+                          </button>
+                        </form>
+                      <% } %>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <div class="px-6 py-6 text-sm text-slate-400 text-center">Aucun document attaché à cette commande.</div>
+            <% } %>
+
+            <!-- Upload direct form (hidden by default) -->
+            <div id="directDocUploadSection" class="hidden border-t border-slate-200 px-6 py-5 bg-slate-50/50">
+              <div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Ajouter un document</div>
+              <form action="/admin/commandes/<%= order.id %>/documents" method="POST" enctype="multipart/form-data" class="space-y-3">
+                <div>
+                  <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="directDocType">Type de document</label>
+                  <select class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900" id="directDocType" name="docType">
+                    <option value="etiquette_envoi">Étiquette envoi</option>
+                    <option value="bon_retour">Bon de retour</option>
+                    <option value="recuperation_clonage">Récupération clonage</option>
+                    <option value="facture">Facture</option>
+                    <option value="bon_commande">Bon de commande</option>
+                    <option value="autre" selected>Autre</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400">Fichier PDF</label>
+                  <div id="directDocDropZone" class="mt-1 relative rounded-xl border-2 border-dashed border-slate-300 bg-white p-3 text-center cursor-pointer hover:border-slate-400 transition">
+                    <input type="file" name="document" id="directDocInput" accept="application/pdf,.pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <div id="directDocPlaceholder" class="flex items-center justify-center gap-2">
+                      <span class="material-symbols-outlined text-lg text-slate-400">upload_file</span>
+                      <span class="text-xs text-slate-500 font-semibold">Glissez un PDF ou cliquez</span>
+                      <span class="text-[10px] text-slate-400">(max 10 Mo)</span>
+                    </div>
+                    <div id="directDocPreview" class="hidden items-center gap-2">
+                      <span class="material-symbols-outlined text-base text-red-500">picture_as_pdf</span>
+                      <span id="directDocFileName" class="text-xs font-semibold text-slate-700 truncate flex-1"></span>
+                      <button type="button" id="directDocRemove" class="text-xs text-red-500 hover:text-red-700 font-semibold">Retirer</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="stampDocument" value="on" checked class="accent-slate-800 w-4 h-4" />
+                    <span class="text-xs font-semibold text-slate-600">Ajouter le numéro de commande sur le document</span>
+                  </label>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="directDocNote">Note (optionnel)</label>
+                  <input class="mt-1 w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold" id="directDocNote" name="note" placeholder="Ex: bordereau Colissimo" type="text" />
+                </div>
+
+                <button class="w-full rounded-xl bg-slate-800 text-white px-5 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-slate-700 transition" type="submit">
+                  Uploader
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <script>
+            (function() {
+              var toggleBtn = document.getElementById('toggleDocUploadBtn');
+              var section = document.getElementById('directDocUploadSection');
+              if (toggleBtn && section) {
+                toggleBtn.addEventListener('click', function() {
+                  section.classList.toggle('hidden');
+                });
+              }
+
+              // Direct upload drag & drop
+              var dropZone = document.getElementById('directDocDropZone');
+              var input = document.getElementById('directDocInput');
+              var placeholder = document.getElementById('directDocPlaceholder');
+              var preview = document.getElementById('directDocPreview');
+              var fileName = document.getElementById('directDocFileName');
+              var removeBtn = document.getElementById('directDocRemove');
+              if (!dropZone || !input) return;
+
+              function showFile(file) {
+                if (!file) return;
+                fileName.textContent = file.name;
+                placeholder.classList.add('hidden');
+                preview.classList.remove('hidden');
+                preview.classList.add('flex');
+              }
+              function clearFile() {
+                input.value = '';
+                placeholder.classList.remove('hidden');
+                preview.classList.add('hidden');
+                preview.classList.remove('flex');
+              }
+
+              input.addEventListener('change', function() {
+                if (this.files && this.files[0]) showFile(this.files[0]);
+                else clearFile();
+              });
+              dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                dropZone.classList.add('border-slate-500', 'bg-slate-100');
+              });
+              dropZone.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                dropZone.classList.remove('border-slate-500', 'bg-slate-100');
+              });
+              dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                dropZone.classList.remove('border-slate-500', 'bg-slate-100');
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                  var file = e.dataTransfer.files[0];
+                  if (file.type === 'application/pdf') {
+                    var dt = new DataTransfer();
+                    dt.items.add(file);
+                    input.files = dt.files;
+                    showFile(file);
+                  }
+                }
+              });
+              if (removeBtn) {
+                removeBtn.addEventListener('click', function(e) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  clearFile();
+                });
+              }
+            })();
+          </script>
+
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
+              <div class="font-semibold text-slate-900">Articles (<%= order.items ? order.items.length : 0 %>)</div>
+            </div>
+
+            <% if (order.items && order.items.length) { %>
+              <div class="p-6 space-y-4">
+                <% order.items.forEach((it) => { %>
+                  <div class="rounded-2xl border border-slate-200 bg-white p-4 flex items-center gap-4">
+                    <div class="w-16 h-16 rounded-2xl bg-slate-50 overflow-hidden flex items-center justify-center flex-shrink-0">
+                      <% if (it.imageUrl) { %>
+                        <img alt="<%= it.name %>" class="w-full h-full object-cover" src="<%= it.imageUrl %>" />
+                      <% } else { %>
+                        <span class="material-symbols-outlined text-slate-400">inventory_2</span>
+                      <% } %>
+                    </div>
+
+                    <div class="flex-1 min-w-0">
+                      <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                          <div class="font-semibold text-slate-900 truncate"><%= it.name %></div>
+                          <% if (it.sku) { %>
+                            <div class="mt-1 text-xs text-slate-500">Réf : <%= it.sku %></div>
+                          <% } %>
+                          <% if (it.optionsSummary) { %>
+                            <div class="mt-1 text-xs text-slate-500"><%= it.optionsSummary %></div>
+                          <% } %>
+                          <div class="mt-2 flex items-center gap-2">
+                            <% if (it.inStock === true) { %>
+                              <span class="badge badge-success">En stock</span>
+                            <% } else if (it.inStock === false) { %>
+                              <span class="badge badge-warning">Stock limité</span>
+                            <% } %>
+                            <span class="text-xs text-slate-500">Quantité : <span class="font-semibold text-slate-500"><%= it.quantity %></span></span>
+                          </div>
+                        </div>
+
+                        <div class="text-right flex-shrink-0">
+                          <div class="font-semibold text-slate-900"><%= it.lineTotal %></div>
+                          <div class="mt-1 text-xs text-slate-500">PU : <%= it.unitPrice %></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <div class="p-6 text-slate-500">Aucun article.</div>
+            <% } %>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
+              <div class="font-semibold text-slate-900">Historique des statuts</div>
+            </div>
+
+            <% if (order.statusHistory && order.statusHistory.length) { %>
+              <div class="p-6 space-y-4">
+                <% order.statusHistory.forEach((h) => { %>
+                  <div class="flex items-start gap-4">
+                    <div class="mt-1 w-2.5 h-2.5 rounded-full bg-slate-300"></div>
+                    <div class="flex-1">
+                      <div class="flex flex-wrap items-center gap-3">
+                        <span class="<%= h.statusBadge.className %>"><%= h.statusBadge.label %></span>
+                        <div class="text-sm font-semibold text-slate-500"><%= h.changedAt %></div>
+                      </div>
+                      <div class="mt-1 text-xs text-slate-500">Par <span class="font-semibold text-slate-500"><%= h.changedBy %></span></div>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <div class="p-6 text-slate-500">Aucun historique.</div>
+            <% } %>
+          </div>
+        </section>
+
+        <aside class="xl:col-span-4 space-y-6">
+          <div class="bg-white rounded-2xl border border-slate-200 p-6">
+            <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-400">
+              <span class="material-symbols-outlined text-base text-primary">package_2</span>
+              Suivis d’expédition
+            </div>
+
+            <% if (order.shipments && order.shipments.length) { %>
+              <div class="mt-4 space-y-3">
+                <% order.shipments.forEach((s) => { %>
+                  <div class="rounded-xl border border-slate-200 p-4">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0">
+                        <div class="font-semibold text-slate-900 truncate"><%= s.label || 'Expédition' %></div>
+                        <div class="mt-1 text-sm text-slate-500 break-words">
+                          <span class="font-semibold">Suivi :</span>
+                          <span class="font-mono"><%= s.trackingNumber %></span>
+                        </div>
+                        <% if (s.carrier) { %>
+                          <div class="mt-1 text-xs text-slate-500">Transporteur : <span class="font-semibold text-slate-500"><%= s.carrier %></span></div>
+                        <% } %>
+                        <div class="mt-1 text-xs text-slate-500">Ajouté le <span class="font-semibold text-slate-500"><%= s.createdAt %></span><% if (s.createdBy) { %> par <span class="font-semibold text-slate-500"><%= s.createdBy %></span><% } %></div>
+                        <% if (s.note) { %>
+                          <div class="mt-2 text-xs text-slate-500"><%= s.note %></div>
+                        <% } %>
+                        <% if (s.document && s.document.storedPath) { %>
+                          <div class="mt-3 flex items-center gap-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                            <span class="material-symbols-outlined text-base text-red-500">picture_as_pdf</span>
+                            <span class="text-xs font-semibold text-slate-700 truncate flex-1"><%= s.document.originalName || 'document.pdf' %></span>
+                            <% if (s.document.stamped) { %>
+                              <span class="inline-flex items-center gap-0.5 rounded-full bg-green-50 border border-green-200 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                                <span class="material-symbols-outlined text-[10px]">verified</span>Tamponné
+                              </span>
+                            <% } %>
+                            <a href="/admin/commandes/<%= order.id %>/suivi/<%= s.id %>/document" target="_blank" class="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-slate-200 transition" title="Voir">
+                              <span class="material-symbols-outlined text-sm text-slate-600">visibility</span>
+                            </a>
+                            <a href="/admin/commandes/<%= order.id %>/suivi/<%= s.id %>/document?action=download" class="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-slate-200 transition" title="Télécharger">
+                              <span class="material-symbols-outlined text-sm text-slate-600">download</span>
+                            </a>
+                            <a href="/admin/commandes/<%= order.id %>/suivi/<%= s.id %>/document" target="_blank" onclick="window.open(this.href).print(); return false;" class="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-slate-200 transition" title="Imprimer">
+                              <span class="material-symbols-outlined text-sm text-slate-600">print</span>
+                            </a>
+                          </div>
+                        <% } %>
+                      </div>
+
+                      <form action="/admin/commandes/<%= order.id %>/suivi/<%= s.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer ce suivi ?">
+                        <button class="btn btn-secondary" type="submit">
+                          Supprimer
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <div class="mt-4 text-sm text-slate-500">Aucun suivi pour le moment.</div>
+            <% } %>
+
+            <div class="mt-6 pt-6 border-t border-slate-200">
+              <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Ajouter un suivi</div>
+
+              <form action="/admin/commandes/<%= order.id %>/suivi" class="mt-4 space-y-3" method="POST" enctype="multipart/form-data">
+                <div>
+                  <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="shipmentLabel">Type</label>
+                  <select class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" id="shipmentLabel" name="label">
+                    <option value="Envoi">Envoi</option>
+                    <option value="Envoi partiel">Envoi partiel</option>
+                    <option value="Retour">Retour</option>
+                    <option value="Renvoi SAV">Renvoi SAV</option>
+                    <option value="Récupération clonage">Récupération clonage</option>
+                    <option value="Autre">Autre</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="trackingNumber">Numéro de suivi</label>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="trackingNumber" name="trackingNumber" placeholder="Ex: 6A1234567890" type="text" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="carrier">Transporteur (optionnel)</label>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="carrier" name="carrier" placeholder="Ex: Colissimo, DHL…" type="text" />
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="shipmentNote">Note (optionnel)</label>
+                  <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="shipmentNote" name="note" placeholder="Ex: 1ère partie expédiée, reste à envoyer" rows="3"></textarea>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400">Document (optionnel, PDF)</label>
+                  <div id="shipDocDropZone" class="mt-2 relative rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 p-4 text-center cursor-pointer hover:border-slate-400 hover:bg-slate-100 transition">
+                    <input type="file" name="document" id="shipDocInput" accept="application/pdf,.pdf" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    <div id="shipDocPlaceholder" class="flex flex-col items-center gap-1">
+                      <span class="material-symbols-outlined text-2xl text-slate-400">upload_file</span>
+                      <div class="text-xs text-slate-500 font-semibold">Glissez un PDF ici ou cliquez</div>
+                      <div class="text-[10px] text-slate-400">Max 10 Mo</div>
+                    </div>
+                    <div id="shipDocPreview" class="hidden flex items-center gap-2">
+                      <span class="material-symbols-outlined text-base text-red-500">picture_as_pdf</span>
+                      <span id="shipDocFileName" class="text-xs font-semibold text-slate-700 truncate flex-1"></span>
+                      <button type="button" id="shipDocRemove" class="text-xs text-red-500 hover:text-red-700 font-semibold">Retirer</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="stampDocument" value="on" checked class="accent-slate-800 w-4 h-4" id="shipDocStamp" />
+                    <span class="text-xs font-semibold text-slate-600">Ajouter le numéro de commande sur le document</span>
+                  </label>
+                </div>
+
+                <button class="w-full rounded-xl bg-slate-800 text-white px-5 py-3 text-xs font-semibold uppercase tracking-wider hover:bg-slate-700 transition" type="submit">
+                  Ajouter le suivi
+                </button>
+              </form>
+
+              <script>
+                (function() {
+                  var dropZone = document.getElementById('shipDocDropZone');
+                  var input = document.getElementById('shipDocInput');
+                  var placeholder = document.getElementById('shipDocPlaceholder');
+                  var preview = document.getElementById('shipDocPreview');
+                  var fileName = document.getElementById('shipDocFileName');
+                  var removeBtn = document.getElementById('shipDocRemove');
+                  var stampCheckbox = document.getElementById('shipDocStamp');
+
+                  if (!dropZone || !input) return;
+
+                  function showFile(file) {
+                    if (!file) return;
+                    fileName.textContent = file.name;
+                    placeholder.classList.add('hidden');
+                    preview.classList.remove('hidden');
+                    preview.classList.add('flex');
+                    stampCheckbox.closest('div').style.display = '';
+                  }
+
+                  function clearFile() {
+                    input.value = '';
+                    placeholder.classList.remove('hidden');
+                    preview.classList.add('hidden');
+                    preview.classList.remove('flex');
+                  }
+
+                  input.addEventListener('change', function() {
+                    if (this.files && this.files[0]) showFile(this.files[0]);
+                    else clearFile();
+                  });
+
+                  dropZone.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    dropZone.classList.add('border-slate-500', 'bg-slate-100');
+                  });
+                  dropZone.addEventListener('dragleave', function(e) {
+                    e.preventDefault();
+                    dropZone.classList.remove('border-slate-500', 'bg-slate-100');
+                  });
+                  dropZone.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    dropZone.classList.remove('border-slate-500', 'bg-slate-100');
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      var file = e.dataTransfer.files[0];
+                      if (file.type === 'application/pdf') {
+                        var dt = new DataTransfer();
+                        dt.items.add(file);
+                        input.files = dt.files;
+                        showFile(file);
+                      }
+                    }
+                  });
+
+                  removeBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    clearFile();
+                  });
+                })();
+              </script>
+            </div>
+          </div>
+
+          <% if (order && order.consigne && order.consigne.hasConsigne) { %>
+            <div class="bg-white rounded-2xl border border-slate-200 p-6">
+              <div class="flex items-center justify-between gap-4">
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Consigne (ancienne pièce)</div>
+                <% if (order.consigne.hasPending) { %>
+                  <form action="/admin/commandes/<%= order.id %>/consigne/recu" method="POST" data-ajax="true">
+                    <button class="btn btn-primary" type="submit">
+                      Marquer reçu
+                    </button>
+                  </form>
+                <% } %>
+              </div>
+
+              <div class="mt-4 space-y-3">
+                <% (order.consigne.lines || []).forEach((l) => { %>
+                  <div class="rounded-xl border border-slate-200 p-4">
+                    <div class="flex items-start justify-between gap-4">
+                      <div class="min-w-0">
+                        <div class="font-semibold text-slate-900 truncate"><%= l.name %></div>
+                        <% if (l.sku) { %><div class="mt-1 text-xs text-slate-500">Réf : <span class="font-semibold text-slate-500"><%= l.sku %></span></div><% } %>
+                        <div class="mt-2 text-xs text-slate-500">
+                          Quantité : <span class="font-semibold text-slate-500"><%= l.quantity %></span>
+                          • Montant : <span class="font-semibold text-slate-500"><%= l.amount %></span>
+                          • Total : <span class="font-semibold text-slate-500"><%= l.total %></span>
+                        </div>
+                        <% if (l.isReceived) { %>
+                          <div class="mt-2 text-xs font-semibold uppercase tracking-widest text-green-700">Reçu</div>
+                        <% } else if (l.isOverdue) { %>
+                          <div class="mt-2 text-xs font-semibold uppercase tracking-widest text-red-700">En retard (garantie annulée)</div>
+                        <% } else if (l.daysLeft !== null) { %>
+                          <div class="mt-2 text-xs font-semibold uppercase tracking-widest text-amber-800">Jours restants : <%= l.daysLeft %></div>
+                        <% } %>
+                      </div>
+                      <div class="text-right">
+                        <% if (l.dueAt) { %><div class="text-xs text-slate-500">Échéance</div><div class="text-xs font-semibold text-slate-900"><%= l.dueAt %></div><% } %>
+                      </div>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+
+              <% if (order.consigne.hasOverdue) { %>
+                <div class="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+                  <div class="font-semibold">Consigne due : <%= order.consigne.totalDue %></div>
+                  <div class="mt-1 text-xs">La garantie est annulée tant que l’ancienne pièce n’est pas reçue.</div>
+                </div>
+              <% } %>
+            </div>
+          <% } %>
+
+          <div class="bg-white rounded-2xl border border-slate-200 p-6">
+            <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Récapitulatif</div>
+
+            <div class="mt-4 space-y-3 text-sm">
+              <div class="flex items-center justify-between">
+                <div class="text-slate-500">Sous-total articles</div>
+                <div class="font-semibold text-slate-900"><%= order.itemsSubtotal %></div>
+              </div>
+
+              <% if (typeof order.clientDiscountCents !== 'undefined' && order.clientDiscountCents > 0) { %>
+                <div class="flex items-center justify-between">
+                  <div class="text-slate-500">Remise compte (<%= typeof order.clientDiscountPercent !== 'undefined' ? String(order.clientDiscountPercent).replace('.', ',') : '' %>%)</div>
+                  <div class="font-semibold text-slate-900">- <%= (order.clientDiscountCents / 100).toFixed(2).replace('.', ',') %> €</div>
+                </div>
+              <% } %>
+
+              <% if (typeof order.promoDiscountCents !== 'undefined' && order.promoDiscountCents > 0) { %>
+                <div class="flex items-center justify-between">
+                  <div class="text-slate-500">Code promo <%= order.promoCode ? '(' + order.promoCode + ')' : '' %></div>
+                  <div class="font-semibold text-slate-900">- <%= (order.promoDiscountCents / 100).toFixed(2).replace('.', ',') %> €</div>
+                </div>
+              <% } %>
+
+              <% if ((typeof order.clientDiscountCents !== 'undefined' && order.clientDiscountCents > 0) || (typeof order.promoDiscountCents !== 'undefined' && order.promoDiscountCents > 0)) { %>
+                <div class="flex items-center justify-between">
+                  <div class="text-slate-500">Sous-total après remise</div>
+                  <div class="font-semibold text-slate-900"><%= typeof order.itemsTotalAfterDiscount !== 'undefined' ? order.itemsTotalAfterDiscount : order.itemsSubtotal %></div>
+                </div>
+              <% } %>
+
+              <div class="flex items-center justify-between">
+                <div class="text-slate-500">Livraison</div>
+                <div class="font-semibold <%= order.shippingCostCents === 0 ? 'text-green-600' : 'text-slate-900' %>">
+                  <%= order.shippingCostCents === 0 ? 'OFFERT' : order.shippingCost %>
+                </div>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="text-slate-500">HT</div>
+                <div class="font-semibold text-slate-900"><%= order.ht %></div>
+              </div>
+              <div class="flex items-center justify-between">
+                <div class="text-slate-500">TVA</div>
+                <div class="font-semibold text-slate-900"><%= order.vat %></div>
+              </div>
+            </div>
+
+            <div class="mt-6 pt-6 border-t border-slate-200 flex items-center justify-between">
+              <div class="font-semibold text-slate-900">Total TTC</div>
+              <div class="text-primary font-semibold text-2xl"><%= order.total %></div>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 p-6">
+            <div class="flex items-center justify-between gap-4">
+              <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Emails</div>
+              <div class="relative" id="send-email-dropdown">
+                <button type="button" class="btn btn-secondary text-xs" id="send-email-btn">
+                  <span class="material-symbols-outlined mr-1 text-base">send</span>
+                  Envoyer
+                  <span class="material-symbols-outlined ml-1 text-sm">expand_more</span>
+                </button>
+                <div id="send-email-menu" class="hidden absolute right-0 top-full mt-2 w-72 bg-white rounded-xl border border-slate-200 shadow-xl z-50 overflow-hidden">
+                  <%
+                    var emailTypes = [
+                      { key: 'order_confirmation', label: 'Confirmation de commande', icon: 'receipt_long' },
+                      { key: 'shipment_tracking', label: "Suivi d'expedition", icon: 'local_shipping' },
+                      { key: 'delivery_confirmed', label: 'Livraison confirmee', icon: 'done_all' },
+                      { key: 'status_change', label: 'Statut : Validee', icon: 'check_circle' },
+                      { key: 'consigne_start', label: 'Consigne : retour piece', icon: 'assignment_return' },
+                      { key: 'consigne_received', label: 'Consigne recue', icon: 'inventory' },
+                    ];
+                  %>
+                  <% emailTypes.forEach(function(et) { %>
+                    <div class="flex items-center gap-1 border-b border-slate-100 last:border-0">
+                      <button type="button" class="email-preview-btn flex-1 flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition text-left" data-type="<%= et.key %>" title="Apercu">
+                        <span class="material-symbols-outlined text-base text-slate-400"><%= et.icon %></span>
+                        <span class="flex-1 truncate"><%= et.label %></span>
+                        <span class="material-symbols-outlined text-base text-slate-300">visibility</span>
+                      </button>
+                      <form action="/admin/commandes/<%= order.id %>/email/resend" method="POST" class="flex-shrink-0 pr-2" onsubmit="return confirm('Envoyer cet email maintenant ?')">
+                        <input type="hidden" name="type" value="<%= et.key %>" />
+                        <button type="submit" class="w-8 h-8 rounded-lg hover:bg-primary/10 flex items-center justify-center transition" title="Envoyer">
+                          <span class="material-symbols-outlined text-base text-primary">send</span>
+                        </button>
+                      </form>
+                    </div>
+                  <% }) %>
+                </div>
+              </div>
+            </div>
+
+            <% if (order.emailsSent && order.emailsSent.length) { %>
+              <div class="mt-4 space-y-2">
+                <% order.emailsSent.forEach(function(e) { %>
+                  <div class="rounded-xl border border-slate-100 p-3 flex items-start gap-3">
+                    <div class="mt-0.5 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 <%= e.status === 'sent' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600' %>">
+                      <span class="material-symbols-outlined text-[14px]"><%= e.status === 'sent' ? 'check' : 'close' %></span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-sm font-semibold text-slate-900"><%= e.typeLabel || e.type %></div>
+                      <div class="text-xs text-slate-500"><%= e.sentAt %></div>
+                      <% if (e.recipientEmail) { %>
+                        <div class="text-xs text-slate-400"><%= e.recipientEmail %></div>
+                      <% } %>
+                      <% if (e.status === 'failed' && e.reason) { %>
+                        <div class="text-xs text-red-500 mt-0.5">Erreur : <%= e.reason %></div>
+                      <% } %>
+                    </div>
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                      <button type="button" class="email-preview-btn w-7 h-7 rounded-lg hover:bg-slate-100 flex items-center justify-center transition" data-type="<%= e.type %>" title="Apercu">
+                        <span class="material-symbols-outlined text-base text-slate-400">visibility</span>
+                      </button>
+                      <form action="/admin/commandes/<%= order.id %>/email/resend" method="POST" class="inline" onsubmit="return confirm('Renvoyer cet email ?')">
+                        <input type="hidden" name="type" value="<%= e.type %>" />
+                        <button type="submit" class="w-7 h-7 rounded-lg hover:bg-primary/10 flex items-center justify-center transition" title="Renvoyer">
+                          <span class="material-symbols-outlined text-base text-primary">replay</span>
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <div class="mt-4 text-sm text-slate-500">Aucun email envoy&eacute; pour cette commande.</div>
+            <% } %>
+
+            <% if (order.smsSent && order.smsSent.length) { %>
+              <div class="mt-6">
+                <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-2">
+                  <span class="material-symbols-outlined text-[13px] align-middle mr-1">sms</span>SMS envoy&eacute;s
+                </div>
+                <div class="space-y-2">
+                  <% order.smsSent.forEach(function(s) { %>
+                    <div class="rounded-xl border border-slate-100 p-3 flex items-start gap-3">
+                      <div class="mt-0.5 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 <%= s.status === 'sent' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600' %>">
+                        <span class="material-symbols-outlined text-[14px]"><%= s.status === 'sent' ? 'check' : 'close' %></span>
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        <div class="text-sm font-semibold text-slate-900"><%= s.typeLabel %></div>
+                        <div class="text-xs text-slate-500"><%= s.sentAt %></div>
+                        <% if (s.recipientPhone) { %>
+                          <div class="text-xs text-slate-400"><%= s.recipientPhone %></div>
+                        <% } %>
+                        <% if (s.status === 'failed' && s.reason) { %>
+                          <div class="text-xs text-red-500 mt-0.5">Erreur : <%= s.reason %></div>
+                        <% } %>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-slate-200 p-6" data-notes-widget data-entity-type="order" data-entity-id="<%= order ? order.id : '' %>"></div>
+
+          <% if (!dbConnected) { %>
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+              <div class="font-bold">Mode d&eacute;mo</div>
+              <div class="mt-1 text-sm">La base de donn&eacute;es est indisponible : impossible de modifier le statut.</div>
+            </div>
+          <% } %>
+        </aside>
+      </div>
+    <% } %>
+  </div>
+</main>
+
+<!-- Email preview modal -->
+<div id="email-preview-modal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/50" id="email-preview-overlay"></div>
+  <div class="absolute inset-4 lg:inset-8 bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between flex-shrink-0">
+      <div class="font-semibold text-slate-900" id="email-preview-title">Apercu email</div>
+      <button type="button" id="email-preview-close" class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="flex-1 overflow-hidden">
+      <iframe id="email-preview-iframe" class="w-full h-full border-0" sandbox="allow-same-origin"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Dropdown toggle
+  var dropBtn = document.getElementById('send-email-btn');
+  var dropMenu = document.getElementById('send-email-menu');
+  if (dropBtn && dropMenu) {
+    dropBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      dropMenu.classList.toggle('hidden');
+    });
+    document.addEventListener('click', function() {
+      dropMenu.classList.add('hidden');
+    });
+    dropMenu.addEventListener('click', function(e) {
+      e.stopPropagation();
+    });
+  }
+
+  // Email preview modal
+  var modal = document.getElementById('email-preview-modal');
+  var overlay = document.getElementById('email-preview-overlay');
+  var closeBtn = document.getElementById('email-preview-close');
+  var iframe = document.getElementById('email-preview-iframe');
+  var titleEl = document.getElementById('email-preview-title');
+
+  var typeLabels = {
+    order_confirmation: 'Confirmation de commande',
+    shipment_tracking: "Suivi d'expedition",
+    delivery_confirmed: 'Livraison confirmee',
+    status_change: 'Statut : Validee',
+    consigne_start: 'Consigne : retour piece',
+    consigne_received: 'Consigne recue'
+  };
+
+  var orderId = '<%= order ? order.id : "" %>';
+
+  document.querySelectorAll('.email-preview-btn').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var emailType = this.dataset.type;
+      if (!emailType || !orderId) return;
+
+      if (dropMenu) dropMenu.classList.add('hidden');
+
+      modal.classList.remove('hidden');
+      titleEl.textContent = 'Apercu : ' + (typeLabels[emailType] || emailType);
+      iframe.src = '';
+      iframe.src = '/admin/commandes/' + orderId + '/email/preview/' + emailType;
+    });
+  });
+
+  function closeModal() {
+    modal.classList.add('hidden');
+    iframe.src = '';
+  }
+  if (overlay) overlay.addEventListener('click', closeModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+  });
+});
+</script>
+
+<script>
+(function() {
+  // Print label button (single)
+  function openPrintPdf(url) {
+    var w = window.open(url, '_blank', 'width=800,height=600');
+    if (w) {
+      w.addEventListener('load', function() {
+        setTimeout(function() { w.print(); }, 500);
+      });
+    }
+  }
+
+  var singleBtn = document.getElementById('printLabelBtn');
+  if (singleBtn) {
+    singleBtn.addEventListener('click', function() {
+      var url = this.getAttribute('data-url');
+      if (url) openPrintPdf(url);
+    });
+  }
+
+  // Print label dropdown
+  var toggle = document.getElementById('printLabelToggle');
+  var menu = document.getElementById('printLabelMenu');
+  if (toggle && menu) {
+    toggle.addEventListener('click', function(e) {
+      e.stopPropagation();
+      menu.classList.toggle('hidden');
+    });
+    document.addEventListener('click', function() {
+      menu.classList.add('hidden');
+    });
+    menu.querySelectorAll('.print-label-item').forEach(function(item) {
+      item.addEventListener('click', function() {
+        var url = this.getAttribute('data-url');
+        if (url) openPrintPdf(url);
+        menu.classList.add('hidden');
+      });
+    });
+  }
+
+  // Ctrl+P override: print label PDF instead of page
+  var labelUrl = (singleBtn && singleBtn.getAttribute('data-url')) || '';
+  if (!labelUrl && menu) {
+    var first = menu.querySelector('.print-label-item');
+    if (first) labelUrl = first.getAttribute('data-url') || '';
+  }
+  if (labelUrl) {
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+        e.preventDefault();
+        openPrintPdf(labelUrl);
+      }
+    });
+  }
+})();
+</script>
+
+<% if (order) { %>
+<script>
+(function() {
+  var orderId = '<%= order.id %>';
+
+  // Toggle manual status section
+  var toggleBtn = document.getElementById('toggle-manual-status-btn');
+  var manualSection = document.getElementById('manual-status-section');
+  if (toggleBtn && manualSection) {
+    toggleBtn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      manualSection.classList.toggle('hidden');
+    });
+  }
+
+  var container = document.getElementById('timeline-container');
+  if (!container) return;
+
+  // Toggle cloning fail form
+  container.addEventListener('click', function(e) {
+    var failBtn = e.target.closest('.timeline-fail-btn');
+    if (failBtn) {
+      var form = document.getElementById('cloning-fail-form');
+      if (form) form.classList.toggle('hidden');
+      return;
+    }
+  });
+
+  // Handle timeline action buttons
+  container.addEventListener('click', function(e) {
+    var btn = e.target.closest('.timeline-action-btn');
+    if (!btn) return;
+
+    var action = btn.getAttribute('data-action');
+    if (!action) return;
+
+    var body = { action: action };
+
+    // Collect carrier / tracking if mark_label_sent
+    if (action === 'mark_label_sent') {
+      var carrierSel = container.querySelector('.timeline-field-carrier');
+      var trackingInp = container.querySelector('.timeline-field-tracking');
+      if (carrierSel) body.carrier = carrierSel.value;
+      if (trackingInp) body.trackingNumber = trackingInp.value;
+    }
+
+    // Collect failure note
+    if (action === 'mark_cloning_failed') {
+      var noteEl = document.getElementById('cloning-fail-note');
+      var noteVal = noteEl ? noteEl.value.trim() : '';
+      if (!noteVal) {
+        if (window.__toast) window.__toast('error', 'Veuillez indiquer la raison de l\'échec.');
+        if (noteEl) noteEl.focus();
+        return;
+      }
+      body.failureNote = noteVal;
+    }
+
+    btn.disabled = true;
+    var origHTML = btn.innerHTML;
+    btn.innerHTML = '<div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>';
+
+    fetch('/admin/api/commandes/' + orderId + '/advance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(body),
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.ok) {
+          if (window.__toast) window.__toast('success', 'Étape mise à jour');
+          refreshTimeline();
+        } else {
+          btn.disabled = false;
+          btn.innerHTML = origHTML;
+          if (window.__toast) window.__toast('error', data.error || 'Erreur');
+        }
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.innerHTML = origHTML;
+        if (window.__toast) window.__toast('error', 'Erreur réseau');
+      });
+  });
+
+  function refreshTimeline() {
+    fetch('/admin/api/commandes/' + orderId + '/timeline', {
+      headers: { 'Accept': 'application/json' },
+    })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.ok || !data.steps) return;
+        renderTimeline(data.steps);
+      })
+      .catch(function() {});
+  }
+
+  function renderTimeline(steps) {
+    var html = '';
+    steps.forEach(function(step, idx) {
+      var isLast = idx === steps.length - 1;
+      var stateClasses = {
+        done: 'bg-green-500 text-white',
+        current: 'bg-blue-500 text-white timeline-node-current',
+        future: 'bg-white border-2 border-slate-300 text-slate-400',
+        error: 'bg-red-500 text-white',
+      };
+      var lineClass = step.state === 'done' ? 'bg-green-400' : (step.state === 'current' ? 'bg-blue-400' : 'bg-slate-200');
+      var labelClass = step.state === 'current' ? 'font-bold text-slate-900' : (step.state === 'future' ? 'text-slate-400' : (step.state === 'error' ? 'font-bold text-red-700' : 'font-semibold text-slate-700'));
+      var nodeIcon = step.state === 'done' ? 'check' : (step.state === 'error' ? 'warning' : (step.icon || 'circle'));
+
+      html += '<div class="relative flex gap-4 ' + (isLast ? '' : 'pb-8') + '">';
+
+      // Line
+      if (!isLast) {
+        html += '<div class="absolute left-[15px] top-[30px] w-0.5 bottom-0 ' + lineClass + '"></div>';
+      }
+
+      // Node
+      html += '<div class="relative z-10 shrink-0 w-[30px] h-[30px] rounded-full flex items-center justify-center ' + (stateClasses[step.state] || stateClasses.future) + '">';
+      html += '<span class="material-symbols-outlined" style="font-size:16px">' + nodeIcon + '</span>';
+      html += '</div>';
+
+      // Content
+      html += '<div class="flex-1 min-w-0">';
+      html += '<div class="flex items-center gap-2 flex-wrap"><span class="text-sm ' + labelClass + '">' + escH(step.label) + '</span>';
+      if (step.date) html += '<span class="text-[11px] text-slate-400">' + escH(step.date) + '</span>';
+      html += '</div>';
+
+      // Tracking
+      if (step.trackingNumber && step.state !== 'future') {
+        html += '<div class="mt-1 flex items-center gap-1.5 text-xs text-slate-500"><span class="material-symbols-outlined" style="font-size:13px">pin</span>';
+        if (step.trackingUrl) {
+          html += '<a href="' + escH(step.trackingUrl) + '" target="_blank" class="font-mono text-indigo-600 hover:underline">' + escH(step.trackingNumber) + '</a>';
+        } else {
+          html += '<span class="font-mono">' + escH(step.trackingNumber) + '</span>';
+        }
+        if (step.carrier) html += '<span class="text-slate-400">(' + escH(step.carrier) + ')</span>';
+        html += '</div>';
+      }
+
+      // Failure note
+      if (step.isFailed && step.failureNote) {
+        html += '<div class="mt-2 rounded-xl border border-red-200 bg-red-50 p-3">';
+        html += '<div class="text-xs font-bold text-red-700 flex items-center gap-1"><span class="material-symbols-outlined" style="font-size:14px">error</span> Clonage échoué</div>';
+        html += '<div class="mt-1 text-xs text-red-600">' + escH(step.failureNote) + '</div>';
+        html += '<div class="mt-3 flex flex-wrap gap-2">';
+        html += '<button type="button" class="timeline-action-btn rounded-lg bg-blue-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-blue-700 transition" data-action="retry_cloning"><span class="material-symbols-outlined mr-1" style="font-size:13px">refresh</span>Réessayer</button>';
+        html += '<button type="button" class="timeline-action-btn rounded-lg bg-amber-600 text-white px-3 py-1.5 text-xs font-semibold hover:bg-amber-700 transition" data-action="skip_cloning"><span class="material-symbols-outlined mr-1" style="font-size:13px">fast_forward</span>Envoyer sans clonage</button>';
+        html += '</div></div>';
+      }
+
+      // Action buttons
+      if (step.state === 'current' && step.action && !step.isFailed) {
+        html += '<div class="mt-2">';
+        if (step.action === 'mark_label_sent') {
+          html += '<div class="rounded-xl border border-blue-200 bg-blue-50 p-3 space-y-2">';
+          html += '<div class="flex flex-wrap gap-2">';
+          html += '<select class="timeline-field-carrier rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900"><option value="">Transporteur</option><option value="Chronopost">Chronopost</option><option value="Colissimo">Colissimo</option><option value="DHL">DHL</option><option value="UPS">UPS</option><option value="Mondial Relay">Mondial Relay</option><option value="Autre">Autre</option></select>';
+          html += '<input type="text" class="timeline-field-tracking rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 w-44" placeholder="N\u00b0 de suivi (optionnel)" />';
+          html += '</div>';
+          html += '<button type="button" class="timeline-action-btn rounded-lg bg-blue-600 text-white px-4 py-2 text-xs font-semibold hover:bg-blue-700 transition flex items-center gap-1" data-action="mark_label_sent"><span class="material-symbols-outlined" style="font-size:14px">send</span> Marquer étiquette envoyée</button>';
+          html += '</div>';
+        } else if (step.action === 'mark_piece_received') {
+          html += '<button type="button" class="timeline-action-btn rounded-lg bg-cyan-600 text-white px-4 py-2 text-xs font-semibold hover:bg-cyan-700 transition flex items-center gap-1" data-action="mark_piece_received"><span class="material-symbols-outlined" style="font-size:14px">inventory_2</span> Marquer pièce reçue</button>';
+        } else if (step.action === 'start_cloning') {
+          html += '<div class="flex flex-wrap gap-2">';
+          html += '<button type="button" class="timeline-action-btn rounded-lg bg-purple-600 text-white px-4 py-2 text-xs font-semibold hover:bg-purple-700 transition flex items-center gap-1" data-action="start_cloning"><span class="material-symbols-outlined" style="font-size:14px">play_arrow</span> Démarrer le clonage</button>';
+          html += '<button type="button" class="timeline-fail-btn rounded-lg bg-red-100 text-red-700 px-3 py-1.5 text-xs font-semibold hover:bg-red-200 transition flex items-center gap-1 border border-red-200"><span class="material-symbols-outlined" style="font-size:13px">warning</span> Clonage impossible</button>';
+          html += '</div>';
+          html += '<div class="hidden mt-2 rounded-xl border border-red-200 bg-red-50 p-3" id="cloning-fail-form"><textarea class="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-xs text-slate-900" rows="2" placeholder="Raison de l\'échec (obligatoire)" id="cloning-fail-note"></textarea><button type="button" class="timeline-action-btn mt-2 rounded-lg bg-red-600 text-white px-4 py-2 text-xs font-semibold hover:bg-red-700 transition" data-action="mark_cloning_failed">Confirmer l\'échec</button></div>';
+        } else if (step.action === 'mark_cloning_done') {
+          html += '<div class="flex flex-wrap gap-2">';
+          html += '<button type="button" class="timeline-action-btn rounded-lg bg-green-600 text-white px-4 py-2 text-xs font-semibold hover:bg-green-700 transition flex items-center gap-1" data-action="mark_cloning_done"><span class="material-symbols-outlined" style="font-size:14px">check_circle</span> Clonage terminé</button>';
+          html += '<button type="button" class="timeline-fail-btn rounded-lg bg-red-100 text-red-700 px-3 py-1.5 text-xs font-semibold hover:bg-red-200 transition flex items-center gap-1 border border-red-200"><span class="material-symbols-outlined" style="font-size:13px">warning</span> Clonage impossible</button>';
+          html += '</div>';
+          html += '<div class="hidden mt-2 rounded-xl border border-red-200 bg-red-50 p-3" id="cloning-fail-form"><textarea class="w-full rounded-lg border border-red-200 bg-white px-3 py-2 text-xs text-slate-900" rows="2" placeholder="Raison de l\'échec (obligatoire)" id="cloning-fail-note"></textarea><button type="button" class="timeline-action-btn mt-2 rounded-lg bg-red-600 text-white px-4 py-2 text-xs font-semibold hover:bg-red-700 transition" data-action="mark_cloning_failed">Confirmer l\'échec</button></div>';
+        } else if (step.action === 'mark_shipped') {
+          html += '<button type="button" class="timeline-action-btn rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-semibold hover:bg-indigo-700 transition flex items-center gap-1" data-action="mark_shipped"><span class="material-symbols-outlined" style="font-size:14px">local_shipping</span> Marquer comme expédiée</button>';
+        }
+        html += '</div>';
+      }
+
+      html += '</div></div>';
+    });
+
+    var stepsEl = document.getElementById('timeline-steps');
+    if (stepsEl) stepsEl.innerHTML = html;
+  }
+
+  function escH(s) {
+    if (!s) return '';
+    var d = document.createElement('div');
+    d.appendChild(document.createTextNode(s));
+    return d.innerHTML;
+  }
+
+  // ─── Live "depuis X" counters on current timeline step ───
+  function timeAgo(dateStr) {
+    if (!dateStr) return '';
+    var diff = Date.now() - new Date(dateStr).getTime();
+    if (diff < 0) return '';
+    var mins = Math.floor(diff / 60000);
+    if (mins < 1) return "à l'instant";
+    if (mins < 60) return 'depuis ' + mins + ' min';
+    var hours = Math.floor(mins / 60);
+    if (hours < 24) return 'depuis ' + hours + 'h';
+    var days = Math.floor(hours / 24);
+    if (days === 1) return 'depuis 1 jour';
+    return 'depuis ' + days + ' jours';
+  }
+
+  var rawDatesJson = '<%- typeof timelineRawDates !== "undefined" ? timelineRawDates : "{}" %>';
+  try {
+    var rawDates = JSON.parse(rawDatesJson);
+    // Find the current step node and add a "depuis X" badge
+    var currentNodes = document.querySelectorAll('#timeline-steps .timeline-node-current');
+    if (currentNodes.length === 0) currentNodes = document.querySelectorAll('#timeline-steps .bg-blue-500');
+
+    // Determine which raw date applies to the current step
+    var stepDateMap = {
+      label_sent: rawDates.labelSentAt,
+      client_piece_in_transit: rawDates.labelSentAt,
+      client_piece_received: rawDates.clientPieceReceivedAt,
+      cloning_in_progress: rawDates.cloningStartedAt,
+      cloning_done: rawDates.cloningCompletedAt,
+    };
+
+    // Find the current step's parent and add time badge
+    currentNodes.forEach(function(node) {
+      var stepRow = node.closest('[class*="relative flex"]');
+      if (!stepRow) return;
+      var contentDiv = stepRow.querySelector('.flex-1');
+      if (!contentDiv) return;
+      var wrapDiv = contentDiv.querySelector('.flex.items-center');
+      if (!wrapDiv) wrapDiv = contentDiv;
+
+      // Find the most recent date set
+      var allDates = [rawDates.labelSentAt, rawDates.clientPieceReceivedAt, rawDates.cloningStartedAt, rawDates.cloningCompletedAt, rawDates.shippedToClientAt];
+      var latestDate = null;
+      allDates.forEach(function(d) {
+        if (d && (!latestDate || new Date(d) > new Date(latestDate))) latestDate = d;
+      });
+
+      if (latestDate) {
+        var ago = timeAgo(latestDate);
+        if (ago) {
+          var badge = document.createElement('span');
+          badge.className = 'ml-2 inline-flex items-center rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 text-[10px] font-bold';
+          badge.textContent = ago;
+          badge.id = 'timeline-ago-badge';
+          wrapDiv.appendChild(badge);
+
+          setInterval(function() {
+            var updated = timeAgo(latestDate);
+            if (updated) badge.textContent = updated;
+          }, 60000);
+        }
+      }
+    });
+  } catch (e) { /* ignore */ }
+})();
+</script>
+<% } %>
+
+<%- include('./partials/footer') %>

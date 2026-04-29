@@ -1,0 +1,30 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1">
+  <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-8">
+    <div class="bg-white rounded-2xl border border-slate-200 p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <h1 class="text-3xl font-black text-slate-900"><%= page && page.title ? page.title : 'Page' %></h1>
+          <div class="mt-2 text-sm text-slate-500">Dernière mise à jour : <%= page && page.updatedAt ? new Date(page.updatedAt).toLocaleDateString('fr-FR') : '—' %></div>
+        </div>
+      </div>
+
+      <div class="prose max-w-none mt-8 text-slate-700" style="white-space:normal;">
+        <div style="white-space:pre-line;line-height:1.8;">
+          <%- page && page.contentHtml ? page.contentHtml : '' %>
+        </div>
+      </div>
+
+      <% if (!dbConnected) { %>
+        <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+          <div class="font-bold">Mode démo</div>
+          <div class="mt-1 text-sm">La base de données est indisponible : le texte affiché est un exemple.</div>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

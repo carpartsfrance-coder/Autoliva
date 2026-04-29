@@ -1,0 +1,94 @@
+<!--
+  ============================================================
+  ⚠️  À FAIRE VALIDER PAR AVOCAT AVANT MISE EN LIGNE  ⚠️
+  Ce document est une base rédigée par l'équipe technique pour
+  permettre l'ouverture du module SAV. Toutes les clauses
+  (notamment rétention, mise en demeure, juridiction compétente)
+  doivent être relues et validées par un avocat avant publication.
+  ============================================================
+-->
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-background-light">
+  <div class="mx-auto max-w-3xl px-4 sm:px-6 py-10">
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-10 shadow-premium">
+
+      <div class="text-xs font-semibold uppercase tracking-widest text-slate-400"><%= brand.NAME %></div>
+      <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-slate-900">Conditions générales du Service Après-Vente</h1>
+      <p class="mt-2 text-sm text-slate-500">Version provisoire — en attente de validation juridique</p>
+
+      <div class="prose prose-slate max-w-none mt-8">
+
+        <h2>1. Objet</h2>
+        <p>Les présentes conditions générales (« CGV SAV ») régissent la relation entre <strong><%= brand.NAME %></strong> et tout client (particulier ou professionnel) sollicitant l'intervention du service après-vente pour une pièce achetée auprès de <%= brand.NAME %>. Elles s'appliquent en complément des conditions générales de vente du site <%= brand.DOMAIN %>.</p>
+
+        <h2>2. Garantie légale</h2>
+        <p>Conformément aux <strong>articles L.217-3 et suivants du Code de la consommation</strong>, les consommateurs bénéficient d'une garantie légale de conformité de <strong>2 ans</strong> à compter de la délivrance du bien. Cette garantie est gratuite et indépendante de toute garantie commerciale. Le client peut également se prévaloir de la garantie des vices cachés (articles 1641 et suivants du Code civil).</p>
+
+        <h2>3. Procédure SAV obligatoire</h2>
+        <p>Toute demande SAV portant sur une mécatronique, une boîte de transfert, un pont, un différentiel, un Haldex, un réducteur, un cardan ou tout organe de transmission doit obligatoirement suivre la procédure suivante :</p>
+        <ol>
+          <li><strong>Pré-qualification</strong> en ligne via le formulaire <a href="/sav">/sav</a> (pièces justificatives : facture du garage de montage, confirmation du réglage de base, photos OBD, photos de la pièce installée, VIN).</li>
+          <li><strong>Retour de la pièce</strong> à notre atelier via le bon de retour fourni (transport offert par <%= brand.NAME %>).</li>
+          <li><strong>Analyse sur banc</strong> dédié, dans un délai maximal de 5 jours ouvrés à compter de la réception.</li>
+          <li><strong>Décision</strong> communiquée par écrit avec rapport d'analyse à l'appui.</li>
+        </ol>
+        <p>Le diagnostic à distance n'est pas possible pour ces pièces : seul le passage sur banc permet de qualifier l'origine du dysfonctionnement.</p>
+
+        <h2>4. Forfait d'analyse — 149 € TTC</h2>
+        <p>Pour couvrir les coûts d'immobilisation du banc, de main-d'œuvre technicien et de logistique, un <strong>forfait d'analyse de 149 € TTC</strong> peut être appliqué.</p>
+        <p><strong>⚠️ Ce forfait ne peut en aucun cas être facturé lorsque la garantie légale de conformité s'applique</strong> (art. L217-11 du Code de la consommation : « le consommateur n'est tenu à aucun paiement au titre de la mise en conformité »). La garantie légale est de <strong>2 ans</strong> à compter de la livraison pour une pièce neuve et de <strong>1 an</strong> pour une pièce reconditionnée.</p>
+        <p>Le forfait ne s'applique donc <strong>que si les deux conditions suivantes sont réunies</strong> :</p>
+        <ul>
+          <li>La pièce est <strong>hors de la période de garantie légale de conformité</strong> (plus de 2 ans ou 1 an après livraison selon le cas) ;</li>
+          <li>L'analyse conclut à l'<strong>absence de défaut produit</strong> : mauvais montage caractérisé, usure normale, ou pièce fonctionnant aux valeurs constructeur.</li>
+        </ul>
+        <p><strong>Le client ne paie rien à l'ouverture de la demande.</strong> Il s'engage uniquement, par acceptation des présentes CGV et de la case dédiée du formulaire, à régler ce forfait dans le cas où les deux conditions ci-dessus seraient réunies.</p>
+        <p><em>Nota :</em> même hors garantie légale, le client conserve la possibilité d'invoquer la garantie des vices cachés (art. 1641 et suivants du Code civil) pendant 2 ans à compter de la découverte du défaut.</p>
+
+        <h2>5. Gratuité totale en cas de défaut de conformité confirmé</h2>
+        <p>Conformément à l'article L217-11 du Code de la consommation, si l'analyse confirme un défaut de conformité :</p>
+        <ul>
+          <li><strong>Aucun frais n'est dû par le client</strong> (0 €) : ni diagnostic, ni transport, ni main-d'œuvre.</li>
+          <li>Le client <strong>choisit librement</strong> entre le <strong>remplacement</strong> de la pièce (échange standard par une pièce testée) ou le <strong>remboursement intégral</strong> sous 14 jours ouvrés (art. L217-9).</li>
+          <li>Le retour de la pièce défectueuse vers <%= brand.NAME %> est <strong>offert</strong>.</li>
+          <li>L'envoi de la pièce de remplacement ou le remboursement est intégralement pris en charge.</li>
+          <li>Si le remplacement ou le remboursement ne peut être effectué dans un délai de <strong>30 jours</strong>, le client peut demander la résolution de la vente (art. L217-12).</li>
+        </ul>
+
+        <h2>6. Frais de retour de la pièce vers le client</h2>
+        <p>En cas d'analyse négative (mauvais montage, usure normale, non défectueux) et si le client souhaite récupérer sa pièce, des frais de retour forfaitaires de <strong>25 € TTC</strong> sont appliqués (transport assuré). Le client peut également renoncer au retour de la pièce ; <%= brand.NAME %> en assurera alors la disposition responsable.</p>
+
+        <h2>7. Droit de rétention en cas d'impayé</h2>
+        <p>Conformément à <strong>l'article 2286 du Code civil</strong>, en cas de non-paiement du forfait d'analyse de 149 € TTC à l'issue du délai de relance prévu à l'article 8, <%= brand.NAME %> exerce son <strong>droit de rétention</strong> sur la pièce restée en sa possession jusqu'au paiement intégral de sa créance, intérêts et frais.</p>
+
+        <h2>8. Procédure de relance et délais</h2>
+        <p>En cas de non-paiement de la facture d'analyse :</p>
+        <ul>
+          <li><strong>J+3 et J+7</strong> : relance amiable par email.</li>
+          <li><strong>J+15</strong> : mise en demeure de payer dans un délai de 8 jours, par email avec accusé.</li>
+          <li><strong>À compter de la mise en demeure restée infructueuse</strong> : exercice du droit de rétention, et passé un délai de <strong>90 jours sans règlement ni reprise par le client</strong>, <%= brand.NAME %> pourra procéder à la disposition de la pièce (recyclage, revente en l'état, destruction).</li>
+        </ul>
+        <p>Le client conserve la possibilité de régulariser à tout moment et de récupérer sa pièce moyennant le paiement intégral des sommes dues et des frais de retour.</p>
+
+        <h2>9. Données personnelles</h2>
+        <p>Les données collectées dans le cadre de la procédure SAV sont strictement nécessaires au traitement du dossier et conservées pour la durée légale. Elles ne sont en aucun cas cédées à des tiers. Le client dispose des droits d'accès, de rectification et de suppression prévus par le RGPD en écrivant à <strong><%= brand.EMAIL_SAV %></strong>.</p>
+
+        <h2>10. Médiation et juridiction compétente</h2>
+        <p>En cas de litige, le client est invité à contacter en priorité notre service client. À défaut de résolution amiable, le client consommateur peut recourir gratuitement au médiateur de la consommation (coordonnées à compléter par avocat).</p>
+        <p><strong>Pour les litiges impliquant un professionnel</strong>, et sous réserve des dispositions impératives de la loi, compétence exclusive est attribuée au <strong>Tribunal de commerce de [VILLE À COMPLÉTER]</strong>.</p>
+
+        <h2>11. Acceptation</h2>
+        <p>L'ouverture d'une demande SAV via le formulaire en ligne vaut acceptation expresse des présentes CGV SAV ainsi que de la condition de facturation conditionnelle du forfait d'analyse de 149 € TTC. Les deux cases prévues à cet effet doivent obligatoirement être cochées.</p>
+
+      </div>
+
+      <div class="mt-10 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <strong>⚠️ Document provisoire :</strong> ces CGV doivent être validées par un avocat avant publication officielle.
+      </div>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

@@ -1,0 +1,60 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-slate-50">
+  <div class="mx-auto max-w-md px-4 py-12">
+    <div class="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-sm">
+      <div class="text-center">
+        <div class="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 mb-3">
+          <span class="material-symbols-outlined text-primary">support_agent</span>
+        </div>
+        <h1 class="text-2xl font-bold text-slate-900">Suivre ma demande SAV</h1>
+        <p class="mt-1 text-sm text-slate-600">Saisissez votre numéro de dossier et l'email utilisé lors de la demande.</p>
+      </div>
+
+      <% if (error === 'notfound') { %>
+        <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Aucun dossier trouvé avec ces informations. Vérifiez votre numéro et votre email.
+        </div>
+      <% } else if (error === 'rate') { %>
+        <div class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Trop de tentatives. Réessayez dans 15 minutes.
+        </div>
+      <% } else if (error === 'auth') { %>
+        <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Votre session a expiré. Veuillez vous identifier à nouveau.
+        </div>
+      <% } else if (error === 'missing') { %>
+        <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Numéro de dossier et email requis.
+        </div>
+      <% } else if (error) { %>
+        <div class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Une erreur est survenue. Réessayez.
+        </div>
+      <% } %>
+
+      <form method="POST" action="/sav/suivi" class="mt-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Numéro de dossier</label>
+          <input type="text" name="numero" required value="<%= numero %>" placeholder="SAV-2026-0001"
+                 class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-mono focus:border-primary focus:ring-2 focus:ring-primary/20">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+          <input type="email" name="email" required placeholder="vous@exemple.fr"
+                 class="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:border-primary focus:ring-2 focus:ring-primary/20">
+        </div>
+        <button class="w-full rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold py-3">
+          Accéder à mon dossier
+        </button>
+      </form>
+
+      <p class="mt-5 text-center text-xs text-slate-500">
+        Vous avez un compte ? <a href="/compte/sav" class="text-primary hover:underline">Connectez-vous</a> pour retrouver tous vos dossiers.
+      </p>
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

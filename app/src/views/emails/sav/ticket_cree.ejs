@@ -1,0 +1,28 @@
+<%
+  const baseUrl = brand.SITE_URL;
+  const gl = (typeof guestLink !== 'undefined' && guestLink) ? guestLink : (baseUrl + '/sav/suivi');
+  const body = `
+  <p>Bonjour <strong>${(ticket.client && ticket.client.nom) || ''}</strong>,</p>
+  <p>Nous avons bien enregistré votre demande SAV <strong>${ticket.numero}</strong>. <strong>Vous n'avez rien à payer à cette étape.</strong></p>
+  <p><strong>Prochaine étape :</strong> vous trouverez en pièce jointe votre <strong>bon de retour prépayé</strong> (aucun frais de retour à votre charge).</p>
+  <div style="margin:18px 0;padding:14px;background:#f8fafc;border-left:4px solid #ec1313;border-radius:8px;font-size:14px;">
+    <strong>Comment ça se passe :</strong>
+    <ul style="margin:8px 0 0 18px;padding:0;">
+      <li><strong>Si un défaut de conformité est confirmé</strong> (garantie légale, art. L217-3) : <strong>0 €</strong> — remplacement ou remboursement intégral, au choix.</li>
+      <li><strong>Si la pièce ne présente aucun défaut</strong> (usure normale, mauvaise installation) et que votre achat date de <strong>plus de 2 ans</strong> : un forfait d'analyse de <strong>149 € TTC</strong> peut s'appliquer.</li>
+      <li>Retour vers notre atelier : <strong>offert</strong> dans tous les cas. Retour de la pièce vers vous si vous le souhaitez : 25 € TTC.</li>
+    </ul>
+  </div>
+  <p style="margin:18px 0;text-align:center;">
+    <a href="${gl}"
+       style="display:inline-block;padding:12px 22px;background:#ec1313;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;">
+      Suivre mon dossier
+    </a>
+  </p>
+  <p style="font-size:13px;color:#475569;text-align:center;">
+    Ce lien est personnel et vous permet d'accéder directement à votre dossier sans connexion.
+  </p>
+  <p style="font-size:13px;color:#64748b;">Conformément à la garantie légale de conformité (art. L217-9), vous avez le <strong>choix entre le remplacement et le remboursement</strong> de votre pièce en cas de défaut confirmé.</p>
+  <p>Réponse garantie sous <strong>5 jours ouvrés</strong> après réception de votre pièce.</p>
+` %>
+<%- include('./_layout', { ticket: ticket, subject: 'Votre demande SAV est enregistrée', body: body }) %>
