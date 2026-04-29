@@ -1,0 +1,302 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'settings' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Hero (slides accueil)</div>
+        <div class="mt-1 text-sm text-slate-500">Configure les slides du carrousel d'accueil. Glisse une image, modifie le texte, ré-ordonne ou supprime.</div>
+      </div>
+      <a class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700" href="/admin/parametres/site">
+        <span class="material-symbols-outlined text-base">arrow_back</span> Retour Paramètres
+      </a>
+    </div>
+
+    <% if (typeof successMessage !== 'undefined' && successMessage) { %>
+      <div class="mt-8 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+        <div class="font-bold">OK</div>
+        <div class="mt-1 text-sm"><%= successMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-8 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <form id="hero-form" action="/admin/parametres/hero" method="POST" class="mt-8 space-y-4">
+      <div id="hero-slides-container" class="space-y-4">
+        <% (slides || []).forEach(function(slide, idx) { %>
+          <div class="hero-slide-card bg-white rounded-2xl border border-slate-200 p-6" data-slide-index="<%= idx %>">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm slide-position-label"><%= idx + 1 %></span>
+                <div class="text-base font-semibold text-slate-900">Slide</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" class="hero-slide-up p-2 rounded-lg hover:bg-slate-100" title="Monter">
+                  <span class="material-symbols-outlined text-base">arrow_upward</span>
+                </button>
+                <button type="button" class="hero-slide-down p-2 rounded-lg hover:bg-slate-100" title="Descendre">
+                  <span class="material-symbols-outlined text-base">arrow_downward</span>
+                </button>
+                <button type="button" class="hero-slide-delete p-2 rounded-lg hover:bg-red-50 text-red-600" title="Supprimer">
+                  <span class="material-symbols-outlined text-base">delete</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <!-- IMAGE -->
+              <div>
+                <label class="block text-sm font-medium text-slate-500 mb-2">Image</label>
+                <div class="hero-slide-image-preview relative h-48 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center">
+                  <% if (slide.imageUrl) { %>
+                    <img src="<%= slide.imageUrl %>" alt="<%= slide.imageAlt || '' %>" class="w-full h-full object-cover" />
+                  <% } else { %>
+                    <span class="text-slate-400 text-sm">Aucune image</span>
+                  <% } %>
+                </div>
+                <div class="mt-3 flex items-center gap-2">
+                  <input type="file" class="hero-slide-image-input hidden" accept="image/*" />
+                  <button type="button" class="hero-slide-image-pick inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
+                    <span class="material-symbols-outlined text-base">upload</span> Choisir une image
+                  </button>
+                  <span class="hero-slide-image-status text-xs text-slate-500"></span>
+                </div>
+                <input type="hidden" name="slides[<%= idx %>][imageUrl]" class="hero-slide-image-url" value="<%= slide.imageUrl || '' %>" />
+
+                <label class="block text-sm font-medium text-slate-500 mt-4">Texte alternatif (alt)</label>
+                <input type="text" name="slides[<%= idx %>][imageAlt]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" value="<%= slide.imageAlt || '' %>" placeholder="Description courte (accessibilité)" />
+              </div>
+
+              <!-- TEXTES -->
+              <div>
+                <label class="block text-sm font-medium text-slate-500">Badge (catégorie)</label>
+                <input type="text" name="slides[<%= idx %>][badge]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold" value="<%= slide.badge || '' %>" placeholder="Ex: Service Premium, Transmission, Moteur" />
+
+                <label class="block text-sm font-medium text-slate-500 mt-4">Titre</label>
+                <textarea name="slides[<%= idx %>][title]" rows="2" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold" placeholder="Titre principal du slide"><%= slide.title || '' %></textarea>
+
+                <label class="block text-sm font-medium text-slate-500 mt-4">Description</label>
+                <textarea name="slides[<%= idx %>][description]" rows="3" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Sous-titre / phrase de présentation"><%= slide.description || '' %></textarea>
+              </div>
+            </div>
+
+            <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Bouton principal</div>
+                <label class="block text-sm font-medium text-slate-500">Texte</label>
+                <input type="text" name="slides[<%= idx %>][ctaPrimaryText]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" value="<%= slide.ctaPrimaryText || '' %>" placeholder="Ex: Demander un Devis Gratuit" />
+                <label class="block text-sm font-medium text-slate-500 mt-3">URL</label>
+                <input type="text" name="slides[<%= idx %>][ctaPrimaryUrl]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" value="<%= slide.ctaPrimaryUrl || '' %>" placeholder="Ex: /devis" />
+              </div>
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Bouton secondaire</div>
+                <label class="block text-sm font-medium text-slate-500">Texte</label>
+                <input type="text" name="slides[<%= idx %>][ctaSecondaryText]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" value="<%= slide.ctaSecondaryText || '' %>" placeholder="Ex: Parcourir le catalogue" />
+                <label class="block text-sm font-medium text-slate-500 mt-3">URL</label>
+                <input type="text" name="slides[<%= idx %>][ctaSecondaryUrl]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" value="<%= slide.ctaSecondaryUrl || '' %>" placeholder="Ex: /produits" />
+              </div>
+            </div>
+
+            <div class="mt-4 flex items-center gap-3">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="slides[<%= idx %>][isActive]" value="true" <%= slide.isActive !== false ? 'checked' : '' %> class="rounded border-slate-300 text-primary" />
+                <span class="text-sm font-medium text-slate-700">Slide active (visible sur le site)</span>
+              </label>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+
+      <div class="flex items-center justify-between gap-3 pt-4">
+        <button type="button" id="hero-add-slide" class="inline-flex items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 hover:border-primary hover:bg-primary/5 px-6 py-3 text-sm font-semibold text-slate-700">
+          <span class="material-symbols-outlined">add</span> Ajouter une slide
+        </button>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-red-700 text-white px-6 py-3 text-sm font-bold">
+          <span class="material-symbols-outlined">save</span> Enregistrer les modifications
+        </button>
+      </div>
+    </form>
+  </div>
+</main>
+
+<!-- Template clone pour les nouvelles slides -->
+<template id="hero-slide-template">
+  <div class="hero-slide-card bg-white rounded-2xl border border-slate-200 p-6" data-slide-index="__INDEX__">
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm slide-position-label">__POS__</span>
+        <div class="text-base font-semibold text-slate-900">Slide</div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button type="button" class="hero-slide-up p-2 rounded-lg hover:bg-slate-100" title="Monter">
+          <span class="material-symbols-outlined text-base">arrow_upward</span>
+        </button>
+        <button type="button" class="hero-slide-down p-2 rounded-lg hover:bg-slate-100" title="Descendre">
+          <span class="material-symbols-outlined text-base">arrow_downward</span>
+        </button>
+        <button type="button" class="hero-slide-delete p-2 rounded-lg hover:bg-red-50 text-red-600" title="Supprimer">
+          <span class="material-symbols-outlined text-base">delete</span>
+        </button>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div>
+        <label class="block text-sm font-medium text-slate-500 mb-2">Image</label>
+        <div class="hero-slide-image-preview relative h-48 rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center">
+          <span class="text-slate-400 text-sm">Aucune image</span>
+        </div>
+        <div class="mt-3 flex items-center gap-2">
+          <input type="file" class="hero-slide-image-input hidden" accept="image/*" />
+          <button type="button" class="hero-slide-image-pick inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
+            <span class="material-symbols-outlined text-base">upload</span> Choisir une image
+          </button>
+          <span class="hero-slide-image-status text-xs text-slate-500"></span>
+        </div>
+        <input type="hidden" name="slides[__INDEX__][imageUrl]" class="hero-slide-image-url" value="" />
+        <label class="block text-sm font-medium text-slate-500 mt-4">Texte alternatif (alt)</label>
+        <input type="text" name="slides[__INDEX__][imageAlt]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" value="" placeholder="Description courte (accessibilité)" />
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-500">Badge (catégorie)</label>
+        <input type="text" name="slides[__INDEX__][badge]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold" value="" placeholder="Ex: Service Premium" />
+        <label class="block text-sm font-medium text-slate-500 mt-4">Titre</label>
+        <textarea name="slides[__INDEX__][title]" rows="2" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold" placeholder="Titre principal"></textarea>
+        <label class="block text-sm font-medium text-slate-500 mt-4">Description</label>
+        <textarea name="slides[__INDEX__][description]" rows="3" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Sous-titre"></textarea>
+      </div>
+    </div>
+    <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Bouton principal</div>
+        <label class="block text-sm font-medium text-slate-500">Texte</label>
+        <input type="text" name="slides[__INDEX__][ctaPrimaryText]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+        <label class="block text-sm font-medium text-slate-500 mt-3">URL</label>
+        <input type="text" name="slides[__INDEX__][ctaPrimaryUrl]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+      </div>
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Bouton secondaire</div>
+        <label class="block text-sm font-medium text-slate-500">Texte</label>
+        <input type="text" name="slides[__INDEX__][ctaSecondaryText]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+        <label class="block text-sm font-medium text-slate-500 mt-3">URL</label>
+        <input type="text" name="slides[__INDEX__][ctaSecondaryUrl]" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" />
+      </div>
+    </div>
+    <div class="mt-4 flex items-center gap-3">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input type="checkbox" name="slides[__INDEX__][isActive]" value="true" checked class="rounded border-slate-300 text-primary" />
+        <span class="text-sm font-medium text-slate-700">Slide active (visible sur le site)</span>
+      </label>
+    </div>
+  </div>
+</template>
+
+<script>
+(function() {
+  var container = document.getElementById('hero-slides-container');
+  var addBtn = document.getElementById('hero-add-slide');
+  var template = document.getElementById('hero-slide-template');
+
+  function rebuildIndices() {
+    var cards = container.querySelectorAll('.hero-slide-card');
+    cards.forEach(function(card, idx) {
+      card.dataset.slideIndex = String(idx);
+      var label = card.querySelector('.slide-position-label');
+      if (label) label.textContent = String(idx + 1);
+      // Réécrit tous les name="slides[N][field]" pour avoir N = idx
+      card.querySelectorAll('[name^="slides["]').forEach(function(input) {
+        input.name = input.name.replace(/^slides\[\d+\]/, 'slides[' + idx + ']');
+      });
+    });
+  }
+
+  function bindCard(card) {
+    // Image upload
+    var pickBtn = card.querySelector('.hero-slide-image-pick');
+    var fileInput = card.querySelector('.hero-slide-image-input');
+    var urlInput = card.querySelector('.hero-slide-image-url');
+    var preview = card.querySelector('.hero-slide-image-preview');
+    var status = card.querySelector('.hero-slide-image-status');
+
+    if (pickBtn && fileInput) {
+      pickBtn.addEventListener('click', function() { fileInput.click(); });
+      fileInput.addEventListener('change', function() {
+        var file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        status.textContent = 'Upload en cours…';
+        status.style.color = '#64748b';
+
+        var formData = new FormData();
+        formData.append('image', file);
+        fetch('/admin/parametres/hero/upload', {
+          method: 'POST',
+          body: formData,
+          credentials: 'same-origin',
+          headers: { 'Accept': 'application/json' },
+        })
+          .then(function(res) { return res.json().then(function(json) { return { ok: res.ok, json: json }; }); })
+          .then(function(result) {
+            if (!result.ok || !result.json || result.json.ok === false) {
+              throw new Error((result.json && result.json.error) || 'Échec upload');
+            }
+            urlInput.value = result.json.url;
+            preview.innerHTML = '<img src="' + result.json.url + '" alt="" class="w-full h-full object-cover" />';
+            status.textContent = '✓ Image uploadée';
+            status.style.color = '#059669';
+          })
+          .catch(function(err) {
+            status.textContent = 'Erreur : ' + (err.message || err);
+            status.style.color = '#dc2626';
+          });
+      });
+    }
+
+    // Up / Down
+    var upBtn = card.querySelector('.hero-slide-up');
+    var downBtn = card.querySelector('.hero-slide-down');
+    if (upBtn) upBtn.addEventListener('click', function() {
+      var prev = card.previousElementSibling;
+      if (prev) container.insertBefore(card, prev);
+      rebuildIndices();
+    });
+    if (downBtn) downBtn.addEventListener('click', function() {
+      var next = card.nextElementSibling;
+      if (next) container.insertBefore(next, card);
+      rebuildIndices();
+    });
+
+    // Delete
+    var delBtn = card.querySelector('.hero-slide-delete');
+    if (delBtn) delBtn.addEventListener('click', function() {
+      if (!confirm('Supprimer cette slide ?')) return;
+      card.remove();
+      rebuildIndices();
+    });
+  }
+
+  // Bind sur les slides existantes
+  container.querySelectorAll('.hero-slide-card').forEach(bindCard);
+
+  // Add slide
+  if (addBtn) {
+    addBtn.addEventListener('click', function() {
+      var existing = container.querySelectorAll('.hero-slide-card').length;
+      var html = template.innerHTML
+        .replace(/__INDEX__/g, String(existing))
+        .replace(/__POS__/g, String(existing + 1));
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML = html;
+      var newCard = wrapper.firstElementChild;
+      container.appendChild(newCard);
+      bindCard(newCard);
+      rebuildIndices();
+    });
+  }
+})();
+</script>

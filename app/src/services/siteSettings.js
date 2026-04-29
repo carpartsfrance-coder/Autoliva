@@ -107,9 +107,147 @@ async function updateSiteSettingsFromForm(body) {
   return updated;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Hero slides
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Slides par défaut (utilisées si l'admin n'a rien configuré en DB).
+ * Brand-aware via brand.NAME.
+ */
+function getDefaultHeroSlides() {
+  return [
+    {
+      imageUrl: '/images/hero-home.png',
+      imageAlt: brand.NAME,
+      badge: 'Service Premium',
+      title: 'Pièces auto reconditionnées, d’occasion et testées',
+      description: `${brand.NAME} accompagne particuliers et professionnels avec des pièces fiables, un devis rapide et une livraison express en 48/72h.`,
+      ctaPrimaryText: 'Demander un Devis Gratuit',
+      ctaPrimaryUrl: '/devis',
+      ctaSecondaryText: 'Parcourir le catalogue',
+      ctaSecondaryUrl: '/produits',
+      sortOrder: 0,
+      isActive: true,
+    },
+    {
+      imageUrl: '/images/hero-boite-transfert.jpeg',
+      imageAlt: 'Boîte de transfert et pont différentiel reconditionnés',
+      badge: 'Transmission',
+      title: 'Boîtes de transfert & ponts différentiels reconditionnés',
+      description: 'Notre gamme reconditionnée est testée et garantie 2 ans, pour une fiabilité maximale.',
+      ctaPrimaryText: 'Demander un Devis Gratuit',
+      ctaPrimaryUrl: '/devis',
+      ctaSecondaryText: 'Parcourir le catalogue',
+      ctaSecondaryUrl: '/produits',
+      sortOrder: 1,
+      isActive: true,
+    },
+    {
+      imageUrl: '/images/hero-moteur-reconditionne.jpeg',
+      imageAlt: 'Moteurs reconditionnés',
+      badge: 'Moteur',
+      title: 'Moteurs reconditionnés : performance & sérénité',
+      description: 'Porsche, Range Rover, BMW… des moteurs testés et reconditionnés avec exigence, disponibles rapidement.',
+      ctaPrimaryText: 'Demander un Devis Gratuit',
+      ctaPrimaryUrl: '/devis',
+      ctaSecondaryText: 'Parcourir le catalogue',
+      ctaSecondaryUrl: '/produits',
+      sortOrder: 2,
+      isActive: true,
+    },
+  ];
+}
+
+function sanitizeHeroSlide(s) {
+  const o = s && typeof s === 'object' ? s : {};
+  return {
+    imageUrl: getTrimmedString(o.imageUrl),
+    imageAlt: getTrimmedString(o.imageAlt),
+    badge: getTrimmedString(o.badge),
+    title: getTrimmedString(o.title),
+    description: getTrimmedString(o.description),
+    ctaPrimaryText: getTrimmedString(o.ctaPrimaryText),
+    ctaPrimaryUrl: getTrimmedString(o.ctaPrimaryUrl),
+    ctaSecondaryText: getTrimmedString(o.ctaSecondaryText),
+    ctaSecondaryUrl: getTrimmedString(o.ctaSecondaryUrl),
+    sortOrder: Number.isFinite(Number(o.sortOrder)) ? Number(o.sortOrder) : 0,
+    isActive: o.isActive === false || o.isActive === 'false' || o.isActive === '0' ? false : true,
+  };
+}
+
+function sanitizeHeroSlidesArray(slides) {
+  if (!Array.isArray(slides)) return [];
+  return slides
+    .map(sanitizeHeroSlide)
+    .filter((s) => s.imageUrl || s.title || s.description) // garder seulement les slides utiles
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/**
+ * Retourne les hero slides à afficher (DB si présent et non vide, sinon defaults).
+ * Filtre les slides inactives.
+ */
+async function getHeroSlidesForDisplay() {
+  try {
+    const saved = await getSiteSettings();
+    const dbSlides = saved && Array.isArray(saved.heroSlides) ? saved.heroSlides : [];
+    const activeFromDb = dbSlides
+      .filter((s) => s && s.isActive !== false && (s.imageUrl || s.title))
+      .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
+    if (activeFromDb.length > 0) return activeFromDb.map(sanitizeHeroSlide);
+    return getDefaultHeroSlides();
+  } catch (err) {
+    return getDefaultHeroSlides();
+  }
+}
+
+/**
+ * Retourne les slides côté admin (toutes, y compris inactives, dans l'ordre actuel).
+ * Si la DB est vide, retourne les defaults pour seed initial.
+ */
+async function getHeroSlidesForAdmin() {
+  try {
+    const saved = await getSiteSettings();
+    const dbSlides = saved && Array.isArray(saved.heroSlides) ? saved.heroSlides : [];
+    if (dbSlides.length > 0) {
+      return dbSlides
+        .map((s) => ({
+          _id: s._id ? String(s._id) : '',
+          ...sanitizeHeroSlide(s),
+        }))
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+    // Premier accès : on retourne les defaults (l'admin pourra les éditer/sauvegarder)
+    return getDefaultHeroSlides().map((s) => ({ _id: '', ...s }));
+  } catch (err) {
+    return getDefaultHeroSlides().map((s) => ({ _id: '', ...s }));
+  }
+}
+
+async function updateHeroSlides(slides) {
+  const sanitized = sanitizeHeroSlidesArray(slides);
+  // Réassigne les sortOrder en fonction de la position du tableau pour avoir un ordre cohérent
+  const ordered = sanitized.map((s, idx) => ({ ...s, sortOrder: idx }));
+
+  const updated = await SiteSettings.findOneAndUpdate(
+    { key: 'site' },
+    { $set: { key: 'site', heroSlides: ordered } },
+    { new: true, upsert: true }
+  ).lean();
+
+  return updated && Array.isArray(updated.heroSlides) ? updated.heroSlides : [];
+}
+
 module.exports = {
   buildEnvFallback,
   getSiteSettings,
   getSiteSettingsMergedWithFallback,
   updateSiteSettingsFromForm,
+  // Hero slides
+  getDefaultHeroSlides,
+  getHeroSlidesForDisplay,
+  getHeroSlidesForAdmin,
+  updateHeroSlides,
+  sanitizeHeroSlide,
 };

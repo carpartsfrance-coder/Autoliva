@@ -28,6 +28,7 @@ const { handleProductImageUpload } = require('../middlewares/adminProductUpload'
 const { handleBlogCoverUpload, handleBlogMediaUpload } = require('../middlewares/adminBlogUpload');
 const { handleInvoiceLogoUpload } = require('../middlewares/adminInvoiceUpload');
 const { handleShippingDocUpload } = require('../middlewares/adminShippingDocUpload');
+const { handleHeroImageUpload } = require('../middlewares/adminHeroUpload');
 const { hasAbility, isOwner } = require('../permissions');
 
 const router = express.Router();
@@ -282,6 +283,10 @@ router.get('/parametres/facturation', requireAdminAuth, requireAbility('settings
 router.post('/parametres/facturation', requireAdminAuth, requireAbility('settings.billing'), handleInvoiceLogoUpload, adminController.postAdminInvoiceSettings);
 router.get('/parametres/site', requireAdminAuth, requireAbility('settings.site'), adminController.getAdminSiteSettingsPage);
 router.post('/parametres/site', requireAdminAuth, requireAbility('settings.site'), adminController.postAdminSiteSettings);
+
+router.get('/parametres/hero', requireAdminAuth, requireAbility('settings.site'), adminController.getAdminHeroSettingsPage);
+router.post('/parametres/hero', requireAdminAuth, requireAbility('settings.site'), adminController.postAdminHeroSettings);
+router.post('/parametres/hero/upload', requireAdminAuth, requireAbility('settings.site'), handleHeroImageUpload, adminController.postAdminHeroUploadImage);
 
 router.get('/api/notes', requireAdminAuth, internalNoteAdminController.listNotes);
 router.post('/api/notes', requireAdminAuth, internalNoteAdminController.createNote);

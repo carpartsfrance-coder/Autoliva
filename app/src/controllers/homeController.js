@@ -8,6 +8,7 @@ const demoProducts = require('../demoProducts');
 const { buildProductPublicPath, slugify, getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildCategoryPublicPath } = require('../services/categoryPublic');
 const { buildHreflangSet } = require('../services/i18n');
+const siteSettingsService = require('../services/siteSettings');
 const brand = require('../config/brand');
 
 function getTrimmedString(value) {
@@ -319,6 +320,9 @@ async function getHome(req, res, next) {
       .replace(/>/g, '\\u003e')
       .replace(/&/g, '\\u0026');
 
+    // Hero slides : DB d'abord, fallback sur les defaults brand-aware
+    const heroSlides = await siteSettingsService.getHeroSlidesForDisplay();
+
     return res.render('home', {
       title,
       metaDescription,
@@ -336,6 +340,7 @@ async function getHome(req, res, next) {
       homeCategories,
       homeVehicleMakes,
       homeBlogPosts,
+      heroSlides,
     });
   } catch (err) {
     return next(err);

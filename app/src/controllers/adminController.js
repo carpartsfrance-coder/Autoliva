@@ -662,6 +662,85 @@ async function postAdminSiteSettings(req, res, next) {
   }
 }
 
+// ───────────────────────────── Hero (slides accueil) ─────────────────────────
+
+async function getAdminHeroSettingsPage(req, res) {
+  const dbConnected = mongoose.connection.readyState === 1;
+
+  if (!dbConnected) {
+    return res.status(503).render('admin/hero-settings', {
+      title: 'Admin - Hero',
+      dbConnected,
+      slides: [],
+      successMessage: null,
+      errorMessage: "La base de données n'est pas disponible.",
+    });
+  }
+
+  const successMessage = req.session.adminHeroSettingsSuccess || null;
+  const errorMessage = req.session.adminHeroSettingsError || null;
+  delete req.session.adminHeroSettingsSuccess;
+  delete req.session.adminHeroSettingsError;
+
+  const slides = await siteSettings.getHeroSlidesForAdmin();
+
+  return res.render('admin/hero-settings', {
+    title: 'Admin - Hero',
+    dbConnected,
+    slides,
+    successMessage,
+    errorMessage,
+  });
+}
+
+async function postAdminHeroSettings(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) {
+      req.session.adminHeroSettingsError = "La base de données n'est pas disponible.";
+      return res.redirect('/admin/parametres/hero');
+    }
+
+    // Le formulaire envoie slides[N][field] — on rebuild le tableau dans l'ordre N
+    const body = req.body || {};
+    const slidesIn = Array.isArray(body.slides) ? body.slides : [];
+
+    await siteSettings.updateHeroSlides(slidesIn);
+    req.session.adminHeroSettingsSuccess = 'Slides du hero enregistrées.';
+    return res.redirect('/admin/parametres/hero');
+  } catch (err) {
+    console.error('[admin/hero] postAdminHeroSettings:', err && err.message ? err.message : err);
+    req.session.adminHeroSettingsError = "Impossible d'enregistrer les slides : " + (err && err.message ? err.message : 'erreur inconnue');
+    return res.redirect('/admin/parametres/hero');
+  }
+}
+
+async function postAdminHeroUploadImage(req, res) {
+  try {
+    if (req.uploadError) {
+      return res.status(400).json({ ok: false, error: req.uploadError });
+    }
+    if (!req.file || !req.file.buffer || !req.file.buffer.length) {
+      return res.status(400).json({ ok: false, error: 'Aucune image reçue.' });
+    }
+
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) {
+      return res.status(503).json({ ok: false, error: "La base de données n'est pas disponible." });
+    }
+
+    const saved = await mediaStorage.saveMulterFile(req.file, {
+      fallbackPrefix: 'hero',
+      metadata: { kind: 'hero-slide', uploadedAt: new Date() },
+    });
+
+    return res.json({ ok: true, url: saved.url, filename: saved.filename });
+  } catch (err) {
+    console.error('[admin/hero/upload] erreur:', err && err.message ? err.message : err);
+    return res.status(500).json({ ok: false, error: err && err.message ? err.message : 'Erreur lors de l\'upload' });
+  }
+}
+
 function cleanupUploadedFiles() {}
 
 function getAdminCredentials() {
@@ -9581,6 +9660,9 @@ async function postAdminRecaptureScalapayOrder(req, res, next) {
 }
 
 module.exports = {
+  getAdminHeroSettingsPage,
+  postAdminHeroSettings,
+  postAdminHeroUploadImage,
   getAdminLogin,
   postAdminLogin,
   getAdminLogin2fa,
