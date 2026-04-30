@@ -57,14 +57,14 @@
 </div>
 <% } %>
 
-<% const _altLangPrefix = typeof alternateLangPrefix !== 'undefined' ? alternateLangPrefix : '/en'; %>
 <% const _curPathNoLang = typeof currentPathWithoutLang !== 'undefined' ? currentPathWithoutLang : '/'; %>
-<% const _isEn = typeof lang !== 'undefined' && lang === 'en'; %>
-<% const _frHref = _curPathNoLang === '/' ? '/' : _curPathNoLang; %>
-<% const _enHref = '/en' + (_curPathNoLang === '/' ? '' : _curPathNoLang); %>
-<div class="hidden sm:flex items-center rounded-lg border border-slate-200 overflow-hidden h-9">
-<a class="flex items-center justify-center px-2.5 h-full text-xs font-black uppercase tracking-wider transition-colors <%= _isEn ? 'text-slate-400 hover:text-primary hover:bg-slate-50' : 'bg-primary text-white' %>" href="<%= _frHref %>">FR</a>
-<a class="flex items-center justify-center px-2.5 h-full text-xs font-black uppercase tracking-wider transition-colors <%= _isEn ? 'bg-primary text-white' : 'text-slate-400 hover:text-primary hover:bg-slate-50' %>" href="<%= _enHref %>">EN</a>
+<% const _curPathClean = (_curPathNoLang || '/').split('?')[0].split('#')[0]; %>
+<% const _isDe = typeof lang !== 'undefined' && lang === 'de'; %>
+<% const _frHref = _curPathClean === '/' ? '/' : _curPathClean; %>
+<% const _deHref = '/de' + (_curPathClean === '/' ? '' : _curPathClean); %>
+<div class="hidden sm:flex items-center rounded-lg border border-slate-200 overflow-hidden h-9" role="navigation" aria-label="Sprache / Langue">
+<a class="flex items-center justify-center px-2.5 h-full text-xs font-black uppercase tracking-wider transition-colors <%= _isDe ? 'text-slate-400 hover:text-primary hover:bg-slate-50' : 'bg-primary text-white' %>" href="<%= _frHref %>" hreflang="fr" <%= _isDe ? '' : 'aria-current="true"' %>>FR</a>
+<a class="flex items-center justify-center px-2.5 h-full text-xs font-black uppercase tracking-wider transition-colors <%= _isDe ? 'bg-primary text-white' : 'text-slate-400 hover:text-primary hover:bg-slate-50' %>" href="<%= _deHref %>" hreflang="de" <%= _isDe ? 'aria-current="true"' : '' %>>DE</a>
 </div>
 
 <button aria-controls="mobileNavDrawer" aria-expanded="false" aria-label="<%= t('header.menu') %>" class="flex lg:hidden items-center justify-center rounded-lg h-9 w-9 text-slate-700 hover:bg-slate-100 transition-colors" data-mobile-nav-open type="button">
@@ -123,8 +123,10 @@
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
 
-        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors hover:bg-slate-50 text-slate-800 border-t border-slate-100 mt-2 pt-4" href="<%= _altLangPrefix %><%= _curPathNoLang === '/' ? '' : _curPathNoLang %><%= _curPathNoLang === '/' && _altLangPrefix === '' ? '/' : '' %>">
-          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">translate</span><%= (typeof lang !== 'undefined' && lang === 'en') ? 'Français' : 'English' %></span>
+        <% const _mobileSwitchHref = _isDe ? _frHref : _deHref; %>
+        <% const _mobileSwitchLabel = _isDe ? 'Français' : 'Deutsch'; %>
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors hover:bg-slate-50 text-slate-800 border-t border-slate-100 mt-2 pt-4" href="<%= _mobileSwitchHref %>" hreflang="<%= _isDe ? 'fr' : 'de' %>">
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">translate</span><%= _mobileSwitchLabel %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
       </div>
