@@ -513,6 +513,20 @@ app.use('/en', (req, res) => {
   res.redirect(301, targetPath);
 });
 
+/* /pt et /es : versions linguistiques jamais réellement traduites en migration
+ * carpartsfrance.fr → autoliva.com. On consolide tout vers le FR avec un 301
+ * (même rationale que /en au-dessus). À ré-activer si on relance des
+ * traductions complètes plus tard. */
+app.use('/pt', (req, res) => {
+  const targetPath = req.originalUrl.replace(/^\/pt(\/|$)/, '/') || '/';
+  res.redirect(301, targetPath);
+});
+
+app.use('/es', (req, res) => {
+  const targetPath = req.originalUrl.replace(/^\/es(\/|$)/, '/') || '/';
+  res.redirect(301, targetPath);
+});
+
 app.use((req, res) => {
   res.status(404).render('errors/404', {
     title: `Page introuvable - ${brand.NAME}`,

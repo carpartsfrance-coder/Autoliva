@@ -57,6 +57,104 @@ const EXACT_REDIRECTS = {
   '/mecatronique-dsg-6/':                              '/blog/mecatronique-dsg6-dq250-diagnostic-prix-remplacement',
   '/product/mecatronique-dsg-7-dq200-pour-volskwagen-audi-seat-et-skoda':   '/product/mecatronique-dsg-7-dq200-pour-volkswagen-audi-seat-et-skoda/',
   '/product/mecatronique-dsg-7-dq200-pour-volskwagen-audi-seat-et-skoda/':  '/product/mecatronique-dsg-7-dq200-pour-volkswagen-audi-seat-et-skoda/',
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Récupération trafic SEO carpartsfrance.fr — ajouté le 2026-04-30
+  // suite audit GSC (top URLs en 404 après migration).
+  //
+  // Audit BDD effectué le 2026-04-30 contre /sitemap-blog.xml (304 articles
+  // publiés). Statut des cibles ci-dessous :
+  //
+  //   ✅ Existe déjà :
+  //     - mecatronique-dsg7-dq200-diagnostic-prix-remplacement
+  //     - actionneur-boite-transfert-bmw-x3-e83-pignon-reparation     (remap)
+  //     - pont-arriere-audi-a3-quattro-reconditionnement-haldex       (remap)
+  //     - boite-de-transfert-bmw-x3-e83-prix-budget-comparatif        (remap x2)
+  //
+  //   ❌ À recréer en /admin/blog/nouveau (12 articles) — la redirection
+  //   est active mais mène à un 404 jusqu'à la recréation. C'est volontaire :
+  //   un 404 sur la nouvelle cible n'est pas pire qu'un 404 sur l'URL legacy
+  //   WordPress, et dès que l'article est créé avec le bon slug, la
+  //   redirection fonctionne sans redéploiement :
+  //     - embrayage-dsg-7-double-fonctionnement-et-problemes-courants
+  //     - demonter-phare-audi-a3-8v
+  //     - moteur-porsche-cayenne-4-8-v8
+  //     - haldex-audi-guide-symptomes-et-prix
+  //     - problemes-cylindre-moteurs-porsche
+  //     - moteur-porsche-cayenne-3-0-diesel
+  //     - calibrage-boite-de-transfert-bmw-x3
+  //     - boite-de-transfert-porsche-macan
+  //     - boite-de-transfert-range-rover
+  //     - boite-de-transfert-chevrolet-captiva
+  //     - bruit-pont-avant-bmw-x1
+  //     - calculateur-boite-automatique-310320749r
+  // ─────────────────────────────────────────────────────────────────────
+  '/embrayage-dsg-7-double-fonctionnement-et-problemes-courants':
+    '/blog/embrayage-dsg-7-double-fonctionnement-et-problemes-courants',
+  '/embrayage-dsg-7-double-fonctionnement-et-problemes-courants/':
+    '/blog/embrayage-dsg-7-double-fonctionnement-et-problemes-courants',
+
+  '/demonter-phare-audi-a3-8v':  '/blog/demonter-phare-audi-a3-8v',
+  '/demonter-phare-audi-a3-8v/': '/blog/demonter-phare-audi-a3-8v',
+
+  '/moteur-porsche-cayenne-4-8-v8':  '/blog/moteur-porsche-cayenne-4-8-v8',
+  '/moteur-porsche-cayenne-4-8-v8/': '/blog/moteur-porsche-cayenne-4-8-v8',
+
+  '/haldex-audi-guide-symptomes-et-prix':  '/blog/haldex-audi-guide-symptomes-et-prix',
+  '/haldex-audi-guide-symptomes-et-prix/': '/blog/haldex-audi-guide-symptomes-et-prix',
+
+  '/les-problemes-de-cylindre-sur-les-moteurs-porsche-causes-symptomes-et-solutions':
+    '/blog/problemes-cylindre-moteurs-porsche',
+  '/les-problemes-de-cylindre-sur-les-moteurs-porsche-causes-symptomes-et-solutions/':
+    '/blog/problemes-cylindre-moteurs-porsche',
+
+  '/moteur-porsche-cayenne-3-0-diesel':  '/blog/moteur-porsche-cayenne-3-0-diesel',
+  '/moteur-porsche-cayenne-3-0-diesel/': '/blog/moteur-porsche-cayenne-3-0-diesel',
+
+  '/calibrage-boite-de-transfert-bmw-x3':  '/blog/calibrage-boite-de-transfert-bmw-x3',
+  '/calibrage-boite-de-transfert-bmw-x3/': '/blog/calibrage-boite-de-transfert-bmw-x3',
+
+  // Remap → article existant le plus proche en attendant un article générique BMW
+  '/boite-de-transfert-bmw-2':  '/blog/boite-de-transfert-bmw-x3-e83-prix-budget-comparatif',
+  '/boite-de-transfert-bmw-2/': '/blog/boite-de-transfert-bmw-x3-e83-prix-budget-comparatif',
+
+  '/boite-de-transfert-porsche-macan':  '/blog/boite-de-transfert-porsche-macan',
+  '/boite-de-transfert-porsche-macan/': '/blog/boite-de-transfert-porsche-macan',
+
+  // Remap → article existant (slug proche : "actionneur-boite-transfert-..." sans le "de")
+  '/actionneur-boite-de-transfert-bmw-x3-e83':  '/blog/actionneur-boite-transfert-bmw-x3-e83-pignon-reparation',
+  '/actionneur-boite-de-transfert-bmw-x3-e83/': '/blog/actionneur-boite-transfert-bmw-x3-e83-pignon-reparation',
+
+  '/remplacer-mecatronique-dsg-7':  '/blog/mecatronique-dsg7-dq200-diagnostic-prix-remplacement',
+  '/remplacer-mecatronique-dsg-7/': '/blog/mecatronique-dsg7-dq200-diagnostic-prix-remplacement',
+
+  '/boite-de-transfert-range-rover':  '/blog/boite-de-transfert-range-rover',
+  '/boite-de-transfert-range-rover/': '/blog/boite-de-transfert-range-rover',
+
+  // Remap → article existant (préfixe identique, suffixe "-reconditionnement-haldex")
+  '/pont-arriere-aud-i-a3-quattro':  '/blog/pont-arriere-audi-a3-quattro-reconditionnement-haldex',
+  '/pont-arriere-aud-i-a3-quattro/': '/blog/pont-arriere-audi-a3-quattro-reconditionnement-haldex',
+
+  // Remap → article existant le plus proche (même véhicule, même thème)
+  '/boite-de-transfert-bmw-x3-e83-symptomes-et-remplacement':
+    '/blog/boite-de-transfert-bmw-x3-e83-prix-budget-comparatif',
+  '/boite-de-transfert-bmw-x3-e83-symptomes-et-remplacement/':
+    '/blog/boite-de-transfert-bmw-x3-e83-prix-budget-comparatif',
+
+  '/boite-de-transfert-chevrolet-captiva':  '/blog/boite-de-transfert-chevrolet-captiva',
+  '/boite-de-transfert-chevrolet-captiva/': '/blog/boite-de-transfert-chevrolet-captiva',
+
+  '/bruit-pont-avant-bmw-x1':  '/blog/bruit-pont-avant-bmw-x1',
+  '/bruit-pont-avant-bmw-x1/': '/blog/bruit-pont-avant-bmw-x1',
+
+  '/calculateur-boite-automatique-compatible-310320749r-edc-dc4':
+    '/blog/calculateur-boite-automatique-310320749r',
+  '/calculateur-boite-automatique-compatible-310320749r-edc-dc4/':
+    '/blog/calculateur-boite-automatique-310320749r',
+
+  // PDF technique WordPress supprimé → article blog équivalent
+  '/wp-content/uploads/2025/12/Revue-technique-Mecatronique-dsg-7-DQ200-0AM.pdf':
+    '/blog/mecatronique-dsg7-dq200-diagnostic-prix-remplacement',
 };
 
 // ── 2. WordPress artifact patterns -> 410 Gone ──────────────────────────────
