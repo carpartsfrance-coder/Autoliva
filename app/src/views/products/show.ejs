@@ -1140,22 +1140,102 @@
     </div>
   </div>
 
+  <!-- Sticky Add-to-Cart bar (desktop only, ≥ md) — slides down from top sous le header -->
+  <div class="hidden md:block fixed top-[64px] left-0 right-0 z-40 -translate-y-[calc(100%+64px)] transition-transform duration-300 ease-out" data-sticky-atc-desktop id="stickyAtcBarDesktop">
+    <div class="bg-white/98 backdrop-blur-md border-b border-slate-200 shadow-lg shadow-slate-900/5">
+      <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-3 flex items-center gap-4">
+        <!-- Image produit miniature -->
+        <div class="h-14 w-14 rounded-lg overflow-hidden bg-slate-100 shrink-0 ring-1 ring-slate-200">
+          <img alt="" class="h-full w-full object-cover" data-sticky-atc-desktop-img loading="lazy" />
+        </div>
+
+        <!-- Nom + prix -->
+        <div class="flex flex-col min-w-0 flex-1">
+          <span class="text-[13px] md:text-sm font-bold text-slate-900 truncate leading-tight" data-sticky-atc-desktop-name></span>
+          <div class="flex items-baseline gap-2 mt-0.5">
+            <span class="text-primary font-black text-lg" data-sticky-atc-desktop-price></span>
+            <span class="text-slate-500 text-[11px] font-semibold">TTC</span>
+          </div>
+        </div>
+
+        <!-- Indicateurs de réassurance (lg+) -->
+        <div class="hidden xl:flex items-center gap-5 text-xs font-semibold text-slate-600 shrink-0 mr-2">
+          <span class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-base text-emerald-600">local_shipping</span>
+            Livraison 24/48h
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-base text-emerald-600">verified</span>
+            Garantie 2 ans
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="material-symbols-outlined text-base text-emerald-600">payments</span>
+            3× sans frais
+          </span>
+        </div>
+
+        <!-- CTA -->
+        <button class="shrink-0 bg-primary hover:bg-primary/90 active:bg-primary/95 text-white px-6 py-3 rounded-xl font-black text-sm uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-primary/30 transition-all hover:shadow-xl hover:shadow-primary/40 hover:scale-[1.02]" data-sticky-atc-desktop-btn type="button">
+          <span class="material-symbols-outlined text-lg">add_shopping_cart</span>
+          Ajouter au panier
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
     (function() {
       var stickyBar = document.querySelector('[data-sticky-atc]');
+      var stickyBarDesktop = document.querySelector('[data-sticky-atc-desktop]');
       var realBtn = document.querySelector('[data-add-to-cart-submit]');
       var stickyBtn = document.querySelector('[data-sticky-atc-btn]');
+      var stickyBtnDesktop = document.querySelector('[data-sticky-atc-desktop-btn]');
       if (!stickyBar || !realBtn) return;
 
-      /* Populate name & price from existing DOM */
+      /* Populate name & price from existing DOM (les 2 barres partagent les sources) */
       var h1 = document.querySelector('h1');
       var priceEl = document.querySelector('[data-price-display]');
+      var addToCartForm = document.querySelector('[data-add-to-cart-form]');
+      var productName = (h1 && h1.textContent.trim())
+        || (addToCartForm && addToCartForm.getAttribute('data-product-name'))
+        || '';
+      var productImage = (addToCartForm && addToCartForm.getAttribute('data-product-image'))
+        || (function () {
+            var m = document.querySelector('[data-main-image]');
+            return m && m.src ? m.src : '';
+          })();
+      var productPrice = (priceEl && priceEl.textContent.trim()) || '';
+
       var nameSpan = stickyBar.querySelector('[data-sticky-atc-name]');
       var priceSpan = stickyBar.querySelector('[data-sticky-atc-price]');
-      if (h1 && nameSpan) nameSpan.textContent = h1.textContent.trim();
-      if (priceEl && priceSpan) priceSpan.textContent = priceEl.textContent.trim();
+      if (nameSpan) nameSpan.textContent = productName;
+      if (priceSpan) priceSpan.textContent = productPrice;
 
       stickyBar.style.display = '';
+
+      /* Populate desktop sticky bar */
+      if (stickyBarDesktop) {
+        var nameSpanD = stickyBarDesktop.querySelector('[data-sticky-atc-desktop-name]');
+        var priceSpanD = stickyBarDesktop.querySelector('[data-sticky-atc-desktop-price]');
+        var imgD = stickyBarDesktop.querySelector('[data-sticky-atc-desktop-img]');
+        if (nameSpanD) nameSpanD.textContent = productName;
+        if (priceSpanD) priceSpanD.textContent = productPrice;
+        if (imgD && productImage) {
+          imgD.src = productImage;
+          imgD.alt = productName;
+        }
+
+        /* Sync prix dynamique : si l'utilisateur change une option qui modifie le prix,
+         * le bouton sticky desktop reflète la nouvelle valeur. */
+        if (priceEl && typeof MutationObserver !== 'undefined') {
+          var priceMo = new MutationObserver(function () {
+            var newPrice = priceEl.textContent.trim();
+            if (priceSpan) priceSpan.textContent = newPrice;
+            if (priceSpanD) priceSpanD.textContent = newPrice;
+          });
+          priceMo.observe(priceEl, { childList: true, characterData: true, subtree: true });
+        }
+      }
 
       /* Show custom validation error for missing required options */
       function showOptionError(form) {
@@ -1210,17 +1290,19 @@
         return true;
       }
 
-      /* Click on sticky → check options then submit or scroll to options */
-      if (stickyBtn) {
-        stickyBtn.addEventListener('click', function() {
-          var form = realBtn.closest('form');
-          if (form && !form.checkValidity()) {
-            showOptionError(form);
-            return;
-          }
-          realBtn.click();
-        });
+      /* Click on sticky → check options then submit or scroll to options.
+       * Même comportement pour mobile et desktop. */
+      function handleStickyClick() {
+        var form = realBtn.closest('form');
+        if (form && !form.checkValidity()) {
+          showOptionError(form);
+          return;
+        }
+        realBtn.click();
       }
+
+      if (stickyBtn) stickyBtn.addEventListener('click', handleStickyClick);
+      if (stickyBtnDesktop) stickyBtnDesktop.addEventListener('click', handleStickyClick);
 
       /* Also intercept the real submit button for consistent error UX */
       realBtn.addEventListener('click', function(e) {
@@ -1231,17 +1313,27 @@
         }
       });
 
-      /* Show/hide sticky bar based on real button visibility */
+      /* Show/hide sticky bars (mobile + desktop) based on real button visibility */
       var visible = false;
       var observer = new IntersectionObserver(function(entries) {
         var isInView = entries[0].isIntersecting;
         if (!isInView && !visible) {
+          // Mobile : fade in
           stickyBar.classList.remove('opacity-0', 'pointer-events-none');
           stickyBar.classList.add('opacity-100', 'pointer-events-auto');
+          // Desktop : slide down
+          if (stickyBarDesktop) {
+            stickyBarDesktop.classList.remove('-translate-y-[calc(100%+64px)]');
+            stickyBarDesktop.classList.add('translate-y-0');
+          }
           visible = true;
         } else if (isInView && visible) {
           stickyBar.classList.remove('opacity-100', 'pointer-events-auto');
           stickyBar.classList.add('opacity-0', 'pointer-events-none');
+          if (stickyBarDesktop) {
+            stickyBarDesktop.classList.remove('translate-y-0');
+            stickyBarDesktop.classList.add('-translate-y-[calc(100%+64px)]');
+          }
           visible = false;
         }
       }, { threshold: 0 });
