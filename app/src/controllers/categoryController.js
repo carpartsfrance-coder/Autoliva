@@ -11,6 +11,7 @@ const {
 } = require('../services/categoryPublic');
 const { buildHreflangSet } = require('../services/i18n');
 const { formatCategoryDisplayName } = require('../services/brandSanitizer');
+const internalLinking = require('../services/internalLinking');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -247,6 +248,14 @@ async function getCategory(req, res, next) {
       ],
     });
 
+    /* Maillage interne (sibling categories, sous-cat, top makes, related blog). */
+    let linkingData = {};
+    try {
+      linkingData = await internalLinking.getCategoryLinkingData(category);
+    } catch (err) {
+      console.error('[category] internalLinking error :', err && err.message);
+    }
+
     return res.render('products/index', {
       ...data,
       // Override SEO spécifique catégorie (écrase les valeurs par défaut du service)
@@ -268,6 +277,7 @@ async function getCategory(req, res, next) {
         slug: category.slug,
         publicPath: buildCategoryPublicPath(category),
         seoText: typeof category.seoText === 'string' ? category.seoText : '',
+        linking: linkingData,
       },
     });
   } catch (err) {

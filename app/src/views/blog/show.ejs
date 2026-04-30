@@ -217,4 +217,12 @@
   })();
 </script>
 
+<%/* Maillage interne article blog : si l'article mentionne une marque/modèle,
+     on propose des liens vers les landing pages dédiées (signal SEO fort). */%>
+<%- include('../partials/internal-linking-blocks', {
+  vehicleLinking: null,
+  categoryLinking: null,
+  blogLinking: (typeof blogLinking !== 'undefined' && blogLinking) ? blogLinking : null,
+}) %>
+
 <%- include('../partials/footer') %>

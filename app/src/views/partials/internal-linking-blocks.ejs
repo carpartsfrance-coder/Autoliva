@@ -1,0 +1,235 @@
+<%/*
+  Partial commun : blocs de maillage interne SEO réutilisables.
+
+  Trois variables locales attendues (toutes optionnelles) :
+    - vehicleLinking  : sortie de internalLinking.getMakeLinkingData /
+                        getModelLinkingData / getMoneyPageLinkingData
+    - categoryLinking : sortie de internalLinking.getCategoryLinkingData
+    - blogLinking     : sortie de internalLinking.getBlogPostLinkingData
+                        (ne contient ici que detectedVehicleLandings — le reste
+                        est rendu par la vue blog/show.ejs en autonomie)
+
+  Logique :
+    On affiche une grille de cartes pour chaque "axe" de maillage présent.
+    Chaque carte est un lien interne (anchor optimisé) vers une autre page
+    cohérente thématiquement, ce qui consolide le silo SEO.
+
+  Style : minimaliste tailwind, neutre par défaut. À customiser via .seo-link-grid.
+*/%>
+
+<%
+  const _vl = (typeof vehicleLinking === 'object' && vehicleLinking) ? vehicleLinking : null;
+  const _cl = (typeof categoryLinking === 'object' && categoryLinking) ? categoryLinking : null;
+  const _bl = (typeof blogLinking === 'object' && blogLinking) ? blogLinking : null;
+  /* Helper : pluriel intelligent. */
+  const plural = (n, s, p) => `${n} ${n > 1 ? p : s}`;
+%>
+
+<% if (_vl || _cl || _bl) { %>
+<section class="seo-internal-linking" style="background:#fff;border-top:1px solid #e9ecef;">
+  <div class="max-w-7xl mx-auto px-4 lg:px-8 py-12 space-y-12">
+
+    <%/* ─── PAGE MARQUE : modèles enfants ────────────────────────── */%>
+    <% if (_vl && Array.isArray(_vl.childModels) && _vl.childModels.length > 0) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Tous les modèles compatibles</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <% for (const m of _vl.childModels) { %>
+            <a href="<%= m.url %>"
+               class="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 transition-colors">
+              <span class="text-sm font-semibold text-slate-700 group-hover:text-primary truncate"><%= m.name %></span>
+              <% if (m.productCount) { %>
+                <span class="text-xs text-slate-400 group-hover:text-primary/70"><%= m.productCount %></span>
+              <% } %>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%/* ─── PAGE MARQUE : catégories disponibles ────────────────── */%>
+    <% if (_vl && Array.isArray(_vl.availableCategories) && _vl.availableCategories.length > 0) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Pièces par catégorie</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <% for (const c of _vl.availableCategories) { %>
+            <a href="<%= c.url %>"
+               class="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
+              <%= c.name %>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%/* ─── PAGE MODÈLE : catégories money pages disponibles ───── */%>
+    <% if (_vl && Array.isArray(_vl.availableCategories) && _vl.availableCategories.length > 0 && _vl.parentMake) { %>
+      <%/* Affichage spécifique au modèle : on l'a déjà couvert au-dessus si page marque.
+           Si page modèle (parentMake présent), c'est ici que ça s'affiche. */%>
+    <% } %>
+
+    <%/* ─── PAGE MODÈLE : sibling models ───────────────────────── */%>
+    <% if (_vl && Array.isArray(_vl.siblingModels) && _vl.siblingModels.length > 0) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">
+          Autres modèles
+          <% if (_vl.parentMake && _vl.parentMake.name) { %><%= _vl.parentMake.name %><% } %>
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+          <% for (const m of _vl.siblingModels) { %>
+            <a href="<%= m.url %>"
+               class="px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-center text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
+              <%= m.name %>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%/* ─── PAGE MONEY : sibling categories (autres catégories pour ce modèle) ─ */%>
+    <% if (_vl && Array.isArray(_vl.siblingCategories) && _vl.siblingCategories.length > 0) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">
+          Autres pièces
+          <% if (_vl.parentModel && _vl.parentModel.name) { %>pour <%= _vl.parentModel.name %><% } %>
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <% for (const c of _vl.siblingCategories) { %>
+            <a href="<%= c.url %>"
+               class="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
+              <%= c.name %>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%/* ─── PAGE MONEY : same category, other models (Boîte de transfert BMW X3, X4...) ─ */%>
+    <% if (_vl && Array.isArray(_vl.sameCategoryOtherModels) && _vl.sameCategoryOtherModels.length > 0) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">
+          <%= (_vl.parentCategory && _vl.parentCategory.name) ? _vl.parentCategory.name.split('>').pop().trim() : 'Pièce' %>
+          <% if (_vl.parentMake && _vl.parentMake.name) { %>pour autres <%= _vl.parentMake.name %><% } %>
+        </h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+          <% for (const m of _vl.sameCategoryOtherModels) { %>
+            <a href="<%= m.url %>"
+               class="px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-center text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
+              <%= m.name %>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%/* ─── PAGE CATÉGORIE : sub-categories ─────────────────────── */%>
+    <% if (_cl && Array.isArray(_cl.subCategories) && _cl.subCategories.length > 0) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Sous-catégories</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <% for (const c of _cl.subCategories) { %>
+            <a href="<%= c.url %>"
+               class="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
+              <%= c.name %>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%/* ─── PAGE CATÉGORIE : top makes ──────────────────────────── */%>
+    <% if (_cl && Array.isArray(_cl.topMakesForCategory) && _cl.topMakesForCategory.length > 0) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Marques les plus demandées</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          <% for (const m of _cl.topMakesForCategory) { %>
+            <a href="<%= m.url %>"
+               class="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 transition-colors">
+              <span class="text-sm font-semibold text-slate-700 group-hover:text-primary"><%= m.name %></span>
+              <% if (m.productCount) { %>
+                <span class="text-xs text-slate-400 group-hover:text-primary/70"><%= m.productCount %></span>
+              <% } %>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%/* ─── PAGE CATÉGORIE : sibling categories ────────────────── */%>
+    <% if (_cl && Array.isArray(_cl.siblingCategories) && _cl.siblingCategories.length > 0) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Autres catégories</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          <% for (const c of _cl.siblingCategories) { %>
+            <a href="<%= c.url %>"
+               class="px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-center text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
+              <%= c.name %>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%/* ─── BLOG ARTICLES LIÉS (vehicle + category linking) ───── */%>
+    <% const _relatedPosts = (_vl && _vl.relatedBlogPosts) || (_cl && _cl.relatedBlogPosts) || [];
+       if (_relatedPosts.length > 0) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Conseils techniques liés</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <% for (const p of _relatedPosts.slice(0, 6)) { %>
+            <a href="/blog/<%= encodeURIComponent(p.slug) %>"
+               class="group block rounded-xl border border-slate-200 overflow-hidden hover:border-primary transition-colors">
+              <% if (p.coverImageUrl) { %>
+                <img src="<%= p.coverImageUrl %>" alt="<%= p.title %>" loading="lazy"
+                     class="w-full aspect-[16/9] object-cover" />
+              <% } %>
+              <div class="p-4">
+                <h3 class="text-sm font-bold text-slate-800 group-hover:text-primary line-clamp-2 mb-1"><%= p.title %></h3>
+                <% if (p.readingTimeMinutes) { %>
+                  <p class="text-xs text-slate-500"><%= p.readingTimeMinutes %> min de lecture</p>
+                <% } %>
+              </div>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%/* ─── PAGE MARQUE : sibling makes (navigation marques) ──── */%>
+    <% if (_vl && Array.isArray(_vl.siblingMakes) && _vl.siblingMakes.length > 0 && !_vl.parentMake) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Autres marques</h2>
+        <div class="grid grid-cols-3 sm:grid-cols-5 gap-3">
+          <% for (const m of _vl.siblingMakes) { %>
+            <a href="<%= m.url %>"
+               class="px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-center text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
+              <%= m.name %>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+    <%/* ─── BLOG ARTICLE : detected vehicle landings ──────────── */%>
+    <% if (_bl && Array.isArray(_bl.detectedVehicleLandings) && _bl.detectedVehicleLandings.length > 0) { %>
+      <div>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Trouvez la pièce pour votre véhicule</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <% for (const v of _bl.detectedVehicleLandings) { %>
+            <a href="<%= v.url %>"
+               class="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border-2 border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 transition-colors">
+              <div class="flex flex-col">
+                <span class="text-sm font-bold text-primary">
+                  <%= v.makeName %><% if (v.modelName) { %> <%= v.modelName %><% } %>
+                </span>
+                <span class="text-xs text-slate-500">Voir les pièces compatibles →</span>
+              </div>
+            </a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+
+  </div>
+</section>
+<% } %>

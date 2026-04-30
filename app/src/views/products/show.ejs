@@ -1308,6 +1308,47 @@
       window.addEventListener('resize', checkSize);
     })();
   </script>
+
+  <%/* Maillage interne fiche produit : parentVehicleLandings + parentCategory.
+       Donne à Google des signaux clairs sur la place du produit dans la taxonomie. */%>
+  <% if (typeof productLinking !== 'undefined' && productLinking
+        && (
+          (Array.isArray(productLinking.parentVehicleLandings) && productLinking.parentVehicleLandings.length > 0)
+          || productLinking.parentCategory
+        )) { %>
+    <section class="seo-internal-linking" style="background:#fff;border-top:1px solid #e9ecef;">
+      <div class="max-w-7xl mx-auto px-4 lg:px-8 py-10 space-y-8">
+        <% if (productLinking.parentCategory) { %>
+          <div>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-slate-800 mb-3">Catégorie</h2>
+            <a href="<%= productLinking.parentCategory.url %>"
+               class="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
+              <%= productLinking.parentCategory.name %>
+              <span class="text-slate-400">→</span>
+            </a>
+          </div>
+        <% } %>
+        <% if (Array.isArray(productLinking.parentVehicleLandings) && productLinking.parentVehicleLandings.length > 0) { %>
+          <div>
+            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-slate-800 mb-3">Voir les pièces compatibles</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <% for (const v of productLinking.parentVehicleLandings) { %>
+                <a href="<%= v.url %>"
+                   class="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border-2 border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 transition-colors">
+                  <div class="flex flex-col">
+                    <span class="text-sm font-bold text-primary">
+                      <%= v.makeName %><% if (v.modelName) { %> <%= v.modelName %><% } %>
+                    </span>
+                    <span class="text-xs text-slate-500">Toutes pièces compatibles →</span>
+                  </div>
+                </a>
+              <% } %>
+            </div>
+          </div>
+        <% } %>
+      </div>
+    </section>
+  <% } %>
 </main>
 
 <%- include('../partials/footer') %>

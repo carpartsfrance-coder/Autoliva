@@ -746,6 +746,19 @@ async function getBlogPost(req, res) {
     const ogArticlePublishedTime = publishedAt ? new Date(publishedAt).toISOString() : '';
     const ogArticleModifiedTime = updatedAt ? new Date(updatedAt).toISOString() : '';
 
+    /* Maillage interne : on enrichit avec detectedVehicleLandings (links vers
+       /pieces-auto/{make}/{model} si l'article mentionne une marque/modèle).
+       Les similarPosts et relatedProducts existants sont préservés. */
+    let blogLinking = { detectedVehicleLandings: [] };
+    try {
+      const linking = await require('../services/internalLinking').getBlogPostLinkingData(post);
+      blogLinking = {
+        detectedVehicleLandings: linking.detectedVehicleLandings || [],
+      };
+    } catch (err) {
+      console.error('[blog] internalLinking error :', err && err.message);
+    }
+
     return res.render('blog/show', {
       title,
       metaDescription,
@@ -774,6 +787,7 @@ async function getBlogPost(req, res) {
       },
       relatedProducts: relatedView,
       similarPosts,
+      blogLinking,
     });
   })().catch((err) => {
     console.error(err);

@@ -423,6 +423,15 @@
       </div>
     </section>
   <% } %>
+
+  <%/* Maillage interne SEO : grilles de liens contextuels (modèles enfants,
+       catégories disponibles, articles blog liés, sibling pages…). Le partial
+       devine quoi afficher selon les variables vehicleLinking / categoryLinking. */%>
+  <%- include('../partials/internal-linking-blocks', {
+    vehicleLinking: (_vehicleContext && _vehicleContext.linking) ? _vehicleContext.linking : null,
+    categoryLinking: (_categoryContext && _categoryContext.linking) ? _categoryContext.linking : null,
+    blogLinking: null,
+  }) %>
 </main>
 
 <%- include('../partials/footer') %>

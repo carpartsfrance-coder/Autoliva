@@ -926,6 +926,20 @@ async function getProduct(req, res, next) {
       { lang: 'x-default', href: canonicalUrl },
     ];
 
+    /* Maillage interne : on récupère parent vehicle landings + parent category
+       depuis le service. La logique relatedProducts / relatedBlogPosts existante
+       reste en place et est préservée pour ne pas régresser. */
+    let productLinking = { parentVehicleLandings: [], parentCategory: null };
+    try {
+      const linking = await require('../services/internalLinking').getProductLinkingData(product);
+      productLinking = {
+        parentVehicleLandings: linking.parentVehicleLandings || [],
+        parentCategory: linking.parentCategory || null,
+      };
+    } catch (err) {
+      console.error('[product] internalLinking error :', err && err.message);
+    }
+
     if (req.session) delete req.session.cartError;
     return res.render('products/show', {
       title: seoTitle,
@@ -948,6 +962,7 @@ async function getProduct(req, res, next) {
       categoryName,
       relatedProducts,
       relatedBlogPosts,
+      productLinking,
     });
   } catch (err) {
     return next(err);

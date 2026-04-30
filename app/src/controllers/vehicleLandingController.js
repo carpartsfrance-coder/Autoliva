@@ -22,6 +22,7 @@ const vehicleService = require('../services/vehicleLandingService');
 const VehicleLanding = require('../models/VehicleLanding');
 const { buildHreflangSet } = require('../services/i18n');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
+const internalLinking = require('../services/internalLinking');
 
 function toJsonLdSafe(value) {
   return JSON.stringify(value)
@@ -243,6 +244,24 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
         ? `Pièces auto ${makeName} ${modelName}`
         : `Pièces auto ${makeName}`;
 
+  /* Maillage interne : matrice de liens contextuels (modèles enfants,
+     catégories disponibles, articles blog liés, sibling pages…). Géré par
+     le service internalLinking pour que la logique reste centralisée et
+     cachée 5 min en mémoire. */
+  let linkingData = {};
+  try {
+    if (partTypeSlug && modelName) {
+      linkingData = await internalLinking.getMoneyPageLinkingData(makeName, modelName, partTypeSlug);
+    } else if (modelName) {
+      linkingData = await internalLinking.getModelLinkingData(makeName, modelName);
+    } else {
+      linkingData = await internalLinking.getMakeLinkingData(makeName);
+    }
+  } catch (err) {
+    console.error('[vehicleLanding] internalLinking error :', err && err.message);
+    linkingData = {};
+  }
+
   return res.render('products/index', {
     ...data,
     /* Override SEO meta */
@@ -272,6 +291,7 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
         makeUrl: `/pieces-auto/${makeSlug}`,
         modelUrl: modelSlug ? `/pieces-auto/${makeSlug}/${modelSlug}` : null,
       },
+      linking: linkingData,
     },
   });
 }
