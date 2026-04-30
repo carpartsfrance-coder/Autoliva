@@ -10,6 +10,7 @@ const {
   getPublicBaseUrlFromReq,
 } = require('../services/categoryPublic');
 const { buildHreflangSet } = require('../services/i18n');
+const { formatCategoryDisplayName } = require('../services/brandSanitizer');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -169,8 +170,14 @@ async function getCategory(req, res, next) {
     const data = await prepareProductListingData(req, { presetCategoryName: category.name });
 
     /* Override SEO spécifique à la page catégorie (canonical /categorie/:slug,
-     * title incluant le nom catégorie, JSON-LD CollectionPage + breadcrumb). */
-    const name = getTrimmedString(category.name);
+     * title incluant le nom catégorie, JSON-LD CollectionPage + breadcrumb).
+     *
+     * Les noms en DB peuvent contenir " > " (hiérarchie parent > enfant) qui
+     * polluerait le H1 et le <title>. On affiche le segment terminal seul
+     * (« Bloc moteur » plutôt que « Moteur > Bloc moteur ») — le breadcrumb
+     * au-dessus du H1 rappelle déjà la hiérarchie. */
+    const rawName = getTrimmedString(category.name);
+    const name = formatCategoryDisplayName(rawName);
     const title = `${name} - Pièces auto | ${brand.NAME}`;
     const metaDescription = buildCategoryMetaDescription(name, data.totalCount);
 

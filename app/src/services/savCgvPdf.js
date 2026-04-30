@@ -10,6 +10,7 @@
 const crypto = require('crypto');
 const PDFDocument = require('pdfkit');
 const savFileStorage = require('./savFileStorage');
+const brand = require('../config/brand');
 
 function metaHash(ticket) {
   const cgv = (ticket && ticket.cgvAcceptance) || {};
@@ -43,7 +44,7 @@ function buildPdfBuffer(ticket) {
         .text('Acceptation des Conditions Générales du SAV', { align: 'left' });
       doc.moveDown(0.3);
       doc.font('Helvetica').fontSize(10).fillColor('#475569')
-        .text('CarParts France — Document signé électroniquement', { align: 'left' });
+        .text(`${brand.NAME} — Document signé électroniquement`, { align: 'left' });
       doc.moveDown(1);
 
       // Cadre dossier
@@ -59,7 +60,7 @@ function buildPdfBuffer(ticket) {
       doc.font('Helvetica-Bold').fontSize(12).text("Texte de l'acceptation");
       doc.font('Helvetica').fontSize(10).fillColor('#1e293b');
       doc.text(
-        "Le client déclare avoir pris connaissance et accepter sans réserve les Conditions Générales du Service Après-Vente de CarParts France, et notamment :",
+        `Le client déclare avoir pris connaissance et accepter sans réserve les Conditions Générales du Service Après-Vente de ${brand.NAME}, et notamment :`,
         { align: 'justify' }
       );
       doc.moveDown(0.4);
@@ -103,7 +104,7 @@ function buildPdfBuffer(ticket) {
       // Pied de page
       doc.font('Helvetica').fontSize(8).fillColor('#94a3b8')
         .text(
-          'Document généré automatiquement par CarParts France SAS — RCS xxx — carpartsfrance.fr',
+          `Document généré automatiquement par ${brand.COMPANY.LEGAL_NAME || brand.NAME}${brand.COMPANY.RCS ? ` — RCS ${brand.COMPANY.RCS}` : ''} — ${brand.DOMAIN}`,
           56,
           doc.page.height - 60,
           { align: 'center', width: doc.page.width - 112 }

@@ -7,6 +7,7 @@ const { markdownToHtml, stripHtml: stripHtmlFromService } = require('../services
 const mediaStorage = require('../services/mediaStorage');
 const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const emailService = require('../services/emailService');
+const brand = require('../config/brand');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -38,7 +39,7 @@ function countWords(value) {
 }
 
 function buildSeoAssistant({ form, mode }) {
-  const siteName = 'CarParts France';
+  const siteName = brand.NAME;
   const baseUrl = getSiteUrlFromEnv();
 
   const title = getTrimmedString(form && form.title);
@@ -512,7 +513,7 @@ async function postAdminCreateBlogPost(req, res, next) {
     if (!dbConnected) {
       cleanupUploadedBlogFile(req);
       return res.status(503).render('errors/500', {
-        title: 'Erreur - CarParts France',
+        title: `Erreur - ${brand.NAME}`,
       });
     }
 
@@ -667,12 +668,12 @@ async function getAdminEditBlogPostPage(req, res, next) {
 
     if (!mongoose.Types.ObjectId.isValid(postId)) {
       cleanupUploadedBlogFile(req);
-      return res.status(404).render('errors/404', { title: 'Page introuvable - CarParts France' });
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
 
     const post = await BlogPost.findById(postId).lean();
     if (!post) {
-      return res.status(404).render('errors/404', { title: 'Page introuvable - CarParts France' });
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
 
     const errorMessage = req.session.adminBlogError || null;
@@ -711,12 +712,12 @@ async function postAdminUpdateBlogPost(req, res, next) {
 
     if (!mongoose.Types.ObjectId.isValid(postId)) {
       cleanupUploadedBlogFile(req);
-      return res.status(404).render('errors/404', { title: 'Page introuvable - CarParts France' });
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
 
     const existing = await BlogPost.findById(postId).lean();
     if (!existing) {
-      return res.status(404).render('errors/404', { title: 'Page introuvable - CarParts France' });
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
 
     if (req.uploadError) {
@@ -866,11 +867,11 @@ async function postAdminDeleteBlogPost(req, res, next) {
     const { postId } = req.params;
 
     if (!dbConnected) {
-      return res.status(503).render('errors/500', { title: 'Erreur - CarParts France' });
+      return res.status(503).render('errors/500', { title: `Erreur - ${brand.NAME}` });
     }
 
     if (!mongoose.Types.ObjectId.isValid(postId)) {
-      return res.status(404).render('errors/404', { title: 'Page introuvable - CarParts France' });
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
 
     const existing = await BlogPost.findById(postId).select('_id coverImageUrl').lean();

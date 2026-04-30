@@ -30,201 +30,345 @@ function toIsoDate(value) {
   }
 }
 
+/* ─── Helpers de rendu XML ────────────────────────────────────────────── */
+
+function renderUrlset(urls, { withImages = false } = {}) {
+  const ns = withImages
+    ? `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">`
+    : `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
+
+  const body = urls.map((u) => {
+    const lastmod = u.lastmod ? `\n    <lastmod>${escapeXml(u.lastmod)}</lastmod>` : '';
+    const imageXml = withImages
+      ? (u.images || [])
+        .filter(Boolean)
+        .map((imgUrl) => {
+          const title = u.imageTitle ? `\n      <image:title>${escapeXml(u.imageTitle)}</image:title>` : '';
+          return `\n    <image:image>\n      <image:loc>${escapeXml(imgUrl)}</image:loc>${title}\n    </image:image>`;
+        })
+        .join('')
+      : '';
+    return `  <url>\n    <loc>${escapeXml(u.loc)}</loc>${lastmod}${imageXml}\n  </url>`;
+  }).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${ns}\n${body}\n</urlset>\n`;
+}
+
+function renderSitemapIndex(sitemaps) {
+  const body = sitemaps.map((s) => {
+    const lastmod = s.lastmod ? `\n    <lastmod>${escapeXml(s.lastmod)}</lastmod>` : '';
+    return `  <sitemap>\n    <loc>${escapeXml(s.loc)}</loc>${lastmod}\n  </sitemap>`;
+  }).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    body + `\n</sitemapindex>\n`;
+}
+
+function sendXml(res, xml) {
+  /* Le middleware express-session ajoute un Set-Cookie sur toutes les réponses
+     (rolling: true). Sur un sitemap public, ce cookie casse le cache CDN et
+     peut faire échouer le crawl Google ("Impossible de lire le sitemap"
+     dans Search Console). On nettoie donc le header avant l'envoi. */
+  res.removeHeader('Set-Cookie');
+  res.set('Content-Type', 'application/xml; charset=utf-8');
+  res.set('Cache-Control', 'public, max-age=600');
+  return res.status(200).send(xml);
+}
+
+function absMediaUrl(baseUrl, mediaPath) {
+  if (!mediaPath) return '';
+  return baseUrl ? `${baseUrl}${mediaPath}` : mediaPath;
+}
+
+/* ─── Sous-sitemaps ──────────────────────────────────────────────────── */
+
+async function buildPagesUrls(baseUrl, dbConnected) {
+  const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
+  const urls = [
+    { loc: resolveUrl('/'), lastmod: '' },
+    { loc: resolveUrl('/produits'), lastmod: '' },
+    { loc: resolveUrl('/categorie'), lastmod: '' },
+    { loc: resolveUrl('/pieces-auto'), lastmod: '' },
+    { loc: resolveUrl('/blog'), lastmod: '' },
+    { loc: resolveUrl('/contact'), lastmod: '' },
+    { loc: resolveUrl('/devis'), lastmod: '' },
+    { loc: resolveUrl('/faq'), lastmod: '' },
+    { loc: resolveUrl('/notre-histoire'), lastmod: '' },
+    { loc: resolveUrl('/legal'), lastmod: '' },
+  ];
+
+  let legalPages = [];
+  if (dbConnected) {
+    legalPages = await LegalPage.find({ isPublished: { $ne: false } })
+      .select('_id slug updatedAt')
+      .sort({ sortOrder: 1, title: 1 })
+      .lean();
+  } else {
+    legalPages = (DEFAULT_LEGAL_PAGES || []).map((p) => ({ slug: p.slug, updatedAt: null }));
+  }
+
+  for (const lp of legalPages) {
+    if (!lp || !lp.slug) continue;
+    urls.push({ loc: resolveUrl(`/legal/${encodeURIComponent(lp.slug)}`), lastmod: toIsoDate(lp.updatedAt) });
+  }
+  return urls;
+}
+
+async function buildCategoriesUrls(req, dbConnected) {
+  if (!dbConnected) {
+    /* Mode demo (sans DB) : construire les catégories depuis demoProducts. */
+    const bySlug = new Map();
+    for (const p of demoProducts || []) {
+      const raw = p && typeof p.category === 'string' ? p.category.trim() : '';
+      if (!raw) continue;
+      const main = raw.includes('>') ? raw.split('>')[0].trim() : raw;
+      const slug = main.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+      if (!slug) continue;
+      if (!bySlug.has(slug)) bySlug.set(slug, { slug, updatedAt: null });
+    }
+    const urls = [];
+    for (const c of bySlug.values()) {
+      const loc = buildCategoryPublicUrl(c, { req });
+      if (loc) urls.push({ loc, lastmod: '' });
+    }
+    return urls;
+  }
+
+  const cats = await Category.find({ isActive: true })
+    .select('_id slug updatedAt')
+    .sort({ sortOrder: 1, name: 1 })
+    .lean();
+  const urls = [];
+  for (const c of cats) {
+    if (!c || !c.slug) continue;
+    const loc = buildCategoryPublicUrl(c, { req });
+    if (!loc) continue;
+    urls.push({ loc, lastmod: toIsoDate(c.updatedAt) });
+  }
+  return urls;
+}
+
+async function buildProductsUrls(req, baseUrl, dbConnected) {
+  let products = [];
+  if (dbConnected) {
+    products = await Product.find({ isPublished: { $ne: false } })
+      .select('_id slug name updatedAt imageUrl galleryUrls')
+      .sort({ updatedAt: -1 })
+      .lean();
+  } else {
+    products = (demoProducts || []).slice();
+  }
+
+  const urls = [];
+  for (const p of products) {
+    if (!p || !p._id) continue;
+    const loc = buildProductPublicUrl(p, { req });
+    if (!loc) continue;
+    const images = [];
+    if (p.imageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(p.imageUrl, p.name)));
+    if (Array.isArray(p.galleryUrls)) {
+      for (const u of p.galleryUrls) {
+        if (typeof u === 'string' && u.trim()) {
+          images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(u.trim(), p.name)));
+        }
+      }
+    }
+    urls.push({ loc, lastmod: toIsoDate(p.updatedAt), images, imageTitle: p.name || '' });
+  }
+  return urls;
+}
+
+async function buildVehiclesUrls(req, baseUrl, dbConnected) {
+  if (!dbConnected) return [];
+  const urls = [];
+  const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
+  try {
+    const vehicleService = require('../services/vehicleLandingService');
+    const makes = await vehicleService.listMakes();
+    for (const make of makes) {
+      const makeCount = await vehicleService.countCompatibleProducts({ make: make.name });
+      if (makeCount === 0) continue;
+      urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}`), lastmod: '' });
+      for (const model of (make.models || [])) {
+        const modelCount = await vehicleService.countCompatibleProducts({ make: make.name, model: model.name });
+        if (modelCount === 0) continue;
+        urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}`), lastmod: '' });
+        const cats = await vehicleService.listCategorySlugsForVehicle({ make: make.name, model: model.name });
+        for (const cat of cats) {
+          urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}/${cat.slug}`), lastmod: '' });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[sitemap] vehicle landings : erreur ignorée :', err && err.message ? err.message : err);
+  }
+  return urls;
+}
+
+async function buildReferencesUrls(baseUrl, dbConnected) {
+  if (!dbConnected) return [];
+  const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
+  const urls = [];
+  try {
+    const refRows = await Product.aggregate([
+      { $match: { isPublished: { $ne: false }, compatibleReferences: { $exists: true, $ne: [] } } },
+      { $unwind: '$compatibleReferences' },
+      { $project: { ref: { $trim: { input: '$compatibleReferences' } } } },
+      { $match: { ref: { $regex: /^[A-Za-z0-9._\-/]{4,50}$/ } } },
+      { $group: { _id: { $toUpper: '$ref' } } },
+      { $sort: { _id: 1 } },
+      { $limit: 5000 },
+    ]);
+    for (const row of refRows || []) {
+      if (!row || !row._id) continue;
+      urls.push({ loc: resolveUrl(`/reference/${encodeURIComponent(row._id)}`), lastmod: '' });
+    }
+  } catch (err) {
+    console.error('[sitemap] OEM references : erreur ignorée :', err && err.message ? err.message : err);
+  }
+  return urls;
+}
+
+async function buildBlogUrls(baseUrl, dbConnected) {
+  if (!dbConnected) return [];
+  const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
+  const posts = await BlogPost.find({ isPublished: true })
+    .select('_id slug title updatedAt publishedAt coverImageUrl')
+    .sort({ publishedAt: -1, updatedAt: -1 })
+    .lean();
+  const urls = [];
+  for (const bp of posts) {
+    if (!bp || !bp.slug) continue;
+    const loc = resolveUrl(`/blog/${encodeURIComponent(String(bp.slug))}`);
+    const last = bp.updatedAt || bp.publishedAt || null;
+    const images = [];
+    if (bp.coverImageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(bp.coverImageUrl, bp.title)));
+    urls.push({ loc, lastmod: toIsoDate(last), images, imageTitle: bp.title || '' });
+  }
+  return urls;
+}
+
+/* ─── Routes ─────────────────────────────────────────────────────────── */
+
+/* /sitemap.xml — sitemap index pointant vers les sous-sitemaps.
+   Si l'index est désactivé (SITEMAP_LEGACY_FLAT=true) on retourne le format
+   monolithique pour compat. */
 async function getSitemapXml(req, res, next) {
+  try {
+    const baseUrl = getPublicBaseUrlFromReq(req);
+
+    if (process.env.SITEMAP_LEGACY_FLAT === 'true') {
+      return getLegacyFlatSitemap(req, res, next);
+    }
+
+    const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
+    const now = new Date().toISOString();
+    const sitemaps = [
+      { loc: resolveUrl('/sitemap-pages.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-categories.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-products.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-references.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-blog.xml'), lastmod: now },
+    ];
+
+    return sendXml(res, renderSitemapIndex(sitemaps));
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/* Format flat : tout dans un seul sitemap.xml (anciennement la valeur par
+   défaut). Conservé en flag pour rollback rapide si besoin. */
+async function getLegacyFlatSitemap(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
 
-    let products = [];
-    let categories = [];
-    let legalPages = [];
-    let blogPosts = [];
-    if (dbConnected) {
-      /* Filtre sitemap : seuls les produits publiés (default true) sont inclus.
-       * Évite que Google crawle des brouillons / produits désactivés. */
-      products = await Product.find({ isPublished: { $ne: false } })
-        .select('_id slug name updatedAt imageUrl galleryUrls')
-        .sort({ updatedAt: -1 })
-        .lean();
+    const all = []
+      .concat(await buildPagesUrls(baseUrl, dbConnected))
+      .concat(await buildCategoriesUrls(req, dbConnected))
+      .concat(await buildVehiclesUrls(req, baseUrl, dbConnected))
+      .concat(await buildReferencesUrls(baseUrl, dbConnected))
+      .concat(await buildProductsUrls(req, baseUrl, dbConnected))
+      .concat(await buildBlogUrls(baseUrl, dbConnected));
 
-      categories = await Category.find({ isActive: true })
-        .select('_id slug updatedAt')
-        .sort({ sortOrder: 1, name: 1 })
-        .lean();
+    return sendXml(res, renderUrlset(all, { withImages: true }));
+  } catch (err) {
+    return next(err);
+  }
+}
 
-      legalPages = await LegalPage.find({ isPublished: { $ne: false } })
-        .select('_id slug updatedAt')
-        .sort({ sortOrder: 1, title: 1 })
-        .lean();
+async function getSitemapPages(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const urls = await buildPagesUrls(baseUrl, dbConnected);
+    return sendXml(res, renderUrlset(urls));
+  } catch (err) {
+    return next(err);
+  }
+}
 
-      blogPosts = await BlogPost.find({ isPublished: true })
-        .select('_id slug title updatedAt publishedAt coverImageUrl')
-        .sort({ publishedAt: -1, updatedAt: -1 })
-        .lean();
-    } else {
-      products = (demoProducts || []).slice();
+async function getSitemapCategories(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const urls = await buildCategoriesUrls(req, dbConnected);
+    return sendXml(res, renderUrlset(urls));
+  } catch (err) {
+    return next(err);
+  }
+}
 
-      const bySlug = new Map();
-      for (const p of demoProducts || []) {
-        const raw = p && typeof p.category === 'string' ? p.category.trim() : '';
-        if (!raw) continue;
-        const main = raw.includes('>') ? raw.split('>')[0].trim() : raw;
-        const slug = main
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '');
-        if (!slug) continue;
-        if (!bySlug.has(slug)) bySlug.set(slug, { slug, updatedAt: null });
-      }
-      categories = Array.from(bySlug.values());
+async function getSitemapProducts(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const urls = await buildProductsUrls(req, baseUrl, dbConnected);
+    return sendXml(res, renderUrlset(urls, { withImages: true }));
+  } catch (err) {
+    return next(err);
+  }
+}
 
-      legalPages = (DEFAULT_LEGAL_PAGES || []).map((p) => ({ slug: p.slug, updatedAt: null }));
-      blogPosts = [];
-    }
+async function getSitemapVehicles(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const urls = await buildVehiclesUrls(req, baseUrl, dbConnected);
+    return sendXml(res, renderUrlset(urls));
+  } catch (err) {
+    return next(err);
+  }
+}
 
-    const urls = [];
+async function getSitemapReferences(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const urls = await buildReferencesUrls(baseUrl, dbConnected);
+    return sendXml(res, renderUrlset(urls));
+  } catch (err) {
+    return next(err);
+  }
+}
 
-    function resolveUrl(path) {
-      return baseUrl ? `${baseUrl}${path}` : path;
-    }
-
-    urls.push({ loc: resolveUrl('/'), lastmod: '' });
-    urls.push({ loc: resolveUrl('/produits'), lastmod: '' });
-    urls.push({ loc: resolveUrl('/categorie'), lastmod: '' });
-    urls.push({ loc: resolveUrl('/pieces-auto'), lastmod: '' });
-    urls.push({ loc: resolveUrl('/blog'), lastmod: '' });
-    urls.push({ loc: resolveUrl('/contact'), lastmod: '' });
-    urls.push({ loc: resolveUrl('/devis'), lastmod: '' });
-    urls.push({ loc: resolveUrl('/faq'), lastmod: '' });
-    urls.push({ loc: resolveUrl('/notre-histoire'), lastmod: '' });
-    urls.push({ loc: resolveUrl('/legal'), lastmod: '' });
-
-    for (const lp of legalPages || []) {
-      if (!lp || !lp.slug) continue;
-      urls.push({ loc: resolveUrl(`/legal/${encodeURIComponent(lp.slug)}`), lastmod: toIsoDate(lp.updatedAt) });
-    }
-
-    for (const c of categories || []) {
-      if (!c || !c.slug) continue;
-      const loc = buildCategoryPublicUrl(c, { req });
-      if (!loc) continue;
-      urls.push({ loc, lastmod: toIsoDate(c.updatedAt) });
-    }
-
-    /* Vehicle landing pages — /pieces-auto/:make, /:make/:model, /:make/:model/:category.
-       On ne liste que les couples qui ont au moins 1 produit compatible
-       (sinon Google trouverait des 404 dans le sitemap).
-
-       NOTE perf : les pages /:make/:model/:category sont les "money pages" (forte
-       conversion). Elles génèrent potentiellement beaucoup d'URLs (n_makes ×
-       n_models × n_categories). On limite avec listCategorySlugsForVehicle qui
-       ne retourne que les catégories ayant ≥1 produit pour le couple. */
-    if (dbConnected) {
-      try {
-        const vehicleService = require('../services/vehicleLandingService');
-        const makes = await vehicleService.listMakes();
-        for (const make of makes) {
-          const makeCount = await vehicleService.countCompatibleProducts({ make: make.name });
-          if (makeCount === 0) continue;
-          urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}`), lastmod: '' });
-
-          for (const model of (make.models || [])) {
-            const modelCount = await vehicleService.countCompatibleProducts({ make: make.name, model: model.name });
-            if (modelCount === 0) continue;
-            urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}`), lastmod: '' });
-
-            /* Money pages : :make/:model/:category. */
-            const cats = await vehicleService.listCategorySlugsForVehicle({ make: make.name, model: model.name });
-            for (const cat of cats) {
-              urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}/${cat.slug}`), lastmod: '' });
-            }
-          }
-        }
-      } catch (err) {
-        console.error('[sitemap] vehicle landings : erreur ignorée :', err && err.message ? err.message : err);
-      }
-    }
-
-    /* OEM reference landing pages — /reference/:ref.
-       Une URL par référence unique présente dans compatibleReferences[] de
-       au moins 1 produit publié. Les mécanos pros Googlent ces refs directement,
-       conversion rate très haute. Limit raisonnable pour éviter sitemap énorme. */
-    if (dbConnected) {
-      try {
-        const refRows = await Product.aggregate([
-          { $match: { isPublished: { $ne: false }, compatibleReferences: { $exists: true, $ne: [] } } },
-          { $unwind: '$compatibleReferences' },
-          { $project: { ref: { $trim: { input: '$compatibleReferences' } } } },
-          { $match: { ref: { $regex: /^[A-Za-z0-9._\-/]{4,50}$/ } } },
-          { $group: { _id: { $toUpper: '$ref' } } },
-          { $sort: { _id: 1 } },
-          { $limit: 5000 }, // safety cap
-        ]);
-        for (const row of refRows || []) {
-          if (!row || !row._id) continue;
-          urls.push({ loc: resolveUrl(`/reference/${encodeURIComponent(row._id)}`), lastmod: '' });
-        }
-      } catch (err) {
-        console.error('[sitemap] OEM references : erreur ignorée :', err && err.message ? err.message : err);
-      }
-    }
-
-    for (const p of products) {
-      if (!p || !p._id) continue;
-      const loc = buildProductPublicUrl(p, { req });
-      if (!loc) continue;
-
-      /* Collect all product images for the image sitemap */
-      const imageUrls = [];
-      if (p.imageUrl) imageUrls.push(buildSeoMediaUrl(p.imageUrl, p.name));
-      if (Array.isArray(p.galleryUrls)) {
-        for (const u of p.galleryUrls) {
-          if (typeof u === 'string' && u.trim()) imageUrls.push(buildSeoMediaUrl(u.trim(), p.name));
-        }
-      }
-
-      urls.push({ loc, lastmod: toIsoDate(p.updatedAt), images: imageUrls, imageTitle: p.name || '' });
-    }
-
-    for (const bp of blogPosts || []) {
-      if (!bp || !bp.slug) continue;
-      const loc = resolveUrl(`/blog/${encodeURIComponent(String(bp.slug))}`);
-      const last = bp.updatedAt || bp.publishedAt || null;
-      const blogImages = [];
-      if (bp.coverImageUrl) blogImages.push(buildSeoMediaUrl(bp.coverImageUrl, bp.title));
-      urls.push({ loc, lastmod: toIsoDate(last), images: blogImages, imageTitle: bp.title || '' });
-    }
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>\n` +
-      `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n` +
-      `        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n` +
-      urls
-        .map((u) => {
-          const lastmod = u.lastmod ? `\n    <lastmod>${escapeXml(u.lastmod)}</lastmod>` : '';
-          const imageXml = (u.images || [])
-            .filter(Boolean)
-            .map((imgUrl) => {
-              const absImgUrl = baseUrl ? `${baseUrl}${imgUrl}` : imgUrl;
-              const title = u.imageTitle ? `\n      <image:title>${escapeXml(u.imageTitle)}</image:title>` : '';
-              return `\n    <image:image>\n      <image:loc>${escapeXml(absImgUrl)}</image:loc>${title}\n    </image:image>`;
-            })
-            .join('');
-          return `  <url>\n    <loc>${escapeXml(u.loc)}</loc>${lastmod}${imageXml}\n  </url>`;
-        })
-        .join('\n') +
-      `\n</urlset>\n`;
-
-    res.set('Content-Type', 'application/xml; charset=utf-8');
-    res.set('Cache-Control', 'public, max-age=600');
-    return res.status(200).send(xml);
+async function getSitemapBlog(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const urls = await buildBlogUrls(baseUrl, dbConnected);
+    return sendXml(res, renderUrlset(urls, { withImages: true }));
   } catch (err) {
     return next(err);
   }
 }
 
 function getRobotsTxt(req, res) {
+  /* Même pollution Set-Cookie que sur sitemap : on nettoie. */
+  res.removeHeader('Set-Cookie');
+
   if (process.env.FORCE_NOINDEX === 'true') {
     const body = [
       'User-agent: *',
@@ -260,4 +404,10 @@ function getRobotsTxt(req, res) {
 module.exports = {
   getSitemapXml,
   getRobotsTxt,
+  getSitemapPages,
+  getSitemapCategories,
+  getSitemapProducts,
+  getSitemapVehicles,
+  getSitemapReferences,
+  getSitemapBlog,
 };

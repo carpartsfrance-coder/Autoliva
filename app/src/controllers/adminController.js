@@ -30,6 +30,7 @@ const openaiProductGenerator = require('../services/openaiProductGenerator');
 const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const { getNextOrderNumber } = require('../services/orderNumber');
 const { hasAbility, getRoleLabel, ROLES } = require('../permissions');
+const brand = require('../config/brand');
 
 const ADMIN_LOGIN_BUCKETS = new Map();
 const ADMIN_RESET_BUCKETS = new Map();
@@ -1068,7 +1069,7 @@ async function postAdminCreateCategory(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('errors/500', {
-        title: 'Erreur - CarParts France',
+        title: `Erreur - ${brand.NAME}`,
       });
     }
 
@@ -1122,7 +1123,7 @@ async function postAdminUpdateCategory(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('errors/500', {
-        title: 'Erreur - CarParts France',
+        title: `Erreur - ${brand.NAME}`,
       });
     }
 
@@ -1267,7 +1268,7 @@ async function postAdminToggleCategory(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('errors/500', {
-        title: 'Erreur - CarParts France',
+        title: `Erreur - ${brand.NAME}`,
       });
     }
 
@@ -1309,7 +1310,7 @@ async function postAdminDeleteCategory(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('errors/500', {
-        title: 'Erreur - CarParts France',
+        title: `Erreur - ${brand.NAME}`,
       });
     }
 
@@ -1368,7 +1369,7 @@ async function postAdminBulkDeleteCategories(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('errors/500', {
-        title: 'Erreur - CarParts France',
+        title: `Erreur - ${brand.NAME}`,
       });
     }
 
@@ -2532,7 +2533,7 @@ async function getAdminOrderDetailPage(req, res, next) {
 
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -2544,7 +2545,7 @@ async function getAdminOrderDetailPage(req, res, next) {
     const orderDoc = await Order.findById(orderId).lean();
     if (!orderDoc) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -4616,7 +4617,7 @@ function countWords(value) {
 }
 
 function buildProductSeoAssistant({ form, mode, productId } = {}) {
-  const siteName = 'CarParts France';
+  const siteName = brand.NAME;
   const baseUrl = getSiteUrlFromEnv();
 
   const name = getTrimmedString(form && form.name);
@@ -5775,7 +5776,7 @@ async function postAdminBulkDeleteProducts(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('errors/500', {
-        title: 'Erreur - CarParts France',
+        title: `Erreur - ${brand.NAME}`,
       });
     }
 
@@ -6729,7 +6730,7 @@ async function getAdminEditProductPage(req, res, next) {
 
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -6737,7 +6738,7 @@ async function getAdminEditProductPage(req, res, next) {
 
     if (!product) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -6988,7 +6989,7 @@ async function postAdminUpdateProduct(req, res, next) {
       cleanupUploadedFiles(req);
 
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -6997,7 +6998,7 @@ async function postAdminUpdateProduct(req, res, next) {
       cleanupUploadedFiles(req);
 
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -7314,7 +7315,7 @@ async function postAdminUpdateProduct(req, res, next) {
 
     if (!updated) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -7361,13 +7362,13 @@ async function postAdminDeleteProduct(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('errors/500', {
-        title: 'Erreur - CarParts France',
+        title: `Erreur - ${brand.NAME}`,
       });
     }
 
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -7583,7 +7584,7 @@ async function getAdminClientDetailPage(req, res, next) {
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -7593,7 +7594,7 @@ async function getAdminClientDetailPage(req, res, next) {
 
     if (!user) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -7752,14 +7753,14 @@ async function postAdminUpdateClientDiscount(req, res, next) {
 
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
     const user = await User.findById(userId).select('_id').lean();
     if (!user) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -8187,14 +8188,14 @@ async function getAdminReturnDetailPage(req, res, next) {
 
     if (!mongoose.Types.ObjectId.isValid(returnId)) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
     const rr = await ReturnRequest.findById(returnId).lean();
     if (!rr) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -8260,13 +8261,13 @@ async function postAdminUpdateReturnStatus(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('errors/500', {
-        title: 'Erreur - CarParts France',
+        title: `Erreur - ${brand.NAME}`,
       });
     }
 
     if (!mongoose.Types.ObjectId.isValid(returnId)) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -8281,7 +8282,7 @@ async function postAdminUpdateReturnStatus(req, res, next) {
 
     if (!existing) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 
@@ -8317,13 +8318,13 @@ async function postAdminUpdateReturnNote(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('errors/500', {
-        title: 'Erreur - CarParts France',
+        title: `Erreur - ${brand.NAME}`,
       });
     }
 
     if (!mongoose.Types.ObjectId.isValid(returnId)) {
       return res.status(404).render('errors/404', {
-        title: 'Page introuvable - CarParts France',
+        title: `Page introuvable - ${brand.NAME}`,
       });
     }
 

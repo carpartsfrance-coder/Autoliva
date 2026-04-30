@@ -293,6 +293,21 @@ app.get('/favicon.ico', (req, res) => {
   res.status(204).end();
 });
 
+/* Routes SEO publiques montées AVANT le middleware session.
+   Sinon express-session monkey-patche res.end() et rajoute un Set-Cookie
+   sur sitemap.xml/robots.txt — Google Search Console tombe alors sur
+   "Impossible de lire le sitemap" et le CDN ne peut plus cacher la réponse.
+   Ces handlers n'ont pas besoin de session, ni de cart, ni de res.locals
+   applicatifs : ils interrogent directement les modèles Mongoose. */
+app.get('/sitemap.xml', seoController.getSitemapXml);
+app.get('/sitemap-pages.xml', seoController.getSitemapPages);
+app.get('/sitemap-categories.xml', seoController.getSitemapCategories);
+app.get('/sitemap-products.xml', seoController.getSitemapProducts);
+app.get('/sitemap-vehicles.xml', seoController.getSitemapVehicles);
+app.get('/sitemap-references.xml', seoController.getSitemapReferences);
+app.get('/sitemap-blog.xml', seoController.getSitemapBlog);
+app.get('/robots.txt', seoController.getRobotsTxt);
+
 app.use(
   session((() => {
     const sessionOptions = {
@@ -434,8 +449,8 @@ app.use(async (req, res, next) => {
   next();
 });
 
-app.get('/sitemap.xml', seoController.getSitemapXml);
-app.get('/robots.txt', seoController.getRobotsTxt);
+/* Routes SEO publiques (sitemap.xml, sitemap-*.xml, robots.txt) déclarées
+   plus haut, avant le middleware session. */
 
 app.use('/media', mediaRouter);
 

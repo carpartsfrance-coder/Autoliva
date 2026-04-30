@@ -2,8 +2,8 @@
 // openaiSavReformulate.js
 //
 // Service de reformulation de réponses SAV via OpenAI Chat Completions.
-// Adopte un ton "CarParts France" : professionnel, poli, empathique,
-// vouvoiement systématique, signature "L'équipe SAV CarParts France".
+// Adopte un ton brand-aware : professionnel, poli, empathique, vouvoiement
+// systématique, signature "L'équipe SAV ${brand.NAME}".
 //
 // Variables d'environnement utilisées :
 //   - OPENAI_API_KEY              (obligatoire)

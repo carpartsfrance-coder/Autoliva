@@ -30,6 +30,7 @@
  */
 
 const FSM = require('./savStateMachine');
+const brand = require('./brand');
 
 // ------------------------------------------------------------
 //  Macros réutilisables
@@ -52,7 +53,7 @@ const MACRO = {
       'Vous pouvez simplement répondre à cet email en joignant les fichiers.',
       '',
       'Merci d\'avance,',
-      'Service SAV CarParts France',
+      `Service SAV ${brand.NAME}`,
     ].join('<br>'),
   }),
 
@@ -73,7 +74,7 @@ const MACRO = {
       'Dès réception dans notre atelier, vous recevrez une notification et l\'analyse démarrera.',
       '',
       'Cordialement,',
-      'Service SAV CarParts France',
+      `Service SAV ${brand.NAME}`,
     ].join('<br>'),
   }),
 
@@ -95,7 +96,7 @@ const MACRO = {
       'Conformément à l\'article L221-23 du Code de la consommation et comme indiqué dans nos Conditions Générales de Vente, <strong>les frais de retour sont à votre charge</strong>.',
       '',
       'Vous pouvez nous retourner la pièce par le transporteur de votre choix à l\'adresse suivante :',
-      '<br><strong>CarParts France — Service Retours</strong>',
+      `<br><strong>${brand.NAME} — Service Retours</strong>`,
       '<br>[adresse à compléter]',
       '',
       '<strong>Important :</strong>',
@@ -107,7 +108,7 @@ const MACRO = {
       'Dès réception et vérification de l\'état de la pièce, nous procéderons au remboursement sous 14 jours.',
       '',
       'Cordialement,',
-      'Service SAV CarParts France',
+      `Service SAV ${brand.NAME}`,
     ].join('<br>'),
   }),
 
@@ -136,7 +137,7 @@ const MACRO = {
       '<strong>Ce que nous vous demandons :</strong> conservez le colis, l\'emballage et tous les éléments reçus le cas échéant.',
       '',
       'Cordialement,',
-      'Service SAV CarParts France',
+      `Service SAV ${brand.NAME}`,
     ].join('<br>'),
   }),
 
@@ -158,7 +159,7 @@ const MACRO = {
       'Merci de nous confirmer votre accord en répondant simplement à cet email.',
       '',
       'Cordialement,',
-      'Service SAV CarParts France',
+      `Service SAV ${brand.NAME}`,
     ].join('<br>'),
   }),
 
@@ -183,7 +184,7 @@ const MACRO = {
       'Merci de nous confirmer votre préférence en répondant à cet email.',
       '',
       'Cordialement,',
-      'Service SAV CarParts France',
+      `Service SAV ${brand.NAME}`,
     ].join('<br>'),
   }),
 
@@ -207,7 +208,7 @@ const MACRO = {
       'Restant à votre disposition pour toute question.',
       '',
       'Cordialement,',
-      'Service SAV CarParts France',
+      `Service SAV ${brand.NAME}`,
     ].join('<br>'),
   }),
 
@@ -247,7 +248,7 @@ const MACRO = {
       'Merci de conserver le colis et l\'emballage d\'origine en attendant.',
       '',
       'Cordialement,',
-      'Service SAV CarParts France',
+      `Service SAV ${brand.NAME}`,
     ].join('<br>'),
   }),
 
@@ -273,7 +274,7 @@ const MACRO = {
       'Merci de nous confirmer votre accord ou de nous contacter si vous souhaitez en discuter.',
       '',
       'Cordialement,',
-      'Service SAV CarParts France',
+      `Service SAV ${brand.NAME}`,
     ].join('<br>'),
   }),
 };
@@ -383,7 +384,7 @@ const PLAYBOOKS = {
     ],
     templates: [
       { key: 'accuse', label: 'Accusé de réception', body:
-        'Bonjour {nom},<br><br>Nous avons bien reçu votre demande SAV <strong>{numero}</strong> concernant votre <strong>{piece}</strong>. Un technicien prend en charge votre dossier sous 48 h ouvrées.<br><br>Conformément à la garantie légale de conformité, l\'ensemble de la procédure est sans frais pour vous.<br><br>Cordialement,<br>Service SAV CarParts France' },
+        `Bonjour {nom},<br><br>Nous avons bien reçu votre demande SAV <strong>{numero}</strong> concernant votre <strong>{piece}</strong>. Un technicien prend en charge votre dossier sous 48 h ouvrées.<br><br>Conformément à la garantie légale de conformité, l'ensemble de la procédure est sans frais pour vous.<br><br>Cordialement,<br>Service SAV ${brand.NAME}` },
       { key: 'relance_docs', label: 'Relance documents J+3', body:
         'Bonjour {nom},<br><br>Nous n\'avons pas encore reçu les documents nécessaires au traitement de votre dossier <strong>{numero}</strong>. Sans retour de votre part sous 7 jours, le dossier sera clôturé automatiquement.<br><br>Cordialement,' },
     ],
@@ -668,7 +669,7 @@ const PLAYBOOKS = {
           'Si vous avez besoin d\'un autre document, n\'hésitez pas à nous le faire savoir.',
           '',
           'Cordialement,',
-          'Service SAV CarParts France',
+          `Service SAV ${brand.NAME}`,
         ].join('<br>'),
       },
       MACRO.closeResolved('garantie', ['envoi', 'cloture']),

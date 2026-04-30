@@ -280,7 +280,8 @@ async function getHome(req, res, next) {
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/` : `${langPrefix}/`;
     const title = `Pièces auto reconditionnées, d’occasion et testées | ${brand.NAME}`;
-    const aboutText = getTrimmedString(siteSettings && siteSettings.aboutText);
+    const { sanitizeBrandLeak } = require('../services/brandSanitizer');
+    const aboutText = sanitizeBrandLeak(getTrimmedString(siteSettings && siteSettings.aboutText));
     const metaDescription = truncateText(
       normalizeMetaText(
         aboutText || `${brand.NAME} propose des pièces auto reconditionnées, d'occasion et testées, avec devis rapide, livraison express et accompagnement expert.`

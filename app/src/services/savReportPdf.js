@@ -9,6 +9,7 @@ const http = require('http');
 
 const PDFDocument = require('pdfkit');
 const savFileStorage = require('./savFileStorage');
+const brand = require('../config/brand');
 let QRCode = null;
 try { QRCode = require('qrcode'); } catch (_) { /* optionnel */ }
 
@@ -132,10 +133,10 @@ async function generateAnalysisReport(ticket, options = {}) {
   });
 
   // ----- Header -----
-  doc.fillColor('#ec1313').fontSize(20).font('Helvetica-Bold').text('CarParts France');
+  doc.fillColor('#ec1313').fontSize(20).font('Helvetica-Bold').text(brand.NAME);
   doc.fillColor('#1a1a1a').fontSize(9).font('Helvetica')
     .text('Rapport d\'analyse SAV — Mécatroniques & organes de transmission')
-    .text('sav@carpartsfrance.fr · 04 65 84 54 88 · www.carpartsfrance.fr');
+    .text(`${brand.EMAIL_SAV} · ${brand.PHONE} · ${brand.SITE_URL.replace(/^https?:\/\//, '')}`);
   doc.moveDown(0.6);
   doc.strokeColor('#ec1313').lineWidth(1.2).moveTo(48, doc.y).lineTo(547, doc.y).stroke();
   doc.moveDown(0.8);
@@ -300,10 +301,10 @@ async function generateAnalysisReport(ticket, options = {}) {
     doc.strokeColor('#e5e7eb').lineWidth(0.6).moveTo(48, doc.y).lineTo(547, doc.y).stroke();
     doc.moveDown(0.4);
     doc.fontSize(8).fillColor('#64748b').text(
-      "CarParts France — RCS Toulouse · TVA intracommunautaire FR XX XXX XXX XXX. " +
+      `${brand.COMPANY.LEGAL_NAME || brand.NAME}${brand.COMPANY.RCS ? ` — RCS ${brand.COMPANY.RCS}` : ''}${brand.COMPANY.VAT ? ` · TVA intracommunautaire ${brand.COMPANY.VAT}` : ''}. ` +
       "Le présent rapport constitue le compte-rendu de l'analyse réalisée sur banc à la demande du client. " +
       "Conformément aux conditions générales du SAV, en cas de conclusion ne caractérisant pas un défaut produit (mauvais montage, usure normale, pièce non défectueuse), " +
-      "le forfait d'analyse de 149 € TTC est dû. En cas d'impayé, conformément à l'article 2286 du Code civil, CarParts France exerce son droit de rétention sur la pièce.",
+      `le forfait d'analyse de 149 € TTC est dû. En cas d'impayé, conformément à l'article 2286 du Code civil, ${brand.NAME} exerce son droit de rétention sur la pièce.`,
       { align: 'justify' }
     );
   }

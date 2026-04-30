@@ -17,6 +17,7 @@ const {
 } = require('../services/productPublic');
 const { buildHreflangSet } = require('../services/i18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
+const { sanitizeBrandLeak } = require('../services/brandSanitizer');
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -260,8 +261,8 @@ function normalizeProduct(product) {
     compareAtPriceCents,
     badges,
     galleryUrls,
-    shortDescription: typeof product.shortDescription === 'string' ? product.shortDescription.trim() : '',
-    description: typeof product.description === 'string' ? product.description.trim() : '',
+    shortDescription: typeof product.shortDescription === 'string' ? sanitizeBrandLeak(product.shortDescription.trim()) : '',
+    description: typeof product.description === 'string' ? sanitizeBrandLeak(product.description.trim()) : '',
     keyPoints,
     specs,
     reconditioningSteps,
@@ -568,8 +569,10 @@ async function getProduct(req, res, next) {
       return '';
     };
 
+    /* sanitizeBrandLeak : si l'override DB contient encore "CarParts France"
+       (rebranding partiel), on remplace par brand.NAME courant. */
     const titleOverride = product.seo && typeof product.seo.metaTitle === 'string'
-      ? product.seo.metaTitle.trim()
+      ? sanitizeBrandLeak(product.seo.metaTitle.trim())
       : '';
 
     /* Construit un title SEO en tenant dans ~60 caractères (limite SERP Google).
@@ -592,12 +595,31 @@ async function getProduct(req, res, next) {
       const truncatedName = name.length > maxNameLen ? `${name.slice(0, maxNameLen).trim()}…` : name;
       return `${truncatedName}${suffix}`;
     }
+    /* Si l'override DB n'a pas de suffix marque, on l'ajoute pour cohérence
+       SEO (sinon certaines fiches s'affichent sans " | Autoliva" en SERP). */
+    function ensureBrandSuffix(t) {
+      if (!t) return t;
+      const suffix = ` | ${brand.NAME}`;
+      const trimmed = t.trim();
+      if (trimmed.endsWith(suffix)) return trimmed;
+      const lower = trimmed.toLowerCase();
+      const lowerName = brand.NAME.toLowerCase();
+      /* Si le brand est déjà mentionné en fin (avec un autre séparateur), on
+         laisse tel quel — l'auteur a probablement choisi cette tournure. */
+      if (lower.endsWith(lowerName)) return trimmed;
+      /* Si l'ajout du suffix dépasse 65 caractères, on tronque le nom. */
+      const candidate = `${trimmed}${suffix}`;
+      if (candidate.length <= 65) return candidate;
+      const maxLen = Math.max(20, 65 - suffix.length - 1);
+      const cut = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen).trim()}…` : trimmed;
+      return `${cut}${suffix}`;
+    }
     const seoTitle = titleOverride
-      ? titleOverride
+      ? ensureBrandSuffix(titleOverride)
       : buildSeoTitleFitted(product.name, brandText, skuText);
 
     const descriptionOverride = product.seo && typeof product.seo.metaDescription === 'string'
-      ? product.seo.metaDescription.trim()
+      ? sanitizeBrandLeak(product.seo.metaDescription.trim())
       : '';
     const baseDesc = product.shortDescription || product.description || '';
     const baseDescPlain = toPlainText(baseDesc);

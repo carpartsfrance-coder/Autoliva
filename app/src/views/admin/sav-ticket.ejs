@@ -221,7 +221,7 @@
                 <div class="p-3 bg-slate-50 border-t border-slate-100">
                   <div class="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden max-w-2xl mx-auto">
                     <div class="px-3 py-1.5 border-b border-slate-100 bg-slate-50 text-[11px] text-slate-600 space-y-0.5">
-                      <div class="flex"><span class="font-semibold w-14">De :</span><span>SAV CarParts France &lt;sav@carpartsfrance.fr&gt;</span></div>
+                      <div class="flex"><span class="font-semibold w-14">De :</span><span>SAV <%= brand.NAME %> &lt;<%= brand.EMAIL_SAV %>&gt;</span></div>
                       <div class="flex"><span class="font-semibold w-14">A :</span><span id="sav-preview-to">--</span></div>
                       <div class="flex"><span class="font-semibold w-14">Objet :</span><span id="sav-preview-subject" class="font-semibold text-slate-900">--</span></div>
                       <div class="flex"><span class="font-semibold w-14">Ref. :</span><span id="sav-preview-ref" class="font-mono text-[10px]">--</span></div>
@@ -230,7 +230,7 @@
                       <div id="sav-msg-preview"></div>
                       <hr class="my-3 border-slate-200">
                       <div class="text-xs text-slate-500 leading-relaxed">
-                        <div class="font-semibold text-slate-700">L'equipe SAV CarParts France</div>
+                        <div class="font-semibold text-slate-700">L'équipe SAV <%= brand.NAME %></div>
                         <div>sav@carpartsfrance.fr -- 04 65 84 54 88</div>
                       </div>
                     </div>
@@ -253,7 +253,7 @@
                   <button type="button" data-cmd="bold" class="sav-composer__icon-btn" title="Gras">
                     <span style="font-size:14px;font-weight:700;">B</span>
                   </button>
-                  <button type="button" id="sav-reformulate-btn" class="sav-composer__icon-btn" title="Reformuler avec l'IA (ton CarParts France)">
+                  <button type="button" id="sav-reformulate-btn" class="sav-composer__icon-btn" title="Reformuler avec l'IA (ton <%= brand.NAME %>)">
                     <span class="material-symbols-outlined" style="font-size:18px;">auto_awesome</span>
                   </button>
                   <input type="file" id="sav-attach-input" class="hidden" multiple accept="application/pdf,image/*">

@@ -1,9 +1,11 @@
 // Pages admin SAV — uniquement du rendu. Toute la logique passe par /admin/api/sav/*.
 
+const brand = require('../config/brand');
+
 function baseLocals(req, extra) {
   return Object.assign(
     {
-      title: 'SAV — Admin CarParts France',
+      title: `SAV — Admin ${brand.NAME}`,
       isOwner: req.session && req.session.admin && req.session.admin.role === 'owner',
       currentAdmin: (req.session && req.session.admin) || null,
       // Le token Bearer pour les fetch côté navigateur — exposé seulement à un admin authentifié
