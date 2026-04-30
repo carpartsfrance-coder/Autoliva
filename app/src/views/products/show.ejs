@@ -1317,35 +1317,53 @@
           || productLinking.parentCategory
         )) { %>
     <section class="seo-internal-linking" style="background:#fff;border-top:1px solid #e9ecef;">
-      <div class="max-w-7xl mx-auto px-4 lg:px-8 py-10 space-y-8">
-        <% if (productLinking.parentCategory) { %>
-          <div>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-slate-800 mb-3">Catégorie</h2>
-            <a href="<%= productLinking.parentCategory.url %>"
-               class="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
-              <%= productLinking.parentCategory.name %>
-              <span class="text-slate-400">→</span>
-            </a>
-          </div>
-        <% } %>
+      <div class="max-w-7xl mx-auto px-4 lg:px-8 py-10 sm:py-14 space-y-12 sm:space-y-16">
+
         <% if (Array.isArray(productLinking.parentVehicleLandings) && productLinking.parentVehicleLandings.length > 0) { %>
           <div>
-            <h2 class="text-lg sm:text-xl font-bold tracking-tight text-slate-800 mb-3">Voir les pièces compatibles</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="mb-4 sm:mb-6">
+              <h2 class="text-xl sm:text-3xl home-display font-bold">Voir toutes les pièces compatibles</h2>
+              <p class="text-slate-500 text-sm mt-1">Pièces reconditionnées spécifiques à votre véhicule, garantie 24 mois</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               <% for (const v of productLinking.parentVehicleLandings) { %>
                 <a href="<%= v.url %>"
-                   class="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border-2 border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 transition-colors">
-                  <div class="flex flex-col">
-                    <span class="text-sm font-bold text-primary">
-                      <%= v.makeName %><% if (v.modelName) { %> <%= v.modelName %><% } %>
+                   class="group flex items-center justify-between gap-3 px-5 py-5 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border-2 border-primary/20 hover:border-primary hover:shadow-md hover:shadow-red-500/20 transition-all">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <span class="shrink-0 w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                      <span class="material-symbols-rounded text-2xl">directions_car</span>
                     </span>
-                    <span class="text-xs text-slate-500">Toutes pièces compatibles →</span>
+                    <div class="flex flex-col min-w-0">
+                      <span class="text-base font-black text-primary truncate">
+                        <%= v.makeName %><% if (v.modelName) { %> <%= v.modelName %><% } %>
+                      </span>
+                      <span class="text-xs text-slate-500">Catalogue complet →</span>
+                    </div>
                   </div>
+                  <span class="shrink-0 material-symbols-rounded text-primary group-hover:translate-x-1 transition-transform">arrow_forward</span>
                 </a>
               <% } %>
             </div>
           </div>
         <% } %>
+
+        <% if (productLinking.parentCategory) { %>
+          <div>
+            <div class="mb-4 sm:mb-6">
+              <h2 class="text-xl sm:text-3xl home-display font-bold">Explorer la catégorie</h2>
+              <p class="text-slate-500 text-sm mt-1">Toutes les pièces de cette catégorie</p>
+            </div>
+            <a href="<%= productLinking.parentCategory.url %>"
+               class="group inline-flex items-center gap-3 px-5 py-4 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all">
+              <span class="shrink-0 w-10 h-10 rounded-xl bg-slate-100 text-slate-500 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center transition-colors">
+                <span class="material-symbols-rounded text-xl">category</span>
+              </span>
+              <span class="text-sm font-bold text-slate-800 group-hover:text-primary"><%= productLinking.parentCategory.name %></span>
+              <span class="material-symbols-rounded text-base text-slate-300 group-hover:text-primary group-hover:translate-x-1 transition-all">arrow_forward</span>
+            </a>
+          </div>
+        <% } %>
+
       </div>
     </section>
   <% } %>

@@ -1,45 +1,64 @@
 <%/*
   Partial commun : blocs de maillage interne SEO réutilisables.
 
-  Trois variables locales attendues (toutes optionnelles) :
+  Variables locales attendues (toutes optionnelles) :
     - vehicleLinking  : sortie de internalLinking.getMakeLinkingData /
                         getModelLinkingData / getMoneyPageLinkingData
     - categoryLinking : sortie de internalLinking.getCategoryLinkingData
     - blogLinking     : sortie de internalLinking.getBlogPostLinkingData
-                        (ne contient ici que detectedVehicleLandings — le reste
-                        est rendu par la vue blog/show.ejs en autonomie)
 
-  Logique :
-    On affiche une grille de cartes pour chaque "axe" de maillage présent.
-    Chaque carte est un lien interne (anchor optimisé) vers une autre page
-    cohérente thématiquement, ce qui consolide le silo SEO.
-
-  Style : minimaliste tailwind, neutre par défaut. À customiser via .seo-link-grid.
+  Design : aligné sur le DS du site Autoliva (cards rounded-2xl, primary
+  rouge en accent, Material Symbols, hover scale + ombre, aspect-[16/10]
+  pour les images, badges blanc/translucide).
 */%>
 
 <%
   const _vl = (typeof vehicleLinking === 'object' && vehicleLinking) ? vehicleLinking : null;
   const _cl = (typeof categoryLinking === 'object' && categoryLinking) ? categoryLinking : null;
   const _bl = (typeof blogLinking === 'object' && blogLinking) ? blogLinking : null;
-  /* Helper : pluriel intelligent. */
-  const plural = (n, s, p) => `${n} ${n > 1 ? p : s}`;
+
+  /* Mapping nom catégorie → icône Material Symbol pour ajouter du visuel
+     aux pills de navigation. Fallback "category" pour les inconnues. */
+  function categoryIcon(name) {
+    if (!name || typeof name !== 'string') return 'category';
+    const n = name.toLowerCase();
+    if (n.includes('moteur')) return 'settings';
+    if (n.includes('transmission') || n.includes('boîte') || n.includes('mécatronique') || n.includes('embrayage')) return 'precision_manufacturing';
+    if (n.includes('frein')) return 'do_not_disturb_on_total_silence';
+    if (n.includes('suspension') || n.includes('direction') || n.includes('amortisseur')) return 'altitude';
+    if (n.includes('électr') || n.includes('démarreur') || n.includes('alternateur')) return 'bolt';
+    if (n.includes('carrosserie') || n.includes('éclairage') || n.includes('phare')) return 'directions_car';
+    if (n.includes('habitacle') || n.includes('intérieur')) return 'airline_seat_recline_normal';
+    if (n.includes('entretien') || n.includes('huile') || n.includes('vidange')) return 'oil_barrel';
+    if (n.includes('pont') || n.includes('différentiel')) return 'tune';
+    if (n.includes('transfert')) return 'swap_horiz';
+    if (n.includes('cardan') || n.includes('arbre')) return 'rotate_right';
+    return 'category';
+  }
 %>
 
 <% if (_vl || _cl || _bl) { %>
 <section class="seo-internal-linking" style="background:#fff;border-top:1px solid #e9ecef;">
-  <div class="max-w-7xl mx-auto px-4 lg:px-8 py-12 space-y-12">
+  <div class="max-w-7xl mx-auto px-4 lg:px-8 py-10 sm:py-14 space-y-12 sm:space-y-16">
 
-    <%/* ─── PAGE MARQUE : modèles enfants ────────────────────────── */%>
+    <%/* ─── PAGE MARQUE : modèles enfants ──────────────────────── */%>
     <% if (_vl && Array.isArray(_vl.childModels) && _vl.childModels.length > 0) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Tous les modèles compatibles</h2>
+        <div class="flex items-center justify-between mb-4 sm:mb-8">
+          <div>
+            <h2 class="text-xl sm:text-3xl home-display font-bold">Tous les modèles compatibles</h2>
+            <p class="text-slate-500 text-sm mt-1"><%= _vl.childModels.length %> modèles disponibles</p>
+          </div>
+        </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           <% for (const m of _vl.childModels) { %>
             <a href="<%= m.url %>"
-               class="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 transition-colors">
-              <span class="text-sm font-semibold text-slate-700 group-hover:text-primary truncate"><%= m.name %></span>
+               class="group flex items-center justify-between gap-3 px-4 py-3 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all">
+              <span class="text-sm font-bold text-slate-800 group-hover:text-primary truncate"><%= m.name %></span>
               <% if (m.productCount) { %>
-                <span class="text-xs text-slate-400 group-hover:text-primary/70"><%= m.productCount %></span>
+                <span class="shrink-0 inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-slate-100 text-[10px] font-black text-slate-500 group-hover:bg-primary/10 group-hover:text-primary"><%= m.productCount %></span>
+              <% } else { %>
+                <span class="material-symbols-rounded text-base text-slate-300 group-hover:text-primary group-hover:translate-x-0.5 transition-all">arrow_forward</span>
               <% } %>
             </a>
           <% } %>
@@ -47,75 +66,109 @@
       </div>
     <% } %>
 
-    <%/* ─── PAGE MARQUE : catégories disponibles ────────────────── */%>
+    <%/* ─── PAGE MARQUE & MODÈLE : catégories disponibles (avec icônes) ─ */%>
     <% if (_vl && Array.isArray(_vl.availableCategories) && _vl.availableCategories.length > 0) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Pièces par catégorie</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div class="flex items-center justify-between mb-4 sm:mb-8">
+          <div>
+            <h2 class="text-xl sm:text-3xl home-display font-bold">Pièces par catégorie</h2>
+            <p class="text-slate-500 text-sm mt-1">
+              <% if (_vl.parentMake && _vl.parentMake.name) { %>
+                Pièces compatibles pour ce modèle, classées par type
+              <% } else { %>
+                Toutes les pièces disponibles pour cette marque
+              <% } %>
+            </p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
           <% for (const c of _vl.availableCategories) { %>
             <a href="<%= c.url %>"
-               class="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
-              <%= c.name %>
+               class="group flex items-center gap-3 px-4 py-4 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all">
+              <span class="shrink-0 w-10 h-10 rounded-xl bg-slate-100 text-slate-500 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center transition-colors">
+                <span class="material-symbols-rounded text-xl"><%= categoryIcon(c.name) %></span>
+              </span>
+              <span class="text-sm font-bold text-slate-800 group-hover:text-primary"><%= c.name %></span>
             </a>
           <% } %>
         </div>
       </div>
     <% } %>
 
-    <%/* ─── PAGE MODÈLE : catégories money pages disponibles ───── */%>
-    <% if (_vl && Array.isArray(_vl.availableCategories) && _vl.availableCategories.length > 0 && _vl.parentMake) { %>
-      <%/* Affichage spécifique au modèle : on l'a déjà couvert au-dessus si page marque.
-           Si page modèle (parentMake présent), c'est ici que ça s'affiche. */%>
-    <% } %>
-
-    <%/* ─── PAGE MODÈLE : sibling models ───────────────────────── */%>
+    <%/* ─── PAGE MODÈLE : sibling models ────────────────────────── */%>
     <% if (_vl && Array.isArray(_vl.siblingModels) && _vl.siblingModels.length > 0) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">
-          Autres modèles
-          <% if (_vl.parentMake && _vl.parentMake.name) { %><%= _vl.parentMake.name %><% } %>
-        </h2>
+        <div class="flex items-center justify-between mb-4 sm:mb-8">
+          <div>
+            <h2 class="text-xl sm:text-3xl home-display font-bold">
+              Autres modèles<% if (_vl.parentMake && _vl.parentMake.name) { %> <%= _vl.parentMake.name %><% } %>
+            </h2>
+            <p class="text-slate-500 text-sm mt-1">Trouvez la pièce adaptée à votre véhicule</p>
+          </div>
+          <% if (_vl.parentMake && _vl.parentMake.url) { %>
+            <a class="hidden sm:flex items-center gap-2 text-primary font-bold hover:gap-3 transition-all" href="<%= _vl.parentMake.url %>">
+              Voir tout <span class="material-symbols-rounded text-lg">arrow_forward</span>
+            </a>
+          <% } %>
+        </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
           <% for (const m of _vl.siblingModels) { %>
             <a href="<%= m.url %>"
-               class="px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-center text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
-              <%= m.name %>
+               class="group flex flex-col items-center justify-center gap-2 px-4 py-5 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all text-center">
+              <span class="material-symbols-rounded text-2xl text-slate-300 group-hover:text-primary transition-colors">directions_car</span>
+              <span class="text-sm font-bold text-slate-800 group-hover:text-primary leading-tight"><%= m.name %></span>
             </a>
           <% } %>
         </div>
       </div>
     <% } %>
 
-    <%/* ─── PAGE MONEY : sibling categories (autres catégories pour ce modèle) ─ */%>
+    <%/* ─── PAGE MONEY : sibling categories (autres pièces pour ce modèle) ─ */%>
     <% if (_vl && Array.isArray(_vl.siblingCategories) && _vl.siblingCategories.length > 0) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">
-          Autres pièces
-          <% if (_vl.parentModel && _vl.parentModel.name) { %>pour <%= _vl.parentModel.name %><% } %>
-        </h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div class="flex items-center justify-between mb-4 sm:mb-8">
+          <div>
+            <h2 class="text-xl sm:text-3xl home-display font-bold">
+              Autres pièces<% if (_vl.parentModel && _vl.parentModel.name) { %> pour <%= _vl.parentModel.name %><% } %>
+            </h2>
+            <p class="text-slate-500 text-sm mt-1">Pièces compatibles classées par type</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
           <% for (const c of _vl.siblingCategories) { %>
             <a href="<%= c.url %>"
-               class="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
-              <%= c.name %>
+               class="group flex items-center gap-3 px-4 py-4 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all">
+              <span class="shrink-0 w-10 h-10 rounded-xl bg-slate-100 text-slate-500 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center transition-colors">
+                <span class="material-symbols-rounded text-xl"><%= categoryIcon(c.name) %></span>
+              </span>
+              <span class="text-sm font-bold text-slate-800 group-hover:text-primary"><%= c.name %></span>
             </a>
           <% } %>
         </div>
       </div>
     <% } %>
 
-    <%/* ─── PAGE MONEY : same category, other models (Boîte de transfert BMW X3, X4...) ─ */%>
+    <%/* ─── PAGE MONEY : same category, other models ─────────────── */%>
     <% if (_vl && Array.isArray(_vl.sameCategoryOtherModels) && _vl.sameCategoryOtherModels.length > 0) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">
-          <%= (_vl.parentCategory && _vl.parentCategory.name) ? _vl.parentCategory.name.split('>').pop().trim() : 'Pièce' %>
-          <% if (_vl.parentMake && _vl.parentMake.name) { %>pour autres <%= _vl.parentMake.name %><% } %>
-        </h2>
+        <div class="flex items-center justify-between mb-4 sm:mb-8">
+          <div>
+            <h2 class="text-xl sm:text-3xl home-display font-bold">
+              <%= (_vl.parentCategory && _vl.parentCategory.name) ? (_vl.parentCategory.name.split('>').pop().trim()) : 'Pièce' %>
+              <% if (_vl.parentMake && _vl.parentMake.name) { %>pour autres <%= _vl.parentMake.name %><% } %>
+            </h2>
+            <p class="text-slate-500 text-sm mt-1">Même pièce, autre modèle</p>
+          </div>
+        </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
           <% for (const m of _vl.sameCategoryOtherModels) { %>
             <a href="<%= m.url %>"
-               class="px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-center text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
-              <%= m.name %>
+               class="group flex flex-col items-center justify-center gap-2 px-4 py-5 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all text-center">
+              <span class="material-symbols-rounded text-2xl text-slate-300 group-hover:text-primary transition-colors">directions_car</span>
+              <span class="text-sm font-bold text-slate-800 group-hover:text-primary leading-tight"><%= m.name %></span>
+              <% if (m.productCount) { %>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider"><%= m.productCount %> ref<%= m.productCount > 1 ? 's' : '' %></span>
+              <% } %>
             </a>
           <% } %>
         </div>
@@ -125,12 +178,20 @@
     <%/* ─── PAGE CATÉGORIE : sub-categories ─────────────────────── */%>
     <% if (_cl && Array.isArray(_cl.subCategories) && _cl.subCategories.length > 0) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Sous-catégories</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div class="flex items-center justify-between mb-4 sm:mb-8">
+          <div>
+            <h2 class="text-xl sm:text-3xl home-display font-bold">Sous-catégories</h2>
+            <p class="text-slate-500 text-sm mt-1">Affinez votre recherche</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
           <% for (const c of _cl.subCategories) { %>
             <a href="<%= c.url %>"
-               class="flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
-              <%= c.name %>
+               class="group flex items-center gap-3 px-4 py-4 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all">
+              <span class="shrink-0 w-10 h-10 rounded-xl bg-slate-100 text-slate-500 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center transition-colors">
+                <span class="material-symbols-rounded text-xl"><%= categoryIcon(c.name) %></span>
+              </span>
+              <span class="text-sm font-bold text-slate-800 group-hover:text-primary"><%= c.name %></span>
             </a>
           <% } %>
         </div>
@@ -140,14 +201,24 @@
     <%/* ─── PAGE CATÉGORIE : top makes ──────────────────────────── */%>
     <% if (_cl && Array.isArray(_cl.topMakesForCategory) && _cl.topMakesForCategory.length > 0) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Marques les plus demandées</h2>
-        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div class="flex items-center justify-between mb-4 sm:mb-8">
+          <div>
+            <h2 class="text-xl sm:text-3xl home-display font-bold">Marques les plus demandées</h2>
+            <p class="text-slate-500 text-sm mt-1">Trouvez votre véhicule en un clic</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
           <% for (const m of _cl.topMakesForCategory) { %>
             <a href="<%= m.url %>"
-               class="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 transition-colors">
-              <span class="text-sm font-semibold text-slate-700 group-hover:text-primary"><%= m.name %></span>
+               class="group flex items-center justify-between gap-3 px-4 py-4 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all">
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="shrink-0 w-10 h-10 rounded-xl bg-slate-100 text-slate-500 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center transition-colors">
+                  <span class="material-symbols-rounded text-xl">directions_car</span>
+                </span>
+                <span class="text-sm font-bold text-slate-800 group-hover:text-primary truncate"><%= m.name %></span>
+              </div>
               <% if (m.productCount) { %>
-                <span class="text-xs text-slate-400 group-hover:text-primary/70"><%= m.productCount %></span>
+                <span class="shrink-0 inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full bg-slate-100 text-[10px] font-black text-slate-500 group-hover:bg-primary/10 group-hover:text-primary"><%= m.productCount %></span>
               <% } %>
             </a>
           <% } %>
@@ -155,75 +226,118 @@
       </div>
     <% } %>
 
-    <%/* ─── PAGE CATÉGORIE : sibling categories ────────────────── */%>
+    <%/* ─── PAGE CATÉGORIE : sibling categories ─────────────────── */%>
     <% if (_cl && Array.isArray(_cl.siblingCategories) && _cl.siblingCategories.length > 0) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Autres catégories</h2>
+        <div class="flex items-center justify-between mb-4 sm:mb-8">
+          <div>
+            <h2 class="text-xl sm:text-3xl home-display font-bold">Autres catégories</h2>
+            <p class="text-slate-500 text-sm mt-1">Explorez tout le catalogue</p>
+          </div>
+        </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           <% for (const c of _cl.siblingCategories) { %>
             <a href="<%= c.url %>"
-               class="px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-center text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
-              <%= c.name %>
+               class="group flex items-center gap-3 px-4 py-4 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all">
+              <span class="shrink-0 w-9 h-9 rounded-lg bg-slate-100 text-slate-500 group-hover:bg-primary/10 group-hover:text-primary flex items-center justify-center transition-colors">
+                <span class="material-symbols-rounded text-lg"><%= categoryIcon(c.name) %></span>
+              </span>
+              <span class="text-sm font-bold text-slate-800 group-hover:text-primary truncate"><%= c.name %></span>
             </a>
           <% } %>
         </div>
       </div>
     <% } %>
 
-    <%/* ─── BLOG ARTICLES LIÉS (vehicle + category linking) ───── */%>
+    <%/* ─── BLOG ARTICLES LIÉS (style aligné HP) ─────────────────── */%>
     <% const _relatedPosts = (_vl && _vl.relatedBlogPosts) || (_cl && _cl.relatedBlogPosts) || [];
        if (_relatedPosts.length > 0) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Conseils techniques liés</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <% for (const p of _relatedPosts.slice(0, 6)) { %>
-            <a href="/blog/<%= encodeURIComponent(p.slug) %>"
-               class="group block rounded-xl border border-slate-200 overflow-hidden hover:border-primary transition-colors">
-              <% if (p.coverImageUrl) { %>
-                <img src="<%= p.coverImageUrl %>" alt="<%= p.title %>" loading="lazy"
-                     class="w-full aspect-[16/9] object-cover" />
-              <% } %>
-              <div class="p-4">
-                <h3 class="text-sm font-bold text-slate-800 group-hover:text-primary line-clamp-2 mb-1"><%= p.title %></h3>
-                <% if (p.readingTimeMinutes) { %>
-                  <p class="text-xs text-slate-500"><%= p.readingTimeMinutes %> min de lecture</p>
-                <% } %>
-              </div>
-            </a>
+        <div class="flex items-center justify-between mb-4 sm:mb-8">
+          <div>
+            <h2 class="text-xl sm:text-3xl home-display font-bold">Conseils techniques liés</h2>
+            <p class="text-slate-500 text-sm mt-1">Diagnostic, prix, remplacement — par nos experts</p>
+          </div>
+          <a class="hidden sm:flex items-center gap-2 border border-slate-200 px-6 py-2 rounded-full font-bold hover:bg-slate-50 transition-all" href="/blog">
+            Tout le blog <span class="material-symbols-rounded text-lg">trending_up</span>
+          </a>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
+          <% for (const p of _relatedPosts.slice(0, 3)) { %>
+            <article class="group">
+              <a href="/blog/<%= encodeURIComponent(p.slug) %>" class="block">
+                <div class="rounded-2xl overflow-hidden mb-4 relative aspect-[16/10]">
+                  <% if (p.coverImageUrl) { %>
+                    <img alt="<%= p.title %>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                         src="<%= p.coverImageUrl %>" loading="lazy" />
+                  <% } else { %>
+                    <div class="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400">
+                      <span class="material-symbols-rounded text-5xl">article</span>
+                    </div>
+                  <% } %>
+                  <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                  <div class="absolute bottom-4 left-4 flex gap-2">
+                    <span class="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded">GUIDE</span>
+                    <% if (p.readingTimeMinutes) { %>
+                      <span class="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded"><%= p.readingTimeMinutes %> MIN</span>
+                    <% } %>
+                  </div>
+                </div>
+                <h3 class="font-bold text-slate-800 leading-tight group-hover:text-primary transition-colors line-clamp-2"><%= p.title %></h3>
+              </a>
+            </article>
           <% } %>
         </div>
       </div>
     <% } %>
 
-    <%/* ─── PAGE MARQUE : sibling makes (navigation marques) ──── */%>
+    <%/* ─── PAGE MARQUE : sibling makes (navigation marques) ────── */%>
     <% if (_vl && Array.isArray(_vl.siblingMakes) && _vl.siblingMakes.length > 0 && !_vl.parentMake) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Autres marques</h2>
-        <div class="grid grid-cols-3 sm:grid-cols-5 gap-3">
+        <div class="flex items-center justify-between mb-4 sm:mb-8">
+          <div>
+            <h2 class="text-xl sm:text-3xl home-display font-bold">Autres marques</h2>
+            <p class="text-slate-500 text-sm mt-1">Toutes les marques compatibles</p>
+          </div>
+          <a class="hidden sm:flex items-center gap-2 border border-slate-200 px-6 py-2 rounded-full font-bold hover:bg-slate-50 transition-all" href="/pieces-auto">
+            Toutes les marques <span class="material-symbols-rounded text-lg">arrow_forward</span>
+          </a>
+        </div>
+        <div class="grid grid-cols-3 sm:grid-cols-5 gap-3 sm:gap-4">
           <% for (const m of _vl.siblingMakes) { %>
             <a href="<%= m.url %>"
-               class="px-4 py-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-primary/5 text-center text-sm font-semibold text-slate-700 hover:text-primary transition-colors">
-              <%= m.name %>
+               class="group flex flex-col items-center justify-center gap-2 px-4 py-5 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all text-center">
+              <span class="material-symbols-rounded text-2xl text-slate-300 group-hover:text-primary transition-colors">directions_car</span>
+              <span class="text-sm font-bold text-slate-800 group-hover:text-primary"><%= m.name %></span>
             </a>
           <% } %>
         </div>
       </div>
     <% } %>
 
-    <%/* ─── BLOG ARTICLE : detected vehicle landings ──────────── */%>
+    <%/* ─── BLOG ARTICLE : detected vehicle landings (CTA fort) ──── */%>
     <% if (_bl && Array.isArray(_bl.detectedVehicleLandings) && _bl.detectedVehicleLandings.length > 0) { %>
       <div>
-        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 mb-4">Trouvez la pièce pour votre véhicule</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="mb-4 sm:mb-6">
+          <h2 class="text-xl sm:text-3xl home-display font-bold">Trouvez la pièce pour votre véhicule</h2>
+          <p class="text-slate-500 text-sm mt-1">Pièces reconditionnées, garantie 24 mois</p>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <% for (const v of _bl.detectedVehicleLandings) { %>
             <a href="<%= v.url %>"
-               class="group flex items-center justify-between gap-2 px-4 py-3 rounded-xl border-2 border-primary/20 hover:border-primary bg-primary/5 hover:bg-primary/10 transition-colors">
-              <div class="flex flex-col">
-                <span class="text-sm font-bold text-primary">
-                  <%= v.makeName %><% if (v.modelName) { %> <%= v.modelName %><% } %>
+               class="group flex items-center justify-between gap-3 px-5 py-5 bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl border-2 border-primary/20 hover:border-primary hover:shadow-md hover:shadow-red-500/20 transition-all">
+              <div class="flex items-center gap-3 min-w-0">
+                <span class="shrink-0 w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+                  <span class="material-symbols-rounded text-2xl">directions_car</span>
                 </span>
-                <span class="text-xs text-slate-500">Voir les pièces compatibles →</span>
+                <div class="flex flex-col min-w-0">
+                  <span class="text-base font-black text-primary truncate">
+                    <%= v.makeName %><% if (v.modelName) { %> <%= v.modelName %><% } %>
+                  </span>
+                  <span class="text-xs text-slate-500">Voir les pièces compatibles</span>
+                </div>
               </div>
+              <span class="shrink-0 material-symbols-rounded text-primary group-hover:translate-x-1 transition-transform">arrow_forward</span>
             </a>
           <% } %>
         </div>
