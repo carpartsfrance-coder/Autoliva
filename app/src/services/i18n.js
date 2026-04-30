@@ -2,10 +2,11 @@
 
 const fr = require('../locales/fr.json');
 const en = require('../locales/en.json');
+const de = require('../locales/de.json');
 const brand = require('../config/brand');
 
-const dictionaries = { fr, en };
-const SUPPORTED_LANGS = ['fr', 'en'];
+const dictionaries = { fr, en, de };
+const SUPPORTED_LANGS = ['fr', 'en', 'de'];
 const DEFAULT_LANG = 'fr';
 
 /**
