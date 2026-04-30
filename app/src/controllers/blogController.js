@@ -535,6 +535,23 @@ async function getBlogPost(req, res) {
       return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
 
+    /* Hreflang DE : quand cet article a une traduction allemande publiée
+     * (post.localizations.de.translatedAt non null), on surcharge le hreflang
+     * standard pour ajouter <link rel="alternate" hreflang="de"> et signaler
+     * la réciprocité à Google. Sinon comportement inchangé. */
+    const hasDeTranslation = Boolean(
+      post.localizations && post.localizations.de && post.localizations.de.translatedAt
+    );
+    if (hasDeTranslation) {
+      const frHref = baseUrl ? `${baseUrl}/blog/${encodeURIComponent(post.slug)}` : `/blog/${encodeURIComponent(post.slug)}`;
+      const deHref = baseUrl ? `${baseUrl}/de/blog/${encodeURIComponent(post.slug)}` : `/de/blog/${encodeURIComponent(post.slug)}`;
+      hreflang.hreflangTags = [
+        { lang: 'fr', href: frHref },
+        { lang: 'de', href: deHref },
+        { lang: 'x-default', href: frHref },
+      ];
+    }
+
     const cleanedMarkdown = (post && typeof post.contentMarkdown === 'string' && post.contentMarkdown.trim())
       ? stripLeadingSommaireSectionFromMarkdown(
           stripLeadingSeoNoiseFromMarkdown(

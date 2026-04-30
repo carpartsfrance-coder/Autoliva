@@ -249,6 +249,38 @@ async function buildBlogUrls(baseUrl, dbConnected) {
   return urls;
 }
 
+/* Sitemap DE : ne liste QUE les articles avec une traduction allemande
+ * effectivement publiée (localizations.de.translatedAt non null). Un article
+ * en cours de traduction n'apparaît pas, ce qui évite à Google d'indexer une
+ * 404 ou un fallback FR. */
+async function buildBlogUrlsDe(baseUrl, dbConnected) {
+  if (!dbConnected) return [];
+  const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
+  const posts = await BlogPost.find({
+    isPublished: true,
+    'localizations.de.translatedAt': { $ne: null },
+  })
+    .select('_id slug title updatedAt publishedAt coverImageUrl localizations.de.translatedAt localizations.de.title')
+    .sort({ publishedAt: -1, updatedAt: -1 })
+    .lean();
+  const urls = [];
+  for (const bp of posts) {
+    if (!bp || !bp.slug) continue;
+    const deLoc = bp.localizations && bp.localizations.de;
+    if (!deLoc || !deLoc.translatedAt) continue;
+    const loc = resolveUrl(`/de/blog/${encodeURIComponent(String(bp.slug))}`);
+    // lastmod = max(translatedAt, updatedAt) pour signaler les retraductions
+    const last = (deLoc.translatedAt && bp.updatedAt && new Date(deLoc.translatedAt) > new Date(bp.updatedAt))
+      ? deLoc.translatedAt
+      : (bp.updatedAt || bp.publishedAt || deLoc.translatedAt || null);
+    const images = [];
+    const imgTitle = deLoc.title || bp.title;
+    if (bp.coverImageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(bp.coverImageUrl, imgTitle)));
+    urls.push({ loc, lastmod: toIsoDate(last), images, imageTitle: imgTitle || '' });
+  }
+  return urls;
+}
+
 /* ─── Routes ─────────────────────────────────────────────────────────── */
 
 /* /sitemap.xml — sitemap index pointant vers les sous-sitemaps.
@@ -271,6 +303,7 @@ async function getSitemapXml(req, res, next) {
       { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-references.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-blog.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-blog-de.xml'), lastmod: now },
     ];
 
     return sendXml(res, renderSitemapIndex(sitemaps));
@@ -359,6 +392,17 @@ async function getSitemapBlog(req, res, next) {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildBlogUrls(baseUrl, dbConnected);
+    return sendXml(res, renderUrlset(urls, { withImages: true }));
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function getSitemapBlogDe(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const urls = await buildBlogUrlsDe(baseUrl, dbConnected);
     return sendXml(res, renderUrlset(urls, { withImages: true }));
   } catch (err) {
     return next(err);
@@ -473,6 +517,7 @@ function getRobotsTxt(req, res) {
     `Sitemap: ${abs('/sitemap-vehicles.xml')}`,
     `Sitemap: ${abs('/sitemap-references.xml')}`,
     `Sitemap: ${abs('/sitemap-blog.xml')}`,
+    `Sitemap: ${abs('/sitemap-blog-de.xml')}`,
     '',
   ];
 
@@ -490,4 +535,5 @@ module.exports = {
   getSitemapVehicles,
   getSitemapReferences,
   getSitemapBlog,
+  getSitemapBlogDe,
 };

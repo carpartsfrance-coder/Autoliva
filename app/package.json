@@ -35,7 +35,11 @@
     "cleanup:vehicle-models": "node src/seed/cleanupVehicleMakeModelNames.js --apply",
     "css:build:admin": "npx tailwindcss -c tailwind.config.admin.js -i src/styles/admin.css -o public/admin/style.css --minify",
     "css:build:all": "npm run css:build && npm run css:build:admin",
-    "css:watch:admin": "npx tailwindcss -c tailwind.config.admin.js -i src/styles/admin.css -o public/admin/style.css --watch"
+    "css:watch:admin": "npx tailwindcss -c tailwind.config.admin.js -i src/styles/admin.css -o public/admin/style.css --watch",
+    "translate:blog:de:dry": "node scripts/translate-blog-de.js",
+    "translate:blog:de:dry:slug": "node scripts/translate-blog-de.js --slug=",
+    "translate:blog:de": "node scripts/translate-blog-de.js --apply",
+    "translate:blog:de:retry": "node scripts/translate-blog-de.js --apply --retranslate"
   },
   "dependencies": {
     "@tailwindcss/container-queries": "^0.1.1",
