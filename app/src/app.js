@@ -306,6 +306,7 @@ app.get('/sitemap-products.xml', seoController.getSitemapProducts);
 app.get('/sitemap-vehicles.xml', seoController.getSitemapVehicles);
 app.get('/sitemap-references.xml', seoController.getSitemapReferences);
 app.get('/sitemap-blog.xml', seoController.getSitemapBlog);
+app.get('/sitemap-blog-de.xml', seoController.getSitemapBlogDe);
 app.get('/robots.txt', seoController.getRobotsTxt);
 
 app.use(
@@ -525,6 +526,24 @@ app.use('/pt', (req, res) => {
 app.use('/es', (req, res) => {
   const targetPath = req.originalUrl.replace(/^\/es(\/|$)/, '/') || '/';
   res.redirect(301, targetPath);
+});
+
+/* ─── Versions allemandes (Phase 1 internationalisation) ──────────────────
+ *
+ * Pour l'instant, seul le blog est exposé en DE (autres pages = redirect FR).
+ * Quand on étendra (produits, catégories...), on ajoutera les routers ici
+ * AVANT le catchall app.use('/de', redirectToFr) ci-dessous.
+ *
+ * Les articles traduits sont stockés dans BlogPost.localizations.de et
+ * exposés via blogDeController qui réutilise les vues blog/show.ejs
+ * en swapant title/excerpt/contentHtml/seo. */
+app.use('/de/blog', require('./routes/blogDe'));
+
+/* Catchall /de pour tout ce qui n'est pas encore traduit → redirect FR.
+ * Comportement temporaire jusqu'à ce qu'on traduise produits/catégories. */
+app.use('/de', (req, res) => {
+  const targetPath = req.originalUrl.replace(/^\/de(\/|$)/, '/') || '/';
+  res.redirect(302, targetPath); // 302 (temporaire) car DE est en cours de roll-out
 });
 
 app.use((req, res) => {
