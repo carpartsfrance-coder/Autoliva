@@ -27,6 +27,9 @@ node_modules/
 # Runtime data
 uploads/
 
+# Translation dumps (dry-run JSON output) — local-only, never committed
+tmp/
+
 # Word temp files
 ~$*
 *.tmp
