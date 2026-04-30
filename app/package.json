@@ -39,7 +39,9 @@
     "translate:blog:de:dry": "node scripts/translate-blog-de.js",
     "translate:blog:de:dry:slug": "node scripts/translate-blog-de.js --slug=",
     "translate:blog:de": "node scripts/translate-blog-de.js --apply",
-    "translate:blog:de:retry": "node scripts/translate-blog-de.js --apply --retranslate"
+    "translate:blog:de:retry": "node scripts/translate-blog-de.js --apply --retranslate",
+    "generate:blog:fr:dry": "node scripts/generate-blog-articles-fr.js",
+    "generate:blog:fr": "node scripts/generate-blog-articles-fr.js --apply"
   },
   "dependencies": {
     "@tailwindcss/container-queries": "^0.1.1",

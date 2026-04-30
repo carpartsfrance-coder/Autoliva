@@ -1,0 +1,167 @@
+{
+  "_meta": {
+    "description": "Briefs pour les 12 articles FR à recréer suite à la migration carpartsfrance.fr → autoliva.com. Chaque brief alimente le générateur scripts/generate-blog-articles-fr.js. Les slugs sont IMPOSÉS (cibles des redirections 301 dans wpRedirects.js).",
+    "version": "1.0.0",
+    "createdAt": "2026-04-30"
+  },
+  "articles": [
+    {
+      "slug": "embrayage-dsg-7-double-fonctionnement-et-problemes-courants",
+      "title_hint": "Embrayage DSG7 double : fonctionnement et problèmes courants",
+      "primaryKeyword": "embrayage DSG7 double",
+      "category": { "slug": "transmission-boite-de-vitesses", "label": "Transmission > Boîte de vitesses" },
+      "topic": "Comment fonctionne l'embrayage à double DSG7 (DQ200) : 2 disques d'embrayage à sec K1 (rapports impairs 1-3-5-7) et K2 (rapports pairs 2-4-6 + R), pédale d'embrayage absente, gestion électronique par la mécatronique. Problèmes courants : juddering au démarrage (à-coups), patinage, usure prématurée des garnitures (~120-180 000 km), bruits de roulement, claquement à froid. Causes : conduite urbaine, surcharge de couple, qualité du fluide hydraulique, défaut de mécatronique. Solutions : remplacement disques d'embrayage seuls (~600-900 € + main d'œuvre), pack volant moteur bi-masse, échange standard mécatronique si défaut combiné. Distinguer du DQ250 (humide). Codes défaut typiques (P189500, P175D). Outil spécial T10491 nécessaire pour démontage.",
+      "relatedSlugs": [
+        "mecatronique-dsg7-dq200-diagnostic-prix-remplacement",
+        "embrayage-sec-dq200-usure-juddering-remplacement",
+        "dq200-0am-vag-vehicules-compatibles-a1-a3-golf-polo"
+      ],
+      "productCtaSearchHint": "mecatronique-dsg-7-dq200-pour-volkswagen-audi-seat-et-skoda"
+    },
+    {
+      "slug": "demonter-phare-audi-a3-8v",
+      "title_hint": "Démonter le phare avant d'une Audi A3 8V : tutoriel pas-à-pas",
+      "primaryKeyword": "démonter phare Audi A3 8V",
+      "category": { "slug": "", "label": "" },
+      "topic": "Tutoriel détaillé de démontage et remontage du phare avant sur Audi A3 8V (2012-2020) : phares halogène, xénon et LED matrix. Outils nécessaires : tournevis cruciforme, douille Torx T20/T25, prudence sur les attaches plastique. Étapes : déposer le pare-chocs avant (4-5 vis dans passage de roue + 2-3 vis sous le pare-chocs + clips supérieurs), déconnecter les câbles de phare (connecteurs lampe / ampoule / moteur), dévisser les 3 vis de fixation du phare (tête T25), déposer le bloc optique. Particularités xénon (haute tension, attendre décharge condensateur 5 min) et LED matrix (codage VCDS obligatoire après remplacement). Erreurs courantes : casser les pattes de fixation plastique, oublier le déclipsage du carénage moteur. Coût : remplacement DIY ~30 min, en garage 60-90 € de main d'œuvre.",
+      "relatedSlugs": [],
+      "productCtaSearchHint": null
+    },
+    {
+      "slug": "moteur-porsche-cayenne-4-8-v8",
+      "title_hint": "Moteur Porsche Cayenne 4.8 V8 : guide complet 957 et 958",
+      "primaryKeyword": "moteur Porsche Cayenne 4.8 V8",
+      "category": { "slug": "moteur-bloc-moteur", "label": "Moteur > Bloc moteur" },
+      "topic": "Article pillar sur la famille des moteurs Porsche 4.8L V8 90° atmosphériques et turbo, équipant les Cayenne 957 (2007-2010) et 958 (2010-2018) ainsi que la Panamera 970. Variantes : M48.01 (Cayenne S 957, 385 ch), M48.02 (Cayenne S 958 et Panamera S, 400 ch), M48.51 / M48.52 Turbo (500-550 ch), GTS 957 (405 ch) et GTS 958 (420 ch). Caractéristiques techniques : injection directe (DFI à partir de 2008-2009), VarioCam Plus, calage variable, distribution par chaîne (vs courroie sur 955 4.5 V8). Pannes connues : tendeur de chaîne de distribution (codes P0016, P0017), boulons de cames avant la mise à jour 2010, vis de came rupturées sur 4.8 V8 plus sain que le 4.5 V8 (pas de bore scoring sur le 4.8). Surconsommation d'huile possible mais moindre. Refroidissement durites en plastique. Prix moteur reconditionné Porsche Cayenne 4.8 V8 : 5300-7500 € selon variante, échange standard, 2 ans de garantie.",
+      "relatedSlugs": [
+        "moteur-cayenne-s-957-4-8-v8-m48-01-diagnostic-prix",
+        "moteur-cayenne-s-958-4-8-v8-m48-02-400ch-diagnostic",
+        "moteur-cayenne-gts-957-4-8-v8-405ch-particularites",
+        "moteur-cayenne-gts-958-4-8-v8-420ch-particularites",
+        "panamera-turbo-symptomes-codes-defaut-diagnostic-4-8-v8",
+        "chaine-distribution-panamera-4-8-v8-p0016-boulons-came"
+      ],
+      "productCtaSearchHint": null
+    },
+    {
+      "slug": "haldex-audi-guide-symptomes-et-prix",
+      "title_hint": "Haldex Audi : guide complet, symptômes et prix de reconditionnement",
+      "primaryKeyword": "Haldex Audi",
+      "category": { "slug": "transmission-pont-differentiel", "label": "Transmission > Pont / Différentiel" },
+      "topic": "Guide complet sur le système Haldex équipant les Audi quattro à transmission transversale (A3 8L/8P/8V, TT 8N/8J/FV, Q3 8U/F3, S3 8V, RS3, Q5 transverse, Allroad). Histoire : Haldex Generation 1 (1998-2003, A3/TT/Golf 4Motion), Gen 2 (2003-2007), Gen 3 (2007-2010, retrait pompe externe pour pompe interne), Gen 4 (2010-2014, plus rapide et moins de pannes), Gen 5 (2014+, pompe gérovor, à entretenir vidange tous les 60 000 km). Fonctionnement : embrayage multidisques humide qui pré-charge l'arrière selon les conditions, contrôle électronique par calculateur Haldex et signaux ESP/ABS. Symptômes de panne : voyant ESP, perte de motricité 4WD, codes P17D6 / P17D7, témoin sur le tableau, comportement deux roues motrices, bruits roulement à l'arrière, fuite huile au-dessus de l'embrayage. Diagnostic VCDS : adaptations Haldex, valeur de couple, pression. Solutions : vidange Haldex (50-150 €), pompe Haldex (200-400 €), reconditionnement complet (~700-1290 € chez Autoliva). Prix reconditionné Pont arrière Haldex Audi VW Seat Skoda 0CQ525554 : 1290 € TTC, 2 ans de garantie.",
+      "relatedSlugs": [
+        "pompe-haldex",
+        "pont-arriere-audi-a3-quattro-reconditionnement-haldex",
+        "pont-arriere-tiguan-4motion-diagnostic-prix-remplacement-haldex",
+        "pont-arriere-golf-7-4motion-diagnostic-prix-remplacement-haldex",
+        "diagnostic-transmission-freelander-2-ptu-haldex-differentiel"
+      ],
+      "productCtaSearchHint": "Pont arrière Haldex reconditionné Audi VW Seat Skoda réf. 0CQ525554"
+    },
+    {
+      "slug": "problemes-cylindre-moteurs-porsche",
+      "title_hint": "Problèmes de cylindre sur moteurs Porsche : bore scoring, causes et solutions",
+      "primaryKeyword": "bore scoring Porsche",
+      "category": { "slug": "moteur-bloc-moteur", "label": "Moteur > Bloc moteur" },
+      "topic": "Le bore scoring (rayures du cylindre) est la pathologie majeure des moteurs Porsche M48 4.5 V8 (Cayenne S et Turbo 955, 2002-2007) et plus rare sur les premiers M48 4.8 V8 957. Causes : revêtement Nikasil (couche fine de nickel-silicium-carbure) qui s'use prématurément sur cylindre 2 et 6 (Turbo) ou cylindre 3 (S), accentué par : démarrages à froid sans réchauffement, conduite urbaine fréquente, qualité d'huile et intervalles trop espacés. Symptômes : surconsommation d'huile (1L / 1000 km), fumée bleue à l'accélération, claquement métallique cylindrique audible, codes raté de combustion (P0301-P0308). Diagnostic : endoscopie des chemises (caméra 8 mm), test de compression, mesure de pression d'huile à chaud. Distinction Cayenne 955 4.5 V8 vs 957 4.8 V8 : le 4.8 a une nouvelle conception bloc (revêtement Lokasil amélioré) qui élimine quasi totalement le bore scoring. Solutions : aléser et chemiser (1 800-2 800 €), bloc moteur reconditionné échange standard (5 000-8 000 €), moteur d'occasion (peu fiable, on hérite du même problème), changement de moteur complet pour modèles tardifs avec bloc révisé.",
+      "relatedSlugs": [
+        "cylindres-rayes-cayenne-s-4-5-v8-m48-00-nicasil-diagnostic",
+        "cayenne-955-turbo-vs-s-bore-scoring-fiabilite",
+        "cayenne-s-4-5-v8-symptomes-codes-defaut-diagnostic",
+        "moteur-porsche-cayenne-s-4-5-v8-m48-00-diagnostic-prix-echange-standard",
+        "moteur-porsche-cayenne-955-turbo-4-5-v8-m48-50-diagnostic-prix"
+      ],
+      "productCtaSearchHint": null
+    },
+    {
+      "slug": "moteur-porsche-cayenne-3-0-diesel",
+      "title_hint": "Moteur Porsche Cayenne 3.0 V6 TDI : guide, pannes et prix",
+      "primaryKeyword": "moteur Cayenne 3.0 diesel",
+      "category": { "slug": "moteur-bloc-moteur", "label": "Moteur > Bloc moteur" },
+      "topic": "Le V6 3.0L TDI Porsche équipant le Cayenne 958 (2010-2018) et la Panamera 970, dans plusieurs variantes de puissance : 240 ch (Cayenne Diesel 2010-2014), 245 ch (E1 II), 250-262 ch (S Diesel et facelift). Origine : moteur Audi/VAG dérivé du V6 3.0 TDI quattro avec adaptations spécifiques Porsche (admission, ECU). Code moteur : MCP, MCR, CASA, CRCA selon année. Caractéristiques : injection directe Common Rail Bosch, turbo VTG, AdBlue (depuis 2012 selon norme Euro 5b/6), filtre à particules. Pannes connues : chaîne de distribution (codes P0016, P0017, claquement froid, allongement), suies sur EGR et papillon d'admission, vannes EGR Pierburg en panne, faisceau injecteurs sur premiers modèles, capteur de température, claquement froid des injecteurs. Pas de problème majeur de bloc-cylindres. Surconsommation d'huile rare. Différenciation avec le 3.0 TDI VAG : ECU Porsche, échappement, cartographie. Prix moteur reconditionné Porsche Cayenne 3.0 V6 TDI : 4500-6500 € selon variante, échange standard avec 2 ans de garantie.",
+      "relatedSlugs": [],
+      "productCtaSearchHint": null
+    },
+    {
+      "slug": "calibrage-boite-de-transfert-bmw-x3",
+      "title_hint": "Calibrage boîte de transfert BMW X3 : procédure ISTA pas-à-pas",
+      "primaryKeyword": "calibrage boîte de transfert BMW X3",
+      "category": { "slug": "transmission-boite-de-transfert", "label": "Transmission > Boîte de transfert" },
+      "topic": "Procédure complète de calibrage (initialisation) de la boîte de transfert ATC400 / ATC450 / ATC700 sur BMW X3 (E83, F25, G01) après remplacement de la boîte ou de l'actionneur (servomoteur). Pourquoi calibrer : la boîte mémorise une position zéro de l'embrayage et le point de friction. Sans calibrage, comportement erratique (xDrive instable, codes 4F8C, 4F8D, 4F8E, 4F8F dans le BMW xDrive ECU). Outils nécessaires : interface BMW (ICOM avec ISTA, ou clone INPA/ISTA-D), véhicule sur 4 roues libres (cric ou pont), batterie pleine, branchement OBD2. Étapes ISTA : (1) connecter ISTA, (2) sélectionner module xDrive (33 - Allradgetriebe / Verteilergetriebe), (3) Service Functions → Servomotor adaption / calibration, (4) suivre les instructions à l'écran (rotation roues, tests d'embrayage), (5) confirmer effacement codes, (6) test routier 50-100 km. Particularités sur F25 et G01 : procédure légèrement différente, avec test d'élasticité du système. Sans outil pro : INPA / Ediabas avec script Allradlogi.zip ou rester chez le concessionnaire (~80-150 € la prestation).",
+      "relatedSlugs": [
+        "boite-de-transfert-atc400-bmw-x3-e83-diagnostic-prix",
+        "boite-de-transfert-bmw-x3-e83-prix-budget-comparatif",
+        "vidange-boite-de-transfert-bmw-x3-e83-huile-procedure",
+        "actionneur-boite-transfert-bmw-x3-e83-pignon-reparation"
+      ],
+      "productCtaSearchHint": null
+    },
+    {
+      "slug": "boite-de-transfert-porsche-macan",
+      "title_hint": "Boîte de transfert Porsche Macan : références, pannes et prix",
+      "primaryKeyword": "boîte de transfert Porsche Macan",
+      "category": { "slug": "transmission-boite-de-transfert", "label": "Transmission > Boîte de transfert" },
+      "topic": "Le Porsche Macan (2014+) partage la plateforme MLB du groupe VAG avec l'Audi Q5 (8R), Audi A4/A5 B8/B9 et Audi Q7. Boîte de transfert : VL381 / VL382 / VL480 selon motorisation (essence ou diesel, S/GTS/Turbo). Différentes du Cayenne (qui a sa propre boîte ATC). Composants : embrayage multidisques humide pré-chargé, distribution longitudinale, contrôle électronique. Codes OEM courants : 0BJ, 0BR, 0BT selon génération. Pannes connues : embrayage multidisques usé (perte de couple à l'arrière), capteur de couple ouvert, contrôleur de la boîte (TCU intégré ou séparé selon variante), roulements internes, fuite d'huile au niveau du carter de la boîte. Symptômes : voyant ESP/4WD, vibrations en virage serré, perte de traction sur sol glissant, claquement métallique. Diagnostic : VCDS sur module 22 (Allradkupplung), valeurs d'adaptation, pression embrayage. Vidange : huile DSG/transverse spécifique, ~80-120 € pièces. Solutions : vidange (économique), reconditionnement (1500-2500 €), boîte d'occasion testée (1000-1800 €), neuf chez Porsche (3500-5000 €).",
+      "relatedSlugs": [
+        "boite-de-transfert-audi-vw-0av409053-diagnostic-prix-remplacement",
+        "boite-de-transfert-audi-q3-8u-quattro-panne-diagnostic"
+      ],
+      "productCtaSearchHint": null
+    },
+    {
+      "slug": "boite-de-transfert-range-rover",
+      "title_hint": "Boîte de transfert Range Rover : références par modèle, pannes et prix",
+      "primaryKeyword": "boîte de transfert Range Rover",
+      "category": { "slug": "transmission-boite-de-transfert", "label": "Transmission > Boîte de transfert" },
+      "topic": "Vue d'ensemble des boîtes de transfert des différents modèles Range Rover : Range Rover L322 (2002-2012, BorgWarner ATC700 puis Magna PTU), Range Rover L405 (2012-2022, ZF avec capteur de mode différentiel central), Range Rover Sport L494 (2013-2022, BorgWarner / Magna PTU), Evoque L538 (2011-2018, Haldex Gen 4/5 transverse), Velar L560 (2017+, Magna). Différences : transmission permanente vs occasionnelle, mode high/low range avec différentiel central verrouillable. Codes OEM par modèle. Pannes spécifiques : sur L322 4.4 V8 M62, fuite carter avant et casse de pignons sur PTU. Sur Evoque, classique panne Haldex. Sur Sport L494, problème de pré-chargement et codes P0731. Diagnostic IDS / SDD (BMW IDS-Land Rover) : adaptations module DCU (Differential Control Unit). Symptômes communs : voyant 'transmission gearbox fault', perte de traction, vibrations en virage, sifflement aigu de la boîte. Solutions : vidange Range Rover spécifique (huile MTF, 200-300 €), reconditionnement (variable selon modèle, 1500-3500 €), boîte d'occasion (1200-2500 €), neuve concession (3500-6000 €).",
+      "relatedSlugs": [
+        "diagnostic-pont-avant-range-rover-l405-l494-methode",
+        "fuite-pignon-range-rover-l405-l494-ssm72080-joint-roulement",
+        "pont-avant-range-rover-l405-rr-sport-l494-3-0-v6-diagnostic-prix"
+      ],
+      "productCtaSearchHint": null
+    },
+    {
+      "slug": "boite-de-transfert-chevrolet-captiva",
+      "title_hint": "Boîte de transfert Chevrolet Captiva : panne, diagnostic et solutions",
+      "primaryKeyword": "boîte de transfert Captiva",
+      "category": { "slug": "transmission-boite-de-transfert", "label": "Transmission > Boîte de transfert" },
+      "topic": "La Chevrolet Captiva (2006-2018) et sa jumelle Opel Antara (2006-2017) partagent la plateforme GM Theta avec une boîte de transfert BorgWarner spécifique (BW 4475 ou similaire selon motorisation 2.2 VCDi 184 ch ou 2.0 VCDi 150 ch). Architecture : prise de force (PTU) sur la boîte de vitesses transverse, arbre de transmission jusqu'au pont arrière, embrayage multidisques humide commandé électroniquement. Pannes connues : usure prématurée de la couronne intérieure du PTU (~120 000-180 000 km), fuite d'huile au niveau du joint d'arbre primaire, contrôleur 4WD défaillant (codes P1875, P1876), problème de capteur. Symptômes : sifflement aigu en accélération, vibrations en virage serré, voyant 4WD, perte de motricité sur sol glissant, témoin 'service AWD'. Diagnostic : Tech 2 / GDS / OPCOM, valeurs adaptation, pression embrayage. Solutions : vidange Captiva (~80-120 €, huile spécifique GM), reconditionnement de la PTU (1200-1800 €), boîte d'occasion testée (800-1500 €), retrait du système 4WD pour économiser (déconseillé, conséquence légale). Faut anticiper : pas d'arrêt complet du 4WD possible avec ancien firmware.",
+      "relatedSlugs": [
+        "pont-arriere-chevrolet-captiva-22-vcdi-awd-panne-remplacement",
+        "pont-arriere-chevrolet-captiva-opel-antara-diagnostic-prix-remplacement",
+        "bruits-sifflements-differentiel-captiva-antara-diagnostic"
+      ],
+      "productCtaSearchHint": null
+    },
+    {
+      "slug": "bruit-pont-avant-bmw-x1",
+      "title_hint": "Bruit pont avant BMW X1 : diagnostic et solutions",
+      "primaryKeyword": "bruit pont avant BMW X1",
+      "category": { "slug": "transmission-pont-differentiel", "label": "Transmission > Pont / Différentiel" },
+      "topic": "Diagnostic complet des bruits provenant du pont avant sur BMW X1 (E84 2009-2015 puis F48 2015-2022). Le X1 E84 xDrive utilise le même pont avant que la Série 3 E90 xDrive (rapport 2.93), avec un boîtier de transfert ATC400. Les bruits typiques : sifflement aigu en accélération (roulements de pignon attaqué), grognement à charge constante (couple conique usé), claquement en décélération (jeu de pignon), bruit de tic-tic à régime stable (cardan / joint homocinétique). Causes principales : usure des roulements intérieurs (notamment celui d'attaque), jeu de couple conique, joint spi de pignon fuyant qui laisse fuir l'huile et tue le roulement. Codes défaut associés : pas de codes ABS/ESP, c'est mécanique. Diagnostic : dépose du cardan avant pour test à vide, mesure de jeu axial du pignon, écoute au stéthoscope, test routier en charge. Étape par étape pour distinguer pont avant vs cardan vs roulement de roue : vrille en virage = pont avant ; bruit constant = cardan ; bruit en virage uniquement = roulement de roue. Solutions : vidange préventive (60 €), changement joint spi seul (200-300 € + main d'œuvre), reconditionnement complet du pont avant (1290 € chez Autoliva), pont d'occasion non recommandé. Compatibilité : pont avant X1 E84 = E90 xDrive 293, partagé avec Série 1 E81/E82/E87/E88 xDrive.",
+      "relatedSlugs": [
+        "pont-avant-bmw-x1-e84-serie-3-e90-xdrive-293-guide",
+        "diagnostic-pont-avant-bmw-e90-xdrive-293-bruits",
+        "prix-pont-avant-bmw-x1-e84-e90-xdrive-293-budget",
+        "entretien-vidange-pont-avant-bmw-x1-e84-e90-xdrive"
+      ],
+      "productCtaSearchHint": "pont avant BMW"
+    },
+    {
+      "slug": "calculateur-boite-automatique-310320749r",
+      "title_hint": "Calculateur boîte automatique 310320749R : Renault EDC DC4",
+      "primaryKeyword": "calculateur 310320749R",
+      "category": { "slug": "transmission-mecatronique", "label": "Transmission > Mécatronique" },
+      "topic": "Le calculateur 310320749R équipe la boîte automatique Renault EDC (Efficient Dual Clutch) DC4 — boîte à double embrayage 6 rapports de Getrag (devenu Magna PT), équipant Mégane III/IV, Scénic III/IV, Captur, Clio IV, Kadjar 1.5 dCi (et certains modèles Dacia). Code interne mécatronique. Pannes typiques : codes DTC P0900, P0901, P0904, P0918, P189500, voyant boîte automatique allumé, mode dégradé, à-coups, refus de passer en D ou R, perte de communication avec le calculateur. Distinction de la mécatronique (organe complet hydraulique + électronique) du calculateur seul (TCU). Le 310320749R est le numéro OEM du module calculateur uniquement (carte électronique sans valves). Compatibilité : Mégane III phase 1/2/3 1.5 dCi 110, Scénic III, Captur 1.5 dCi 90/110, Clio IV 1.5 dCi 90 EDC, Kadjar 1.5 dCi 110, Dacia Lodgy/Dokker EDC. Diagnostic : Renault Clip ou ECU Test, lecture codes spécifiques EDC. Solutions : reprogrammation TCU (logiciel, 100-200 € en garage), remplacement calculateur seul échange standard (550-750 € reconditionné, 1200-1500 € neuf concession), remplacement mécatronique complète (1500-2500 € reconditionnée).",
+      "relatedSlugs": [
+        "calculateur-boite-edc-dc4-renault-diagnostic-prix-remplacement",
+        "calculateur-edc-megane-3-diagnostic-prix-remplacement",
+        "calculateur-edc-megane-4-diagnostic-prix-remplacement",
+        "calculateur-edc-scenic-3-diagnostic-prix-remplacement",
+        "calculateur-edc-captur-clio-4-diagnostic-prix-remplacement"
+      ],
+      "productCtaSearchHint": null
+    }
+  ]
+}
