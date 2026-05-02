@@ -325,7 +325,7 @@ async function getFeaturedProductsForAdmin() {
   const [ids, allProducts] = await Promise.all([
     getFeaturedProductIds(),
     Product.find({})
-      .select('_id name sku imageUrl')
+      .select('_id name sku brand imageUrl')
       .sort({ name: 1 })
       .lean(),
   ]);
@@ -343,6 +343,7 @@ async function getFeaturedProductsForAdmin() {
             id: String(product._id),
             name: product.name || '',
             sku: product.sku || '',
+            brand: product.brand || '',
             imageUrl: product.imageUrl || '',
           }
         : null,
@@ -353,6 +354,8 @@ async function getFeaturedProductsForAdmin() {
     id: String(p._id),
     name: p.name || '',
     sku: p.sku || '',
+    brand: p.brand || '',
+    imageUrl: p.imageUrl || '',
   }));
 
   return { slots, productOptions, limit: FEATURED_PRODUCTS_LIMIT };
