@@ -4621,7 +4621,7 @@ function buildProductSeoAssistant({ form, mode, productId } = {}) {
   const baseUrl = getSiteUrlFromEnv();
 
   const name = getTrimmedString(form && form.name);
-  const brand = getTrimmedString(form && form.brand);
+  const productBrand = getTrimmedString(form && form.brand);
   const sku = getTrimmedString(form && form.sku);
   const category = getTrimmedString(form && form.category);
 
@@ -4652,7 +4652,7 @@ function buildProductSeoAssistant({ form, mode, productId } = {}) {
   const urlPath = `/product/${encodeURIComponent(urlStubSlug)}/`;
   const url = baseUrl ? `${baseUrl}${urlPath}` : urlPath;
 
-  const autoTitle = `${name || siteName}${brand ? ` - ${brand}` : ''}${sku ? ` (Réf ${sku})` : ''} | ${siteName}`.trim();
+  const autoTitle = `${name || siteName}${productBrand ? ` - ${productBrand}` : ''}${sku ? ` (Réf ${sku})` : ''} | ${siteName}`.trim();
   const finalTitle = metaTitle || autoTitle;
 
   const fallbackDesc = truncateText(stripMarkdown(stripHtml(contentText)), 160);
@@ -4674,8 +4674,8 @@ function buildProductSeoAssistant({ form, mode, productId } = {}) {
   checks.push({
     key: 'brand',
     label: 'Marque',
-    ok: Boolean(brand),
-    detail: brand ? '' : 'Ajoutez la marque (Volkswagen, Audi…).',
+    ok: Boolean(productBrand),
+    detail: productBrand ? '' : 'Ajoutez la marque (Volkswagen, Audi…).',
     weight: 5,
   });
   checks.push({
