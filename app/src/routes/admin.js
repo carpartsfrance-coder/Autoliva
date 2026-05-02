@@ -295,6 +295,9 @@ router.get('/parametres/hero', requireAdminAuth, requireAbility('settings.site')
 router.post('/parametres/hero', requireAdminAuth, requireAbility('settings.site'), adminController.postAdminHeroSettings);
 router.post('/parametres/hero/upload', requireAdminAuth, requireAbility('settings.site'), handleHeroImageUpload, adminController.postAdminHeroUploadImage);
 
+router.get('/parametres/produits-vedette', requireAdminAuth, requireAbility('settings.site'), adminController.getAdminFeaturedProductsPage);
+router.post('/parametres/produits-vedette', requireAdminAuth, requireAbility('settings.site'), adminController.postAdminFeaturedProducts);
+
 router.get('/api/notes', requireAdminAuth, internalNoteAdminController.listNotes);
 router.post('/api/notes', requireAdminAuth, internalNoteAdminController.createNote);
 router.put('/api/notes/:id', requireAdminAuth, internalNoteAdminController.updateNote);

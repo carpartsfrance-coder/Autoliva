@@ -30,6 +30,11 @@ const siteSettingsSchema = new mongoose.Schema(
     youtubeUrl: { type: String, default: '', trim: true },
 
     heroSlides: { type: [heroSlideSchema], default: [] },
+
+    featuredProductIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+      default: [],
+    },
   },
   { timestamps: true }
 );

@@ -716,6 +716,64 @@ async function postAdminHeroSettings(req, res, next) {
   }
 }
 
+// ───────────────────────────── Produits vedette (home) ──────────────────────
+
+async function getAdminFeaturedProductsPage(req, res) {
+  const dbConnected = mongoose.connection.readyState === 1;
+
+  if (!dbConnected) {
+    return res.status(503).render('admin/featured-products-settings', {
+      title: 'Admin - Produits vedette',
+      dbConnected,
+      slots: [],
+      productOptions: [],
+      limit: siteSettings.FEATURED_PRODUCTS_LIMIT,
+      successMessage: null,
+      errorMessage: "La base de données n'est pas disponible.",
+    });
+  }
+
+  const successMessage = req.session.adminFeaturedProductsSuccess || null;
+  const errorMessage = req.session.adminFeaturedProductsError || null;
+  delete req.session.adminFeaturedProductsSuccess;
+  delete req.session.adminFeaturedProductsError;
+
+  const { slots, productOptions, limit } = await siteSettings.getFeaturedProductsForAdmin();
+
+  return res.render('admin/featured-products-settings', {
+    title: 'Admin - Produits vedette',
+    dbConnected,
+    slots,
+    productOptions,
+    limit,
+    successMessage,
+    errorMessage,
+  });
+}
+
+async function postAdminFeaturedProducts(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) {
+      req.session.adminFeaturedProductsError = "La base de données n'est pas disponible.";
+      return res.redirect('/admin/parametres/produits-vedette');
+    }
+
+    const body = req.body || {};
+    const raw = body.productIds;
+    const ids = Array.isArray(raw) ? raw : raw ? [raw] : [];
+
+    await siteSettings.updateFeaturedProductIds(ids);
+    req.session.adminFeaturedProductsSuccess = 'Produits vedette enregistrés.';
+    return res.redirect('/admin/parametres/produits-vedette');
+  } catch (err) {
+    console.error('[admin/featured-products] post:', err && err.message ? err.message : err);
+    req.session.adminFeaturedProductsError =
+      "Impossible d'enregistrer : " + (err && err.message ? err.message : 'erreur inconnue');
+    return res.redirect('/admin/parametres/produits-vedette');
+  }
+}
+
 async function postAdminHeroUploadImage(req, res) {
   try {
     if (req.uploadError) {
@@ -9664,6 +9722,8 @@ module.exports = {
   getAdminHeroSettingsPage,
   postAdminHeroSettings,
   postAdminHeroUploadImage,
+  getAdminFeaturedProductsPage,
+  postAdminFeaturedProducts,
   getAdminLogin,
   postAdminLogin,
   getAdminLogin2fa,

@@ -1,5 +1,9 @@
+const mongoose = require('mongoose');
 const SiteSettings = require('../models/SiteSettings');
+const Product = require('../models/Product');
 const brand = require('../config/brand');
+
+const FEATURED_PRODUCTS_LIMIT = 4;
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : value ? String(value).trim() : '';
@@ -239,6 +243,121 @@ async function updateHeroSlides(slides) {
   return updated && Array.isArray(updated.heroSlides) ? updated.heroSlides : [];
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Produits vedette (section "Découvrez Nos Pièces" sur la home)
+// ────────────────────────────────────────────────────────────────────────────
+
+function sanitizeFeaturedIds(rawIds) {
+  if (!Array.isArray(rawIds)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const v of rawIds) {
+    const id = typeof v === 'string' ? v.trim() : v && v.toString ? v.toString() : '';
+    if (!id) continue;
+    if (!mongoose.Types.ObjectId.isValid(id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+    if (result.length >= FEATURED_PRODUCTS_LIMIT) break;
+  }
+  return result;
+}
+
+async function getFeaturedProductIds() {
+  const saved = await getSiteSettings();
+  const ids = saved && Array.isArray(saved.featuredProductIds) ? saved.featuredProductIds : [];
+  return sanitizeFeaturedIds(ids.map((id) => (id ? String(id) : '')));
+}
+
+async function updateFeaturedProductIds(rawIds) {
+  const ids = sanitizeFeaturedIds(rawIds);
+  const objectIds = ids.map((id) => new mongoose.Types.ObjectId(id));
+
+  const updated = await SiteSettings.findOneAndUpdate(
+    { key: 'site' },
+    { $set: { key: 'site', featuredProductIds: objectIds } },
+    { new: true, upsert: true }
+  ).lean();
+
+  return updated && Array.isArray(updated.featuredProductIds)
+    ? updated.featuredProductIds.map((id) => String(id))
+    : [];
+}
+
+/**
+ * Retourne les produits vedette à afficher sur la home, dans l'ordre choisi.
+ * Si moins de FEATURED_PRODUCTS_LIMIT sont configurés, complète avec les
+ * produits récemment mis à jour. Si rien n'est configuré du tout, fallback
+ * complet sur les produits récents (comportement historique).
+ */
+async function getFeaturedProductsForDisplay() {
+  const ids = await getFeaturedProductIds();
+
+  if (!ids.length) {
+    return Product.find({}).sort({ updatedAt: -1 }).limit(FEATURED_PRODUCTS_LIMIT).lean();
+  }
+
+  const objectIds = ids.map((id) => new mongoose.Types.ObjectId(id));
+  const found = await Product.find({ _id: { $in: objectIds } }).lean();
+  const byId = new Map(found.map((p) => [String(p._id), p]));
+  const ordered = ids.map((id) => byId.get(id)).filter(Boolean);
+
+  if (ordered.length >= FEATURED_PRODUCTS_LIMIT) {
+    return ordered.slice(0, FEATURED_PRODUCTS_LIMIT);
+  }
+
+  const missing = FEATURED_PRODUCTS_LIMIT - ordered.length;
+  const excludeIds = ordered.map((p) => p._id).filter(Boolean);
+  const fillers = await Product.find({ _id: { $nin: excludeIds } })
+    .sort({ updatedAt: -1 })
+    .limit(missing)
+    .lean();
+
+  return ordered.concat(fillers);
+}
+
+/**
+ * Retourne les slots côté admin : exactement FEATURED_PRODUCTS_LIMIT slots,
+ * chaque slot étant soit un produit (avec id, name, sku, imageUrl) soit null.
+ * Plus la liste de tous les produits du catalogue pour le picker.
+ */
+async function getFeaturedProductsForAdmin() {
+  const [ids, allProducts] = await Promise.all([
+    getFeaturedProductIds(),
+    Product.find({})
+      .select('_id name sku imageUrl')
+      .sort({ name: 1 })
+      .lean(),
+  ]);
+
+  const byId = new Map(allProducts.map((p) => [String(p._id), p]));
+  const slots = [];
+  for (let i = 0; i < FEATURED_PRODUCTS_LIMIT; i += 1) {
+    const id = ids[i] || '';
+    const product = id ? byId.get(id) : null;
+    slots.push({
+      position: i + 1,
+      productId: id || '',
+      product: product
+        ? {
+            id: String(product._id),
+            name: product.name || '',
+            sku: product.sku || '',
+            imageUrl: product.imageUrl || '',
+          }
+        : null,
+    });
+  }
+
+  const productOptions = allProducts.map((p) => ({
+    id: String(p._id),
+    name: p.name || '',
+    sku: p.sku || '',
+  }));
+
+  return { slots, productOptions, limit: FEATURED_PRODUCTS_LIMIT };
+}
+
 module.exports = {
   buildEnvFallback,
   getSiteSettings,
@@ -250,4 +369,10 @@ module.exports = {
   getHeroSlidesForAdmin,
   updateHeroSlides,
   sanitizeHeroSlide,
+  // Featured products
+  FEATURED_PRODUCTS_LIMIT,
+  getFeaturedProductIds,
+  updateFeaturedProductIds,
+  getFeaturedProductsForDisplay,
+  getFeaturedProductsForAdmin,
 };

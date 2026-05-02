@@ -154,7 +154,8 @@ async function getHome(req, res, next) {
     let homeCategories = [];
     let homeVehicleMakes = [];
     if (dbConnected) {
-      const [products, featuredCategoryDocs, vehicleMakeDocs] = await Promise.all([
+      const [featuredFromSettings, recentProducts, featuredCategoryDocs, vehicleMakeDocs] = await Promise.all([
+        siteSettingsService.getFeaturedProductsForDisplay(),
         Product.find({})
           .sort({ updatedAt: -1 })
           .limit(8)
@@ -171,7 +172,9 @@ async function getHome(req, res, next) {
           .lean(),
       ]);
 
-      featuredProducts = products;
+      featuredProducts = Array.isArray(featuredFromSettings) && featuredFromSettings.length
+        ? featuredFromSettings
+        : recentProducts;
       homeCategories = buildHomeCategoriesFromDocs(featuredCategoryDocs);
       homeVehicleMakes = buildHomeVehicleMakesFromNames((vehicleMakeDocs || []).map((row) => row && row.name));
 
@@ -186,7 +189,7 @@ async function getHome(req, res, next) {
       }
 
       if (!homeCategories.length) {
-        homeCategories = buildHomeCategoriesFromDemo(featuredProducts);
+        homeCategories = buildHomeCategoriesFromDemo(recentProducts);
       }
 
       if (!homeVehicleMakes.length) {
@@ -211,7 +214,7 @@ async function getHome(req, res, next) {
       }
 
       if (!homeVehicleMakes.length) {
-        homeVehicleMakes = buildHomeVehicleMakesFromProducts(featuredProducts);
+        homeVehicleMakes = buildHomeVehicleMakesFromProducts(recentProducts);
       }
     } else {
       featuredProducts = Array.isArray(demoProducts) ? demoProducts.slice(0, 8) : [];

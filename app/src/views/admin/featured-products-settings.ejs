@@ -1,0 +1,137 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'settings' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Produits vedette (page d'accueil)</div>
+        <div class="mt-1 text-sm text-slate-500">Choisis les <%= limit %> produits affichés dans la section "Découvrez Nos Pièces", et leur ordre.</div>
+      </div>
+      <a class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700" href="/admin/parametres">
+        <span class="material-symbols-outlined text-base">arrow_back</span> Retour Paramètres
+      </a>
+    </div>
+
+    <% if (typeof successMessage !== 'undefined' && successMessage) { %>
+      <div class="mt-8 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900">
+        <div class="font-bold">OK</div>
+        <div class="mt-1 text-sm"><%= successMessage %></div>
+      </div>
+    <% } %>
+
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-8 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+        <div class="font-bold">Erreur</div>
+        <div class="mt-1 text-sm"><%= errorMessage %></div>
+      </div>
+    <% } %>
+
+    <form id="featured-form" action="/admin/parametres/produits-vedette" method="POST" class="mt-8 space-y-4">
+      <div id="featured-slots-container" class="space-y-4">
+        <% (slots || []).forEach(function(slot, idx) { %>
+          <div class="featured-slot-card bg-white rounded-2xl border border-slate-200 p-6" data-slot-index="<%= idx %>">
+            <div class="flex items-center justify-between mb-4">
+              <div class="flex items-center gap-3">
+                <span class="inline-flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm slot-position-label"><%= idx + 1 %></span>
+                <div class="text-base font-semibold text-slate-900">Position <span class="slot-position-label"><%= idx + 1 %></span></div>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" class="featured-slot-up p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed" title="Monter" <%= idx === 0 ? 'disabled' : '' %>>
+                  <span class="material-symbols-outlined text-base">arrow_upward</span>
+                </button>
+                <button type="button" class="featured-slot-down p-2 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed" title="Descendre" <%= idx === (slots.length - 1) ? 'disabled' : '' %>>
+                  <span class="material-symbols-outlined text-base">arrow_downward</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+              <div class="lg:col-span-1">
+                <div class="featured-slot-preview h-40 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex items-center justify-center">
+                  <% if (slot.product && slot.product.imageUrl) { %>
+                    <img src="<%= slot.product.imageUrl %>" alt="<%= slot.product.name %>" class="w-full h-full object-cover" />
+                  <% } else { %>
+                    <span class="text-slate-400 text-sm">Aucun produit sélectionné</span>
+                  <% } %>
+                </div>
+              </div>
+
+              <div class="lg:col-span-2">
+                <label class="block text-sm font-medium text-slate-500">Produit</label>
+                <select name="productIds" class="featured-slot-select mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary">
+                  <option value="">— Aucun (laisser vide) —</option>
+                  <% (productOptions || []).forEach(function(opt) { %>
+                    <option value="<%= opt.id %>" <%= slot.productId === opt.id ? 'selected' : '' %>>
+                      <%= opt.name %><%= opt.sku ? ' — ' + opt.sku : '' %>
+                    </option>
+                  <% }); %>
+                </select>
+                <div class="mt-2 text-xs text-slate-500">
+                  <% if (slot.product) { %>
+                    <span class="font-semibold text-slate-700"><%= slot.product.name %></span><%= slot.product.sku ? ' · Réf ' + slot.product.sku : '' %>
+                  <% } else { %>
+                    Sélectionne un produit dans la liste, ou laisse vide.
+                  <% } %>
+                </div>
+              </div>
+            </div>
+          </div>
+        <% }); %>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end pt-4">
+        <a class="btn btn-secondary" href="/admin/parametres">Retour</a>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-red-700 text-white px-6 py-3 text-sm font-bold">
+          <span class="material-symbols-outlined">save</span> Enregistrer
+        </button>
+      </div>
+
+      <div class="text-xs text-slate-500">
+        Astuce : si tu sélectionnes moins de <%= limit %> produits, les positions vides sont automatiquement remplies par les produits récemment mis à jour.
+      </div>
+    </form>
+  </div>
+</main>
+
+<script>
+(function() {
+  var container = document.getElementById('featured-slots-container');
+  if (!container) return;
+
+  function refreshArrows() {
+    var cards = container.querySelectorAll('.featured-slot-card');
+    cards.forEach(function(card, idx) {
+      var up = card.querySelector('.featured-slot-up');
+      var down = card.querySelector('.featured-slot-down');
+      if (up) up.disabled = (idx === 0);
+      if (down) down.disabled = (idx === cards.length - 1);
+
+      // Mise à jour des labels de position
+      card.dataset.slotIndex = String(idx);
+      card.querySelectorAll('.slot-position-label').forEach(function(el) {
+        el.textContent = String(idx + 1);
+      });
+    });
+  }
+
+  container.addEventListener('click', function(e) {
+    var btn = e.target.closest('.featured-slot-up, .featured-slot-down');
+    if (!btn) return;
+    var card = btn.closest('.featured-slot-card');
+    if (!card) return;
+
+    if (btn.classList.contains('featured-slot-up')) {
+      var prev = card.previousElementSibling;
+      if (prev) container.insertBefore(card, prev);
+    } else {
+      var next = card.nextElementSibling;
+      if (next) container.insertBefore(next, card);
+    }
+    refreshArrows();
+  });
+})();
+</script>
+
+<%- include('./partials/footer') %>
