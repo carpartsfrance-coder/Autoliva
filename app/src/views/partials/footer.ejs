@@ -628,14 +628,27 @@
     });
   }
 
+  /* On push pour TOUS les forms /panier/ajouter/, y compris la fiche produit
+     (data-add-to-cart-form). Raison : le gate AJAX dans show.ejs (line ~1063)
+     dépend de window.CPFCartFeedback qui est défini APRÈS dans footer.ejs ;
+     donc l'AJAX ne s'attache pas et le form submit normalement → reload de
+     page sans push. Le push synchrone ici garantit l'event quel que soit le
+     chemin pris. Doublon possible si l'AJAX finit par marcher : préférable
+     à un événement manquant. */
+  function dedupKey(form) {
+    var d = form.dataset || {};
+    return (d.productId || form.getAttribute('action') || '') + '|' + Date.now();
+  }
+  var lastPushKey = '';
   document.addEventListener('submit', function (e) {
     var form = e.target;
     if (!form || form.tagName !== 'FORM') return;
     var action = form.getAttribute('action') || '';
     if (action.indexOf('/panier/ajouter/') === -1) return;
-    /* La fiche produit gère son propre push dans le AJAX success → on saute
-       pour éviter le doublon. Détection par le data-add-to-cart-form attribute. */
-    if (form.hasAttribute('data-add-to-cart-form')) return;
+    /* Dédup grossier : même form submit dans la même seconde = un seul push. */
+    var key = dedupKey(form).replace(/\d+$/, function (s) { return Math.floor(Number(s) / 1000); });
+    if (key === lastPushKey) return;
+    lastPushKey = key;
     pushAddToCart(form);
   }, true);
 

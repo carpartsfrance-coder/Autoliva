@@ -64,10 +64,6 @@
     if (!form || form.tagName !== 'FORM') return;
     var action = form.getAttribute('action') || '';
     if (action.indexOf('/panier/ajouter/') === -1) return;
-    /* La fiche produit gère son push dans le AJAX success — skip pour éviter
-       le doublon. Le footer inline gère aussi déjà cette branche, mais
-       l'inline et l'externe peuvent se déclencher en parallèle. */
-    if (form.hasAttribute('data-add-to-cart-form')) return;
     var item = readProductFromForm(form);
     if (item) pushAddToCart(item);
   }
