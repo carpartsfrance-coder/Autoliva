@@ -437,6 +437,37 @@
 </div>
 <% } %>
 
+<% if (Array.isArray(items) && items.length) {
+  const _ga4CheckoutItems = items.map((it) => {
+    const p = it && it.product ? it.product : {};
+    const qty = Number(it && it.quantity) || 1;
+    const unit = Math.round(Number(it && it.unitPriceCents) || 0) / 100;
+    return {
+      item_id: String(p.sku || p._id || ''),
+      item_name: String(p.name || ''),
+      item_category: String(p.category || ''),
+      item_brand: String(p.brand || ''),
+      price: unit,
+      quantity: qty,
+    };
+  });
+  const _ga4BeginCheckout = JSON.stringify({
+    event: 'begin_checkout',
+    ecommerce: {
+      currency: 'EUR',
+      value: Math.round(Number(totalCents) || 0) / 100,
+      items: _ga4CheckoutItems,
+    },
+  }).replace(/</g, '\\u003c'); %>
+<script>
+(function () {
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ ecommerce: null });
+  window.dataLayer.push(<%- _ga4BeginCheckout %>);
+})();
+</script>
+<% } %>
+
 <%- include('../partials/footer') %>
 
 <%/* ── Scripts ─────────────────────────────────────────────── */%>

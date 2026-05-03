@@ -493,50 +493,32 @@
   </div>
 </main>
 
-<% if (order.statusKey === 'paid' || order.statusKey === 'processing' || order.statusKey === 'shipped' || order.statusKey === 'delivered' || order.statusKey === 'completed') { %>
-<script>
-(function() {
-  // Ne fire qu'une seule fois par commande via sessionStorage
-  var purchaseKey = 'cpf_purchase_tracked_<%= order.id %>';
-  if (window.sessionStorage) {
-    try {
-      if (sessionStorage.getItem(purchaseKey)) return;
-      sessionStorage.setItem(purchaseKey, '1');
-    } catch(e) {}
-  }
-
-  // === 1. DataLayer push pour GTM (GA4 + Google Ads via GTM) ===
-  window.dataLayer = window.dataLayer || [];
-  window.dataLayer.push({ ecommerce: null });
-
-  window.dataLayer.push({
+<% if (typeof firePurchase !== 'undefined' && firePurchase) {
+  const _ga4PurchaseItems = (Array.isArray(order.items) ? order.items : []).map((it) => ({
+    item_id: String(it.sku || it.productId || ''),
+    item_name: String(it.name || ''),
+    item_category: String(it.category || ''),
+    item_brand: String(it.brand || ''),
+    price: Math.round(Number(it.unitPriceCents) || 0) / 100,
+    quantity: Number(it.quantity) || 1,
+  }));
+  const _ga4Purchase = JSON.stringify({
     event: 'purchase',
     ecommerce: {
-      transaction_id: '<%= order.number %>',
-      value: <%= (order.totalCents / 100).toFixed(2) %>,
-      tax: <%= (order.vatCents / 100).toFixed(2) %>,
-      shipping: <%= (order.shippingCostCents / 100).toFixed(2) %>,
-      currency: '<%= order.currency || "EUR" %>',
-      items: [
-        <% if (order.items && order.items.length) { %>
-          <% order.items.forEach(function(it, idx) { %>
-            {
-              item_id: '<%= (it.sku || it.productId || "").replace(/\x27/g, "\\\'" ) %>',
-              item_name: '<%= (it.name || "").replace(/\x27/g, "\\\'" ) %>',
-              price: <%= it.unitPriceCents ? (it.unitPriceCents / 100).toFixed(2) : 0 %>,
-              quantity: <%= it.quantity || 1 %>
-            }<%= idx < order.items.length - 1 ? ',' : '' %>
-          <% }); %>
-        <% } %>
-      ]
+      transaction_id: String(order.number || ''),
+      value: Math.round(Number(order.totalCents) || 0) / 100,
+      tax: Math.round(Number(order.vatCents) || 0) / 100,
+      shipping: Math.round(Number(order.shippingCostCents) || 0) / 100,
+      currency: order.currency || 'EUR',
+      coupon: order.promoCode || '',
+      items: _ga4PurchaseItems,
     },
-    value: <%= (order.totalCents / 100).toFixed(2) %>,
-    tax: <%= (order.vatCents / 100).toFixed(2) %>,
-    shipping: <%= (order.shippingCostCents / 100).toFixed(2) %>,
-    currency: '<%= order.currency || "EUR" %>',
-    transaction_id: '<%= order.number %>'
-  });
-
+  }).replace(/</g, '\\u003c'); %>
+<script>
+(function () {
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ ecommerce: null });
+  window.dataLayer.push(<%- _ga4Purchase %>);
 })();
 </script>
 <% } %>

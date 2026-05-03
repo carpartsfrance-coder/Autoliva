@@ -278,7 +278,7 @@
             <p class="text-left md:text-right text-xs italic <%= hasConsigne ? 'text-emerald-600 font-semibold' : 'text-slate-400' %>"><%= hasConsigne ? 'Échange standard sans caution • Retour ancien organe sous 30 jours' : (shippingDelayText || (product.inStock ? 'Livraison rapide en France' : 'Disponible sur commande')) %></p>
           </div>
 
-          <form action="/panier/ajouter/<%= product._id %>" class="flex flex-col gap-4 lg:flex-1" data-add-to-cart-form data-product-image="<%= mainImage %>" data-product-name="<%= product.name %>" method="POST">
+          <form action="/panier/ajouter/<%= product._id %>" class="flex flex-col gap-4 lg:flex-1" data-add-to-cart-form data-product-id="<%= product._id %>" data-product-sku="<%= product.sku || product._id %>" data-product-image="<%= mainImage %>" data-product-name="<%= product.name %>" data-product-category="<%= product.category || '' %>" data-product-brand="<%= product.brand || '' %>" data-product-price-cents="<%= basePriceCents %>" method="POST">
             <input name="returnTo" type="hidden" value="<%= typeof returnTo !== 'undefined' ? returnTo : '/panier' %>" />
             <input data-qty-input name="qty" type="hidden" value="1" />
 
@@ -1460,5 +1460,30 @@
     </section>
   <% } %>
 </main>
+
+<% if (product) { %>
+<% const _ga4ViewItem = JSON.stringify({
+  event: 'view_item',
+  ecommerce: {
+    currency: 'EUR',
+    value: Math.round(Number(product.priceCents) || 0) / 100,
+    items: [{
+      item_id: String(product.sku || product._id || ''),
+      item_name: String(product.name || ''),
+      item_category: String(product.category || ''),
+      item_brand: String(product.brand || ''),
+      price: Math.round(Number(product.priceCents) || 0) / 100,
+      quantity: 1,
+    }],
+  },
+}).replace(/</g, '\\u003c'); %>
+<script>
+(function () {
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ ecommerce: null });
+  window.dataLayer.push(<%- _ga4ViewItem %>);
+})();
+</script>
+<% } %>
 
 <%- include('../partials/footer') %>

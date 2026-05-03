@@ -532,7 +532,7 @@ async function getOrderDetailPage(req, res, next) {
 
       if (validProductIds.length) {
         const products = await Product.find({ _id: { $in: validProductIds } })
-          .select('_id imageUrl inStock')
+          .select('_id imageUrl inStock brand category')
           .lean();
 
         for (const p of products) {
@@ -635,6 +635,27 @@ async function getOrderDetailPage(req, res, next) {
       totalDue: formatEuro(totalDueCents),
       totalDueCents,
     };
+
+    /* === GA4/GTM : déclenche `purchase` UNE seule fois par commande ===
+       Update atomique : seule la requête qui fait passer le flag à `true`
+       voit `firePurchase = true`. Évite les doubles comptages au reload. */
+    let firePurchase = false;
+    const isPaidOrFulfilled = ['paid', 'processing', 'shipped', 'delivered', 'completed']
+      .includes(getTrimmedString(order.status).toLowerCase());
+
+    if (isPaidOrFulfilled && !order.analyticsTracked) {
+      try {
+        const result = await Order.updateOne(
+          { _id: order._id, analyticsTracked: { $ne: true } },
+          { $set: { analyticsTracked: true } }
+        );
+        if (result && (result.modifiedCount === 1 || result.nModified === 1)) {
+          firePurchase = true;
+        }
+      } catch (err) {
+        console.error('[ga4-purchase] flag set failed', err && err.message);
+      }
+    }
 
     return res.render('account/order', {
       title: `Commande ${order.number} - ${brand.NAME}`,
@@ -740,6 +761,8 @@ async function getOrderDetailPage(req, res, next) {
                 inStock: p && typeof p.inStock === 'boolean' ? p.inStock : null,
                 name: it.name,
                 sku: it.sku,
+                brand: p && typeof p.brand === 'string' ? p.brand : '',
+                category: p && typeof p.category === 'string' ? p.category : '',
                 optionsSummary: it && typeof it.optionsSummary === 'string' ? it.optionsSummary : '',
                 unitPrice: formatEuro(it.unitPriceCents),
                 unitPriceCents: it.unitPriceCents,
@@ -750,6 +773,7 @@ async function getOrderDetailPage(req, res, next) {
             })
           : [],
       },
+      firePurchase,
     });
   } catch (err) {
     return next(err);

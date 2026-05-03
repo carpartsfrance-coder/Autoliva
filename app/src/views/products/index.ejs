@@ -342,7 +342,13 @@
                       <p class="text-[10px] text-gray-400 uppercase tracking-wider">Prix TTC</p>
                       <p class="text-base sm:text-lg font-bold text-gray-900"><%= formatMoney(p.priceCents) %> €</p>
                     </div>
-                    <form action="/panier/ajouter/<%= p._id %>" method="POST">
+                    <form action="/panier/ajouter/<%= p._id %>" method="POST"
+                      data-product-id="<%= p._id %>"
+                      data-product-sku="<%= p.sku || p._id %>"
+                      data-product-name="<%= p.name %>"
+                      data-product-category="<%= p.category || '' %>"
+                      data-product-brand="<%= p.brand || '' %>"
+                      data-product-price-cents="<%= p.priceCents || 0 %>">
                       <input name="returnTo" type="hidden" value="<%= typeof returnTo !== 'undefined' ? returnTo : '/produits' %>" />
                       <input name="qty" type="hidden" value="1" />
                       <button class="bg-gray-100 p-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-primary hover:border-primary hover:text-white transition-colors duration-150 disabled:opacity-60" <%= p.inStock ? '' : 'disabled' %> type="submit">
@@ -433,6 +439,44 @@
     blogLinking: null,
   }) %>
 </main>
+
+<% if (Array.isArray(products) && products.length) {
+  let _ga4ListId = 'catalog';
+  let _ga4ListName = 'Catalogue produits';
+  if (typeof searchQuery !== 'undefined' && searchQuery) {
+    _ga4ListId = 'search_' + String(searchQuery).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
+    _ga4ListName = 'Recherche : ' + String(searchQuery);
+  } else if (_categoryContext && _categoryContext.name) {
+    _ga4ListId = 'category_' + String(_categoryContext.slug || _categoryContext.name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
+    _ga4ListName = String(_categoryContext.name);
+  } else if (_vehicleContext && _vehicleContext.name) {
+    _ga4ListId = 'vehicle_' + String(_vehicleContext.slug || _vehicleContext.name).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
+    _ga4ListName = String(_vehicleContext.name);
+  }
+  const _ga4ListItems = products.slice(0, 20).map((p, idx) => ({
+    item_id: String(p.sku || p._id || ''),
+    item_name: String(p.name || ''),
+    item_category: String(p.category || ''),
+    item_brand: String(p.brand || ''),
+    price: Math.round(Number(p.priceCents) || 0) / 100,
+    index: idx,
+  }));
+  const _ga4ViewItemList = JSON.stringify({
+    event: 'view_item_list',
+    ecommerce: {
+      item_list_id: _ga4ListId,
+      item_list_name: _ga4ListName,
+      items: _ga4ListItems,
+    },
+  }).replace(/</g, '\\u003c'); %>
+<script>
+(function () {
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ ecommerce: null });
+  window.dataLayer.push(<%- _ga4ViewItemList %>);
+})();
+</script>
+<% } %>
 
 <%- include('../partials/footer') %>
 

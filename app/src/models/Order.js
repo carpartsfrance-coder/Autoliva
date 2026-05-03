@@ -276,6 +276,10 @@ const orderSchema = new mongoose.Schema(
       detail: { type: String, default: '', trim: true },
     },
     isManual: { type: Boolean, default: false },
+    // Flag GA4/GTM : passe à true la première fois que la page de confirmation
+    // a poussé l'event `purchase` dans le dataLayer. Permet d'éviter les
+    // doubles comptages (reload, re-visite, etc.) côté serveur.
+    analyticsTracked: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminUser', default: null },
     noteInternal: { type: String, default: '', trim: true },
     noteClient: { type: String, default: '', trim: true },
