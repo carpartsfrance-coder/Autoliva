@@ -532,7 +532,7 @@ async function getOrderDetailPage(req, res, next) {
 
       if (validProductIds.length) {
         const products = await Product.find({ _id: { $in: validProductIds } })
-          .select('_id imageUrl inStock brand category')
+          .select('_id imageUrl inStock brand category compatibility')
           .lean();
 
         for (const p of products) {
@@ -755,13 +755,17 @@ async function getOrderDetailPage(req, res, next) {
           ? order.items.map((it) => {
               const pid = it && it.productId ? String(it.productId) : '';
               const p = pid ? productMap.get(pid) : null;
+              const brandRaw = p && typeof p.brand === 'string' ? p.brand.trim() : '';
+              const compatBrand = p && Array.isArray(p.compatibility) && p.compatibility[0] && p.compatibility[0].make
+                ? String(p.compatibility[0].make).trim()
+                : '';
               return {
                 productId: pid,
                 imageUrl: p && p.imageUrl ? p.imageUrl : '',
                 inStock: p && typeof p.inStock === 'boolean' ? p.inStock : null,
                 name: it.name,
                 sku: it.sku,
-                brand: p && typeof p.brand === 'string' ? p.brand : '',
+                brand: brandRaw || compatBrand,
                 category: p && typeof p.category === 'string' ? p.category : '',
                 optionsSummary: it && typeof it.optionsSummary === 'string' ? it.optionsSummary : '',
                 unitPrice: formatEuro(it.unitPriceCents),

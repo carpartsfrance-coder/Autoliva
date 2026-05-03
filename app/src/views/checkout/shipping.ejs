@@ -442,11 +442,12 @@
     const p = it && it.product ? it.product : {};
     const qty = Number(it && it.quantity) || 1;
     const unit = Math.round(Number(it && it.unitPriceCents) || 0) / 100;
+    const brand = (p.brand && String(p.brand).trim()) || (Array.isArray(p.compatibility) && p.compatibility[0] && p.compatibility[0].make) || '';
     return {
       item_id: String(p.sku || p._id || ''),
       item_name: String(p.name || ''),
       item_category: String(p.category || ''),
-      item_brand: String(p.brand || ''),
+      item_brand: String(brand),
       price: unit,
       quantity: qty,
     };

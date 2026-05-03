@@ -589,4 +589,83 @@
 
 <script src="/js/analytics-tracker.js" defer></script>
 <script src="/js/ga4-ecommerce.js" defer></script>
+<%/* GA4 e-commerce inline backup : add_to_cart / phone_click / whatsapp_click.
+     Synchrone (pas de defer) → garanti d'être attaché avant tout clic utilisateur.
+     Doublon défensif au cas où /js/ga4-ecommerce.js ne charge pas (CDN, cache, etc.) :
+     les pushes sont déduplicables côté GTM via event_id si besoin, mais ici on
+     préfère l'event qui passe à zéro. */%>
+<script>
+(function () {
+  if (window.__ga4InlineReady) return;
+  window.__ga4InlineReady = true;
+
+  function pushAddToCart(form) {
+    if (!form || !form.dataset) return;
+    var d = form.dataset;
+    var sku = d.productSku || d.productId || '';
+    if (!sku) return;
+    var qtyEl = form.querySelector('input[name="qty"]');
+    var qty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
+    if (!isFinite(qty) || qty < 1) qty = 1;
+    var priceCents = Number(d.productPriceCents) || 0;
+    var price = priceCents > 0 ? Math.round(priceCents) / 100 : 0;
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({ ecommerce: null });
+    window.dataLayer.push({
+      event: 'add_to_cart',
+      ecommerce: {
+        currency: 'EUR',
+        value: Number((price * qty).toFixed(2)),
+        items: [{
+          item_id: sku,
+          item_name: d.productName || '',
+          item_category: d.productCategory || '',
+          item_brand: d.productBrand || '',
+          price: price,
+          quantity: qty,
+        }],
+      },
+    });
+  }
+
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form || form.tagName !== 'FORM') return;
+    var action = form.getAttribute('action') || '';
+    if (action.indexOf('/panier/ajouter/') === -1) return;
+    /* La fiche produit gère son propre push dans le AJAX success → on saute
+       pour éviter le doublon. Détection par le data-add-to-cart-form attribute. */
+    if (form.hasAttribute('data-add-to-cart-form')) return;
+    pushAddToCart(form);
+  }, true);
+
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[href^="tel:"]') : null;
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: 'phone_click',
+      phone_number: href.replace(/^tel:/i, '').trim(),
+      page_path: window.location.pathname,
+    });
+  }, true);
+
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a') : null;
+    if (!a) return;
+    var href = a.getAttribute('href') || '';
+    if (!/wa\.me|api\.whatsapp\.com/i.test(href)) return;
+    var phone = '';
+    var m = href.match(/wa\.me\/(\+?\d+)/i);
+    if (m) phone = '+' + m[1].replace(/^\+/, '');
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: 'whatsapp_click',
+      phone_number: phone,
+      page_path: window.location.pathname,
+    });
+  }, true);
+})();
+</script>
 </body></html>
