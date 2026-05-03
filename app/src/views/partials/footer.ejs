@@ -628,28 +628,44 @@
     });
   }
 
-  /* On push pour TOUS les forms /panier/ajouter/, y compris la fiche produit
-     (data-add-to-cart-form). Raison : le gate AJAX dans show.ejs (line ~1063)
-     dépend de window.CPFCartFeedback qui est défini APRÈS dans footer.ejs ;
-     donc l'AJAX ne s'attache pas et le form submit normalement → reload de
-     page sans push. Le push synchrone ici garantit l'event quel que soit le
-     chemin pris. Doublon possible si l'AJAX finit par marcher : préférable
-     à un événement manquant. */
-  function dedupKey(form) {
-    var d = form.dataset || {};
-    return (d.productId || form.getAttribute('action') || '') + '|' + Date.now();
+  /* Trois chemins pour pousser add_to_cart, du plus fiable au moins fiable.
+     Dédup partagé : si l'un des trois fire pour un form donné, les autres
+     skippent pendant 1s. */
+  var lastPushFor = Object.create(null);
+  function tryPush(form, source) {
+    if (!form) return;
+    var key = (form.dataset && form.dataset.productId) || form.getAttribute('action') || '';
+    var now = Date.now();
+    if (lastPushFor[key] && (now - lastPushFor[key]) < 1500) return;
+    lastPushFor[key] = now;
+    pushAddToCart(form);
   }
-  var lastPushKey = '';
+
+  /* (1) Click capture-phase sur tout bouton/élément à l'intérieur d'un form
+     /panier/ajouter/ — fire AVANT tout `e.preventDefault()` éventuel d'un
+     handler concurrent (capture phase). Le click event lui-même n'est jamais
+     « avalé » : preventDefault sur click empêche la submission mais pas
+     l'event. C'est la voie la plus fiable. */
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var btn = t.closest('button, [role="button"], input[type="submit"]');
+    if (!btn) return;
+    var form = btn.closest('form');
+    if (!form) return;
+    var action = form.getAttribute('action') || '';
+    if (action.indexOf('/panier/ajouter/') === -1) return;
+    tryPush(form, 'click');
+  }, true);
+
+  /* (2) Submit capture-phase — couvre les submits programmatiques
+     (form.submit(), form.dispatchEvent(submit)) qui n'émettent pas de click. */
   document.addEventListener('submit', function (e) {
     var form = e.target;
     if (!form || form.tagName !== 'FORM') return;
     var action = form.getAttribute('action') || '';
     if (action.indexOf('/panier/ajouter/') === -1) return;
-    /* Dédup grossier : même form submit dans la même seconde = un seul push. */
-    var key = dedupKey(form).replace(/\d+$/, function (s) { return Math.floor(Number(s) / 1000); });
-    if (key === lastPushKey) return;
-    lastPushKey = key;
-    pushAddToCart(form);
+    tryPush(form, 'submit');
   }, true);
 
   document.addEventListener('click', function (e) {
