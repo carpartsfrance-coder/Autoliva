@@ -588,64 +588,72 @@
 </div>
 
 <script src="/js/analytics-tracker.js" defer></script>
-<script src="/js/ga4-ecommerce.js" defer></script>
-<%/* GA4 e-commerce inline backup : add_to_cart / phone_click / whatsapp_click.
-     Synchrone (pas de defer) → garanti d'être attaché avant tout clic utilisateur.
-     Doublon défensif au cas où /js/ga4-ecommerce.js ne charge pas (CDN, cache, etc.) :
-     les pushes sont déduplicables côté GTM via event_id si besoin, mais ici on
-     préfère l'event qui passe à zéro. */%>
+<%/* GA4 e-commerce inline (synchrone, no defer) — source unique des events
+     add_to_cart / phone_click / whatsapp_click. On a retiré le script externe
+     /js/ga4-ecommerce.js pour éviter toute race condition entre les deux
+     (sinon risque de double-push add_to_cart). Tout passe par
+     window.GA4Ecommerce.trackAddToCart(form) avec dédup interne. */%>
 <script>
 (function () {
   if (window.__ga4InlineReady) return;
   window.__ga4InlineReady = true;
 
-  function pushAddToCart(form) {
-    if (!form || !form.dataset) return;
+  /* === Source unique de vérité pour add_to_cart ===
+     Plusieurs chemins peuvent vouloir tracer un add_to_cart pour un même
+     clic (handler click capture, submit capture, .then(success) AJAX d'un
+     IIFE custom comme show.ejs). Pour éviter les pushes multiples, tout
+     le monde appelle window.GA4Ecommerce.trackAddToCart(form) qui dédup
+     en interne sur (productId|action) avec une fenêtre de 1500ms. */
+  var lastPushFor = Object.create(null);
+
+  function buildItem(form) {
+    if (!form || !form.dataset) return null;
     var d = form.dataset;
     var sku = d.productSku || d.productId || '';
-    if (!sku) return;
+    if (!sku) return null;
     var qtyEl = form.querySelector('input[name="qty"]');
     var qty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
     if (!isFinite(qty) || qty < 1) qty = 1;
     var priceCents = Number(d.productPriceCents) || 0;
     var price = priceCents > 0 ? Math.round(priceCents) / 100 : 0;
+    return {
+      item_id: sku,
+      item_name: d.productName || '',
+      item_category: d.productCategory || '',
+      item_brand: d.productBrand || '',
+      price: price,
+      quantity: qty,
+    };
+  }
+
+  function trackAddToCart(form) {
+    if (!form) return false;
+    var key = (form.dataset && form.dataset.productId) || form.getAttribute('action') || '';
+    var now = Date.now();
+    if (lastPushFor[key] && (now - lastPushFor[key]) < 1500) return false;
+    var item = buildItem(form);
+    if (!item) return false;
+    lastPushFor[key] = now;
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({ ecommerce: null });
     window.dataLayer.push({
       event: 'add_to_cart',
       ecommerce: {
         currency: 'EUR',
-        value: Number((price * qty).toFixed(2)),
-        items: [{
-          item_id: sku,
-          item_name: d.productName || '',
-          item_category: d.productCategory || '',
-          item_brand: d.productBrand || '',
-          price: price,
-          quantity: qty,
-        }],
+        value: Number((item.price * item.quantity).toFixed(2)),
+        items: [item],
       },
     });
+    return true;
   }
 
-  /* Trois chemins pour pousser add_to_cart, du plus fiable au moins fiable.
-     Dédup partagé : si l'un des trois fire pour un form donné, les autres
-     skippent pendant 1s. */
-  var lastPushFor = Object.create(null);
-  function tryPush(form, source) {
-    if (!form) return;
-    var key = (form.dataset && form.dataset.productId) || form.getAttribute('action') || '';
-    var now = Date.now();
-    if (lastPushFor[key] && (now - lastPushFor[key]) < 1500) return;
-    lastPushFor[key] = now;
-    pushAddToCart(form);
-  }
+  /* Expose comme API publique pour que show.ejs (et autres) puissent
+     appeler la même fonction sans dupliquer le push. */
+  window.GA4Ecommerce = window.GA4Ecommerce || {};
+  window.GA4Ecommerce.trackAddToCart = trackAddToCart;
 
-  /* (1) Click capture-phase sur tout bouton/élément à l'intérieur d'un form
-     /panier/ajouter/ — fire AVANT tout `e.preventDefault()` éventuel d'un
-     handler concurrent (capture phase). Le click event lui-même n'est jamais
-     « avalé » : preventDefault sur click empêche la submission mais pas
-     l'event. C'est la voie la plus fiable. */
+  /* (1) Click capture-phase : voie la plus fiable. Fire AVANT tout
+     preventDefault() / stopPropagation() d'un handler concurrent. */
   document.addEventListener('click', function (e) {
     var t = e.target;
     if (!t || !t.closest) return;
@@ -655,17 +663,18 @@
     if (!form) return;
     var action = form.getAttribute('action') || '';
     if (action.indexOf('/panier/ajouter/') === -1) return;
-    tryPush(form, 'click');
+    trackAddToCart(form);
   }, true);
 
-  /* (2) Submit capture-phase — couvre les submits programmatiques
-     (form.submit(), form.dispatchEvent(submit)) qui n'émettent pas de click. */
+  /* (2) Submit capture-phase — fallback pour submits programmatiques
+     (form.submit(), dispatchEvent(submit)) qui n'émettent pas de click.
+     Dédup auto si le click a déjà tracké. */
   document.addEventListener('submit', function (e) {
     var form = e.target;
     if (!form || form.tagName !== 'FORM') return;
     var action = form.getAttribute('action') || '';
     if (action.indexOf('/panier/ajouter/') === -1) return;
-    tryPush(form, 'submit');
+    trackAddToCart(form);
   }, true);
 
   document.addEventListener('click', function (e) {

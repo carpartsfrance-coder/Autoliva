@@ -1102,33 +1102,13 @@
                   var payload = data && typeof data === 'object' ? data : {};
                   var productData = payload.product && typeof payload.product === 'object' ? payload.product : {};
 
-                  /* GA4 add_to_cart : push après succès serveur (cart incrémenté).
-                     Pas de reload de page → l'event reste visible dans dataLayer. */
-                  try {
-                    var d = addToCartForm.dataset || {};
-                    var qtyEl = addToCartForm.querySelector('input[name="qty"]');
-                    var qty = qtyEl ? parseInt(qtyEl.value, 10) : 1;
-                    if (!Number.isFinite(qty) || qty < 1) qty = 1;
-                    var priceCents = Number(d.productPriceCents) || 0;
-                    var price = priceCents > 0 ? Math.round(priceCents) / 100 : 0;
-                    window.dataLayer = window.dataLayer || [];
-                    window.dataLayer.push({ ecommerce: null });
-                    window.dataLayer.push({
-                      event: 'add_to_cart',
-                      ecommerce: {
-                        currency: 'EUR',
-                        value: Number((price * qty).toFixed(2)),
-                        items: [{
-                          item_id: d.productSku || d.productId || '',
-                          item_name: d.productName || '',
-                          item_category: d.productCategory || '',
-                          item_brand: d.productBrand || '',
-                          price: price,
-                          quantity: qty,
-                        }],
-                      },
-                    });
-                  } catch (e) { /* never block UX */ }
+                  /* GA4 add_to_cart : déléguer à window.GA4Ecommerce.trackAddToCart()
+                     qui dédup en interne. Le click capture-phase l'a déjà appelé,
+                     donc cet appel sera no-op (dédup 1500ms). On l'appelle quand
+                     même comme filet de sécurité au cas où le click serait raté. */
+                  if (window.GA4Ecommerce && typeof window.GA4Ecommerce.trackAddToCart === 'function') {
+                    try { window.GA4Ecommerce.trackAddToCart(addToCartForm); } catch (e) {}
+                  }
 
                   if (window.CPFCartFeedback && typeof window.CPFCartFeedback.notifyAdded === 'function') {
                     window.CPFCartFeedback.notifyAdded({
