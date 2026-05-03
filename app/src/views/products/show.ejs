@@ -1492,6 +1492,11 @@
 </main>
 
 <% if (product) { %>
+<% /* _ga4Brand est défini dans le else-block plus haut, donc hors-scope ici. On
+     recompose localement pour éviter ReferenceError. */ %>
+<% const _ga4BrandFooter = ((product.brand && String(product.brand).trim())
+  || (Array.isArray(product.compatibility) && product.compatibility[0] && product.compatibility[0].make)
+  || ''); %>
 <% const _ga4ViewItem = JSON.stringify({
   event: 'view_item',
   ecommerce: {
@@ -1501,7 +1506,7 @@
       item_id: String(product.sku || product._id || ''),
       item_name: String(product.name || ''),
       item_category: String(product.category || ''),
-      item_brand: _ga4Brand,
+      item_brand: String(_ga4BrandFooter),
       price: Math.round(Number(product.priceCents) || 0) / 100,
       quantity: 1,
     }],
