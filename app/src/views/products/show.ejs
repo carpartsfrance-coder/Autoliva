@@ -1060,7 +1060,12 @@
             });
           }
 
-          if (addToCartForm && addToCartSubmit && window.fetch && window.FormData && window.CPFCartFeedback) {
+          /* On retire window.CPFCartFeedback du gate : il est défini dans
+             footer.ejs qui est inclus APRÈS ce script, donc undefined au
+             parse-time → le listener ne s'attachait pas → form submit natif
+             → reload de page → add_to_cart perdu. CPFCartFeedback est
+             utilisé seulement DANS le handler, lazily. */
+          if (addToCartForm && addToCartSubmit && window.fetch && window.FormData) {
             addToCartForm.addEventListener('submit', function (event) {
               if (addToCartPending) {
                 event.preventDefault();
@@ -1097,7 +1102,8 @@
                   var payload = data && typeof data === 'object' ? data : {};
                   var productData = payload.product && typeof payload.product === 'object' ? payload.product : {};
 
-                  /* GA4 add_to_cart : push après succès serveur (cart incrémenté). */
+                  /* GA4 add_to_cart : push après succès serveur (cart incrémenté).
+                     Pas de reload de page → l'event reste visible dans dataLayer. */
                   try {
                     var d = addToCartForm.dataset || {};
                     var qtyEl = addToCartForm.querySelector('input[name="qty"]');
@@ -1124,11 +1130,13 @@
                     });
                   } catch (e) { /* never block UX */ }
 
-                  window.CPFCartFeedback.notifyAdded({
-                    cartItemCount: payload.cartItemCount,
-                    productName: productData.name || addToCartForm.getAttribute('data-product-name') || 'Produit',
-                    imageUrl: productData.imageUrl || addToCartForm.getAttribute('data-product-image') || ''
-                  });
+                  if (window.CPFCartFeedback && typeof window.CPFCartFeedback.notifyAdded === 'function') {
+                    window.CPFCartFeedback.notifyAdded({
+                      cartItemCount: payload.cartItemCount,
+                      productName: productData.name || addToCartForm.getAttribute('data-product-name') || 'Produit',
+                      imageUrl: productData.imageUrl || addToCartForm.getAttribute('data-product-image') || ''
+                    });
+                  }
 
                   setAddToCartSuccessState();
 
@@ -1139,7 +1147,9 @@
                 })
                 .catch(function (err) {
                   var minDisableRemaining = Math.max(0, 1000 - (Date.now() - startedAt));
-                  window.CPFCartFeedback.notifyError(err && err.message ? err.message : 'Impossible d’ajouter le produit au panier pour le moment.');
+                  if (window.CPFCartFeedback && typeof window.CPFCartFeedback.notifyError === 'function') {
+                    window.CPFCartFeedback.notifyError(err && err.message ? err.message : 'Impossible d’ajouter le produit au panier pour le moment.');
+                  }
                   window.setTimeout(function () {
                     resetAddToCartButton();
                     addToCartPending = false;
