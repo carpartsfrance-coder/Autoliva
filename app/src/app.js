@@ -309,6 +309,11 @@ app.get('/sitemap-blog.xml', seoController.getSitemapBlog);
 app.get('/sitemap-blog-de.xml', seoController.getSitemapBlogDe);
 app.get('/robots.txt', seoController.getRobotsTxt);
 
+/* Feed Google Shopping (Merchant Center). Monté avant session pour les
+ * mêmes raisons que les sitemaps : pas de Set-Cookie sur la réponse, cache
+ * CDN propre, pas de pollution session sur un endpoint public crawlé. */
+app.get('/google-merchant-feed.xml', require('./routes/google-merchant-feed'));
+
 app.use(
   session((() => {
     const sessionOptions = {
