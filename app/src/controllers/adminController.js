@@ -2369,7 +2369,7 @@ async function getAdminOrdersPage(req, res, next) {
         isManual: !!o.isManual,
         sourceChannel: o.source && o.source.channel ? o.source.channel : 'website',
         docCount: (Array.isArray(o.documents) ? o.documents.length : 0)
-          + (Array.isArray(o.shipments) ? o.shipments.filter((s) => s && s.document && s.document.storedPath).length : 0),
+          + (Array.isArray(o.shipments) ? o.shipments.filter((s) => s && s.document).length : 0),
         hasShippingLabel: Array.isArray(o.documents) && o.documents.some((d) => d && d.docType === 'etiquette_envoi'),
         lastShippingLabelUrl: (function() {
           // Check direct documents for etiquette_envoi first (most recent)
@@ -2382,7 +2382,7 @@ async function getAdminOrdersPage(req, res, next) {
           }
           // Fallback: shipment documents with "Envoi" label
           if (Array.isArray(o.shipments)) {
-            const withDoc = o.shipments.filter((s) => s && s.document && s.document.storedPath && (s.label === 'Envoi' || s.label === 'Envoi partiel'));
+            const withDoc = o.shipments.filter((s) => s && s.document && (s.label === 'Envoi' || s.label === 'Envoi partiel'));
             if (withDoc.length) {
               const last = withDoc[withDoc.length - 1];
               return `/admin/commandes/${String(o._id)}/suivi/${String(last._id)}/document`;
@@ -2545,7 +2545,7 @@ async function getAdminOrderDetailPage(req, res, next) {
             carrier: s.carrier || '',
             trackingNumber: s.trackingNumber,
             note: s.note || '',
-            document: s.document && s.document.storedPath ? {
+            document: s.document ? {
               originalName: s.document.originalName || 'document.pdf',
               stamped: !!s.document.stamped,
               sizeBytes: s.document.sizeBytes || 0,
