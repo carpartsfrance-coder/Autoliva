@@ -369,7 +369,7 @@ async function getProductBySlug(req, res, next) {
 
     const hit = await Product.findOne({ slug }).select('_id').lean();
     if (!hit || !hit._id) {
-      return res.redirect(302, `/produits?q=${encodeURIComponent(raw)}`);
+      return res.redirect(301, `/produits?q=${encodeURIComponent(raw)}`);
     }
 
     req.params.id = String(hit._id);
