@@ -502,6 +502,9 @@
     price: Math.round(Number(it.unitPriceCents) || 0) / 100,
     quantity: Number(it.quantity) || 1,
   }));
+  // Enhanced Conversions : payload user_data normalisé côté serveur.
+  // GTM hashe en sha256 et l'envoie avec la conversion Google Ads.
+  const _userData = (typeof enhancedConversionUserData !== 'undefined' && enhancedConversionUserData) ? enhancedConversionUserData : {};
   const _ga4Purchase = JSON.stringify({
     event: 'purchase',
     ecommerce: {
@@ -513,12 +516,19 @@
       coupon: order.promoCode || '',
       items: _ga4PurchaseItems,
     },
+    user_data: _userData,
+  }).replace(/</g, '\\u003c');
+  const _enhancedConv = JSON.stringify({
+    event: 'enhanced_conversion_data',
+    enhanced_conversion_data: _userData,
   }).replace(/</g, '\\u003c'); %>
 <script>
 (function () {
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({ ecommerce: null });
   window.dataLayer.push(<%- _ga4Purchase %>);
+  // Event séparé pour les setups GTM avec un trigger dédié User-Provided Data.
+  window.dataLayer.push(<%- _enhancedConv %>);
 })();
 </script>
 <% } %>

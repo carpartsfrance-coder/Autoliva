@@ -303,6 +303,124 @@
                   <% } %>
                 </div>
 
+                <%/* ── Attribution marketing (gclid + UTM) ────────────────────── */%>
+                <% if (order.attribution && order.attribution.hasAttribution) { %>
+                  <%
+                    var _attrColors = {
+                      amber: { dot: 'bg-amber-500', text: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200' },
+                      blue: { dot: 'bg-blue-500', text: 'text-blue-700', bg: 'bg-blue-50', border: 'border-blue-200' },
+                      sky: { dot: 'bg-sky-500', text: 'text-sky-700', bg: 'bg-sky-50', border: 'border-sky-200' },
+                      emerald: { dot: 'bg-emerald-500', text: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+                      purple: { dot: 'bg-purple-500', text: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200' },
+                      slate: { dot: 'bg-slate-400', text: 'text-slate-700', bg: 'bg-slate-50', border: 'border-slate-200' },
+                    };
+                    var _pc = _attrColors[order.attribution.primary.badge] || _attrColors.slate;
+                    var _ft = order.attribution.firstTouch;
+                    var _lt = order.attribution.lastTouch;
+                    var _sameTouch = _ft && _lt && _ft.gclid === _lt.gclid && _ft.utmCampaign === _lt.utmCampaign && _ft.utmSource === _lt.utmSource;
+                    var _touchesToRender = [];
+                    if (_ft && _sameTouch) {
+                      _touchesToRender.push({ t: _ft, label: 'Clic unique' });
+                    } else {
+                      if (_ft) _touchesToRender.push({ t: _ft, label: 'Premier clic' });
+                      if (_lt) _touchesToRender.push({ t: _lt, label: 'Dernier clic (a converti)' });
+                    }
+                  %>
+                  <div class="mt-3 rounded-xl border <%= _pc.border %> <%= _pc.bg %> p-4">
+                    <div class="flex items-center justify-between">
+                      <div class="text-[10px] font-semibold uppercase tracking-widest <%= _pc.text %>">Attribution marketing</div>
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white border <%= _pc.border %> text-[11px] font-bold <%= _pc.text %>">
+                        <span class="material-symbols-outlined" style="font-size:13px"><%= order.attribution.primary.icon %></span>
+                        <%= order.attribution.primary.sourceLabel %>
+                      </span>
+                    </div>
+                    <% _touchesToRender.forEach(function(_tr) { var t = _tr.t; var label = _tr.label; %>
+                      <div class="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+                        <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-400"><%= label %></div>
+                        <div class="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+                          <% if (t.utmCampaign) { %>
+                            <div>
+                              <span class="text-slate-400">Campagne :</span>
+                              <a href="/admin/commandes?utmCampaign=<%= encodeURIComponent(t.utmCampaign) %>" class="ml-1 font-semibold text-slate-800 hover:underline"><%= t.utmCampaign %></a>
+                            </div>
+                          <% } %>
+                          <% if (t.utmSource) { %>
+                            <div>
+                              <span class="text-slate-400">Source :</span>
+                              <a href="/admin/commandes?utmSource=<%= encodeURIComponent(t.utmSource) %>" class="ml-1 font-semibold text-slate-800 hover:underline"><%= t.utmSource %></a>
+                              <% if (t.utmMedium) { %><span class="text-slate-400"> · <%= t.utmMedium %></span><% } %>
+                            </div>
+                          <% } %>
+                          <% if (t.utmTerm) { %>
+                            <div>
+                              <span class="text-slate-400">Mot-clé :</span>
+                              <span class="ml-1 font-semibold text-slate-800"><%= t.utmTerm %></span>
+                            </div>
+                          <% } %>
+                          <% if (t.utmContent) { %>
+                            <div>
+                              <span class="text-slate-400">Variante (content) :</span>
+                              <span class="ml-1 font-semibold text-slate-800"><%= t.utmContent %></span>
+                            </div>
+                          <% } %>
+                          <% if (t.gclid) { %>
+                            <div class="sm:col-span-2">
+                              <span class="text-slate-400">gclid :</span>
+                              <code class="ml-1 text-[11px] text-slate-700 break-all"><%= t.gclid %></code>
+                            </div>
+                          <% } %>
+                          <% if (t.fbclid) { %>
+                            <div class="sm:col-span-2">
+                              <span class="text-slate-400">fbclid :</span>
+                              <code class="ml-1 text-[11px] text-slate-700 break-all"><%= t.fbclid %></code>
+                            </div>
+                          <% } %>
+                          <% if (t.msclkid) { %>
+                            <div class="sm:col-span-2">
+                              <span class="text-slate-400">msclkid :</span>
+                              <code class="ml-1 text-[11px] text-slate-700 break-all"><%= t.msclkid %></code>
+                            </div>
+                          <% } %>
+                          <% if (t.landingPath) { %>
+                            <div class="sm:col-span-2">
+                              <span class="text-slate-400">Page d'arrivée :</span>
+                              <code class="ml-1 text-[11px] text-slate-700 break-all"><%= t.landingPathShort %></code>
+                            </div>
+                          <% } %>
+                          <% if (t.referrer) { %>
+                            <div class="sm:col-span-2">
+                              <span class="text-slate-400">Référent :</span>
+                              <span class="ml-1 text-[11px] text-slate-700 break-all"><%= t.referrer %></span>
+                            </div>
+                          <% } %>
+                          <% if (t.capturedAt) { %>
+                            <div>
+                              <span class="text-slate-400">Capturé le :</span>
+                              <span class="ml-1 text-slate-700"><%= t.capturedAt %></span>
+                            </div>
+                          <% } %>
+                        </div>
+                      </div>
+                    <% }); %>
+                    <% if (order.attribution.ga4ClientId) { %>
+                      <div class="mt-2 text-[11px] text-slate-400">
+                        GA4 client_id : <code class="text-slate-600"><%= order.attribution.ga4ClientId %></code>
+                      </div>
+                    <% } %>
+                    <% if (order.attribution.uploadedToGoogleAdsAt) { %>
+                      <div class="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-50 border border-green-200 text-[11px] font-bold text-green-700">
+                        <span class="material-symbols-outlined" style="font-size:13px">cloud_done</span>
+                        Envoyée à Google Ads
+                      </div>
+                    <% } else if (order.attribution.uploadError) { %>
+                      <div class="mt-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-200 text-[11px] font-bold text-red-700" title="<%= order.attribution.uploadError %>">
+                        <span class="material-symbols-outlined" style="font-size:13px">error</span>
+                        Échec d'envoi à Google Ads
+                      </div>
+                    <% } %>
+                  </div>
+                <% } %>
+
                 <% if (order.noteInternal) { %>
                   <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
                     <div class="text-[10px] font-semibold uppercase tracking-widest text-amber-600">Note interne</div>
