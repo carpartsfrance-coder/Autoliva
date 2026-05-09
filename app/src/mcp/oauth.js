@@ -39,6 +39,25 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
+// La CSP globale d'helmet inclut form-action 'self' https://*.mollie.com
+// https://*.scalapay.com mais PAS claude.ai. Le navigateur bloque alors le
+// redirect 302 du POST /oauth/authorize vers https://claude.ai/api/mcp/auth_callback.
+// On surcharge donc la CSP sur les routes OAuth pour autoriser claude.ai.
+function setOAuthCsp(res) {
+  res.set(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "script-src 'self' 'unsafe-inline'",
+      "img-src 'self' data:",
+      "form-action 'self' https://claude.ai https://*.claude.ai https://*.anthropic.com",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+    ].join('; ')
+  );
+}
+
 // === Endpoints metadata (RFC 9728 + RFC 8414) ============================
 
 function handleProtectedResourceMetadata(req, res) {
@@ -92,6 +111,7 @@ function handleRegister(req, res) {
 // === /oauth/authorize ====================================================
 
 function handleAuthorizeGet(req, res) {
+  setOAuthCsp(res);
   const {
     client_id,
     redirect_uri,
@@ -167,6 +187,7 @@ function handleAuthorizeGet(req, res) {
 }
 
 function handleAuthorizePost(req, res) {
+  setOAuthCsp(res);
   const expected = process.env.MCP_BEARER_TOKEN;
   if (!expected) return res.status(503).send('Serveur non configuré');
 
