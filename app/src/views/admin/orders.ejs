@@ -90,7 +90,7 @@
           </select>
 
           <%/* Filtres marketing : campagne + source UTM */%>
-          <input class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 w-44" name="utmCampaign" type="text" placeholder="Campagne (utm_campaign)" value="<%= filters && filters.utmCampaign ? filters.utmCampaign : '' %>" />
+          <input class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 w-full sm:w-44" name="utmCampaign" type="text" placeholder="Campagne (utm_campaign)" value="<%= filters && filters.utmCampaign ? filters.utmCampaign : '' %>" />
 
           <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="utmSource">
             <option value="">Toute origine pub</option>
@@ -285,7 +285,56 @@
           </button>
           <div id="selectedOrdersCount" class="text-xs font-bold text-slate-500">0 sélectionné</div>
         </div>
-        <div class="overflow-x-auto">
+        <%/* ── Mobile : cards stack ─────────────────────────────────── */%>
+        <ul class="md:hidden divide-y divide-slate-100">
+          <% (Array.isArray(orders) ? orders : []).forEach(function(o) {
+               var _oCh = o.sourceChannel || 'website';
+               var _isMobileWeb = _oCh === 'website' && !o.isManual;
+          %>
+            <li>
+              <a href="/admin/commandes/<%= o.id %>" class="block px-5 py-4 hover:bg-slate-50 active:bg-slate-100 transition">
+                <%/* Ligne 1 : numéro + statut */%>
+                <div class="flex items-center justify-between gap-2">
+                  <div class="font-semibold text-slate-900 text-sm truncate"><%= o.number %></div>
+                  <span class="<%= o.statusBadge.className %> shrink-0"><%= o.statusBadge.label %></span>
+                </div>
+                <%/* Ligne 2 : montant + date + client */%>
+                <div class="mt-1.5 flex items-center justify-between gap-2">
+                  <div class="text-base font-bold text-slate-900"><%= o.total %></div>
+                  <div class="text-[11px] text-slate-500"><%= o.date %></div>
+                </div>
+                <div class="mt-1 text-xs text-slate-700 truncate"><%= o.customer %></div>
+                <% if (o.customerEmail) { %>
+                  <div class="text-[11px] text-slate-400 truncate"><%= o.customerEmail %></div>
+                <% } %>
+                <%/* Ligne 3 : badges (type, source, attribution, items count) */%>
+                <div class="mt-2 flex items-center gap-1.5 flex-wrap text-[11px]">
+                  <% if (o.orderType === 'exchange_cloning') { %>
+                    <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">Éch.+Clonage</span>
+                  <% } else if (o.orderType === 'exchange') { %>
+                    <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Échange</span>
+                  <% } %>
+                  <% if (o.attribution && o.attribution.hasAttribution) {
+                       var _ac = { amber: 'bg-amber-50 text-amber-700 border-amber-200', blue: 'bg-blue-50 text-blue-700 border-blue-200', sky: 'bg-sky-50 text-sky-700 border-sky-200', emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200', purple: 'bg-purple-50 text-purple-700 border-purple-200', slate: 'bg-slate-100 text-slate-600 border-slate-200' };
+                       var _abc = _ac[o.attribution.primary.badge] || _ac.slate;
+                  %>
+                    <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full border <%= _abc %>" title="<%= o.attribution.primary.sourceLabel %>">
+                      <% if (o.attribution.primary.campaign) { %><%= o.attribution.primary.campaignShort %><% } else { %><%= o.attribution.primary.sourceLabel %><% } %>
+                    </span>
+                  <% } else if (_isMobileWeb) { %>
+                    <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">Web</span>
+                  <% } else { %>
+                    <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600"><%= _oCh %></span>
+                  <% } %>
+                  <span class="ml-auto text-slate-500"><%= o.itemCount %> art.</span>
+                </div>
+              </a>
+            </li>
+          <% }); %>
+        </ul>
+
+        <%/* ── Desktop : tableau classique ─────────────────────────── */%>
+        <div class="overflow-x-auto hidden md:block">
           <table class="w-full text-left admin-table">
             <%
               const oSort = filters.sort || 'date';
