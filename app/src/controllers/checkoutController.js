@@ -17,6 +17,7 @@ const { getLegalPageBySlug } = require('../services/legalPages');
 const { ensureInvoiceIssuedForPaidOrder } = require('../services/orderInvoices');
 const { getNextOrderNumber } = require('../services/orderNumber');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
+const { buildOrderAttribution } = require('../middlewares/captureAttribution');
 
 const crypto = require('crypto');
 
@@ -1895,6 +1896,7 @@ async function postPayment(req, res, next) {
             cgvSlug: 'cgv',
             cgvUpdatedAt: cgvPage && cgvPage.updatedAt ? new Date(cgvPage.updatedAt) : null,
           },
+          attribution: buildOrderAttribution(req),
         });
         break;
       } catch (err) {

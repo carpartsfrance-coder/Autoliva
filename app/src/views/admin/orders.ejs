@@ -89,6 +89,18 @@
             <option value="365d" <%= filters && filters.period === '365d' ? 'selected' : '' %>>12 mois</option>
           </select>
 
+          <%/* Filtres marketing : campagne + source UTM */%>
+          <input class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 w-44" name="utmCampaign" type="text" placeholder="Campagne (utm_campaign)" value="<%= filters && filters.utmCampaign ? filters.utmCampaign : '' %>" />
+
+          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="utmSource">
+            <option value="">Toute origine pub</option>
+            <option value="google" <%= filters && filters.utmSource === 'google' ? 'selected' : '' %>>Google</option>
+            <option value="facebook" <%= filters && filters.utmSource === 'facebook' ? 'selected' : '' %>>Facebook</option>
+            <option value="instagram" <%= filters && filters.utmSource === 'instagram' ? 'selected' : '' %>>Instagram</option>
+            <option value="bing" <%= filters && filters.utmSource === 'bing' ? 'selected' : '' %>>Bing</option>
+            <option value="newsletter" <%= filters && filters.utmSource === 'newsletter' ? 'selected' : '' %>>Newsletter</option>
+          </select>
+
           <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="limit">
             <% const oLimitCurrent = filters && filters.limit ? filters.limit : 20; %>
             <option value="20" <%= oLimitCurrent === 20 ? 'selected' : '' %>>20 / page</option>
@@ -349,6 +361,28 @@
                         <span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600"><span class="material-symbols-outlined" style="font-size:12px">language</span>Web</span>
                       <% } else if (o.isManual || _ch !== 'website') { %>
                         <span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600"><% if (_srcIcons[_ch]) { %><span class="material-symbols-outlined" style="font-size:12px"><%= _srcIcons[_ch] %></span><% } %><%= _srcLabels[_ch] || _ch %></span>
+                      <% } %>
+                      <%/* Badge marketing : campagne + source du dernier clic attribué */%>
+                      <% if (o.attribution && o.attribution.hasAttribution) {
+                           var _attrBadge = o.attribution.primary.badge || 'slate';
+                           var _attrColors = {
+                             amber: 'bg-amber-50 text-amber-700 border-amber-200',
+                             blue: 'bg-blue-50 text-blue-700 border-blue-200',
+                             sky: 'bg-sky-50 text-sky-700 border-sky-200',
+                             emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                             purple: 'bg-purple-50 text-purple-700 border-purple-200',
+                             slate: 'bg-slate-100 text-slate-600 border-slate-200',
+                           };
+                           var _attrCls = _attrColors[_attrBadge] || _attrColors.slate;
+                      %>
+                        <span class="relative group cursor-default inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border <%= _attrCls %>" title="<%= o.attribution.primary.sourceLabel %><% if (o.attribution.primary.campaign) { %> · <%= o.attribution.primary.campaign %><% } %>">
+                          <span class="material-symbols-outlined" style="font-size:12px"><%= o.attribution.primary.icon || 'ads_click' %></span>
+                          <% if (o.attribution.primary.campaign) { %>
+                            <%= o.attribution.primary.campaignShort %>
+                          <% } else { %>
+                            <%= o.attribution.primary.sourceLabel %>
+                          <% } %>
+                        </span>
                       <% } %>
                       <% if (o.notesCount > 0) { %>
                         <span class="relative group cursor-default">

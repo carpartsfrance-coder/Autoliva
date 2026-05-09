@@ -113,6 +113,25 @@ const smsSentSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const attributionTouchSubSchema = new mongoose.Schema(
+  {
+    gclid: { type: String, default: '', trim: true },
+    gbraid: { type: String, default: '', trim: true },
+    wbraid: { type: String, default: '', trim: true },
+    fbclid: { type: String, default: '', trim: true },
+    msclkid: { type: String, default: '', trim: true },
+    utmSource: { type: String, default: '', trim: true },
+    utmMedium: { type: String, default: '', trim: true },
+    utmCampaign: { type: String, default: '', trim: true },
+    utmContent: { type: String, default: '', trim: true },
+    utmTerm: { type: String, default: '', trim: true },
+    landingPath: { type: String, default: '', trim: true },
+    referrer: { type: String, default: '', trim: true },
+    capturedAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 const orderDocumentSchema = new mongoose.Schema(
   {
     docType: {
@@ -281,6 +300,19 @@ const orderSchema = new mongoose.Schema(
     noteClient: { type: String, default: '', trim: true },
     quoteReference: { type: String, default: '', trim: true },
     documents: { type: [orderDocumentSchema], default: [] },
+
+    // ── Attribution Google Ads / UTM ─────────────────────────────────────
+    // Rempli au moment du Order.create par buildOrderAttribution(req).
+    // Utilisé par le job d'upload Offline Conversions Import (PR 3).
+    attribution: {
+      firstTouch: { type: attributionTouchSubSchema, default: null },
+      lastTouch: { type: attributionTouchSubSchema, default: null },
+      ga4ClientId: { type: String, default: '', trim: true },
+      ga4SessionId: { type: String, default: '', trim: true },
+      uploadedToGoogleAdsAt: { type: Date, default: null, index: true },
+      googleAdsConversionId: { type: String, default: '', trim: true },
+      uploadError: { type: String, default: '', trim: true },
+    },
   },
   {
     timestamps: true,
@@ -427,5 +459,7 @@ orderSchema.index(
   { deletedAt: 1 },
   { partialFilterExpression: { deletedAt: { $type: 'date' } } }
 );
+orderSchema.index({ 'attribution.lastTouch.gclid': 1 });
+orderSchema.index({ 'attribution.uploadedToGoogleAdsAt': 1, paymentStatus: 1 });
 
 module.exports = mongoose.model('Order', orderSchema);

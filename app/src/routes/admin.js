@@ -158,6 +158,8 @@ router.post('/profil/securite/2fa/disable', requireAdminAuth, adminController.po
 router.get('/analytics', requireAdminAuth, analyticsController.getAnalyticsDashboard);
 router.post('/analytics/synonyme', requireAdminAuth, analyticsController.postAddSynonym);
 
+router.get('/marketing', requireAdminAuth, adminController.getAdminMarketingPage);
+
 router.get('/commandes', requireAdminAuth, adminController.getAdminOrdersPage);
 router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteOrders);
 router.get('/commandes/nouvelle', requireAdminAuth, adminController.getAdminNewOrderPage);
