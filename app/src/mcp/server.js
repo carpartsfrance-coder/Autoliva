@@ -96,7 +96,29 @@ async function dispatch(message) {
   return rpcError(id, JSONRPC_METHOD_NOT_FOUND, `Method not found: ${method}`);
 }
 
+// CORS — nécessaire pour les clients MCP basés navigateur (Claude Cowork via
+// claude.ai). Le token Bearer protège l'accès, donc on peut autoriser toutes
+// les origines : un site tiers ne peut rien lire sans connaître le token.
+const ALLOWED_HEADERS = 'Authorization, Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID';
+const ALLOWED_METHODS = 'POST, GET, DELETE, OPTIONS';
+
+function applyCors(req, res) {
+  const origin = req.get('origin') || '*';
+  res.set('Access-Control-Allow-Origin', origin);
+  res.set('Access-Control-Allow-Methods', ALLOWED_METHODS);
+  res.set('Access-Control-Allow-Headers', ALLOWED_HEADERS);
+  res.set('Access-Control-Expose-Headers', 'Mcp-Session-Id, MCP-Protocol-Version');
+  res.set('Access-Control-Max-Age', '86400');
+  res.set('Vary', 'Origin');
+}
+
+function handleOptions(req, res) {
+  applyCors(req, res);
+  res.status(204).end();
+}
+
 function bearerAuth(req, res, next) {
+  applyCors(req, res);
   const expected = process.env.MCP_BEARER_TOKEN;
   if (!expected) {
     return res.status(503).json({
@@ -154,6 +176,9 @@ function handleDelete(req, res) {
 
 function mountMcp(app) {
   const path = process.env.MCP_PATH || '/mcp';
+  // OPTIONS (préflight CORS) doit répondre AVANT l'auth Bearer, car le
+  // navigateur ne joint pas le header Authorization à la requête préflight.
+  app.options(path, handleOptions);
   app.post(path, bearerAuth, handlePost);
   app.get(path, bearerAuth, handleGet);
   app.delete(path, bearerAuth, handleDelete);
