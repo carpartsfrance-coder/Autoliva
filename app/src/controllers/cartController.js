@@ -11,6 +11,7 @@ const pricing = require('../services/pricing');
 const productOptions = require('../services/productOptions');
 const { getShippingMethods } = require('../services/shippingPricing');
 const { logCartEvent } = require('../services/cartEventLogger');
+const { track } = require('../services/eventTracker');
 const brand = require('../config/brand');
 
 function getCart(req) {
@@ -525,6 +526,16 @@ async function addToCart(req, res, next) {
       optionsSummary: display.optionsSummary || '',
     });
 
+    /* Visitor timeline */
+    track(req, 'add_to_cart', {
+      productId: id,
+      productName: product.name || '',
+      productSku: product.sku || '',
+      productPriceCents: Number.isFinite(product.priceCents) ? product.priceCents : 0,
+      qtyChange: qty,
+      cartItemsCount: computeCartItemCount(cart),
+    });
+
     if (jsonResponse) {
       return res.status(200).json({
         ok: true,
@@ -576,6 +587,11 @@ function updateCartItem(req, res) {
         previousQuantity,
         optionsSummary: existingItem.optionsSummary || '',
       });
+      track(req, 'remove_from_cart', {
+        productId: existingItem.productId || id,
+        qtyChange: -previousQuantity,
+        cartItemsCount: computeCartItemCount(cart) - previousQuantity,
+      });
     }
     delete cart.items[id];
   } else {
@@ -592,6 +608,11 @@ function updateCartItem(req, res) {
       quantity: qty,
       previousQuantity,
       optionsSummary: existingItem.optionsSummary || '',
+    });
+    track(req, 'update_qty', {
+      productId: existingItem.productId || id,
+      qtyChange: qty - previousQuantity,
+      cartItemsCount: computeCartItemCount(cart) + (qty - previousQuantity),
     });
   }
 
@@ -614,6 +635,11 @@ function removeFromCart(req, res) {
       quantity: 0,
       previousQuantity: removedItem.quantity || 0,
       optionsSummary: removedItem.optionsSummary || '',
+    });
+    track(req, 'remove_from_cart', {
+      productId: removedItem.productId || id,
+      qtyChange: -(removedItem.quantity || 0),
+      cartItemsCount: computeCartItemCount(cart) - (removedItem.quantity || 0),
     });
   }
 

@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const emailService = require('../services/emailService');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildHreflangSet } = require('../services/i18n');
+const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
 const brand = require('../config/brand');
 
 function getTrimmedString(value) {
@@ -377,6 +378,12 @@ async function postContact(req, res, next) {
     if (req.session && typeof req.session === 'object') {
       req.session.contactFormTs = Date.now();
     }
+
+    /* Visitor timeline : soumission formulaire contact / devis */
+    rememberEmail(req, email);
+    trackEvent(req, mode === 'devis' ? 'quote_request' : 'contact_submit', {
+      meta: { mode, hasMessage: true },
+    });
 
     return res.render('contact/index', {
       title,

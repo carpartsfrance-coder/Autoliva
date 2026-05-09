@@ -319,6 +319,94 @@
   }
 
   /* ================================================================ */
+  /*  6. CLICKS TÉLÉPHONE / EMAIL / WHATSAPP                          */
+  /* ================================================================ */
+
+  function hookEngagementClicks() {
+    document.addEventListener('click', function (e) {
+      var el = e.target;
+      // Remonte jusqu'au <a> parent si on a cliqué sur un enfant (icône, span, etc.)
+      while (el && el !== document.body && el.tagName !== 'A') {
+        el = el.parentElement;
+      }
+      if (!el || el.tagName !== 'A') return;
+
+      var href = el.getAttribute('href') || '';
+      if (!href) return;
+
+      if (href.indexOf('tel:') === 0) {
+        track({
+          type: 'click_phone',
+          target: href.replace(/^tel:/, '').slice(0, 60),
+          pageTitle: document.title,
+        });
+        flush();
+      } else if (href.indexOf('mailto:') === 0) {
+        track({
+          type: 'click_email',
+          target: href.replace(/^mailto:/, '').split('?')[0].slice(0, 120),
+          pageTitle: document.title,
+        });
+        flush();
+      } else if (href.match(/(wa\.me|api\.whatsapp\.com|whatsapp:)/i)) {
+        track({
+          type: 'click_whatsapp',
+          target: href.slice(0, 200),
+          pageTitle: document.title,
+        });
+        flush();
+      } else if (href.match(/(facebook\.com\/sharer|twitter\.com\/intent|t\.me\/share)/i)) {
+        track({
+          type: 'click_social_share',
+          target: href.slice(0, 200),
+          pageTitle: document.title,
+        });
+      }
+    }, true);
+  }
+
+  /* ================================================================ */
+  /*  7. DURÉE DE LA PAGE (envoyée au unload)                          */
+  /* ================================================================ */
+
+  var pageEnterMs = Date.now();
+  function trackPageDuration() {
+    var duration = Date.now() - pageEnterMs;
+    if (duration < 500 || duration > 30 * 60 * 1000) return;
+    // Push directement dans la queue + flush, car on est en train de quitter
+    track({
+      type: 'page_exit',
+      durationMs: duration,
+      pageTitle: document.title,
+    });
+    flush();
+  }
+
+  /* ================================================================ */
+  /*  8. APPLICATION DE FILTRES (changement URL ?marque=… etc.)       */
+  /* ================================================================ */
+
+  function hookFilters() {
+    var FILTER_KEYS = ['marque', 'category', 'categorie', 'sort', 'tri', 'priceMin', 'priceMax', 'vehicleMake', 'vehicleModel'];
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var applied = {};
+      var hasFilter = false;
+      for (var k = 0; k < FILTER_KEYS.length; k++) {
+        var v = params.get(FILTER_KEYS[k]);
+        if (v) { applied[FILTER_KEYS[k]] = v; hasFilter = true; }
+      }
+      if (hasFilter) {
+        track({
+          type: 'filter_applied',
+          meta: applied,
+          pageTitle: document.title,
+        });
+      }
+    } catch (e) {}
+  }
+
+  /* ================================================================ */
   /*  INIT                                                             */
   /* ================================================================ */
 
@@ -326,6 +414,8 @@
     trackPageview();
     hookSearch();
     hookAddToCart();
+    hookEngagementClicks();
+    hookFilters();
     markConversion();
 
     // Wait for DOM ready for product interactions
@@ -334,6 +424,10 @@
     } else {
       hookProductInteractions();
     }
+
+    // Durée de page : tracker au unload
+    window.addEventListener('pagehide', trackPageDuration);
+    window.addEventListener('beforeunload', trackPageDuration);
   }
 
   init();

@@ -31,6 +31,7 @@ const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const { getNextOrderNumber } = require('../services/orderNumber');
 const { formatAttribution } = require('../services/attributionDisplay');
 const { getMarketingDashboardData } = require('../services/marketingAggregations');
+const { listRecentSessions, getSessionTimeline } = require('../services/visitorTimeline');
 const { hasAbility, getRoleLabel, ROLES } = require('../permissions');
 const brand = require('../config/brand');
 
@@ -9748,6 +9749,102 @@ async function postAdminRecaptureScalapayOrder(req, res, next) {
   }
 }
 
+// ─── Visiteurs : timeline forensic ─────────────────────────────────────
+async function getAdminVisitorsListPage(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const period = typeof req.query.period === 'string' ? req.query.period.trim() : '24h';
+    const source = typeof req.query.source === 'string' ? req.query.source.trim() : '';
+    const campaign = typeof req.query.campaign === 'string' ? req.query.campaign.trim() : '';
+    const converted = typeof req.query.converted === 'string' ? req.query.converted.trim() : '';
+    const search = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+
+    const filters = { period: period || '24h', source, campaign, converted, search };
+
+    if (!dbConnected) {
+      return res.render('admin/visitors-list', {
+        title: `Admin - Visiteurs - ${brand.NAME}`,
+        dbConnected,
+        sessions: [],
+        filters,
+        formatEuro,
+        formatDateTimeFR,
+      });
+    }
+
+    const sessions = await listRecentSessions({ period, source, campaign, converted, search, limit: 100 });
+    return res.render('admin/visitors-list', {
+      title: `Admin - Visiteurs - ${brand.NAME}`,
+      dbConnected,
+      sessions,
+      filters,
+      formatEuro,
+      formatDateTimeFR,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function getAdminVisitorDetailPage(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const sessionId = req.params.sessionId || '';
+
+    if (!dbConnected || !sessionId) {
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    }
+
+    const data = await getSessionTimeline(sessionId);
+    if (!data) {
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    }
+
+    return res.render('admin/visitor-detail', {
+      title: `Admin - Visiteur ${sessionId.slice(0, 8)} - ${brand.NAME}`,
+      dbConnected,
+      data,
+      formatEuro,
+      formatDateTimeFR,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+// API JSON pour le polling 5s du detail visiteur (rafraîchit la timeline en place)
+async function getAdminVisitorEventsApi(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const sessionId = req.params.sessionId || '';
+    if (!dbConnected || !sessionId) return res.status(404).json({ ok: false });
+    const data = await getSessionTimeline(sessionId);
+    if (!data) return res.status(404).json({ ok: false });
+    return res.json({
+      ok: true,
+      eventsCount: data.events.length,
+      lastSeenAt: data.summary.lastSeenAt,
+      // On renvoie une représentation minimale des events pour réactualiser
+      events: data.events.map((e) => ({
+        type: e.type,
+        page: e.page,
+        productName: e.productName,
+        target: e.target,
+        searchQuery: e.searchQuery,
+        cart: e.cart,
+        orderNumber: e.orderNumber,
+        orderTotalCents: e.orderTotalCents,
+        meta: e.meta,
+        interaction: e.interaction,
+        funnelStep: e.funnelStep,
+        createdAt: e.createdAt,
+      })),
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 // ─── Marketing dashboard ────────────────────────────────────────────────
 async function getAdminMarketingPage(req, res, next) {
   try {
@@ -9808,6 +9905,9 @@ module.exports = {
   postAdminCancelAllProductDrafts,
   getAdminDashboard,
   getAdminMarketingPage,
+  getAdminVisitorsListPage,
+  getAdminVisitorDetailPage,
+  getAdminVisitorEventsApi,
   getAdminOrdersPage,
   getAdminOrderDetailPage,
   postAdminUpdateOrderStatus,
