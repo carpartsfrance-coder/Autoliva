@@ -49,6 +49,50 @@
     if (ms < 60000) return Math.round(ms / 1000) + ' s';
     return Math.round(ms / 60000) + ' min';
   }
+
+  // Extrait un nom lisible depuis un slug d'URL produit.
+  // /product/mecatronique-dsg7-dq381-0de-...  →  "Mécatronique DSG7 DQ381"
+  function readableFromSlug(path) {
+    if (!path) return '';
+    var m = path.match(/\/product[s]?\/([^\/?#]+)/);
+    if (!m) return '';
+    var slug = decodeURIComponent(m[1] || '');
+    // Coupe les bouts de hash (UUID-like) à la fin
+    slug = slug.replace(/-(\d+[a-z]+|[a-f0-9]{8,}).*/i, '');
+    var words = slug.split('-').filter(Boolean);
+    return words.map(function(w) {
+      // Garde DQ381, VW, etc. en majuscules
+      if (/^(dq|dsg|tcu|vin|vw|bmw|gp|spi)\d*$/i.test(w)) return w.toUpperCase();
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(' ');
+  }
+
+  // Dédoublonnage : on n'affiche qu'UN event par couple pageview/funnel_step
+  // émis dans la même seconde sur la même page (sinon on a 2 events identiques).
+  function dedupeEvents(events) {
+    var out = [];
+    var i = 0;
+    while (i < events.length) {
+      var ev = events[i];
+      var next = events[i + 1];
+      if (next
+          && ev.type === 'pageview'
+          && next.type === 'funnel_step'
+          && Math.abs(new Date(next.createdAt).getTime() - new Date(ev.createdAt).getTime()) < 2000
+          && (ev.page === next.page || !next.page)) {
+        // On garde le pageview + on annote son funnelStep depuis le suivant
+        ev.funnelStep = next.funnelStep || ev.funnelStep;
+        out.push(ev);
+        i += 2;
+      } else {
+        out.push(ev);
+        i += 1;
+      }
+    }
+    return out;
+  }
+
+  var displayEvents = dedupeEvents(data.events);
 %>
 
 <main class="flex-1 relative">
@@ -129,7 +173,7 @@
     <%/* Timeline */%>
     <div class="mt-6 bg-white rounded-2xl border border-slate-200 overflow-hidden">
       <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
-        <div class="font-semibold text-slate-900">Timeline (<span id="timeline-count"><%= data.events.length %></span> événements)</div>
+        <div class="font-semibold text-slate-900">Timeline (<span id="timeline-count"><%= displayEvents.length %></span> action<%= displayEvents.length > 1 ? 's' : '' %>)</div>
         <% if (data.orders.length) { %>
           <div class="flex gap-2">
             <% data.orders.forEach(function(o) { %>
@@ -142,68 +186,95 @@
         <% } %>
       </div>
 
-      <div class="p-6" id="timeline-container">
-        <% if (!data.events.length) { %>
-          <div class="text-center text-sm text-slate-500 py-8">Aucun événement pour cette session.</div>
+      <div id="timeline-container">
+        <% if (!displayEvents.length) { %>
+          <div class="text-center text-sm text-slate-500 py-12">Aucun événement pour cette session.</div>
         <% } else { %>
-          <ol class="relative border-l-2 border-slate-200 ml-3">
-            <% data.events.forEach(function(ev) {
+          <ul class="divide-y divide-slate-100">
+            <% displayEvents.forEach(function(ev, idx) {
                  var m = metaFor(ev.type);
                  var c = COLOR_CLASSES[m.color] || COLOR_CLASSES.slate;
+                 var productLabel = ev.productName || readableFromSlug(ev.page) || '';
             %>
-              <li class="mb-5 ml-6">
-                <span class="absolute -left-3 flex items-center justify-center w-6 h-6 rounded-full <%= c.bg %> <%= c.text %> ring-4 ring-white">
-                  <span class="material-symbols-outlined" style="font-size:14px"><%= m.icon %></span>
-                </span>
-                <div class="flex items-baseline gap-2 flex-wrap">
-                  <span class="font-semibold text-slate-900 text-sm"><%= m.label %></span>
-                  <span class="text-[11px] text-slate-400 font-mono"><%= fmtTime(ev.createdAt) %></span>
+              <li class="px-6 py-4 flex items-start gap-4 hover:bg-slate-50/60 transition">
+                <%/* Numéro d'étape + icône — toujours alignés à gauche */%>
+                <div class="flex-shrink-0 flex flex-col items-center" style="width:48px">
+                  <span class="text-[10px] font-bold text-slate-300 mb-1"><%= String(idx + 1).padStart(2, '0') %></span>
+                  <span class="flex items-center justify-center w-9 h-9 rounded-full <%= c.bg %> <%= c.text %>">
+                    <span class="material-symbols-outlined" style="font-size:18px;line-height:1"><%= m.icon %></span>
+                  </span>
                 </div>
-                <div class="mt-1 text-xs text-slate-600">
-                  <% if (ev.type === 'pageview' || ev.type === 'page_exit') { %>
-                    <code class="text-[11px]"><%= (ev.page || '').slice(0, 100) %></code>
-                    <% if (ev.pageTitle) { %><div class="mt-0.5 text-slate-500"><%= ev.pageTitle %></div><% } %>
-                    <% if (ev.durationMs > 0) { %><span class="ml-2 text-[11px] text-slate-400">durée : <%= fmtDuration(ev.durationMs) %></span><% } %>
-                  <% } else if (ev.type === 'add_to_cart' || ev.type === 'remove_from_cart' || ev.type === 'update_qty') { %>
-                    <% if (ev.productName) { %><span class="font-semibold"><%= ev.productName %></span><% } %>
-                    <% if (ev.cart && ev.cart.qtyChange) { %>
-                      <span class="ml-1">(<%= ev.cart.qtyChange > 0 ? '+' : '' %><%= ev.cart.qtyChange %>)</span>
+
+                <%/* Contenu principal */%>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-baseline gap-2 flex-wrap">
+                    <span class="font-semibold text-slate-900 text-sm"><%= m.label %></span>
+                    <span class="text-[11px] text-slate-400 font-mono"><%= fmtTime(ev.createdAt) %></span>
+                    <% if (ev.durationMs > 0) { %>
+                      <span class="text-[11px] text-slate-500">· resté <%= fmtDuration(ev.durationMs) %></span>
                     <% } %>
-                    <% if (ev.productPriceCents) { %><span class="ml-2 text-slate-400"><%= formatEuro(ev.productPriceCents) %></span><% } %>
-                  <% } else if (ev.type === 'click_phone') { %>
-                    A cliqué pour appeler : <code class="text-[11px]"><%= ev.target %></code>
-                  <% } else if (ev.type === 'click_email') { %>
-                    A cliqué pour envoyer un email à : <code class="text-[11px]"><%= ev.target %></code>
-                  <% } else if (ev.type === 'click_whatsapp') { %>
-                    A ouvert WhatsApp : <code class="text-[11px]"><%= (ev.target || '').slice(0, 60) %></code>
-                  <% } else if (ev.type === 'order_placed') { %>
-                    <span class="font-semibold text-green-700">Commande <%= ev.orderNumber %></span> · <%= formatEuro(ev.orderTotalCents) %>
-                  <% } else if (ev.type === 'product_interaction') { %>
-                    <%= ev.interaction || '' %>
-                    <% if (ev.productName) { %> · <%= ev.productName %><% } %>
-                  <% } else if (ev.type === 'search') { %>
-                    Recherche : <span class="font-semibold">"<%= ev.searchQuery %>"</span> · <%= ev.searchResultCount %> résultats
-                  <% } else if (ev.type === 'newsletter_signup') { %>
-                    Inscription newsletter
-                  <% } else if (ev.type === 'contact_submit' || ev.type === 'quote_request') { %>
-                    <%= ev.type === 'quote_request' ? 'Demande de devis envoyée' : 'Formulaire de contact envoyé' %>
-                  <% } else if (ev.type === 'account_create') { %>
-                    Création de compte (<%= ev.meta && ev.meta.accountType ? ev.meta.accountType : 'particulier' %>)
-                  <% } else if (ev.type === 'login') { %>
-                    Connexion à son compte
-                  <% } else if (ev.type === 'filter_applied') { %>
-                    Filtre : <code class="text-[11px]"><%= JSON.stringify(ev.meta || {}) %></code>
-                  <% } else if (ev.type === 'funnel_step') { %>
-                    <%= ev.funnelStep %>
-                    <% if (ev.productName) { %> · <%= ev.productName %><% } %>
-                  <% } else { %>
-                    <%= ev.type %>
-                    <% if (ev.target) { %> · <%= ev.target %><% } %>
-                  <% } %>
+                  </div>
+                  <div class="mt-1 text-sm text-slate-700">
+                    <% if (ev.type === 'pageview' || ev.type === 'page_exit') { %>
+                      <% if (productLabel) { %>
+                        <div class="font-semibold text-slate-900"><%= productLabel %></div>
+                      <% } %>
+                      <code class="text-[11px] text-slate-500 break-all"><%= (ev.page || '').slice(0, 120) %></code>
+                    <% } else if (ev.type === 'add_to_cart' || ev.type === 'remove_from_cart' || ev.type === 'update_qty') { %>
+                      <% if (productLabel) { %>
+                        <span class="font-semibold text-slate-900"><%= productLabel %></span>
+                      <% } %>
+                      <% if (ev.cart && ev.cart.qtyChange) { %>
+                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full <%= ev.cart.qtyChange > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700' %> text-[11px] font-bold">
+                          <%= ev.cart.qtyChange > 0 ? '+' : '' %><%= ev.cart.qtyChange %>
+                        </span>
+                      <% } %>
+                      <% if (ev.productPriceCents) { %><span class="ml-2 text-xs text-slate-500"><%= formatEuro(ev.productPriceCents) %></span><% } %>
+                    <% } else if (ev.type === 'click_phone') { %>
+                      <span class="font-semibold text-blue-700">📞 <%= ev.target %></span>
+                    <% } else if (ev.type === 'click_email') { %>
+                      <span class="font-semibold text-blue-700">✉️ <%= ev.target %></span>
+                    <% } else if (ev.type === 'click_whatsapp') { %>
+                      <span class="font-semibold text-green-700">💬 WhatsApp</span>
+                      <span class="ml-2 text-xs text-slate-500"><%= (ev.target || '').slice(0, 80) %></span>
+                    <% } else if (ev.type === 'order_placed') { %>
+                      <span class="font-bold text-green-700 text-base">Commande <%= ev.orderNumber %></span>
+                      <span class="ml-2 px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-bold"><%= formatEuro(ev.orderTotalCents) %></span>
+                    <% } else if (ev.type === 'product_interaction') { %>
+                      <span class="text-slate-700"><%= ev.interaction || '' %></span>
+                      <% if (productLabel) { %><span class="ml-2 font-semibold text-slate-900"><%= productLabel %></span><% } %>
+                    <% } else if (ev.type === 'search') { %>
+                      Recherche : <span class="font-semibold text-slate-900">« <%= ev.searchQuery %> »</span>
+                      <span class="ml-2 text-xs text-slate-500"><%= ev.searchResultCount %> résultats</span>
+                    <% } else if (ev.type === 'newsletter_signup') { %>
+                      <span class="font-semibold text-purple-700">Inscription newsletter</span>
+                    <% } else if (ev.type === 'contact_submit') { %>
+                      <span class="font-semibold text-purple-700">Formulaire contact envoyé</span>
+                    <% } else if (ev.type === 'quote_request') { %>
+                      <span class="font-semibold text-purple-700">Demande de devis envoyée</span>
+                    <% } else if (ev.type === 'account_create') { %>
+                      <span class="font-semibold text-green-700">Création de compte</span>
+                      <span class="ml-2 text-xs text-slate-500">(<%= ev.meta && ev.meta.accountType ? ev.meta.accountType : 'particulier' %>)</span>
+                    <% } else if (ev.type === 'login') { %>
+                      <span class="font-semibold text-slate-700">Connexion à son compte</span>
+                    <% } else if (ev.type === 'filter_applied') { %>
+                      <% if (ev.meta && typeof ev.meta === 'object') { %>
+                        <% Object.keys(ev.meta).forEach(function(k) { %>
+                          <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[11px] font-semibold mr-1"><%= k %> = <%= ev.meta[k] %></span>
+                        <% }); %>
+                      <% } %>
+                    <% } else if (ev.type === 'funnel_step') { %>
+                      <span class="text-slate-700"><%= ev.funnelStep %></span>
+                      <% if (productLabel) { %><span class="ml-2 font-semibold text-slate-900"><%= productLabel %></span><% } %>
+                    <% } else { %>
+                      <%= ev.type %>
+                      <% if (ev.target) { %><span class="ml-2 text-slate-500"><%= ev.target %></span><% } %>
+                    <% } %>
+                  </div>
                 </div>
               </li>
             <% }); %>
-          </ol>
+          </ul>
         <% } %>
       </div>
     </div>
@@ -217,14 +288,14 @@
 <script>
 (function() {
   var sessionId = <%- JSON.stringify(data.sessionId) %>;
-  var lastCount = <%= data.events.length %>;
+  var lastCount = <%= data.events.length %>; // raw count (avant dédup) — fiable
 
   function poll() {
     fetch('/admin/visiteurs/' + encodeURIComponent(sessionId) + '/events', { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (!data || !data.ok) return;
-        if (data.eventsCount !== lastCount) {
+        if (data.eventsCount > lastCount) {
           // Nouveau(x) event(s) → on recharge la page pour afficher proprement
           window.location.reload();
         }
@@ -232,7 +303,6 @@
       .catch(function() {});
   }
 
-  // Premier poll dans 5s, puis toutes les 5s
   setInterval(poll, 5000);
 })();
 </script>
