@@ -29,6 +29,8 @@ const CartEvent = require('../models/CartEvent');
 const openaiProductGenerator = require('../services/openaiProductGenerator');
 const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const { getNextOrderNumber } = require('../services/orderNumber');
+const { formatAttribution } = require('../services/attributionDisplay');
+const { getMarketingDashboardData } = require('../services/marketingAggregations');
 const { hasAbility, getRoleLabel, ROLES } = require('../permissions');
 const brand = require('../config/brand');
 
@@ -2267,6 +2269,8 @@ async function getAdminOrdersPage(req, res, next) {
     const type = typeof req.query.type === 'string' ? req.query.type.trim() : '';
     const period = typeof req.query.period === 'string' ? req.query.period.trim() : '';
     const sourceFilter = typeof req.query.source === 'string' ? req.query.source.trim() : '';
+    const utmCampaignFilter = typeof req.query.utmCampaign === 'string' ? req.query.utmCampaign.trim() : '';
+    const utmSourceFilter = typeof req.query.utmSource === 'string' ? req.query.utmSource.trim() : '';
     const orderTypeFilter = typeof req.query.orderType === 'string' ? req.query.orderType.trim() : '';
     const cloningStatusFilter = typeof req.query.cloningStatus === 'string' ? req.query.cloningStatus.trim() : '';
     const returnFilter = typeof req.query.returnFilter === 'string' ? req.query.returnFilter.trim() : '';
@@ -2397,6 +2401,30 @@ async function getAdminOrdersPage(req, res, next) {
       }
     }
 
+    // Filtres marketing : utmCampaign / utmSource — match firstTouch OU lastTouch.
+    // On utilise $and pour ne pas écraser le $or de la recherche `q`.
+    const attributionAndClauses = [];
+    if (utmCampaignFilter) {
+      attributionAndClauses.push({
+        $or: [
+          { 'attribution.firstTouch.utmCampaign': utmCampaignFilter },
+          { 'attribution.lastTouch.utmCampaign': utmCampaignFilter },
+        ],
+      });
+    }
+    if (utmSourceFilter) {
+      const srcLower = utmSourceFilter.toLowerCase();
+      attributionAndClauses.push({
+        $or: [
+          { 'attribution.firstTouch.utmSource': srcLower },
+          { 'attribution.lastTouch.utmSource': srcLower },
+        ],
+      });
+    }
+    if (attributionAndClauses.length) {
+      query.$and = (query.$and || []).concat(attributionAndClauses);
+    }
+
     const totalItems = await Order.countDocuments(query);
     const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
     const page = Math.min(requestedPage, totalPages);
@@ -2506,6 +2534,7 @@ async function getAdminOrdersPage(req, res, next) {
         lastNoteDate: noteInfo && noteInfo.lastDate ? formatDateTimeFR(noteInfo.lastDate) : '',
         isManual: !!o.isManual,
         sourceChannel: o.source && o.source.channel ? o.source.channel : 'website',
+        attribution: formatAttribution(o.attribution, formatDateTimeFR),
         docCount: (Array.isArray(o.documents) ? o.documents.length : 0)
           + (Array.isArray(o.shipments) ? o.shipments.filter((s) => s && s.document && s.document.storedPath).length : 0),
         hasShippingLabel: Array.isArray(o.documents) && o.documents.some((d) => d && d.docType === 'etiquette_envoi'),
@@ -2565,7 +2594,7 @@ async function getAdminOrdersPage(req, res, next) {
       trashCount,
       view,
       orderAlerts,
-      filters: { q, status, type, period, source: sourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, sort: activeSortField, order: activeSortDir === 1 ? 'asc' : 'desc', limit: perPage },
+      filters: { q, status, type, period, source: sourceFilter, utmCampaign: utmCampaignFilter, utmSource: utmSourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, sort: activeSortField, order: activeSortDir === 1 ? 'asc' : 'desc', limit: perPage },
       pagination,
     });
   } catch (err) {
@@ -2895,6 +2924,7 @@ async function getAdminOrderDetailPage(req, res, next) {
         createdAt: formatDateTimeFR(orderDoc.createdAt),
         sourceChannel: orderDoc.source && orderDoc.source.channel ? orderDoc.source.channel : 'website',
         sourceDetail: orderDoc.source && orderDoc.source.detail ? orderDoc.source.detail : '',
+        attribution: formatAttribution(orderDoc.attribution, formatDateTimeFR),
         noteInternal: orderDoc.noteInternal || '',
         noteClient: orderDoc.noteClient || '',
         quoteReference: orderDoc.quoteReference || '',
@@ -9718,6 +9748,42 @@ async function postAdminRecaptureScalapayOrder(req, res, next) {
   }
 }
 
+// ─── Marketing dashboard ────────────────────────────────────────────────
+async function getAdminMarketingPage(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+
+    const period = typeof req.query.period === 'string' ? req.query.period.trim() : '';
+    const model = typeof req.query.model === 'string' ? req.query.model.trim() : '';
+    const sortField = typeof req.query.sort === 'string' ? req.query.sort.trim() : '';
+    const sortDir = typeof req.query.order === 'string' ? req.query.order.trim() : '';
+
+    if (!dbConnected) {
+      return res.render('admin/marketing', {
+        title: `Admin - Marketing - ${brand.NAME}`,
+        dbConnected,
+        rows: [],
+        totals: { visits: 0, orders: 0, revenueCents: 0, aovCents: 0, conversionRate: 0 },
+        filters: { period: period || '30d', model: model || 'last', sort: sortField || 'revenue', order: sortDir || 'desc' },
+        formatEuro,
+      });
+    }
+
+    const data = await getMarketingDashboardData({ period, model, sortField, sortDir });
+
+    return res.render('admin/marketing', {
+      title: `Admin - Marketing - ${brand.NAME}`,
+      dbConnected,
+      rows: data.rows,
+      totals: data.totals,
+      filters: { period: data.period, model: data.model, sort: data.sortField, order: data.sortDir },
+      formatEuro,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   getAdminHeroSettingsPage,
   postAdminHeroSettings,
@@ -9741,6 +9807,7 @@ module.exports = {
   postAdminCancelProductDraft,
   postAdminCancelAllProductDrafts,
   getAdminDashboard,
+  getAdminMarketingPage,
   getAdminOrdersPage,
   getAdminOrderDetailPage,
   postAdminUpdateOrderStatus,

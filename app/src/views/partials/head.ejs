@@ -11,6 +11,65 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','GTM-NZDFRVCG');</script>
 <!-- End Google Tag Manager -->
+<!-- Attribution capture (gclid + utm + GA4 client_id) -->
+<script>
+(function () {
+  try {
+    var KEYS = ['gclid','gbraid','wbraid','fbclid','msclkid','utm_source','utm_medium','utm_campaign','utm_content','utm_term'];
+    var KEY_LAST = 'cpf_attr';
+    var KEY_FIRST = 'cpf_attr_first';
+
+    var url = new URL(window.location.href);
+    var found = {};
+    var hasAny = false;
+    for (var i = 0; i < KEYS.length; i++) {
+      var v = url.searchParams.get(KEYS[i]);
+      if (v) { found[KEYS[i]] = v; hasAny = true; }
+    }
+
+    if (hasAny) {
+      var payload = {
+        gclid: found.gclid || '',
+        gbraid: found.gbraid || '',
+        wbraid: found.wbraid || '',
+        fbclid: found.fbclid || '',
+        msclkid: found.msclkid || '',
+        utmSource: found.utm_source || '',
+        utmMedium: found.utm_medium || '',
+        utmCampaign: found.utm_campaign || '',
+        utmContent: found.utm_content || '',
+        utmTerm: found.utm_term || '',
+        landingPath: url.pathname + url.search,
+        referrer: document.referrer || '',
+        capturedAt: new Date().toISOString()
+      };
+      try {
+        localStorage.setItem(KEY_LAST, JSON.stringify(payload));
+        if (!localStorage.getItem(KEY_FIRST)) {
+          localStorage.setItem(KEY_FIRST, JSON.stringify(payload));
+        }
+      } catch (e) {}
+    }
+
+    function readLs(k) {
+      try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; }
+    }
+    function readGaClientId() {
+      var m = document.cookie.match(/_ga=GA\d+\.\d+\.(\d+\.\d+)/);
+      return m ? m[1] : '';
+    }
+
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({
+      event: 'attribution_ready',
+      attribution_first_touch: readLs(KEY_FIRST),
+      attribution_last_touch: readLs(KEY_LAST),
+      ga_client_id: readGaClientId()
+    });
+  } catch (e) {}
+})();
+</script>
+<!-- End Attribution capture -->
 <script>
   (function () {
     document.documentElement.classList.add('js');

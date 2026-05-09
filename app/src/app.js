@@ -8,6 +8,7 @@ const wpRedirects = require('./middlewares/wpRedirects');
 const wwwCanonical = require('./middlewares/wwwCanonical');
 const cpfRedirects = require('./middlewares/cpfRedirects');
 const i18nMiddleware = require('./middlewares/i18n');
+const captureAttribution = require('./middlewares/captureAttribution');
 const brand = require('./config/brand');
 
 const app = express();
@@ -475,6 +476,10 @@ app.use(wpRedirects);
 
 // i18n: language detection from URL prefix (/en/)
 app.use(i18nMiddleware);
+
+// Capture gclid + UTM sur les pages HTML — alimente session, cookies first-party
+// (90j) et la collection AttributionTouch. Doit s'exécuter avant les routers.
+app.use(captureAttribution);
 
 // Analytics tracking endpoint (public, no auth)
 app.post('/api/analytics/track', analyticsController.postTrackEvent);
