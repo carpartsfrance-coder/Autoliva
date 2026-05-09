@@ -161,6 +161,10 @@ router.post('/analytics/synonyme', requireAdminAuth, analyticsController.postAdd
 
 router.get('/marketing', requireAdminAuth, adminController.getAdminMarketingPage);
 
+router.get('/visiteurs', requireAdminAuth, adminController.getAdminVisitorsListPage);
+router.get('/visiteurs/:sessionId', requireAdminAuth, adminController.getAdminVisitorDetailPage);
+router.get('/visiteurs/:sessionId/events', requireAdminAuth, adminController.getAdminVisitorEventsApi);
+
 router.get('/commandes', requireAdminAuth, adminController.getAdminOrdersPage);
 router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteOrders);
 router.get('/commandes/nouvelle', requireAdminAuth, adminController.getAdminNewOrderPage);

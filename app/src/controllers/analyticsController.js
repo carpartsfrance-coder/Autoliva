@@ -21,6 +21,15 @@ async function postTrackEvent(req, res) {
     // Limit batch size
     const batch = events.slice(0, 20);
 
+    // Identité serveur (jamais le client n'écrit ces 3 champs lui-même)
+    const serverSessionId = (req.sessionID || (req.session && req.session.id) || '').toString();
+    const serverUserId = (req.session && req.session.user && req.session.user._id
+      && mongoose.Types.ObjectId.isValid(req.session.user.email ? req.session.user._id : req.session.user._id))
+      ? req.session.user._id : null;
+    const serverEmailHash = (req.session && typeof req.session.emailHash === 'string') ? req.session.emailHash : '';
+    const serverAttribution = (req.session && req.session.attribution) || {};
+    const lastTouch = (serverAttribution.lastTouch) || (serverAttribution.firstTouch) || {};
+
     const docs = [];
     for (const ev of batch) {
       if (!ev || typeof ev.type !== 'string') continue;
@@ -29,20 +38,33 @@ async function postTrackEvent(req, res) {
 
       docs.push({
         type,
-        sessionId: sanitize(ev.sessionId, 64),
-        source: sanitize(ev.source, 60),
-        medium: sanitize(ev.medium, 60),
-        campaign: sanitize(ev.campaign, 120),
-        referrer: sanitize(ev.referrer, 500),
+        // sessionId : serveur prévaut (le client peut envoyer pour debug, mais on utilise notre SID)
+        sessionId: serverSessionId || sanitize(ev.sessionId, 64),
+        userId: serverUserId,
+        emailHash: serverEmailHash,
+        // Attribution : serveur prévaut (lecture session), fallback client
+        source: lastTouch.utmSource || sanitize(ev.source, 60),
+        medium: lastTouch.utmMedium || sanitize(ev.medium, 60),
+        campaign: lastTouch.utmCampaign || sanitize(ev.campaign, 120),
+        referrer: lastTouch.referrer || sanitize(ev.referrer, 500),
+        gclid: lastTouch.gclid || '',
+        // Données page / produit (le client est seul à connaître)
         page: sanitize(ev.page, 500),
+        pageTitle: sanitize(ev.pageTitle, 200),
+        durationMs: typeof ev.durationMs === 'number' && ev.durationMs >= 0 ? Math.min(ev.durationMs, 30 * 60 * 1000) : 0,
         productId: isObjectId(ev.productId) ? ev.productId : null,
         productName: sanitize(ev.productName, 200),
+        productSku: sanitize(ev.productSku, 80),
+        productPriceCents: typeof ev.productPriceCents === 'number' ? Math.max(0, Math.floor(ev.productPriceCents)) : 0,
         searchQuery: sanitize(ev.searchQuery, 200),
         searchResultCount: typeof ev.searchResultCount === 'number' ? Math.max(-1, Math.floor(ev.searchResultCount)) : -1,
         funnelStep: sanitize(ev.funnelStep, 40),
         interaction: sanitize(ev.interaction, 60),
         converted: ev.converted === true,
+        target: sanitize(ev.target, 200),
+        meta: ev.meta && typeof ev.meta === 'object' ? ev.meta : null,
         deviceType: sanitize(ev.deviceType, 20),
+        userAgent: sanitize(req.headers && req.headers['user-agent'], 300),
       });
     }
 

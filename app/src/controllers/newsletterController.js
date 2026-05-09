@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const NewsletterSubscriber = require('../models/NewsletterSubscriber');
+const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -71,6 +72,12 @@ async function postSubscribe(req, res, next) {
       source: getTrimmedString(req.body && req.body.source) || 'footer',
       subscribedAt: new Date(),
       unsubscribedAt: null,
+    });
+
+    /* Visitor timeline : inscription newsletter + email hash */
+    rememberEmail(req, email);
+    trackEvent(req, 'newsletter_signup', {
+      meta: { sourceForm: getTrimmedString(req.body && req.body.source) || 'footer' },
     });
 
     req.session.newsletterSuccess = 'Merci ! Votre email est bien inscrit à la newsletter.';

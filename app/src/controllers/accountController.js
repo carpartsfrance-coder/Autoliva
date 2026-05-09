@@ -17,6 +17,7 @@ const productOptions = require('../services/productOptions');
 const { logExistingCartItems } = require('../services/cartEventLogger');
 const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const { buildUserData } = require('../services/enhancedConversionData');
+const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
 const brand = require('../config/brand');
 
 const LOGIN_BUCKETS = new Map();
@@ -2018,6 +2019,10 @@ async function postLogin(req, res, next) {
       discountPercent: typeof user.discountPercent === 'number' ? user.discountPercent : 0,
     };
 
+    /* Visitor timeline : login + remember email hash for cross-device stitch */
+    rememberEmail(req, user.email);
+    trackEvent(req, 'login', { meta: { method: 'email' } });
+
     const returnTo = getSafeReturnTo(req.body.returnTo);
     const target = returnTo || '/compte';
 
@@ -2540,6 +2545,10 @@ async function postRegister(req, res, next) {
       companyName: created.companyName || '',
       discountPercent: typeof created.discountPercent === 'number' ? created.discountPercent : 0,
     };
+
+    /* Visitor timeline : création de compte + email hash */
+    rememberEmail(req, created.email);
+    trackEvent(req, 'account_create', { meta: { accountType: created.accountType } });
 
     const returnTo = getSafeReturnTo(req.body.returnTo);
     const target = returnTo || '/compte';

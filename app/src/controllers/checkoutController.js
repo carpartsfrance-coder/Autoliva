@@ -19,6 +19,7 @@ const { ensureInvoiceIssuedForPaidOrder } = require('../services/orderInvoices')
 const { getNextOrderNumber } = require('../services/orderNumber');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const { buildOrderAttribution } = require('../middlewares/captureAttribution');
+const { track: trackEvent } = require('../services/eventTracker');
 
 const crypto = require('crypto');
 const brand = require('../config/brand');
@@ -1975,6 +1976,14 @@ async function postPayment(req, res, next) {
       req.session.checkoutError = 'Une erreur est survenue lors de la création de votre commande.';
       return res.redirect('/commande/livraison');
     }
+
+    /* Visitor timeline : commande créée */
+    trackEvent(req, 'order_placed', {
+      orderId: created._id,
+      orderNumber: created.number,
+      orderTotalCents: created.totalCents,
+      converted: true,
+    });
 
     await reserveOrderStockIfNeeded(created, productById);
 
