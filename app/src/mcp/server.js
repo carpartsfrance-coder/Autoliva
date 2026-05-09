@@ -139,6 +139,30 @@ function bearerAuth(req, res, next) {
   return next();
 }
 
+// Variante : token dans l'URL — pour les clients qui ne supportent pas de
+// header Authorization custom (Claude.ai/Cowork passent l'URL telle quelle
+// sans permettre de configurer un header). Le path agit comme secret.
+// Renvoie 404 plutôt que 401 sur token invalide pour ne pas révéler la route.
+function pathTokenAuth(req, res, next) {
+  applyCors(req, res);
+  const expected = process.env.MCP_BEARER_TOKEN;
+  if (!expected) {
+    return res.status(503).json({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: JSONRPC_INTERNAL_ERROR, message: 'MCP_BEARER_TOKEN non configuré côté serveur' },
+    });
+  }
+  if (!req.params.token || req.params.token !== expected) {
+    return res.status(404).json({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: JSONRPC_METHOD_NOT_FOUND, message: 'Not Found' },
+    });
+  }
+  return next();
+}
+
 async function handlePost(req, res) {
   const body = req.body;
   if (body === undefined || body === null) {
@@ -176,12 +200,20 @@ function handleDelete(req, res) {
 
 function mountMcp(app) {
   const path = process.env.MCP_PATH || '/mcp';
-  // OPTIONS (préflight CORS) doit répondre AVANT l'auth Bearer, car le
-  // navigateur ne joint pas le header Authorization à la requête préflight.
+  // OPTIONS (préflight CORS) doit répondre AVANT l'auth, car le navigateur
+  // ne joint pas le header Authorization à la requête préflight.
   app.options(path, handleOptions);
   app.post(path, bearerAuth, handlePost);
   app.get(path, bearerAuth, handleGet);
   app.delete(path, bearerAuth, handleDelete);
+
+  // Mode token-dans-l'URL pour clients sans header custom (Claude.ai/Cowork).
+  // L'URL complète agit comme secret : https://<domain>/mcp/<token>
+  app.options(path + '/:token', handleOptions);
+  app.post(path + '/:token', pathTokenAuth, handlePost);
+  app.get(path + '/:token', pathTokenAuth, handleGet);
+  app.delete(path + '/:token', pathTokenAuth, handleDelete);
+
   return path;
 }
 
