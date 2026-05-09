@@ -20,6 +20,7 @@ const businessOverview = require('./tools/businessOverview');
 const productPerformance = require('./tools/productPerformance');
 const campaignPerformance = require('./tools/campaignPerformance');
 const funnelLeaks = require('./tools/funnelLeaks');
+const { mountOAuth, isValidAccessToken } = require('./oauth');
 
 const TOOLS = [businessOverview, productPerformance, campaignPerformance, funnelLeaks];
 const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.definition.name, t]));
@@ -129,7 +130,13 @@ function bearerAuth(req, res, next) {
   }
   const auth = req.get('authorization') || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  if (!token || token !== expected) {
+  // Accepte deux formes :
+  // 1. Le secret MCP_BEARER_TOKEN direct (curl, scripts, autres clients MCP)
+  // 2. Un access token OAuth émis par /oauth/token (Cowork)
+  if (!token || (token !== expected && !isValidAccessToken(token))) {
+    // RFC 9728 : indique au client où trouver les métadonnées OAuth.
+    const baseUrl = (req.get('x-forwarded-proto') || 'https') + '://' + (req.get('x-forwarded-host') || req.get('host'));
+    res.set('WWW-Authenticate', `Bearer realm="mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);
     return res.status(401).json({
       jsonrpc: '2.0',
       id: null,
@@ -207,12 +214,15 @@ function mountMcp(app) {
   app.get(path, bearerAuth, handleGet);
   app.delete(path, bearerAuth, handleDelete);
 
-  // Mode token-dans-l'URL pour clients sans header custom (Claude.ai/Cowork).
-  // L'URL complète agit comme secret : https://<domain>/mcp/<token>
+  // Mode token-dans-l'URL (path) pour clients qui ne supportent ni OAuth
+  // ni headers Authorization custom — fallback simple.
   app.options(path + '/:token', handleOptions);
   app.post(path + '/:token', pathTokenAuth, handlePost);
   app.get(path + '/:token', pathTokenAuth, handleGet);
   app.delete(path + '/:token', pathTokenAuth, handleDelete);
+
+  // OAuth 2.1 (RFC 7591/9728/8414) : requis par Claude.ai/Cowork.
+  mountOAuth(app);
 
   return path;
 }
