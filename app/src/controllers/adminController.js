@@ -2857,6 +2857,18 @@ async function getAdminOrderDetailPage(req, res, next) {
 
     const timelineSteps = buildTimelineSteps(orderDoc);
 
+    // Récupère le sessionId du client lié à cette commande pour permettre
+    // un drill vers /admin/visiteurs/:sessionId (parcours complet du client).
+    let visitorSessionId = '';
+    try {
+      const AnalyticsEvent = require('../models/AnalyticsEvent');
+      const evt = await AnalyticsEvent.findOne(
+        { orderId: orderDoc._id, sessionId: { $ne: '' } },
+        { sessionId: 1 }
+      ).lean();
+      if (evt && evt.sessionId) visitorSessionId = evt.sessionId;
+    } catch (_) { /* non bloquant */ }
+
     return res.render('admin/order', {
       title: `Admin - ${orderDoc.number}`,
       dbConnected,
@@ -2926,6 +2938,7 @@ async function getAdminOrderDetailPage(req, res, next) {
         sourceChannel: orderDoc.source && orderDoc.source.channel ? orderDoc.source.channel : 'website',
         sourceDetail: orderDoc.source && orderDoc.source.detail ? orderDoc.source.detail : '',
         attribution: formatAttribution(orderDoc.attribution, formatDateTimeFR),
+        visitorSessionId,
         noteInternal: orderDoc.noteInternal || '',
         noteClient: orderDoc.noteClient || '',
         quoteReference: orderDoc.quoteReference || '',

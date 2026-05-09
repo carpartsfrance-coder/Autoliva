@@ -146,13 +146,34 @@
               <% rows.forEach(function(r) {
                    var trClass = r.isVirtual ? 'bg-slate-50/60 text-slate-600' : '';
                    var pillCls = _badgeColors[r.displayBadge] || _badgeColors.slate;
-                   var drillUrl = '';
+                   var drillOrdersUrl = '';
+                   var drillVisitorsUrl = '';
                    if (r.isCampaign) {
-                     var qsParts = [];
-                     if (r.campaign) qsParts.push('utmCampaign=' + encodeURIComponent(r.campaign));
-                     if (r.source) qsParts.push('utmSource=' + encodeURIComponent(r.source));
-                     if (filters.period && filters.period !== 'all') qsParts.push('period=' + encodeURIComponent(filters.period));
-                     drillUrl = '/admin/commandes' + (qsParts.length ? '?' + qsParts.join('&') : '');
+                     // Lien vers les commandes filtrées par cette campagne
+                     var qsOrders = [];
+                     if (r.campaign) qsOrders.push('utmCampaign=' + encodeURIComponent(r.campaign));
+                     if (r.source) qsOrders.push('utmSource=' + encodeURIComponent(r.source));
+                     if (filters.period && filters.period !== 'all') qsOrders.push('period=' + encodeURIComponent(filters.period));
+                     drillOrdersUrl = '/admin/commandes' + (qsOrders.length ? '?' + qsOrders.join('&') : '');
+
+                     // Lien vers les sessions/visiteurs (mêmes filtres adaptés au format admin/visiteurs)
+                     var qsVisitors = [];
+                     if (r.campaign) qsVisitors.push('campaign=' + encodeURIComponent(r.campaign));
+                     if (r.source) qsVisitors.push('source=' + encodeURIComponent(r.source));
+                     // /admin/visiteurs accepte 1h / 24h / 7d / 30d — on map depuis la période marketing
+                     var visitorsPeriod = (filters.period === '7d' || filters.period === '30d') ? filters.period : '7d';
+                     qsVisitors.push('period=' + visitorsPeriod);
+                     drillVisitorsUrl = '/admin/visiteurs?' + qsVisitors.join('&');
+                   } else if (r.bucket === '__direct__' || r.bucket === '__gads__' || r.bucket === '__fb__' || r.bucket === '__msads__') {
+                     // Buckets virtuels (Direct, Google Ads sans UTM, etc.) : pas de drill
+                     // précis vers commandes, mais on peut quand même lister les visiteurs
+                     // par source si disponible
+                     var qsVB = [];
+                     if (r.bucket === '__gads__') qsVB.push('source=google');
+                     else if (r.bucket === '__fb__') qsVB.push('source=facebook');
+                     else if (r.bucket === '__msads__') qsVB.push('source=bing');
+                     qsVB.push('period=7d');
+                     drillVisitorsUrl = '/admin/visiteurs?' + qsVB.join('&');
                    }
               %>
                 <tr class="<%= trClass %>">
@@ -178,11 +199,21 @@
                   <td class="px-6 py-4 text-right tabular-nums"><%= r.aovCents ? formatEuro(r.aovCents) : '—' %></td>
                   <td class="px-6 py-4 text-right tabular-nums"><%- pct(r.conversionRate) %></td>
                   <td class="px-6 py-4 text-right">
-                    <% if (drillUrl) { %>
-                      <a href="<%= drillUrl %>" class="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
-                        Voir commandes
-                        <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
-                      </a>
+                    <% if (drillVisitorsUrl || drillOrdersUrl) { %>
+                      <div class="inline-flex items-center gap-2 justify-end">
+                        <% if (drillVisitorsUrl) { %>
+                          <a href="<%= drillVisitorsUrl %>" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-700 transition" title="Voir les sessions / visiteurs de cette source">
+                            <span class="material-symbols-outlined" style="font-size:14px">visibility</span>
+                            Sessions
+                          </a>
+                        <% } %>
+                        <% if (drillOrdersUrl) { %>
+                          <a href="<%= drillOrdersUrl %>" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-700 transition" title="Voir les commandes de cette source">
+                            <span class="material-symbols-outlined" style="font-size:14px">receipt_long</span>
+                            Commandes
+                          </a>
+                        <% } %>
+                      </div>
                     <% } else { %>
                       <span class="text-xs text-slate-300">—</span>
                     <% } %>
