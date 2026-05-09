@@ -17,16 +17,31 @@
       </a>
     </div>
 
-    <form action="/admin/commandes" class="sticky top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET">
+    <%
+      var _activeFiltersCount = 0;
+      if (filters) {
+        ['status','orderType','cloningStatus','returnFilter','type','source','period','utmCampaign','utmSource'].forEach(function(k){
+          if (filters[k]) _activeFiltersCount++;
+        });
+      }
+    %>
+    <form action="/admin/commandes" class="lg:sticky lg:top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET">
       <div class="flex flex-col xl:flex-row xl:items-center gap-4">
-        <div class="flex-1">
-          <div class="relative">
+        <div class="flex gap-2 flex-1">
+          <div class="relative flex-1">
             <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
             <input class="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400" name="q" placeholder="Rechercher: n° commande, email, nom..." type="text" value="<%= filters && filters.q ? filters.q : '' %>" />
           </div>
+          <button type="button" id="filters-toggle" class="lg:hidden inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-900 shrink-0" aria-expanded="<%= _activeFiltersCount > 0 ? 'true' : 'false' %>" aria-controls="filters-panel">
+            <span class="material-symbols-outlined text-lg">tune</span>
+            <span>Filtres</span>
+            <% if (_activeFiltersCount > 0) { %>
+              <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-slate-900 text-white text-xs font-bold"><%= _activeFiltersCount %></span>
+            <% } %>
+          </button>
         </div>
 
-        <div class="flex flex-col sm:flex-row gap-3 flex-wrap">
+        <div id="filters-panel" class="<%= _activeFiltersCount > 0 ? 'flex' : 'hidden' %> lg:flex flex-col sm:flex-row gap-3 flex-wrap">
           <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="status">
             <option value="">Tous les statuts</option>
             <option value="pending_payment" <%= filters && filters.status === 'pending_payment' ? 'selected' : '' %>>En attente paiement</option>
@@ -114,6 +129,18 @@
         </div>
       </div>
     </form>
+    <script>
+      (function () {
+        var btn = document.getElementById('filters-toggle');
+        var panel = document.getElementById('filters-panel');
+        if (!btn || !panel) return;
+        btn.addEventListener('click', function () {
+          var isHidden = panel.classList.toggle('hidden');
+          panel.classList.toggle('flex', !isHidden);
+          btn.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+        });
+      })();
+    </script>
 
     <!-- Alert banner -->
     <%
