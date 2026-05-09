@@ -16,6 +16,7 @@ const { ensureInvoiceIssuedForPaidOrder } = require('../services/orderInvoices')
 const productOptions = require('../services/productOptions');
 const { logExistingCartItems } = require('../services/cartEventLogger');
 const { getSiteUrlFromEnv } = require('../services/siteUrl');
+const { buildUserData } = require('../services/enhancedConversionData');
 
 const LOGIN_BUCKETS = new Map();
 const REGISTER_BUCKETS = new Map();
@@ -635,9 +636,17 @@ async function getOrderDetailPage(req, res, next) {
       totalDueCents,
     };
 
+    // Enhanced Conversions for Google Ads — payload normalisé poussé dans
+    // dataLayer côté client. GTM se charge du hash sha256 + envoi.
+    const enhancedConversionUserData = buildUserData({
+      email: sessionUser && sessionUser.email,
+      address: order.shippingAddress || order.billingAddress || null,
+    });
+
     return res.render('account/order', {
       title: `Commande ${order.number} - CarParts France`,
       dbConnected,
+      enhancedConversionUserData,
       order: {
         id: String(order._id),
         number: order.number,

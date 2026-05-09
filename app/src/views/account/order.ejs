@@ -509,6 +509,10 @@
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({ ecommerce: null });
 
+  // Enhanced Conversions : payload user_data normalisé côté serveur.
+  // GTM hashe en sha256 et l'envoie avec la conversion Google Ads.
+  var userData = <%- JSON.stringify(typeof enhancedConversionUserData !== 'undefined' && enhancedConversionUserData ? enhancedConversionUserData : {}) %>;
+
   window.dataLayer.push({
     event: 'purchase',
     ecommerce: {
@@ -534,7 +538,15 @@
     tax: <%= (order.vatCents / 100).toFixed(2) %>,
     shipping: <%= (order.shippingCostCents / 100).toFixed(2) %>,
     currency: '<%= order.currency || "EUR" %>',
-    transaction_id: '<%= order.number %>'
+    transaction_id: '<%= order.number %>',
+    user_data: userData
+  });
+
+  // === 2. Event séparé "enhanced_conversion_data" pour les setups GTM
+  // qui utilisent un trigger dédié (cf. variable User-Provided Data).
+  window.dataLayer.push({
+    event: 'enhanced_conversion_data',
+    enhanced_conversion_data: userData
   });
 
 })();
