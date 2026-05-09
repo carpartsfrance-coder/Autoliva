@@ -284,6 +284,11 @@ if (compression) {
   app.use(compression());
 }
 
+// MCP server (Cowork business analytics) — monté avant la session/i18n
+// car c'est un endpoint JSON-RPC stateless, sans cookies ni HTML.
+const { mountMcp } = require('./mcp/server');
+mountMcp(app);
+
 app.get('/favicon.ico', (req, res) => {
   res.status(204).end();
 });
