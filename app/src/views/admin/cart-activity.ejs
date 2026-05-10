@@ -572,11 +572,19 @@
       if (!tpl) return;
       subjectEl.value = tpl.subject || '';
       bodyEl.value = tpl.body || '';
+      // Le template décide si le CTA panier est pertinent (false pour devis/contact)
+      if (typeof tpl.defaultIncludeCta === 'boolean') {
+        ctaEl.checked = tpl.defaultIncludeCta;
+      }
     }
 
     if (defaultTpl) {
       templateEl.value = defaultTpl.key;
       applyTemplate(defaultTpl);
+    } else {
+      // Pas de template par défaut : CTA off pour les leads sans panier pertinent
+      var isExplicitRequest = c.captureSource === 'devis' || c.captureSource === 'contact';
+      ctaEl.checked = !isExplicitRequest && c.items && c.items.length > 0;
     }
 
     templateEl.addEventListener('change', function () {
@@ -672,7 +680,9 @@
       updateCount();
     }
 
-    var defaultSms = SMS_TEMPLATES.find(function (t) { return t.key === 'sms_cart_reminder'; });
+    var defaultSms = SMS_TEMPLATES.find(function (t) {
+      return t.forSource && t.forSource.indexOf(c.captureSource) >= 0;
+    }) || SMS_TEMPLATES.find(function (t) { return t.key === 'sms_cart_reminder'; });
     if (defaultSms) { templateEl.value = defaultSms.key; applyTemplate(defaultSms); }
 
     templateEl.addEventListener('change', function () {

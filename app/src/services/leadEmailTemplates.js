@@ -40,11 +40,18 @@ function buildLeadVariables({ lead, req, adminName }) {
   /* Pour les leads devis/contact, le "produit" pertinent est ce que le
      client a demandé explicitement, pas ce qu'il avait dans son panier */
   let productName;
-  if (isExplicitRequest && (requested.ref || requested.vehicle)) {
-    const parts = [];
-    if (requested.ref) parts.push(requested.ref);
-    if (requested.vehicle) parts.push(`pour ${requested.vehicle}`);
-    productName = parts.join(' ') || 'votre demande';
+  if (isExplicitRequest) {
+    if (requested.ref && requested.vehicle) {
+      productName = `${requested.ref} pour ${requested.vehicle}`;
+    } else if (requested.ref) {
+      productName = requested.ref;
+    } else if (requested.vehicle) {
+      productName = `la pièce pour ${requested.vehicle}`;
+    } else if (firstItem) {
+      productName = firstItem.name || 'votre demande';
+    } else {
+      productName = 'votre demande';
+    }
   } else if (firstItem) {
     productName = firstItem.name || 'votre article';
   } else {
@@ -102,33 +109,48 @@ const EMAIL_TEMPLATES = [
     key: 'devis_followup',
     label: '📨 Suite à votre demande de devis',
     forSource: ['devis', 'contact'],
+    defaultIncludeCta: false, // pas de CTA panier : la demande n'est pas le panier
     subject: 'Suite à votre demande chez {brand}',
-    body: 'Suite à votre demande, je reviens vers vous : {nom_produit} est bien disponible au prix de {prix_total}.\n\nPouvez-vous me confirmer votre VIN ou votre immatriculation ? Cela me permettra de garantir la compatibilité avec votre véhicule.\n\nN’hésitez pas à me joindre par retour d’email ou au {telephone}, je suis à votre disposition.',
+    body: 'Suite à votre demande concernant {nom_produit}, je reviens vers vous.\n\nPour vous proposer la bonne pièce au meilleur prix, pouvez-vous me confirmer votre VIN ou votre immatriculation ?\n\nJe vérifie immédiatement la disponibilité dans notre stock et reviens vers vous avec une proposition détaillée.\n\nVous pouvez aussi me joindre directement au {telephone}.',
+  },
+  {
+    key: 'devis_quote_ready',
+    label: '💼 Envoyer un devis chiffré',
+    forSource: ['devis', 'contact'],
+    defaultIncludeCta: false,
+    subject: 'Votre devis pour {nom_produit}',
+    body: 'Suite à votre demande, voici ma proposition pour {nom_produit} :\n\n[Détailler ici : référence exacte, prix, délai de livraison, garantie]\n\nCe devis est valable 7 jours. Pour valider votre commande, répondez simplement à cet email ou appelez-moi au {telephone}.',
   },
   {
     key: 'cart_reminder',
     label: '🛒 Votre panier vous attend',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
+    defaultIncludeCta: true,
     subject: 'Votre panier {brand} vous attend',
-    body: 'Vous avez sélectionné {nom_produit} sur notre site sans finaliser votre commande.\n\nMontant : {prix_total}\n\nPour reprendre votre commande en un clic : {lien_panier}\n\nSi vous avez la moindre question (compatibilité, délai de livraison, garantie…), je suis disponible pour vous aider.',
+    body: 'Vous avez sélectionné {nom_produit} sur notre site sans finaliser votre commande.\n\nMontant : {prix_total}\n\nPour reprendre votre commande en un clic, cliquez sur le bouton ci-dessous.\n\nSi vous avez la moindre question (compatibilité, délai de livraison, garantie…), je suis disponible pour vous aider.',
   },
   {
     key: 'compatibility_check',
     label: '🔧 Question sur la compatibilité ?',
-    subject: 'Compatibilité de {nom_produit} avec votre véhicule',
-    body: 'Vous avez consulté {nom_produit} sur notre site sans valider votre commande.\n\nAvez-vous une question sur la compatibilité avec votre véhicule ? Pour vous garantir la bonne pièce, je peux vérifier votre VIN ou votre plaque d’immatriculation.\n\nRépondez simplement à cet email avec votre VIN ou votre immatriculation, je reviens vers vous très vite.',
+    defaultIncludeCta: false,
+    subject: 'Compatibilité avec votre véhicule',
+    body: 'Vous avez consulté notre site sans valider votre commande.\n\nAvez-vous une question sur la compatibilité avec votre véhicule ? Pour vous garantir la bonne pièce, je peux vérifier votre VIN ou votre plaque d’immatriculation.\n\nRépondez simplement à cet email avec votre VIN ou votre immatriculation, je reviens vers vous très vite.',
   },
   {
     key: 'discount_offer',
     label: '💰 -10 % offerts pour finaliser',
-    subject: '-10 % sur {nom_produit} chez {brand}',
-    body: 'Pour vous remercier de votre intérêt pour {nom_produit}, je vous offre 10 % de remise sur votre commande.\n\nMontant : {prix_total} → avec le code RELANCE10 valable 7 jours.\n\nReprendre votre panier : {lien_panier}\n\nÀ très bientôt sur {brand}.',
+    forSource: ['cart_activity', 'guest_checkout', 'user'],
+    defaultIncludeCta: true,
+    subject: '-10 % pour finaliser votre commande chez {brand}',
+    body: 'Pour vous remercier de votre intérêt pour {nom_produit}, je vous offre 10 % de remise sur votre commande.\n\nMontant : {prix_total} → avec le code RELANCE10 valable 7 jours.\n\nIl vous suffit de cliquer sur le bouton ci-dessous pour reprendre votre panier et appliquer le code au moment du paiement.',
   },
   {
     key: 'availability_confirm',
     label: '✅ Confirmation disponibilité',
+    forSource: ['cart_activity', 'guest_checkout', 'user'],
+    defaultIncludeCta: true,
     subject: '{nom_produit} est disponible',
-    body: '{nom_produit} est en stock et prêt à être expédié.\n\nMontant : {prix_total}\nLivraison sous 24/48h ouvrées.\n\nPour finaliser votre commande : {lien_panier}\n\nCordialement.',
+    body: '{nom_produit} est en stock et prêt à être expédié.\n\nMontant : {prix_total}\nLivraison sous 24/48h ouvrées.\n\nPour finaliser votre commande, cliquez sur le bouton ci-dessous.',
   },
 ];
 
@@ -140,22 +162,25 @@ const SMS_TEMPLATES = [
   {
     key: 'sms_cart_reminder',
     label: '🛒 Panier en attente',
-    body: '{prenom}, votre panier {brand} ({prix_total}) vous attend. Reprendre : {lien_panier}',
+    forSource: ['cart_activity', 'guest_checkout', 'user'],
+    body: '{prenom}, votre panier {brand} ({prix_total}) vous attend. Reprendre en 1 clic : {lien_panier}',
   },
   {
     key: 'sms_devis_followup',
     label: '📨 Suite devis',
-    body: '{prenom}, votre {nom_produit} à {prix_total} est dispo. Répondez à ce SMS pour valider ou appelez le {telephone}.',
+    forSource: ['devis', 'contact'],
+    body: '{prenom}, suite à votre demande chez {brand}, j\'ai votre dossier sous les yeux. Pouvez-vous me confirmer votre VIN ? Vous pouvez aussi m\'appeler au {telephone}.',
   },
   {
     key: 'sms_discount',
     label: '💰 -10 %',
+    forSource: ['cart_activity', 'guest_checkout', 'user'],
     body: '{prenom}, -10% sur votre panier {brand} avec RELANCE10 (7 jours). {lien_panier}',
   },
   {
     key: 'sms_callback',
     label: '📞 Demande de rappel',
-    body: '{prenom}, je peux vous rappeler pour votre {nom_produit} ? Répondez avec un créneau qui vous arrange. {brand}',
+    body: '{prenom}, je peux vous rappeler pour {nom_produit} ? Répondez avec un créneau qui vous arrange. {brand}',
   },
 ];
 

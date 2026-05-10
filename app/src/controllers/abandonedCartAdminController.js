@@ -117,8 +117,8 @@ async function getAdminLeadsPage(req, res, next) {
       kpis: { total: 0, uncontacted: 0, contacted: 0, converted: 0, pendingValueCents: 0, recoveryRate: '0' },
       filters: { status, manualStatus: manualStatusFilter, captureSource, channel, period, q, sort },
       pagination: { page: 1, perPage, totalItems: 0, totalPages: 1, from: 0, to: 0, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1 },
-      emailTemplates: EMAIL_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body, forSource: t.forSource || [] })),
-      smsTemplates: SMS_TEMPLATES.map((t) => ({ key: t.key, label: t.label, body: t.body })),
+      emailTemplates: EMAIL_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body, forSource: t.forSource || [], defaultIncludeCta: t.defaultIncludeCta !== false })),
+      smsTemplates: SMS_TEMPLATES.map((t) => ({ key: t.key, label: t.label, body: t.body, forSource: t.forSource || [] })),
     }, overrides));
 
     if (!dbConnected) return baseRender();
@@ -665,7 +665,7 @@ async function postLeadAddNote(req, res, next) {
 function getAdminLeadTemplates(req, res) {
   return res.json({
     ok: true,
-    email: EMAIL_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body, forSource: t.forSource || [] })),
+    email: EMAIL_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body, forSource: t.forSource || [], defaultIncludeCta: t.defaultIncludeCta !== false })),
     sms: SMS_TEMPLATES.map((t) => ({ key: t.key, label: t.label, body: t.body })),
   });
 }
