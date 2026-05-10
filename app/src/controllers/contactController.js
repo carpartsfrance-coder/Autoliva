@@ -4,6 +4,7 @@ const emailService = require('../services/emailService');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildHreflangSet } = require('../services/i18n');
 const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
+const { captureContactLead } = require('../services/leadCapture');
 const brand = require('../config/brand');
 
 function getTrimmedString(value) {
@@ -384,6 +385,23 @@ async function postContact(req, res, next) {
     trackEvent(req, mode === 'devis' ? 'quote_request' : 'contact_submit', {
       meta: { mode, hasMessage: true },
     });
+
+    /* Lead capture (non-bloquant) : persiste le contact pour relance ultérieure */
+    captureContactLead({
+      req,
+      mode,
+      email,
+      firstName,
+      lastName,
+      phone,
+      message: form.message,
+      productHints: {
+        VIN: form.vin,
+        Immat: form.plate,
+        Vehicule: form.vehicle,
+        Reference: form.partRef,
+      },
+    }).catch(() => { /* non-bloquant */ });
 
     return res.render('contact/index', {
       title,

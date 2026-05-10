@@ -257,15 +257,32 @@ router.get('/clients', requireAdminAuth, adminController.getAdminClientsPage);
 router.get('/clients/:userId', requireAdminAuth, adminController.getAdminClientDetailPage);
 router.post('/clients/:userId/remise', requireAdminAuth, adminController.postAdminUpdateClientDiscount);
 
-router.get('/activite-panier', requireAdminAuth, adminController.getAdminCartActivityPage);
+/**
+ * /admin/activite-panier = page unifiée "Leads à relancer"
+ * Lit AbandonedCart (incluant guests, contacts, devis, newsletter).
+ */
+router.get('/activite-panier', requireAdminAuth, abandonedCartAdminController.getAdminLeadsPage);
+router.get('/activite-panier/:id', requireAdminAuth, abandonedCartAdminController.getAdminLeadDetail);
+
+/* Endpoints d'action sur un lead */
+router.post('/api/leads/:id/email', requireAdminAuth, abandonedCartAdminController.postLeadSendEmail);
+router.post('/api/leads/:id/sms', requireAdminAuth, abandonedCartAdminController.postLeadSendSms);
+router.post('/api/leads/:id/status', requireAdminAuth, abandonedCartAdminController.postLeadSetStatus);
+router.post('/api/leads/:id/note', requireAdminAuth, abandonedCartAdminController.postLeadAddNote);
 
 router.get('/codes-promo', requireAdminAuth, adminController.getAdminPromoCodesPage);
 router.post('/codes-promo', requireAdminAuth, adminController.postAdminCreatePromoCode);
 router.post('/codes-promo/:promoId', requireAdminAuth, adminController.postAdminUpdatePromoCode);
 router.post('/codes-promo/:promoId/supprimer', requireAdminAuth, adminController.postAdminDeletePromoCode);
 
-router.get('/relances', requireAdminAuth, abandonedCartAdminController.getAdminAbandonedCartsPage);
-router.get('/relances/:cartId', requireAdminAuth, abandonedCartAdminController.getAdminAbandonedCartDetail);
+/* /admin/relances : redirige vers la page unifiée /admin/activite-panier (rétro-compat) */
+router.get('/relances', requireAdminAuth, (req, res) => {
+  const qs = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+  return res.redirect(301, '/admin/activite-panier' + qs);
+});
+router.get('/relances/:cartId', requireAdminAuth, (req, res) => {
+  return res.redirect(301, '/admin/activite-panier/' + encodeURIComponent(req.params.cartId));
+});
 router.post('/relances/:cartId/relancer', requireAdminAuth, abandonedCartAdminController.postAdminManualReminder);
 
 router.get('/retours', requireAdminAuth, adminController.getAdminReturnsPage);

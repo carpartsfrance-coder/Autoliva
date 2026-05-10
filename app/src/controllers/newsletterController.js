@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const NewsletterSubscriber = require('../models/NewsletterSubscriber');
 const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
+const { captureNewsletterLead } = require('../services/leadCapture');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -79,6 +80,13 @@ async function postSubscribe(req, res, next) {
     trackEvent(req, 'newsletter_signup', {
       meta: { sourceForm: getTrimmedString(req.body && req.body.source) || 'footer' },
     });
+
+    /* Lead capture (non-bloquant) : si la session a un panier, en faire un lead */
+    captureNewsletterLead({
+      req,
+      email,
+      source: getTrimmedString(req.body && req.body.source) || 'footer',
+    }).catch(() => { /* non-bloquant */ });
 
     req.session.newsletterSuccess = 'Merci ! Votre email est bien inscrit à la newsletter.';
     return res.redirect(returnTo);
