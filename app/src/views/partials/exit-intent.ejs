@@ -162,32 +162,45 @@
     try { sessionStorage.setItem('cpf_ei_dismissed', '1'); } catch (e) {}
   }
 
-  // Desktop : souris sort par le haut du viewport
-  document.addEventListener('mouseout', function (e) {
-    if (e.toElement || e.relatedTarget) return; // sortie réelle uniquement
-    if (e.clientY > 0) return; // par le haut
-    show('mouse_leave_top');
+  var isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+
+  // ─── DESKTOP : souris sort par le haut du viewport ───────────────────
+  if (!isMobile) {
+    document.addEventListener('mouseout', function (e) {
+      if (e.toElement || e.relatedTarget) return; // sortie réelle uniquement
+      if (e.clientY > 0) return; // par le haut
+      show('mouse_leave_top');
+    });
+  }
+
+  // ─── MOBILE 1 : visibilité de l'onglet (utilisateur switche d'app) ──
+  // Très fiable pour "je suis sur le point de partir"
+  // Garde-fou : seulement si > 12s sur la page (sinon trop précoce)
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') {
+      if (Date.now() - loadTime > 12000) {
+        show('visibility_hidden');
+      }
+    }
   });
 
-  // Mobile : proxy "back button intent" via scroll comportement
-  var lastScrollY = window.scrollY;
-  var scrollUpStart = 0;
+  // ─── MOBILE 2 : scrollé profond puis revenu vers le haut ─────────────
+  // Proxy fiable de "je vais cliquer sur back / fermer"
+  var maxScrollY = 0;
+  var scrollBackTriggered = false;
   window.addEventListener('scroll', function () {
-    var y = window.scrollY;
-    if (y < lastScrollY && lastScrollY > 800) {
-      // remontée rapide après avoir scrollé bas → intention de partir
-      if (!scrollUpStart) scrollUpStart = Date.now();
-      if (Date.now() - scrollUpStart < 300 && (lastScrollY - y) > 400) {
-        show('mobile_scroll_up_fast');
-      }
-    } else {
-      scrollUpStart = 0;
+    var y = window.scrollY || document.documentElement.scrollTop || 0;
+    if (y > maxScrollY) maxScrollY = y;
+    // A scrollé profond (>1000px) puis revient près du haut (<300px)
+    if (!scrollBackTriggered && maxScrollY > 1000 && y < 300) {
+      scrollBackTriggered = true;
+      show('mobile_scroll_back_to_top');
     }
-    lastScrollY = y;
   }, { passive: true });
 
-  // Fallback : 60s sur la page sans intéraction submit / navigation
-  setTimeout(function () { show('time_60s'); }, 60000);
+  // ─── MOBILE 3 : fallback temps ───────────────────────────────────────
+  // 30s sur mobile (au lieu de 60s) car l'attention y est plus courte
+  setTimeout(function () { show(isMobile ? 'time_30s' : 'time_60s'); }, isMobile ? 30000 : 60000);
 
   closeBtn.addEventListener('click', dismiss);
   var declineBtn = document.getElementById('ei-decline');
