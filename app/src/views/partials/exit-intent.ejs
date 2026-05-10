@@ -14,33 +14,89 @@
 
 <% if (_showExitIntent) { %>
 <div id="exit-intent-popup" class="fixed inset-0 z-[60] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="ei-title">
-  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
-    <button type="button" id="ei-close" class="absolute top-3 right-3 w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center" aria-label="Fermer">
+  <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl relative overflow-hidden animate-[ei-pop_280ms_ease-out]">
+    <button type="button" id="ei-close" class="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/80 hover:bg-slate-100 flex items-center justify-center shadow-sm" aria-label="Fermer">
       <span class="material-symbols-outlined text-slate-500">close</span>
     </button>
 
-    <div class="text-center">
-      <div class="w-16 h-16 mx-auto rounded-full bg-amber-100 flex items-center justify-center mb-3">
-        <span class="material-symbols-outlined text-amber-600" style="font-size:32px">redeem</span>
+    <!-- Header avec gradient + badge promo -->
+    <div class="relative bg-gradient-to-br from-red-600 via-red-700 to-red-800 px-6 pt-7 pb-16 text-white overflow-hidden">
+      <!-- Badge -5% en coin -->
+      <div class="absolute -right-6 top-4 rotate-12 bg-amber-400 text-red-900 font-black text-sm px-8 py-1 shadow-lg">
+        − 5 % OFFERTS
       </div>
-      <h3 id="ei-title" class="text-xl font-bold text-slate-900">Avant de partir…</h3>
-      <p class="text-sm text-slate-600 mt-1">Recevez <strong class="text-amber-700">5 % de remise</strong> avec le code <strong>BIENVENUE5</strong> + nos meilleures offres mécatronique et boîtes auto.</p>
+
+      <div class="flex items-center gap-2 text-white/80 text-[11px] font-bold uppercase tracking-widest mb-2">
+        <span class="material-symbols-outlined" style="font-size:16px">support_agent</span>
+        Aide à la commande
+      </div>
+      <h3 id="ei-title" class="text-2xl font-black leading-tight">Pas sûr de la<br/>compatibilité ?</h3>
+      <p class="mt-2 text-white/90 text-sm">Notre équipe technique vérifie votre pièce <strong>gratuitement</strong> avant que vous commandiez.</p>
     </div>
 
-    <form id="ei-form" class="mt-5 space-y-3">
-      <% if (typeof product !== 'undefined' && product && product._id) { %>
-        <input type="hidden" name="productId" value="<%= product._id %>" />
-      <% } %>
-      <input type="email" name="email" required placeholder="votre@email.com" class="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
-      <button type="submit" class="w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg font-bold text-sm transition">
-        Recevoir mon code -5 %
-      </button>
-      <p class="text-[11px] text-slate-400 text-center">Pas de spam. Désinscription en 1 clic.</p>
-    </form>
+    <!-- Body : value props -->
+    <div class="px-6 -mt-10 relative z-[1]">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-md p-4">
+        <ul class="space-y-2 text-sm text-slate-700">
+          <li class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-green-600 flex-shrink-0" style="font-size:18px">check_circle</span>
+            <span><strong>Vérification VIN gratuite</strong> par notre équipe</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-green-600 flex-shrink-0" style="font-size:18px">check_circle</span>
+            <span><strong>Devis personnalisé</strong> sous 24h ouvrées</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-green-600 flex-shrink-0" style="font-size:18px">check_circle</span>
+            <span><strong>Garantie 1 an</strong> pièce reconditionnée</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="material-symbols-outlined text-amber-600 flex-shrink-0" style="font-size:18px">redeem</span>
+            <span><strong>−5 %</strong> sur votre 1ʳᵉ commande avec <code class="bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded text-xs font-bold">BIENVENUE5</code></span>
+          </li>
+        </ul>
+      </div>
+    </div>
 
-    <div id="ei-result" class="mt-3 text-sm text-center"></div>
+    <!-- Form -->
+    <div class="px-6 pt-4 pb-6">
+      <form id="ei-form" class="space-y-2">
+        <% if (typeof product !== 'undefined' && product && product._id) { %>
+          <input type="hidden" name="productId" value="<%= product._id %>" />
+        <% } %>
+        <label class="block text-xs font-semibold text-slate-600">Recevez votre code + nos conseils experts</label>
+        <input type="email" name="email" required placeholder="votre@email.com" autocomplete="email"
+               class="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-300" />
+        <button type="submit" class="w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white py-3 rounded-lg font-bold text-sm transition shadow-sm">
+          Recevoir mon code −5 %
+        </button>
+      </form>
+
+      <!-- Trust + secondary action -->
+      <div class="mt-3 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-1 text-xs text-slate-500">
+          <span class="text-amber-500">★★★★★</span>
+          <span class="font-semibold">4,8/5</span>
+          <span class="text-slate-400">— clients satisfaits</span>
+        </div>
+        <button type="button" id="ei-decline" class="text-xs text-slate-400 hover:text-slate-600 underline-offset-2 hover:underline">
+          Non merci
+        </button>
+      </div>
+
+      <p class="mt-2 text-[10px] text-slate-400 text-center">Pas de spam. Désinscription en 1 clic. Données traitées selon notre <a href="/legal/politique-de-confidentialite" target="_blank" class="underline hover:text-slate-600">politique de confidentialité</a>.</p>
+
+      <div id="ei-result" class="mt-3 text-sm text-center"></div>
+    </div>
   </div>
 </div>
+
+<style>
+  @keyframes ei-pop {
+    from { opacity: 0; transform: scale(0.92) translateY(8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+</style>
 
 <script>
 (function () {
@@ -111,7 +167,14 @@
   setTimeout(function () { show('time_60s'); }, 60000);
 
   closeBtn.addEventListener('click', dismiss);
+  var declineBtn = document.getElementById('ei-decline');
+  if (declineBtn) declineBtn.addEventListener('click', dismiss);
   modal.addEventListener('click', function (e) { if (e.target === modal) dismiss(); });
+
+  // ESC ferme
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) dismiss();
+  });
 
   form.addEventListener('submit', function (e) {
     e.preventDefault();
