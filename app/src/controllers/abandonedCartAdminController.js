@@ -78,6 +78,7 @@ function getCaptureSourceLabel(captureSource) {
     contact: { label: 'Contact', className: 'bg-cyan-50 text-cyan-700' },
     devis: { label: 'Devis', className: 'bg-teal-50 text-teal-700' },
     cart_activity: { label: 'Panier', className: 'bg-slate-100 text-slate-700' },
+    blog_cta: { label: 'Article blog', className: 'bg-emerald-50 text-emerald-700' },
     manual: { label: 'Manuel', className: 'bg-yellow-50 text-yellow-700' },
   };
   return labels[captureSource] || { label: captureSource || '—', className: 'bg-slate-100 text-slate-500' };
@@ -132,7 +133,7 @@ async function getAdminLeadsPage(req, res, next) {
     if (manualStatusFilter === 'none') query.manualStatus = null;
     else if (['contacted', 'converted', 'lost'].includes(manualStatusFilter)) query.manualStatus = manualStatusFilter;
 
-    const allowedSources = new Set(['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'cart_activity', 'manual']);
+    const allowedSources = new Set(['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'cart_activity', 'blog_cta', 'manual']);
     if (captureSource && allowedSources.has(captureSource)) query.captureSource = captureSource;
 
     if (channel === 'email') query.email = { $ne: '' };

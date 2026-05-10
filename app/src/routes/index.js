@@ -21,9 +21,10 @@ router.get('/product/:slug', productController.getProductBySlug);
 router.get('/contact', contactController.getContactPage);
 router.post('/contact', contactController.postContact);
 
-/* Endpoints publics de capture de lead (popup, save-cart, devis fiche produit) */
+/* Endpoints publics de capture de lead (popup, save-cart, devis fiche produit, CTA blog) */
 router.post('/api/lead/save-cart', leadCaptureController.postSaveCart);
 router.post('/api/lead/product-quote', leadCaptureController.postProductQuote);
+router.post('/api/lead/blog-cta', leadCaptureController.postBlogCta);
 router.post('/api/lead/exit-intent', leadCaptureController.postExitIntent);
 router.get('/devis', (req, res, next) => {
   req.query = { ...(req.query || {}), type: 'devis' };

@@ -52,6 +52,126 @@
             <div class="prose dark:prose-invert max-w-none article-content">
               <%- post && post.contentHtml ? post.contentHtml : '' %>
             </div>
+
+            <!-- Gros CTA fin d'article : capture lead avec contexte produit/sujet -->
+            <% var _ctaTopic = post && post.category && post.category.label ? post.category.label : (post && post.seo && post.seo.primaryKeyword ? post.seo.primaryKeyword : ''); %>
+            <div id="blog-end-cta" class="mt-10 rounded-2xl border-2 border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/50 p-6 lg:p-8 relative overflow-hidden">
+              <div class="absolute -right-8 -top-8 w-40 h-40 bg-red-100/40 rounded-full"></div>
+              <div class="absolute -left-10 -bottom-10 w-48 h-48 bg-amber-50/50 rounded-full"></div>
+
+              <div class="relative z-10">
+                <div class="inline-flex items-center gap-1.5 bg-red-100 text-red-700 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest mb-3">
+                  <span class="material-symbols-outlined" style="font-size:14px">verified</span>
+                  Aide technique offerte
+                </div>
+
+                <h2 class="text-2xl lg:text-3xl font-display font-black text-slate-900 leading-tight">
+                  <% if (_ctaTopic) { %>
+                    Besoin d'aide concernant <%= _ctaTopic %> ?
+                  <% } else { %>
+                    Besoin d'un avis technique sur votre véhicule ?
+                  <% } %>
+                </h2>
+
+                <p class="mt-2 text-slate-600 text-sm lg:text-base leading-relaxed max-w-2xl">
+                  Notre équipe technique vérifie gratuitement la compatibilité avec votre véhicule (VIN/immatriculation), vous envoie un devis personnalisé sous 24h et vous accompagne jusqu'au remontage. Garantie jusqu'à 2&nbsp;ans*.
+                </p>
+
+                <div class="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div class="bg-white rounded-lg border border-slate-100 p-3">
+                    <span class="material-symbols-outlined text-green-600" style="font-size:20px">check_circle</span>
+                    <div class="text-[11px] font-bold text-slate-700 mt-1 leading-tight">Vérification VIN</div>
+                  </div>
+                  <div class="bg-white rounded-lg border border-slate-100 p-3">
+                    <span class="material-symbols-outlined text-green-600" style="font-size:20px">schedule</span>
+                    <div class="text-[11px] font-bold text-slate-700 mt-1 leading-tight">Devis 24h</div>
+                  </div>
+                  <div class="bg-white rounded-lg border border-slate-100 p-3">
+                    <span class="material-symbols-outlined text-green-600" style="font-size:20px">shield</span>
+                    <div class="text-[11px] font-bold text-slate-700 mt-1 leading-tight">Garantie 2 ans*</div>
+                  </div>
+                  <div class="bg-white rounded-lg border border-slate-100 p-3">
+                    <span class="material-symbols-outlined text-green-600" style="font-size:20px">local_shipping</span>
+                    <div class="text-[11px] font-bold text-slate-700 mt-1 leading-tight">Livraison 24/48h</div>
+                  </div>
+                </div>
+
+                <form id="blog-end-cta-form" class="mt-6 space-y-3">
+                  <input type="hidden" name="articleSlug" value="<%= post && post.slug ? post.slug : '' %>" />
+                  <input type="hidden" name="articleTitle" value="<%= post && post.title ? post.title : '' %>" />
+                  <% if (relatedProducts && relatedProducts.length === 1) { %>
+                    <input type="hidden" name="productId" value="<%= relatedProducts[0].id || '' %>" />
+                  <% } %>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input type="text" name="firstName" placeholder="Prénom (optionnel)" maxlength="80"
+                           class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition" />
+                    <input type="tel" name="phone" placeholder="Téléphone (optionnel)" maxlength="24"
+                           class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition" />
+                  </div>
+                  <input type="email" name="email" required placeholder="votre@email.com *"
+                         class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition" />
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input type="text" name="vin" placeholder="VIN (optionnel)" maxlength="32"
+                           class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition" />
+                    <input type="text" name="vehicle" placeholder="Marque + modèle + année" maxlength="200"
+                           class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition" />
+                  </div>
+                  <textarea name="message" rows="2" maxlength="500" placeholder="Décrivez votre symptôme ou question (codes défaut, bruit, kilométrage…)"
+                            class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition resize-none"></textarea>
+
+                  <button type="submit" class="w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white py-4 rounded-xl font-black text-base transition shadow-md hover:shadow-lg flex items-center justify-center gap-2">
+                    <span class="material-symbols-outlined" style="font-size:20px">send</span>
+                    Demander mon devis personnalisé
+                  </button>
+
+                  <p class="text-[11px] text-slate-500 text-center">Sans engagement · Réponse sous 24h ouvrées · <a href="/legal/politique-de-confidentialite" target="_blank" class="underline hover:text-slate-700">Confidentialité</a></p>
+                </form>
+
+                <div id="blog-end-cta-result" class="mt-4 text-sm"></div>
+              </div>
+            </div>
+
+            <script>
+            (function () {
+              var form = document.getElementById('blog-end-cta-form');
+              var result = document.getElementById('blog-end-cta-result');
+              if (!form) return;
+              form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                var data = {};
+                new FormData(form).forEach(function (v, k) { data[k] = v; });
+                result.innerHTML = '<div class="text-slate-500 text-center">Envoi de votre demande…</div>';
+                fetch('/api/lead/blog-cta', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(data),
+                })
+                  .then(function (r) { return r.json(); })
+                  .then(function (d) {
+                    if (d && d.ok) {
+                      result.innerHTML = ''
+                        + '<div class="rounded-xl bg-green-50 border-2 border-green-200 p-5 text-center">'
+                        + '  <div class="w-14 h-14 mx-auto rounded-full bg-green-500 flex items-center justify-center mb-3">'
+                        + '    <span class="material-symbols-outlined text-white" style="font-size:30px">check</span>'
+                        + '  </div>'
+                        + '  <div class="text-green-800 font-black text-lg">Demande reçue !</div>'
+                        + '  <div class="text-sm text-slate-600 mt-1">Notre équipe vous contacte par email sous 24h ouvrées.</div>'
+                        + '  <div class="text-xs text-slate-500 mt-2">📧 Confirmation envoyée à <strong>' + (data.email || '').replace(/[<>&"]/g, '') + '</strong></div>'
+                        + '</div>';
+                      form.style.display = 'none';
+                      if (window.dataLayer) window.dataLayer.push({ event: 'lead_blog_cta_end', email: data.email, article: data.articleSlug });
+                      setTimeout(function () {
+                        result.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }, 200);
+                    } else {
+                      result.innerHTML = '<div class="text-red-700 text-center font-semibold">Erreur. Vérifiez votre email ou réessayez.</div>';
+                    }
+                  })
+                  .catch(function () { result.innerHTML = '<div class="text-red-700 text-center font-semibold">Erreur réseau. Réessayez.</div>'; });
+              });
+            })();
+            </script>
           </div>
         </article>
       </div>
@@ -122,16 +242,60 @@
           </div>
         <% } %>
 
-        <div class="bg-accent-dark text-white p-5 rounded-xl relative overflow-hidden">
+        <!-- CTA expert sticky : capture lead avec contexte article -->
+        <div class="bg-gradient-to-br from-red-600 to-red-700 text-white p-5 rounded-xl relative overflow-hidden shadow-lg">
+          <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full"></div>
+          <div class="absolute -left-6 -bottom-6 w-32 h-32 bg-white/5 rounded-full"></div>
           <div class="relative z-10">
-            <h3 class="text-lg font-display font-bold mb-2">Restez informé</h3>
-            <p class="text-[11px] text-slate-400 mb-4">Recevez nos guides techniques et offres exclusives chaque mois.</p>
-            <form class="space-y-2" onsubmit="return false;">
-              <input class="w-full bg-white/10 border-white/20 rounded-lg py-1.5 px-3 text-xs focus:ring-primary focus:border-primary" placeholder="Votre email" type="email"/>
-              <button class="w-full bg-primary hover:bg-red-700 text-white font-bold py-2 rounded-lg text-xs transition-all uppercase" type="submit">S'abonner</button>
+            <div class="inline-flex items-center gap-1 bg-amber-300 text-red-900 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider mb-2">
+              <span class="material-symbols-outlined" style="font-size:12px">support_agent</span>
+              Conseil expert offert
+            </div>
+            <h3 class="text-base font-bold mb-1.5 leading-tight">Une question sur cet article&nbsp;?</h3>
+            <p class="text-[11px] text-white/80 mb-3 leading-snug">Notre équipe technique répond gratuitement avec des conseils adaptés à votre véhicule.</p>
+            <form id="blog-sidebar-cta" class="space-y-2">
+              <input type="hidden" name="articleSlug" value="<%= post && post.slug ? post.slug : '' %>" />
+              <input type="hidden" name="articleTitle" value="<%= post && post.title ? post.title : '' %>" />
+              <input class="w-full bg-white/15 backdrop-blur border border-white/20 rounded-lg py-2 px-3 text-xs text-white placeholder-white/60 focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 focus:outline-none"
+                     placeholder="votre@email.com" name="email" type="email" required />
+              <button class="w-full bg-amber-400 hover:bg-amber-300 text-red-900 font-black py-2 rounded-lg text-xs transition flex items-center justify-center gap-1" type="submit">
+                Recevoir un conseil
+                <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
+              </button>
             </form>
+            <div id="blog-sidebar-cta-result" class="mt-2 text-[11px]"></div>
           </div>
         </div>
+
+        <script>
+        (function () {
+          var form = document.getElementById('blog-sidebar-cta');
+          var result = document.getElementById('blog-sidebar-cta-result');
+          if (!form) return;
+          form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var data = {};
+            new FormData(form).forEach(function (v, k) { data[k] = v; });
+            result.innerHTML = '<span class="text-white/70">Envoi…</span>';
+            fetch('/api/lead/blog-cta', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data),
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                if (d && d.ok) {
+                  result.innerHTML = '<span class="text-amber-200 font-bold">✓ Demande reçue. Vérifiez votre email pour la suite.</span>';
+                  if (window.dataLayer) window.dataLayer.push({ event: 'lead_blog_cta_sidebar', email: data.email });
+                  setTimeout(function () { form.style.display = 'none'; }, 1500);
+                } else {
+                  result.innerHTML = '<span class="text-amber-200">Erreur. Réessayez.</span>';
+                }
+              })
+              .catch(function () { result.innerHTML = '<span class="text-amber-200">Erreur réseau.</span>'; });
+          });
+        })();
+        </script>
       </aside>
     </div>
   </div>
