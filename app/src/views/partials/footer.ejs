@@ -706,4 +706,55 @@
   }, true);
 })();
 </script>
+
+<%- include('./exit-intent') %>
+
+<%/* Crisp Live Chat — activé seulement si la variable d'env CRISP_WEBSITE_ID
+     est définie côté serveur (configurable dans Render → Environment).
+     Désactivé sur les pages admin et checkout pour ne pas gêner. */%>
+<% if (typeof process !== 'undefined' && process.env && process.env.CRISP_WEBSITE_ID
+       && !/^\/(admin|commande)(\/|$)/.test(_pathOnly || '')) { %>
+<script type="text/javascript">
+  window.$crisp = [];
+  window.CRISP_WEBSITE_ID = "<%= process.env.CRISP_WEBSITE_ID %>";
+  (function(){
+    var d = document;
+    var s = d.createElement("script");
+    s.src = "https://client.crisp.chat/l.js";
+    s.async = 1;
+    d.getElementsByTagName("head")[0].appendChild(s);
+  })();
+
+  // Pré-remplir l'email Crisp si on a un emailHash en session
+  <% if (typeof user !== 'undefined' && user && user.email) { %>
+  window.$crisp.push(["set", "user:email", "<%= user.email %>"]);
+  <% if (user.firstName || user.lastName) { %>
+  window.$crisp.push(["set", "user:nickname", "<%= ((user.firstName || '') + ' ' + (user.lastName || '')).trim() %>"]);
+  <% } %>
+  <% } %>
+
+  // Tracker événement GA4 quand le visiteur ouvre le chat
+  document.addEventListener('DOMContentLoaded', function () {
+    setTimeout(function () {
+      if (window.$crisp && window.$crisp.push) {
+        window.$crisp.push(["on", "chat:opened", function () {
+          window.dataLayer = window.dataLayer || [];
+          window.dataLayer.push({
+            event: 'crisp_chat_opened',
+            page_path: window.location.pathname,
+          });
+        }]);
+        window.$crisp.push(["on", "message:sent", function () {
+          window.dataLayer = window.dataLayer || [];
+          window.dataLayer.push({
+            event: 'crisp_message_sent',
+            page_path: window.location.pathname,
+          });
+        }]);
+      }
+    }, 2000);
+  });
+</script>
+<% } %>
+
 </body></html>

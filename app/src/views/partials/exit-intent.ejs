@@ -1,0 +1,141 @@
+<%/*
+  Popup d'intention de sortie : email contre code promo BIENVENUE5.
+  - Ne s'affiche QUE :
+    * sur les pages publiques (pas /admin, /commande, /panier, /compte)
+    * pour les visiteurs anonymes (pas connectés)
+    * une fois par 7 jours (cookie + sessionStorage)
+    * après un délai minimum sur la page (5s) pour ne pas saouler
+  - Triggers :
+    * Desktop : mouseleave vers le haut du viewport
+    * Mobile  : scroll-up rapide après scroll-down (proxy de "user about to leave")
+*/%>
+<% var _eiPath = (typeof currentPathWithoutLang !== 'undefined' ? currentPathWithoutLang : (typeof currentPath === 'string' ? currentPath : '')).split('?')[0].split('#')[0]; %>
+<% var _showExitIntent = !/^\/(admin|commande|panier|compte|legal|sav)(\/|$)/.test(_eiPath) && !(typeof currentUser !== 'undefined' && currentUser); %>
+
+<% if (_showExitIntent) { %>
+<div id="exit-intent-popup" class="fixed inset-0 z-[60] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="ei-title">
+  <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+    <button type="button" id="ei-close" class="absolute top-3 right-3 w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center" aria-label="Fermer">
+      <span class="material-symbols-outlined text-slate-500">close</span>
+    </button>
+
+    <div class="text-center">
+      <div class="w-16 h-16 mx-auto rounded-full bg-amber-100 flex items-center justify-center mb-3">
+        <span class="material-symbols-outlined text-amber-600" style="font-size:32px">redeem</span>
+      </div>
+      <h3 id="ei-title" class="text-xl font-bold text-slate-900">Avant de partir…</h3>
+      <p class="text-sm text-slate-600 mt-1">Recevez <strong class="text-amber-700">5 % de remise</strong> avec le code <strong>BIENVENUE5</strong> + nos meilleures offres mécatronique et boîtes auto.</p>
+    </div>
+
+    <form id="ei-form" class="mt-5 space-y-3">
+      <% if (typeof product !== 'undefined' && product && product._id) { %>
+        <input type="hidden" name="productId" value="<%= product._id %>" />
+      <% } %>
+      <input type="email" name="email" required placeholder="votre@email.com" class="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
+      <button type="submit" class="w-full bg-amber-600 hover:bg-amber-700 text-white py-3 rounded-lg font-bold text-sm transition">
+        Recevoir mon code -5 %
+      </button>
+      <p class="text-[11px] text-slate-400 text-center">Pas de spam. Désinscription en 1 clic.</p>
+    </form>
+
+    <div id="ei-result" class="mt-3 text-sm text-center"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  // Bail si déjà vu / converti dans les 7 derniers jours
+  function getCookie(name) {
+    var match = document.cookie.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
+    return match ? match[1] : '';
+  }
+  function setCookie(name, value, days) {
+    var d = new Date();
+    d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
+    document.cookie = name + '=' + value + ';expires=' + d.toUTCString() + ';path=/;SameSite=Lax';
+  }
+
+  if (getCookie('cpf_ei_seen') === '1') return;
+  try { if (sessionStorage.getItem('cpf_ei_dismissed') === '1') return; } catch (e) {}
+
+  var modal = document.getElementById('exit-intent-popup');
+  var closeBtn = document.getElementById('ei-close');
+  var form = document.getElementById('ei-form');
+  var result = document.getElementById('ei-result');
+  if (!modal || !form) return;
+
+  var triggered = false;
+  var loadTime = Date.now();
+  var MIN_TIME_ON_PAGE = 5000; // 5s minimum
+
+  function show(reason) {
+    if (triggered) return;
+    if (Date.now() - loadTime < MIN_TIME_ON_PAGE) return;
+    triggered = true;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    if (window.dataLayer) window.dataLayer.push({ event: 'exit_intent_shown', reason: reason });
+  }
+
+  function dismiss() {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    try { sessionStorage.setItem('cpf_ei_dismissed', '1'); } catch (e) {}
+  }
+
+  // Desktop : souris sort par le haut du viewport
+  document.addEventListener('mouseout', function (e) {
+    if (e.toElement || e.relatedTarget) return; // sortie réelle uniquement
+    if (e.clientY > 0) return; // par le haut
+    show('mouse_leave_top');
+  });
+
+  // Mobile : proxy "back button intent" via scroll comportement
+  var lastScrollY = window.scrollY;
+  var scrollUpStart = 0;
+  window.addEventListener('scroll', function () {
+    var y = window.scrollY;
+    if (y < lastScrollY && lastScrollY > 800) {
+      // remontée rapide après avoir scrollé bas → intention de partir
+      if (!scrollUpStart) scrollUpStart = Date.now();
+      if (Date.now() - scrollUpStart < 300 && (lastScrollY - y) > 400) {
+        show('mobile_scroll_up_fast');
+      }
+    } else {
+      scrollUpStart = 0;
+    }
+    lastScrollY = y;
+  }, { passive: true });
+
+  // Fallback : 60s sur la page sans intéraction submit / navigation
+  setTimeout(function () { show('time_60s'); }, 60000);
+
+  closeBtn.addEventListener('click', dismiss);
+  modal.addEventListener('click', function (e) { if (e.target === modal) dismiss(); });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var data = {};
+    new FormData(form).forEach(function (v, k) { data[k] = v; });
+    result.innerHTML = '<span class="text-slate-500">Envoi…</span>';
+    fetch('/api/lead/exit-intent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok) {
+          result.innerHTML = '<span class="text-green-700 font-semibold">✓ Code BIENVENUE5 envoyé sur ' + data.email + '</span>';
+          setCookie('cpf_ei_seen', '1', 30);
+          if (window.dataLayer) window.dataLayer.push({ event: 'lead_exit_intent', email: data.email });
+          setTimeout(dismiss, 2500);
+        } else {
+          result.innerHTML = '<span class="text-red-700">Erreur. Réessayez.</span>';
+        }
+      })
+      .catch(function () { result.innerHTML = '<span class="text-red-700">Erreur réseau.</span>'; });
+  });
+})();
+</script>
+<% } %>
