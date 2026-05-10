@@ -65,6 +65,8 @@ async function sendAbandonedCartReminders() {
     const reminder3Cutoff = new Date(now.getTime() - REMINDER_3_DELAY_MS);
 
     const eligibleCarts = await AbandonedCart.find({
+      // Skip leads with manual status (admin a déjà pris la main)
+      manualStatus: null,
       $or: [
         // Abandoned for > 1h but < 24h (eligible for reminder 1)
         {
@@ -113,9 +115,13 @@ async function sendAbandonedCartReminders() {
           continue;
         }
 
-        // Double-check the cart hasn't been recovered in the meantime
-        const freshCart = await AbandonedCart.findById(cart._id).select('status').lean();
+        // Double-check the cart hasn't been recovered or manually handled in the meantime
+        const freshCart = await AbandonedCart.findById(cart._id).select('status manualStatus').lean();
         if (!freshCart || freshCart.status === 'recovered' || freshCart.status === 'expired') {
+          continue;
+        }
+        if (freshCart.manualStatus) {
+          // Admin a marqué ce lead manuellement → ne pas envoyer de relance auto
           continue;
         }
 

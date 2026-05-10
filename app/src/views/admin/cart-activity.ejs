@@ -6,189 +6,446 @@
   <div class="px-6 lg:px-10 py-8">
     <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
       <div>
-        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Activité panier'}] }) %>
-        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Activité panier</div>
-        <div class="mt-1 text-sm text-slate-500">Historique des actions panier des clients connectés.</div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Leads à relancer'}] }) %>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Leads à relancer</div>
+        <div class="mt-1 text-sm text-slate-500">Visiteurs avec activité panier ou demande de devis, prêts à être recontactés.</div>
+      </div>
+    </div>
+
+    <!-- KPIs (30 derniers jours) -->
+    <div class="mt-8 grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Leads (30j)</div>
+        <div class="mt-1 text-2xl font-bold text-slate-900"><%= kpis.total %></div>
+      </div>
+      <div class="rounded-2xl border border-red-100 bg-red-50/40 p-4">
+        <div class="text-xs uppercase tracking-widest text-red-500 font-semibold">À contacter</div>
+        <div class="mt-1 text-2xl font-bold text-red-700"><%= kpis.uncontacted %></div>
+      </div>
+      <div class="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+        <div class="text-xs uppercase tracking-widest text-blue-500 font-semibold">Contactés</div>
+        <div class="mt-1 text-2xl font-bold text-blue-700"><%= kpis.contacted %></div>
+      </div>
+      <div class="rounded-2xl border border-green-100 bg-green-50/40 p-4">
+        <div class="text-xs uppercase tracking-widest text-green-500 font-semibold">Convertis</div>
+        <div class="mt-1 text-2xl font-bold text-green-700"><%= kpis.converted %> <span class="text-sm font-medium text-green-600">(<%= kpis.recoveryRate %>%)</span></div>
+      </div>
+      <div class="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
+        <div class="text-xs uppercase tracking-widest text-amber-600 font-semibold">€ en attente</div>
+        <div class="mt-1 text-2xl font-bold text-amber-700"><%= kpis.pendingValue || '0,00 €' %></div>
       </div>
     </div>
 
     <!-- Filtres -->
-    <form action="/admin/activite-panier" class="sticky top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET">
-      <div class="flex flex-col xl:flex-row xl:items-center gap-4">
-        <div class="flex-1">
-          <div class="relative">
-            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
-            <input class="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400" name="q" placeholder="Rechercher : nom, email du client..." type="text" value="<%= filters && filters.q ? filters.q : '' %>" />
-          </div>
-        </div>
+    <form action="/admin/activite-panier" class="mt-6 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm" method="GET">
+      <div class="grid grid-cols-2 lg:grid-cols-7 gap-3">
 
-        <div class="flex flex-col sm:flex-row gap-3">
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="action">
-            <option value="">Toutes les actions</option>
-            <option value="add" <%= filters && filters.action === 'add' ? 'selected' : '' %>>Ajout</option>
-            <option value="update" <%= filters && filters.action === 'update' ? 'selected' : '' %>>Modification</option>
-            <option value="remove" <%= filters && filters.action === 'remove' ? 'selected' : '' %>>Suppression</option>
-          </select>
+        <input type="text" name="q" value="<%= filters.q || '' %>" placeholder="Email, nom, tél…"
+          class="col-span-2 lg:col-span-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
 
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="period">
-            <option value="">Toutes périodes</option>
-            <option value="24h" <%= filters && filters.period === '24h' ? 'selected' : '' %>>24 heures</option>
-            <option value="7d" <%= filters && filters.period === '7d' ? 'selected' : '' %>>7 jours</option>
-            <option value="30d" <%= filters && filters.period === '30d' ? 'selected' : '' %>>30 jours</option>
-            <option value="90d" <%= filters && filters.period === '90d' ? 'selected' : '' %>>90 jours</option>
-          </select>
+        <select name="manual" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+          <option value="">Statut manuel: tous</option>
+          <option value="none" <%= filters.manualStatus === 'none' ? 'selected' : '' %>>Non contacté</option>
+          <option value="contacted" <%= filters.manualStatus === 'contacted' ? 'selected' : '' %>>Contacté</option>
+          <option value="converted" <%= filters.manualStatus === 'converted' ? 'selected' : '' %>>Converti</option>
+          <option value="lost" <%= filters.manualStatus === 'lost' ? 'selected' : '' %>>Perdu</option>
+        </select>
 
-          <button class="btn btn-secondary" type="submit">
-            Filtrer
-          </button>
-        </div>
+        <select name="source" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+          <option value="">Source: toutes</option>
+          <option value="user" <%= filters.captureSource === 'user' ? 'selected' : '' %>>Compte client</option>
+          <option value="guest_checkout" <%= filters.captureSource === 'guest_checkout' ? 'selected' : '' %>>Guest checkout</option>
+          <option value="devis" <%= filters.captureSource === 'devis' ? 'selected' : '' %>>Demande devis</option>
+          <option value="contact" <%= filters.captureSource === 'contact' ? 'selected' : '' %>>Contact</option>
+          <option value="newsletter" <%= filters.captureSource === 'newsletter' ? 'selected' : '' %>>Newsletter</option>
+          <option value="cart_activity" <%= filters.captureSource === 'cart_activity' ? 'selected' : '' %>>Panier</option>
+        </select>
+
+        <select name="channel" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+          <option value="">Canal: tous</option>
+          <option value="email" <%= filters.channel === 'email' ? 'selected' : '' %>>Email dispo</option>
+          <option value="phone" <%= filters.channel === 'phone' ? 'selected' : '' %>>Tél dispo</option>
+          <option value="both" <%= filters.channel === 'both' ? 'selected' : '' %>>Email + Tél</option>
+        </select>
+
+        <select name="period" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+          <option value="7d" <%= filters.period === '7d' ? 'selected' : '' %>>7 jours</option>
+          <option value="30d" <%= !filters.period || filters.period === '30d' ? 'selected' : '' %>>30 jours</option>
+          <option value="90d" <%= filters.period === '90d' ? 'selected' : '' %>>90 jours</option>
+        </select>
+
+        <select name="sort" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+          <option value="recent" <%= !filters.sort || filters.sort === 'recent' ? 'selected' : '' %>>Récent ↓</option>
+          <option value="amount" <%= filters.sort === 'amount' ? 'selected' : '' %>>Montant ↓</option>
+          <option value="oldest" <%= filters.sort === 'oldest' ? 'selected' : '' %>>Ancien ↑</option>
+        </select>
+
+      </div>
+      <div class="mt-3 flex items-center gap-2">
+        <button class="btn btn-primary text-sm" type="submit">Appliquer</button>
+        <a href="/admin/activite-panier" class="btn btn-ghost text-sm">Réinitialiser</a>
       </div>
     </form>
 
-    <!-- Tableau -->
-    <div class="mt-8 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
-        <div class="font-semibold text-slate-900">Événements panier</div>
-        <% if (typeof pagination !== 'undefined' && pagination && pagination.totalItems) { %>
-          <div class="text-xs font-bold text-slate-500">
-            <%= pagination.from %>–<%= pagination.to %> sur <%= pagination.totalItems %>
-          </div>
+    <!-- Liste de leads -->
+    <div class="mt-6 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div class="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+        <div class="font-semibold text-slate-900 text-sm"><%= pagination.totalItems %> lead<%= pagination.totalItems > 1 ? 's' : '' %></div>
+        <% if (pagination.totalItems > 0) { %>
+          <div class="text-xs text-slate-500"><%= pagination.from %>–<%= pagination.to %></div>
         <% } %>
       </div>
 
-      <% if (events && events.length) { %>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left admin-table">
-            <thead>
-              <tr class="text-xs font-semibold text-slate-400 uppercase tracking-widest bg-white">
-                <th class="px-6 py-4">Date / Heure</th>
-                <th class="px-6 py-4">Client</th>
-                <th class="px-6 py-4">Action</th>
-                <th class="px-6 py-4">Produit</th>
-                <th class="px-6 py-4 text-center">Quantité</th>
-                <th class="px-6 py-4">Options</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              <% events.forEach((ev) => { %>
-                <tr>
-                  <!-- Date -->
-                  <td class="px-6 py-4 text-sm text-slate-500 whitespace-nowrap"><%= ev.dateFormatted %></td>
+      <% if (leads && leads.length) { %>
+        <ul class="divide-y divide-slate-100">
+          <% leads.forEach((c) => { %>
+            <li class="lead-row p-5 hover:bg-slate-50/60 transition" data-lead-id="<%= c.id %>">
+              <div class="flex flex-col lg:flex-row lg:items-start gap-4">
 
-                  <!-- Client -->
-                  <td class="px-6 py-4">
-                    <div class="flex items-center gap-2">
-                      <div>
-                        <a class="font-semibold text-slate-900 hover:text-primary transition" href="/admin/clients/<%= ev.userId %>"><%= ev.userName || 'Client' %></a>
-                        <div class="text-xs text-slate-400"><%= ev.userEmail %></div>
-                      </div>
-                      <% if (ev.accountType === 'pro') { %>
-                        <span class="badge badge-pro">PRO</span>
-                      <% } %>
+                <!-- Avatar / image produit -->
+                <div class="flex-shrink-0">
+                  <% if (c.firstItemImage) { %>
+                    <img src="<%= c.firstItemImage %>" alt="" class="w-14 h-14 rounded-xl object-cover border border-slate-200" />
+                  <% } else { %>
+                    <div class="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center">
+                      <span class="material-symbols-outlined text-slate-400">person</span>
                     </div>
-                  </td>
+                  <% } %>
+                </div>
 
-                  <!-- Action badge -->
-                  <td class="px-6 py-4">
-                    <% if (ev.action === 'add') { %>
-                      <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700">
-                        <span class="material-symbols-outlined text-sm">add_shopping_cart</span>
-                        Ajout
-                      </span>
-                    <% } else if (ev.action === 'update') { %>
-                      <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700">
-                        <span class="material-symbols-outlined text-sm">edit</span>
-                        Modification
-                      </span>
-                    <% } else if (ev.action === 'remove') { %>
-                      <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700">
-                        <span class="material-symbols-outlined text-sm">remove_shopping_cart</span>
-                        Suppression
+                <!-- Infos client -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <div class="font-semibold text-slate-900">
+                      <%= c.fullName || c.email || c.phone || 'Anonyme' %>
+                    </div>
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider <%= c.statusBadge.className %>">
+                      <%= c.statusBadge.label %>
+                    </span>
+                    <% if (c.captureSource) { %>
+                      <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium <%= c.captureBadge.className %>">
+                        <%= c.captureBadge.label %>
                       </span>
                     <% } %>
-                  </td>
+                  </div>
 
-                  <!-- Produit -->
-                  <td class="px-6 py-4">
-                    <% if (ev.productName) { %>
-                      <a class="font-semibold text-slate-900 hover:text-primary transition" href="/admin/catalogue/<%= ev.productId %>"><%= ev.productName %></a>
-                    <% } else { %>
-                      <span class="text-slate-400 italic">Produit supprimé</span>
+                  <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                    <% if (c.email) { %>
+                      <a href="mailto:<%= c.email %>" class="text-slate-700 hover:text-primary inline-flex items-center gap-1">
+                        <span class="material-symbols-outlined text-base">mail</span><%= c.email %>
+                      </a>
                     <% } %>
-                    <% if (ev.productSku) { %>
-                      <div class="text-xs text-slate-400">SKU : <%= ev.productSku %></div>
+                    <% if (c.phone) { %>
+                      <a href="tel:<%= c.phone %>" class="text-slate-700 hover:text-primary inline-flex items-center gap-1">
+                        <span class="material-symbols-outlined text-base">call</span><%= c.phone %>
+                        <% if (!c.phoneCallable) { %>
+                          <span class="text-xs text-amber-600">(format ?)</span>
+                        <% } %>
+                      </a>
                     <% } %>
-                  </td>
+                    <span class="text-slate-400 text-xs"><%= c.lastActivityRel %></span>
+                  </div>
 
-                  <!-- Quantité -->
-                  <td class="px-6 py-4 text-center text-sm font-semibold text-slate-700">
-                    <% if (ev.action === 'update' && ev.previousQuantity != null) { %>
-                      <span class="text-slate-400"><%= ev.previousQuantity %></span>
-                      <span class="material-symbols-outlined text-xs text-slate-300 align-middle">arrow_forward</span>
-                      <span><%= ev.quantity %></span>
-                    <% } else if (ev.action === 'remove') { %>
-                      <span class="text-red-400 line-through"><%= ev.previousQuantity || '-' %></span>
-                    <% } else { %>
-                      <%= ev.quantity %>
-                    <% } %>
-                  </td>
+                  <div class="mt-2 text-sm text-slate-600 truncate" title="<%= c.itemsSummary %>">
+                    <span class="font-medium text-slate-900"><%= c.totalAmount %></span>
+                    <span class="text-slate-400">·</span>
+                    <%= c.itemsSummary %>
+                    <% if (c.itemCount > 0) { %><span class="text-slate-400 text-xs">(<%= c.itemCount %> art.)</span><% } %>
+                  </div>
 
-                  <!-- Options -->
-                  <td class="px-6 py-4 text-xs text-slate-500">
-                    <%= ev.optionsSummary || '—' %>
-                  </td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
+                  <% if (c.contextMessage) { %>
+                    <div class="mt-2 text-xs text-slate-500 italic line-clamp-2"><%= c.contextMessage.slice(0, 200) %><%= c.contextMessage.length > 200 ? '…' : '' %></div>
+                  <% } %>
 
-        <!-- Pagination -->
-        <div class="px-6 py-4 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div class="text-xs font-semibold uppercase tracking-widest text-slate-400">
-            Affichage <%= pagination.from %>-<%= pagination.to %> sur <%= pagination.totalItems %>
-          </div>
+                  <% if (c.manualEmailsSent || c.manualSmsSent) { %>
+                    <div class="mt-2 text-xs text-slate-400">
+                      <% if (c.manualEmailsSent) { %><span>📧 <%= c.manualEmailsSent %> email<%= c.manualEmailsSent > 1 ? 's' : '' %> envoyé<%= c.manualEmailsSent > 1 ? 's' : '' %></span><% } %>
+                      <% if (c.manualEmailsSent && c.manualSmsSent) { %><span class="mx-1">·</span><% } %>
+                      <% if (c.manualSmsSent) { %><span>📱 <%= c.manualSmsSent %> SMS</span><% } %>
+                    </div>
+                  <% } %>
+                </div>
 
-          <%
-            const qVal = filters && filters.q ? String(filters.q) : '';
-            const actionVal = filters && filters.action ? String(filters.action) : '';
-            const periodVal = filters && filters.period ? String(filters.period) : '';
-            const extraQuery = [
-              qVal ? `q=${encodeURIComponent(qVal)}` : '',
-              actionVal ? `action=${encodeURIComponent(actionVal)}` : '',
-              periodVal ? `period=${encodeURIComponent(periodVal)}` : '',
-            ].filter(Boolean).join('&');
-            const withExtra = extraQuery ? `&${extraQuery}` : '';
-          %>
+                <!-- Actions -->
+                <div class="flex flex-wrap items-center gap-1.5 lg:flex-col lg:items-end lg:min-w-[200px]">
+                  <% if (c.email) { %>
+                    <button type="button" class="btn btn-secondary text-xs lead-action" data-action="email" data-lead-id="<%= c.id %>" data-lead-email="<%= c.email %>" data-lead-name="<%= c.fullName %>">
+                      <span class="material-symbols-outlined text-sm mr-1">mail</span>Email
+                    </button>
+                  <% } %>
+                  <% if (c.phone && c.phoneCallable) { %>
+                    <button type="button" class="btn btn-secondary text-xs lead-action" data-action="sms" data-lead-id="<%= c.id %>" data-lead-phone="<%= c.phone %>" data-lead-name="<%= c.fullName %>">
+                      <span class="material-symbols-outlined text-sm mr-1">sms</span>SMS
+                    </button>
+                  <% } %>
+                  <button type="button" class="btn btn-ghost text-xs lead-detail-btn" data-lead-id="<%= c.id %>">
+                    <span class="material-symbols-outlined text-sm mr-1">visibility</span>Détail
+                  </button>
+                  <% if (c.sessionId) { %>
+                    <a href="/admin/visiteurs/<%= c.sessionId %>" class="btn btn-ghost text-xs" title="Voir le replay session">
+                      <span class="material-symbols-outlined text-sm mr-1">play_circle</span>Session
+                    </a>
+                  <% } %>
 
-          <% if (typeof pagination !== 'undefined' && pagination && pagination.totalPages > 1) { %>
-            <div class="flex items-center justify-end gap-2">
-              <a class="w-9 h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition <%= pagination.hasPrev ? '' : 'opacity-40 pointer-events-none' %>" href="?page=<%= pagination.prevPage %><%= withExtra %>" aria-label="Page précédente">
-                <span class="material-symbols-outlined text-slate-500">chevron_left</span>
-              </a>
-
-              <% const startPage = Math.max(1, pagination.page - 2); %>
-              <% const endPage = Math.min(pagination.totalPages, pagination.page + 2); %>
-              <% for (let p = startPage; p <= endPage; p += 1) { %>
-                <a class="w-9 h-9 inline-flex items-center justify-center rounded-xl border text-xs font-semibold <%= p === pagination.page ? 'bg-primary text-white border-primary' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50' %>" href="?page=<%= p %><%= withExtra %>"><%= p %></a>
-              <% } %>
-
-              <a class="w-9 h-9 inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 transition <%= pagination.hasNext ? '' : 'opacity-40 pointer-events-none' %>" href="?page=<%= pagination.nextPage %><%= withExtra %>" aria-label="Page suivante">
-                <span class="material-symbols-outlined text-slate-500">chevron_right</span>
-              </a>
-            </div>
-          <% } %>
-        </div>
-
+                  <!-- Statut manuel -->
+                  <div class="inline-flex items-center rounded-lg overflow-hidden border border-slate-200 mt-1">
+                    <button type="button" class="lead-status-btn px-2 py-1 text-xs <%= c.manualStatus === 'contacted' ? 'bg-blue-100 text-blue-800 font-semibold' : 'bg-white hover:bg-slate-50' %>" data-lead-id="<%= c.id %>" data-status="contacted" title="Marquer contacté">📞</button>
+                    <button type="button" class="lead-status-btn px-2 py-1 text-xs border-l border-slate-200 <%= c.manualStatus === 'converted' ? 'bg-green-100 text-green-800 font-semibold' : 'bg-white hover:bg-slate-50' %>" data-lead-id="<%= c.id %>" data-status="converted" title="Marquer converti">✅</button>
+                    <button type="button" class="lead-status-btn px-2 py-1 text-xs border-l border-slate-200 <%= c.manualStatus === 'lost' ? 'bg-slate-200 text-slate-600 font-semibold' : 'bg-white hover:bg-slate-50' %>" data-lead-id="<%= c.id %>" data-status="lost" title="Marquer perdu">❌</button>
+                  </div>
+                </div>
+              </div>
+            </li>
+          <% }) %>
+        </ul>
       <% } else { %>
-        <div class="text-center py-12">
-          <span class="material-symbols-outlined text-6xl text-slate-300">add_shopping_cart</span>
-          <p class="text-lg font-semibold text-slate-500 mt-4">Aucune activité panier</p>
-          <p class="text-slate-400 text-sm">Les actions panier des clients connectés apparaîtront ici.</p>
+        <div class="p-12 text-center">
+          <span class="material-symbols-outlined text-slate-300" style="font-size:48px">inbox</span>
+          <p class="mt-3 text-slate-500">Aucun lead correspondant aux filtres.</p>
+          <a href="/admin/activite-panier" class="mt-2 inline-block text-sm text-primary hover:underline">Réinitialiser les filtres</a>
+        </div>
+      <% } %>
+
+      <!-- Pagination -->
+      <% if (pagination.totalPages > 1) { %>
+        <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50">
+          <div class="text-xs text-slate-500">Page <%= pagination.page %> / <%= pagination.totalPages %></div>
+          <div class="flex items-center gap-2">
+            <% if (pagination.hasPrev) { %>
+              <a href="?<%= new URLSearchParams(Object.assign({}, filters, { page: pagination.prevPage })).toString() %>" class="btn btn-ghost text-xs">← Précédent</a>
+            <% } %>
+            <% if (pagination.hasNext) { %>
+              <a href="?<%= new URLSearchParams(Object.assign({}, filters, { page: pagination.nextPage })).toString() %>" class="btn btn-ghost text-xs">Suivant →</a>
+            <% } %>
+          </div>
         </div>
       <% } %>
     </div>
+
+    <% if (!dbConnected) { %>
+      <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+        <div class="font-bold">Mode démo</div>
+        <div class="mt-1 text-sm">Base de données indisponible.</div>
+      </div>
+    <% } %>
   </div>
 </main>
+
+<!-- Modal: action (email / sms / detail) -->
+<div id="lead-modal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/50" id="lead-modal-overlay"></div>
+  <div class="absolute right-0 top-0 h-full w-full max-w-xl bg-white shadow-2xl overflow-y-auto">
+    <div class="p-6">
+      <div class="flex items-center justify-between mb-6">
+        <div id="lead-modal-title" class="text-lg font-semibold text-slate-900">Détail du lead</div>
+        <button type="button" id="lead-modal-close" class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div id="lead-modal-content"><div class="text-sm text-slate-500">Chargement...</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var BRAND = <%- JSON.stringify(typeof brand !== 'undefined' ? brand.NAME : 'Autoliva') %>;
+
+  var modal = document.getElementById('lead-modal');
+  var overlay = document.getElementById('lead-modal-overlay');
+  var closeBtn = document.getElementById('lead-modal-close');
+  var content = document.getElementById('lead-modal-content');
+  var title = document.getElementById('lead-modal-title');
+
+  function openModal(t) { if (t) title.textContent = t; modal.classList.remove('hidden'); }
+  function closeModal() { modal.classList.add('hidden'); }
+  if (overlay) overlay.addEventListener('click', closeModal);
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  }
+
+  function refresh() { window.location.reload(); }
+
+  // ─ Statut manuel rapide ─
+  document.querySelectorAll('.lead-status-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var leadId = btn.dataset.leadId;
+      var status = btn.dataset.status;
+      var alreadyActive = btn.classList.contains('font-semibold');
+      var newStatus = alreadyActive ? null : status;
+      fetch('/admin/api/leads/' + leadId + '/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data && data.ok) refresh();
+          else alert('Erreur: ' + (data && data.error ? data.error : 'inconnue'));
+        })
+        .catch(function () { alert('Erreur réseau'); });
+    });
+  });
+
+  // ─ Detail ─
+  document.querySelectorAll('.lead-detail-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var leadId = btn.dataset.leadId;
+      openModal('Détail du lead');
+      content.innerHTML = '<div class="text-sm text-slate-500">Chargement...</div>';
+      fetch('/admin/activite-panier/' + leadId, { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok || !data.cart) { content.innerHTML = '<div class="text-sm text-red-500">Erreur de chargement.</div>'; return; }
+          var c = data.cart;
+          var html = '<div class="space-y-4">';
+          html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Client</div>';
+          html += '<div class="font-semibold text-slate-900">' + escapeHtml(((c.firstName || '') + ' ' + (c.lastName || '')).trim() || c.email || '—') + '</div>';
+          if (c.email) html += '<div class="text-sm"><a href="mailto:' + escapeHtml(c.email) + '" class="text-primary hover:underline">' + escapeHtml(c.email) + '</a></div>';
+          if (c.phone) html += '<div class="text-sm"><a href="tel:' + escapeHtml(c.phone) + '" class="text-primary hover:underline">' + escapeHtml(c.phone) + '</a></div>';
+          html += '<div class="text-xs text-slate-500 mt-1">Source : ' + escapeHtml(c.captureSourceLabel || '—') + '</div>';
+          if (c.attribution && c.attribution.source) html += '<div class="text-xs text-slate-500">Attribution : ' + escapeHtml(c.attribution.source) + (c.attribution.medium ? ' / ' + escapeHtml(c.attribution.medium) : '') + '</div>';
+          html += '</div>';
+
+          if (c.contextMessage) {
+            html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Contexte / Message</div>';
+            html += '<div class="text-sm text-slate-700 whitespace-pre-line">' + escapeHtml(c.contextMessage) + '</div></div>';
+          }
+
+          if (c.items && c.items.length) {
+            html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Articles (' + c.items.length + ')</div>';
+            c.items.forEach(function (it) {
+              html += '<div class="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">';
+              if (it.image) html += '<img src="' + escapeHtml(it.image) + '" alt="" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" />';
+              else html += '<div class="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0"></div>';
+              html += '<div class="flex-1 min-w-0"><div class="font-semibold text-slate-900 text-sm">' + escapeHtml(it.name) + '</div>';
+              if (it.sku) html += '<div class="text-xs text-slate-400">Réf : ' + escapeHtml(it.sku) + '</div>';
+              if (it.optionsSummary) html += '<div class="text-xs text-slate-500">' + escapeHtml(it.optionsSummary) + '</div>';
+              html += '<div class="text-xs text-slate-500">Qté ' + it.quantity + ' · ' + escapeHtml(it.price) + '</div></div></div>';
+            });
+            html += '<div class="pt-3 flex justify-between items-center"><div class="font-semibold text-slate-900">Total</div><div class="font-bold text-slate-900">' + escapeHtml(c.totalAmount) + '</div></div></div>';
+          }
+
+          if (c.notes && c.notes.length) {
+            html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Historique (' + c.notes.length + ')</div>';
+            c.notes.slice().reverse().forEach(function (n) {
+              html += '<div class="text-sm text-slate-700 py-1.5 border-b border-slate-100 last:border-0">' + escapeHtml(n.text);
+              html += '<div class="text-xs text-slate-400">' + escapeHtml(n.addedByName || 'Admin') + ' · ' + escapeHtml(n.addedAt) + '</div></div>';
+            });
+            html += '</div>';
+          }
+
+          html += '<form id="lead-note-form" class="rounded-xl border border-slate-200 p-4">';
+          html += '<div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Ajouter une note</div>';
+          html += '<textarea name="text" rows="3" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Note interne…"></textarea>';
+          html += '<button type="submit" class="btn btn-primary text-xs mt-2">Enregistrer</button></form>';
+
+          html += '</div>';
+          content.innerHTML = html;
+
+          var noteForm = document.getElementById('lead-note-form');
+          if (noteForm) {
+            noteForm.addEventListener('submit', function (e) {
+              e.preventDefault();
+              var text = noteForm.querySelector('textarea[name="text"]').value;
+              fetch('/admin/api/leads/' + leadId + '/note', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text }),
+              })
+                .then(function (r) { return r.json(); })
+                .then(function (d) { if (d && d.ok) refresh(); else alert('Erreur: ' + (d && d.error ? d.error : '?')); });
+            });
+          }
+        })
+        .catch(function () { content.innerHTML = '<div class="text-sm text-red-500">Erreur de chargement.</div>'; });
+    });
+  });
+
+  // ─ Action: email ou sms ─
+  document.querySelectorAll('.lead-action').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var action = btn.dataset.action;
+      var leadId = btn.dataset.leadId;
+      var name = btn.dataset.leadName || '';
+      if (action === 'email') {
+        var email = btn.dataset.leadEmail;
+        openModal('Envoyer un email à ' + (name || email));
+        content.innerHTML = ''
+          + '<form id="lead-email-form" class="space-y-3">'
+          + '<div class="text-xs text-slate-500">Destinataire : <strong>' + escapeHtml(email) + '</strong></div>'
+          + '<input type="text" name="subject" placeholder="Sujet" required maxlength="200" '
+          + '  value="Votre demande chez ' + escapeHtml(BRAND) + '" '
+          + '  class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />'
+          + '<textarea name="body" rows="10" required maxlength="8000" '
+          + '  class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono" '
+          + '  placeholder="Bonjour,&#10;&#10;Suite à votre passage sur notre site, je vous propose…&#10;&#10;Cordialement"></textarea>'
+          + '<div class="flex items-center gap-2"><button type="submit" class="btn btn-primary text-sm">Envoyer</button>'
+          + '<button type="button" onclick="document.getElementById(\'lead-modal\').classList.add(\'hidden\')" class="btn btn-ghost text-sm">Annuler</button></div>'
+          + '<div id="lead-email-result" class="text-sm"></div>'
+          + '</form>';
+        var form = document.getElementById('lead-email-form');
+        form.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var resultEl = document.getElementById('lead-email-result');
+          resultEl.textContent = 'Envoi…';
+          var subject = form.querySelector('input[name="subject"]').value;
+          var body = form.querySelector('textarea[name="body"]').value;
+          fetch('/admin/api/leads/' + leadId + '/email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subject: subject, body: body }),
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              if (d && d.ok) { resultEl.innerHTML = '<span class="text-green-700">✓ Envoyé</span>'; setTimeout(refresh, 700); }
+              else resultEl.innerHTML = '<span class="text-red-700">Erreur : ' + escapeHtml(d && d.error ? d.error : '?') + '</span>';
+            })
+            .catch(function () { resultEl.innerHTML = '<span class="text-red-700">Erreur réseau</span>'; });
+        });
+      } else if (action === 'sms') {
+        var phone = btn.dataset.leadPhone;
+        openModal('Envoyer un SMS à ' + (name || phone));
+        content.innerHTML = ''
+          + '<form id="lead-sms-form" class="space-y-3">'
+          + '<div class="text-xs text-slate-500">Destinataire : <strong>' + escapeHtml(phone) + '</strong></div>'
+          + '<textarea name="text" rows="5" required maxlength="480" '
+          + '  class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" '
+          + '  placeholder="Bonjour, suite à votre passage sur ' + escapeHtml(BRAND) + '…">' + 'Bonjour, votre panier ' + escapeHtml(BRAND) + ' vous attend. Besoin d\'aide pour finaliser ? Répondez à ce message.' + '</textarea>'
+          + '<div class="text-xs text-slate-400"><span id="sms-count">0</span>/480 caractères</div>'
+          + '<div class="flex items-center gap-2"><button type="submit" class="btn btn-primary text-sm">Envoyer</button>'
+          + '<button type="button" onclick="document.getElementById(\'lead-modal\').classList.add(\'hidden\')" class="btn btn-ghost text-sm">Annuler</button></div>'
+          + '<div id="lead-sms-result" class="text-sm"></div>'
+          + '</form>';
+        var smsForm = document.getElementById('lead-sms-form');
+        var ta = smsForm.querySelector('textarea[name="text"]');
+        var counter = document.getElementById('sms-count');
+        function updateCount() { counter.textContent = ta.value.length; }
+        ta.addEventListener('input', updateCount); updateCount();
+        smsForm.addEventListener('submit', function (e) {
+          e.preventDefault();
+          var resultEl = document.getElementById('lead-sms-result');
+          resultEl.textContent = 'Envoi…';
+          fetch('/admin/api/leads/' + leadId + '/sms', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: ta.value }),
+          })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              if (d && d.ok) { resultEl.innerHTML = '<span class="text-green-700">✓ Envoyé</span>'; setTimeout(refresh, 700); }
+              else resultEl.innerHTML = '<span class="text-red-700">Erreur : ' + escapeHtml(d && d.error ? d.error : '?') + '</span>';
+            })
+            .catch(function () { resultEl.innerHTML = '<span class="text-red-700">Erreur réseau</span>'; });
+        });
+      }
+    });
+  });
+})();
+</script>
 
 <%- include('./partials/footer') %>
