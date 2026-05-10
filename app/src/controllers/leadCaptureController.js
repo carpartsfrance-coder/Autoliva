@@ -364,6 +364,68 @@ async function postProductQuote(req, res) {
   }
 }
 
+async function postBlogCta(req, res) {
+  try {
+    if (isRateLimited(req)) return res.status(429).json({ ok: false, error: 'too_many_requests' });
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'db_down' });
+
+    const email = normalizeEmail(req.body && req.body.email);
+    const phone = normalizePhone(req.body && req.body.phone);
+    const firstName = trim(req.body && req.body.firstName).slice(0, 80);
+    const message = trim(req.body && req.body.message).slice(0, 1000);
+    const vin = trim(req.body && req.body.vin).slice(0, 32);
+    const plate = trim(req.body && req.body.plate).slice(0, 16);
+    const vehicle = trim(req.body && req.body.vehicle).slice(0, 200);
+    const articleSlug = trim(req.body && req.body.articleSlug).slice(0, 200);
+    const articleTitle = trim(req.body && req.body.articleTitle).slice(0, 200);
+    const productId = trim(req.body && req.body.productId);
+
+    if (!email && !phone) return res.status(400).json({ ok: false, error: 'no_contact' });
+    if (email && !email.includes('@')) return res.status(400).json({ ok: false, error: 'invalid_email' });
+
+    const productItem = await buildItemFromProductId(productId);
+
+    /* Le contexte ajoute l'origine article pour que le commercial sache
+       quel sujet intéresse le visiteur (= ce qui a déclenché la demande) */
+    const articleContext = articleTitle
+      ? `Demande issue de l'article : "${articleTitle}"${articleSlug ? ` (/blog/${articleSlug})` : ''}`
+      : 'Demande issue d\'un article du blog';
+    const fullMessage = [articleContext, message].filter(Boolean).join('\n');
+
+    const result = await upsertLead({
+      req,
+      email,
+      phone,
+      firstName,
+      captureSource: 'blog_cta',
+      productItem,
+      message: fullMessage,
+      vin,
+      plate,
+      vehicle,
+    });
+
+    if (!result) return res.status(500).json({ ok: false, error: 'create_failed' });
+
+    if (email) rememberEmail(req, email);
+    trackEvent(req, 'lead_capture', { meta: { kind: 'blog_cta', articleSlug }, productId, target: email || phone });
+
+    if (email) {
+      sendVisitorAck({
+        req, kind: 'product_quote',
+        email, firstName,
+        productName: productItem ? productItem.name : '',
+        recoveryToken: result.recoveryToken,
+      }).catch(() => {});
+    }
+
+    return res.json({ ok: true, leadId: result.leadId });
+  } catch (err) {
+    console.error('[leadCaptureController] blog-cta error:', err && err.message ? err.message : err);
+    return res.status(500).json({ ok: false, error: 'server_error' });
+  }
+}
+
 async function postExitIntent(req, res) {
   try {
     if (isRateLimited(req, 12, 30 * 60 * 1000)) return res.status(429).json({ ok: false, error: 'too_many_requests' });
@@ -405,5 +467,6 @@ async function postExitIntent(req, res) {
 module.exports = {
   postSaveCart,
   postProductQuote,
+  postBlogCta,
   postExitIntent,
 };
