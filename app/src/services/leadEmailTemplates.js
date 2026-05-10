@@ -34,7 +34,22 @@ function buildLeadVariables({ lead, req, adminName }) {
   const baseUrl = getBaseUrl(req);
   const items = Array.isArray(lead.items) ? lead.items : [];
   const firstItem = items[0] || null;
-  const productName = firstItem ? (firstItem.name || 'votre article') : 'votre article';
+  const requested = lead.requested || {};
+  const isExplicitRequest = lead.captureSource === 'devis' || lead.captureSource === 'contact';
+
+  /* Pour les leads devis/contact, le "produit" pertinent est ce que le
+     client a demandé explicitement, pas ce qu'il avait dans son panier */
+  let productName;
+  if (isExplicitRequest && (requested.ref || requested.vehicle)) {
+    const parts = [];
+    if (requested.ref) parts.push(requested.ref);
+    if (requested.vehicle) parts.push(`pour ${requested.vehicle}`);
+    productName = parts.join(' ') || 'votre demande';
+  } else if (firstItem) {
+    productName = firstItem.name || 'votre article';
+  } else {
+    productName = 'votre demande';
+  }
 
   const recoveryUrl = lead.recoveryToken
     ? `${baseUrl}/panier/recuperer/${encodeURIComponent(lead.recoveryToken)}`
@@ -58,6 +73,10 @@ function buildLeadVariables({ lead, req, adminName }) {
     nom_commercial: trim(adminName) || 'L’équipe ' + brand.NAME,
     brand: brand.NAME,
     telephone: trim(brand.PHONE) || '',
+    /* champs additionnels disponibles dans les templates */
+    vin: trim(requested.vin),
+    vehicule: trim(requested.vehicle),
+    immatriculation: trim(requested.plate),
   };
 }
 

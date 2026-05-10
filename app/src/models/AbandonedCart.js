@@ -72,7 +72,20 @@ const abandonedCartSchema = new mongoose.Schema(
     /** Notes internes admin (chronologique) */
     notes: { type: [abandonedCartNoteSchema], default: [] },
 
-    /** Contexte additionnel (message du devis/contact, attribution, etc.) */
+    /**
+     * Demande explicite saisie par le client dans /devis ou /contact.
+     * Distinct du panier (qui peut contenir autre chose) : le `requested`
+     * exprime ce que le client cherche réellement.
+     */
+    requested: {
+      vehicle: { type: String, default: '', trim: true },     // ex: "Golf 7"
+      vin: { type: String, default: '', trim: true },          // ex: "WAUZZZ..."
+      plate: { type: String, default: '', trim: true },        // immatriculation
+      ref: { type: String, default: '', trim: true },          // référence pièce
+      message: { type: String, default: '', trim: true },      // message libre
+    },
+
+    /** Contexte additionnel libre (legacy + concat pour leads multi-touchpoints) */
     contextMessage: { type: String, default: '', trim: true },
     attribution: {
       source: { type: String, default: '' },

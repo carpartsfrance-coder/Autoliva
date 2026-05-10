@@ -135,18 +135,18 @@ async function captureContactLead({ req, mode, email, firstName, lastName, phone
     const cleanLast = trim(lastName);
     const cleanMessage = trim(message);
 
-    const productHintsText = Object.entries(productHints || {})
-      .filter(([, v]) => v)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(' | ');
+    /* Extraction structurée des hints produit */
+    const hints = productHints || {};
+    const requested = {
+      vehicle: trim(hints.Vehicule || hints.vehicle).slice(0, 200),
+      vin: trim(hints.VIN || hints.vin).toUpperCase().slice(0, 32),
+      plate: trim(hints.Immat || hints.plate).toUpperCase().slice(0, 16),
+      ref: trim(hints.Reference || hints.ref).slice(0, 200),
+      message: cleanMessage.slice(0, 2000),
+    };
 
-    const contextMessage = [
-      productHintsText,
-      cleanMessage ? `Message: ${cleanMessage}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n')
-      .slice(0, 4000);
+    /* contextMessage gardé pour rétro-compat, mais ne sert qu'aux additions multi-touch */
+    const contextMessage = '';
 
     const now = new Date();
 
@@ -184,12 +184,24 @@ async function captureContactLead({ req, mode, email, firstName, lastName, phone
         update.$set.attribution = attribution;
       }
 
-      // Concaténer le message au contexte existant
-      if (contextMessage) {
-        const concat = existing.contextMessage
-          ? `${existing.contextMessage}\n---\n[${now.toISOString().slice(0, 10)}] ${contextMessage}`
-          : contextMessage;
-        update.$set.contextMessage = concat.slice(0, 4000);
+      /* Mise à jour des champs requested : on enrichit ce qui est vide,
+         et si la nouvelle demande est différente, on archive l'ancienne dans contextMessage */
+      const ex = existing.requested || {};
+      const archivedDemands = [];
+      ['vehicle', 'vin', 'plate', 'ref', 'message'].forEach((k) => {
+        if (requested[k] && !ex[k]) {
+          update.$set[`requested.${k}`] = requested[k];
+        } else if (requested[k] && ex[k] && requested[k] !== ex[k]) {
+          archivedDemands.push(`${k}: ${requested[k]}`);
+        }
+      });
+      if (archivedDemands.length > 0) {
+        const dateTag = `[${now.toISOString().slice(0, 10)}]`;
+        const addition = `${dateTag} Nouvelle demande — ${archivedDemands.join(' | ')}`;
+        update.$set.contextMessage = (existing.contextMessage
+          ? `${existing.contextMessage}\n---\n${addition}`
+          : addition
+        ).slice(0, 4000);
       }
 
       // Si pas d'items mais qu'on en a un nouveau snapshot, on enrichit
@@ -214,6 +226,7 @@ async function captureContactLead({ req, mode, email, firstName, lastName, phone
       captureSource,
       items,
       totalAmountCents,
+      requested,
       contextMessage,
       attribution,
       status: 'abandoned',
