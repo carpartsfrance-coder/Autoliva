@@ -390,36 +390,94 @@
   blogLinking: (typeof blogLinking !== 'undefined' && blogLinking) ? blogLinking : null,
 }) %>
 
-<%/* Sticky bar mobile : produit principal lié à l'article. Pattern e-commerce
-     classique pour transformer le trafic SEO d'un article en clic produit.
-     Visible uniquement sur mobile (md:hidden) — sur desktop l'aside sticky
-     du sidebar gère déjà la conversion. */%>
+<%/* Sticky bar produit : la pièce principale liée à l'article, toujours
+     visible en bas. Pattern e-commerce classique pour transformer le
+     trafic SEO d'un article en clic produit (et donc en panier).
+     - Mobile : bottom-[85px] (au-dessus de la nav mobile + WhatsApp)
+     - Desktop : bottom-4, max-w-3xl centré, ne couvre pas WhatsApp à droite
+     - Bouton X dismissable, sessionStorage pour ne pas re-afficher
+     - Apparaît seulement après scroll > 600px (laisse l'article respirer) */%>
 <% const _stickyProduct = (typeof relatedProducts !== 'undefined' && Array.isArray(relatedProducts) && relatedProducts.length > 0) ? relatedProducts[0] : null; %>
 <% if (_stickyProduct && _stickyProduct.url) { %>
-  <div class="fixed bottom-[85px] left-0 right-0 z-40 md:hidden" data-blog-sticky-product>
-    <div class="mx-3 mb-2 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-sm px-3 py-2.5 shadow-xl">
+  <div id="blog-sticky-product"
+       class="fixed bottom-[85px] md:bottom-4 left-0 right-0 z-40 transition-all duration-300 opacity-0 translate-y-4 pointer-events-none"
+       data-blog-sticky-product>
+    <div class="mx-3 md:mx-auto md:max-w-3xl mb-2 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/97 backdrop-blur-md px-3 py-2.5 shadow-xl ring-1 ring-black/5">
       <a class="shrink-0" href="<%= _stickyProduct.url %>">
         <% if (_stickyProduct.imageUrl) { %>
-          <img alt="<%= _stickyProduct.name %>" src="<%= _stickyProduct.imageUrl %>" class="w-12 h-12 rounded-xl object-cover border border-slate-100" width="48" height="48" loading="lazy" decoding="async" />
+          <img alt="<%= _stickyProduct.name %>" src="<%= _stickyProduct.imageUrl %>" class="w-12 h-12 md:w-14 md:h-14 rounded-xl object-cover border border-slate-100" width="56" height="56" loading="lazy" decoding="async" />
         <% } else { %>
-          <div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
+          <div class="w-12 h-12 md:w-14 md:h-14 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400">
             <span class="material-symbols-outlined text-xl">inventory_2</span>
           </div>
         <% } %>
       </a>
       <a class="flex flex-col min-w-0 flex-1" href="<%= _stickyProduct.url %>">
         <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pièce de l'article</span>
-        <span class="text-xs font-bold text-slate-900 truncate leading-tight"><%= _stickyProduct.name %></span>
+        <span class="text-xs md:text-sm font-bold text-slate-900 truncate leading-tight"><%= _stickyProduct.name %></span>
         <% if (_stickyProduct.priceLabel) { %>
-          <span class="text-primary font-black text-sm"><%= _stickyProduct.priceLabel %></span>
+          <span class="text-primary font-black text-sm md:text-base"><%= _stickyProduct.priceLabel %></span>
         <% } %>
       </a>
-      <a class="shrink-0 bg-primary hover:bg-primary/90 text-white px-4 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-primary/20 transition-all" href="<%= _stickyProduct.url %>">
+      <a class="shrink-0 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 md:px-5 md:py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-primary/20 transition-all" href="<%= _stickyProduct.url %>">
         Voir
         <span class="material-symbols-outlined text-base">arrow_forward</span>
       </a>
+      <button type="button" id="blog-sticky-product-close" class="shrink-0 w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition" aria-label="Masquer">
+        <span class="material-symbols-outlined" style="font-size:18px">close</span>
+      </button>
     </div>
   </div>
+
+  <script>
+  (function () {
+    var bar = document.getElementById('blog-sticky-product');
+    var closeBtn = document.getElementById('blog-sticky-product-close');
+    if (!bar) return;
+
+    // Skip si déjà fermé pendant cette session
+    try {
+      if (sessionStorage.getItem('cpf_blog_sticky_dismissed') === '1') {
+        bar.style.display = 'none';
+        return;
+      }
+    } catch (e) {}
+
+    function show() {
+      bar.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+      bar.classList.add('opacity-100', 'translate-y-0');
+    }
+
+    function hide() {
+      bar.style.display = 'none';
+      try { sessionStorage.setItem('cpf_blog_sticky_dismissed', '1'); } catch (e) {}
+      if (window.dataLayer) window.dataLayer.push({ event: 'blog_sticky_product_dismissed' });
+    }
+
+    if (closeBtn) closeBtn.addEventListener('click', hide);
+
+    // Apparaît après 600px de scroll, pour laisser respirer le début de l'article
+    var shown = false;
+    function checkScroll() {
+      if (shown) return;
+      var y = window.scrollY || document.documentElement.scrollTop || 0;
+      if (y > 600) {
+        shown = true;
+        show();
+        if (window.dataLayer) window.dataLayer.push({ event: 'blog_sticky_product_shown', product_id: '<%= _stickyProduct.id || "" %>' });
+      }
+    }
+    window.addEventListener('scroll', checkScroll, { passive: true });
+    checkScroll();
+
+    // Tracker click "Voir" pour mesurer la conversion
+    bar.querySelectorAll('a').forEach(function (a) {
+      a.addEventListener('click', function () {
+        if (window.dataLayer) window.dataLayer.push({ event: 'blog_sticky_product_click', product_id: '<%= _stickyProduct.id || "" %>' });
+      });
+    });
+  })();
+  </script>
 <% } %>
 
 <%- include('../partials/footer') %>
