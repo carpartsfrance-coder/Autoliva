@@ -21,6 +21,9 @@ const abandonedCartSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     email: { type: String, default: '', trim: true, index: true },
     firstName: { type: String, default: '', trim: true },
+    lastName: { type: String, default: '', trim: true },
+    phone: { type: String, default: '', trim: true },
+    isGuest: { type: Boolean, default: false, index: true },
     items: { type: [abandonedCartItemSchema], required: true },
     totalAmountCents: { type: Number, required: true, min: 0 },
     status: {

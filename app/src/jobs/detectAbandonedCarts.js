@@ -54,21 +54,38 @@ async function detectAbandonedCarts() {
         const itemKeys = Object.keys(cart.items);
         if (itemKeys.length === 0) continue;
 
-        // Must have a logged-in user with an email
+        // Email source: logged-in user OR guest checkout fallback
         const user = sessionData.user;
-        if (!user || !user.email) {
+        const guest = sessionData.checkout && sessionData.checkout.guest;
+
+        let email = '';
+        let firstName = '';
+        let lastName = '';
+        let phone = '';
+        let isGuest = false;
+        let userId = null;
+
+        if (user && user.email) {
+          email = String(user.email).trim().toLowerCase();
+          firstName = user.firstName || '';
+          userId = user._id ? String(user._id) : null;
+        } else if (guest && guest.email) {
+          email = String(guest.email).trim().toLowerCase();
+          firstName = guest.firstName || '';
+          lastName = guest.lastName || '';
+          phone = guest.phone || '';
+          isGuest = true;
+        } else {
           report.skipped += 1;
           continue;
         }
 
-        const email = String(user.email).trim().toLowerCase();
         if (!email || !email.includes('@')) {
           report.skipped += 1;
           continue;
         }
 
         const sessionId = String(doc._id);
-        const userId = user._id ? String(user._id) : null;
 
         // Check if this session cart was already tracked and is still active
         const existingCart = await AbandonedCart.findOne({
@@ -164,7 +181,10 @@ async function detectAbandonedCarts() {
           sessionId,
           userId: userId ? new mongoose.Types.ObjectId(userId) : null,
           email,
-          firstName: user.firstName || '',
+          firstName,
+          lastName,
+          phone,
+          isGuest,
           items: abandonedItems,
           totalAmountCents,
           status: 'abandoned',
