@@ -177,6 +177,61 @@
       </div>
 
       <aside class="lg:col-span-4 space-y-6 lg:sticky lg:top-24 lg:max-h-[calc(100vh-6rem)] lg:overflow-auto lg:pr-1">
+        <!-- CTA expert : en TOP sidebar pour être visible sans scroll -->
+        <div class="bg-gradient-to-br from-red-600 to-red-700 text-white p-5 rounded-xl relative overflow-hidden shadow-lg">
+          <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full"></div>
+          <div class="absolute -left-6 -bottom-6 w-32 h-32 bg-white/5 rounded-full"></div>
+          <div class="relative z-10">
+            <div class="inline-flex items-center gap-1 bg-amber-300 text-red-900 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider mb-2">
+              <span class="material-symbols-outlined" style="font-size:12px">support_agent</span>
+              Conseil expert offert
+            </div>
+            <h3 class="text-base font-bold mb-1.5 leading-tight">Une question sur cet article&nbsp;?</h3>
+            <p class="text-[11px] text-white/80 mb-3 leading-snug">Notre équipe technique répond gratuitement avec des conseils adaptés à votre véhicule.</p>
+            <form id="blog-sidebar-cta" class="space-y-2">
+              <input type="hidden" name="articleSlug" value="<%= post && post.slug ? post.slug : '' %>" />
+              <input type="hidden" name="articleTitle" value="<%= post && post.title ? post.title : '' %>" />
+              <input class="w-full bg-white/15 backdrop-blur border border-white/20 rounded-lg py-2 px-3 text-xs text-white placeholder-white/60 focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 focus:outline-none"
+                     placeholder="votre@email.com" name="email" type="email" required />
+              <button class="w-full bg-amber-400 hover:bg-amber-300 text-red-900 font-black py-2 rounded-lg text-xs transition flex items-center justify-center gap-1" type="submit">
+                Recevoir un conseil
+                <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
+              </button>
+            </form>
+            <div id="blog-sidebar-cta-result" class="mt-2 text-[11px]"></div>
+          </div>
+        </div>
+
+        <script>
+        (function () {
+          var form = document.getElementById('blog-sidebar-cta');
+          var result = document.getElementById('blog-sidebar-cta-result');
+          if (!form) return;
+          form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var data = {};
+            new FormData(form).forEach(function (v, k) { data[k] = v; });
+            result.innerHTML = '<span class="text-white/70">Envoi…</span>';
+            fetch('/api/lead/blog-cta', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data),
+            })
+              .then(function (r) { return r.json(); })
+              .then(function (d) {
+                if (d && d.ok) {
+                  result.innerHTML = '<span class="text-amber-200 font-bold">✓ Demande reçue. Vérifiez votre email pour la suite.</span>';
+                  if (window.dataLayer) window.dataLayer.push({ event: 'lead_blog_cta_sidebar', email: data.email });
+                  setTimeout(function () { form.style.display = 'none'; }, 1500);
+                } else {
+                  result.innerHTML = '<span class="text-amber-200">Erreur. Réessayez.</span>';
+                }
+              })
+              .catch(function () { result.innerHTML = '<span class="text-amber-200">Erreur réseau.</span>'; });
+          });
+        })();
+        </script>
+
         <div id="tocCard" class="hidden bg-white dark:bg-surface-dark p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
           <h3 class="font-display font-bold text-sm uppercase tracking-widest text-slate-900 dark:text-white mb-4 flex items-center gap-2">
             <span class="w-1.5 h-1.5 bg-primary rounded-full"></span> Sommaire
@@ -242,60 +297,6 @@
           </div>
         <% } %>
 
-        <!-- CTA expert sticky : capture lead avec contexte article -->
-        <div class="bg-gradient-to-br from-red-600 to-red-700 text-white p-5 rounded-xl relative overflow-hidden shadow-lg">
-          <div class="absolute -right-4 -top-4 w-24 h-24 bg-white/5 rounded-full"></div>
-          <div class="absolute -left-6 -bottom-6 w-32 h-32 bg-white/5 rounded-full"></div>
-          <div class="relative z-10">
-            <div class="inline-flex items-center gap-1 bg-amber-300 text-red-900 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider mb-2">
-              <span class="material-symbols-outlined" style="font-size:12px">support_agent</span>
-              Conseil expert offert
-            </div>
-            <h3 class="text-base font-bold mb-1.5 leading-tight">Une question sur cet article&nbsp;?</h3>
-            <p class="text-[11px] text-white/80 mb-3 leading-snug">Notre équipe technique répond gratuitement avec des conseils adaptés à votre véhicule.</p>
-            <form id="blog-sidebar-cta" class="space-y-2">
-              <input type="hidden" name="articleSlug" value="<%= post && post.slug ? post.slug : '' %>" />
-              <input type="hidden" name="articleTitle" value="<%= post && post.title ? post.title : '' %>" />
-              <input class="w-full bg-white/15 backdrop-blur border border-white/20 rounded-lg py-2 px-3 text-xs text-white placeholder-white/60 focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 focus:outline-none"
-                     placeholder="votre@email.com" name="email" type="email" required />
-              <button class="w-full bg-amber-400 hover:bg-amber-300 text-red-900 font-black py-2 rounded-lg text-xs transition flex items-center justify-center gap-1" type="submit">
-                Recevoir un conseil
-                <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
-              </button>
-            </form>
-            <div id="blog-sidebar-cta-result" class="mt-2 text-[11px]"></div>
-          </div>
-        </div>
-
-        <script>
-        (function () {
-          var form = document.getElementById('blog-sidebar-cta');
-          var result = document.getElementById('blog-sidebar-cta-result');
-          if (!form) return;
-          form.addEventListener('submit', function (e) {
-            e.preventDefault();
-            var data = {};
-            new FormData(form).forEach(function (v, k) { data[k] = v; });
-            result.innerHTML = '<span class="text-white/70">Envoi…</span>';
-            fetch('/api/lead/blog-cta', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(data),
-            })
-              .then(function (r) { return r.json(); })
-              .then(function (d) {
-                if (d && d.ok) {
-                  result.innerHTML = '<span class="text-amber-200 font-bold">✓ Demande reçue. Vérifiez votre email pour la suite.</span>';
-                  if (window.dataLayer) window.dataLayer.push({ event: 'lead_blog_cta_sidebar', email: data.email });
-                  setTimeout(function () { form.style.display = 'none'; }, 1500);
-                } else {
-                  result.innerHTML = '<span class="text-amber-200">Erreur. Réessayez.</span>';
-                }
-              })
-              .catch(function () { result.innerHTML = '<span class="text-amber-200">Erreur réseau.</span>'; });
-          });
-        })();
-        </script>
       </aside>
     </div>
   </div>
