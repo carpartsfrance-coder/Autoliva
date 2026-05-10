@@ -29,11 +29,21 @@ const DEFAULT_SORT_DIR = 'desc';
 
 // Sentinelles pour les buckets virtuels (apparaissent dans `row.bucket`).
 const BUCKET_LEGACY = '__legacy__';      // Commandes d'avant le tracking
-const BUCKET_DIRECT = '__direct__';      // Pas de pub : direct ou SEO
+const BUCKET_DIRECT = '__direct__';      // Vrai direct (referrer vide, pas d'UTM, pas de clickid)
+const BUCKET_ORGANIC = '__organic__';    // SEO : referrer = moteur de recherche, pas d'UTM, pas de clickid
 const BUCKET_GADS_NO_UTM = '__gads__';   // Google Ads gclid sans UTM
 const BUCKET_FB_NO_UTM = '__fb__';       // Facebook Ads fbclid sans UTM
 const BUCKET_MS_NO_UTM = '__msads__';    // Microsoft Ads msclkid sans UTM
-const VIRTUAL_BUCKETS = new Set([BUCKET_LEGACY, BUCKET_DIRECT, BUCKET_GADS_NO_UTM, BUCKET_FB_NO_UTM, BUCKET_MS_NO_UTM]);
+const VIRTUAL_BUCKETS = new Set([BUCKET_LEGACY, BUCKET_DIRECT, BUCKET_ORGANIC, BUCKET_GADS_NO_UTM, BUCKET_FB_NO_UTM, BUCKET_MS_NO_UTM]);
+
+// Regex Mongo : détecte les referrers issus de moteurs de recherche.
+// Couvre Google (toutes TLD), Bing, DuckDuckGo, Brave, Qwant, Yahoo,
+// Ecosia, Startpage, Lilo, Yandex (ya.ru inclus).
+//
+// Note : chaque hostname doit se terminer par un séparateur (/?#) ou la fin
+// de string. Les TLD sont limitées à 2-4 chars pour éviter les faux
+// positifs type "google.someshady.com".
+const ORGANIC_REFERRER_REGEX = /^https?:\/\/(?:[a-z0-9-]+\.)*(google\.[a-z]{2,4}(?:\.[a-z]{2})?|bing\.com|duckduckgo\.com|search\.brave\.com|brave\.com|qwant\.com|[a-z]+\.search\.yahoo\.com|search\.yahoo\.com|yahoo\.com|ecosia\.org|startpage\.com|search\.lilo\.org|lilo\.org|yandex\.[a-z]{2,4}(?:\.[a-z]{2})?|ya\.ru)(?:[\/?#]|$)/i;
 
 function getStartDateForPeriod(period) {
   if (period === 'all') return null;
@@ -81,6 +91,13 @@ async function aggregateVisits(startDate) {
           hasWbraid: { $cond: [{ $and: [{ $ifNull: ['$wbraid', false] }, { $ne: ['$wbraid', ''] }] }, true, false] },
           hasFbclid: { $cond: [{ $and: [{ $ifNull: ['$fbclid', false] }, { $ne: ['$fbclid', ''] }] }, true, false] },
           hasMsclkid: { $cond: [{ $and: [{ $ifNull: ['$msclkid', false] }, { $ne: ['$msclkid', ''] }] }, true, false] },
+          hasOrganicReferrer: {
+            $cond: [
+              { $regexMatch: { input: { $ifNull: ['$referrer', ''] }, regex: ORGANIC_REFERRER_REGEX } },
+              true,
+              false,
+            ],
+          },
         },
         sessions: { $addToSet: '$sessionId' },
       },
@@ -96,6 +113,7 @@ async function aggregateVisits(startDate) {
         hasWbraid: '$_id.hasWbraid',
         hasFbclid: '$_id.hasFbclid',
         hasMsclkid: '$_id.hasMsclkid',
+        hasOrganicReferrer: '$_id.hasOrganicReferrer',
         visits: { $size: '$sessions' },
       },
     },
@@ -127,6 +145,13 @@ async function aggregateOrders(startDate, model) {
           hasWbraid: { $cond: [{ $and: [{ $ifNull: [`$${touchField}.wbraid`, false] }, { $ne: [`$${touchField}.wbraid`, ''] }] }, true, false] },
           hasFbclid: { $cond: [{ $and: [{ $ifNull: [`$${touchField}.fbclid`, false] }, { $ne: [`$${touchField}.fbclid`, ''] }] }, true, false] },
           hasMsclkid: { $cond: [{ $and: [{ $ifNull: [`$${touchField}.msclkid`, false] }, { $ne: [`$${touchField}.msclkid`, ''] }] }, true, false] },
+          hasOrganicReferrer: {
+            $cond: [
+              { $regexMatch: { input: { $ifNull: [`$${touchField}.referrer`, ''] }, regex: ORGANIC_REFERRER_REGEX } },
+              true,
+              false,
+            ],
+          },
         },
         orders: { $sum: 1 },
         revenueCents: { $sum: '$totalCents' },
@@ -144,6 +169,7 @@ async function aggregateOrders(startDate, model) {
         hasWbraid: '$_id.hasWbraid',
         hasFbclid: '$_id.hasFbclid',
         hasMsclkid: '$_id.hasMsclkid',
+        hasOrganicReferrer: '$_id.hasOrganicReferrer',
         orders: 1,
         revenueCents: 1,
       },
@@ -186,7 +212,12 @@ function classifyRow(row, hasAttr) {
     return { key: BUCKET_MS_NO_UTM, bucket: BUCKET_MS_NO_UTM, campaign: '', source: '', medium: '' };
   }
 
-  // Aucun identifiant : direct ou SEO
+  // Pas d'UTM, pas de clickid, mais referrer = moteur de recherche → SEO organique
+  if (row.hasOrganicReferrer) {
+    return { key: BUCKET_ORGANIC, bucket: BUCKET_ORGANIC, campaign: '', source: '', medium: '' };
+  }
+
+  // Aucun identifiant : vrai direct (URL tapée, favoris, app email, etc.)
   return { key: BUCKET_DIRECT, bucket: BUCKET_DIRECT, campaign: '', source: '', medium: '' };
 }
 
@@ -225,7 +256,10 @@ function getDisplayProps(row) {
     return { displayLabel: 'Pré-tracking', displaySource: '(pré-tracking)', displayBadge: 'slate', displayIcon: 'history', isVirtual: true, isCampaign: false };
   }
   if (row.bucket === BUCKET_DIRECT) {
-    return { displayLabel: 'Direct / SEO', displaySource: '(direct)', displayBadge: 'slate', displayIcon: 'travel_explore', isVirtual: true, isCampaign: false };
+    return { displayLabel: 'Direct', displaySource: '(direct)', displayBadge: 'slate', displayIcon: 'language', isVirtual: true, isCampaign: false };
+  }
+  if (row.bucket === BUCKET_ORGANIC) {
+    return { displayLabel: 'Trafic organique (SEO)', displaySource: 'Moteurs de recherche', displayBadge: 'emerald', displayIcon: 'travel_explore', isVirtual: true, isCampaign: false };
   }
   if (row.bucket === BUCKET_GADS_NO_UTM) {
     return { displayLabel: 'Google Ads (sans UTM)', displaySource: 'Google Ads', displayBadge: 'amber', displayIcon: 'ads_click', isVirtual: true, isCampaign: false };
@@ -329,6 +363,7 @@ module.exports = {
   // Exposé pour les tests
   BUCKET_LEGACY,
   BUCKET_DIRECT,
+  BUCKET_ORGANIC,
   BUCKET_GADS_NO_UTM,
   BUCKET_FB_NO_UTM,
   BUCKET_MS_NO_UTM,

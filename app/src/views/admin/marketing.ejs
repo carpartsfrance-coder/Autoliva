@@ -234,14 +234,15 @@
                      var visitorsPeriod = (filters.period === '7d' || filters.period === '30d') ? filters.period : '7d';
                      qsVisitors.push('period=' + visitorsPeriod);
                      drillVisitorsUrl = '/admin/visiteurs?' + qsVisitors.join('&');
-                   } else if (r.bucket === '__direct__' || r.bucket === '__gads__' || r.bucket === '__fb__' || r.bucket === '__msads__') {
-                     // Buckets virtuels (Direct, Google Ads sans UTM, etc.) : pas de drill
+                   } else if (r.bucket === '__direct__' || r.bucket === '__organic__' || r.bucket === '__gads__' || r.bucket === '__fb__' || r.bucket === '__msads__') {
+                     // Buckets virtuels (Direct, Organique, Google Ads sans UTM, etc.) : pas de drill
                      // précis vers commandes, mais on peut quand même lister les visiteurs
                      // par source si disponible
                      var qsVB = [];
                      if (r.bucket === '__gads__') qsVB.push('source=google');
                      else if (r.bucket === '__fb__') qsVB.push('source=facebook');
                      else if (r.bucket === '__msads__') qsVB.push('source=bing');
+                     else if (r.bucket === '__organic__') qsVB.push('medium=organic');
                      qsVB.push('period=7d');
                      drillVisitorsUrl = '/admin/visiteurs?' + qsVB.join('&');
                    }
