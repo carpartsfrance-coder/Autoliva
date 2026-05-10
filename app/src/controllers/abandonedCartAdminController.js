@@ -194,6 +194,20 @@ async function getAdminLeadsPage(req, res, next) {
       const items = Array.isArray(c.items) ? c.items : [];
       const phoneFR = normalizePhoneFR(c.phone || '');
       const fullName = ((c.firstName || '') + ' ' + (c.lastName || '')).trim();
+      const req = c.requested || {};
+      const isExplicitRequest = c.captureSource === 'devis' || c.captureSource === 'contact';
+      const hasRequested = !!(req.vehicle || req.vin || req.plate || req.ref || req.message);
+
+      /* Construction d'un résumé "demande explicite" pour les leads devis/contact */
+      const requestSummary = (() => {
+        const parts = [];
+        if (req.ref) parts.push(req.ref);
+        if (req.vehicle) parts.push(req.vehicle);
+        if (req.vin) parts.push(`VIN ${req.vin}`);
+        else if (req.plate) parts.push(req.plate);
+        return parts.join(' · ');
+      })();
+
       return {
         id: String(c._id),
         sessionId: c.sessionId || '',
@@ -203,6 +217,19 @@ async function getAdminLeadsPage(req, res, next) {
         firstName: c.firstName || '',
         lastName: c.lastName || '',
         fullName: fullName || '',
+
+        /* Demande explicite (formulaire devis/contact) */
+        requested: {
+          vehicle: req.vehicle || '',
+          vin: req.vin || '',
+          plate: req.plate || '',
+          ref: req.ref || '',
+          message: req.message || '',
+        },
+        hasRequested,
+        requestSummary,
+        showRequestAsPrimary: isExplicitRequest && hasRequested,
+
         items,
         itemCount: items.length,
         itemsSummary: items.length
@@ -277,6 +304,7 @@ async function getAdminLeadDetail(req, res, next) {
     const cart = await AbandonedCart.findById(id).lean();
     if (!cart) return res.status(404).json({ ok: false, error: 'Lead non trouvé.' });
 
+    const req = cart.requested || {};
     return res.json({
       ok: true,
       cart: {
@@ -288,6 +316,14 @@ async function getAdminLeadDetail(req, res, next) {
         lastName: cart.lastName,
         captureSource: cart.captureSource,
         captureSourceLabel: getCaptureSourceLabel(cart.captureSource).label,
+        requested: {
+          vehicle: req.vehicle || '',
+          vin: req.vin || '',
+          plate: req.plate || '',
+          ref: req.ref || '',
+          message: req.message || '',
+        },
+        hasRequested: !!(req.vehicle || req.vin || req.plate || req.ref || req.message),
         contextMessage: cart.contextMessage || '',
         attribution: cart.attribution || {},
         items: (cart.items || []).map((it) => ({
