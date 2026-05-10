@@ -194,17 +194,17 @@ async function getAdminLeadsPage(req, res, next) {
       const items = Array.isArray(c.items) ? c.items : [];
       const phoneFR = normalizePhoneFR(c.phone || '');
       const fullName = ((c.firstName || '') + ' ' + (c.lastName || '')).trim();
-      const req = c.requested || {};
+      const requested = c.requested || {};
       const isExplicitRequest = c.captureSource === 'devis' || c.captureSource === 'contact';
-      const hasRequested = !!(req.vehicle || req.vin || req.plate || req.ref || req.message);
+      const hasRequested = !!(requested.vehicle || requested.vin || requested.plate || requested.ref || requested.message);
 
       /* Construction d'un résumé "demande explicite" pour les leads devis/contact */
       const requestSummary = (() => {
         const parts = [];
-        if (req.ref) parts.push(req.ref);
-        if (req.vehicle) parts.push(req.vehicle);
-        if (req.vin) parts.push(`VIN ${req.vin}`);
-        else if (req.plate) parts.push(req.plate);
+        if (requested.ref) parts.push(requested.ref);
+        if (requested.vehicle) parts.push(requested.vehicle);
+        if (requested.vin) parts.push(`VIN ${requested.vin}`);
+        else if (requested.plate) parts.push(requested.plate);
         return parts.join(' · ');
       })();
 
@@ -220,11 +220,11 @@ async function getAdminLeadsPage(req, res, next) {
 
         /* Demande explicite (formulaire devis/contact) */
         requested: {
-          vehicle: req.vehicle || '',
-          vin: req.vin || '',
-          plate: req.plate || '',
-          ref: req.ref || '',
-          message: req.message || '',
+          vehicle: requested.vehicle || '',
+          vin: requested.vin || '',
+          plate: requested.plate || '',
+          ref: requested.ref || '',
+          message: requested.message || '',
         },
         hasRequested,
         requestSummary,
@@ -304,7 +304,7 @@ async function getAdminLeadDetail(req, res, next) {
     const cart = await AbandonedCart.findById(id).lean();
     if (!cart) return res.status(404).json({ ok: false, error: 'Lead non trouvé.' });
 
-    const req = cart.requested || {};
+    const requested = cart.requested || {};
     return res.json({
       ok: true,
       cart: {
@@ -317,13 +317,13 @@ async function getAdminLeadDetail(req, res, next) {
         captureSource: cart.captureSource,
         captureSourceLabel: getCaptureSourceLabel(cart.captureSource).label,
         requested: {
-          vehicle: req.vehicle || '',
-          vin: req.vin || '',
-          plate: req.plate || '',
-          ref: req.ref || '',
-          message: req.message || '',
+          vehicle: requested.vehicle || '',
+          vin: requested.vin || '',
+          plate: requested.plate || '',
+          ref: requested.ref || '',
+          message: requested.message || '',
         },
-        hasRequested: !!(req.vehicle || req.vin || req.plate || req.ref || req.message),
+        hasRequested: !!(requested.vehicle || requested.vin || requested.plate || requested.ref || requested.message),
         contextMessage: cart.contextMessage || '',
         attribution: cart.attribution || {},
         items: (cart.items || []).map((it) => ({
