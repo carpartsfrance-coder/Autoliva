@@ -45,15 +45,30 @@
     if (!source && referrer) {
       try {
         var refHost = new URL(referrer).hostname.replace('www.', '');
+        var selfHost = window.location.hostname.replace('www.', '');
         if (refHost.includes('google')) { source = 'google'; medium = 'organic'; }
         else if (refHost.includes('bing')) { source = 'bing'; medium = 'organic'; }
+        else if (refHost.includes('duckduckgo')) { source = 'duckduckgo'; medium = 'organic'; }
+        else if (refHost.includes('search.brave')) { source = 'brave'; medium = 'organic'; }
+        else if (refHost.includes('qwant')) { source = 'qwant'; medium = 'organic'; }
+        else if (refHost.includes('ecosia')) { source = 'ecosia'; medium = 'organic'; }
+        else if (refHost.includes('startpage')) { source = 'startpage'; medium = 'organic'; }
+        else if (refHost.includes('search.lilo') || refHost.includes('lilo.org')) { source = 'lilo'; medium = 'organic'; }
+        else if (refHost.includes('yahoo')) { source = 'yahoo'; medium = 'organic'; }
+        else if (refHost.includes('yandex') || refHost === 'ya.ru') { source = 'yandex'; medium = 'organic'; }
+        else if (refHost.includes('chatgpt') || refHost.includes('openai')) { source = 'chatgpt'; medium = 'ai'; }
+        else if (refHost.includes('perplexity')) { source = 'perplexity'; medium = 'ai'; }
+        else if (refHost.includes('claude.ai') || refHost.includes('anthropic')) { source = 'claude'; medium = 'ai'; }
+        else if (refHost.includes('copilot') || refHost.includes('bing.com/chat')) { source = 'copilot'; medium = 'ai'; }
+        else if (refHost.includes('gemini.google')) { source = 'gemini'; medium = 'ai'; }
+        else if (refHost.includes('aisearchindex')) { source = refHost; medium = 'ai'; }
         else if (refHost.includes('facebook') || refHost.includes('fb.com')) { source = 'facebook'; medium = 'social'; }
         else if (refHost.includes('instagram')) { source = 'instagram'; medium = 'social'; }
         else if (refHost.includes('tiktok')) { source = 'tiktok'; medium = 'social'; }
         else if (refHost.includes('youtube')) { source = 'youtube'; medium = 'social'; }
         else if (refHost.includes('twitter') || refHost.includes('x.com')) { source = 'twitter'; medium = 'social'; }
         else if (refHost.includes('linkedin')) { source = 'linkedin'; medium = 'social'; }
-        else if (!refHost.includes('carpartsfrance')) { source = refHost; medium = 'referral'; }
+        else if (refHost !== selfHost && !refHost.endsWith('.' + selfHost)) { source = refHost; medium = 'referral'; }
       } catch (e) { /* invalid URL */ }
     }
 
