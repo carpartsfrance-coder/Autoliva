@@ -7,6 +7,7 @@ const savController = require('../controllers/savController');
 const productController = require('../controllers/productController');
 const contactController = require('../controllers/contactController');
 const legacyRedirectController = require('../controllers/legacyRedirectController');
+const leadCaptureController = require('../controllers/leadCaptureController');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const brand = require('../config/brand');
 
@@ -19,6 +20,11 @@ router.get('/product/:slug', productController.getProductBySlug);
 
 router.get('/contact', contactController.getContactPage);
 router.post('/contact', contactController.postContact);
+
+/* Endpoints publics de capture de lead (popup, save-cart, devis fiche produit) */
+router.post('/api/lead/save-cart', leadCaptureController.postSaveCart);
+router.post('/api/lead/product-quote', leadCaptureController.postProductQuote);
+router.post('/api/lead/exit-intent', leadCaptureController.postExitIntent);
 router.get('/devis', (req, res, next) => {
   req.query = { ...(req.query || {}), type: 'devis' };
   return contactController.getContactPage(req, res, next);
