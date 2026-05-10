@@ -3,6 +3,14 @@ const mongoose = require('mongoose');
 const AbandonedCart = require('../models/AbandonedCart');
 const { sendAbandonedCartReminder, sendEmail } = require('../services/emailService');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
+const {
+  EMAIL_TEMPLATES,
+  SMS_TEMPLATES,
+  applyVariables,
+  buildLeadVariables,
+  renderEmailHtml,
+  renderEmailText,
+} = require('../services/leadEmailTemplates');
 const brand = require('../config/brand');
 
 function escapeRegExp(str) {
@@ -109,6 +117,8 @@ async function getAdminLeadsPage(req, res, next) {
       kpis: { total: 0, uncontacted: 0, contacted: 0, converted: 0, pendingValueCents: 0, recoveryRate: '0' },
       filters: { status, manualStatus: manualStatusFilter, captureSource, channel, period, q, sort },
       pagination: { page: 1, perPage, totalItems: 0, totalPages: 1, from: 0, to: 0, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1 },
+      emailTemplates: EMAIL_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body, forSource: t.forSource || [] })),
+      smsTemplates: SMS_TEMPLATES.map((t) => ({ key: t.key, label: t.label, body: t.body })),
     }, overrides));
 
     if (!dbConnected) return baseRender();
@@ -321,12 +331,14 @@ async function getAdminLeadDetail(req, res, next) {
 function getAdminFromReq(req) {
   if (req && req.session && req.session.admin) {
     const a = req.session.admin;
+    const adminUserId = a.adminUserId || a._id || '';
     return {
-      id: a._id && mongoose.Types.ObjectId.isValid(a._id) ? new mongoose.Types.ObjectId(a._id) : null,
+      id: adminUserId && mongoose.Types.ObjectId.isValid(adminUserId) ? new mongoose.Types.ObjectId(adminUserId) : null,
       name: ((a.firstName || '') + ' ' + (a.lastName || '')).trim() || a.email || 'Admin',
+      email: a.email || '',
     };
   }
-  return { id: null, name: 'Admin' };
+  return { id: null, name: 'Admin', email: '' };
 }
 
 /**
@@ -387,7 +399,10 @@ async function postAdminManualReminder(req, res, next) {
 
 /**
  * POST /admin/api/leads/:id/email — envoie un email custom.
- * Body: { subject, body, replyTo? }
+ * Body: { subject, body, templateKey?, includeCartCta? }
+ *
+ * Le sujet et le corps subissent un remplacement de variables côté serveur
+ * (sécurité : on ne fait pas confiance à ce qui vient du front).
  */
 async function postLeadSendEmail(req, res, next) {
   try {
@@ -399,40 +414,91 @@ async function postLeadSendEmail(req, res, next) {
     if (!cart) return res.status(404).json({ ok: false, error: 'Lead non trouvé.' });
     if (!cart.email) return res.status(400).json({ ok: false, error: 'Pas d’email enregistré.' });
 
-    const subject = String((req.body && req.body.subject) || '').trim().slice(0, 200);
-    const bodyText = String((req.body && req.body.body) || '').trim().slice(0, 8000);
-    if (!subject || !bodyText) return res.status(400).json({ ok: false, error: 'Sujet et message requis.' });
+    const rawSubject = String((req.body && req.body.subject) || '').trim().slice(0, 200);
+    const rawBody = String((req.body && req.body.body) || '').trim().slice(0, 8000);
+    const templateKey = String((req.body && req.body.templateKey) || '').trim().slice(0, 60);
+    const includeCartCta = req.body && req.body.includeCartCta === true;
+    if (!rawSubject || !rawBody) return res.status(400).json({ ok: false, error: 'Sujet et message requis.' });
 
-    const recipient = getReminderRecipients(cart);
+    const admin = getAdminFromReq(req);
+    const vars = buildLeadVariables({ lead: cart, req, adminName: admin.name });
 
-    const safeBody = escapeHtml(bodyText).replace(/\r?\n/g, '<br/>');
-    const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827; max-width: 600px;">
-        <p style="margin:0 0 12px 0;">Bonjour${cart.firstName ? ` ${escapeHtml(cart.firstName)}` : ''},</p>
-        <div style="font-size:14px;">${safeBody}</div>
-        <p style="margin:20px 0 0 0; font-size:13px; color:#6b7280;">— L’équipe ${brand.NAME}</p>
-      </div>`.trim();
+    const finalSubject = applyVariables(rawSubject, vars);
+    const finalBody = applyVariables(rawBody, vars);
+
+    const html = renderEmailHtml({
+      subject: finalSubject,
+      body: finalBody,
+      vars,
+      ctaUrl: includeCartCta ? vars.lien_panier : '',
+    });
+    const text = renderEmailText({ body: finalBody, vars });
 
     const sendResult = await sendEmail({
       toEmail: cart.email,
-      subject,
+      subject: finalSubject,
       html,
-      text: `Bonjour${cart.firstName ? ' ' + cart.firstName : ''},\n\n${bodyText}\n\n— L'équipe ${brand.NAME}`,
+      text,
+      replyTo: admin.email ? { email: admin.email, name: admin.name } : undefined,
     });
 
     if (!sendResult || !sendResult.ok) {
       return res.status(502).json({ ok: false, error: `Échec envoi email: ${sendResult && sendResult.reason ? sendResult.reason : 'inconnu'}` });
     }
 
-    const admin = getAdminFromReq(req);
     const now = new Date();
+    const noteLabel = templateKey ? ` [${templateKey}]` : '';
     await AbandonedCart.updateOne({ _id: cart._id }, {
       $set: { lastManualContactAt: now },
       $inc: { manualEmailsSent: 1 },
-      $push: { notes: { text: `📧 Email envoyé : "${subject}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
+      $push: { notes: { text: `📧 Email envoyé${noteLabel} : "${finalSubject}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
     });
 
-    return res.json({ ok: true, sentTo: recipient.email });
+    return res.json({ ok: true, sentTo: cart.email });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * POST /admin/api/leads/:id/email/preview — retourne l'HTML final qui sera envoyé.
+ * Body: { subject, body, includeCartCta? }
+ */
+async function postLeadEmailPreview(req, res, next) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'DB indisponible.' });
+    const id = req.params.id;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ ok: false, error: 'ID invalide.' });
+    const cart = await AbandonedCart.findById(id).lean();
+    if (!cart) return res.status(404).json({ ok: false, error: 'Lead non trouvé.' });
+
+    const rawSubject = String((req.body && req.body.subject) || '').trim().slice(0, 200);
+    const rawBody = String((req.body && req.body.body) || '').trim().slice(0, 8000);
+    const includeCartCta = req.body && req.body.includeCartCta === true;
+
+    const admin = getAdminFromReq(req);
+    const vars = buildLeadVariables({ lead: cart, req, adminName: admin.name });
+
+    const finalSubject = applyVariables(rawSubject, vars);
+    const finalBody = applyVariables(rawBody, vars);
+    const previewHtml = renderEmailHtml({ subject: finalSubject, body: finalBody, vars, ctaUrl: includeCartCta ? vars.lien_panier : '' });
+
+    return res.json({
+      ok: true,
+      subject: finalSubject,
+      previewHtml,
+      variables: {
+        prenom: vars.prenom,
+        nom: vars.nom,
+        nom_produit: vars.nom_produit,
+        prix_total: vars.prix_total,
+        lien_panier: vars.lien_panier,
+        lien_produit: vars.lien_produit,
+        nom_commercial: vars.nom_commercial,
+        brand: vars.brand,
+        telephone: vars.telephone,
+      },
+    });
   } catch (err) {
     return next(err);
   }
@@ -440,7 +506,9 @@ async function postLeadSendEmail(req, res, next) {
 
 /**
  * POST /admin/api/leads/:id/sms — envoie un SMS.
- * Body: { text }
+ * Body: { text, templateKey? }
+ *
+ * Les variables {prenom}, {lien_panier}, etc. sont remplacées côté serveur.
  */
 async function postLeadSendSms(req, res, next) {
   try {
@@ -454,20 +522,25 @@ async function postLeadSendSms(req, res, next) {
     const phoneFR = normalizePhoneFR(cart.phone);
     if (!phoneFR) return res.status(400).json({ ok: false, error: 'Téléphone invalide ou non français.' });
 
-    const text = String((req.body && req.body.text) || '').trim().slice(0, 480);
-    if (!text) return res.status(400).json({ ok: false, error: 'Message requis.' });
+    const rawText = String((req.body && req.body.text) || '').trim().slice(0, 480);
+    const templateKey = String((req.body && req.body.templateKey) || '').trim().slice(0, 60);
+    if (!rawText) return res.status(400).json({ ok: false, error: 'Message requis.' });
 
-    const sendResult = await sendSms({ to: phoneFR, text });
+    const admin = getAdminFromReq(req);
+    const vars = buildLeadVariables({ lead: cart, req, adminName: admin.name });
+    const finalText = applyVariables(rawText, vars).slice(0, 480);
+
+    const sendResult = await sendSms({ to: phoneFR, text: finalText });
     if (!sendResult || !sendResult.ok) {
       return res.status(502).json({ ok: false, error: `Échec envoi SMS: ${sendResult && sendResult.reason ? sendResult.reason : 'inconnu'}` });
     }
 
-    const admin = getAdminFromReq(req);
     const now = new Date();
+    const noteLabel = templateKey ? ` [${templateKey}]` : '';
     await AbandonedCart.updateOne({ _id: cart._id }, {
       $set: { lastManualContactAt: now },
       $inc: { manualSmsSent: 1 },
-      $push: { notes: { text: `📱 SMS envoyé : "${text.slice(0, 120)}${text.length > 120 ? '…' : ''}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
+      $push: { notes: { text: `📱 SMS envoyé${noteLabel} : "${finalText.slice(0, 120)}${finalText.length > 120 ? '…' : ''}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
     });
 
     return res.json({ ok: true, sentTo: phoneFR });
@@ -550,6 +623,17 @@ async function postLeadAddNote(req, res, next) {
   }
 }
 
+/**
+ * GET /admin/api/leads/templates — retourne les templates email + SMS au front.
+ */
+function getAdminLeadTemplates(req, res) {
+  return res.json({
+    ok: true,
+    email: EMAIL_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body, forSource: t.forSource || [] })),
+    sms: SMS_TEMPLATES.map((t) => ({ key: t.key, label: t.label, body: t.body })),
+  });
+}
+
 module.exports = {
   // page principale
   getAdminLeadsPage,
@@ -557,9 +641,11 @@ module.exports = {
   // actions
   postAdminManualReminder,
   postLeadSendEmail,
+  postLeadEmailPreview,
   postLeadSendSms,
   postLeadSetStatus,
   postLeadAddNote,
+  getAdminLeadTemplates,
   // legacy aliases (pour rétro-compat des routes existantes)
   getAdminAbandonedCartsPage: getAdminLeadsPage,
   getAdminAbandonedCartDetail: getAdminLeadDetail,
