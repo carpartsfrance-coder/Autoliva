@@ -2537,7 +2537,7 @@ async function getAdminOrdersPage(req, res, next) {
         sourceChannel: o.source && o.source.channel ? o.source.channel : 'website',
         attribution: formatAttribution(o.attribution, formatDateTimeFR),
         docCount: (Array.isArray(o.documents) ? o.documents.length : 0)
-          + (Array.isArray(o.shipments) ? o.shipments.filter((s) => s && s.document && s.document.storedPath).length : 0),
+          + (Array.isArray(o.shipments) ? o.shipments.filter((s) => s && s.document).length : 0),
         hasShippingLabel: Array.isArray(o.documents) && o.documents.some((d) => d && d.docType === 'etiquette_envoi'),
         lastShippingLabelUrl: (function() {
           // Check direct documents for etiquette_envoi first (most recent)
@@ -2550,7 +2550,7 @@ async function getAdminOrdersPage(req, res, next) {
           }
           // Fallback: shipment documents with "Envoi" label
           if (Array.isArray(o.shipments)) {
-            const withDoc = o.shipments.filter((s) => s && s.document && s.document.storedPath && (s.label === 'Envoi' || s.label === 'Envoi partiel'));
+            const withDoc = o.shipments.filter((s) => s && s.document && (s.label === 'Envoi' || s.label === 'Envoi partiel'));
             if (withDoc.length) {
               const last = withDoc[withDoc.length - 1];
               return `/admin/commandes/${String(o._id)}/suivi/${String(last._id)}/document`;
@@ -2713,7 +2713,7 @@ async function getAdminOrderDetailPage(req, res, next) {
             carrier: s.carrier || '',
             trackingNumber: s.trackingNumber,
             note: s.note || '',
-            document: s.document && s.document.storedPath ? {
+            document: s.document ? {
               originalName: s.document.originalName || 'document.pdf',
               stamped: !!s.document.stamped,
               sizeBytes: s.document.sizeBytes || 0,
@@ -3339,7 +3339,9 @@ async function postAdminAddOrderShipment(req, res, next) {
 
     // Handle document upload + optional PDF stamping
     let documentData = null;
-    if (req.file && req.file.buffer) {
+    let documentProcessingError = null;
+    const userAttachedFile = !!(req.file && req.file.buffer && req.file.buffer.length > 0);
+    if (userAttachedFile) {
       try {
         const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 
@@ -3386,12 +3388,17 @@ async function postAdminAddOrderShipment(req, res, next) {
           fileData: fileBuffer,
           uploadedAt: new Date(),
         };
+
+        console.log(`[shipment-doc] Document prepared for order ${existing.number}: ${documentData.originalName} (${fileBuffer.length} bytes, stamped=${stamped})`);
       } catch (docErr) {
-        console.error('Erreur traitement document expédition:', docErr && docErr.message ? docErr.message : docErr);
+        documentProcessingError = docErr && docErr.message ? docErr.message : String(docErr);
+        console.error(`[shipment-doc] Erreur traitement document expédition pour ${existing.number}:`, documentProcessingError);
       }
     }
 
+    const shipmentId = new mongoose.Types.ObjectId();
     const shipmentEntry = {
+      _id: shipmentId,
       label,
       carrier,
       trackingNumber,
@@ -3403,9 +3410,43 @@ async function postAdminAddOrderShipment(req, res, next) {
       shipmentEntry.document = documentData;
     }
 
-    await Order.findByIdAndUpdate(orderId, {
-      $push: { shipments: shipmentEntry },
-    });
+    try {
+      await Order.findByIdAndUpdate(orderId, {
+        $push: { shipments: shipmentEntry },
+      });
+    } catch (pushErr) {
+      const msg = pushErr && pushErr.message ? pushErr.message : 'erreur base de données';
+      console.error(`[shipment-doc] $push échoué pour ${existing.number}:`, msg);
+      req.session.adminOrderError = `Impossible d'enregistrer le suivi : ${msg}.`;
+      if (wantsJsonResponse(req)) return res.status(500).json({ ok: false, error: req.session.adminOrderError });
+      return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+    }
+
+    // Defensive verification: if the user attached a file, confirm fileData was persisted (bypass select:false via native query)
+    if (userAttachedFile && documentData) {
+      try {
+        const verify = await Order.collection.findOne(
+          { _id: new mongoose.Types.ObjectId(orderId), 'shipments._id': shipmentId },
+          { projection: { 'shipments.$': 1 } }
+        );
+        const persistedDoc = verify && Array.isArray(verify.shipments) && verify.shipments[0] && verify.shipments[0].document;
+        const rawFileData = persistedDoc && persistedDoc.fileData;
+        const persistedSize = rawFileData
+          ? (rawFileData.buffer && typeof rawFileData.buffer.length === 'number' ? rawFileData.buffer.length : (typeof rawFileData.length === 'number' ? rawFileData.length : 0))
+          : 0;
+        if (!persistedDoc || !persistedSize) {
+          console.error(`[shipment-doc] Vérification post-save KO : document NON persisté pour ${existing.number} (shipmentId=${shipmentId}). Le PDF ne sera pas visible.`);
+          req.session.adminOrderError = "Le suivi a été ajouté mais le PDF n'a pas pu être enregistré (le fichier est peut-être trop volumineux). Réessayez avec un PDF plus léger.";
+        } else {
+          console.log(`[shipment-doc] Vérification OK : ${persistedSize} bytes persistés pour ${existing.number} (shipmentId=${shipmentId}).`);
+        }
+      } catch (verifyErr) {
+        console.warn(`[shipment-doc] Vérification post-save impossible :`, verifyErr && verifyErr.message ? verifyErr.message : verifyErr);
+      }
+    } else if (userAttachedFile && !documentData) {
+      console.warn(`[shipment-doc] L'utilisateur a joint un fichier mais le traitement a échoué pour ${existing.number} (raison : ${documentProcessingError || 'inconnue'}).`);
+      req.session.adminOrderError = `Le suivi a été ajouté mais le PDF n'a pas pu être traité : ${documentProcessingError || 'erreur inconnue'}.`;
+    }
 
     // Skip shipment tracking email for "Récupération clonage" — a dedicated cloning label email is sent instead
     const _isRecupClonageLabel = label.toLowerCase().includes('cupération clonage') || label.toLowerCase().includes('recuperation clonage') || label.toLowerCase() === 'récupération clonage';
