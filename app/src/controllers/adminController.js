@@ -7536,6 +7536,83 @@ async function postAdminDeleteProduct(req, res, next) {
   }
 }
 
+async function postAdminDuplicateProduct(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const { productId } = req.params;
+
+    if (!dbConnected) {
+      req.session.adminCatalogError = 'La base de données n’est pas disponible. Réessayez dans quelques instants.';
+      return res.redirect('/admin/catalogue');
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    }
+
+    const source = await Product.findById(productId).lean();
+    if (!source) {
+      req.session.adminCatalogError = 'Produit source introuvable.';
+      return res.redirect('/admin/catalogue');
+    }
+
+    const baseName = (source.name || 'Produit').trim();
+    const newName = `${baseName} (copie)`;
+
+    const baseSlug = slugify(source.slug || newName) || 'produit';
+    const slugRoot = baseSlug.replace(/-copie(-\d+)?$/, '');
+    let candidateSlug = `${slugRoot}-copie`;
+    let attempt = 2;
+    /* eslint-disable no-await-in-loop */
+    while (await Product.findOne({ slug: candidateSlug }).select('_id').lean()) {
+      candidateSlug = `${slugRoot}-copie-${attempt}`;
+      attempt += 1;
+      if (attempt > 50) {
+        candidateSlug = `${slugRoot}-copie-${Date.now()}`;
+        break;
+      }
+    }
+    /* eslint-enable no-await-in-loop */
+
+    const newSku = source.sku ? `${source.sku}-COPIE` : '';
+
+    const clone = { ...source };
+    delete clone._id;
+    delete clone.createdAt;
+    delete clone.updatedAt;
+    delete clone.__v;
+    delete clone.aiDraft;
+
+    // Strip subdoc _ids so Mongoose génère des nouveaux (sinon collisions avec la source)
+    const stripIds = (arr) => Array.isArray(arr) ? arr.map((it) => { const { _id, ...rest } = it || {}; return rest; }) : arr;
+    clone.specs = stripIds(clone.specs);
+    clone.compatibility = stripIds(clone.compatibility);
+    clone.faqs = stripIds(clone.faqs);
+    clone.reconditioningSteps = stripIds(clone.reconditioningSteps);
+    clone.options = Array.isArray(clone.options)
+      ? clone.options.map((opt) => {
+          const { _id, choices, ...rest } = opt || {};
+          return { ...rest, choices: stripIds(choices) };
+        })
+      : clone.options;
+
+    clone.name = newName;
+    clone.slug = candidateSlug;
+    clone.sku = newSku;
+    clone.isPublished = false; // brouillon par défaut, l'admin publiera quand prêt
+
+    const created = await Product.create(clone);
+
+    req.session.adminCatalogSuccess = `Produit dupliqué : « ${newName} » (slug ${candidateSlug}). Le doublon est masqué du sitemap tant qu'il n'est pas publié.`;
+    if (wantsJsonResponse(req)) {
+      return res.json({ ok: true, message: 'Produit dupliqué.', data: { id: String(created._id), slug: candidateSlug } });
+    }
+    return res.redirect(`/admin/catalogue/${created._id}`);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function getAdminClientsPage(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -10002,6 +10079,7 @@ module.exports = {
   getAdminEditProductPage,
   postAdminUpdateProduct,
   postAdminDeleteProduct,
+  postAdminDuplicateProduct,
   postAdminBulkDeleteProducts,
   getAdminClientsPage,
   getAdminClientDetailPage,
