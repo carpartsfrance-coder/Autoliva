@@ -761,8 +761,10 @@
                 <input type="text" id="sav-paymentlink-desc" placeholder="Description visible client (optionnel)"
                        class="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs mb-1.5">
                 <button type="button" id="sav-paymentlink-create" class="btn btn-secondary w-full text-[10px] inline-flex items-center justify-center gap-1">
-                  <span class="material-symbols-outlined" style="font-size:14px;">link</span>Générer le lien Mollie
+                  <span class="material-symbols-outlined" id="sav-paymentlink-create-icon" style="font-size:14px;">link</span>
+                  <span id="sav-paymentlink-create-label">Générer le lien Mollie</span>
                 </button>
+                <div id="sav-paymentlink-error" class="hidden mt-1 text-[10px] text-rose-600 font-semibold leading-tight"></div>
                 <div class="mt-1 text-[10px] text-slate-400 leading-tight">Le lien est créé immédiatement. À envoyer au client via le bouton "Envoyer" ci-dessous, ou à copier manuellement.</div>
               </div>
             </div>
@@ -1001,5 +1003,5 @@
 
 <div class="sav-toast-root" id="sav-toast-root" aria-live="polite"></div>
 <script src="/js/sav-labels.js?v=3" defer></script>
-<script src="/js/sav-admin.js?v=35" defer></script>
+<script src="/js/sav-admin.js?v=36" defer></script>
 <%- include('./partials/footer') %>
