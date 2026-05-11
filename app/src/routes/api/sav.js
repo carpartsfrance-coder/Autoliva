@@ -1908,6 +1908,75 @@ adminRouter.post('/tickets/:numero/refund', async (req, res) => {
   }
 });
 
+// POST /admin/api/sav/tickets/:numero/payment-link
+// Crée un lien de paiement Mollie sur mesure (montant libre) attaché au ticket.
+// Body : { amountCents, label, description }
+adminRouter.post('/tickets/:numero/payment-link', async (req, res) => {
+  try {
+    const amountCents = parseInt(req.body && req.body.amountCents, 10);
+    if (!Number.isFinite(amountCents) || amountCents < 1) return fail(res, 'Montant invalide', 400);
+    const label = (req.body && req.body.label) || '';
+    const description = (req.body && req.body.description) || '';
+
+    const adminEmail = (req.adminUser && req.adminUser.email)
+      || (req.session && req.session.admin && req.session.admin.email)
+      || 'sav-admin';
+
+    const mollieService = require('../../services/mollieService');
+    const result = await mollieService.createCustomPaymentLink({
+      ticketNumero: req.params.numero,
+      amountCents,
+      label,
+      description,
+      adminEmail,
+    });
+
+    audit.log({
+      req,
+      action: 'sav.payment_link.create',
+      entityType: 'sav_ticket',
+      entityId: req.params.numero,
+      after: { mollieId: result.mollieId, amountCents, label: result.label },
+    });
+    return ok(res, {
+      numero: req.params.numero,
+      link: result,
+    });
+  } catch (err) {
+    const code = /introuvable/.test(err.message) ? 404 : (/invalide/.test(err.message) ? 400 : 500);
+    return fail(res, err.message, code);
+  }
+});
+
+// POST /admin/api/sav/tickets/:numero/payment-link/:mollieId/send
+// Envoie le lien de paiement par email au client.
+adminRouter.post('/tickets/:numero/payment-link/:mollieId/send', async (req, res) => {
+  try {
+    const adminEmail = (req.adminUser && req.adminUser.email)
+      || (req.session && req.session.admin && req.session.admin.email)
+      || 'sav-admin';
+
+    const mollieService = require('../../services/mollieService');
+    const result = await mollieService.sendCustomPaymentLinkEmail({
+      ticketNumero: req.params.numero,
+      mollieId: req.params.mollieId,
+      adminEmail,
+    });
+
+    audit.log({
+      req,
+      action: 'sav.payment_link.send',
+      entityType: 'sav_ticket',
+      entityId: req.params.numero,
+      after: { mollieId: req.params.mollieId, recipient: result.recipient },
+    });
+    return ok(res, { numero: req.params.numero, mollieId: req.params.mollieId, sentTo: result.recipient });
+  } catch (err) {
+    const code = /introuvable|manquant/.test(err.message) ? 404 : 500;
+    return fail(res, err.message, code);
+  }
+});
+
 // POST /admin/api/sav/tickets/:numero/rapport-pdf
 adminRouter.post('/tickets/:numero/rapport-pdf', async (req, res) => {
   try {
