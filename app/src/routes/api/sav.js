@@ -450,15 +450,33 @@ adminRouter.get('/tickets', async (req, res) => {
     } else if (archivedMode !== 'all') {
       q.archivedAt = { $in: [null, undefined] };
     }
-    // Réponse client en attente : un message client posté après la dernière lecture admin
+    // État de conversation — logique unifiée sur la timeline des messages.
+    // `awaitingClient` = "Client a répondu" : dernier message du client > dernière réponse admin
+    //                                         (ou admin n'a jamais répondu).
+    // `waitingForClient` = "En attente client" : dernière réponse admin > dernier message client
+    //                                            (ou client n'a jamais écrit mais admin a écrit).
+    // Les deux excluent les statuts terminaux (un ticket clos n'attend personne).
+    const TERMINAL_STATUTS = ['clos', 'refuse', 'resolu_garantie', 'resolu_facture', 'clos_sans_reponse'];
     if (req.query.awaitingClient === 'true') {
       q.$expr = {
         $and: [
           { $ne: ['$lastClientMessageAt', null] },
           { $or: [
-            { $eq: ['$lastAdminReadAt', null] },
-            { $gt: ['$lastClientMessageAt', '$lastAdminReadAt'] },
+            { $eq: ['$lastAdminMessageAt', null] },
+            { $gt: ['$lastClientMessageAt', '$lastAdminMessageAt'] },
           ] },
+          { $not: { $in: ['$statut', TERMINAL_STATUTS] } },
+        ],
+      };
+    } else if (req.query.waitingForClient === 'true') {
+      q.$expr = {
+        $and: [
+          { $ne: ['$lastAdminMessageAt', null] },
+          { $or: [
+            { $eq: ['$lastClientMessageAt', null] },
+            { $gt: ['$lastAdminMessageAt', '$lastClientMessageAt'] },
+          ] },
+          { $not: { $in: ['$statut', TERMINAL_STATUTS] } },
         ],
       };
     }
@@ -2241,6 +2259,7 @@ adminRouter.get('/dashboard', async (req, res) => {
       mesTickets,
       tousResolus,
       awaitingClient,
+      waitingForClient,
     ] = await Promise.all([
       SavTicket.countDocuments({ statut: { $in: STATUTS_ACTIFS } }),
       SavTicket.countDocuments({ statut: { $in: ['en_attente_documents', 'relance_1', 'relance_2'] } }),
@@ -2258,8 +2277,30 @@ adminRouter.get('/dashboard', async (req, res) => {
       SavTicket.find({ statut: { $in: STATUTS_CLOS }, createdAt: { $gte: new Date(Date.now() - 365 * 24 * 3600 * 1000) } })
         .select('createdAt updatedAt statut')
         .lean(),
+      // État conversation — logique unifiée timeline messages (voir GET /tickets).
       SavTicket.countDocuments({
-        $expr: { $and: [ { $ne: ['$lastClientMessageAt', null] }, { $or: [ { $eq: ['$lastAdminReadAt', null] }, { $gt: ['$lastClientMessageAt', '$lastAdminReadAt'] } ] } ] },
+        $expr: {
+          $and: [
+            { $ne: ['$lastClientMessageAt', null] },
+            { $or: [
+              { $eq: ['$lastAdminMessageAt', null] },
+              { $gt: ['$lastClientMessageAt', '$lastAdminMessageAt'] },
+            ] },
+            { $not: { $in: ['$statut', STATUTS_CLOS] } },
+          ],
+        },
+      }),
+      SavTicket.countDocuments({
+        $expr: {
+          $and: [
+            { $ne: ['$lastAdminMessageAt', null] },
+            { $or: [
+              { $eq: ['$lastClientMessageAt', null] },
+              { $gt: ['$lastAdminMessageAt', '$lastClientMessageAt'] },
+            ] },
+            { $not: { $in: ['$statut', STATUTS_CLOS] } },
+          ],
+        },
       }),
     ]);
 
@@ -2350,6 +2391,7 @@ adminRouter.get('/dashboard', async (req, res) => {
       sav_recurrents: savRecurrents,
       mes_tickets: mesTickets || 0,
       awaiting_client: awaitingClient || 0,
+      waiting_for_client: waitingForClient || 0,
       by_team,
       by_motif,
       chart: { labels, ouverts: ouvertsArr, clos: closArr },

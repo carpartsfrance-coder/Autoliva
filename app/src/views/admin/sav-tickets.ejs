@@ -1,5 +1,5 @@
 <%- include('./partials/head') %>
-<link rel="stylesheet" href="/css/sav.css?v=21">
+<link rel="stylesheet" href="/css/sav.css?v=22">
 <%- include('./partials/sidebar', { active: 'sav' }) %>
 
 <main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>" data-current-user-id="<%= (typeof currentAdmin !== 'undefined' && currentAdmin && currentAdmin.adminUserId) || '' %>">
@@ -24,7 +24,7 @@
     </div>
 
     <!-- Mini KPIs en tête de liste -->
-    <div id="sav-list-kpis" class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
+    <div id="sav-list-kpis" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 mb-3">
       <button type="button" data-mini-kpi-filter="" class="sav-mini-kpi">
         <div class="sav-mini-kpi__icon bg-slate-100 text-slate-600"><span class="material-symbols-outlined text-base">list_alt</span></div>
         <div><div class="sav-mini-kpi__value" data-mini-kpi="total">—</div><div class="sav-mini-kpi__label">Total</div></div>
@@ -45,9 +45,13 @@
         <div class="sav-mini-kpi__icon bg-red-100 text-red-700"><span class="material-symbols-outlined text-base">warning</span></div>
         <div><div class="sav-mini-kpi__value" data-mini-kpi="slaDepasse">—</div><div class="sav-mini-kpi__label">SLA dépassé</div></div>
       </button>
-      <button type="button" data-mini-kpi-filter="awaitingClient=true" class="sav-mini-kpi">
+      <button type="button" data-mini-kpi-filter="awaitingClient=true" class="sav-mini-kpi" title="Tickets où le client a écrit après notre dernière réponse — à toi de jouer">
         <div class="sav-mini-kpi__icon bg-rose-100 text-rose-700"><span class="material-symbols-outlined text-base">mark_unread_chat_alt</span></div>
-        <div><div class="sav-mini-kpi__value" data-mini-kpi="awaitingClient">—</div><div class="sav-mini-kpi__label">Réponse client</div></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="awaitingClient">—</div><div class="sav-mini-kpi__label">Client a répondu</div></div>
+      </button>
+      <button type="button" data-mini-kpi-filter="waitingForClient=true" class="sav-mini-kpi" title="Tickets où on a répondu en dernier — on attend le retour client">
+        <div class="sav-mini-kpi__icon bg-amber-100 text-amber-700"><span class="material-symbols-outlined text-base">schedule_send</span></div>
+        <div><div class="sav-mini-kpi__value" data-mini-kpi="waitingForClient">—</div><div class="sav-mini-kpi__label">En attente client</div></div>
       </button>
     </div>
 
@@ -78,6 +82,7 @@
     <!-- Filtres + recherche -->
     <form id="sav-filters" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
       <input type="hidden" name="awaitingClient">
+      <input type="hidden" name="waitingForClient">
       <input type="hidden" name="sla_depasse">
       <div class="lg:col-span-2 relative">
         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base">search</span>
@@ -350,5 +355,5 @@
 </div>
 
 <script src="/js/sav-labels.js?v=3" defer></script>
-<script src="/js/sav-admin.js?v=19" defer></script>
+<script src="/js/sav-admin.js?v=20" defer></script>
 <%- include('./partials/footer') %>

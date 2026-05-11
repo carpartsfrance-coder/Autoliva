@@ -1551,6 +1551,14 @@
   50%      { background: rgba(239,68,68,.06); }
 }
 
+/* Teinte de fond pour lignes où le client a répondu (à traiter) */
+.sav-row--client-replied {
+  background: rgba(244, 63, 94, .04);
+}
+.sav-row--client-replied:hover {
+  background: rgba(244, 63, 94, .09) !important;
+}
+
 /* Timeline dot variant auto */
 .sav-timeline__dot--auto { background: var(--sav-orange-500) !important; }
 
