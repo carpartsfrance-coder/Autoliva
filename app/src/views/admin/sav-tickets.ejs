@@ -14,6 +14,9 @@
         <button type="button" id="sav-new-ticket-btn" class="btn btn-primary">
           <span class="material-symbols-outlined mr-1 text-base">add</span>Nouveau ticket
         </button>
+        <button type="button" id="sav-archive-closed-btn" class="btn btn-secondary" title="Archiver d'un coup tous les tickets en statut terminal (clos, résolu, refusé)">
+          <span class="material-symbols-outlined mr-1 text-base">inventory_2</span>Archiver les clos
+        </button>
         <a id="sav-export-csv" href="#" class="btn btn-secondary" aria-label="Exporter les tickets en CSV"><span class="material-symbols-outlined mr-1 text-base" aria-hidden="true">download</span>Exporter CSV</a>
         <a href="/admin/sav/procedures" class="btn btn-secondary"><span class="material-symbols-outlined mr-1 text-base">menu_book</span>Procédures</a>
         <a href="/admin/sav" class="btn btn-secondary">← Tableau de bord</a>
@@ -166,6 +169,11 @@
         <span class="material-symbols-outlined text-base" aria-hidden="true">bolt</span>
         <span>Ma queue (priorité)</span>
       </label>
+      <label class="sav-filter-pill" title="Afficher uniquement les tickets archivés (masqués par défaut)">
+        <input type="checkbox" name="showArchived" value="true" class="peer sr-only">
+        <span class="material-symbols-outlined text-base" aria-hidden="true">inventory_2</span>
+        <span>Voir les archivés</span>
+      </label>
     </form>
 
     <!-- Toggle vue table / kanban -->
@@ -195,6 +203,10 @@
       <select id="sav-bulk-assign" class="rounded-lg border border-slate-300 px-2 py-1 text-xs"></select>
       <button type="button" id="sav-bulk-assign-apply" class="rounded-lg bg-slate-900 text-white px-3 py-1 text-xs font-semibold">Assigner</button>
       <button type="button" id="sav-bulk-export" class="ml-auto rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold">Exporter sélection</button>
+      <button type="button" id="sav-bulk-archive" class="rounded-lg border border-slate-300 bg-white hover:bg-slate-50 px-3 py-1 text-xs font-semibold inline-flex items-center gap-1">
+        <span class="material-symbols-outlined text-base">inventory_2</span>
+        <span data-bulk-archive-label>Archiver la sélection</span>
+      </button>
       <button type="button" id="sav-bulk-delete" class="rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 px-3 py-1 text-xs font-semibold inline-flex items-center gap-1">
         <span class="material-symbols-outlined text-base">delete</span>
         Supprimer la sélection
@@ -338,5 +350,5 @@
 </div>
 
 <script src="/js/sav-labels.js?v=3" defer></script>
-<script src="/js/sav-admin.js?v=18" defer></script>
+<script src="/js/sav-admin.js?v=19" defer></script>
 <%- include('./partials/footer') %>
