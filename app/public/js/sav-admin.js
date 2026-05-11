@@ -1205,13 +1205,24 @@
         var amtInput = document.getElementById('sav-paymentlink-amount');
         var labelInput = document.getElementById('sav-paymentlink-label');
         var descInput = document.getElementById('sav-paymentlink-desc');
-        var euros = parseFloat((amtInput && amtInput.value) || '');
-        if (!isFinite(euros) || euros <= 0) { toast('Montant invalide', 'error'); return; }
+        var errBox = document.getElementById('sav-paymentlink-error');
+        var btnLabel = document.getElementById('sav-paymentlink-create-label');
+        var btnIcon = document.getElementById('sav-paymentlink-create-icon');
+        function showInlineError(msg) {
+          if (errBox) { errBox.textContent = msg; errBox.classList.remove('hidden'); }
+          toast(msg, 'error');
+        }
+        function clearInlineError() { if (errBox) { errBox.textContent = ''; errBox.classList.add('hidden'); } }
+        clearInlineError();
+        var euros = parseFloat((amtInput && amtInput.value || '').replace(',', '.'));
+        if (!isFinite(euros) || euros <= 0) { showInlineError('Montant invalide.'); return; }
         var cents = Math.round(euros * 100);
         var label = (labelInput && labelInput.value || '').trim();
         var description = (descInput && descInput.value || '').trim();
         if (!window.confirm('Créer un lien Mollie de ' + euros.toFixed(2) + ' € pour le ticket ' + numero + ' ?')) return;
         createBtn.disabled = true; createBtn.classList.add('opacity-60');
+        if (btnLabel) btnLabel.textContent = 'Création en cours…';
+        if (btnIcon) btnIcon.textContent = 'progress_activity';
         api('/tickets/' + encodeURIComponent(numero) + '/payment-link', {
           method: 'POST',
           body: JSON.stringify({ amountCents: cents, label: label, description: description }),
@@ -1223,10 +1234,18 @@
             if (descInput) descInput.value = '';
             loadTicket();
           } else {
-            toast((res.j && res.j.error) || 'Erreur', 'error');
+            var msg = (res.j && res.j.error) || 'Erreur (HTTP ' + (res && res.j ? '' : 'inconnu') + ')';
+            if (/MOLLIE_API_KEY/.test(msg)) msg = 'MOLLIE_API_KEY manquant côté serveur — contacte un admin technique.';
+            showInlineError(msg);
           }
-        }).catch(function (err) { toast(err.message || 'Erreur', 'error'); })
-          .finally(function () { createBtn.disabled = false; createBtn.classList.remove('opacity-60'); });
+        }).catch(function (err) {
+          showInlineError((err && err.message) || 'Erreur réseau');
+        }).finally(function () {
+          createBtn.disabled = false;
+          createBtn.classList.remove('opacity-60');
+          if (btnLabel) btnLabel.textContent = 'Générer le lien Mollie';
+          if (btnIcon) btnIcon.textContent = 'link';
+        });
         return;
       }
 
