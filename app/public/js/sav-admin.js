@@ -428,7 +428,7 @@
       // Coalesce multi-values into comma-separated for statut & pieceType
       var multi = { statut: [], pieceType: [] };
       fd.forEach(function (v, k) {
-        if (!v || k === 'assignedToMe' || k === 'priority') return;
+        if (!v || k === 'assignedToMe' || k === 'priority' || k === 'showArchived') return;
         if (multi[k]) { multi[k].push(v); return; }
         qs.append(k, v);
       });
@@ -446,6 +446,8 @@
         qs.append('dir', state.dir);
       }
       if (fd.get('assignedToMe') === 'true' && CURRENT_USER_ID) qs.append('assignedToUserId', CURRENT_USER_ID);
+      // Archivés : par défaut on les masque (archived omis = false côté serveur)
+      if (fd.get('showArchived') === 'true') qs.append('archived', 'true');
       return qs;
     }
 
@@ -545,7 +547,14 @@
               '>' + sla.label + '</span></td>' +
             '<td class="px-3 py-2 text-xs text-slate-500">' + new Date(t.createdAt).toLocaleDateString('fr-FR') + '</td>' +
             '<td class="px-3 py-2 text-right">' +
-              '<button type="button" class="sav-row-delete inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-50 text-red-500" data-numero="' + escapeHtml(t.numero) + '" title="Supprimer le ticket ' + escapeHtml(t.numero) + '">' +
+              (t.archivedAt
+                ? '<button type="button" class="sav-row-unarchive inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-emerald-50 text-emerald-600" data-numero="' + escapeHtml(t.numero) + '" title="Désarchiver le ticket ' + escapeHtml(t.numero) + '">' +
+                    '<span class="material-symbols-outlined text-base">unarchive</span>' +
+                  '</button>'
+                : '<button type="button" class="sav-row-archive inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-slate-100 text-slate-500" data-numero="' + escapeHtml(t.numero) + '" title="Archiver le ticket ' + escapeHtml(t.numero) + '">' +
+                    '<span class="material-symbols-outlined text-base">inventory_2</span>' +
+                  '</button>') +
+              '<button type="button" class="sav-row-delete inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-red-50 text-red-500 ml-1" data-numero="' + escapeHtml(t.numero) + '" title="Supprimer le ticket ' + escapeHtml(t.numero) + '">' +
                 '<span class="material-symbols-outlined text-base">delete</span>' +
               '</button>' +
             '</td>' +
@@ -613,6 +622,30 @@
           });
         });
       });
+      tbody.querySelectorAll('.sav-row-archive, .sav-row-unarchive').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var n = btn.getAttribute('data-numero');
+          if (!n) return;
+          var isUnarchive = btn.classList.contains('sav-row-unarchive');
+          btn.disabled = true;
+          api('/tickets/' + encodeURIComponent(n) + '/archive', {
+            method: 'POST',
+            body: JSON.stringify({ archive: !isUnarchive }),
+          }).then(function (res) {
+            btn.disabled = false;
+            if (!res.ok || !res.j || !res.j.success) {
+              toast((res.j && res.j.error) || (isUnarchive ? 'Désarchivage échoué' : 'Archivage échoué'), 'error');
+              return;
+            }
+            selected.delete(n);
+            var row = btn.closest('tr');
+            if (row && row.parentNode) row.parentNode.removeChild(row);
+            updateBulkBar();
+            toast(isUnarchive ? 'Ticket ' + n + ' désarchivé' : 'Ticket ' + n + ' archivé', 'success');
+          });
+        });
+      });
     }
 
     function updateBulkBar() {
@@ -674,6 +707,62 @@
       // Export = juste un CSV des sélectionnés (en pratique on filtre côté csv)
       window.open('/admin/api/sav/tickets.csv?' + buildQs().toString(), '_blank');
     });
+    // Bulk archive / unarchive — bascule selon que la vue affiche les archivés ou non
+    var bulkArchiveBtn = document.getElementById('sav-bulk-archive');
+    function refreshBulkArchiveLabel() {
+      if (!bulkArchiveBtn) return;
+      var showingArchived = form && form.querySelector('[name="showArchived"]') && form.querySelector('[name="showArchived"]').checked;
+      var labelEl = bulkArchiveBtn.querySelector('[data-bulk-archive-label]');
+      var iconEl = bulkArchiveBtn.querySelector('.material-symbols-outlined');
+      if (labelEl) labelEl.textContent = showingArchived ? 'Désarchiver la sélection' : 'Archiver la sélection';
+      if (iconEl) iconEl.textContent = showingArchived ? 'unarchive' : 'inventory_2';
+    }
+    if (bulkArchiveBtn) {
+      bulkArchiveBtn.addEventListener('click', function () {
+        if (!selected.size) return;
+        var showingArchived = form.querySelector('[name="showArchived"]').checked;
+        var archive = !showingArchived;
+        var arr = Array.from(selected);
+        var verb = archive ? 'Archiver' : 'Désarchiver';
+        if (!confirm(verb + ' ' + arr.length + ' ticket(s) ?')) return;
+        bulkArchiveBtn.disabled = true;
+        api('/tickets/bulk-archive', {
+          method: 'POST',
+          body: JSON.stringify({ numeros: arr, archive: archive }),
+        }).then(function (res) {
+          bulkArchiveBtn.disabled = false;
+          if (!res.ok || !res.j || !res.j.success) {
+            toast((res.j && res.j.error) || (verb + ' échoué'), 'error');
+            return;
+          }
+          var modified = (res.j.data && res.j.data.modified) || arr.length;
+          toast(modified + ' ticket(s) ' + (archive ? 'archivé(s)' : 'désarchivé(s)'), 'success');
+          selected.clear(); updateBulkBar(); load();
+        });
+      });
+    }
+
+    // Bouton header "Archiver les clos" — archive d'un coup tous les tickets en statut terminal
+    var archiveClosedBtn = document.getElementById('sav-archive-closed-btn');
+    if (archiveClosedBtn) {
+      archiveClosedBtn.addEventListener('click', function () {
+        if (!confirm('Archiver tous les tickets en statut clos / résolu / refusé ? Ils seront masqués de la liste mais conservés.')) return;
+        archiveClosedBtn.disabled = true;
+        api('/tickets/archive-all-closed', { method: 'POST', body: JSON.stringify({}) }).then(function (res) {
+          archiveClosedBtn.disabled = false;
+          if (!res.ok || !res.j || !res.j.success) {
+            toast((res.j && res.j.error) || 'Archivage échoué', 'error');
+            return;
+          }
+          var n = (res.j.data && res.j.data.modified) || 0;
+          if (n === 0) toast('Aucun ticket à archiver.', 'info');
+          else toast(n + ' ticket(s) archivé(s)', 'success');
+          load();
+          loadMiniKpis();
+        });
+      });
+    }
+
     var bulkDeleteBtn = document.getElementById('sav-bulk-delete');
     if (bulkDeleteBtn) bulkDeleteBtn.addEventListener('click', function () {
       if (!selected.size) return;
@@ -709,7 +798,8 @@
     });
 
     form.addEventListener('submit', function (e) { e.preventDefault(); state.page = 1; load(); });
-    form.addEventListener('change', function () { state.page = 1; load(); });
+    form.addEventListener('change', function () { refreshBulkArchiveLabel(); state.page = 1; load(); });
+    refreshBulkArchiveLabel();
 
     // CSV export
     var csvBtn = document.getElementById('sav-export-csv');

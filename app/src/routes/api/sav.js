@@ -441,6 +441,14 @@ adminRouter.get('/tickets', async (req, res) => {
       q['sla.dateLimite'] = { $lt: new Date() };
       q.statut = q.statut || { $nin: ['clos', 'refuse', 'resolu_garantie', 'resolu_facture', 'clos_sans_reponse'] };
     }
+
+    // Archivés : par défaut on les masque. `archived=true` → uniquement archivés ; `archived=all` → tous.
+    const archivedMode = String(req.query.archived || 'false');
+    if (archivedMode === 'true') {
+      q.archivedAt = { $ne: null };
+    } else if (archivedMode !== 'all') {
+      q.archivedAt = { $in: [null, undefined] };
+    }
     // Réponse client en attente : un message client posté après la dernière lecture admin
     if (req.query.awaitingClient === 'true') {
       q.$expr = {
@@ -1270,6 +1278,99 @@ adminRouter.post('/tickets/bulk-delete', async (req, res) => {
 
     audit.log({ req, action: 'sav.bulk_delete', entityType: 'sav_ticket', entityId: found.join(','), before: { count: found.length }, after: { deletedCount } });
     return ok(res, { deletedCount, deletedNumeros: found });
+  } catch (err) {
+    return fail(res, err.message, 500);
+  }
+});
+
+// ──────────────────────────────────────────────────────────
+// Archivage : masque le ticket de la liste sans le supprimer.
+// `archive=false` dans le body permet de désarchiver via les mêmes endpoints.
+// ──────────────────────────────────────────────────────────
+
+function currentAdminLabel(req) {
+  const u = (req.session && req.session.user) || (req.session && req.session.admin) || {};
+  return u.email || u.username || u.name || 'admin';
+}
+
+// POST /admin/api/sav/tickets/:numero/archive — archiver / désarchiver un ticket
+adminRouter.post('/tickets/:numero/archive', async (req, res) => {
+  try {
+    const archive = req.body && req.body.archive === false ? false : true;
+    const ticket = await SavTicket.findOne({ numero: req.params.numero });
+    if (!ticket) return fail(res, 'Ticket introuvable', 404);
+    const before = { archivedAt: ticket.archivedAt };
+    if (archive) {
+      ticket.archivedAt = new Date();
+      ticket.archivedBy = currentAdminLabel(req);
+    } else {
+      ticket.archivedAt = null;
+      ticket.archivedBy = '';
+    }
+    await ticket.save();
+    audit.log({
+      req,
+      action: archive ? 'sav.archive' : 'sav.unarchive',
+      entityType: 'sav_ticket',
+      entityId: ticket.numero,
+      before,
+      after: { archivedAt: ticket.archivedAt },
+    });
+    return ok(res, { numero: ticket.numero, archivedAt: ticket.archivedAt });
+  } catch (err) {
+    return fail(res, err.message, 500);
+  }
+});
+
+// POST /admin/api/sav/tickets/bulk-archive — archiver / désarchiver plusieurs tickets
+// Body : { numeros: [...], archive: true|false }
+adminRouter.post('/tickets/bulk-archive', async (req, res) => {
+  try {
+    const raw = (req.body && req.body.numeros) || [];
+    const list = Array.isArray(raw) ? raw : [raw];
+    const unique = Array.from(new Set(list.map((v) => String(v).trim()).filter(Boolean)));
+    if (!unique.length) return fail(res, 'Aucun ticket sélectionné.');
+    const archive = req.body && req.body.archive === false ? false : true;
+
+    const update = archive
+      ? { $set: { archivedAt: new Date(), archivedBy: currentAdminLabel(req) } }
+      : { $set: { archivedAt: null, archivedBy: '' } };
+    const result = await SavTicket.updateMany({ numero: { $in: unique } }, update);
+    const matched = Number.isFinite(result && result.matchedCount) ? result.matchedCount : 0;
+    const modified = Number.isFinite(result && result.modifiedCount) ? result.modifiedCount : 0;
+
+    audit.log({
+      req,
+      action: archive ? 'sav.bulk_archive' : 'sav.bulk_unarchive',
+      entityType: 'sav_ticket',
+      entityId: unique.join(','),
+      before: { count: unique.length },
+      after: { matched, modified },
+    });
+    return ok(res, { matched, modified, numeros: unique, archive });
+  } catch (err) {
+    return fail(res, err.message, 500);
+  }
+});
+
+// POST /admin/api/sav/tickets/archive-all-closed — archive tous les tickets en statut terminal
+adminRouter.post('/tickets/archive-all-closed', async (req, res) => {
+  try {
+    const TERMINAL = ['clos', 'refuse', 'resolu_garantie', 'resolu_facture', 'clos_sans_reponse'];
+    const result = await SavTicket.updateMany(
+      { statut: { $in: TERMINAL }, archivedAt: { $in: [null, undefined] } },
+      { $set: { archivedAt: new Date(), archivedBy: currentAdminLabel(req) } }
+    );
+    const modified = Number.isFinite(result && result.modifiedCount) ? result.modifiedCount : 0;
+    audit.log({
+      req,
+      action: 'sav.archive_all_closed',
+      entityType: 'sav_ticket',
+      entityId: 'all_terminal',
+      before: null,
+      after: { modified },
+    });
+    return ok(res, { modified });
   } catch (err) {
     return fail(res, err.message, 500);
   }

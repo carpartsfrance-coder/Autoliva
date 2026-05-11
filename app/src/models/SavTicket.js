@@ -414,6 +414,11 @@ const savTicketSchema = new mongoose.Schema(
       screenshotBanc: { type: String, trim: true },
       certificatReconditionnement: { type: String, trim: true },
     },
+
+    // Archivage : masque le ticket de la liste par défaut sans le supprimer.
+    // Indépendant du statut — on peut archiver un ticket non clos si besoin.
+    archivedAt: { type: Date, default: null, index: true },
+    archivedBy: { type: String, trim: true, default: '' },
   },
   { timestamps: true }
 );
