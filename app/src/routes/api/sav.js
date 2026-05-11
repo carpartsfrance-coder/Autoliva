@@ -619,6 +619,7 @@ adminRouter.get('/tickets/:numero/order-context', async (req, res) => {
     if (!order) return ok(res, { order: null, numeroCommande: ticket.numeroCommande });
     return ok(res, {
       order: {
+        _id: String(order._id),
         number: order.number,
         status: order.status,
         createdAt: order.createdAt,
@@ -634,6 +635,14 @@ adminRouter.get('/tickets/:numero/order-context', async (req, res) => {
           document: s.document, createdAt: s.createdAt,
         })),
         cloningTracking: order.cloningTracking || null,
+        molliePaymentId: order.molliePaymentId || '',
+        molliePaymentStatus: order.molliePaymentStatus || '',
+        scalapayOrderToken: order.scalapayOrderToken || '',
+        scalapayStatus: order.scalapayStatus || '',
+        /* Total déjà remboursé pour information côté UI SAV */
+        refundsTotalCents: Array.isArray(order.refunds)
+          ? order.refunds.reduce((s, r) => s + (Number(r && r.amountCents) || 0), 0)
+          : 0,
       },
     });
   } catch (err) {
@@ -1808,7 +1817,9 @@ adminRouter.post('/tickets/:numero/facturer-149', async (req, res) => {
   }
 });
 
-// POST /admin/api/sav/tickets/:numero/refund — remboursement Mollie sur la commande liée
+// POST /admin/api/sav/tickets/:numero/refund — remboursement sur la commande liée
+// (passe par refundService → Mollie / Scalapay / manuel, génère un avoir PDF,
+// envoie l'email client, met à jour Order.refunds[] ET SavTicket.paiements.remboursement)
 adminRouter.post('/tickets/:numero/refund', async (req, res) => {
   try {
     const ticket = await SavTicket.findOne({ numero: req.params.numero });
@@ -1817,33 +1828,81 @@ adminRouter.post('/tickets/:numero/refund', async (req, res) => {
 
     const order = await Order.findOne({ number: ticket.numeroCommande });
     if (!order) return fail(res, 'Commande introuvable', 404);
-    if (!order.molliePaymentId) return fail(res, 'Aucun paiement Mollie sur cette commande', 400);
 
     const amountCents = parseInt(req.body && req.body.amountCents, 10);
     if (!Number.isFinite(amountCents) || amountCents <= 0) return fail(res, 'Montant invalide', 400);
-    if (order.totalCents && amountCents > order.totalCents) return fail(res, 'Montant supérieur au total commande', 400);
 
+    const method = (req.body && req.body.method) || '';
     const reason = (req.body && req.body.reason) || `SAV ${ticket.numero}`;
-    const mollie = require('../../services/mollie');
-    const refund = await mollie.createRefund({
-      paymentId: order.molliePaymentId,
+    const notes = (req.body && req.body.notes) || '';
+    const generateCreditNote = req.body && req.body.generateCreditNote !== false; // défaut true
+    const sendEmail = req.body && req.body.sendEmail !== false; // défaut true
+
+    const adminEmail = (req.adminUser && req.adminUser.email)
+      || (req.session && req.session.admin && req.session.admin.email)
+      || 'sav-admin';
+
+    const refundService = require('../../services/refundService');
+    const result = await refundService.processOrderRefund({
+      orderId: String(order._id),
       amountCents,
-      description: reason,
+      method,
+      reason,
+      notes,
+      generateCreditNote,
+      sendEmail,
+      adminEmail,
     });
 
+    if (!result.ok) {
+      return fail(res, result.error || 'Le remboursement a échoué', result.errorCode === 'amount_exceeds_total' ? 400 : 500);
+    }
+
+    /* Mise à jour SAV : paiements.remboursement + closure.refundDone */
     ticket.paiements = ticket.paiements || {};
     ticket.paiements.remboursement = {
       status: 'effectue',
-      mollieRefundId: refund && refund.id,
+      method: result.refund.method,
+      mollieRefundId: result.refund.method === 'mollie' ? (result.refund.providerRefundId || '') : '',
+      providerRefundId: result.refund.providerRefundId || '',
+      creditNoteNumber: result.creditNote ? result.creditNote.number : '',
       amountCents,
       date: new Date(),
       reason,
     };
-    ticket.addMessage('admin', 'interne', `Remboursement Mollie ${(amountCents / 100).toFixed(2)}€ effectué (${refund && refund.id || '-'})`);
+    ticket.closure = ticket.closure || {};
+    ticket.closure.refundDone = true;
+
+    const cnPart = result.creditNote && result.creditNote.number ? ` Avoir ${result.creditNote.number}` : '';
+    const refIdPart = result.refund.providerRefundId ? ` (${result.refund.method} ${result.refund.providerRefundId})` : '';
+    ticket.addMessage(
+      'admin',
+      'interne',
+      `Remboursement ${(amountCents / 100).toFixed(2)}€ via ${result.refund.method}${refIdPart} effectué.${cnPart}`
+    );
     await ticket.save();
 
-    audit.log({ req, action: 'sav.refund', entityType: 'sav_ticket', entityId: ticket.numero, after: { amountCents, mollieRefundId: refund && refund.id } });
-    return ok(res, { numero: ticket.numero, refund: { id: refund && refund.id, amountCents } });
+    audit.log({
+      req,
+      action: 'sav.refund',
+      entityType: 'sav_ticket',
+      entityId: ticket.numero,
+      after: {
+        amountCents,
+        method: result.refund.method,
+        providerRefundId: result.refund.providerRefundId || '',
+        creditNoteNumber: result.creditNote ? result.creditNote.number : '',
+      },
+    });
+    return ok(res, {
+      numero: ticket.numero,
+      refund: {
+        id: result.refund.providerRefundId || '',
+        amountCents,
+        method: result.refund.method,
+      },
+      creditNote: result.creditNote ? { number: result.creditNote.number } : null,
+    });
   } catch (err) {
     return fail(res, err.message, 500);
   }

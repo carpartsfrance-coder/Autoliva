@@ -1095,7 +1095,15 @@
       if (!st || !btn) return;
       var r = ticket.paiements && ticket.paiements.remboursement;
       if (r && r.status === 'effectue') {
-        st.innerHTML = '<span class="text-emerald-700 font-semibold">' + (r.amountCents/100).toFixed(2) + ' € remboursés</span> · ' + (r.mollieRefundId || '');
+        var amount = (r.amountCents/100).toFixed(2);
+        var refId = r.mollieRefundId || '';
+        var html = '<span class="text-emerald-700 font-semibold">' + amount + ' € remboursés</span>';
+        if (refId) html += ' · <span class="font-mono">' + refId + '</span>';
+        /* Lien vers l'avoir PDF si on a un numéro de commande et qu'un avoir a été généré */
+        if (ticket.numeroCommande && r.creditNoteNumber) {
+          html += '<div class="mt-1"><a href="/admin/commandes/' + encodeURIComponent(ticket.orderId || '') + '/avoir/' + encodeURIComponent(r.creditNoteNumber) + '/pdf" target="_blank" class="text-[10px] text-blue-600 hover:underline">Voir avoir ' + r.creditNoteNumber + '</a></div>';
+        }
+        st.innerHTML = html;
       } else {
         st.textContent = 'Aucun remboursement enregistré';
       }
@@ -1103,19 +1111,38 @@
     document.addEventListener('click', function (e) {
       if (!e.target.closest('#sav-refund-btn')) return;
       var input = document.getElementById('sav-refund-amount');
+      var methodSel = document.getElementById('sav-refund-method');
+      var reasonInput = document.getElementById('sav-refund-reason');
+      var cnCheck = document.getElementById('sav-refund-cn');
+      var emailCheck = document.getElementById('sav-refund-email');
       var euros = parseFloat((input && input.value) || '');
       if (!isFinite(euros) || euros <= 0) { toast('Montant invalide', 'error'); return; }
       var cents = Math.round(euros * 100);
-      if (!window.confirm('Rembourser ' + euros.toFixed(2) + ' € via Mollie sur la commande ' + (ticket.numeroCommande || '?') + ' ?')) return;
+      var method = (methodSel && methodSel.value) || '';
+      var reason = (reasonInput && reasonInput.value) || '';
+      var generateCreditNote = !!(cnCheck && cnCheck.checked);
+      var sendEmail = !!(emailCheck && emailCheck.checked);
+      var methodLabel = method
+        ? method.charAt(0).toUpperCase() + method.slice(1).replace('_', ' ')
+        : 'le provider auto-détecté';
+      if (!window.confirm('Rembourser ' + euros.toFixed(2) + ' € via ' + methodLabel + ' sur la commande ' + (ticket.numeroCommande || '?') + ' ?')) return;
       var btn = document.getElementById('sav-refund-btn');
       btn.disabled = true; btn.classList.add('opacity-60');
       api('/tickets/' + encodeURIComponent(numero) + '/refund', {
         method: 'POST',
-        body: JSON.stringify({ amountCents: cents }),
+        body: JSON.stringify({
+          amountCents: cents,
+          method: method,
+          reason: reason,
+          generateCreditNote: generateCreditNote,
+          sendEmail: sendEmail,
+        }),
       }).then(function (res) {
         if (res.ok && res.j.success) {
-          toast('Remboursement effectué', 'success');
+          var cnNum = res.j.data && res.j.data.creditNote && res.j.data.creditNote.number;
+          toast('Remboursement effectué' + (cnNum ? ' (avoir ' + cnNum + ')' : ''), 'success');
           input.value = '';
+          if (reasonInput) reasonInput.value = '';
           loadTicket();
         } else {
           toast((res.j && res.j.error) || 'Erreur', 'error');
@@ -1143,6 +1170,8 @@
             : '<div class="text-slate-400 italic">Aucune commande liée.</div>';
           return;
         }
+        /* Stocke l'orderId sur l'objet ticket pour reconstruire l'URL de l'avoir */
+        if (o._id) ticket.orderId = o._id;
         var html = '';
         // Header : numéro + statut sur une ligne
         var statusHtml = o.status

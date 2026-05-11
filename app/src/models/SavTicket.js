@@ -293,7 +293,10 @@ const savTicketSchema = new mongoose.Schema(
       },
       remboursement: {
         status: { type: String, enum: ['na', 'effectue', 'echoue'], default: 'na' },
+        method: { type: String, default: '', trim: true }, // mollie / scalapay / manual / bank_transfer / cash / other
         mollieRefundId: { type: String, trim: true },
+        providerRefundId: { type: String, default: '', trim: true }, // ID provider générique (mollie/scalapay)
+        creditNoteNumber: { type: String, default: '', trim: true }, // n° d'avoir lié si généré
         amountCents: { type: Number },
         date: { type: Date },
         reason: { type: String, trim: true },

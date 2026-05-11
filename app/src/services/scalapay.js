@@ -170,9 +170,53 @@ async function capturePayment({ token, merchantReference, amountCents, currency 
   return requestJson(url, { method: 'POST', apiKey, body });
 }
 
+/**
+ * Refund Scalapay — appelle POST /v2/payments/{token}/refunds.
+ * Supporte le partiel (passer amountCents) ; sans montant = total.
+ *
+ * Doc Scalapay : https://developers.scalapay.com/reference/refundpayment
+ *
+ * @param {object} args
+ * @param {string} args.token          - Order token Scalapay
+ * @param {number} [args.amountCents]  - montant partiel (€ * 100). Si omis : refund total
+ * @param {string} [args.refundId]     - identifiant marchand idempotent (sinon : auto-généré)
+ * @param {string} [args.reason]       - motif (visible côté Scalapay)
+ * @param {string} [args.currency='EUR']
+ * @returns {Promise<object>} réponse Scalapay
+ */
+async function refundPayment({ token, amountCents, refundId, reason, currency = 'EUR' } = {}) {
+  const apiKey = getApiKeyFromEnv();
+  const baseUrl = getBaseUrlFromEnv();
+
+  const t = getTrimmedString(token);
+  if (!t) throw new Error('token Scalapay manquant');
+
+  const body = {};
+
+  if (Number.isFinite(amountCents) && amountCents > 0) {
+    body.amount = {
+      amount: formatAmountFromCents(amountCents),
+      currency,
+    };
+  }
+
+  /* refundId idempotent : Scalapay garantit qu'un même refundId ne crée pas
+   * un doublon. Si l'admin re-clique, on bloque côté serveur (anti-spam).
+   * Si non fourni, on génère un UUID-like à partir du timestamp + random. */
+  const id = getTrimmedString(refundId) || `cpf-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  body.refundId = id;
+
+  const reasonText = getTrimmedString(reason);
+  if (reasonText) body.reason = reasonText;
+
+  const url = `${baseUrl}/v2/payments/${encodeURIComponent(t)}/refunds`;
+  return requestJson(url, { method: 'POST', apiKey, body });
+}
+
 module.exports = {
   formatAmountFromCents,
   createOrder,
   getPayment,
   capturePayment,
+  refundPayment,
 };
