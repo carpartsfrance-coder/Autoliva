@@ -194,6 +194,31 @@
     return '<span class="inline-flex w-6 h-6 rounded-full text-white items-center justify-center text-[10px] font-bold" style="background: hsl(' + hue + ',55%,45%)">' + initials + '</span>';
   }
 
+  // État conversation — basé exclusivement sur la timeline des messages
+  // (lastClientMessageAt vs lastAdminMessageAt). Le « read » côté admin n'est
+  // pas utilisé ici pour rester cohérent quand on répond sans ouvrir la fiche
+  // (macros, email API). Masqué pour les statuts terminaux.
+  var TERMINAL_STATUTS = ['clos', 'refuse', 'resolu_garantie', 'resolu_facture', 'clos_sans_reponse'];
+  function convState(t) {
+    if (!t || TERMINAL_STATUTS.indexOf(t.statut) !== -1) return null;
+    var c = t.lastClientMessageAt ? new Date(t.lastClientMessageAt).getTime() : 0;
+    var a = t.lastAdminMessageAt ? new Date(t.lastAdminMessageAt).getTime() : 0;
+    if (!c && !a) return null;
+    if (c > a) return 'clientReplied';
+    return 'waitingClient';
+  }
+  function convBadge(state) {
+    if (state === 'clientReplied') {
+      return '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-rose-200 bg-rose-50 text-rose-700 text-[10px] font-semibold" title="Le client a écrit après notre dernière réponse — à toi de jouer">' +
+        '<span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span> Client a répondu</span>';
+    }
+    if (state === 'waitingClient') {
+      return '<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full border border-amber-200 bg-amber-50 text-amber-700 text-[10px] font-semibold" title="On a répondu en dernier — on attend le retour client">' +
+        '<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span> En attente client</span>';
+    }
+    return '';
+  }
+
   // slaState — cls progressive selon % de temps écoulé du SLA (vert > 50%, orange 10-50%, rouge < 10% ou dépassé)
   // opts : { dateOuverture } pour calcul %
   function slaState(d, opts) {
@@ -485,6 +510,7 @@
                   '>' + sla2.label + '</span>' +
               '</div>' +
               '<div class="text-xs text-slate-700 truncate">' + escapeHtml((t.client && t.client.email) || '') + '</div>' +
+              (convBadge(convState(t)) ? '<div class="mt-1">' + convBadge(convState(t)) + '</div>' : '') +
               '<div class="mt-1 flex items-center gap-2 flex-wrap">' + pieceBadge(t.pieceType) +
                 statutBadge(t.statut) +
               '</div>' +
@@ -503,8 +529,9 @@
           var assignHtml = t.assignedToName
             ? '<div class="flex items-center gap-1">' + avatar(t.assignedToName) + '<span class="text-[11px] truncate max-w-[110px]">' + escapeHtml(t.assignedToName) + '</span></div>'
             : '<span class="text-[11px] text-slate-400 italic">Non assigné</span>';
-          var awaiting = t.lastClientMessageAt && (!t.lastAdminReadAt || new Date(t.lastClientMessageAt) > new Date(t.lastAdminReadAt));
-          var awaitingDot = awaiting ? '<span title="Réponse client en attente" class="inline-block w-2 h-2 rounded-full bg-rose-500 mr-1 align-middle animate-pulse"></span>' : '';
+          var convSt = convState(t);
+          var convBadgeHtml = convBadge(convSt);
+          var rowTint = convSt === 'clientReplied' ? 'sav-row--client-replied' : '';
           // Indicateur notes épinglées (couleur max priorité)
           var pinColor = '';
           var pinOrder = ['rose', 'amber', 'blue', 'emerald', 'slate'];
@@ -533,10 +560,10 @@
           };
           var mInfo = MOTIF_LABELS[t.motifSav] || MOTIF_LABELS.piece_defectueuse;
           var motifBadge = '<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-medium ' + mInfo.cls + '" title="' + escapeHtml(t.motifSav || '') + '">' + mInfo.icon + ' ' + mInfo.label + '</span>';
-          return '<tr class="hover:bg-slate-50 cursor-pointer ' + rowPulse + '" data-row="' + i + '" data-numero="' + escapeHtml(t.numero) + '">' +
+          return '<tr class="hover:bg-slate-50 cursor-pointer ' + rowPulse + ' ' + rowTint + '" data-row="' + i + '" data-numero="' + escapeHtml(t.numero) + '">' +
             '<td class="px-3 py-2 sav-col-sticky-l"><input type="checkbox" class="rounded sav-row-cb" data-numero="' + escapeHtml(t.numero) + '" ' + (selected.has(t.numero) ? 'checked' : '') + '></td>' +
-            '<td class="px-3 py-2 font-mono text-xs font-semibold sav-col-sticky-l2">' + pinDot + awaitingDot + escapeHtml(t.numero) + '</td>' +
-            '<td class="px-3 py-2"><div class="text-xs font-medium">' + escapeHtml((t.client && t.client.nom) || '') + '</div><div class="text-[10px] text-slate-500">' + escapeHtml((t.client && t.client.email) || '') + '</div></td>' +
+            '<td class="px-3 py-2 font-mono text-xs font-semibold sav-col-sticky-l2">' + pinDot + escapeHtml(t.numero) + '</td>' +
+            '<td class="px-3 py-2"><div class="text-xs font-medium">' + escapeHtml((t.client && t.client.nom) || '') + '</div><div class="text-[10px] text-slate-500">' + escapeHtml((t.client && t.client.email) || '') + '</div>' + (convBadgeHtml ? '<div class="mt-1">' + convBadgeHtml + '</div>' : '') + '</td>' +
             '<td class="px-3 py-2"><div class="flex flex-col gap-0.5">' + motifBadge + (t.pieceType ? pieceBadge(t.pieceType) : '') + '</div></td>' +
             '<td class="px-3 py-2 text-xs">' + (vstr ? escapeHtml(vstr) : '<span class="text-slate-400">—</span>') + (v.vin ? '<div class="text-[10px] font-mono text-slate-400">' + escapeHtml(v.vin) + '</div>' : '') + '</td>' +
             '<td class="px-3 py-2">' + assignHtml + '</td>' +
@@ -867,6 +894,7 @@
               '<div class="flex items-center justify-between gap-1 mb-1"><span class="font-mono font-bold text-[11px]">' + escapeHtml(t.numero) + '</span>' +
               '<span class="sav-sla-badge sav-sla-badge--' + sla2.cls + '">' + sla2.label + '</span></div>' +
               '<div class="truncate font-medium">' + escapeHtml((t.client && t.client.nom) || (t.client && t.client.email) || '—') + '</div>' +
+              (convBadge(convState(t)) ? '<div class="mt-1">' + convBadge(convState(t)) + '</div>' : '') +
               '<div class="mt-1">' + pieceBadge(t.pieceType) + '</div>' +
               (t.assignedToName ? '<div class="mt-1 flex items-center gap-1 text-slate-500">' + avatar(t.assignedToName) + '<span>' + escapeHtml(t.assignedToName) + '</span></div>' : '<div class="mt-1 text-slate-400 italic">Non assigné</div>') +
             '</a>';
@@ -978,6 +1006,7 @@
         setV('attenteFournisseur', d.enAttenteFournisseur || 0);
         setV('slaDepasse', d.slaDepasse || d.sla_depasse || 0);
         setV('awaitingClient', d.awaiting_client || 0);
+        setV('waitingForClient', d.waiting_for_client || 0);
         var bt = d.by_team || {};
         setV('teamAtelier', bt.atelier || 0);
         setV('teamLogistique', bt.logistique || 0);
