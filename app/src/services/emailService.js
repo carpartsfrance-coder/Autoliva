@@ -18,6 +18,7 @@ const {
   buildCloningPieceReceivedEmail,
   buildCloningDoneEmail,
   buildCloningFailedEmail,
+  buildRefundIssuedEmail,
 } = require('./emailTemplates');
 
 const mongoose = require('mongoose');
@@ -608,6 +609,30 @@ async function sendCloningStepEmail({ order, user, step } = {}) {
   return result;
 }
 
+/**
+ * Envoie un email "remboursement émis" au client, avec PDF d'avoir en pièce
+ * jointe si fourni.
+ */
+async function sendRefundIssuedEmail({ order, user, refund, creditNote, creditNotePdfBuffer } = {}) {
+  if (!order || !user || !user.email || !refund) return { ok: false, reason: 'missing_data' };
+  const baseUrl = getBaseUrl();
+  const built = buildRefundIssuedEmail({ order, user, refund, creditNote, baseUrl });
+  const attachments = [];
+  if (creditNotePdfBuffer && Buffer.isBuffer(creditNotePdfBuffer) && creditNotePdfBuffer.length) {
+    const number = creditNote && creditNote.number ? String(creditNote.number).trim() : '';
+    const filename = number ? `Avoir-${number}.pdf` : 'Avoir.pdf';
+    attachments.push({ filename, content: creditNotePdfBuffer.toString('base64'), disposition: 'attachment' });
+  }
+  return sendEmail({
+    toEmail: user.email,
+    subject: built.subject,
+    html: built.html,
+    text: built.text,
+    attachments,
+    replyTo: commercialReplyTo(),
+  });
+}
+
 module.exports = {
   sendEmail,
   sendOrderConfirmationEmail,
@@ -625,5 +650,6 @@ module.exports = {
   sendOrderStatusChangeEmail,
   sendCloningLabelEmail,
   sendCloningStepEmail,
+  sendRefundIssuedEmail,
   logEmailSent,
 };

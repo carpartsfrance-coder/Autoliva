@@ -46,6 +46,67 @@ const shipmentSchema = new mongoose.Schema(
   { timestamps: false }
 );
 
+/* ──────────────────────────────────────────────────────────────────────
+ * Remboursements et avoirs (credit notes)
+ * - `refunds[]` : trace chaque remboursement (auto via Mollie, ou manuel)
+ * - `creditNotes[]` : trace les avoirs PDF générés, avec leur propre
+ *   numérotation (AV-YYYY-NNNN). Un avoir peut être lié à un refund.
+ * ───────────────────────────────────────────────────────────────────── */
+const refundLineSchema = new mongoose.Schema(
+  {
+    productId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    name: { type: String, default: '', trim: true },
+    sku: { type: String, default: '', trim: true },
+    quantity: { type: Number, default: 1, min: 0 },
+    unitPriceCents: { type: Number, default: 0, min: 0 },
+    lineTotalCents: { type: Number, default: 0, min: 0 },
+  },
+  { _id: false }
+);
+
+const refundSchema = new mongoose.Schema(
+  {
+    amountCents: { type: Number, required: true, min: 1 },
+    reason: { type: String, default: '', trim: true },
+    method: {
+      type: String,
+      enum: ['mollie', 'scalapay', 'manual', 'bank_transfer', 'cash', 'other'],
+      default: 'manual',
+    },
+    /* Identifiant côté provider (mollie refund id, scalapay refund id) */
+    providerRefundId: { type: String, default: '', trim: true, index: true },
+    providerStatus: { type: String, default: '', trim: true },
+    providerRawResponse: { type: mongoose.Schema.Types.Mixed, default: null, select: false },
+    /* Numéro d'avoir lié, si un PDF a été généré */
+    creditNoteNumber: { type: String, default: '', trim: true },
+    /* Lignes remboursées (optionnel, sert au PDF d'avoir) */
+    lines: { type: [refundLineSchema], default: [] },
+    /* Métadonnées */
+    createdAt: { type: Date, required: true },
+    createdBy: { type: String, default: '', trim: true },
+    notes: { type: String, default: '', trim: true },
+  },
+  { timestamps: false }
+);
+
+const creditNoteSchema = new mongoose.Schema(
+  {
+    number: { type: String, required: true, trim: true, index: true },
+    issuedAt: { type: Date, required: true },
+    totalCents: { type: Number, required: true, min: 0 },
+    reason: { type: String, default: '', trim: true },
+    /* Lignes de l'avoir (peut différer du refund si avoir sans remboursement) */
+    lines: { type: [refundLineSchema], default: [] },
+    /* PDF binaire stocké en base (Render = filesystem éphémère) */
+    pdfData: { type: Buffer, default: null, select: false },
+    pdfSizeBytes: { type: Number, default: 0 },
+    /* Lien optionnel vers le refund correspondant (index dans refunds[]) */
+    refundIndex: { type: Number, default: null },
+    createdBy: { type: String, default: '', trim: true },
+  },
+  { timestamps: false }
+);
+
 const consigneLineSchema = new mongoose.Schema(
   {
     productId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
@@ -79,7 +140,7 @@ const statusHistorySchema = new mongoose.Schema(
   {
     status: {
       type: String,
-      enum: ['draft', 'pending_payment', 'paid', 'processing', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded'],
+      enum: ['draft', 'pending_payment', 'paid', 'processing', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded'],
       required: true,
     },
     cloningStatus: { type: String, default: null, trim: true },
@@ -164,7 +225,7 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['draft', 'pending_payment', 'paid', 'processing', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded'],
+      enum: ['draft', 'pending_payment', 'paid', 'processing', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded'],
       default: 'pending_payment',
       required: true,
     },
@@ -270,6 +331,8 @@ const orderSchema = new mongoose.Schema(
       lines: { type: [consigneLineSchema], default: [] },
     },
     shipments: { type: [shipmentSchema], default: [] },
+    refunds: { type: [refundSchema], default: [] },
+    creditNotes: { type: [creditNoteSchema], default: [] },
     totalCents: { type: Number, required: true, min: 0 },
     items: { type: [orderItemSchema], required: true },
     shippingAddress: { type: addressSnapshotSchema, required: true },

@@ -1205,6 +1205,173 @@
             </div>
           </div>
 
+          <%# ─── Remboursements & avoirs ─────────────────────────────── %>
+          <% if (typeof hasAbility === 'function' && hasAbility('orders.refund') && order.statusKey !== 'draft' && order.statusKey !== 'pending_payment' && order.statusKey !== 'cancelled') { %>
+            <div class="bg-white rounded-2xl border border-slate-200 p-6">
+              <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-slate-400">
+                  <span class="material-symbols-outlined text-base text-red-600">undo</span>
+                  Remboursements et avoirs
+                </div>
+                <% if (order.refundableLeftCents > 0) { %>
+                  <button type="button" class="btn btn-danger" data-open-refund-modal>
+                    <span class="material-symbols-outlined mr-1 text-base">payments</span>
+                    Rembourser
+                  </button>
+                <% } %>
+              </div>
+
+              <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <div class="rounded-xl border border-slate-200 p-3">
+                  <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Déjà remboursé</div>
+                  <div class="mt-1 font-bold text-slate-900"><%= order.refundsTotal %></div>
+                </div>
+                <div class="rounded-xl border border-slate-200 p-3">
+                  <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Reste remboursable</div>
+                  <div class="mt-1 font-bold text-slate-900"><%= order.refundableLeft %></div>
+                </div>
+              </div>
+
+              <% if (order.refunds && order.refunds.length) { %>
+                <div class="mt-4 space-y-3">
+                  <% order.refunds.forEach((r) => { %>
+                    <div class="rounded-xl border border-slate-200 p-4">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="font-semibold text-slate-900"><%= r.amount %> — <span class="uppercase text-xs tracking-wider text-slate-500"><%= r.method %></span></div>
+                          <% if (r.reason) { %>
+                            <div class="mt-1 text-xs text-slate-500"><%= r.reason %></div>
+                          <% } %>
+                          <% if (r.providerRefundId) { %>
+                            <div class="mt-1 text-xs text-slate-500">Ref <%= r.method %> : <span class="font-mono"><%= r.providerRefundId %></span><% if (r.providerStatus) { %> • statut : <%= r.providerStatus %><% } %></div>
+                          <% } %>
+                          <div class="mt-1 text-xs text-slate-500">Le <span class="font-semibold text-slate-500"><%= r.createdAt %></span><% if (r.createdBy) { %> par <span class="font-semibold text-slate-500"><%= r.createdBy %></span><% } %></div>
+                          <% if (r.creditNoteNumber) { %>
+                            <div class="mt-2 flex items-center gap-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                              <span class="material-symbols-outlined text-base text-red-500">picture_as_pdf</span>
+                              <span class="text-xs font-semibold text-slate-700 truncate flex-1">Avoir <%= r.creditNoteNumber %></span>
+                              <a href="<%= r.creditNotePdfUrl %>" target="_blank" class="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-slate-200 transition" title="Voir">
+                                <span class="material-symbols-outlined text-sm text-slate-600">visibility</span>
+                              </a>
+                              <a href="<%= r.creditNotePdfUrl %>?action=download" class="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-slate-200 transition" title="Télécharger">
+                                <span class="material-symbols-outlined text-sm text-slate-600">download</span>
+                              </a>
+                            </div>
+                          <% } %>
+                        </div>
+                      </div>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } else { %>
+                <div class="mt-4 text-sm text-slate-500">Aucun remboursement émis pour cette commande.</div>
+              <% } %>
+            </div>
+
+            <%# ─── Modal Rembourser ──────────────────────────────────── %>
+            <div data-refund-modal class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="text-base font-bold text-slate-900">Rembourser la commande #<%= order.number %></div>
+                  <button type="button" data-close-refund-modal class="text-slate-400 hover:text-slate-700">
+                    <span class="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+
+                <form action="/admin/commandes/<%= order.id %>/rembourser" method="POST" class="mt-4 space-y-4" data-refund-form>
+                  <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="refundAmount">Montant à rembourser (€)</label>
+                    <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" id="refundAmount" name="amount" type="text" inputmode="decimal" placeholder="Ex : 12,50" required />
+                    <div class="mt-1 text-[11px] text-slate-500">Reste remboursable : <strong><%= order.refundableLeft %></strong></div>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="refundMethod">Méthode</label>
+                    <select class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" id="refundMethod" name="method">
+                      <% if (order.molliePaymentId && order.molliePaymentStatus === 'paid') { %>
+                        <option value="mollie" <%= order.refundDefaultMethod === 'mollie' ? 'selected' : '' %>>Mollie — remboursement automatique</option>
+                      <% } %>
+                      <% if (order.scalapayOrderToken && order.scalapayStatus === 'captured') { %>
+                        <option value="scalapay" <%= order.refundDefaultMethod === 'scalapay' ? 'selected' : '' %>>Scalapay — remboursement automatique</option>
+                      <% } %>
+                      <option value="bank_transfer">Virement bancaire (manuel)</option>
+                      <option value="cash">Espèces (manuel)</option>
+                      <option value="manual">Autre / geste commercial</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="refundReason">Motif (visible sur l'avoir et l'email client)</label>
+                    <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="refundReason" name="reason" type="text" placeholder="Ex : Produit non conforme" />
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="refundNotes">Notes internes (optionnel)</label>
+                    <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" id="refundNotes" name="notes" rows="2" placeholder="Détails internes, contexte SAV…"></textarea>
+                  </div>
+
+                  <div class="space-y-2">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" name="generateCreditNote" value="on" checked class="accent-slate-800 w-4 h-4" />
+                      <span class="text-sm font-semibold text-slate-700">Générer un avoir PDF (AV-YYYY-NNNN)</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" name="sendEmail" value="on" checked class="accent-slate-800 w-4 h-4" />
+                      <span class="text-sm font-semibold text-slate-700">Envoyer un email de confirmation au client</span>
+                    </label>
+                  </div>
+
+                  <div class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-xs text-amber-900">
+                    <strong>Attention :</strong> avec Mollie ou Scalapay, l'API du provider est appelée immédiatement. Vérifie bien le montant avant de valider.
+                  </div>
+
+                  <div class="flex items-center justify-end gap-3 pt-2">
+                    <button type="button" data-close-refund-modal class="btn btn-secondary">Annuler</button>
+                    <button type="submit" class="btn btn-danger">
+                      <span class="material-symbols-outlined mr-1 text-base">payments</span>
+                      Émettre le remboursement
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <script>
+              (function () {
+                var openBtn = document.querySelector('[data-open-refund-modal]');
+                var modal = document.querySelector('[data-refund-modal]');
+                if (!modal) return;
+                var closeBtns = modal.querySelectorAll('[data-close-refund-modal]');
+                var form = modal.querySelector('[data-refund-form]');
+
+                function open() {
+                  modal.classList.remove('hidden');
+                  modal.classList.add('flex');
+                  document.body.style.overflow = 'hidden';
+                }
+                function close() {
+                  modal.classList.add('hidden');
+                  modal.classList.remove('flex');
+                  document.body.style.overflow = '';
+                }
+                if (openBtn) openBtn.addEventListener('click', open);
+                closeBtns.forEach(function (b) { b.addEventListener('click', close); });
+                modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+                document.addEventListener('keydown', function (e) {
+                  if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+                });
+                if (form) {
+                  form.addEventListener('submit', function (e) {
+                    var amount = (form.querySelector('[name=amount]').value || '').trim();
+                    if (!amount) { e.preventDefault(); alert('Renseigne un montant.'); return; }
+                    var ok = window.confirm('Émettre ce remboursement maintenant ? L\'action est immédiate côté Mollie/Scalapay.');
+                    if (!ok) e.preventDefault();
+                  });
+                }
+              })();
+            </script>
+          <% } %>
+
           <% if (order && order.consigne && order.consigne.hasConsigne) { %>
             <div class="bg-white rounded-2xl border border-slate-200 p-6">
               <div class="flex items-center justify-between gap-4">

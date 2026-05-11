@@ -1269,6 +1269,71 @@ ${renderPrimaryButton({ href: orderUrl, label: 'Suivre le parcours de ma command
   };
 }
 
+function buildRefundIssuedEmail({ order, user, refund, creditNote, baseUrl } = {}) {
+  const number = order && order.number ? String(order.number) : '';
+  const orderId = order && order._id ? String(order._id) : '';
+  const firstName = user && user.firstName ? String(user.firstName).trim() : '';
+
+  const amountCents = refund && Number.isFinite(refund.amountCents) ? refund.amountCents : 0;
+  const reason = refund && refund.reason ? String(refund.reason).trim() : '';
+  const method = refund && refund.method ? String(refund.method) : 'manual';
+  const creditNoteNumber = creditNote && creditNote.number ? String(creditNote.number) : '';
+
+  const methodLabels = {
+    mollie: 'sur le moyen de paiement utilisé (carte ou virement instantané)',
+    scalapay: 'sur votre échéancier Scalapay',
+    manual: 'manuellement par notre service commercial',
+    bank_transfer: 'par virement bancaire',
+    cash: 'en espèces',
+    other: '',
+  };
+  const methodText = methodLabels[method] || methodLabels.other;
+  const eta = method === 'mollie'
+    ? 'Le crédit apparaît généralement sous 1 à 5 jours ouvrés.'
+    : method === 'scalapay'
+      ? 'Scalapay ajuste vos prochaines échéances automatiquement.'
+      : '';
+
+  const subject = number ? `Remboursement de votre commande #${number}` : 'Remboursement effectué';
+  const orderUrl = baseUrl && orderId ? `${baseUrl.replace(/\/$/, '')}/compte/commandes/${encodeURIComponent(orderId)}` : '';
+
+  const bodyHtml = `
+<div style="font-size:16px;font-weight:900;">${firstName ? `${escapeHtml(firstName)}, ` : ''}votre remboursement a été émis</div>
+<div style="margin-top:10px;font-size:14px;line-height:1.6;color:#334155;">
+  ${number ? `Concernant la commande <strong>#${escapeHtml(number)}</strong>. ` : ''}Nous avons émis le remboursement suivant${methodText ? ` ${escapeHtml(methodText)}` : ''}.
+</div>
+
+<div style="margin-top:14px;padding:14px 16px;border:1px solid #fee2e2;background:#fef2f2;border-radius:14px;color:#0f172a;font-size:14px;line-height:1.7;">
+  <div style="display:flex;justify-content:space-between;gap:10px;">
+    <div style="font-weight:900;">Montant remboursé</div>
+    <div style="font-weight:900;white-space:nowrap;color:#b91c1c;">${escapeHtml(formatEuro(amountCents))}</div>
+  </div>
+  ${reason ? `<div style="margin-top:8px;font-size:13px;color:#475569;">Motif : ${escapeHtml(reason)}</div>` : ''}
+  ${creditNoteNumber ? `<div style="margin-top:8px;font-size:13px;color:#475569;">Avoir n° <strong>${escapeHtml(creditNoteNumber)}</strong> joint à ce mail.</div>` : ''}
+</div>
+
+${eta ? `<div style="margin-top:12px;font-size:13px;line-height:1.6;color:#475569;">${escapeHtml(eta)}</div>` : ''}
+
+${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
+
+<div style="margin-top:14px;font-size:12px;line-height:1.6;color:#64748b;">
+  Si vous avez la moindre question, répondez simplement à ce mail.
+</div>`;
+
+  const text = `Remboursement émis${number ? ` (commande #${number})` : ''}. Montant: ${formatEuro(amountCents)}.${reason ? ` Motif: ${reason}.` : ''}${creditNoteNumber ? ` Avoir: ${creditNoteNumber}.` : ''}`;
+
+  return {
+    subject,
+    html: renderEmailLayout({
+      title: subject,
+      preheader: `Remboursement de ${formatEuro(amountCents)} émis`,
+      bodyHtml,
+      baseUrl,
+    }),
+    text,
+  };
+}
+
 module.exports = {
   buildOrderConfirmationEmail,
   buildConsigneStartEmail,
@@ -1289,4 +1354,5 @@ module.exports = {
   buildCloningPieceReceivedEmail,
   buildCloningDoneEmail,
   buildCloningFailedEmail,
+  buildRefundIssuedEmail,
 };

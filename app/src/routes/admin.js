@@ -172,6 +172,8 @@ router.get('/commandes/:orderId', requireAdminAuth, adminController.getAdminOrde
 router.post('/commandes/:orderId/statut', requireAdminAuth, adminController.postAdminUpdateOrderStatus);
 router.post('/commandes/:orderId/type', requireAdminAuth, adminController.postAdminUpdateOrderType);
 router.post('/commandes/:orderId/consigne/recu', requireAdminAuth, adminController.postAdminMarkOrderConsigneReceived);
+router.post('/commandes/:orderId/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundOrder);
+router.get('/commandes/:orderId/avoir/:creditNoteNumber/pdf', requireAdminAuth, requireAbility('orders.refund'), adminController.getAdminOrderCreditNotePdf);
 router.post('/commandes/:orderId/suivi', requireAdminAuth, handleShippingDocUpload, adminController.postAdminAddOrderShipment);
 router.get('/commandes/:orderId/suivi/:shipmentId/document', requireAdminAuth, adminController.getAdminShipmentDocument);
 router.post('/commandes/:orderId/suivi/:shipmentId/supprimer', requireAdminAuth, adminController.postAdminDeleteOrderShipment);
