@@ -185,7 +185,7 @@
           <div class="relative w-full aspect-video rounded-xl bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-800 refined-shadow">
             <% if (mainMediaItem) { %>
               <% const _isMainVideo = mainMediaItem.type === 'video'; %>
-              <img alt="<%= product.name %> — photo principale" class="w-full h-full object-cover<%= _isMainVideo ? ' hidden' : '' %>" data-main-image decoding="async" loading="eager" fetchpriority="high" width="800" height="450" <% if (!_isMainVideo) { %>src="<%= mainImage %>"<% } %> />
+              <img alt="<%= product.name %> — photo principale" class="w-full h-full object-cover cursor-zoom-in<%= _isMainVideo ? ' hidden' : '' %>" data-main-image decoding="async" loading="eager" fetchpriority="high" width="800" height="450" <% if (!_isMainVideo) { %>src="<%= mainImage %>"<% } %> />
               <video class="w-full h-full object-cover<%= _isMainVideo ? '' : ' hidden' %>" data-main-video controls preload="metadata" playsinline<% if (_isMainVideo) { %> src="<%= mainImage %>"<% } %>></video>
             <% } else { %>
               <div class="w-full h-full flex items-center justify-center text-slate-400">
@@ -201,6 +201,21 @@
                 <span class="material-symbols-outlined">chevron_right</span>
               </button>
             <% } %>
+          </div>
+
+          <%# Lightbox — agrandir l'image au clic %>
+          <div aria-hidden="true" aria-label="Image agrandie" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/90 backdrop-blur-sm p-4 sm:p-8" data-lightbox role="dialog" tabindex="-1">
+            <button aria-label="Fermer" class="absolute top-4 right-4 z-10 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition" data-lightbox-close type="button">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+            <button aria-label="Image précédente" class="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition hidden" data-lightbox-prev type="button">
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            <button aria-label="Image suivante" class="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition hidden" data-lightbox-next type="button">
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+            <img alt="" class="max-w-full max-h-full object-contain select-none" data-lightbox-img />
+            <div class="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-xs font-semibold tracking-wider hidden" data-lightbox-counter></div>
           </div>
 
           <% if (visibleThumbItems.length) { %>
@@ -1126,13 +1141,95 @@
               });
             }
 
-            mainImg.addEventListener('click', function () {
-              setIndex(currentIndex + 1);
-            });
+            /* ── Lightbox : ouvrir au clic sur l'image principale ─────── */
+            var lightbox = document.querySelector('[data-lightbox]');
+            var lightboxImg = lightbox ? lightbox.querySelector('[data-lightbox-img]') : null;
+            var lightboxPrev = lightbox ? lightbox.querySelector('[data-lightbox-prev]') : null;
+            var lightboxNext = lightbox ? lightbox.querySelector('[data-lightbox-next]') : null;
+            var lightboxClose = lightbox ? lightbox.querySelector('[data-lightbox-close]') : null;
+            var lightboxCounter = lightbox ? lightbox.querySelector('[data-lightbox-counter]') : null;
+
+            /* Indices des images (vidéos exclues) pour la nav lightbox */
+            var imageThumbIndices = thumbs.reduce(function (acc, t, i) {
+              if ((t.getAttribute('data-type') || 'image') !== 'video') acc.push(i);
+              return acc;
+            }, []);
+            var lightboxImageIdx = 0; // position dans imageThumbIndices
+
+            function updateLightboxCounter() {
+              if (!lightboxCounter) return;
+              if (imageThumbIndices.length <= 1) {
+                lightboxCounter.classList.add('hidden');
+                return;
+              }
+              lightboxCounter.classList.remove('hidden');
+              lightboxCounter.textContent = (lightboxImageIdx + 1) + ' / ' + imageThumbIndices.length;
+            }
+
+            function showLightboxAt(imageIdx) {
+              if (!lightbox || !lightboxImg) return;
+              if (!imageThumbIndices.length) return;
+              if (imageIdx < 0) imageIdx = imageThumbIndices.length - 1;
+              if (imageIdx >= imageThumbIndices.length) imageIdx = 0;
+              lightboxImageIdx = imageIdx;
+              var thumb = thumbs[imageThumbIndices[imageIdx]];
+              var src = thumb && thumb.getAttribute('data-src');
+              if (!src) return;
+              lightboxImg.setAttribute('src', src);
+              lightboxImg.setAttribute('alt', (mainImg && mainImg.getAttribute('alt')) || '');
+              updateLightboxCounter();
+              /* Sync également l'image principale + thumb actif */
+              setIndex(imageThumbIndices[imageIdx]);
+            }
+
+            function openLightbox() {
+              if (!lightbox || !mainImg || mainImg.classList.contains('hidden')) return;
+              /* Trouver l'index image courant dans imageThumbIndices */
+              var pos = imageThumbIndices.indexOf(currentIndex);
+              if (pos < 0) pos = 0;
+              showLightboxAt(pos);
+              lightbox.classList.remove('hidden');
+              lightbox.classList.add('flex');
+              lightbox.setAttribute('aria-hidden', 'false');
+              document.body.style.overflow = 'hidden';
+              if (lightboxPrev) lightboxPrev.classList.toggle('hidden', imageThumbIndices.length <= 1);
+              if (lightboxNext) lightboxNext.classList.toggle('hidden', imageThumbIndices.length <= 1);
+              try { lightbox.focus(); } catch (e) {}
+            }
+
+            function closeLightbox() {
+              if (!lightbox) return;
+              lightbox.classList.add('hidden');
+              lightbox.classList.remove('flex');
+              lightbox.setAttribute('aria-hidden', 'true');
+              document.body.style.overflow = '';
+            }
+
+            if (lightbox && mainImg) {
+              mainImg.addEventListener('click', openLightbox);
+
+              if (lightboxClose) lightboxClose.addEventListener('click', closeLightbox);
+              if (lightboxPrev) lightboxPrev.addEventListener('click', function () { showLightboxAt(lightboxImageIdx - 1); });
+              if (lightboxNext) lightboxNext.addEventListener('click', function () { showLightboxAt(lightboxImageIdx + 1); });
+
+              /* Clic sur l'overlay (pas sur l'image ou les boutons) → fermer */
+              lightbox.addEventListener('click', function (e) {
+                if (e.target === lightbox) closeLightbox();
+              });
+            }
 
             document.addEventListener('keydown', function (e) {
               if (!e) return;
               if (e.altKey || e.ctrlKey || e.metaKey) return;
+              var lightboxOpen = lightbox && !lightbox.classList.contains('hidden');
+
+              if (lightboxOpen) {
+                if (e.key === 'Escape') { e.preventDefault(); closeLightbox(); return; }
+                if (e.key === 'ArrowLeft') { e.preventDefault(); showLightboxAt(lightboxImageIdx - 1); return; }
+                if (e.key === 'ArrowRight') { e.preventDefault(); showLightboxAt(lightboxImageIdx + 1); return; }
+                return;
+              }
+
               var tag = (e.target && e.target.tagName) ? String(e.target.tagName).toLowerCase() : '';
               if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
 
