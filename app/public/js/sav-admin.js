@@ -1154,6 +1154,114 @@
       });
     });
 
+    /* ── Liens de paiement Mollie sur mesure ───────────────────── */
+    function statusBadgeClasses(s) {
+      if (s === 'paid') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      if (s === 'failed' || s === 'canceled' || s === 'expired') return 'bg-rose-50 text-rose-700 border-rose-200';
+      return 'bg-amber-50 text-amber-700 border-amber-200';
+    }
+    function renderPaymentLinksPanel() {
+      var box = document.getElementById('sav-paymentlinks-list');
+      if (!box) return;
+      var links = (ticket.paiements && Array.isArray(ticket.paiements.customLinks)) ? ticket.paiements.customLinks : [];
+      if (!links.length) { box.textContent = 'Aucun lien de paiement.'; return; }
+      var html = '';
+      links.slice().sort(function (a, b) { return (new Date(b.createdAt || 0)) - (new Date(a.createdAt || 0)); }).forEach(function (l) {
+        var amt = ((l.amountCents || 0) / 100).toFixed(2);
+        var label = escapeHtml(l.label || '—');
+        var st = escapeHtml(l.status || 'pending');
+        var badge = statusBadgeClasses(l.status);
+        var url = l.paymentUrl || '';
+        var paidLine = l.paidAt ? '<div class="mt-0.5 text-[10px] text-emerald-700">Payé le ' + escapeHtml(formatDateTime(l.paidAt)) + '</div>' : '';
+        var sentLine = l.sentToClientAt ? '<div class="mt-0.5 text-[10px] text-slate-400">Envoyé le ' + escapeHtml(formatDateTime(l.sentToClientAt)) + '</div>' : '';
+        var actions = '';
+        if (l.status === 'pending' && url) {
+          actions += '<button type="button" class="sav-paymentlink-send text-[10px] font-semibold text-blue-600 hover:underline" data-mollie-id="' + escapeHtml(l.mollieId) + '">Envoyer par email</button>';
+          actions += ' · <button type="button" class="sav-paymentlink-copy text-[10px] font-semibold text-slate-600 hover:underline" data-url="' + escapeHtml(url) + '">Copier le lien</button>';
+          actions += ' · <a href="' + escapeHtml(url) + '" target="_blank" class="text-[10px] font-semibold text-slate-600 hover:underline">Ouvrir</a>';
+        } else if (url) {
+          actions += '<a href="' + escapeHtml(url) + '" target="_blank" class="text-[10px] font-semibold text-slate-600 hover:underline">Voir sur Mollie</a>';
+        }
+        html += '<div class="rounded-lg border border-slate-200 px-2 py-1.5 bg-white">'
+          + '<div class="flex items-center justify-between gap-2">'
+            + '<div class="min-w-0">'
+              + '<div class="font-bold text-slate-900">' + amt + ' € · <span class="font-normal text-slate-600">' + label + '</span></div>'
+              + paidLine + sentLine
+            + '</div>'
+            + '<span class="text-[9px] uppercase tracking-wider font-semibold border rounded-full px-1.5 py-0.5 ' + badge + '">' + st + '</span>'
+          + '</div>'
+          + (actions ? '<div class="mt-1">' + actions + '</div>' : '')
+        + '</div>';
+      });
+      box.innerHTML = html;
+    }
+    function formatDateTime(v) {
+      try { var d = new Date(v); return d.toLocaleString('fr-FR'); } catch (e) { return ''; }
+    }
+
+    document.addEventListener('click', function (e) {
+      var createBtn = e.target.closest('#sav-paymentlink-create');
+      if (createBtn) {
+        var amtInput = document.getElementById('sav-paymentlink-amount');
+        var labelInput = document.getElementById('sav-paymentlink-label');
+        var descInput = document.getElementById('sav-paymentlink-desc');
+        var euros = parseFloat((amtInput && amtInput.value) || '');
+        if (!isFinite(euros) || euros <= 0) { toast('Montant invalide', 'error'); return; }
+        var cents = Math.round(euros * 100);
+        var label = (labelInput && labelInput.value || '').trim();
+        var description = (descInput && descInput.value || '').trim();
+        if (!window.confirm('Créer un lien Mollie de ' + euros.toFixed(2) + ' € pour le ticket ' + numero + ' ?')) return;
+        createBtn.disabled = true; createBtn.classList.add('opacity-60');
+        api('/tickets/' + encodeURIComponent(numero) + '/payment-link', {
+          method: 'POST',
+          body: JSON.stringify({ amountCents: cents, label: label, description: description }),
+        }).then(function (res) {
+          if (res.ok && res.j.success) {
+            toast('Lien créé : ' + euros.toFixed(2) + ' €', 'success');
+            if (amtInput) amtInput.value = '';
+            if (labelInput) labelInput.value = '';
+            if (descInput) descInput.value = '';
+            loadTicket();
+          } else {
+            toast((res.j && res.j.error) || 'Erreur', 'error');
+          }
+        }).catch(function (err) { toast(err.message || 'Erreur', 'error'); })
+          .finally(function () { createBtn.disabled = false; createBtn.classList.remove('opacity-60'); });
+        return;
+      }
+
+      var sendBtn = e.target.closest('.sav-paymentlink-send');
+      if (sendBtn) {
+        var mid = sendBtn.getAttribute('data-mollie-id');
+        if (!mid) return;
+        if (!window.confirm('Envoyer ce lien de paiement au client par email ?')) return;
+        sendBtn.disabled = true; sendBtn.classList.add('opacity-60');
+        api('/tickets/' + encodeURIComponent(numero) + '/payment-link/' + encodeURIComponent(mid) + '/send', { method: 'POST' })
+          .then(function (res) {
+            if (res.ok && res.j.success) {
+              toast('Email envoyé à ' + ((res.j.data && res.j.data.sentTo) || 'client'), 'success');
+              loadTicket();
+            } else {
+              toast((res.j && res.j.error) || 'Erreur', 'error');
+            }
+          }).catch(function (err) { toast(err.message || 'Erreur', 'error'); })
+          .finally(function () { sendBtn.disabled = false; sendBtn.classList.remove('opacity-60'); });
+        return;
+      }
+
+      var copyBtn = e.target.closest('.sav-paymentlink-copy');
+      if (copyBtn) {
+        var url = copyBtn.getAttribute('data-url');
+        if (!url) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(function () { toast('Lien copié', 'success'); }).catch(function () { toast('Copie impossible', 'error'); });
+        } else {
+          window.prompt('Copier le lien :', url);
+        }
+        return;
+      }
+    });
+
     function loadOrderContext() {
       var box = document.getElementById('sav-order-context-body');
       if (!box) return;
@@ -1244,6 +1352,7 @@
         renderTabBadges();
         loadOrderContext();
         renderRefundPanel();
+        renderPaymentLinksPanel();
         // Skeletons → clear aria-busy (innerHTML already replaced)
         ['sav-header-meta', 'sav-dossier', 'sav-timeline', 'sav-documents'].forEach(function (id) {
           var el = document.getElementById(id);

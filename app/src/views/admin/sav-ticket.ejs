@@ -749,6 +749,22 @@
                   <span class="material-symbols-outlined" style="font-size:14px;">undo</span>Rembourser
                 </button>
               </div>
+
+              <%# ── Liens de paiement Mollie sur mesure ────────────────── %>
+              <div class="pt-2 border-t border-slate-100">
+                <div class="text-[10px] uppercase tracking-wide font-semibold text-slate-400 mb-0.5">Lien de paiement Mollie</div>
+                <div id="sav-paymentlinks-list" class="text-xs text-slate-500 mb-1.5 space-y-1.5">—</div>
+                <input type="number" id="sav-paymentlink-amount" min="0" step="0.01" placeholder="Montant € (ex : 49,90)"
+                       class="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs mb-1.5">
+                <input type="text" id="sav-paymentlink-label" placeholder="Libellé (ex : Frais transport DOM)"
+                       class="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs mb-1.5">
+                <input type="text" id="sav-paymentlink-desc" placeholder="Description visible client (optionnel)"
+                       class="w-full rounded-lg border border-slate-200 px-2 py-1 text-xs mb-1.5">
+                <button type="button" id="sav-paymentlink-create" class="btn btn-secondary w-full text-[10px] inline-flex items-center justify-center gap-1">
+                  <span class="material-symbols-outlined" style="font-size:14px;">link</span>Générer le lien Mollie
+                </button>
+                <div class="mt-1 text-[10px] text-slate-400 leading-tight">Le lien est créé immédiatement. À envoyer au client via le bouton "Envoyer" ci-dessous, ou à copier manuellement.</div>
+              </div>
             </div>
           </details>
 

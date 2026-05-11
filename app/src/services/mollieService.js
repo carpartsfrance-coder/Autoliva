@@ -166,11 +166,85 @@ async function createQontoAndMollieAndNotify(ticketNumero) {
   };
 }
 
+/**
+ * Crée un lien de paiement Mollie sur mesure pour un ticket SAV (montant libre).
+ * Distinct du forfait 149€ : ajoute une entrée dans `paiements.customLinks[]`.
+ *
+ * @param {object} args
+ * @param {string} args.ticketNumero
+ * @param {number} args.amountCents      - montant en cents (>= 1)
+ * @param {string} [args.label]          - libellé interne (admin)
+ * @param {string} [args.description]    - description Mollie + email client
+ * @param {string} [args.adminEmail]     - qui a créé le lien
+ * @returns {Promise<{ linkId, mollieId, paymentUrl, amountCents, status }>}
+ */
+async function createCustomPaymentLink({ ticketNumero, amountCents, label, description, adminEmail } = {}) {
+  const ticket = await SavTicket.findOne({ numero: ticketNumero });
+  if (!ticket) throw new Error(`Ticket SAV introuvable : ${ticketNumero}`);
+  if (!Number.isFinite(amountCents) || amountCents < 1) throw new Error('Montant invalide');
+
+  const safeLabel = (typeof label === 'string' ? label.trim() : '') || 'Paiement complémentaire';
+  const safeDescription = (typeof description === 'string' ? description.trim() : '')
+    || `${safeLabel} - SAV ${ticket.numero}`;
+
+  const payment = await mollie.createPayment({
+    amountCents,
+    description: safeDescription,
+    redirectUrl: `${getSiteUrl()}/sav/suivi/${encodeURIComponent(ticket.numero)}`,
+    webhookUrl: getWebhookUrl(),
+    metadata: { savNumero: ticket.numero, kind: 'sav-custom-link', label: safeLabel },
+  });
+  if (!payment || !payment.id) throw new Error("Réponse Mollie invalide (pas d'id)");
+
+  const paymentUrl = payment._links && payment._links.checkout && payment._links.checkout.href;
+
+  ticket.paiements = ticket.paiements || {};
+  if (!Array.isArray(ticket.paiements.customLinks)) ticket.paiements.customLinks = [];
+  const entry = {
+    label: safeLabel,
+    description: safeDescription,
+    amountCents,
+    currency: 'EUR',
+    mollieId: payment.id,
+    paymentUrl: paymentUrl || '',
+    status: 'pending',
+    createdAt: new Date(),
+    createdBy: (typeof adminEmail === 'string' ? adminEmail.trim() : '') || 'admin',
+  };
+  ticket.paiements.customLinks.push(entry);
+  ticket.addMessage(
+    'admin',
+    'interne',
+    `Lien Mollie sur mesure créé : ${(amountCents / 100).toFixed(2)} € — ${safeLabel} (${payment.id})`
+  );
+  await ticket.save();
+
+  /* L'_id n'est pas fiable côté lean — mongoose n'auto-id pas dans nos
+   * subdocs `customLinks` (cf. autres tableaux du modèle). On utilise
+   * mollieId comme identifiant côté UI (unique, indexé). */
+  return {
+    mollieId: payment.id,
+    paymentUrl: paymentUrl || '',
+    amountCents,
+    status: 'pending',
+    label: safeLabel,
+    description: safeDescription,
+  };
+}
+
 // Mapping Mollie status → notre statut interne
 function mapMollieStatus(s) {
   if (s === 'paid') return 'payee';
   if (s === 'failed' || s === 'canceled' || s === 'expired') return 'impayee';
   return 'a_facturer'; // open / pending / authorized
+}
+
+function mapCustomLinkStatus(s) {
+  if (s === 'paid') return 'paid';
+  if (s === 'failed') return 'failed';
+  if (s === 'canceled') return 'canceled';
+  if (s === 'expired') return 'expired';
+  return 'pending'; // open / pending / authorized
 }
 
 async function handleWebhook(mollieId) {
@@ -188,8 +262,51 @@ async function handleWebhook(mollieId) {
     return { ok: false, reason: 'ticket_not_found', mollieId, savNumero };
   }
 
-  const newStatus = mapMollieStatus(payment.status);
+  const kind = payment.metadata && payment.metadata.kind;
   ticket.paiements = ticket.paiements || {};
+
+  /* ── Route 1 : lien de paiement sur mesure ──────────────────── */
+  if (kind === 'sav-custom-link') {
+    if (!Array.isArray(ticket.paiements.customLinks)) ticket.paiements.customLinks = [];
+    const link = ticket.paiements.customLinks.find((l) => l && l.mollieId === mollieId);
+    if (!link) {
+      return { ok: false, reason: 'custom_link_not_found', mollieId, savNumero };
+    }
+    const newStatus = mapCustomLinkStatus(payment.status);
+    link.status = newStatus;
+    link.lastWebhookAt = new Date();
+    if (newStatus === 'paid' && !link.paidAt) {
+      link.paidAt = new Date();
+      ticket.addMessage(
+        'systeme',
+        'interne',
+        `Lien Mollie sur mesure payé (${mollieId}) — ${(link.amountCents / 100).toFixed(2)} €`
+      );
+      try {
+        const { sendEmail } = require('./emailService');
+        await sendEmail({
+          toEmail: ticket.client && ticket.client.email,
+          subject: `[SAV ${ticket.numero}] Reçu de paiement ${(link.amountCents / 100).toFixed(2)} €`,
+          html: `<p>Bonjour ${(ticket.client && ticket.client.nom) || ''},</p>
+            <p>Nous avons bien reçu votre paiement de <strong>${(link.amountCents / 100).toFixed(2)} €</strong> pour le dossier SAV <strong>${ticket.numero}</strong>${link.label ? ` (${link.label})` : ''}.</p>
+            <p>Merci de votre confiance.</p>
+            <p style="font-size:13px;color:#475569;">Référence Mollie : ${mollieId}</p>`,
+          text: `Reçu de paiement ${(link.amountCents / 100).toFixed(2)}€ pour le dossier ${ticket.numero}. Réf Mollie ${mollieId}.`,
+        });
+      } catch (_) {}
+    } else if (newStatus === 'failed' || newStatus === 'canceled' || newStatus === 'expired') {
+      ticket.addMessage(
+        'systeme',
+        'interne',
+        `Lien Mollie sur mesure ${newStatus} (${mollieId}, status=${payment.status})`
+      );
+    }
+    await ticket.save();
+    return { ok: true, savNumero, mollieStatus: payment.status, kind: 'sav-custom-link', linkStatus: newStatus };
+  }
+
+  /* ── Route 2 : forfait 149€ (comportement historique inchangé) ─ */
+  const newStatus = mapMollieStatus(payment.status);
   ticket.paiements.facture149 = ticket.paiements.facture149 || {};
   ticket.paiements.facture149.status = newStatus;
   ticket.paiements.facture149.mollieId = mollieId;
@@ -197,7 +314,6 @@ async function handleWebhook(mollieId) {
     ticket.paiements.facture149.datePaiement = new Date();
     if (ticket.analyse) ticket.analyse.facture149 = { status: 'payee' };
     ticket.addMessage('systeme', 'interne', `Paiement 149€ confirmé (Mollie ${mollieId})`);
-    // Reçu de paiement
     try {
       const { sendEmail } = require('./emailService');
       await sendEmail({
@@ -210,7 +326,6 @@ async function handleWebhook(mollieId) {
         text: `Reçu de paiement 149€ pour le dossier ${ticket.numero}. Réf Mollie ${mollieId}.`,
       });
     } catch (_) {}
-    // Notif Slack (si configuré)
     try { require('./slackNotifier').notifyPaymentReceived(ticket); } catch (_) {}
   } else if (newStatus === 'impayee') {
     if (ticket.analyse) ticket.analyse.facture149 = { status: 'impayee' };
@@ -221,9 +336,73 @@ async function handleWebhook(mollieId) {
   return { ok: true, savNumero, mollieStatus: payment.status, internalStatus: newStatus };
 }
 
+/**
+ * Envoie le lien de paiement sur mesure au client par email.
+ * @param {object} args
+ * @param {string} args.ticketNumero
+ * @param {string} args.mollieId        - identifie le lien dans paiements.customLinks[]
+ * @param {string} [args.adminEmail]
+ * @returns {Promise<{ ok, recipient, status }>}
+ */
+async function sendCustomPaymentLinkEmail({ ticketNumero, mollieId, adminEmail } = {}) {
+  const ticket = await SavTicket.findOne({ numero: ticketNumero });
+  if (!ticket) throw new Error(`Ticket SAV introuvable : ${ticketNumero}`);
+  if (!Array.isArray(ticket.paiements && ticket.paiements.customLinks)) {
+    throw new Error('Aucun lien de paiement sur ce ticket');
+  }
+  const link = ticket.paiements.customLinks.find((l) => l && l.mollieId === mollieId);
+  if (!link) throw new Error(`Lien Mollie ${mollieId} introuvable sur le ticket`);
+  if (!link.paymentUrl) throw new Error('URL de paiement Mollie manquante (lien à régénérer)');
+
+  const toEmail = ticket.client && ticket.client.email ? String(ticket.client.email).trim() : '';
+  if (!toEmail) throw new Error('Email client manquant sur le ticket');
+
+  const { sendEmail } = require('./emailService');
+  const amountText = (link.amountCents / 100).toFixed(2).replace('.', ',');
+  const greetingName = (ticket.client && ticket.client.prenom) || (ticket.client && ticket.client.nom) || '';
+  const labelLine = link.label ? `<p style="margin:0 0 8px 0;font-size:13px;color:#475569;">Objet : <strong>${link.label}</strong></p>` : '';
+  const descLine = link.description && link.description !== link.label ? `<p style="margin:0 0 8px 0;font-size:13px;color:#475569;">${link.description}</p>` : '';
+
+  const html = `
+    <p>Bonjour ${greetingName},</p>
+    <p>Concernant votre dossier SAV <strong>${ticket.numero}</strong>, nous vous transmettons un lien de paiement sécurisé Mollie :</p>
+    <div style="margin:14px 0;padding:14px 16px;border:1px solid #e5e7eb;background:#f8fafc;border-radius:14px;">
+      ${labelLine}
+      ${descLine}
+      <div style="margin-top:6px;font-size:18px;font-weight:900;color:#0f172a;">${amountText} €</div>
+    </div>
+    <p style="text-align:center;margin:24px 0;">
+      <a href="${link.paymentUrl}" style="display:inline-block;padding:12px 22px;background:#ec1313;color:#fff;text-decoration:none;border-radius:10px;font-weight:700;">Régler ${amountText} € en ligne</a>
+    </p>
+    <p style="font-size:13px;color:#475569;">Référence : ${ticket.numero} · Lien sécurisé Mollie (paiement par carte / Apple Pay / virement instantané).</p>
+    <p style="font-size:12px;color:#64748b;margin-top:18px;">Si vous avez une question, répondez simplement à ce mail.</p>
+  `;
+  const text = `Lien de paiement SAV ${ticket.numero} - ${amountText} EUR\n${link.label || ''}\n\nRégler en ligne : ${link.paymentUrl}\n`;
+
+  const result = await sendEmail({
+    toEmail,
+    subject: `[SAV ${ticket.numero}] Lien de paiement ${amountText} €${link.label ? ` — ${link.label}` : ''}`,
+    html,
+    text,
+  });
+
+  link.sentToClientAt = new Date();
+  link.sentToClientBy = (typeof adminEmail === 'string' ? adminEmail.trim() : '') || 'admin';
+  ticket.addMessage(
+    'admin',
+    'interne',
+    `Lien Mollie envoyé au client par email : ${amountText} € — ${link.label || mollieId}`
+  );
+  await ticket.save();
+
+  return { ok: !!(result && result.ok !== false), recipient: toEmail, status: link.status };
+}
+
 module.exports = {
   createPayment149,
   createQontoAndMollieAndNotify,
+  createCustomPaymentLink,
+  sendCustomPaymentLinkEmail,
   handleWebhook,
   PRICE_CENTS_149,
 };

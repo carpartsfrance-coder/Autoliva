@@ -301,6 +301,32 @@ const savTicketSchema = new mongoose.Schema(
         date: { type: Date },
         reason: { type: String, trim: true },
       },
+      /* Liens de paiement Mollie sur mesure (montants libres, demandes ad-hoc).
+       * Distinct du forfait 149€ (`facture149`) qui reste géré séparément. */
+      customLinks: {
+        type: [
+          {
+            label: { type: String, default: '', trim: true },
+            description: { type: String, default: '', trim: true },
+            amountCents: { type: Number, required: true, min: 1 },
+            currency: { type: String, default: 'EUR', trim: true },
+            mollieId: { type: String, default: '', trim: true, index: true },
+            paymentUrl: { type: String, default: '', trim: true },
+            status: {
+              type: String,
+              enum: ['pending', 'paid', 'failed', 'canceled', 'expired'],
+              default: 'pending',
+            },
+            createdAt: { type: Date, required: true },
+            createdBy: { type: String, default: '', trim: true },
+            sentToClientAt: { type: Date, default: null },
+            sentToClientBy: { type: String, default: '', trim: true },
+            paidAt: { type: Date, default: null },
+            lastWebhookAt: { type: Date, default: null },
+          },
+        ],
+        default: [],
+      },
     },
 
     // Feedback client (4.4 Google Reviews)
