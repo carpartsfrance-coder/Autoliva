@@ -1609,6 +1609,8 @@ function getOrderStatusBadge(status) {
       return { label: 'Annulée', className: 'status-chip status-annulee' };
     case 'refunded':
       return { label: 'Remboursée', className: 'status-chip status-remboursee' };
+    case 'partially_refunded':
+      return { label: 'Partiellement remboursée', className: 'status-chip status-remboursee' };
     default:
       return { label: status || '—', className: 'status-chip' };
   }
@@ -1665,6 +1667,7 @@ function getOrderStatusOptions() {
     { key: 'delivered', label: 'Livrée' },
     { key: 'completed', label: 'Terminée' },
     { key: 'cancelled', label: 'Annulée' },
+    { key: 'partially_refunded', label: 'Partiellement remboursée' },
     { key: 'refunded', label: 'Remboursée' },
   ];
 }
@@ -2790,6 +2793,34 @@ async function getAdminOrderDetailPage(req, res, next) {
         }))
       : [];
 
+    /* ── Remboursements & avoirs ─────────────────────────────────── */
+    const refundsList = Array.isArray(orderDoc.refunds) ? orderDoc.refunds : [];
+    const refundsTotalCents = refundsList.reduce((s, r) => s + (Number(r && r.amountCents) || 0), 0);
+    const orderTotalCents = Number(orderDoc.totalCents) || 0;
+    const refundableLeftCents = Math.max(0, orderTotalCents - refundsTotalCents);
+
+    const viewRefunds = refundsList
+      .slice()
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      .map((r) => ({
+        amount: formatEuro(r.amountCents || 0),
+        method: r.method || 'manual',
+        reason: r.reason || '',
+        providerRefundId: r.providerRefundId || '',
+        providerStatus: r.providerStatus || '',
+        creditNoteNumber: r.creditNoteNumber || '',
+        createdAt: r.createdAt ? formatDateTimeFR(r.createdAt) : '',
+        createdBy: r.createdBy || '',
+        notes: r.notes || '',
+        creditNotePdfUrl: r.creditNoteNumber
+          ? `/admin/commandes/${String(orderDoc._id)}/avoir/${encodeURIComponent(r.creditNoteNumber)}/pdf`
+          : '',
+      }));
+
+    const refundDefaultMethod = orderDoc.molliePaymentId && orderDoc.molliePaymentStatus === 'paid'
+      ? 'mollie'
+      : (orderDoc.scalapayOrderToken && orderDoc.scalapayStatus === 'captured' ? 'scalapay' : 'manual');
+
     const consigneLines = orderDoc && orderDoc.consigne && Array.isArray(orderDoc.consigne.lines)
       ? orderDoc.consigne.lines
       : [];
@@ -2952,6 +2983,16 @@ async function getAdminOrderDetailPage(req, res, next) {
         shipments,
         documents: orderDocuments,
         allDocuments,
+        refunds: viewRefunds,
+        refundsTotal: formatEuro(refundsTotalCents),
+        refundsTotalCents,
+        refundableLeft: formatEuro(refundableLeftCents),
+        refundableLeftCents,
+        refundDefaultMethod,
+        molliePaymentId: orderDoc.molliePaymentId || '',
+        molliePaymentStatus: orderDoc.molliePaymentStatus || '',
+        scalapayOrderToken: orderDoc.scalapayOrderToken || '',
+        scalapayStatus: orderDoc.scalapayStatus || '',
         itemsSubtotal: formatEuro(itemsSubtotalCents),
         clientDiscountPercent,
         clientDiscountCents,
@@ -3649,6 +3690,127 @@ async function getAdminShipmentDocument(req, res, next) {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `${disposition}; filename="${filename}"`);
     return res.send(fileBuffer);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+ * Remboursements et avoirs (commandes)
+ * ────────────────────────────────────────────────────────────────── */
+
+async function postAdminRefundOrder(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const { orderId } = req.params;
+
+    if (!dbConnected) {
+      req.session.adminOrderError = 'La base de données n’est pas disponible.';
+      return res.redirect('/admin/commandes');
+    }
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    }
+
+    const adminEmail = req.session && req.session.admin && req.session.admin.email
+      ? String(req.session.admin.email)
+      : 'admin';
+
+    /* Parsing du formulaire — montant en EUR avec virgule possible */
+    const rawAmount = getTrimmedString(req.body.amount).replace(/\s/g, '').replace(',', '.');
+    const amountFloat = Number.parseFloat(rawAmount);
+    const amountCents = Number.isFinite(amountFloat) ? Math.round(amountFloat * 100) : NaN;
+
+    const method = getTrimmedString(req.body.method);
+    const reason = getTrimmedString(req.body.reason);
+    const notes = getTrimmedString(req.body.notes);
+    const generateCreditNote = req.body.generateCreditNote === 'on' || req.body.generateCreditNote === 'true' || req.body.generateCreditNote === '1';
+    const sendEmail = req.body.sendEmail === 'on' || req.body.sendEmail === 'true' || req.body.sendEmail === '1';
+
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      req.session.adminOrderError = 'Montant invalide. Saisis un montant en euros (ex : 12,50).';
+      return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+    }
+
+    const refundService = require('../services/refundService');
+    const result = await refundService.processOrderRefund({
+      orderId,
+      amountCents,
+      method,
+      reason,
+      notes,
+      generateCreditNote,
+      sendEmail,
+      adminEmail,
+    });
+
+    if (!result.ok) {
+      console.error(`[admin-refund] Échec pour commande ${orderId} :`, result.errorCode, result.error);
+      req.session.adminOrderError = result.error || 'Le remboursement a échoué.';
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: result.error, errorCode: result.errorCode });
+      return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+    }
+
+    const cnPart = result.creditNote && result.creditNote.number ? ` Avoir ${result.creditNote.number} généré.` : '';
+    const emailPart = sendEmail ? ' Email client envoyé.' : '';
+    req.session.adminOrderSuccess = `Remboursement de ${(amountCents / 100).toFixed(2)} € émis via ${result.refund.method}.${cnPart}${emailPart}`;
+    if (wantsJsonResponse(req)) {
+      return res.json({
+        ok: true,
+        message: req.session.adminOrderSuccess,
+        data: { refund: { amountCents, method: result.refund.method }, creditNote: result.creditNote ? { number: result.creditNote.number } : null },
+      });
+    }
+    return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function getAdminOrderCreditNotePdf(req, res, next) {
+  try {
+    const { orderId, creditNoteNumber } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(404).send('Commande introuvable.');
+    }
+
+    /* Bypass select:false sur pdfData via requête native */
+    const orderDoc = await Order.collection.findOne(
+      { _id: new mongoose.Types.ObjectId(orderId) },
+      { projection: { creditNotes: 1, number: 1 } }
+    );
+    if (!orderDoc) return res.status(404).send('Commande introuvable.');
+
+    const cn = Array.isArray(orderDoc.creditNotes)
+      ? orderDoc.creditNotes.find((c) => c && String(c.number) === String(creditNoteNumber))
+      : null;
+    if (!cn) return res.status(404).send('Avoir introuvable.');
+
+    let buffer = cn.pdfData ? (cn.pdfData.buffer || cn.pdfData) : null;
+
+    /* Fallback : régénération à la volée si le buffer manque */
+    if (!buffer || !buffer.length) {
+      const Order = require('../models/Order');
+      const User = require('../models/User');
+      const { buildCreditNotePdfBuffer } = require('../services/creditNotePdf');
+      const full = await Order.findById(orderId).lean();
+      const user = full && full.userId ? await User.findById(full.userId).lean() : null;
+      const refund = full && Array.isArray(full.refunds) && Number.isInteger(cn.refundIndex)
+        ? full.refunds[cn.refundIndex]
+        : null;
+      buffer = await buildCreditNotePdfBuffer({ order: full, user, creditNote: cn, refund });
+    }
+
+    if (!buffer || !buffer.length) {
+      return res.status(404).send('PDF d’avoir introuvable.');
+    }
+
+    const action = req.query.action || 'view';
+    const disposition = action === 'download' ? 'attachment' : 'inline';
+    const filename = `Avoir-${cn.number}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `${disposition}; filename="${filename}"`);
+    return res.send(buffer);
   } catch (err) {
     return next(err);
   }
@@ -10046,6 +10208,8 @@ module.exports = {
   postAdminMarkOrderConsigneReceived,
   postAdminAddOrderShipment,
   getAdminShipmentDocument,
+  postAdminRefundOrder,
+  getAdminOrderCreditNotePdf,
   postAdminUploadOrderDocument,
   getAdminOrderDocument,
   getAdminOrderDocumentDownload,
