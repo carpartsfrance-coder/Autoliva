@@ -234,6 +234,7 @@ router.post('/catalogue/supprimer-multi', requireAdminAuth, adminController.post
 router.get('/catalogue/:productId', requireAdminAuth, adminController.getAdminEditProductPage);
 router.post('/catalogue/:productId', requireAdminAuth, handleProductImageUpload, adminController.postAdminUpdateProduct);
 router.post('/catalogue/:productId/supprimer', requireAdminAuth, adminController.postAdminDeleteProduct);
+router.post('/catalogue/:productId/dupliquer', requireAdminAuth, adminController.postAdminDuplicateProduct);
 
 const adminProductSearchHandler = typeof blogAdminController.getAdminProductSearchApi === 'function'
   ? blogAdminController.getAdminProductSearchApi

@@ -315,6 +315,10 @@
                         <span class="material-symbols-outlined mr-2 text-base">edit</span>
                         Modifier
                       </a>
+                      <button class="btn btn-ghost" type="button" data-duplicate-product="<%= p.id %>">
+                        <span class="material-symbols-outlined mr-2 text-base">content_copy</span>
+                        Dupliquer
+                      </button>
                       <form data-ajax="true" data-confirm="Supprimer ce produit ?" action="/admin/catalogue/<%= p.id %>/supprimer" method="POST" class="inline">
                         <input type="hidden" name="returnTo" value="<%= urlForPage(currentPage) %>" />
                         <button
@@ -409,6 +413,42 @@
     } else {
       revealPage();
     }
+  })();
+
+  /* Bouton "Dupliquer" produit — POST détaché du bulkForm pour éviter le strip HTML5 des forms imbriqués */
+  (function () {
+    function bindDuplicate() {
+      document.querySelectorAll('button[data-duplicate-product]').forEach(function (btn) {
+        if (btn._dupBound) return;
+        btn._dupBound = true;
+        btn.addEventListener('click', async function (e) {
+          e.preventDefault();
+          var productId = btn.getAttribute('data-duplicate-product');
+          if (!productId) return;
+          var ok = window.adminConfirm
+            ? await window.adminConfirm('Dupliquer ce produit ? La copie sera créée en brouillon (non publiée).')
+            : window.confirm('Dupliquer ce produit ? La copie sera créée en brouillon (non publiée).');
+          if (!ok) return;
+          if (window.btnSetLoading) window.btnSetLoading(btn); else btn.disabled = true;
+          try {
+            var result = window.adminFetch
+              ? await window.adminFetch('/admin/catalogue/' + encodeURIComponent(productId) + '/dupliquer', { method: 'POST' })
+              : await (await fetch('/admin/catalogue/' + encodeURIComponent(productId) + '/dupliquer', { method: 'POST', headers: { Accept: 'application/json' }, credentials: 'same-origin' })).json();
+            if (result && result.ok && result.data && result.data.id) {
+              window.location.href = '/admin/catalogue/' + result.data.id;
+              return;
+            }
+          } catch (_e) { /* adminFetch a déjà affiché un toast */ }
+          if (window.btnResetLoading) window.btnResetLoading(btn); else btn.disabled = false;
+        });
+      });
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bindDuplicate);
+    } else {
+      bindDuplicate();
+    }
+    window.initDuplicateButtons = bindDuplicate;
   })();
 </script>
 
