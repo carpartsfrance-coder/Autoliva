@@ -101,4 +101,62 @@ module.exports = [
     imageUrl:
       'https://lh3.googleusercontent.com/aida-public/AB6AXuAtBonuo271EYXk93w4io9KwRNQWHeq5MVggdcPgMTVj2ZtaVew-818GhYf0I0Nj5xlDSvY9-r22eyeNQzV2J41TNT7ViLRIRpX_IPrO5gWj_uv8IbEAuJhtamOiXjaweplKdy_eSojIBac6pXT61SXTiluuiGWCnCR90Y3po2yTRz5PRQcvC4sj7uxlsH3dakLN8mPdxeWQfo_r46W5P5F_oA883OPvr4emcGZoEzdoRDr5yXXTFLAiLNxsk0rDnKi3f6YBRLgrkB2',
   },
+  {
+    _id: '65d0fe4f5311236168a109ce',
+    name: 'Clonage mécatronique TCU DSG & S-tronic',
+    category: 'Transmission',
+    brand: 'Autoliva',
+    sku: 'CPF-SVC-CLONE-TCU-001',
+    slug: 'clonage-mecatronique-tcu-dsg-s-tronic',
+    serviceType: 'standalone_cloning',
+    priceCents: 19900,
+    inStock: true,
+    imageUrl: '',
+    shippingDelayText: 'Clonage 24h après réception',
+    badges: { topLeft: 'Service • 199€', condition: 'Service à distance' },
+    shortDescription:
+      'Service de clonage logiciel TCU pour mécatroniques DSG et S-tronic. Toutes boîtes VAG. 199€ TTC, étiquette retour incluse, clonage en 24h après réception.',
+    description:
+      '<p><strong>Le seul service de clonage mécatronique DSG &amp; S-tronic à prix fixe en France.</strong></p><p>Service couvrant toutes les boîtes DSG (DQ200, DQ250, DQ381, DQ500) et S-tronic (DL501, DL382). Vous nous envoyez vos 2 mécatroniques (ou 2 TCU), nous clonons en 24h, nous vous renvoyons les 2 pièces.</p>',
+    keyPoints: [
+      '199€ TTC tout compris — prix fixe toutes boîtes',
+      'Clonage en 24h ouvrées après réception',
+      'Toutes boîtes DSG & S-tronic VAG',
+      'Étiquettes aller et retour incluses',
+    ],
+    specs: [
+      { label: 'Boîtes compatibles', value: 'DQ200, DQ250, DQ381, DQ500, DL501, DL382' },
+      { label: 'Délai atelier', value: '24h ouvrées après réception' },
+      { label: 'Expédition', value: 'Étiquettes aller + retour incluses' },
+      { label: 'Garantie', value: '30 jours sur l\'opération de clonage' },
+    ],
+    reconditioningSteps: [
+      { title: '1. Vous commandez en ligne', description: 'Paiement 199€ TTC. Étiquette retour envoyée par email.' },
+      { title: '2. Vous nous envoyez vos 2 mécatroniques', description: 'Emballez l\'ancienne et la nouvelle ensemble et expédiez-nous le colis.' },
+      { title: '3. On clone en 24h', description: 'Réception → transfert logiciel TCU → test sur banc.' },
+      { title: '4. On vous renvoie les 2 pièces', description: 'Retour en colis suivi à l\'adresse de votre choix.' },
+    ],
+    compatibility: [
+      { make: 'Volkswagen', model: 'Golf / Polo / Tiguan (DSG)', years: '2003+', engine: 'Tous moteurs' },
+      { make: 'Audi', model: 'A1 / A3 / A4 / A5 / Q3 / Q5 (S-tronic)', years: '2005+', engine: 'Tous moteurs' },
+      { make: 'Skoda', model: 'Octavia / Superb (DSG)', years: '2005+', engine: 'Tous moteurs' },
+      { make: 'Seat', model: 'Leon / Ateca (DSG)', years: '2005+', engine: 'Tous moteurs' },
+    ],
+    faqs: [
+      { question: 'Qu\'est-ce que le clonage de mécatronique TCU ?', answer: 'Transfert logiciel de votre ancienne TCU vers la nouvelle mécatronique, pour éviter le réglage de base en concession et conserver vos adaptations.' },
+      { question: 'Toutes les boîtes DSG et S-tronic sont compatibles ?', answer: 'Oui : DQ200, DQ250, DQ381, DQ500, DL501, DL382.' },
+      { question: 'Quelle est la garantie ?', answer: '30 jours sur l\'opération de clonage logiciel. Pas de garantie sur le hardware des mécatroniques.' },
+      { question: 'Combien de temps total ?', answer: '4 à 6 jours porte-à-porte (transport aller + 24h clonage + retour).' },
+    ],
+    sections: {
+      showKeyPoints: true,
+      showSpecs: true,
+      showReconditioning: true,
+      showCompatibility: true,
+      showFaq: true,
+      showVideo: false,
+      showSupportBox: true,
+      showRelatedProducts: false,
+    },
+  },
 ];

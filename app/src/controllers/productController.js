@@ -362,6 +362,12 @@ async function getProductBySlug(req, res, next) {
     }
 
     if (!dbConnected) {
+      const demoHit = (Array.isArray(demoProducts) ? demoProducts : [])
+        .find((p) => p && typeof p.slug === 'string' && slugifyLoose(p.slug) === slug);
+      if (demoHit && demoHit._id) {
+        req.params.id = String(demoHit._id);
+        return getProduct(req, res, next);
+      }
       return res.status(404).render('errors/404', {
         title: `Page introuvable - ${brand.NAME}`,
       });

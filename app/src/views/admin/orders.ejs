@@ -59,9 +59,10 @@
             <option value="standard" <%= filters && filters.orderType === 'standard' ? 'selected' : '' %>>Vente simple</option>
             <option value="exchange" <%= filters && filters.orderType === 'exchange' ? 'selected' : '' %>>Échange standard</option>
             <option value="exchange_cloning" <%= filters && filters.orderType === 'exchange_cloning' ? 'selected' : '' %>>Échange + Clonage</option>
+            <option value="standalone_cloning" <%= filters && filters.orderType === 'standalone_cloning' ? 'selected' : '' %>>Service Clonage TCU</option>
           </select>
 
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 <%= filters && filters.orderType === 'exchange_cloning' ? '' : 'hidden' %>" name="cloningStatus" id="cloningStatusFilter">
+          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 <%= (filters && (filters.orderType === 'exchange_cloning' || filters.orderType === 'standalone_cloning')) ? '' : 'hidden' %>" name="cloningStatus" id="cloningStatusFilter">
             <option value="">Statut clonage</option>
             <option value="pending_label" <%= filters && filters.cloningStatus === 'pending_label' ? 'selected' : '' %>>Attente étiquette</option>
             <option value="label_sent" <%= filters && filters.cloningStatus === 'label_sent' ? 'selected' : '' %>>Étiquette envoyée</option>
@@ -491,6 +492,10 @@
                       <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
                         <span class="material-symbols-outlined" style="font-size:13px">science</span>Éch. + Clonage
                       </span>
+                    <% } else if (o.orderType === 'standalone_cloning') { %>
+                      <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200">
+                        <span class="material-symbols-outlined" style="font-size:13px">memory</span>Service Clonage
+                      </span>
                     <% } else if (o.orderType === 'exchange') { %>
                       <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
                         Échange std
@@ -518,8 +523,8 @@
                           <span class="material-symbols-outlined text-base text-slate-400" title="<%= o.docCount %> document(s) attaché(s)">attach_file</span>
                         <% } %>
                       </div>
-                      <%/* Sous-statut clonage pour exchange_cloning */ %>
-                      <% if (o.orderType === 'exchange_cloning' && o.cloningStatusBadge) { %>
+                      <%/* Sous-statut clonage pour exchange_cloning et standalone_cloning */ %>
+                      <% if ((o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') && o.cloningStatusBadge) { %>
                         <div class="flex items-center gap-1 text-[11px] font-semibold">
                           <% if (o.cloningStatus === 'pending_label') { %>
                             <span class="inline-flex items-center gap-1 text-amber-600"><span style="font-size:12px">&#x1F7E1;</span> Étiquette récup à envoyer</span>
@@ -562,8 +567,8 @@
                       var _urgencyLabel = '';
                       var _urgencyClass = 'text-slate-300';
                       if (o.returnStatus === 'overdue') { _urgencyLevel = 0; _urgencyLabel = 'Retour en retard'; _urgencyClass = 'text-red-500'; }
-                      else if (o.orderType === 'exchange_cloning' && (o.cloningStatus === 'pending_label' || o.cloningStatus === 'label_sent' || o.cloningStatus === 'client_piece_in_transit')) { _urgencyLevel = 1; _urgencyLabel = 'Attente pièce'; _urgencyClass = 'text-orange-500'; }
-                      else if (o.orderType === 'exchange_cloning' && o.cloningStatus === 'cloning_in_progress') { _urgencyLevel = 2; _urgencyLabel = 'Clonage en cours'; _urgencyClass = 'text-purple-500'; }
+                      else if ((o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') && (o.cloningStatus === 'pending_label' || o.cloningStatus === 'label_sent' || o.cloningStatus === 'client_piece_in_transit')) { _urgencyLevel = 1; _urgencyLabel = 'Attente pièce'; _urgencyClass = 'text-orange-500'; }
+                      else if ((o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') && o.cloningStatus === 'cloning_in_progress') { _urgencyLevel = 2; _urgencyLabel = 'Clonage en cours'; _urgencyClass = 'text-purple-500'; }
                       else if (o.statusBadge && o.statusBadge.label === 'En attente paiement') { _urgencyLevel = 3; _urgencyLabel = 'Attente paiement'; _urgencyClass = 'text-amber-500'; }
                     %>
                     <% if (_urgencyLevel < 4) { %>

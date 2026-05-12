@@ -7,6 +7,12 @@ const productSchema = new mongoose.Schema(
     brand: { type: String, default: '', trim: true },
     sku: { type: String, default: '', trim: true },
     slug: { type: String, default: '', trim: true, lowercase: true },
+    serviceType: {
+      type: String,
+      enum: ['', 'standalone_cloning'],
+      default: '',
+      trim: true,
+    },
     priceCents: { type: Number, required: true, min: 0 },
     compareAtPriceCents: { type: Number, default: null, min: 0 },
     consigne: {

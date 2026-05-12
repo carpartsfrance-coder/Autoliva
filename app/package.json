@@ -15,6 +15,7 @@
     "heroku-postbuild": "npm run css:build:all",
     "emails:consigne:reminders": "node src/jobs/sendConsigneReminders.js",
     "seed": "node src/seed/seedProducts.js",
+    "seed:clonage-tcu": "node src/seed/seedClonageTcuService.js",
     "import:woo:dry": "node src/seed/importWooProductsFromCsv.js",
     "import:woo": "node src/seed/importWooProductsFromCsv.js --apply",
     "categories:setup:dry": "node src/seed/setupPartCategories.js",

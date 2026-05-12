@@ -12,7 +12,7 @@ const orderItemSchema = new mongoose.Schema(
     lineTotalCents: { type: Number, required: true, min: 0 },
     itemType: {
       type: String,
-      enum: ['standard', 'exchange', 'exchange_cloning', ''],
+      enum: ['standard', 'exchange', 'exchange_cloning', 'standalone_cloning', ''],
       default: '',
     },
   },
@@ -231,7 +231,7 @@ const orderSchema = new mongoose.Schema(
     },
     orderType: {
       type: String,
-      enum: ['standard', 'exchange', 'exchange_cloning'],
+      enum: ['standard', 'exchange', 'exchange_cloning', 'standalone_cloning'],
       default: 'standard',
     },
     cloningStatus: {
@@ -394,7 +394,7 @@ orderSchema.pre('save', function (next) {
 
   // ─── 1. Synchroniser cloningStatus / returnStatus selon orderType ───
   if (order.isModified('orderType')) {
-    if (order.orderType === 'exchange_cloning') {
+    if (order.orderType === 'exchange_cloning' || order.orderType === 'standalone_cloning') {
       // Clonage : la pièce client est envoyée au DÉBUT, pas de retour séparé
       if (!order.cloningStatus) order.cloningStatus = 'pending_label';
       order.returnStatus = 'not_applicable';
@@ -443,7 +443,7 @@ orderSchema.pre('save', function (next) {
   }
 
   // ─── 3. Mise à jour automatique des cloningDates ───
-  if (order.isModified('cloningStatus') && order.orderType === 'exchange_cloning') {
+  if (order.isModified('cloningStatus') && (order.orderType === 'exchange_cloning' || order.orderType === 'standalone_cloning')) {
     if (!order.cloningDates) order.cloningDates = {};
 
     switch (order.cloningStatus) {

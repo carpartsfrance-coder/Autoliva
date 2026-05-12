@@ -1684,6 +1684,7 @@ function getOrderTypeLabel(orderType) {
   switch (orderType) {
     case 'exchange': return 'Échange standard';
     case 'exchange_cloning': return 'Échange + Clonage';
+    case 'standalone_cloning': return 'Service Clonage TCU';
     case 'standard':
     default:
       return 'Standard';
@@ -2370,7 +2371,7 @@ async function getAdminOrdersPage(req, res, next) {
       query['source.channel'] = sourceFilter;
     }
 
-    const allowedOrderTypes = new Set(['standard', 'exchange', 'exchange_cloning']);
+    const allowedOrderTypes = new Set(['standard', 'exchange', 'exchange_cloning', 'standalone_cloning']);
     if (orderTypeFilter && allowedOrderTypes.has(orderTypeFilter)) {
       query.orderType = orderTypeFilter;
     }
@@ -2527,7 +2528,7 @@ async function getAdminOrdersPage(req, res, next) {
         orderType: o.orderType || 'standard',
         orderTypeLabel: getOrderTypeLabel(o.orderType),
         cloningStatus: o.cloningStatus || null,
-        cloningStatusBadge: o.orderType === 'exchange_cloning' ? getCloningStatusBadge(o.cloningStatus) : null,
+        cloningStatusBadge: (o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') ? getCloningStatusBadge(o.cloningStatus) : null,
         cloningTrackingNumber,
         returnStatus: o.returnStatus || 'not_applicable',
         returnDaysLeft,
@@ -2568,8 +2569,8 @@ async function getAdminOrdersPage(req, res, next) {
     if (isUrgencySort) {
       const urgencyScore = (o) => {
         if (o.returnStatus === 'overdue') return 0;
-        if (o.orderType === 'exchange_cloning' && (o.cloningStatus === 'pending_label' || o.cloningStatus === 'label_sent' || o.cloningStatus === 'client_piece_in_transit')) return 1;
-        if (o.orderType === 'exchange_cloning' && o.cloningStatus === 'cloning_in_progress') return 2;
+        if ((o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') && (o.cloningStatus === 'pending_label' || o.cloningStatus === 'label_sent' || o.cloningStatus === 'client_piece_in_transit')) return 1;
+        if ((o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') && o.cloningStatus === 'cloning_in_progress') return 2;
         if (o.statusBadge && o.statusBadge.label === 'En attente paiement') return 3;
         return 4;
       };
@@ -9712,7 +9713,7 @@ async function postAdminAdvanceOrder(req, res) {
 
     switch (action) {
       case 'mark_label_sent': {
-        if (order.orderType !== 'exchange_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
+        if (order.orderType !== 'exchange_cloning' && order.orderType !== 'standalone_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
         if (order.cloningStatus !== 'pending_label') return res.status(400).json({ ok: false, error: 'La commande n\'est pas en attente d\'étiquette.' });
         order.cloningStatus = 'label_sent';
         if (carrier || trackingNumber) {
@@ -9725,7 +9726,7 @@ async function postAdminAdvanceOrder(req, res) {
         break;
       }
       case 'mark_piece_in_transit': {
-        if (order.orderType !== 'exchange_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
+        if (order.orderType !== 'exchange_cloning' && order.orderType !== 'standalone_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
         if (order.cloningStatus !== 'label_sent') return res.status(400).json({ ok: false, error: 'L\'étiquette n\'a pas encore été envoyée.' });
         order.cloningStatus = 'client_piece_in_transit';
         if (carrier || trackingNumber) {
@@ -9738,25 +9739,25 @@ async function postAdminAdvanceOrder(req, res) {
         break;
       }
       case 'mark_piece_received': {
-        if (order.orderType !== 'exchange_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
+        if (order.orderType !== 'exchange_cloning' && order.orderType !== 'standalone_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
         if (order.cloningStatus !== 'client_piece_in_transit' && order.cloningStatus !== 'label_sent') return res.status(400).json({ ok: false, error: 'Transition invalide.' });
         order.cloningStatus = 'client_piece_received';
         break;
       }
       case 'start_cloning': {
-        if (order.orderType !== 'exchange_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
+        if (order.orderType !== 'exchange_cloning' && order.orderType !== 'standalone_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
         if (order.cloningStatus !== 'client_piece_received') return res.status(400).json({ ok: false, error: 'La pièce client n\'a pas été reçue.' });
         order.cloningStatus = 'cloning_in_progress';
         break;
       }
       case 'mark_cloning_done': {
-        if (order.orderType !== 'exchange_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
+        if (order.orderType !== 'exchange_cloning' && order.orderType !== 'standalone_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
         if (order.cloningStatus !== 'cloning_in_progress') return res.status(400).json({ ok: false, error: 'Le clonage n\'est pas en cours.' });
         order.cloningStatus = 'cloning_done';
         break;
       }
       case 'mark_cloning_failed': {
-        if (order.orderType !== 'exchange_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
+        if (order.orderType !== 'exchange_cloning' && order.orderType !== 'standalone_cloning') return res.status(400).json({ ok: false, error: 'Action invalide pour ce type de commande.' });
         if (!failureNote) return res.status(400).json({ ok: false, error: 'Veuillez indiquer la raison de l\'échec.' });
         order.cloningStatus = 'cloning_failed';
         order.cloningFailureNote = failureNote;
@@ -9764,7 +9765,7 @@ async function postAdminAdvanceOrder(req, res) {
         break;
       }
       case 'retry_cloning': {
-        if (order.orderType !== 'exchange_cloning') return res.status(400).json({ ok: false, error: 'Action invalide.' });
+        if (order.orderType !== 'exchange_cloning' && order.orderType !== 'standalone_cloning') return res.status(400).json({ ok: false, error: 'Action invalide.' });
         if (order.cloningStatus !== 'cloning_failed') return res.status(400).json({ ok: false, error: 'Le clonage n\'est pas en échec.' });
         order.cloningStatus = 'cloning_in_progress';
         order.cloningFailureNote = '';
@@ -9775,7 +9776,7 @@ async function postAdminAdvanceOrder(req, res) {
         break;
       }
       case 'skip_cloning': {
-        if (order.orderType !== 'exchange_cloning') return res.status(400).json({ ok: false, error: 'Action invalide.' });
+        if (order.orderType !== 'exchange_cloning' && order.orderType !== 'standalone_cloning') return res.status(400).json({ ok: false, error: 'Action invalide.' });
         if (order.cloningStatus !== 'cloning_failed') return res.status(400).json({ ok: false, error: 'Le clonage n\'est pas en échec.' });
         order.cloningStatus = 'cloning_done';
         order._statusChangeNote = note || 'Envoi sans clonage (programmation VIN)';
@@ -9786,7 +9787,7 @@ async function postAdminAdvanceOrder(req, res) {
           return res.status(400).json({ ok: false, error: 'Commande déjà expédiée.' });
         }
         order.status = 'shipped';
-        if (order.orderType === 'exchange_cloning') {
+        if (order.orderType === 'exchange_cloning' || order.orderType === 'standalone_cloning') {
           if (!order.cloningDates) order.cloningDates = {};
           order.cloningDates.shippedToClientAt = new Date();
         }
