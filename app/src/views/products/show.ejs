@@ -116,7 +116,10 @@
       <% } %>
       <% if (ref) subtitleParts.push('Série ' + ref); %>
       <% const productSubtitle = subtitleParts.join(' - '); %>
-      <% const heroBadge = keyEtat || conditionBadge || topLeftBadge || 'Reconditionnement Professionnel'; %>
+      <% const isService = product && product.serviceType === 'standalone_cloning'; %>
+      <% const heroBadge = isService
+        ? (topLeftBadge || 'Service à distance')
+        : (keyEtat || conditionBadge || topLeftBadge || 'Reconditionnement Professionnel'); %>
       <% const visibleThumbImages = thumbImages.slice(0, 4); %>
       <% const hiddenThumbImages = thumbImages.slice(4); %>
       <% const visibleThumbItems = thumbMediaItems.slice(0, 4); %>
@@ -131,12 +134,19 @@
         'Merci.',
       ].join('\n'); %>
       <% const compatibilityContactUrl = '/contact?subject=compatibilite&partRef=' + encodeURIComponent(ref) + '&message=' + encodeURIComponent(compatibilityPrefillMessage); %>
-      <% const qualityHighlights = [
-        { icon: 'verified', label: keyGarantie || 'Garantie 24 Mois' },
-        { icon: 'terminal', label: keyProgrammation || 'Programmation Incluse' },
-        { icon: 'analytics', label: 'Testé sur banc' },
-        { icon: 'lock_open', label: 'Sans caution' },
-      ]; %>
+      <% const qualityHighlights = isService
+        ? [
+            { icon: 'euro', label: '199€ Prix fixe' },
+            { icon: 'bolt', label: 'Clonage en 24h' },
+            { icon: 'local_shipping', label: 'Aller + retour inclus' },
+            { icon: 'verified', label: 'Garantie 30 jours' },
+          ]
+        : [
+            { icon: 'verified', label: keyGarantie || 'Garantie 24 Mois' },
+            { icon: 'terminal', label: keyProgrammation || 'Programmation Incluse' },
+            { icon: 'analytics', label: 'Testé sur banc' },
+            { icon: 'lock_open', label: 'Sans caution' },
+          ]; %>
       <% const faqCount = Array.isArray(product.faqs) ? product.faqs.length : 0; %>
       <% const faqPreviewCards = Array.isArray(product.faqs)
         ? product.faqs.filter((f) => f && f.question && f.answer).slice(0, 3)
@@ -746,8 +756,8 @@
             <% if (product.sections && product.sections.showReconditioning && Array.isArray(product.reconditioningSteps) && product.reconditioningSteps.length) { %>
               <div class="py-10">
                 <div class="mb-8">
-                  <h2 class="text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Notre processus qualité</h3>
-                  <p class="mt-2 text-sm text-slate-500">Chaque étape vise à garantir une pièce contrôlée, durable et prête à être montée.</p>
+                  <h2 class="text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white"><%= isService ? 'Comment ça marche' : 'Notre processus qualité' %></h3>
+                  <p class="mt-2 text-sm text-slate-500"><%= isService ? 'De votre commande à la réception de vos pièces clonées, 4 étapes simples.' : 'Chaque étape vise à garantir une pièce contrôlée, durable et prête à être montée.' %></p>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                   <% product.reconditioningSteps.slice(0, 4).forEach((st, idx) => { %>

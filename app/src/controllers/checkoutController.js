@@ -1790,6 +1790,7 @@ async function postPayment(req, res, next) {
     const cloningCheckItems = [];
     let itemsTotalCents = 0;
     let hasConsigne = false;
+    let hasStandaloneCloning = false;
 
     for (const item of rawItems) {
       const product = normalizeProduct(productById.get(String(item.productId)));
@@ -1805,9 +1806,12 @@ async function postPayment(req, res, next) {
 
       if (!mongoose.Types.ObjectId.isValid(String(product._id))) continue;
 
-      // Determine per-item type: clonage > exchange (consigne) > standard
+      // Determine per-item type: standalone_cloning (service) > exchange_cloning (option) > exchange (consigne) > standard
       let detectedItemType = 'standard';
-      if (productOptions.itemHasCloning(product.options, item.optionsSelection)) {
+      if (product.serviceType === 'standalone_cloning') {
+        detectedItemType = 'standalone_cloning';
+        hasStandaloneCloning = true;
+      } else if (productOptions.itemHasCloning(product.options, item.optionsSelection)) {
         detectedItemType = 'exchange_cloning';
       } else if (product.consigne && product.consigne.enabled && Number.isFinite(product.consigne.amountCents) && product.consigne.amountCents > 0) {
         detectedItemType = 'exchange';
@@ -1917,10 +1921,17 @@ async function postPayment(req, res, next) {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const nextNumber = await getNextOrderNumber({ date: new Date() });
+        const resolvedOrderType = hasStandaloneCloning
+          ? 'standalone_cloning'
+          : productOptions.hasCloningSelection(cloningCheckItems)
+            ? 'exchange_cloning'
+            : hasConsigne
+              ? 'exchange'
+              : 'standard';
         created = await Order.create({
           userId: user._id,
           number: nextNumber.orderNumber,
-          orderType: productOptions.hasCloningSelection(cloningCheckItems) ? 'exchange_cloning' : hasConsigne ? 'exchange' : 'standard',
+          orderType: resolvedOrderType,
           status: 'pending_payment',
           statusHistory: [
             {

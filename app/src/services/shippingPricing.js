@@ -163,6 +163,20 @@ async function computeShippingPricesCents(dbConnected, products) {
 }
 
 async function getShippingMethods(dbConnected, products) {
+  const list = Array.isArray(products) ? products : [];
+  const onlyStandaloneCloning = list.length > 0 && list.every((p) => p && p.serviceType === 'standalone_cloning');
+
+  if (onlyStandaloneCloning) {
+    return [
+      {
+        id: 'domicile',
+        title: 'Expédition aller + retour incluse',
+        description: 'Étiquettes prépayées aller et retour comprises dans le service',
+        priceCents: 0,
+      },
+    ];
+  }
+
   const prices = await computeShippingPricesCents(dbConnected, products);
 
   return [

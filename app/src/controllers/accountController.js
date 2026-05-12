@@ -1180,7 +1180,8 @@ async function getOrderTrackingPage(req, res, next) {
     // Steps depend on order type
     let baseSteps;
     let activeStepOverride = null;
-    const isCloning = order.orderType === 'exchange_cloning';
+    const isCloning = order.orderType === 'exchange_cloning' || order.orderType === 'standalone_cloning';
+    const isStandaloneCloning = order.orderType === 'standalone_cloning';
 
     if (isCloning) {
       baseSteps = [
@@ -1692,6 +1693,29 @@ function getOrderStatusBanner(order) {
         return { title: 'Étape 6 : Clonage terminé, expédition imminente', subtitle: 'Votre pièce programmée sera expédiée sous 24-48h.', icon: 'check_circle', bgClass: 'bg-green-600' };
       case 'cloning_failed':
         return { title: 'Un problème a été détecté sur votre pièce', subtitle: 'Notre équipe technique vous contactera dans les plus brefs délais pour trouver une solution.', icon: 'warning', bgClass: 'bg-red-600' };
+    }
+  }
+
+  // ─── Commandes CLONAGE STANDALONE (service 199€) : 2 pièces aller-retour ───
+  if (orderType === 'standalone_cloning' && cloningStatus) {
+    switch (cloningStatus) {
+      case 'pending_label':
+        return { title: 'Étape 1 : Nous préparons votre étiquette d\'expédition aller', subtitle: 'Vous recevrez par email votre étiquette aller pré-payée pour nous envoyer vos 2 mécatroniques. Étiquettes aller et retour incluses dans le service.', icon: 'mail', bgClass: 'bg-amber-500' };
+      case 'label_sent':
+        return { title: 'Étape 2 : Envoyez-nous vos 2 mécatroniques', subtitle: 'Votre étiquette aller est prête. Emballez l\'ancienne et la nouvelle ensemble, collez l\'étiquette et expédiez-nous le colis.', icon: 'package_2', bgClass: 'bg-orange-500' };
+      case 'client_piece_in_transit':
+        return { title: 'Étape 3 : Vos pièces sont en route vers notre atelier', subtitle: 'Nous vous notifierons dès réception.', icon: 'local_shipping', bgClass: 'bg-blue-500' };
+      case 'client_piece_received':
+        return { title: 'Étape 4 : Pièces reçues, clonage imminent', subtitle: 'Nos techniciens vont procéder au transfert logiciel TCU sous 24h ouvrées.', icon: 'precision_manufacturing', bgClass: 'bg-indigo-500' };
+      case 'cloning_in_progress':
+        return { title: 'Étape 5 : Clonage en cours', subtitle: 'Transfert TCU en cours sur banc. Délai 24h ouvrées maximum.', icon: 'memory', bgClass: 'bg-violet-600' };
+      case 'cloning_done':
+        if (status === 'shipped') {
+          return { title: 'Vos 2 mécatroniques ont été réexpédiées !', subtitle: 'Suivez votre colis avec le numéro de suivi ci-dessous.', icon: 'local_shipping', bgClass: 'bg-green-600' };
+        }
+        return { title: 'Étape 6 : Clonage terminé, retour imminent', subtitle: 'Vos 2 mécatroniques clonées vont être réexpédiées sous 24h.', icon: 'check_circle', bgClass: 'bg-green-600' };
+      case 'cloning_failed':
+        return { title: 'Un problème a été détecté lors du clonage', subtitle: 'Notre équipe technique vous contactera dans les plus brefs délais.', icon: 'warning', bgClass: 'bg-red-600' };
     }
   }
 
