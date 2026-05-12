@@ -1039,7 +1039,7 @@
               addToCartSubmit.disabled = true;
 
               var startedAt = Date.now();
-              var formData = new FormData(addToCartForm);
+              var formData = new URLSearchParams(new FormData(addToCartForm));
 
               fetch(addToCartForm.getAttribute('action'), {
                 method: 'POST',
@@ -1047,7 +1047,8 @@
                 credentials: 'same-origin',
                 headers: {
                   'Accept': 'application/json',
-                  'X-Requested-With': 'XMLHttpRequest'
+                  'X-Requested-With': 'XMLHttpRequest',
+                  'Content-Type': 'application/x-www-form-urlencoded'
                 }
               })
                 .then(function (response) {
