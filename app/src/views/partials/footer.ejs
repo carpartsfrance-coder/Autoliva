@@ -514,7 +514,7 @@
           submitButton.disabled = true;
 
           var startedAt = Date.now();
-          var formData = new FormData(form);
+          var formData = new URLSearchParams(new FormData(form));
 
           fetch(form.getAttribute('action'), {
             method: 'POST',
@@ -522,7 +522,8 @@
             credentials: 'same-origin',
             headers: {
               'Accept': 'application/json',
-              'X-Requested-With': 'XMLHttpRequest'
+              'X-Requested-With': 'XMLHttpRequest',
+              'Content-Type': 'application/x-www-form-urlencoded'
             }
           })
             .then(function (response) {
