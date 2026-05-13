@@ -7,6 +7,7 @@ const { markdownToHtml, stripHtml: stripHtmlFromService } = require('../services
 const mediaStorage = require('../services/mediaStorage');
 const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const emailService = require('../services/emailService');
+const blogPostService = require('../services/blogPostService');
 const brand = require('../config/brand');
 
 function getTrimmedString(value) {
@@ -575,55 +576,17 @@ async function postAdminCreateBlogPost(req, res, next) {
 
     const coverImageUrl = savedCover && savedCover.url ? savedCover.url : form.coverImageUrl;
 
-    const baseSlug = form.slug || slugify(form.title) || 'article';
-    const finalSlug = await ensureUniqueSlug(baseSlug);
-
-    const categorySlug = form.categorySlug || (form.categoryLabel ? slugify(form.categoryLabel) : '');
-
-    const readingTimeMinutes = parseIntOrNull(form.readingTimeMinutes);
-
-    const isPublished = form.isPublished === true;
-    const now = new Date();
-    const publishedAt = isPublished
-      ? (form.publishedAt ? new Date(`${form.publishedAt}T12:00:00.000Z`) : now)
-      : null;
-
-    const contentHtml = form.contentMarkdown ? markdownToHtml(form.contentMarkdown) : '';
-
-    const created = await BlogPost.create({
-      title: form.title,
-      slug: finalSlug,
-      excerpt: form.excerpt,
-      contentHtml,
-      contentMarkdown: form.contentMarkdown,
-      coverImageUrl,
-      category: {
-        slug: categorySlug,
-        label: form.categoryLabel,
+    // Délégation au service partagé (mode 'auto' = suffixe le slug si conflit,
+    // comportement historique du form admin). La logique de création (mapping,
+    // featured-cleanup, etc.) est dans src/services/blogPostService.js.
+    const { post: created } = await blogPostService.createBlogPost({
+      data: {
+        ...form,
+        coverImageUrl,
       },
-      authorName: form.authorName,
-      readingTimeMinutes: readingTimeMinutes !== null ? readingTimeMinutes : 0,
-      relatedProductIds: parseObjectIdListFromLines(form.relatedProductIds),
-      isFeatured: form.isFeatured === true,
-      isHomeFeatured: form.isHomeFeatured === true,
-      isPublished,
-      publishedAt,
-      seo: {
-        primaryKeyword: normalizeMetaText(form.seoPrimaryKeyword),
-        metaTitle: normalizeMetaText(form.seoMetaTitle),
-        metaDescription: normalizeMetaText(form.seoMetaDescription),
-        metaRobots: normalizeMetaText(form.seoMetaRobots),
-        ogImageUrl: getTrimmedString(form.seoOgImageUrl),
-        canonicalPath: getTrimmedString(form.seoCanonicalPath),
-      },
+      source: 'admin-form',
+      options: { slugMode: 'auto', strictProducts: false },
     });
-
-    if (created.isFeatured) {
-      await BlogPost.updateMany(
-        { _id: { $ne: created._id } },
-        { $set: { isFeatured: false } }
-      );
-    }
 
     if (created.isPublished && !created.newsletterSentAt) {
       const baseUrl = getSiteUrlFromEnv() || '';
