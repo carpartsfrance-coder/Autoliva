@@ -121,7 +121,8 @@ const productDoc = {
 <li>Réglage de base / adaptation après remontage (à faire chez vous via VCDS/ODIS)</li>
 <li>Flash performance ou reprog</li>
 <li>Garantie sur le hardware de la mécatronique (avant ou après clonage)</li>
-</ul>`,
+</ul>
+<p style="margin-top:1em;font-size:0.9em;"><strong>📋 Conditions complètes du service :</strong> <a href="/legal/cgv-service-clonage-tcu">Lire les CGV spécifiques au service de clonage TCU</a> (garantie 30 jours, périmètre détaillé, anti-fraude, droit de rétractation, échec du clonage).</p>`,
   keyPoints: [
     '199€ TTC tout compris — prix fixe toutes boîtes',
     'Clonage en 24h ouvrées après réception',
@@ -313,6 +314,10 @@ const productDoc = {
     {
       question: 'Facture pro avec TVA récupérable ?',
       answer: 'Oui, nous émettons une facture avec mention SIRET et TVA récupérable pour les garages, casses et professionnels. Précisez votre numéro de TVA intracommunautaire au moment de la commande.',
+    },
+    {
+      question: 'Où consulter les conditions complètes du service ?',
+      answer: 'Les Conditions Générales spécifiques au service de clonage TCU sont disponibles à l\'adresse https://autoliva.com/legal/cgv-service-clonage-tcu. Elles précisent notamment la garantie 30 jours sur l\'opération logicielle, les exclusions (hardware mécatronique, résultat final véhicule), le droit de rétractation et la procédure en cas d\'échec du clonage. Vous acceptez ces conditions en validant la commande.',
     },
   ],
   relatedBlogPostIds: [],
