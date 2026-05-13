@@ -493,6 +493,10 @@ app.post('/api/analytics/track', analyticsController.postTrackEvent);
 app.use('/api/sav', savApi.publicRouter);
 app.use('/admin/api/sav', savApi.adminRouter);
 
+// Blog API : import server-to-server depuis URL markdown (Bearer token)
+// Endpoint : POST /api/blog/import-from-url
+app.use('/api/blog', require('./routes/api/blogImport'));
+
 // SAV — fichiers stockés en MongoDB (GridFS), avec auth contextuelle
 app.use('/sav-files', require('./routes/savFiles'));
 
