@@ -105,8 +105,8 @@ L'endpoint est accessible sur **tous les domaines** pointant sur le service (mê
 
 | URL | Quand l'utiliser |
 |---|---|
-| `https://carpartsfrance.fr` | **Recommandé** — custom domain prod, stable, ne dépend pas du nom du service Render |
-| `https://autoliva.com` | Équivalent — même service, même DB |
+| `https://autoliva.com` | **Recommandé** — domaine canonique prod, stable, ne dépend pas du nom du service Render |
+| `https://carpartsfrance.fr` | Équivalent (ancien domaine, même service, même DB) |
 | `https://preprod.carpartsfrance.fr` | Tests sur l'env preprod |
 | `https://car-parts-france-fr-refonte.onrender.com` | URL Render technique — fonctionne mais change si on renomme le service |
 
@@ -116,7 +116,7 @@ Stocker le token + l'URL dans l'env du scheduled task :
 
 ```bash
 export BLOG_IMPORT_API_TOKEN="..."
-export ADMIN_BASE_URL="https://carpartsfrance.fr"
+export ADMIN_BASE_URL="https://autoliva.com"
 ```
 
 Et le passer aux sous-agents Claude via le prompt (cf. `~/.claude/skills/generateur-article-seo/SKILL.md` section "Mode orchestrateur").
@@ -176,7 +176,7 @@ EOF
   "data": {
     "id": "6a04...",
     "slug": "article-test-api-import",
-    "url": "https://carpartsfrance.fr/blog/article-test-api-import",
+    "url": "https://autoliva.com/blog/article-test-api-import",
     "created": true,
     "updated": false,
     "isPublished": true,
