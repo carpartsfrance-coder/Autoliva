@@ -99,13 +99,24 @@ openssl rand -hex 32
    - **Value** : la valeur générée
 3. **Save Changes** → Render redémarre automatiquement le service
 
-### 3. Côté orchestrateur (scheduled task)
+### 3. Choix de l'`ADMIN_BASE_URL`
 
-Stocker le même token dans l'env du scheduled task :
+L'endpoint est accessible sur **tous les domaines** pointant sur le service (même app, même DB) :
+
+| URL | Quand l'utiliser |
+|---|---|
+| `https://carpartsfrance.fr` | **Recommandé** — custom domain prod, stable, ne dépend pas du nom du service Render |
+| `https://autoliva.com` | Équivalent — même service, même DB |
+| `https://preprod.carpartsfrance.fr` | Tests sur l'env preprod |
+| `https://car-parts-france-fr-refonte.onrender.com` | URL Render technique — fonctionne mais change si on renomme le service |
+
+### 4. Côté orchestrateur (scheduled task)
+
+Stocker le token + l'URL dans l'env du scheduled task :
 
 ```bash
 export BLOG_IMPORT_API_TOKEN="..."
-export ADMIN_BASE_URL="https://car-parts-france-fr-refonte.onrender.com"
+export ADMIN_BASE_URL="https://carpartsfrance.fr"
 ```
 
 Et le passer aux sous-agents Claude via le prompt (cf. `~/.claude/skills/generateur-article-seo/SKILL.md` section "Mode orchestrateur").
