@@ -7612,6 +7612,7 @@ async function postAdminUpdateProduct(req, res, next) {
           compatibleReferences,
           priceCents,
           compareAtPriceCents,
+          costCents,
           options: parsedOptions.ok ? parsedOptions.options : [],
           optionTemplateIds: extractProductOptionTemplateObjectIds(parsedOptions.ok ? parsedOptions.options : []),
           consigne: {
