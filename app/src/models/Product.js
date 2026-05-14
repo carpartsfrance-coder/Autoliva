@@ -15,6 +15,11 @@ const productSchema = new mongoose.Schema(
     },
     priceCents: { type: Number, required: true, min: 0 },
     compareAtPriceCents: { type: Number, default: null, min: 0 },
+    /* Prix d'achat fournisseur HT en centimes. Utilisé pour calculer
+     * la marge brute dans le tableau de bord financier (/admin/finance).
+     * Optionnel : null = inconnu, la marge sera affichée "—" pour les
+     * commandes contenant ce produit. */
+    costCents: { type: Number, default: null, min: 0 },
     consigne: {
       enabled: { type: Boolean, default: false },
       amountCents: { type: Number, default: 0, min: 0 },

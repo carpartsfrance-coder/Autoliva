@@ -48,6 +48,12 @@
         <span class="material-symbols-outlined">campaign</span>
         <span class="sidebar-link-text">Marketing</span>
       </a>
+      <% if (typeof isOwner !== 'undefined' && isOwner) { %>
+        <a class="sidebar-link <%= activeKey === 'finance' ? 'sidebar-link--active' : '' %>" href="/admin/finance" title="Finance — pilotage">
+          <span class="material-symbols-outlined">trending_up</span>
+          <span class="sidebar-link-text">Finance</span>
+        </a>
+      <% } %>
       <a class="sidebar-link <%= activeKey === 'visitors' ? 'sidebar-link--active' : '' %>" href="/admin/visiteurs" title="Visiteurs">
         <span class="material-symbols-outlined">visibility</span>
         <span class="sidebar-link-text">Visiteurs</span>
