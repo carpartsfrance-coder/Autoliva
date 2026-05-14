@@ -348,6 +348,172 @@
 
     </div>
 
+    <!-- Tous les produits vendus du mois — table complète avec tri + recherche -->
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden mt-6" id="all-products-block">
+      <div class="px-6 py-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div class="text-lg font-semibold text-slate-900">Tous les produits vendus — <%= period.currentLabel %></div>
+          <div class="text-sm text-slate-500 mt-1">
+            <%= summary.allProductsSold.length %> produit(s) distinct(s) · clique sur une colonne pour trier
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="text" id="all-products-search" placeholder="Rechercher nom ou SKU…"
+                 class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm w-64 focus:ring-amber-500 focus:border-amber-500" />
+        </div>
+      </div>
+
+      <% if (summary.allProductsSold.length === 0) { %>
+        <div class="p-12 text-center text-slate-500">
+          <span class="material-symbols-outlined text-4xl text-slate-300">inventory_2</span>
+          <p class="mt-2">Aucun produit vendu sur ce mois.</p>
+        </div>
+      <% } else { %>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm" id="all-products-table">
+            <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 sticky top-0">
+              <tr>
+                <th class="px-4 py-3 text-left font-semibold cursor-pointer hover:bg-slate-100" data-sort="name">Produit <span class="sort-icon"></span></th>
+                <th class="px-4 py-3 text-left font-semibold cursor-pointer hover:bg-slate-100" data-sort="sku">SKU <span class="sort-icon"></span></th>
+                <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="qtySold">Qté vendue <span class="sort-icon"></span></th>
+                <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="revenueTtc">CA TTC <span class="sort-icon">▼</span></th>
+                <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="revenueHt">CA HT <span class="sort-icon"></span></th>
+                <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="margin">Marge € <span class="sort-icon"></span></th>
+                <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="marginPct">Marge % <span class="sort-icon"></span></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100" id="all-products-tbody">
+              <% summary.allProductsSold.forEach(function (p) { %>
+                <tr class="hover:bg-slate-50"
+                    data-name="<%= (p.name || '').toLowerCase() %>"
+                    data-sku="<%= (p.sku || '').toLowerCase() %>"
+                    data-qtysold="<%= p.qtySold %>"
+                    data-revenuettc="<%= p.revenueTtc %>"
+                    data-revenueht="<%= p.revenueHt %>"
+                    data-margin="<%= p.costKnown ? p.margin : -1 %>"
+                    data-marginpct="<%= p.costKnown && p.marginPct != null ? p.marginPct : -1 %>">
+                  <td class="px-4 py-3 text-slate-900 max-w-md truncate" title="<%= p.name %>"><%= p.name %></td>
+                  <td class="px-4 py-3 font-mono text-xs text-slate-500"><%= p.sku || '—' %></td>
+                  <td class="px-4 py-3 text-right tabular-nums text-slate-700"><%= p.qtySold %></td>
+                  <td class="px-4 py-3 text-right tabular-nums font-semibold text-slate-900"><%= (p.revenueTtc / 100).toFixed(2) %> €</td>
+                  <td class="px-4 py-3 text-right tabular-nums text-slate-500"><%= (p.revenueHt / 100).toFixed(2) %> €</td>
+                  <td class="px-4 py-3 text-right tabular-nums">
+                    <% if (p.costKnown) { %>
+                      <span class="<%= p.margin >= 0 ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold' %>">
+                        <%= p.margin >= 0 ? '+' : '' %><%= (p.margin / 100).toFixed(2) %> €
+                      </span>
+                    <% } else { %>
+                      <span class="text-slate-300" title="Renseigne le prix d'achat sur la fiche produit pour calculer la marge">—</span>
+                    <% } %>
+                  </td>
+                  <td class="px-4 py-3 text-right tabular-nums">
+                    <% if (p.costKnown && p.marginPct != null) { %>
+                      <span class="<%= p.marginPct >= 30 ? 'text-emerald-600' : (p.marginPct >= 10 ? 'text-amber-600' : 'text-rose-600') %>">
+                        <%= p.marginPct.toFixed(1) %> %
+                      </span>
+                    <% } else { %>
+                      <span class="text-slate-300">—</span>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+            <tfoot class="bg-slate-50 border-t-2 border-slate-200">
+              <tr class="text-sm font-semibold text-slate-900">
+                <td class="px-4 py-3" colspan="2">Total <span id="all-products-count"><%= summary.allProductsSold.length %></span> produit(s)</td>
+                <td class="px-4 py-3 text-right tabular-nums" id="all-products-qty-total">
+                  <%= summary.allProductsSold.reduce(function (s, p) { return s + p.qtySold; }, 0) %>
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums" id="all-products-revenuettc-total">
+                  <%= (summary.allProductsSold.reduce(function (s, p) { return s + p.revenueTtc; }, 0) / 100).toFixed(2) %> €
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums text-slate-500" id="all-products-revenueht-total">
+                  <%= (summary.allProductsSold.reduce(function (s, p) { return s + p.revenueHt; }, 0) / 100).toFixed(2) %> €
+                </td>
+                <td class="px-4 py-3 text-right tabular-nums text-emerald-700" id="all-products-margin-total">
+                  +<%= (summary.allProductsSold.filter(function (p) { return p.costKnown; }).reduce(function (s, p) { return s + p.margin; }, 0) / 100).toFixed(2) %> €
+                </td>
+                <td class="px-4 py-3 text-right text-xs text-slate-500" colspan="1">
+                  sur <%= summary.allProductsSold.filter(function (p) { return p.costKnown; }).length %> avec cost
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      <% } %>
+    </div>
+
+    <!-- JS pour tri + recherche client-side -->
+    <script>
+      (function () {
+        var tbody = document.getElementById('all-products-tbody');
+        if (!tbody) return;
+        var rows = Array.from(tbody.querySelectorAll('tr'));
+        var search = document.getElementById('all-products-search');
+
+        /* Re-calcule les totaux du footer en fonction des lignes visibles */
+        function recomputeTotals() {
+          var visibleRows = rows.filter(function (r) { return r.style.display !== 'none'; });
+          document.getElementById('all-products-count').textContent = visibleRows.length;
+          var qty = 0, ttc = 0, ht = 0, margin = 0, withCost = 0;
+          visibleRows.forEach(function (r) {
+            qty += Number(r.dataset.qtysold) || 0;
+            ttc += Number(r.dataset.revenuettc) || 0;
+            ht += Number(r.dataset.revenueht) || 0;
+            if (Number(r.dataset.margin) >= 0) {
+              margin += Number(r.dataset.margin);
+              withCost++;
+            }
+          });
+          document.getElementById('all-products-qty-total').textContent = qty;
+          document.getElementById('all-products-revenuettc-total').textContent = (ttc / 100).toFixed(2) + ' €';
+          document.getElementById('all-products-revenueht-total').textContent = (ht / 100).toFixed(2) + ' €';
+          document.getElementById('all-products-margin-total').textContent = '+' + (margin / 100).toFixed(2) + ' €';
+        }
+
+        /* Recherche : filtre name + sku */
+        if (search) {
+          search.addEventListener('input', function () {
+            var q = search.value.toLowerCase().trim();
+            rows.forEach(function (r) {
+              var match = !q || r.dataset.name.indexOf(q) !== -1 || r.dataset.sku.indexOf(q) !== -1;
+              r.style.display = match ? '' : 'none';
+            });
+            recomputeTotals();
+          });
+        }
+
+        /* Tri sur clic colonne */
+        var currentSort = { key: 'revenuettc', dir: 'desc' };
+        var headers = document.querySelectorAll('#all-products-table th[data-sort]');
+        headers.forEach(function (th) {
+          th.addEventListener('click', function () {
+            var key = th.dataset.sort.toLowerCase();
+            var dir = (currentSort.key === key && currentSort.dir === 'desc') ? 'asc' : 'desc';
+            currentSort = { key: key, dir: dir };
+
+            /* Met à jour les flèches */
+            headers.forEach(function (h) { var i = h.querySelector('.sort-icon'); if (i) i.textContent = ''; });
+            var icon = th.querySelector('.sort-icon');
+            if (icon) icon.textContent = dir === 'desc' ? '▼' : '▲';
+
+            var dataKey = 'data' + key.replace(/[a-z]/i, function (c) { return c.toLowerCase(); });
+            var dataAttr = key; // dataset names are camelCase in JS but we use lowercase attrs
+            var sortedRows = rows.slice().sort(function (a, b) {
+              var va = a.dataset[dataAttr];
+              var vb = b.dataset[dataAttr];
+              var na = parseFloat(va);
+              var nb = parseFloat(vb);
+              var isNum = !isNaN(na) && !isNaN(nb);
+              var cmp = isNum ? (na - nb) : String(va).localeCompare(String(vb));
+              return dir === 'desc' ? -cmp : cmp;
+            });
+            sortedRows.forEach(function (r) { tbody.appendChild(r); });
+          });
+        });
+      })();
+    </script>
+
   <% } %>
 
 </main>
