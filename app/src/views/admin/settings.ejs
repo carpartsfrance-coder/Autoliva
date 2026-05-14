@@ -147,8 +147,19 @@
                 </div>
               </div>
 
+              <div>
+                <label class="block text-sm font-medium text-slate-500" for="staffRole">Type d'accès</label>
+                <select class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="staffRole" name="role">
+                  <option value="employe">Employé back-office (commandes, produits, SAV…)</option>
+                  <option value="comptable">Comptable (lecture seule — espace dédié /comptable)</option>
+                </select>
+                <div class="mt-2 text-xs text-slate-500">
+                  Un comptable n'accède qu'à son espace : factures, avoirs, remboursements et exports CSV/ZIP. Aucune action possible sur les commandes, produits ou clients.
+                </div>
+              </div>
+
               <button class="btn btn-primary" type="submit" <%= dbConnected ? '' : 'disabled' %>>
-                Créer un compte employé
+                Créer le compte
               </button>
             </form>
           <% } %>
@@ -174,6 +185,8 @@
                     <div class="mt-2 flex flex-wrap items-center gap-2 text-xs">
                       <% if (user.role === 'owner') { %>
                         <span class="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full font-semibold">Propriétaire</span>
+                      <% } else if (user.role === 'comptable') { %>
+                        <span class="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-semibold">Comptable</span>
                       <% } else { %>
                         <span class="bg-green-100 text-green-700 text-xs px-2 py-0.5 rounded-full font-semibold">Employé</span>
                       <% } %>

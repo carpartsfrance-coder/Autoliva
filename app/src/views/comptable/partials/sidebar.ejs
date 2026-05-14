@@ -1,0 +1,110 @@
+<% const activeKey = typeof active !== 'undefined' ? active : ''; %>
+
+<div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden"></div>
+
+<aside id="admin-sidebar" class="fixed top-0 left-0 h-full w-72 bg-slate-900 text-white flex flex-col z-40 -translate-x-full lg:translate-x-0 transition-all duration-300">
+
+  <!-- Logo Espace Comptable -->
+  <div class="sidebar-header relative px-6 py-6 border-b border-white/10 flex items-center justify-between">
+    <a class="sidebar-brand flex items-center gap-3 min-w-0" href="/comptable" aria-label="Espace Comptable">
+      <div class="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center flex-shrink-0 font-black text-white text-lg" aria-hidden="true">
+        CP
+      </div>
+      <div class="sidebar-brand-text leading-tight overflow-hidden">
+        <div class="font-semibold tracking-tight text-lg whitespace-nowrap">CARPARTS<span class="text-amber-400">COMPTA</span></div>
+        <div class="text-xs text-white/60 whitespace-nowrap">Espace comptable</div>
+      </div>
+    </a>
+    <button id="sidebar-collapse-btn" class="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg hover:bg-white/10 transition flex-shrink-0" type="button" title="Réduire la barre latérale">
+      <span class="material-symbols-outlined text-lg sidebar-collapse-icon">chevron_left</span>
+    </button>
+  </div>
+
+  <nav class="flex-1 px-4 py-4 overflow-y-auto">
+
+    <div class="sidebar-group-label">Comptabilité</div>
+    <div class="space-y-0.5">
+      <a class="sidebar-link <%= activeKey === 'dashboard' ? 'sidebar-link--active' : '' %>" href="/comptable" title="Tableau de bord">
+        <span class="material-symbols-outlined">dashboard</span>
+        <span class="sidebar-link-text">Tableau de bord</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'invoices' ? 'sidebar-link--active' : '' %>" href="/comptable/factures" title="Factures">
+        <span class="material-symbols-outlined">receipt_long</span>
+        <span class="sidebar-link-text">Factures</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'credit-notes' ? 'sidebar-link--active' : '' %>" href="/comptable/avoirs" title="Avoirs">
+        <span class="material-symbols-outlined">redo</span>
+        <span class="sidebar-link-text">Avoirs</span>
+      </a>
+      <a class="sidebar-link <%= activeKey === 'refunds' ? 'sidebar-link--active' : '' %>" href="/comptable/remboursements" title="Remboursements">
+        <span class="material-symbols-outlined">currency_exchange</span>
+        <span class="sidebar-link-text">Remboursements</span>
+      </a>
+    </div>
+
+    <div class="sidebar-separator"></div>
+
+    <div class="sidebar-group-label">Aide</div>
+    <div class="px-4 py-3 rounded-xl bg-white/5 text-xs text-white/70 leading-relaxed">
+      <div class="font-semibold text-white mb-1">Comment ça marche ?</div>
+      <p class="mb-2">Sur le tableau de bord, vous trouvez les KPI du mois et les écarts détectés automatiquement.</p>
+      <p>Pour la saisie comptable, téléchargez le <strong>CSV du mois</strong> + le <strong>ZIP des PDF</strong> depuis le tableau de bord.</p>
+    </div>
+
+  </nav>
+
+  <!-- Zone utilisateur -->
+  <div class="p-4" style="border-top: 1px solid rgba(255,255,255,0.06)">
+    <%
+      const cu = typeof currentUser !== 'undefined' && currentUser ? currentUser : null;
+      const firstName = cu && cu.firstName ? cu.firstName : '';
+      const lastName  = cu && cu.lastName  ? cu.lastName  : '';
+      const initials  = (firstName.charAt(0) + lastName.charAt(0)).toUpperCase() || '?';
+      const fullName  = (firstName + ' ' + lastName).trim() || (cu && cu.email) || 'Comptable';
+      const userIsOwner = cu && cu.role === 'owner';
+    %>
+    <form action="/comptable/deconnexion" method="POST">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white flex-shrink-0" style="background: rgba(255,255,255,0.15)">
+          <%= initials %>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <div class="text-sm font-medium text-white truncate"><%= fullName %></div>
+            <% if (userIsOwner) { %>
+              <span class="bg-purple-100 text-purple-700 text-xs px-2 py-0.5 rounded-full">Propriétaire</span>
+            <% } else { %>
+              <span class="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full">Comptable</span>
+            <% } %>
+          </div>
+        </div>
+        <button class="sidebar-logout-btn" type="submit" title="Déconnexion">
+          <span class="material-symbols-outlined">logout</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+</aside>
+
+<script>
+  (function () {
+    var toggle = document.getElementById('sidebar-toggle');
+    var sidebar = document.getElementById('admin-sidebar');
+    var overlay = document.getElementById('sidebar-overlay');
+    if (toggle && sidebar && overlay) {
+      function open() { sidebar.classList.remove('-translate-x-full'); overlay.classList.remove('hidden'); }
+      function close() { sidebar.classList.add('-translate-x-full'); overlay.classList.add('hidden'); }
+      toggle.addEventListener('click', open);
+      overlay.addEventListener('click', close);
+    }
+    var collapseBtn = document.getElementById('sidebar-collapse-btn');
+    if (collapseBtn) {
+      collapseBtn.addEventListener('click', function () {
+        document.documentElement.classList.toggle('sidebar-collapsed');
+        var collapsed = document.documentElement.classList.contains('sidebar-collapsed');
+        try { localStorage.setItem('sidebar-collapsed', collapsed ? '1' : '0'); } catch (_) {}
+      });
+    }
+  })();
+</script>

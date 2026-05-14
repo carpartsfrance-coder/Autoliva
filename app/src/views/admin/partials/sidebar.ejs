@@ -132,6 +132,10 @@
         <% } %>
       </a>
       <% if (typeof isOwner !== 'undefined' && isOwner) { %>
+        <a class="sidebar-link <%= activeKey === 'comptable' ? 'sidebar-link--active' : '' %>" href="/comptable" title="Espace comptable">
+          <span class="material-symbols-outlined">account_balance</span>
+          <span class="sidebar-link-text">Espace comptable</span>
+        </a>
         <a class="sidebar-link <%= activeKey === 'settings' ? 'sidebar-link--active' : '' %>" href="/admin/parametres" title="Paramètres">
           <span class="material-symbols-outlined">settings</span>
           <span class="sidebar-link-text">Paramètres</span>

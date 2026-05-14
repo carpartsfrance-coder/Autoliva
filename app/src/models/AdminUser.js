@@ -9,7 +9,7 @@ const adminUserSchema = new mongoose.Schema(
     passwordSalt: { type: String, required: true },
     role: {
       type: String,
-      enum: ['owner', 'employe'],
+      enum: ['owner', 'employe', 'comptable'],
       default: 'employe',
       required: true,
     },

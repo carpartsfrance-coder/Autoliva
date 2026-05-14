@@ -1,0 +1,120 @@
+<%- include('./partials/head', { pageTitle }) %>
+<%- include('./partials/sidebar', { active: 'credit-notes', currentUser }) %>
+
+<main class="p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900">Avoirs</h1>
+      <p class="text-sm text-slate-500 mt-1">
+        <%= data.total %> avoir(s)
+        <% if (range.isCustom) { %>
+          du <%= range.from ? range.from.toLocaleDateString('fr-FR') : '—' %>
+          au <%= range.to ? new Date(range.to.getTime() - 1).toLocaleDateString('fr-FR') : '—' %>
+        <% } else if (period) { %>
+          en <span class="capitalize"><%= period.currentLabel %></span>
+        <% } %>
+      </p>
+    </div>
+    <% if (period) { %>
+      <div class="flex items-center gap-2 bg-white rounded-xl border border-slate-200 p-1">
+        <a href="?period=<%= period.prevPeriod %>" class="px-3 py-2 text-sm rounded-lg hover:bg-slate-100 transition" title="Mois précédent">
+          <span class="material-symbols-outlined text-base align-middle">chevron_left</span>
+        </a>
+        <div class="px-3 py-2 text-sm font-semibold text-slate-900 capitalize"><%= period.currentLabel %></div>
+        <a href="?period=<%= period.nextPeriod %>" class="px-3 py-2 text-sm rounded-lg hover:bg-slate-100 transition" title="Mois suivant">
+          <span class="material-symbols-outlined text-base align-middle">chevron_right</span>
+        </a>
+      </div>
+    <% } %>
+  </div>
+
+  <form method="GET" action="/comptable/avoirs" class="bg-white rounded-2xl border border-slate-200 p-4 mb-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+    <div class="flex-1">
+      <label class="block text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1" for="q">Recherche</label>
+      <input type="text" name="q" id="q" value="<%= search %>" placeholder="N° avoir, n° facture, n° commande, client…"
+             class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:ring-amber-500 focus:border-amber-500" />
+    </div>
+    <div>
+      <label class="block text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1" for="from">Du</label>
+      <input type="date" name="from" id="from" value="<%= range.from ? range.from.toISOString().slice(0,10) : '' %>"
+             class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:ring-amber-500 focus:border-amber-500" />
+    </div>
+    <div>
+      <label class="block text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1" for="to">Au</label>
+      <input type="date" name="to" id="to" value="<%= range.to ? new Date(range.to.getTime() - 86400000).toISOString().slice(0,10) : '' %>"
+             class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:ring-amber-500 focus:border-amber-500" />
+    </div>
+    <button type="submit" class="bg-slate-900 text-white rounded-xl px-5 py-3 text-sm font-semibold hover:bg-slate-800 transition">
+      Filtrer
+    </button>
+    <% if (search || range.isCustom) { %>
+      <a href="/comptable/avoirs" class="text-sm text-slate-500 hover:text-slate-900 px-3 py-3 self-center">Réinitialiser</a>
+    <% } %>
+  </form>
+
+  <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+    <% if (data.rows.length === 0) { %>
+      <div class="p-12 text-center text-slate-500">
+        <span class="material-symbols-outlined text-4xl text-slate-300">redo</span>
+        <p class="mt-2">Aucun avoir sur la période sélectionnée.</p>
+      </div>
+    <% } else { %>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+            <tr>
+              <th class="px-4 py-3 text-left font-semibold">N° avoir</th>
+              <th class="px-4 py-3 text-left font-semibold">Date</th>
+              <th class="px-4 py-3 text-left font-semibold">Client</th>
+              <th class="px-4 py-3 text-left font-semibold">Facture liée</th>
+              <th class="px-4 py-3 text-left font-semibold">Motif</th>
+              <th class="px-4 py-3 text-right font-semibold">HT</th>
+              <th class="px-4 py-3 text-right font-semibold">TVA</th>
+              <th class="px-4 py-3 text-right font-semibold">TTC</th>
+              <th class="px-4 py-3 text-right font-semibold">PDF</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <% data.rows.forEach(function (r) { %>
+              <tr class="hover:bg-slate-50">
+                <td class="px-4 py-3 font-mono text-xs text-slate-900"><%= r.creditNoteNumber %></td>
+                <td class="px-4 py-3 text-slate-700 whitespace-nowrap"><%= r.issuedAt ? new Date(r.issuedAt).toLocaleDateString('fr-FR') : '—' %></td>
+                <td class="px-4 py-3 text-slate-900"><%= r.customer %></td>
+                <td class="px-4 py-3 font-mono text-xs text-slate-500"><%= r.invoiceNumber || '—' %></td>
+                <td class="px-4 py-3 text-slate-700 text-xs max-w-xs truncate" title="<%= r.reason %>"><%= r.reason || '—' %></td>
+                <td class="px-4 py-3 text-right tabular-nums text-rose-600">-<%= (r.htCents / 100).toFixed(2) %> €</td>
+                <td class="px-4 py-3 text-right tabular-nums text-slate-500">-<%= (r.vatCents / 100).toFixed(2) %> €</td>
+                <td class="px-4 py-3 text-right tabular-nums font-semibold text-rose-600">-<%= (r.ttcCents / 100).toFixed(2) %> €</td>
+                <td class="px-4 py-3 text-right">
+                  <a href="/comptable/avoirs/<%= r.orderId %>/<%= encodeURIComponent(r.creditNoteNumber) %>/pdf" target="_blank"
+                     class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 hover:bg-amber-100 hover:text-amber-700 text-slate-600 transition"
+                     title="Télécharger le PDF">
+                    <span class="material-symbols-outlined text-base">picture_as_pdf</span>
+                  </a>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+
+    <% if (data.pageCount > 1) { %>
+      <div class="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-sm">
+        <div class="text-slate-500">Page <%= data.page %> sur <%= data.pageCount %></div>
+        <div class="flex items-center gap-2">
+          <% if (prevPageUrl) { %>
+            <a href="<%= prevPageUrl %>" class="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Précédent</a>
+          <% } %>
+          <% if (nextPageUrl) { %>
+            <a href="<%= nextPageUrl %>" class="px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50">Suivant</a>
+          <% } %>
+        </div>
+      </div>
+    <% } %>
+  </div>
+
+</main>
+
+<%- include('./partials/footer') %>
