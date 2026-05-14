@@ -1,0 +1,86 @@
+<%- include('./partials/head', { title }) %>
+<%- include('./partials/sidebar', { active: 'expenses', currentAdmin: typeof currentAdminSession !== 'undefined' ? currentAdminSession : null }) %>
+
+<main class="p-4 sm:p-6 lg:p-10 max-w-3xl mx-auto">
+
+  <div class="mb-6">
+    <a href="/admin/charges" class="text-sm text-slate-500 hover:text-slate-900 inline-flex items-center gap-1">
+      <span class="material-symbols-outlined text-base">chevron_left</span> Retour aux charges
+    </a>
+    <h1 class="text-2xl font-bold text-slate-900 mt-2">
+      <%= isEdit ? 'Modifier la charge' : 'Nouvelle charge' %>
+    </h1>
+  </div>
+
+  <% if (flash) { %>
+    <div class="<%= flash.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800' %> border rounded-xl p-4 mb-6 text-sm">
+      <%= flash.message %>
+    </div>
+  <% } %>
+
+  <form method="POST" action="<%= isEdit ? '/admin/charges/' + expense._id : '/admin/charges/nouvelle' %>" class="bg-white rounded-2xl border border-slate-200 p-6 space-y-5">
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700 mb-2" for="category">Catégorie *</label>
+      <select id="category" name="category" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:ring-amber-500 focus:border-amber-500">
+        <% categories.forEach(function (c) { %>
+          <option value="<%= c %>" <%= form.category === c ? 'selected' : '' %>><%= categoryLabels[c] %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-2" for="amount">Montant TTC *</label>
+        <div class="relative">
+          <input type="text" id="amount" name="amount" required placeholder="Ex: 800,00" value="<%= form.amount %>"
+                 class="w-full rounded-xl border border-slate-200 bg-slate-50 pl-4 pr-10 py-3 text-sm focus:ring-amber-500 focus:border-amber-500" />
+          <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">€</span>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-slate-700 mb-2" for="date">Date *</label>
+        <input type="date" id="date" name="date" required value="<%= form.date %>"
+               class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:ring-amber-500 focus:border-amber-500" />
+        <div class="mt-1 text-xs text-slate-400">Pour une charge récurrente : date du premier mois.</div>
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-sm font-medium text-slate-700 mb-2" for="description">Description</label>
+      <input type="text" id="description" name="description" maxlength="500" placeholder="Ex: Loyer atelier de juin" value="<%= form.description %>"
+             class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:ring-amber-500 focus:border-amber-500" />
+    </div>
+
+    <div class="border-t border-slate-100 pt-5">
+      <label class="flex items-start gap-3 cursor-pointer">
+        <input type="checkbox" id="recurring" name="recurring" <%= form.recurring ? 'checked' : '' %>
+               class="mt-1 rounded border-slate-300 text-amber-500 focus:ring-amber-500"
+               onchange="document.getElementById('recurring-end-block').classList.toggle('hidden', !this.checked)" />
+        <div>
+          <div class="font-medium text-slate-900">Charge récurrente (mensuelle)</div>
+          <div class="text-xs text-slate-500 mt-0.5">
+            Cette charge sera comptabilisée chaque mois à partir de la date ci-dessus.
+            Par exemple : loyer 800 € à partir de juin 2026.
+          </div>
+        </div>
+      </label>
+      <div id="recurring-end-block" class="<%= form.recurring ? '' : 'hidden' %> mt-4 pl-7">
+        <label class="block text-sm font-medium text-slate-700 mb-2" for="recurringEndDate">Date de fin (optionnel)</label>
+        <input type="date" id="recurringEndDate" name="recurringEndDate" value="<%= form.recurringEndDate %>"
+               class="w-full sm:w-72 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:ring-amber-500 focus:border-amber-500" />
+        <div class="mt-1 text-xs text-slate-400">Laisser vide pour une charge récurrente indéfinie.</div>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3 pt-3 border-t border-slate-100">
+      <button type="submit" class="bg-slate-900 text-white rounded-xl px-6 py-3 text-sm font-semibold hover:bg-slate-800 transition">
+        <%= isEdit ? 'Enregistrer les modifications' : 'Ajouter la charge' %>
+      </button>
+      <a href="/admin/charges" class="text-sm text-slate-500 hover:text-slate-900 px-3 py-3">Annuler</a>
+    </div>
+  </form>
+
+</main>
+
+<%- include('./partials/footer') %>

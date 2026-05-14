@@ -177,6 +177,16 @@ router.get('/marketing', requireAdminAuth, adminController.getAdminMarketingPage
  * et le coût d'achat fournisseur — pas pour les yeux des employés. */
 router.get('/finance', requireAdminAuth, requireAbility('settings.billing'), adminController.getAdminFinancePage);
 
+/* /admin/charges : saisie des charges d'entreprise (loyer, salaires,
+ * marketing budget, etc.). Owner only — info confidentielle. */
+const expenseController = require('../controllers/expenseController');
+router.get('/charges', requireAdminAuth, requireAbility('settings.billing'), expenseController.getListPage);
+router.get('/charges/nouvelle', requireAdminAuth, requireAbility('settings.billing'), expenseController.getNewForm);
+router.post('/charges/nouvelle', requireAdminAuth, requireAbility('settings.billing'), expenseController.postCreate);
+router.get('/charges/:id', requireAdminAuth, requireAbility('settings.billing'), expenseController.getEditForm);
+router.post('/charges/:id', requireAdminAuth, requireAbility('settings.billing'), expenseController.postUpdate);
+router.post('/charges/:id/supprimer', requireAdminAuth, requireAbility('settings.billing'), expenseController.postDelete);
+
 router.get('/visiteurs', requireAdminAuth, adminController.getAdminVisitorsListPage);
 router.get('/visiteurs/:sessionId', requireAdminAuth, adminController.getAdminVisitorDetailPage);
 router.get('/visiteurs/:sessionId/events', requireAdminAuth, adminController.getAdminVisitorEventsApi);

@@ -44,31 +44,78 @@
       </div>
     <% } %>
 
-    <!-- KPI cards -->
+    <%
+      /* Helper de delta vs mois précédent. Retourne un objet
+       *   { pct: nombre signé en %, sign: '+|-|±', class: 'emerald|rose|slate' }
+       * Si le mois précédent est 0, on retourne null (pas de comparaison). */
+      function delta(current, prev) {
+        if (!prev || prev === 0) return null;
+        const pct = ((current - prev) / Math.abs(prev)) * 100;
+        const sign = pct > 0 ? '+' : (pct < 0 ? '' : '±');
+        let cls = 'text-slate-400';
+        if (pct >= 5) cls = 'text-emerald-600';
+        else if (pct <= -5) cls = 'text-rose-600';
+        return { pct, sign, class: cls };
+      }
+      const dCA = delta(summary.revenue.ttc, prevSummary && prevSummary.revenue.ttc);
+      const dProfit = delta(summary.profit.netCents, prevSummary && prevSummary.profit.netCents);
+      const dMargin = delta(summary.margin.gross, prevSummary && prevSummary.margin.gross);
+      const dAvg = delta(summary.avgBasket, prevSummary && prevSummary.avgBasket);
+    %>
+
+    <!-- KPI cards : 4 chiffres clés avec comparaison N-1 -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
 
       <!-- CA TTC -->
       <div class="bg-white rounded-2xl border border-slate-200 p-5">
         <div class="flex items-center justify-between mb-3">
-          <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Chiffre d'affaires TTC</div>
+          <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">CA TTC</div>
           <span class="material-symbols-outlined text-slate-400">attach_money</span>
         </div>
         <div class="text-3xl font-bold text-slate-900"><%= (summary.revenue.ttc / 100).toFixed(2) %> €</div>
         <div class="text-sm text-slate-500 mt-1">HT : <%= (summary.revenue.ht / 100).toFixed(2) %> €</div>
-        <div class="text-xs text-slate-400 mt-2"><%= summary.ordersWithSoldItems %> commande(s)</div>
+        <div class="text-xs mt-2 flex items-center gap-1">
+          <% if (dCA) { %>
+            <span class="<%= dCA.class %> font-semibold tabular-nums"><%= dCA.sign %><%= dCA.pct.toFixed(1) %> %</span>
+            <span class="text-slate-400">vs mois précédent</span>
+          <% } else { %>
+            <span class="text-slate-400"><%= summary.ordersWithSoldItems %> commande(s)</span>
+          <% } %>
+        </div>
       </div>
 
-      <!-- Net (après refunds) -->
-      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+      <!-- Bénéfice net — la KPI star -->
+      <div class="bg-slate-900 text-white rounded-2xl p-5">
         <div class="flex items-center justify-between mb-3">
-          <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">CA Net</div>
-          <span class="material-symbols-outlined text-slate-400">payments</span>
+          <div class="text-xs uppercase tracking-wider text-white/70 font-semibold">Bénéfice net</div>
+          <span class="material-symbols-outlined text-white/60">savings</span>
         </div>
-        <div class="text-3xl font-bold text-slate-900"><%= (summary.net.ttc / 100).toFixed(2) %> €</div>
-        <div class="text-sm text-slate-500 mt-1">après <%= (summary.refunds.total / 100).toFixed(2) %> € de remboursements</div>
-        <div class="text-xs <%= summary.refunds.rate > 0.05 ? 'text-rose-600' : 'text-slate-400' %> mt-2">
-          Taux de remboursement : <%= (summary.refunds.rate * 100).toFixed(2) %> %
-        </div>
+        <% if (summary.margin.itemsCountWithCost > 0 || summary.expenses.total > 0) { %>
+          <div class="text-3xl font-bold <%= summary.profit.netCents >= 0 ? 'text-emerald-300' : 'text-rose-300' %>">
+            <%= summary.profit.netCents >= 0 ? '+' : '' %><%= (summary.profit.netCents / 100).toFixed(2) %> €
+          </div>
+          <div class="text-sm text-white/70 mt-1">
+            <% if (summary.net.ttc > 0) { %>
+              <%= (summary.profit.netPct * 100).toFixed(1) %> % du CA net
+            <% } else { %>
+              Marge brute − charges
+            <% } %>
+          </div>
+          <div class="text-xs mt-2 flex items-center gap-1">
+            <% if (dProfit) { %>
+              <span class="font-semibold tabular-nums <%= dProfit.pct >= 0 ? 'text-emerald-300' : 'text-rose-300' %>"><%= dProfit.sign %><%= dProfit.pct.toFixed(1) %> %</span>
+              <span class="text-white/60">vs mois précédent</span>
+            <% } else { %>
+              <span class="text-white/50">Premier mois de suivi</span>
+            <% } %>
+          </div>
+          <% if (summary.profit.incompleteMargin) { %>
+            <div class="text-[10px] text-amber-300 mt-2">⚠ Marge calculée sur <%= Math.round(summary.margin.coveragePct * 100) %> % du CA seulement</div>
+          <% } %>
+        <% } else { %>
+          <div class="text-3xl font-bold text-white/30">—</div>
+          <div class="text-sm text-white/70 mt-1">Saisis tes coûts produits + charges pour activer</div>
+        <% } %>
       </div>
 
       <!-- Marge brute -->
@@ -80,10 +127,15 @@
         <% if (summary.margin.itemsCountWithCost > 0) { %>
           <div class="text-3xl font-bold text-emerald-700"><%= (summary.margin.gross / 100).toFixed(2) %> €</div>
           <div class="text-sm text-slate-500 mt-1">
-            <%= (summary.margin.pct * 100).toFixed(1) %> % de marge sur les items au cost connu
+            <%= (summary.margin.pct * 100).toFixed(1) %> % · COGS <%= (summary.margin.cogsKnown / 100).toFixed(0) %> €
           </div>
-          <div class="text-xs text-slate-400 mt-2">
-            COGS : <%= (summary.margin.cogsKnown / 100).toFixed(2) %> €
+          <div class="text-xs mt-2 flex items-center gap-1">
+            <% if (dMargin) { %>
+              <span class="<%= dMargin.class %> font-semibold tabular-nums"><%= dMargin.sign %><%= dMargin.pct.toFixed(1) %> %</span>
+              <span class="text-slate-400">vs mois précédent</span>
+            <% } else { %>
+              <span class="text-slate-400">CA Net : <%= (summary.net.ttc / 100).toFixed(0) %> €</span>
+            <% } %>
           </div>
         <% } else { %>
           <div class="text-3xl font-bold text-slate-300">—</div>
@@ -98,19 +150,109 @@
           <span class="material-symbols-outlined text-slate-400">shopping_cart</span>
         </div>
         <div class="text-3xl font-bold text-slate-900"><%= (summary.avgBasket / 100).toFixed(2) %> €</div>
-        <div class="text-sm text-slate-500 mt-1">par commande</div>
-        <div class="text-xs text-slate-400 mt-2"><%= summary.ordersWithSoldItems %> commandes</div>
+        <div class="text-sm text-slate-500 mt-1"><%= summary.ordersWithSoldItems %> commandes</div>
+        <div class="text-xs mt-2 flex items-center gap-1">
+          <% if (dAvg) { %>
+            <span class="<%= dAvg.class %> font-semibold tabular-nums"><%= dAvg.sign %><%= dAvg.pct.toFixed(1) %> %</span>
+            <span class="text-slate-400">vs mois précédent</span>
+          <% } else { %>
+            <span class="<%= summary.refunds.rate > 0.05 ? 'text-rose-600' : 'text-slate-400' %>">
+              Refunds : <%= (summary.refunds.rate * 100).toFixed(1) %> %
+            </span>
+          <% } %>
+        </div>
       </div>
 
+    </div>
+
+    <!-- Compte de résultat — la vraie nouveauté du Sprint A -->
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-6">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <div class="text-lg font-semibold text-slate-900">Compte de résultat — <%= period.currentLabel %></div>
+          <div class="text-sm text-slate-500 mt-1">Du CA brut au bénéfice net, étape par étape.</div>
+        </div>
+        <a href="/admin/charges?period=<%= period.currentPeriod %>" class="text-sm text-amber-600 hover:underline inline-flex items-center gap-1">
+          <span class="material-symbols-outlined text-base">edit</span>
+          Gérer les charges
+        </a>
+      </div>
+      <div class="p-6 space-y-2 text-sm">
+        <div class="flex items-center justify-between py-1">
+          <div class="text-slate-700">CA TTC brut</div>
+          <div class="font-semibold text-slate-900 tabular-nums"><%= (summary.revenue.ttc / 100).toFixed(2) %> €</div>
+        </div>
+        <div class="flex items-center justify-between py-1">
+          <div class="text-slate-700">− Remboursements</div>
+          <div class="font-semibold text-rose-600 tabular-nums">-<%= (summary.refunds.total / 100).toFixed(2) %> €</div>
+        </div>
+        <div class="flex items-center justify-between py-1 border-t border-slate-100 pt-2">
+          <div class="font-semibold text-slate-900">CA Net</div>
+          <div class="font-bold text-slate-900 tabular-nums"><%= (summary.net.ttc / 100).toFixed(2) %> €</div>
+        </div>
+        <% if (summary.margin.itemsCountWithCost > 0) { %>
+          <div class="flex items-center justify-between py-1 mt-3">
+            <div class="text-slate-700">
+              − COGS (achats produits vendus)
+              <% if (summary.profit.incompleteMargin) { %>
+                <span class="text-xs text-amber-600 ml-1">⚠ sur <%= Math.round(summary.margin.coveragePct * 100) %> % du CA</span>
+              <% } %>
+            </div>
+            <div class="font-semibold text-rose-600 tabular-nums">-<%= (summary.margin.cogsKnown / 100).toFixed(2) %> €</div>
+          </div>
+          <div class="flex items-center justify-between py-1 border-t border-slate-100 pt-2">
+            <div class="font-semibold text-slate-900">= Marge brute</div>
+            <div class="font-bold text-emerald-700 tabular-nums"><%= (summary.margin.gross / 100).toFixed(2) %> € (<%= (summary.margin.pct * 100).toFixed(1) %> %)</div>
+          </div>
+        <% } else { %>
+          <div class="flex items-center justify-between py-1 mt-3 italic">
+            <div class="text-slate-400">− COGS : indisponible (saisis le prix d'achat sur tes fiches produit)</div>
+            <div class="text-slate-300 tabular-nums">—</div>
+          </div>
+        <% } %>
+        <div class="mt-3 space-y-1">
+          <% if (summary.expenses.paymentFeesAuto > 0) { %>
+            <div class="flex items-center justify-between py-1">
+              <div class="text-slate-700">
+                − Frais paiement Mollie
+                <span class="text-xs text-emerald-600 ml-1">(auto)</span>
+              </div>
+              <div class="font-semibold text-rose-600 tabular-nums">-<%= (summary.expenses.paymentFeesAuto / 100).toFixed(2) %> €</div>
+            </div>
+          <% } %>
+          <% Object.keys(summary.expenses.byCategory).sort(function (a, b) { return summary.expenses.byCategory[b] - summary.expenses.byCategory[a]; }).forEach(function (cat) { %>
+            <div class="flex items-center justify-between py-1">
+              <div class="text-slate-700">− <%= expensesCategoryLabels[cat] || cat %></div>
+              <div class="font-semibold text-rose-600 tabular-nums">-<%= (summary.expenses.byCategory[cat] / 100).toFixed(2) %> €</div>
+            </div>
+          <% }) %>
+          <% if (summary.expenses.total === 0 && summary.expenses.paymentFeesAuto === 0) { %>
+            <div class="flex items-center justify-between py-1 italic">
+              <div class="text-slate-400">Aucune charge saisie sur ce mois — <a href="/admin/charges/nouvelle" class="text-amber-600 hover:underline not-italic">ajouter une charge</a></div>
+              <div class="text-slate-300 tabular-nums">—</div>
+            </div>
+          <% } %>
+        </div>
+        <div class="flex items-center justify-between py-3 border-t-2 border-slate-900 mt-3">
+          <div class="text-lg font-bold text-slate-900">= Bénéfice net</div>
+          <div class="text-xl font-bold tabular-nums <%= summary.profit.netCents >= 0 ? 'text-emerald-700' : 'text-rose-700' %>">
+            <%= summary.profit.netCents >= 0 ? '+' : '' %><%= (summary.profit.netCents / 100).toFixed(2) %> €
+            <% if (summary.net.ttc > 0) { %>
+              <span class="text-sm font-normal text-slate-500">(<%= (summary.profit.netPct * 100).toFixed(1) %> %)</span>
+            <% } %>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Tendance 12 mois -->
     <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
       <div class="mb-4">
         <div class="text-lg font-semibold text-slate-900">Tendance — 12 derniers mois</div>
-        <div class="text-sm text-slate-500 mt-1">
-          <span class="inline-block w-3 h-3 rounded bg-slate-900 mr-1 align-middle"></span> CA TTC ·
-          <span class="inline-block w-3 h-3 rounded bg-emerald-500 mr-1 align-middle"></span> Marge brute
+        <div class="text-sm text-slate-500 mt-1 flex flex-wrap gap-3">
+          <span><span class="inline-block w-3 h-3 rounded bg-slate-900 mr-1 align-middle"></span> CA TTC</span>
+          <span><span class="inline-block w-3 h-3 rounded bg-emerald-500 mr-1 align-middle"></span> Marge brute</span>
+          <span><span class="inline-block w-3 h-3 rounded bg-amber-500 mr-1 align-middle"></span> Bénéfice net</span>
         </div>
       </div>
       <% const maxRev = Math.max.apply(null, trend.map(function(t){return t.revenueTtc}).concat([1])); %>
@@ -118,6 +260,8 @@
         <% trend.forEach(function (t) {
              const revPct = maxRev > 0 ? (t.revenueTtc / maxRev) * 100 : 0;
              const margPct = maxRev > 0 ? (t.marginGross / maxRev) * 100 : 0;
+             const profitPct = maxRev > 0 && t.profit > 0 ? (t.profit / maxRev) * 100 : 0;
+             const profitNegPct = maxRev > 0 && t.profit < 0 ? (Math.abs(t.profit) / maxRev) * 100 : 0;
              const isCurrent = t.year === summary.year && t.month === summary.month; %>
           <div class="flex-1 flex flex-col items-center gap-1 min-w-0">
             <div class="text-[10px] text-slate-500 tabular-nums whitespace-nowrap"><%= (t.revenueTtc / 100).toFixed(0) %>€</div>
@@ -125,6 +269,11 @@
               <div class="absolute bottom-0 left-0 right-0 <%= isCurrent ? 'bg-slate-900' : 'bg-slate-300' %> rounded-t" style="height: <%= Math.max(2, revPct) %>%; opacity: 0.9"></div>
               <% if (t.marginGross > 0) { %>
                 <div class="absolute bottom-0 left-1/4 right-1/4 bg-emerald-500 rounded-t" style="height: <%= Math.max(2, margPct) %>%; opacity: 0.85"></div>
+              <% } %>
+              <% if (profitPct > 0) { %>
+                <div class="absolute bottom-0 left-[40%] right-[40%] bg-amber-500 rounded-t" style="height: <%= Math.max(2, profitPct) %>%; opacity: 0.95" title="Bénéfice net : <%= (t.profit/100).toFixed(0) %>€"></div>
+              <% } else if (profitNegPct > 0) { %>
+                <div class="absolute top-0 left-[40%] right-[40%] bg-rose-500 rounded-b" style="height: <%= Math.max(2, profitNegPct * 0.3) %>%; opacity: 0.7" title="Perte : <%= (t.profit/100).toFixed(0) %>€"></div>
               <% } %>
             </div>
             <div class="text-[10px] text-slate-500 capitalize"><%= t.label %></div>
