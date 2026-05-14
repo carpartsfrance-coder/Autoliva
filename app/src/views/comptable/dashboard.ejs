@@ -1,0 +1,198 @@
+<%- include('./partials/head', { pageTitle }) %>
+<%- include('./partials/sidebar', { active: 'dashboard', currentUser }) %>
+
+<main class="p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto">
+
+  <!-- En-tête + sélecteur de période -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900">Tableau de bord comptable</h1>
+      <p class="text-sm text-slate-500 mt-1">
+        Bonjour <%= userFullName || userRoleLabel %>, voici le récap du mois.
+      </p>
+    </div>
+    <% if (period) { %>
+      <div class="flex items-center gap-2 bg-white rounded-xl border border-slate-200 p-1">
+        <a href="?period=<%= period.prevPeriod %>" class="px-3 py-2 text-sm rounded-lg hover:bg-slate-100 transition" title="Mois précédent">
+          <span class="material-symbols-outlined text-base align-middle">chevron_left</span>
+        </a>
+        <div class="px-3 py-2 text-sm font-semibold text-slate-900 capitalize"><%= period.currentLabel %></div>
+        <a href="?period=<%= period.nextPeriod %>" class="px-3 py-2 text-sm rounded-lg hover:bg-slate-100 transition" title="Mois suivant">
+          <span class="material-symbols-outlined text-base align-middle">chevron_right</span>
+        </a>
+      </div>
+    <% } %>
+  </div>
+
+  <% if (!dbConnected) { %>
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+      Base de données non connectée. Réessayez dans un instant.
+    </div>
+  <% } else if (summary) { %>
+
+    <!-- KPI cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+
+      <!-- Factures -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Factures émises</div>
+          <span class="material-symbols-outlined text-slate-400">receipt_long</span>
+        </div>
+        <div class="text-3xl font-bold text-slate-900"><%= summary.invoices.count %></div>
+        <div class="text-sm text-slate-500 mt-1">
+          <span class="font-semibold text-slate-900"><%= (summary.invoices.ttcCents / 100).toFixed(2) %> €</span> TTC
+        </div>
+        <div class="text-xs text-slate-400 mt-2">
+          HT : <%= (summary.invoices.htCents / 100).toFixed(2) %> € · TVA : <%= (summary.invoices.vatCents / 100).toFixed(2) %> €
+        </div>
+      </div>
+
+      <!-- Avoirs -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Avoirs émis</div>
+          <span class="material-symbols-outlined text-slate-400">redo</span>
+        </div>
+        <div class="text-3xl font-bold text-slate-900"><%= summary.creditNotes.count %></div>
+        <div class="text-sm text-slate-500 mt-1">
+          <span class="font-semibold text-rose-600">-<%= (summary.creditNotes.ttcCents / 100).toFixed(2) %> €</span> TTC
+        </div>
+        <div class="text-xs text-slate-400 mt-2">
+          HT : -<%= (summary.creditNotes.htCents / 100).toFixed(2) %> € · TVA : -<%= (summary.creditNotes.vatCents / 100).toFixed(2) %> €
+        </div>
+      </div>
+
+      <!-- Remboursements -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Remboursements</div>
+          <span class="material-symbols-outlined text-slate-400">currency_exchange</span>
+        </div>
+        <div class="text-3xl font-bold text-slate-900"><%= summary.refunds.count %></div>
+        <div class="text-sm text-slate-500 mt-1">
+          <span class="font-semibold text-slate-900"><%= (summary.refunds.amountCents / 100).toFixed(2) %> €</span> au total
+        </div>
+        <div class="text-xs text-slate-400 mt-2">Mollie + Scalapay + virements</div>
+      </div>
+
+      <!-- CA Net -->
+      <div class="bg-slate-900 text-white rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs uppercase tracking-wider text-white/60 font-semibold">CA net</div>
+          <span class="material-symbols-outlined text-white/60">payments</span>
+        </div>
+        <div class="text-3xl font-bold"><%= (summary.net.ttcCents / 100).toFixed(2) %> €</div>
+        <div class="text-sm text-white/70 mt-1">TTC après avoirs</div>
+        <div class="text-xs text-white/50 mt-2">
+          HT : <%= (summary.net.htCents / 100).toFixed(2) %> € · TVA : <%= (summary.net.vatCents / 100).toFixed(2) %> €
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Exports -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <div class="text-lg font-semibold text-slate-900">Exports comptables — <%= period.currentLabel %></div>
+          <div class="text-sm text-slate-500 mt-1">Tous les téléchargements sont tracés (RGPD).</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <a href="/comptable/export/<%= summary.year %>/<%= summary.month %>/csv"
+           class="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50 transition group">
+          <div class="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+            <span class="material-symbols-outlined">table_view</span>
+          </div>
+          <div class="flex-1">
+            <div class="font-semibold text-slate-900">CSV — saisie comptable</div>
+            <div class="text-xs text-slate-500 mt-0.5">Une ligne par facture + une ligne par avoir. Compatible Pennylane, Sage, EBP, Cegid.</div>
+          </div>
+          <span class="material-symbols-outlined text-slate-400 group-hover:text-amber-600">download</span>
+        </a>
+        <a href="/comptable/export/<%= summary.year %>/<%= summary.month %>/pdfs.zip"
+           class="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50 transition group">
+          <div class="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
+            <span class="material-symbols-outlined">folder_zip</span>
+          </div>
+          <div class="flex-1">
+            <div class="font-semibold text-slate-900">ZIP — tous les PDF du mois</div>
+            <div class="text-xs text-slate-500 mt-0.5">Factures et avoirs en PDF, classés dans 2 sous-dossiers.</div>
+          </div>
+          <span class="material-symbols-outlined text-slate-400 group-hover:text-amber-600">download</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Santé compta : anomalies -->
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-6">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <div class="text-lg font-semibold text-slate-900">Santé compta — écarts détectés</div>
+          <div class="text-sm text-slate-500 mt-1">
+            <% if (anomalies.length === 0) { %>
+              <span class="text-emerald-600 font-semibold">Aucun écart sur la période.</span> Tout est cohérent.
+            <% } else { %>
+              <%= anomalies.length %> anomalie(s) à examiner.
+            <% } %>
+          </div>
+        </div>
+        <div class="text-3xl">
+          <% if (anomalies.length === 0) { %>
+            <span class="material-symbols-outlined text-emerald-500">check_circle</span>
+          <% } else { %>
+            <span class="material-symbols-outlined text-rose-500">warning</span>
+          <% } %>
+        </div>
+      </div>
+      <% if (anomalies.length > 0) { %>
+        <ul class="divide-y divide-slate-100">
+          <% anomalies.forEach(function (a) { %>
+            <li class="px-6 py-4 flex items-start gap-3">
+              <div class="mt-0.5">
+                <% if (a.severity === 'high') { %>
+                  <span class="w-2.5 h-2.5 rounded-full bg-rose-500 inline-block"></span>
+                <% } else if (a.severity === 'medium') { %>
+                  <span class="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span>
+                <% } else { %>
+                  <span class="w-2.5 h-2.5 rounded-full bg-slate-400 inline-block"></span>
+                <% } %>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm text-slate-900"><%= a.message %></div>
+                <% if (a.orderNumber) { %>
+                  <div class="text-xs text-slate-500 mt-0.5">Commande <%= a.orderNumber %></div>
+                <% } %>
+              </div>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </div>
+
+    <!-- Tendance 12 mois (simple bar chart CSS) -->
+    <div class="bg-white rounded-2xl border border-slate-200 p-6">
+      <div class="mb-4">
+        <div class="text-lg font-semibold text-slate-900">Tendance — 12 derniers mois (CA net TTC)</div>
+        <div class="text-sm text-slate-500 mt-1">Hauteur proportionnelle au plus haut mois.</div>
+      </div>
+      <% const maxCents = Math.max.apply(null, trend.map(function(t){return t.netTtcCents}).concat([1])); %>
+      <div class="flex items-end gap-2 h-40">
+        <% trend.forEach(function (t) {
+             const pct = maxCents > 0 ? Math.round((t.netTtcCents / maxCents) * 100) : 0;
+             const isCurrent = t.year === summary.year && t.month === summary.month; %>
+          <div class="flex-1 flex flex-col items-center gap-1">
+            <div class="text-[10px] text-slate-500 tabular-nums"><%= (t.netTtcCents / 100).toFixed(0) %>€</div>
+            <div class="w-full <%= isCurrent ? 'bg-amber-500' : 'bg-slate-300' %> rounded-t-md" style="height: <%= Math.max(2, pct) %>%"></div>
+            <div class="text-[10px] text-slate-500 capitalize"><%= t.label %></div>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+
+  <% } %>
+
+</main>
+
+<%- include('./partials/footer') %>

@@ -213,8 +213,8 @@ const adminLoginLimiter = rateLimit({
 });
 app.use('/admin/connexion', adminLoginLimiter);
 
-// Headers de sécurité sur toutes les routes /admin
-app.use('/admin', (req, res, next) => {
+// Headers de sécurité sur toutes les routes /admin et /comptable
+const backOfficeSecurityHeaders = (req, res, next) => {
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -238,7 +238,9 @@ app.use('/admin', (req, res, next) => {
     ].join('; ')
   );
   next();
-});
+};
+app.use('/admin', backOfficeSecurityHeaders);
+app.use('/comptable', backOfficeSecurityHeaders);
 
 const secureCookieFromEnv =
   process.env.SESSION_COOKIE_SECURE === 'true'
@@ -260,6 +262,7 @@ const checkoutRouter = require('./routes/checkout');
 const legalRouter = require('./routes/legal');
 const blogRouter = require('./routes/blog');
 const adminRouter = require('./routes/admin');
+const comptableRouter = require('./routes/comptable');
 const mediaRouter = require('./routes/media');
 const savApi = require('./routes/api/sav');
 const seoController = require('./controllers/seoController');
@@ -518,6 +521,7 @@ app.use('/commande', checkoutRouter);
 app.use('/legal', legalRouter);
 app.use('/compte', accountRouter);
 app.use('/admin', adminRouter);
+app.use('/comptable', comptableRouter);
 
 /* /en/ a été désactivé : la traduction du contenu produit/blog n'était que
  * partielle et créait du contenu dupliqué quasi-identique au FR (locale dict

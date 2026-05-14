@@ -32,7 +32,7 @@ const { getNextOrderNumber } = require('../services/orderNumber');
 const { formatAttribution } = require('../services/attributionDisplay');
 const { getMarketingDashboardData } = require('../services/marketingAggregations');
 const { listRecentSessions, getSessionTimeline } = require('../services/visitorTimeline');
-const { hasAbility, getRoleLabel, ROLES } = require('../permissions');
+const { hasAbility, getRoleLabel, isComptable, defaultLandingForRole, ROLES } = require('../permissions');
 const brand = require('../config/brand');
 
 const ADMIN_LOGIN_BUCKETS = new Map();
@@ -1584,9 +1584,27 @@ async function postAdminBulkDeleteCategories(req, res, next) {
 
 function getSafeReturnTo(value) {
   if (typeof value !== 'string') return null;
-  if (!value.startsWith('/admin')) return null;
   if (value.startsWith('//')) return null;
+  /* On accepte aussi les retours vers l'espace comptable pour que le rôle
+   * comptable, qui partage la même page de login, puisse être renvoyé sur
+   * son namespace après authentification. */
+  if (!value.startsWith('/admin') && !value.startsWith('/comptable')) return null;
   return value;
+}
+
+/**
+ * Résout l'URL d'atterrissage après un login réussi en fonction du rôle.
+ * Le rôle `comptable` n'a aucun accès à /admin/* : on l'envoie toujours
+ * vers /comptable, même s'il avait demandé un returnTo dans /admin.
+ */
+function resolveLoginLandingUrl(role, returnTo) {
+  const defaultLanding = defaultLandingForRole(role);
+  if (isComptable(role)) {
+    if (typeof returnTo === 'string' && returnTo.startsWith('/comptable')) return returnTo;
+    return defaultLanding;
+  }
+  if (typeof returnTo === 'string' && returnTo.startsWith('/admin')) return returnTo;
+  return defaultLanding;
 }
 
 function getOrderStatusBadge(status) {
@@ -1875,25 +1893,27 @@ async function postAdminLogin(req, res) {
     // 2FA obligatoire pour les owners (configuration recommandée) — si pas encore activée,
     // on connecte normalement mais on flag pour rappel sur le profil.
 
+    const landingUrl = resolveLoginLandingUrl(sessionAdmin.role, returnTo);
+
     if (req.session && typeof req.session.regenerate === 'function') {
       return req.session.regenerate((err) => {
         if (err) return res.redirect('/admin/connexion');
         req.session.admin = sessionAdmin;
         return req.session.save(() => {
           adminUsers.touchLastLogin(sessionAdmin.adminUserId).catch(() => {});
-          return res.redirect(returnTo);
+          return res.redirect(landingUrl);
         });
       });
     }
 
     if (!req.session || typeof req.session.save !== 'function') {
-      return res.redirect(returnTo);
+      return res.redirect(landingUrl);
     }
 
     req.session.admin = sessionAdmin;
     return req.session.save(() => {
       adminUsers.touchLastLogin(sessionAdmin.adminUserId).catch(() => {});
-      return res.redirect(returnTo);
+      return res.redirect(landingUrl);
     });
   }
 
@@ -8802,15 +8822,17 @@ async function postAdminCreateBackofficeUser(req, res, next) {
     }
 
     const createdBy = getCurrentAdminSession(req);
+    const role = getTrimmedString(req.body && req.body.role) === 'comptable' ? 'comptable' : 'employe';
     await adminUsers.createStaffAdminUser({
       firstName,
       lastName,
       email,
       password,
+      role,
       createdByAdminUserId: createdBy && createdBy.adminUserId ? createdBy.adminUserId : null,
     });
 
-    req.session.adminTeamSuccess = 'Compte back-office créé.';
+    req.session.adminTeamSuccess = role === 'comptable' ? 'Compte comptable créé.' : 'Compte back-office créé.';
     if (wantsJsonResponse(req)) return res.json({ ok: true, message: 'Compte back-office créé.' });
     return res.redirect('/admin/parametres');
   } catch (err) {
@@ -9882,7 +9904,8 @@ async function postAdminLogin2fa(req, res) {
     }
     // Succès : on connecte
     const sessionAdmin = pending.sessionAdmin;
-    const returnTo = pending.returnTo || '/admin';
+    const returnTo = pending.returnTo || defaultLandingForRole(sessionAdmin && sessionAdmin.role);
+    const landingUrl = resolveLoginLandingUrl(sessionAdmin && sessionAdmin.role, returnTo);
     delete req.session.adminPending2fa;
     delete req.session.adminLogin2faError;
     try { require('../services/auditLogger').log({ req, action: 'admin.2fa.success', entityType: 'admin_user', entityId: String(adminUser._id) }); } catch (_) {}
@@ -9891,11 +9914,11 @@ async function postAdminLogin2fa(req, res) {
       return req.session.regenerate((err) => {
         if (err) return res.redirect('/admin/connexion');
         req.session.admin = sessionAdmin;
-        return req.session.save(() => res.redirect(returnTo));
+        return req.session.save(() => res.redirect(landingUrl));
       });
     }
     req.session.admin = sessionAdmin;
-    return req.session.save(() => res.redirect(returnTo));
+    return req.session.save(() => res.redirect(landingUrl));
   } catch (e) {
     console.error('[2fa] postLogin', e.message);
     req.session.adminLogin2faError = 'Erreur serveur.';

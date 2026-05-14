@@ -29,7 +29,7 @@ const { handleBlogCoverUpload, handleBlogMediaUpload } = require('../middlewares
 const { handleInvoiceLogoUpload } = require('../middlewares/adminInvoiceUpload');
 const { handleShippingDocUpload } = require('../middlewares/adminShippingDocUpload');
 const { handleHeroImageUpload } = require('../middlewares/adminHeroUpload');
-const { hasAbility, isOwner } = require('../permissions');
+const { hasAbility, isOwner, isComptable } = require('../permissions');
 
 const router = express.Router();
 
@@ -62,6 +62,17 @@ async function requireAdminAuth(req, res, next) {
             lastName: adminUser.lastName,
             role: adminUser.role,
           };
+
+          /* Rôle comptable : aucun accès à /admin/*, on redirige vers son
+           * espace dédié /comptable. On laisse passer uniquement les routes
+           * de déconnexion et de réinitialisation de mot de passe. */
+          if (isComptable(adminUser.role)) {
+            const path = req.path || '';
+            const isAllowed = path === '/deconnexion' || path.startsWith('/reinitialiser') || path.startsWith('/profil/securite');
+            if (!isAllowed) {
+              return res.redirect('/comptable');
+            }
+          }
 
           /* Injecte les helpers de permissions dans res.locals pour les vues */
           res.locals.hasAbility = (ability) => hasAbility(req.session.admin.role, ability);

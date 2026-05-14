@@ -1,0 +1,13 @@
+<%- include('./partials/head', { pageTitle: pageTitle || 'Accès refusé' }) %>
+<%- include('./partials/sidebar', { active: '', currentUser }) %>
+
+<main class="p-4 sm:p-6 lg:p-10 max-w-3xl mx-auto">
+  <div class="bg-white rounded-2xl border border-slate-200 p-10 text-center">
+    <span class="material-symbols-outlined text-6xl text-rose-500">block</span>
+    <h1 class="mt-4 text-2xl font-bold text-slate-900">Accès refusé</h1>
+    <p class="mt-2 text-sm text-slate-500">Vous n'avez pas les autorisations nécessaires pour consulter cette page.</p>
+    <a href="/comptable" class="mt-6 inline-block bg-slate-900 text-white rounded-xl px-5 py-3 text-sm font-semibold hover:bg-slate-800 transition">Retour au tableau de bord</a>
+  </div>
+</main>
+
+<%- include('./partials/footer') %>

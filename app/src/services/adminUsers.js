@@ -141,7 +141,7 @@ async function listAdminUsers() {
   }));
 }
 
-async function createStaffAdminUser({ firstName, lastName, email, password, createdByAdminUserId } = {}) {
+async function createStaffAdminUser({ firstName, lastName, email, password, role, createdByAdminUserId } = {}) {
   const safeFirstName = getTrimmedString(firstName);
   const safeLastName = getTrimmedString(lastName);
   const safeEmail = normalizeEmail(email);
@@ -151,13 +151,17 @@ async function createStaffAdminUser({ firstName, lastName, email, password, crea
     return null;
   }
 
+  /* Le owner peut créer des employés ou des comptables. Toute autre valeur
+   * est ramenée à 'employe' par sécurité (jamais d'auto-promotion owner). */
+  const safeRole = role === ROLES.COMPTABLE ? ROLES.COMPTABLE : ROLES.EMPLOYE;
+
   return AdminUser.create({
     firstName: safeFirstName,
     lastName: safeLastName,
     email: safeEmail,
     passwordHash: record.hash,
     passwordSalt: record.salt,
-    role: ROLES.EMPLOYE,
+    role: safeRole,
     isActive: true,
     passwordUpdatedAt: new Date(),
     createdByAdminUserId: createdByAdminUserId || null,
