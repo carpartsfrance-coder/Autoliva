@@ -19,6 +19,7 @@ const archiver = require('archiver');
 
 const Order = require('../models/Order');
 const User = require('../models/User');
+const mollie = require('./mollie');
 const { buildOrderInvoicePdfBuffer } = require('./invoicePdf');
 const { buildCreditNotePdfBuffer } = require('./creditNotePdf');
 
@@ -905,6 +906,208 @@ async function getCreditNotePdfBufferFor(orderId, creditNoteNumber) {
   return buildCreditNotePdfBuffer({ order, user, creditNote: cn, refund });
 }
 
+/* ════════════════════════════════════════════════════════════════
+ * Réconciliation Mollie payouts ↔ factures
+ * ════════════════════════════════════════════════════════════════
+ *
+ * Principe :
+ *   Mollie verse l'argent par "settlements" (virements groupés).
+ *   Un settlement = 1 virement bancaire qui agrège N paiements + soustrait
+ *   les éventuels remboursements et frais Mollie de la période.
+ *
+ *   Le comptable veut vérifier : "ce virement de 4 327,12 € reçu le 12 mai
+ *   correspond à quelles ventes ?" Il faut aussi voir s'il y a des écarts
+ *   (paiement Mollie sans facture en base, montant différent, etc.).
+ *
+ * Cette fonction fait :
+ *   1. Récupère les settlements Mollie du mois
+ *   2. Pour chacun, récupère ses paiements (+ refunds inclus)
+ *   3. Match chaque paiement à un Order via molliePaymentId
+ *   4. Calcule : sommes brutes, fees Mollie, refunds, net theorique vs
+ *      net réel du settlement → si ≠, on flag
+ *   5. Retourne une structure prête à afficher
+ *
+ * Comme l'API Mollie est externe et peut être lente, on prend une option
+ * `skipMollie` pour les tests / le cas où la clé n'est pas configurée.
+ */
+async function getMollieReconciliation({ year, month, skipMollie = false } = {}) {
+  const { from, to, year: y, month: m } = getMonthRange(year, month);
+
+  if (skipMollie || !process.env.MOLLIE_API_KEY) {
+    return {
+      year: y, month: m, from, to,
+      configured: false,
+      message: 'MOLLIE_API_KEY non configurée — réconciliation indisponible.',
+      settlements: [],
+    };
+  }
+
+  let settlements = [];
+  try {
+    settlements = await mollie.listSettlements({ from, to });
+  } catch (err) {
+    console.error('[accounting] listSettlements échec :', err && err.message);
+    return {
+      year: y, month: m, from, to,
+      configured: true,
+      message: `Erreur API Mollie : ${err && err.message ? err.message : 'inconnue'}`,
+      settlements: [],
+    };
+  }
+
+  /* Récupère TOUS les molliePaymentId qu'on va matcher pour limiter le find */
+  const allPaymentIds = [];
+  const settlementDetails = [];
+  for (const s of settlements) {
+    let payments = [];
+    let refunds = [];
+    try {
+      [payments, refunds] = await Promise.all([
+        mollie.listSettlementPayments(s.id),
+        mollie.listSettlementRefunds(s.id),
+      ]);
+    } catch (err) {
+      console.error('[accounting] settlement detail échec', s.id, err && err.message);
+    }
+    settlementDetails.push({ settlement: s, payments, refunds });
+    for (const p of payments) if (p.id) allPaymentIds.push(p.id);
+  }
+
+  /* Single query pour matcher les Mollie payments aux Orders */
+  const ordersByMollieId = new Map();
+  if (allPaymentIds.length > 0) {
+    const orders = await Order.find({ molliePaymentId: { $in: allPaymentIds } })
+      .select('_id number molliePaymentId totalCents invoice billingAddress accountType status')
+      .lean();
+    for (const o of orders) ordersByMollieId.set(String(o.molliePaymentId), o);
+  }
+
+  /* Compose le retour pour la vue */
+  const rows = settlementDetails.map(({ settlement, payments, refunds }) => {
+    const amountCents = settlement.amount && settlement.amount.value
+      ? Math.round(parseFloat(settlement.amount.value) * 100)
+      : 0;
+
+    /* Détail des paiements + matching commande */
+    let paymentsSumCents = 0;
+    let paymentsSettlementSumCents = 0;
+    const paymentRows = payments.map((p) => {
+      const grossCents = p.amount && p.amount.value
+        ? Math.round(parseFloat(p.amount.value) * 100)
+        : 0;
+      const settledCents = p.settlementAmount && p.settlementAmount.value
+        ? Math.round(parseFloat(p.settlementAmount.value) * 100)
+        : 0;
+      paymentsSumCents += grossCents;
+      paymentsSettlementSumCents += settledCents;
+
+      const order = ordersByMollieId.get(String(p.id)) || null;
+      return {
+        mollieId: p.id,
+        status: p.status,
+        createdAt: p.createdAt,
+        method: p.method,
+        grossCents,
+        settledCents,
+        feesCents: grossCents - settledCents,
+        order: order ? {
+          id: String(order._id),
+          number: order.number,
+          invoiceNumber: order.invoice && order.invoice.number ? order.invoice.number : '',
+          totalCents: order.totalCents,
+          status: order.status,
+          customer: order.billingAddress && order.billingAddress.fullName ? order.billingAddress.fullName : '—',
+          matchesAmount: order.totalCents === grossCents,
+        } : null,
+      };
+    });
+
+    /* Refunds inclus dans le settlement (montants négatifs) */
+    let refundsSumCents = 0;
+    let refundsSettlementSumCents = 0;
+    const refundRows = refunds.map((r) => {
+      const grossCents = r.amount && r.amount.value
+        ? Math.round(parseFloat(r.amount.value) * 100)
+        : 0;
+      const settledCents = r.settlementAmount && r.settlementAmount.value
+        ? Math.round(parseFloat(r.settlementAmount.value) * 100)
+        : 0;
+      refundsSumCents += grossCents;
+      refundsSettlementSumCents += settledCents;
+      return {
+        mollieId: r.id,
+        paymentId: r.paymentId,
+        status: r.status,
+        createdAt: r.createdAt,
+        grossCents,
+        settledCents,
+        description: r.description || '',
+      };
+    });
+
+    /* Anomalies sur ce settlement */
+    const issues = [];
+    /* Paiement Mollie sans commande en base */
+    const orphanPayments = paymentRows.filter((p) => !p.order);
+    if (orphanPayments.length > 0) {
+      issues.push({
+        severity: 'high',
+        kind: 'payment_without_order',
+        message: `${orphanPayments.length} paiement(s) Mollie sans commande en base.`,
+      });
+    }
+    /* Paiement avec montant ≠ commande */
+    const mismatchAmount = paymentRows.filter((p) => p.order && !p.order.matchesAmount);
+    if (mismatchAmount.length > 0) {
+      issues.push({
+        severity: 'medium',
+        kind: 'amount_mismatch',
+        message: `${mismatchAmount.length} paiement(s) avec un montant qui ne matche pas la commande liée.`,
+      });
+    }
+    /* Paiement payé mais sans facture émise */
+    const noInvoice = paymentRows.filter((p) => p.order && p.status === 'paid' && !p.order.invoiceNumber);
+    if (noInvoice.length > 0) {
+      issues.push({
+        severity: 'high',
+        kind: 'paid_no_invoice',
+        message: `${noInvoice.length} paiement(s) payé(s) sans facture émise sur la commande liée.`,
+      });
+    }
+
+    /* Sanity check global : la somme settlement des paiements - refunds
+     * doit matcher le montant du settlement (modulo arrondis Mollie). */
+    const computedNetCents = paymentsSettlementSumCents - refundsSettlementSumCents;
+    const diffCents = amountCents - computedNetCents;
+
+    return {
+      id: settlement.id,
+      reference: settlement.reference || '',
+      settledAt: settlement.settledAt || null,
+      status: settlement.status,
+      amountCents,
+      paymentsCount: payments.length,
+      paymentsSumCents,
+      paymentsSettlementSumCents,
+      refundsCount: refunds.length,
+      refundsSumCents,
+      refundsSettlementSumCents,
+      feesCents: paymentsSumCents - paymentsSettlementSumCents,
+      computedNetCents,
+      diffCents,
+      payments: paymentRows,
+      refunds: refundRows,
+      issues,
+    };
+  });
+
+  return {
+    year: y, month: m, from, to,
+    configured: true,
+    settlements: rows,
+  };
+}
+
 module.exports = {
   TVA_RATE,
   eur,
@@ -921,4 +1124,5 @@ module.exports = {
   streamMonthlyPdfZip,
   getInvoicePdfBuffer,
   getCreditNotePdfBufferFor,
+  getMollieReconciliation,
 };

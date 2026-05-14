@@ -16,6 +16,7 @@ const productOptions = require('../services/productOptions');
 const { getShippingMethods } = require('../services/shippingPricing');
 const { getLegalPageBySlug } = require('../services/legalPages');
 const { ensureInvoiceIssuedForPaidOrder } = require('../services/orderInvoices');
+const { syncMollieRefundsForOrder } = require('../services/refundService');
 const { getNextOrderNumber } = require('../services/orderNumber');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const { buildOrderAttribution } = require('../middlewares/captureAttribution');
@@ -2398,8 +2399,33 @@ async function postPaymentWebhook(req, res, next) {
     if (!order) return res.status(200).send('OK');
 
     try {
-      const payment = await mollie.getPayment(paymentId);
+      /* embedRefunds: true → la réponse Mollie inclut _embedded.refunds[].
+       * On peut ainsi détecter ET les changements de statut paiement ET
+       * les remboursements créés depuis le dashboard Mollie (sans passer
+       * par notre back-office). Cf. refundService.syncMollieRefundsForOrder. */
+      const payment = await mollie.getPayment(paymentId, { embedRefunds: true });
       await applyMolliePaymentToOrder(order, payment);
+
+      /* Filet de sécurité refunds : si Mollie nous notifie de refunds
+       * (créés via dashboard, API, ou déjà connus), on synchronise.
+       * Idempotent : ne crée d'avoir que pour les refunds inconnus. */
+      const mollieRefunds = payment && payment._embedded && Array.isArray(payment._embedded.refunds)
+        ? payment._embedded.refunds
+        : [];
+      if (mollieRefunds.length > 0) {
+        try {
+          const syncRes = await syncMollieRefundsForOrder({
+            orderId: order._id,
+            mollieRefunds,
+          });
+          if (syncRes && syncRes.newRefundsCount > 0) {
+            console.log(`[mollie-webhook] ${syncRes.newRefundsCount} refund(s) synchronisé(s) sur ${order.number} (${(syncRes.totalAmountCents / 100).toFixed(2)} €)`);
+          }
+        } catch (syncErr) {
+          console.error('[mollie-webhook] sync refunds échec :', syncErr && syncErr.message ? syncErr.message : syncErr);
+          /* on ne fait pas échouer le webhook : Mollie retenterait sinon */
+        }
+      }
     } catch (err) {
       return res.status(200).send('OK');
     }

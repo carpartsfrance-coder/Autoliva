@@ -255,8 +255,138 @@ async function processOrderRefund({
   };
 }
 
+/* ════════════════════════════════════════════════════════════════
+ * Synchronisation des remboursements créés EN DEHORS de notre site
+ * ════════════════════════════════════════════════════════════════
+ *
+ * Cas d'usage : l'owner ouvre le dashboard Mollie, clique sur
+ * "Rembourser" sur une transaction. Mollie effectue le remboursement
+ * et fire un webhook vers notre URL. Mais notre site n'a JAMAIS appelé
+ * mollie.createRefund() pour ce remboursement → aucun avoir n'a été
+ * créé → non-conformité légale (art. 289-VII CGI : tout remboursement
+ * doit donner lieu à une facture rectificative ou avoir).
+ *
+ * Cette fonction est le filet de sécurité : elle scanne les refunds
+ * Mollie d'un paiement et, pour chaque refund qu'on n'a pas encore
+ * enregistré dans Order.refunds[], crée l'avoir + l'entrée bookkeeping.
+ *
+ * Idempotente : appelée plusieurs fois sur le même paiement, ne
+ * recrée rien (dédup via providerRefundId).
+ */
+async function syncMollieRefundsForOrder({ orderId, mollieRefunds = [] } = {}) {
+  if (!mongoose.Types.ObjectId.isValid(String(orderId))) {
+    return { ok: false, errorCode: 'invalid_order_id', error: 'Identifiant de commande invalide.' };
+  }
+  if (!Array.isArray(mollieRefunds) || mollieRefunds.length === 0) {
+    return { ok: true, newRefundsCount: 0, totalAmountCents: 0 };
+  }
+
+  const order = await Order.findById(orderId);
+  if (!order) return { ok: false, errorCode: 'order_not_found', error: 'Commande introuvable.' };
+
+  /* Set des providerRefundId déjà connus pour faire la diff rapide */
+  const knownIds = new Set();
+  for (const r of order.refunds || []) {
+    if (r && r.providerRefundId) knownIds.add(String(r.providerRefundId));
+  }
+
+  let newRefundsCount = 0;
+  let totalAmountCents = 0;
+  const errors = [];
+
+  for (const mr of mollieRefunds) {
+    if (!mr || !mr.id) continue;
+    if (knownIds.has(String(mr.id))) continue; // déjà traité
+
+    /* Conversion Mollie amount → cents */
+    const amountStr = mr.amount && mr.amount.value ? String(mr.amount.value) : '';
+    const amountCents = Math.round(parseFloat(amountStr) * 100);
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      errors.push({ refundId: mr.id, error: 'amount invalide' });
+      continue;
+    }
+
+    /* On vérifie qu'on ne dépasse pas le total commande (sécurité) */
+    const alreadyRefunded = totalRefundedCents(order);
+    const orderTotal = Number(order.totalCents) || 0;
+    if (alreadyRefunded + amountCents > orderTotal) {
+      console.warn(`[refund-service] sync : refund Mollie ${mr.id} dépasse le total commande (${alreadyRefunded + amountCents} > ${orderTotal}). Ignoré.`);
+      errors.push({ refundId: mr.id, error: 'dépasse le total commande' });
+      continue;
+    }
+
+    /* Bookkeeping : ajout dans Order.refunds[] + génération avoir */
+    const now = new Date();
+    const refundEntry = {
+      amountCents,
+      reason: getTrimmedString(mr.description) || 'Remboursement Mollie (dashboard)',
+      method: 'mollie',
+      providerRefundId: String(mr.id),
+      providerStatus: getTrimmedString(mr.status) || '',
+      providerRawResponse: mr,
+      creditNoteNumber: '',
+      lines: [],
+      createdAt: mr.createdAt ? new Date(mr.createdAt) : now,
+      createdBy: 'mollie-webhook',
+      notes: 'Détecté via webhook Mollie (refund créé hors back-office)',
+    };
+    order.refunds.push(refundEntry);
+    const refundIndex = order.refunds.length - 1;
+
+    /* Génération de l'avoir PDF */
+    try {
+      const number = await nextCreditNoteNumber(now);
+      const cnDraft = {
+        number,
+        issuedAt: now,
+        totalCents: amountCents,
+        reason: refundEntry.reason,
+        lines: [],
+        refundIndex,
+        createdBy: 'mollie-webhook',
+      };
+      const recipient = order.userId ? await User.findById(order.userId).lean() : null;
+      const pdfBuffer = await buildCreditNotePdfBuffer({
+        order: order.toObject ? order.toObject() : order,
+        user: recipient,
+        creditNote: cnDraft,
+        refund: refundEntry,
+      });
+      const sizeBytes = pdfBuffer && Buffer.isBuffer(pdfBuffer) ? pdfBuffer.length : 0;
+      order.creditNotes.push({ ...cnDraft, pdfData: pdfBuffer || null, pdfSizeBytes: sizeBytes });
+      order.refunds[refundIndex].creditNoteNumber = number;
+    } catch (cnErr) {
+      console.error('[refund-service] Sync : génération avoir échouée :', cnErr && cnErr.message ? cnErr.message : cnErr);
+      errors.push({ refundId: mr.id, error: 'avoir non généré (' + (cnErr && cnErr.message ? cnErr.message : 'inconnu') + ')' });
+      /* on continue : le refund est enregistré, l'avoir pourra être regénéré au téléchargement */
+    }
+
+    knownIds.add(String(mr.id));
+    newRefundsCount++;
+    totalAmountCents += amountCents;
+  }
+
+  if (newRefundsCount > 0) {
+    /* Mise à jour du statut commande */
+    const newTotal = totalRefundedCents(order);
+    const orderTotal = Number(order.totalCents) || 0;
+    if (newTotal >= orderTotal) {
+      order.status = 'refunded';
+    } else if (newTotal > 0 && order.status !== 'refunded') {
+      order.status = 'partially_refunded';
+    }
+    order._statusChangedBy = 'mollie-webhook';
+    order._statusChangeNote = `Sync auto ${newRefundsCount} refund(s) Mollie (${(totalAmountCents / 100).toFixed(2)} €)`;
+
+    await order.save();
+  }
+
+  return { ok: true, newRefundsCount, totalAmountCents, errors };
+}
+
 module.exports = {
   processOrderRefund,
+  syncMollieRefundsForOrder,
   nextCreditNoteNumber,
   totalRefundedCents,
   deriveDefaultMethod,
