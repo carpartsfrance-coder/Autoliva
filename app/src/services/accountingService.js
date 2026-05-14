@@ -653,37 +653,55 @@ async function buildMonthlyCsv(year, month) {
  * Les PDF de factures sont régénérés à chaque fois (la base ne stocke
  * pas leurs Buffer, et leur contenu est purement déterministe).
  */
-async function streamMonthlyPdfZip(res, year, month) {
+/**
+ * Construit le ZIP du mois EN MÉMOIRE (Buffer) plutôt qu'en streaming.
+ *
+ * Raison : on a constaté en prod (autoliva.com derrière Render +
+ * Cloudflare) que le streaming chunked du ZIP arrivait au client
+ * corrompu — fichier que macOS refuse d'ouvrir ("format non pris en
+ * charge"). Cause exacte non identifiée (gzip dynamique côté CDN,
+ * buffering Render, race sur res.flushHeaders + pipe…). En passant
+ * sur du "build complet puis send en une fois" :
+ *
+ *  - aucun chunked transfer-encoding : Content-Length connu d'avance
+ *  - aucun risque de troncature au milieu du flux
+ *  - si une erreur survient pendant la génération, on peut encore
+ *    répondre 500 proprement (headers pas encore envoyés)
+ *
+ * Coût mémoire : pour un mois moyen avec ~50 factures ce sont
+ * ~30-50 MB en RAM le temps de la requête. Acceptable. Si on atteint
+ * un jour des volumes > 500 factures/mois, il faudra basculer sur un
+ * job async qui pré-génère le ZIP de la veille en stockage.
+ */
+async function buildMonthlyPdfZipBuffer(year, month) {
   const { from, to } = getMonthRange(year, month);
   const monthLabel = `${year}-${String(month).padStart(2, '0')}`;
 
-  /* ── ÉTAPE 1 : envoyer les headers IMMÉDIATEMENT ──────────────
-   * Sinon le reverse-proxy (Cloudflare, Render) peut couper la
-   * connexion en 502 Bad Gateway s'il ne voit aucune réponse dans
-   * son délai de premier byte (~30-100s).
-   * On désactive aussi le buffering nginx-style côté Render pour
-   * que les chunks partent au fur et à mesure. */
-  res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', `attachment; filename="compta_${monthLabel}_pdfs.zip"`);
-  res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('X-Accel-Buffering', 'no');
-  if (typeof res.flushHeaders === 'function') res.flushHeaders();
+  /* Collecteur Buffer : un Writable qui empile les chunks émis par
+   * archiver. À la fin on Buffer.concat() pour obtenir le ZIP complet. */
+  const { Writable } = require('stream');
+  const chunks = [];
+  const collector = new Writable({
+    write(chunk, encoding, cb) { chunks.push(chunk); cb(); },
+  });
 
-  /* ── ÉTAPE 2 : démarrer l'archive et appender un README EN PREMIER
-   * Ça force archiver à émettre ses premiers bytes (signature ZIP +
-   * header local du README) en quelques millisecondes. Le proxy voit
-   * la réponse couler et n'a aucune raison de timeout. */
   const archive = archiver('zip', { zlib: { level: 6 } });
+
+  /* On capture toutes les erreurs archiver — si on en attrape une on
+   * lève pour que le caller renvoie 500 proprement. */
+  let archiveError = null;
   archive.on('error', (err) => {
+    archiveError = err;
     console.error('[accounting] archive error:', err && err.message);
-    try { res.end(); } catch (_) {}
   });
   archive.on('warning', (err) => {
     console.warn('[accounting] archive warning:', err && err.message);
   });
-  archive.pipe(res);
 
-  const readmeHeader = [
+  archive.pipe(collector);
+
+  /* README en tête */
+  archive.append([
     `Export comptable — ${monthLabel}`,
     `Période : du ${frDate(from)} (00h00) au ${frDate(new Date(to.getTime() - 1))} (23h59)`,
     `Généré le : ${frDate(new Date())}`,
@@ -691,13 +709,9 @@ async function streamMonthlyPdfZip(res, year, month) {
     'Source : autoliva.com — Car Parts France',
     '',
     'Voir aussi : export CSV du mois pour la saisie comptable.',
-  ].join('\r\n');
-  archive.append(readmeHeader, { name: 'README.txt' });
+  ].join('\r\n'), { name: 'README.txt' });
 
-  /* ── ÉTAPE 3 : requêtes DB + génération PDF en streaming ──────
-   * À partir d'ici, on append des PDF au fur et à mesure qu'on les
-   * lit/génère. archiver émet les chunks, qui partent en chunked
-   * transfer encoding → le client voit la progression. */
+  /* Compteurs pour le SUMMARY final */
   let invoiceWritten = 0;
   let creditNoteWritten = 0;
   let invoiceFailed = 0;
@@ -789,8 +803,8 @@ async function streamMonthlyPdfZip(res, year, month) {
     console.error('[accounting] ZIP fatal error:', err && err.message);
   }
 
-  /* ── ÉTAPE 4 : résumé final (visible par le comptable) ─────── */
-  const summary = [
+  /* SUMMARY final */
+  archive.append([
     `Résumé de l'export — ${monthLabel}`,
     '',
     `Factures incluses : ${invoiceWritten}${invoiceFailed > 0 ? ` (${invoiceFailed} en échec)` : ''}`,
@@ -801,10 +815,38 @@ async function streamMonthlyPdfZip(res, year, month) {
       : '✓ Export terminé sans erreur fatale.',
     '',
     `Généré le : ${new Date().toISOString()}`,
-  ].join('\r\n');
-  archive.append(summary, { name: 'SUMMARY.txt' });
+  ].join('\r\n'), { name: 'SUMMARY.txt' });
 
-  await archive.finalize();
+  /* On attend à la fois la fin de l'archive ET la fin du collecteur
+   * pour être sûrs que tous les chunks sont arrivés dans `chunks`. */
+  await new Promise((resolve, reject) => {
+    collector.on('finish', resolve);
+    collector.on('error', reject);
+    archive.finalize().catch(reject);
+  });
+
+  if (archiveError) throw archiveError;
+
+  return {
+    buffer: Buffer.concat(chunks),
+    filename: `compta_${monthLabel}_pdfs.zip`,
+    invoiceCount: invoiceWritten,
+    creditNoteCount: creditNoteWritten,
+  };
+}
+
+/**
+ * @deprecated Conservé pour compat — utilise buildMonthlyPdfZipBuffer
+ * et send en une fois. Le streaming chunked posait problème avec le
+ * couple Render + Cloudflare (cf. PR #56-57).
+ */
+async function streamMonthlyPdfZip(res, year, month) {
+  const { buffer, filename } = await buildMonthlyPdfZipBuffer(year, month);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Length', String(buffer.length));
+  res.setHeader('Cache-Control', 'no-store');
+  return res.end(buffer);
 }
 
 /* ════════════════════════════════════════════════════════════════
@@ -852,6 +894,7 @@ module.exports = {
   listCreditNotes,
   listRefunds,
   buildMonthlyCsv,
+  buildMonthlyPdfZipBuffer,
   streamMonthlyPdfZip,
   getInvoicePdfBuffer,
   getCreditNotePdfBufferFor,
