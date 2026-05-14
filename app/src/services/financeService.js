@@ -196,6 +196,10 @@ async function getMonthlySummary(year, month) {
     .filter((p) => p.costKnown)
     .sort((a, b) => b.margin - a.margin)
     .slice(0, 10);
+  /* Liste exhaustive de TOUS les produits vendus dans le mois, triée par
+   * CA décroissant. Sert au tableau "Tous les produits vendus" de la page
+   * /admin/finance, avec recherche + tri client-side côté JS. */
+  const allProductsSold = [...productList].sort((a, b) => b.revenueTtc - a.revenueTtc);
 
   /* ── Charges & bénéfice net ───────────────────────────────────
    * Frais paiement = somme des molliePaymentFeeCents capturés via
@@ -261,6 +265,7 @@ async function getMonthlySummary(year, month) {
     },
     topByRevenue,
     topByMargin,
+    allProductsSold,
     products: { totalCountWithCost: products.filter((p) => Number.isFinite(p.costCents) && p.costCents > 0).length, totalCount: products.length },
   };
 }
