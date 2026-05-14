@@ -100,30 +100,170 @@
         </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <a href="/comptable/export/<%= summary.year %>/<%= summary.month %>/csv"
-           class="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50 transition group">
-          <div class="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
-            <span class="material-symbols-outlined">table_view</span>
+        <button type="button"
+                data-export-button
+                data-export-url="/comptable/export/<%= summary.year %>/<%= summary.month %>/csv"
+                data-export-filename="compta_<%= summary.year %>_<%= String(summary.month).padStart(2, '0') %>.csv"
+                data-export-label="CSV — saisie comptable"
+                class="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50 transition group text-left disabled:opacity-60 disabled:cursor-progress">
+          <div data-export-icon-wrap class="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+            <span data-export-icon class="material-symbols-outlined">table_view</span>
           </div>
           <div class="flex-1">
-            <div class="font-semibold text-slate-900">CSV — saisie comptable</div>
-            <div class="text-xs text-slate-500 mt-0.5">Une ligne par facture + une ligne par avoir. Compatible Pennylane, Sage, EBP, Cegid.</div>
+            <div data-export-title class="font-semibold text-slate-900">CSV — saisie comptable</div>
+            <div data-export-subtitle class="text-xs text-slate-500 mt-0.5">Une ligne par facture + une ligne par avoir. Compatible Pennylane, Sage, EBP, Cegid.</div>
           </div>
-          <span class="material-symbols-outlined text-slate-400 group-hover:text-amber-600">download</span>
-        </a>
-        <a href="/comptable/export/<%= summary.year %>/<%= summary.month %>/pdfs.zip"
-           class="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50 transition group">
-          <div class="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center">
-            <span class="material-symbols-outlined">folder_zip</span>
+          <span data-export-action class="material-symbols-outlined text-slate-400 group-hover:text-amber-600 flex-shrink-0">download</span>
+        </button>
+
+        <button type="button"
+                data-export-button
+                data-export-url="/comptable/export/<%= summary.year %>/<%= summary.month %>/pdfs.zip"
+                data-export-filename="compta_<%= summary.year %>-<%= String(summary.month).padStart(2, '0') %>_pdfs.zip"
+                data-export-label="ZIP — tous les PDF du mois"
+                data-export-long="1"
+                class="flex items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50 transition group text-left disabled:opacity-60 disabled:cursor-progress">
+          <div data-export-icon-wrap class="w-10 h-10 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+            <span data-export-icon class="material-symbols-outlined">folder_zip</span>
           </div>
           <div class="flex-1">
-            <div class="font-semibold text-slate-900">ZIP — tous les PDF du mois</div>
-            <div class="text-xs text-slate-500 mt-0.5">Factures et avoirs en PDF, classés dans 2 sous-dossiers.</div>
+            <div data-export-title class="font-semibold text-slate-900">ZIP — tous les PDF du mois</div>
+            <div data-export-subtitle class="text-xs text-slate-500 mt-0.5">Factures et avoirs en PDF, classés dans 2 sous-dossiers.</div>
           </div>
-          <span class="material-symbols-outlined text-slate-400 group-hover:text-amber-600">download</span>
-        </a>
+          <span data-export-action class="material-symbols-outlined text-slate-400 group-hover:text-amber-600 flex-shrink-0">download</span>
+        </button>
       </div>
     </div>
+
+    <!-- Spinner / progress UX pour les exports comptables ─────────
+         Pourquoi pas un simple <a href="..."> : la génération côté
+         serveur prend 30s-2min pour le ZIP (CPU pdfkit), et entre
+         le clic et le début du téléchargement le navigateur ne montre
+         rien → le comptable a l'impression que rien ne se passe et
+         risque de re-cliquer plusieurs fois.
+
+         On utilise fetch() + Blob + save-by-anchor pour pouvoir :
+          - désactiver le bouton dès le clic
+          - afficher "Génération en cours…" pendant l'attente
+          - afficher le compteur d'octets reçus si le serveur expose
+            Content-Length (le buffer-mode du ZIP le fait, oui)
+          - réactiver le bouton + message de succès quand fini -->
+    <script>
+      (function () {
+        var buttons = document.querySelectorAll('[data-export-button]');
+        if (!buttons.length) return;
+
+        function formatBytes(n) {
+          if (n < 1024) return n + ' o';
+          if (n < 1024 * 1024) return (n / 1024).toFixed(0) + ' Ko';
+          return (n / (1024 * 1024)).toFixed(1) + ' Mo';
+        }
+
+        function setBusy(btn, message) {
+          btn.disabled = true;
+          var icon = btn.querySelector('[data-export-icon]');
+          var action = btn.querySelector('[data-export-action]');
+          var subtitle = btn.querySelector('[data-export-subtitle]');
+          if (icon) icon.textContent = 'progress_activity';
+          if (icon) icon.classList.add('animate-spin');
+          if (action) action.textContent = 'hourglass_top';
+          if (subtitle) {
+            subtitle.dataset.originalText = subtitle.textContent;
+            subtitle.textContent = message;
+          }
+        }
+
+        function setProgress(btn, message) {
+          var subtitle = btn.querySelector('[data-export-subtitle]');
+          if (subtitle) subtitle.textContent = message;
+        }
+
+        function setDone(btn, success) {
+          btn.disabled = false;
+          var icon = btn.querySelector('[data-export-icon]');
+          var action = btn.querySelector('[data-export-action]');
+          var subtitle = btn.querySelector('[data-export-subtitle]');
+          if (icon) icon.classList.remove('animate-spin');
+          if (icon) icon.textContent = btn.dataset.exportUrl.endsWith('.zip') ? 'folder_zip' : 'table_view';
+          if (action) action.textContent = success ? 'check_circle' : 'error';
+          if (subtitle && subtitle.dataset.originalText) {
+            subtitle.textContent = subtitle.dataset.originalText;
+            delete subtitle.dataset.originalText;
+          }
+          setTimeout(function () {
+            if (action) action.textContent = 'download';
+          }, 3000);
+        }
+
+        async function downloadExport(btn) {
+          var url = btn.dataset.exportUrl;
+          var filename = btn.dataset.exportFilename || 'export';
+          var isLong = btn.dataset.exportLong === '1';
+
+          setBusy(btn, isLong
+            ? 'Génération en cours… cela peut prendre 1 à 2 minutes pour un mois chargé.'
+            : 'Génération en cours…');
+
+          try {
+            var response = await fetch(url, {
+              credentials: 'same-origin',
+              headers: { 'Accept': 'application/zip, text/csv, */*' },
+            });
+            if (!response.ok) {
+              throw new Error('HTTP ' + response.status + ' — ' + response.statusText);
+            }
+
+            var totalBytes = parseInt(response.headers.get('Content-Length') || '0', 10);
+            var reader = response.body && response.body.getReader ? response.body.getReader() : null;
+
+            if (reader && totalBytes > 0) {
+              /* Téléchargement progressif avec compteur d'octets */
+              var chunks = [];
+              var received = 0;
+              while (true) {
+                var step = await reader.read();
+                if (step.done) break;
+                chunks.push(step.value);
+                received += step.value.length;
+                var pct = Math.round((received / totalBytes) * 100);
+                setProgress(btn, 'Téléchargement : ' + formatBytes(received) + ' / ' + formatBytes(totalBytes) + ' (' + pct + ' %)');
+              }
+              var blob = new Blob(chunks);
+              saveBlob(blob, filename);
+            } else {
+              /* Fallback : tout d'un coup */
+              var blob2 = await response.blob();
+              saveBlob(blob2, filename);
+            }
+
+            setDone(btn, true);
+          } catch (err) {
+            console.error('[export]', err);
+            setDone(btn, false);
+            var subtitle = btn.querySelector('[data-export-subtitle]');
+            if (subtitle) subtitle.textContent = 'Erreur : ' + (err && err.message ? err.message : 'téléchargement échoué');
+          }
+        }
+
+        function saveBlob(blob, filename) {
+          var url = URL.createObjectURL(blob);
+          var a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        }
+
+        buttons.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            if (btn.disabled) return;
+            downloadExport(btn);
+          });
+        });
+      })();
+    </script>
 
     <!-- Santé compta : anomalies -->
     <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden mb-6">
