@@ -1,0 +1,158 @@
+<%- include('./partials/head', { title }) %>
+<%- include('./partials/sidebar', { active: 'expenses', currentAdmin: typeof currentAdminSession !== 'undefined' ? currentAdminSession : null }) %>
+
+<main class="p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto">
+
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-slate-900">Charges & dépenses</h1>
+      <p class="text-sm text-slate-500 mt-1">
+        Tout ce qui pèse sur le résultat net hors achat produit (marketing, loyer, salaires, SaaS, frais bancaires…).
+        Sert au calcul du <strong>bénéfice net</strong> dans <a href="/admin/finance" class="text-amber-600 hover:underline">/admin/finance</a>.
+      </p>
+    </div>
+    <a href="/admin/charges/nouvelle" class="inline-flex items-center gap-2 bg-slate-900 text-white rounded-xl px-5 py-3 text-sm font-semibold hover:bg-slate-800 transition">
+      <span class="material-symbols-outlined text-base">add</span>
+      Ajouter une charge
+    </a>
+  </div>
+
+  <% if (flash) { %>
+    <div class="<%= flash.type === 'error' ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-emerald-50 border-emerald-200 text-emerald-800' %> border rounded-xl p-4 mb-6 text-sm">
+      <%= flash.message %>
+    </div>
+  <% } %>
+
+  <% if (!dbConnected) { %>
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+      Base de données indisponible.
+    </div>
+  <% } else { %>
+
+    <!-- Filtres -->
+    <form method="GET" action="/admin/charges" class="bg-white rounded-2xl border border-slate-200 p-4 mb-6 flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+      <div>
+        <label class="block text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1" for="period">Mois</label>
+        <div class="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-xl p-1">
+          <a href="?period=<%= period.prevPeriod %><%= filterCategory ? '&category=' + filterCategory : '' %>" class="px-2 py-1 text-sm rounded-lg hover:bg-white transition">
+            <span class="material-symbols-outlined text-base align-middle">chevron_left</span>
+          </a>
+          <input type="hidden" name="period" value="<%= period.currentPeriod %>" />
+          <div class="px-3 py-1 text-sm font-semibold text-slate-900 capitalize"><%= period.currentLabel %></div>
+          <a href="?period=<%= period.nextPeriod %><%= filterCategory ? '&category=' + filterCategory : '' %>" class="px-2 py-1 text-sm rounded-lg hover:bg-white transition">
+            <span class="material-symbols-outlined text-base align-middle">chevron_right</span>
+          </a>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs uppercase tracking-wider text-slate-500 font-semibold mb-1" for="category">Catégorie</label>
+        <select name="category" id="category" class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm focus:ring-amber-500 focus:border-amber-500" onchange="this.form.submit()">
+          <option value="">Toutes</option>
+          <% categories.forEach(function (c) { %>
+            <option value="<%= c %>" <%= filterCategory === c ? 'selected' : '' %>><%= categoryLabels[c] %></option>
+          <% }) %>
+        </select>
+      </div>
+      <% if (filterCategory) { %>
+        <a href="?period=<%= period.currentPeriod %>" class="text-sm text-slate-500 hover:text-slate-900 px-3 py-3 self-center">Réinitialiser</a>
+      <% } %>
+    </form>
+
+    <!-- Synthèse par catégorie -->
+    <% if (grandTotalCents > 0) { %>
+      <div class="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <div class="text-lg font-semibold text-slate-900">Synthèse du mois</div>
+            <div class="text-sm text-slate-500 mt-1">Total des charges qui pèsent sur <%= period.currentLabel %></div>
+          </div>
+          <div class="text-right">
+            <div class="text-3xl font-bold text-rose-700"><%= (grandTotalCents / 100).toFixed(2) %> €</div>
+            <div class="text-xs text-slate-500">Total charges</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+          <% Object.keys(byCategory).sort(function (a, b) { return byCategory[b] - byCategory[a]; }).forEach(function (cat) { %>
+            <div class="rounded-xl border border-slate-200 p-3">
+              <div class="text-xs text-slate-500 truncate" title="<%= categoryLabels[cat] %>"><%= categoryLabels[cat] %></div>
+              <div class="text-lg font-bold text-slate-900 mt-1 tabular-nums"><%= (byCategory[cat] / 100).toFixed(2) %> €</div>
+              <div class="text-xs text-slate-400 mt-0.5"><%= Math.round((byCategory[cat] / grandTotalCents) * 100) %> % du total</div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+
+    <!-- Liste -->
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <div class="text-lg font-semibold text-slate-900">Détail des charges</div>
+          <div class="text-sm text-slate-500 mt-1"><%= total %> ligne(s) · <%= (totalCents / 100).toFixed(2) %> € sur ce filtre</div>
+        </div>
+      </div>
+      <% if (rows.length === 0) { %>
+        <div class="p-12 text-center text-slate-500">
+          <span class="material-symbols-outlined text-4xl text-slate-300">receipt</span>
+          <p class="mt-2">Aucune charge sur cette période.</p>
+          <a href="/admin/charges/nouvelle" class="mt-3 inline-block text-sm text-amber-600 hover:underline">Ajouter la première charge</a>
+        </div>
+      <% } else { %>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+              <tr>
+                <th class="px-4 py-3 text-left font-semibold">Date</th>
+                <th class="px-4 py-3 text-left font-semibold">Catégorie</th>
+                <th class="px-4 py-3 text-left font-semibold">Description</th>
+                <th class="px-4 py-3 text-left font-semibold">Type</th>
+                <th class="px-4 py-3 text-right font-semibold">Montant</th>
+                <th class="px-4 py-3 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <% rows.forEach(function (r) { %>
+                <tr class="hover:bg-slate-50">
+                  <td class="px-4 py-3 text-slate-700 whitespace-nowrap"><%= r.date ? new Date(r.date).toLocaleDateString('fr-FR') : '—' %></td>
+                  <td class="px-4 py-3">
+                    <span class="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full"><%= r.categoryLabel %></span>
+                  </td>
+                  <td class="px-4 py-3 text-slate-700 text-xs max-w-md truncate" title="<%= r.description %>"><%= r.description || '—' %></td>
+                  <td class="px-4 py-3">
+                    <% if (r.recurring) { %>
+                      <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Récurrente</span>
+                    <% } else { %>
+                      <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Ponctuelle</span>
+                    <% } %>
+                    <% if (r.source !== 'manual') { %>
+                      <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full ml-1" title="Capturée automatiquement, non modifiable">Auto</span>
+                    <% } %>
+                  </td>
+                  <td class="px-4 py-3 text-right tabular-nums font-semibold text-rose-700">-<%= (r.amountCents / 100).toFixed(2) %> €</td>
+                  <td class="px-4 py-3 text-right">
+                    <% if (r.editable) { %>
+                      <a href="/admin/charges/<%= r.id %>" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 hover:bg-amber-100 hover:text-amber-700 text-slate-600 transition" title="Modifier">
+                        <span class="material-symbols-outlined text-base">edit</span>
+                      </a>
+                      <form action="/admin/charges/<%= r.id %>/supprimer" method="POST" class="inline-block" onsubmit="return confirm('Supprimer cette charge ?');">
+                        <button type="submit" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 hover:bg-rose-100 hover:text-rose-700 text-slate-600 transition" title="Supprimer">
+                          <span class="material-symbols-outlined text-base">delete</span>
+                        </button>
+                      </form>
+                    <% } else { %>
+                      <span class="text-xs text-slate-400 italic">verrouillée</span>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </div>
+
+  <% } %>
+
+</main>
+
+<%- include('./partials/footer') %>

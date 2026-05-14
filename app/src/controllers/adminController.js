@@ -10233,15 +10233,22 @@ async function getAdminFinancePage(req, res, next) {
     }
 
     const financeService = require('../services/financeService');
-    const [summary, trend] = await Promise.all([
+    /* Mois précédent : pour le calcul des deltas (CA +12%, profit -3%) */
+    const prevDate = new Date(year, month - 2, 1);
+    const prevYear = prevDate.getFullYear();
+    const prevMonth = prevDate.getMonth() + 1;
+
+    const [summary, prevSummary, trend, expensesCategoryLabels] = await Promise.all([
       financeService.getMonthlySummary(year, month),
+      financeService.getMonthlySummary(prevYear, prevMonth),
       financeService.getTwelveMonthTrend(new Date(year, month - 1, 1)),
+      Promise.resolve(require('../services/expenseService').CATEGORY_LABELS),
     ]);
 
     return res.render('admin/finance', {
       title: `Admin - Finance - ${brand.NAME}`,
       dbConnected: true,
-      summary, trend,
+      summary, prevSummary, trend, expensesCategoryLabels,
       period: buildFinancePeriodNav(year, month),
     });
   } catch (err) {

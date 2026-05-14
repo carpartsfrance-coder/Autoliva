@@ -22,6 +22,7 @@ const mongoose = require('mongoose');
 
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const expenseService = require('./expenseService');
 
 const TVA_RATE = 0.20;
 
@@ -78,7 +79,7 @@ async function getMonthlySummary(year, month) {
     archived: { $ne: true },
     deletedAt: null,
   })
-    .select('_id number totalCents items refunds status createdAt accountType')
+    .select('_id number totalCents items refunds status createdAt accountType molliePaymentFeeCents')
     .lean();
 
   /* Collecte tous les productId pour fetcher les costCents en batch */
@@ -110,6 +111,8 @@ async function getMonthlySummary(year, month) {
   let itemsCountWithCost = 0;
   let itemsCountTotal = 0;
   let ordersWithSoldItems = 0;
+  let molliePaymentFeesTotal = 0;  // somme des frais Mollie capturés (settlementAmount - amount)
+  let ordersWithFeeKnown = 0;
 
   /* Top produits par CA et par marge */
   const productAggs = new Map(); // key: productId
@@ -118,6 +121,10 @@ async function getMonthlySummary(year, month) {
     revenueTtc += Number(o.totalCents) || 0;
     refundsTotal += sumRefunds(o);
     if (Array.isArray(o.items) && o.items.length > 0) ordersWithSoldItems++;
+    if (Number.isFinite(o.molliePaymentFeeCents) && o.molliePaymentFeeCents > 0) {
+      molliePaymentFeesTotal += o.molliePaymentFeeCents;
+      ordersWithFeeKnown++;
+    }
 
     if (!Array.isArray(o.items)) continue;
     for (const it of o.items) {
@@ -190,6 +197,28 @@ async function getMonthlySummary(year, month) {
     .sort((a, b) => b.margin - a.margin)
     .slice(0, 10);
 
+  /* ── Charges & bénéfice net ───────────────────────────────────
+   * Frais paiement = somme des molliePaymentFeeCents capturés via
+   *                  webhook Mollie (et idéalement Scalapay un jour)
+   * Charges manuelles = saisies dans /admin/charges (loyer, marketing,
+   *                     salaires, SaaS, etc.) — projection des récurrentes
+   * Bénéfice net = Marge brute − Frais paiement − Charges manuelles */
+  const expensesMonthly = await expenseService.getMonthlyTotals(y, m);
+  const manualExpensesTotal = expensesMonthly.totalCents;
+  const expensesByCategory = expensesMonthly.byCategory;
+
+  /* On ajoute le bucket "payment_fees" si non saisi manuellement et qu'on a
+   * capturé via Mollie. Évite la double comptabilisation : si une charge
+   * payment_fees manuelle existe ce mois-ci, l'owner a probablement saisi
+   * lui-même les frais (ex : Scalapay), donc on additionne les deux. */
+  const totalChargesCents = manualExpensesTotal + molliePaymentFeesTotal;
+
+  /* Bénéfice net : on prend la marge brute "connue" (sur produits au cost
+   * renseigné) et on soustrait toutes les charges. Si la couverture cost
+   * n'est pas 100 %, on prévient l'UI via `incompleteMargin: true`. */
+  const netProfitCents = marginGrossKnown - totalChargesCents;
+  const netProfitPct = revenueNet > 0 ? netProfitCents / Math.round(revenueNet / (1 + TVA_RATE)) : 0;
+
   return {
     year: y,
     month: m,
@@ -218,6 +247,18 @@ async function getMonthlySummary(year, month) {
       itemsCountWithCost,
       itemsCountTotal,
     },
+    expenses: {
+      manualTotal: manualExpensesTotal,
+      paymentFeesAuto: molliePaymentFeesTotal,
+      ordersWithFeeKnown,
+      total: totalChargesCents,
+      byCategory: expensesByCategory,
+    },
+    profit: {
+      netCents: netProfitCents,
+      netPct: netProfitPct,
+      incompleteMargin: costCoveragePct < 1,
+    },
     topByRevenue,
     topByMargin,
     products: { totalCountWithCost: products.filter((p) => Number.isFinite(p.costCents) && p.costCents > 0).length, totalCount: products.length },
@@ -242,6 +283,8 @@ async function getTwelveMonthTrend(referenceDate) {
     revenueTtc: s.revenue.ttc,
     netTtc: s.net.ttc,
     marginGross: s.margin.gross,
+    profit: s.profit.netCents,
+    chargesTotal: s.expenses.total,
   }));
 }
 

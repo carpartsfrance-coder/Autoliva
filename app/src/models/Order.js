@@ -298,6 +298,11 @@ const orderSchema = new mongoose.Schema(
     mollieProfileId: { type: String, default: '', trim: true },
     molliePaidAt: { type: Date, default: null },
     mollieLastCheckedAt: { type: Date, default: null },
+    /* Frais Mollie en centimes (= amount - settlementAmount). Capturé via
+     * webhook quand la transaction est settled. Sert au calcul du bénéfice
+     * net dans /admin/finance. Null tant que Mollie n'a pas settle la
+     * transaction (typiquement < 24h après le paiement). */
+    molliePaymentFeeCents: { type: Number, default: null, min: 0 },
     scalapayOrderToken: { type: String, default: '', trim: true, index: true },
     scalapayCheckoutUrl: { type: String, default: '', trim: true },
     scalapayStatus: { type: String, default: '', trim: true },

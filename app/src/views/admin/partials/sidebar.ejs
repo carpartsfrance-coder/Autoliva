@@ -53,6 +53,10 @@
           <span class="material-symbols-outlined">trending_up</span>
           <span class="sidebar-link-text">Finance</span>
         </a>
+        <a class="sidebar-link <%= activeKey === 'expenses' ? 'sidebar-link--active' : '' %>" href="/admin/charges" title="Charges & dépenses">
+          <span class="material-symbols-outlined">receipt_long</span>
+          <span class="sidebar-link-text">Charges</span>
+        </a>
       <% } %>
       <a class="sidebar-link <%= activeKey === 'visitors' ? 'sidebar-link--active' : '' %>" href="/admin/visiteurs" title="Visiteurs">
         <span class="material-symbols-outlined">visibility</span>

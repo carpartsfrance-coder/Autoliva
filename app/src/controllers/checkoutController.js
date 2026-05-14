@@ -533,6 +533,20 @@ async function applyMolliePaymentToOrder(order, payment) {
     mollieLastCheckedAt: new Date(),
   };
 
+  /* Capture des frais Mollie quand la transaction est settled.
+   * Mollie expose `amount.value` (brut) et `settlementAmount.value` (net
+   * versé). Le delta = frais. Tant que Mollie n'a pas settle, settlementAmount
+   * peut être null → on n'écrit le champ que quand on a une vraie valeur. */
+  try {
+    if (payment && payment.amount && payment.settlementAmount && payment.settlementAmount.value) {
+      const grossCents = Math.round(parseFloat(payment.amount.value) * 100);
+      const settledCents = Math.round(parseFloat(payment.settlementAmount.value) * 100);
+      if (Number.isFinite(grossCents) && Number.isFinite(settledCents) && grossCents >= settledCents) {
+        update.molliePaymentFeeCents = grossCents - settledCents;
+      }
+    }
+  } catch (_) { /* best effort */ }
+
   if (paymentStatus === 'paid') {
     update.molliePaidAt = new Date();
 
