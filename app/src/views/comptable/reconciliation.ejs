@@ -28,6 +28,34 @@
       <div class="font-semibold mb-1">Réconciliation indisponible</div>
       <div><%= data.message || 'MOLLIE_API_KEY non configurée côté serveur.' %></div>
     </div>
+  <% } else if (data.needsOrgToken) { %>
+    <div class="bg-amber-50 border border-amber-200 rounded-xl p-6 text-sm text-amber-800">
+      <div class="font-semibold text-base mb-2 flex items-center gap-2">
+        <span class="material-symbols-outlined">key</span>
+        Clé Mollie incompatible
+      </div>
+      <p class="mb-3">
+        L'endpoint <code class="bg-amber-100 px-1 rounded">/settlements</code> de Mollie (qui liste les virements bancaires)
+        n'est accessible qu'avec une <strong>Organization Access Token</strong>, pas avec la clé API standard
+        utilisée pour les paiements (<code class="bg-amber-100 px-1 rounded">live_xxx</code>).
+      </p>
+      <div class="bg-white/70 rounded-lg p-4 mb-3">
+        <div class="font-semibold mb-2">Comment générer la clé (5 min) :</div>
+        <ol class="list-decimal ml-5 space-y-1 text-xs">
+          <li>Connecte-toi sur <a href="https://my.mollie.com" target="_blank" class="text-amber-700 underline">my.mollie.com</a></li>
+          <li>Menu <strong>Developers</strong> → <strong>Organization access tokens</strong></li>
+          <li>Bouton <strong>Generate new token</strong></li>
+          <li>Permissions minimales : <code class="bg-amber-100 px-1 rounded">settlements.read</code> + <code class="bg-amber-100 px-1 rounded">payments.read</code> + <code class="bg-amber-100 px-1 rounded">refunds.read</code></li>
+          <li>Copie le token (commence par <code class="bg-amber-100 px-1 rounded">access_xxx</code>)</li>
+          <li>Ajoute-le dans Render → ton service → Environment → nouvelle variable <code class="bg-amber-100 px-1 rounded">MOLLIE_ORGANIZATION_TOKEN</code></li>
+          <li>Redéploie</li>
+        </ol>
+      </div>
+      <p class="text-xs">
+        À noter : ce token est <strong>read-only</strong>, il ne peut pas créer de paiements ni de remboursements.
+        Aucun risque d'utiliser des fonds avec cette clé même en cas de fuite.
+      </p>
+    </div>
   <% } else if (data.message) { %>
     <div class="bg-rose-50 border border-rose-200 rounded-xl p-6 text-sm text-rose-800">
       <div class="font-semibold mb-1">Erreur</div>
