@@ -129,13 +129,134 @@ async function createPayment({
   return requestJson(url, { method: 'POST', apiKey, body });
 }
 
-async function getPayment(paymentId) {
+async function getPayment(paymentId, { embedRefunds = false } = {}) {
   const apiKey = getApiKeyFromEnv();
   const id = getTrimmedString(paymentId);
   if (!id) throw new Error('paymentId manquant');
 
-  const url = `${MOLLIE_BASE_URL}/payments/${encodeURIComponent(id)}`;
+  /* ?embed=refunds → la réponse inclut `_embedded.refunds[]` avec
+   * toutes les opérations de remboursement (API ou dashboard Mollie).
+   * Indispensable pour détecter dans le webhook les refunds créés
+   * directement depuis le back-office Mollie sans passer par notre site. */
+  const qs = embedRefunds ? '?embed=refunds' : '';
+  const url = `${MOLLIE_BASE_URL}/payments/${encodeURIComponent(id)}${qs}`;
   return requestJson(url, { apiKey });
+}
+
+/**
+ * Liste les remboursements d'un paiement (alternative à embed=refunds quand
+ * on a besoin de pagination ou qu'on veut isoler les refunds du payment).
+ *
+ * Retourne le _embedded.refunds[] directement, ou [] si aucun.
+ */
+async function listRefunds(paymentId) {
+  const apiKey = getApiKeyFromEnv();
+  const id = getTrimmedString(paymentId);
+  if (!id) throw new Error('paymentId manquant');
+
+  const url = `${MOLLIE_BASE_URL}/payments/${encodeURIComponent(id)}/refunds`;
+  const resp = await requestJson(url, { apiKey });
+  if (resp && resp._embedded && Array.isArray(resp._embedded.refunds)) {
+    return resp._embedded.refunds;
+  }
+  return [];
+}
+
+/**
+ * Liste les "settlements" Mollie = virements groupés que Mollie effectue
+ * vers ton compte bancaire (1x/jour ou 1x/semaine selon ta config).
+ *
+ * Un settlement contient plusieurs paiements (les ventes encaissées de la
+ * période). C'est l'objet de référence pour la réconciliation comptable :
+ * tu vois 4 327 € arriver sur ton compte → quels paiements le composent ?
+ *
+ * Pagination : Mollie pagine 50 par défaut, max 250. On suit `_links.next`.
+ *
+ * @returns {Promise<Array>} settlements triés du plus récent au plus ancien
+ */
+async function listSettlements({ from, to, limit = 250 } = {}) {
+  const apiKey = getApiKeyFromEnv();
+  const out = [];
+  let url = `${MOLLIE_BASE_URL}/settlements?limit=${Math.min(250, Math.max(1, limit))}`;
+
+  while (url) {
+    const resp = await requestJson(url, { apiKey });
+    const items = resp && resp._embedded && Array.isArray(resp._embedded.settlements)
+      ? resp._embedded.settlements
+      : [];
+
+    /* Filtre date locale : si from/to sont passés, on garde uniquement les
+     * settlements dont settledAt tombe dans l'intervalle. Mollie ne supporte
+     * pas de filtre date côté serveur, donc on tronque côté client. */
+    for (const s of items) {
+      if (from || to) {
+        const d = s.settledAt ? new Date(s.settledAt) : null;
+        if (!d) continue;
+        if (from && d < from) {
+          /* settlements triés du plus récent au plus ancien : on peut break */
+          return out;
+        }
+        if (to && d >= to) continue;
+      }
+      out.push(s);
+    }
+
+    const next = resp && resp._links && resp._links.next && resp._links.next.href ? resp._links.next.href : null;
+    url = next;
+  }
+
+  return out;
+}
+
+/**
+ * Liste les paiements inclus dans un settlement Mollie.
+ *
+ * @param {string} settlementId  ex: "stl_jDk30akdN"
+ * @returns {Promise<Array>}     payments avec id, amount, status, settlementAmount, refunds, etc.
+ */
+async function listSettlementPayments(settlementId) {
+  const apiKey = getApiKeyFromEnv();
+  const id = getTrimmedString(settlementId);
+  if (!id) throw new Error('settlementId manquant');
+
+  const out = [];
+  let url = `${MOLLIE_BASE_URL}/settlements/${encodeURIComponent(id)}/payments?limit=250`;
+
+  while (url) {
+    const resp = await requestJson(url, { apiKey });
+    const items = resp && resp._embedded && Array.isArray(resp._embedded.payments)
+      ? resp._embedded.payments
+      : [];
+    out.push(...items);
+    url = resp && resp._links && resp._links.next && resp._links.next.href ? resp._links.next.href : null;
+  }
+
+  return out;
+}
+
+/**
+ * Liste les refunds inclus dans un settlement Mollie (s'il y en a).
+ * Utile pour expliquer pourquoi un payout est inférieur à la somme des
+ * paiements bruts (refunds soustraits).
+ */
+async function listSettlementRefunds(settlementId) {
+  const apiKey = getApiKeyFromEnv();
+  const id = getTrimmedString(settlementId);
+  if (!id) throw new Error('settlementId manquant');
+
+  const out = [];
+  let url = `${MOLLIE_BASE_URL}/settlements/${encodeURIComponent(id)}/refunds?limit=250`;
+
+  while (url) {
+    const resp = await requestJson(url, { apiKey });
+    const items = resp && resp._embedded && Array.isArray(resp._embedded.refunds)
+      ? resp._embedded.refunds
+      : [];
+    out.push(...items);
+    url = resp && resp._links && resp._links.next && resp._links.next.href ? resp._links.next.href : null;
+  }
+
+  return out;
 }
 
 async function createRefund({ paymentId, amountCents, currency = 'EUR', description } = {}) {
@@ -158,5 +279,9 @@ module.exports = {
   formatAmountFromCents,
   createPayment,
   getPayment,
+  listRefunds,
   createRefund,
+  listSettlements,
+  listSettlementPayments,
+  listSettlementRefunds,
 };
