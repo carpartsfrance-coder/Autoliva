@@ -114,9 +114,6 @@ router.get('/avoirs/:orderId/:creditNoteNumber/pdf', requireComptableAuth, requi
 /* ── Remboursements ───────────────────────────────────────────── */
 router.get('/remboursements', requireComptableAuth, requireAbility('accounting.refunds.read'), comptableController.getRefundsList);
 
-/* ── Réconciliation Mollie payouts ↔ factures ──────────────────── */
-router.get('/reconciliation', requireComptableAuth, requireAbility('accounting.view'), comptableController.getReconciliation);
-
 /* ── Exports CSV + ZIP ────────────────────────────────────────── */
 router.get('/export/:year/:month/csv', requireComptableAuth, requireAbility('accounting.export'), comptableController.getMonthlyCsvExport);
 router.get('/export/:year/:month/pdfs.zip', requireComptableAuth, requireAbility('accounting.export'), comptableController.getMonthlyPdfZipExport);
