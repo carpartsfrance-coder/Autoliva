@@ -657,110 +657,152 @@ async function streamMonthlyPdfZip(res, year, month) {
   const { from, to } = getMonthRange(year, month);
   const monthLabel = `${year}-${String(month).padStart(2, '0')}`;
 
-  const invoiceOrders = await Order.find({
-    'invoice.number': { $nin: [null, ''] },
-    'invoice.issuedAt': { $gte: from, $lt: to },
-  })
-    .select('_id number invoice totalCents items billingAddress shippingAddress userId accountType currency shippingCostCents itemsSubtotalCents promoCode promoDiscountCents itemsTotalAfterDiscountCents clientDiscountCents createdAt')
-    .lean();
-
-  /* On force la lecture des creditNotes.pdfData (select:false par défaut) */
-  const creditNoteOrders = await Order.find({
-    'creditNotes.issuedAt': { $gte: from, $lt: to },
-  })
-    .select('+creditNotes.pdfData _id number invoice totalCents items billingAddress shippingAddress userId accountType currency creditNotes refunds')
-    .lean();
-
-  /* Préfetch users pour limiter les findById en boucle */
-  const userIds = new Set();
-  for (const o of invoiceOrders) if (o.userId) userIds.add(String(o.userId));
-  for (const o of creditNoteOrders) if (o.userId) userIds.add(String(o.userId));
-  const usersList = userIds.size
-    ? await User.find({ _id: { $in: Array.from(userIds) } })
-        .select('_id email firstName lastName accountType siret tvaIntracom companyName phone addresses')
-        .lean()
-    : [];
-  const usersById = new Map(usersList.map((u) => [String(u._id), u]));
-
+  /* ── ÉTAPE 1 : envoyer les headers IMMÉDIATEMENT ──────────────
+   * Sinon le reverse-proxy (Cloudflare, Render) peut couper la
+   * connexion en 502 Bad Gateway s'il ne voit aucune réponse dans
+   * son délai de premier byte (~30-100s).
+   * On désactive aussi le buffering nginx-style côté Render pour
+   * que les chunks partent au fur et à mesure. */
   res.setHeader('Content-Type', 'application/zip');
   res.setHeader('Content-Disposition', `attachment; filename="compta_${monthLabel}_pdfs.zip"`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Accel-Buffering', 'no');
+  if (typeof res.flushHeaders === 'function') res.flushHeaders();
 
+  /* ── ÉTAPE 2 : démarrer l'archive et appender un README EN PREMIER
+   * Ça force archiver à émettre ses premiers bytes (signature ZIP +
+   * header local du README) en quelques millisecondes. Le proxy voit
+   * la réponse couler et n'a aucune raison de timeout. */
   const archive = archiver('zip', { zlib: { level: 6 } });
   archive.on('error', (err) => {
     console.error('[accounting] archive error:', err && err.message);
     try { res.end(); } catch (_) {}
   });
+  archive.on('warning', (err) => {
+    console.warn('[accounting] archive warning:', err && err.message);
+  });
   archive.pipe(res);
 
-  /* Factures */
-  for (const order of invoiceOrders) {
-    try {
-      const user = order.userId ? usersById.get(String(order.userId)) || null : null;
-      const buffer = await buildOrderInvoicePdfBuffer({ order, user });
-      if (buffer && buffer.length) {
-        const safeNumber = (order.invoice && order.invoice.number) || `commande-${order.number}`;
-        archive.append(buffer, { name: `factures/${safeNumber}.pdf` });
-      }
-    } catch (e) {
-      console.error('[accounting] PDF facture ratée pour', order.number, e && e.message);
-    }
-  }
-
-  /* Avoirs */
-  for (const order of creditNoteOrders) {
-    if (!Array.isArray(order.creditNotes)) continue;
-    for (const cn of order.creditNotes) {
-      if (!cn || !cn.issuedAt) continue;
-      const issuedAt = cn.issuedAt instanceof Date ? cn.issuedAt : new Date(cn.issuedAt);
-      if (issuedAt < from || issuedAt >= to) continue;
-
-      let buffer = null;
-      if (cn.pdfData && Buffer.isBuffer(cn.pdfData) && cn.pdfData.length > 0) {
-        buffer = cn.pdfData;
-      } else {
-        /* Fallback : régénération à la volée */
-        try {
-          const user = order.userId ? usersById.get(String(order.userId)) || null : null;
-          const refund = Array.isArray(order.refunds) && Number.isInteger(cn.refundIndex)
-            ? order.refunds[cn.refundIndex] || null
-            : null;
-          buffer = await buildCreditNotePdfBuffer({
-            order,
-            user,
-            creditNote: cn,
-            refund,
-          });
-        } catch (e) {
-          console.error('[accounting] PDF avoir raté pour', cn.number, e && e.message);
-          continue;
-        }
-      }
-
-      if (buffer && buffer.length) {
-        const safeNumber = cn.number || `avoir-${order.number}-${cn._id || ''}`;
-        archive.append(buffer, { name: `avoirs/${safeNumber}.pdf` });
-      }
-    }
-  }
-
-  /* README pour le comptable */
-  const readme = [
+  const readmeHeader = [
     `Export comptable — ${monthLabel}`,
-    '',
     `Période : du ${frDate(from)} (00h00) au ${frDate(new Date(to.getTime() - 1))} (23h59)`,
     `Généré le : ${frDate(new Date())}`,
     '',
-    `Factures : ${invoiceOrders.length} document(s)`,
-    `Avoirs   : ${creditNoteOrders.reduce((s, o) => s + (Array.isArray(o.creditNotes) ? o.creditNotes.filter((c) => {
-      const dd = c.issuedAt instanceof Date ? c.issuedAt : new Date(c.issuedAt);
-      return dd >= from && dd < to;
-    }).length : 0), 0)} document(s)`,
-    '',
     'Source : autoliva.com — Car Parts France',
     '',
-    'Téléchargez également l\'export CSV du mois pour la saisie comptable.',
+    'Voir aussi : export CSV du mois pour la saisie comptable.',
   ].join('\r\n');
-  archive.append(readme, { name: 'README.txt' });
+  archive.append(readmeHeader, { name: 'README.txt' });
+
+  /* ── ÉTAPE 3 : requêtes DB + génération PDF en streaming ──────
+   * À partir d'ici, on append des PDF au fur et à mesure qu'on les
+   * lit/génère. archiver émet les chunks, qui partent en chunked
+   * transfer encoding → le client voit la progression. */
+  let invoiceWritten = 0;
+  let creditNoteWritten = 0;
+  let invoiceFailed = 0;
+  let creditNoteFailed = 0;
+  let fatalError = null;
+
+  try {
+    const invoiceOrders = await Order.find({
+      'invoice.number': { $nin: [null, ''] },
+      'invoice.issuedAt': { $gte: from, $lt: to },
+    })
+      .select('_id number invoice totalCents items billingAddress shippingAddress userId accountType currency shippingCostCents itemsSubtotalCents promoCode promoDiscountCents itemsTotalAfterDiscountCents clientDiscountCents createdAt')
+      .lean();
+
+    /* select +creditNotes.pdfData : on force la lecture du Buffer
+     * stocké en base (champ marqué select:false par défaut). */
+    const creditNoteOrders = await Order.find({
+      'creditNotes.issuedAt': { $gte: from, $lt: to },
+    })
+      .select('+creditNotes.pdfData _id number invoice totalCents items billingAddress shippingAddress userId accountType currency creditNotes refunds')
+      .lean();
+
+    /* Préfetch users (un seul find $in vs N findById) */
+    const userIds = new Set();
+    for (const o of invoiceOrders) if (o.userId) userIds.add(String(o.userId));
+    for (const o of creditNoteOrders) if (o.userId) userIds.add(String(o.userId));
+    const usersList = userIds.size
+      ? await User.find({ _id: { $in: Array.from(userIds) } })
+          .select('_id email firstName lastName accountType siret tvaIntracom companyName phone addresses')
+          .lean()
+      : [];
+    const usersById = new Map(usersList.map((u) => [String(u._id), u]));
+
+    /* Factures — regen via pdfkit, séquentiellement (CPU-bound,
+     * paralléliser ne gagnerait rien en mono-thread Node). */
+    for (const order of invoiceOrders) {
+      try {
+        const user = order.userId ? usersById.get(String(order.userId)) || null : null;
+        const buffer = await buildOrderInvoicePdfBuffer({ order, user });
+        if (buffer && buffer.length) {
+          const safeNumber = (order.invoice && order.invoice.number) || `commande-${order.number}`;
+          archive.append(buffer, { name: `factures/${safeNumber}.pdf` });
+          invoiceWritten++;
+        } else {
+          invoiceFailed++;
+        }
+      } catch (e) {
+        console.error('[accounting] PDF facture ratée pour', order.number, e && e.message);
+        invoiceFailed++;
+      }
+    }
+
+    /* Avoirs — lecture du Buffer si dispo, sinon regen */
+    for (const order of creditNoteOrders) {
+      if (!Array.isArray(order.creditNotes)) continue;
+      for (const cn of order.creditNotes) {
+        if (!cn || !cn.issuedAt) continue;
+        const issuedAt = cn.issuedAt instanceof Date ? cn.issuedAt : new Date(cn.issuedAt);
+        if (issuedAt < from || issuedAt >= to) continue;
+
+        let buffer = null;
+        if (cn.pdfData && Buffer.isBuffer(cn.pdfData) && cn.pdfData.length > 0) {
+          buffer = cn.pdfData;
+        } else {
+          try {
+            const user = order.userId ? usersById.get(String(order.userId)) || null : null;
+            const refund = Array.isArray(order.refunds) && Number.isInteger(cn.refundIndex)
+              ? order.refunds[cn.refundIndex] || null
+              : null;
+            buffer = await buildCreditNotePdfBuffer({ order, user, creditNote: cn, refund });
+          } catch (e) {
+            console.error('[accounting] PDF avoir raté pour', cn.number, e && e.message);
+            creditNoteFailed++;
+            continue;
+          }
+        }
+
+        if (buffer && buffer.length) {
+          const safeNumber = cn.number || `avoir-${order.number}-${cn._id || ''}`;
+          archive.append(buffer, { name: `avoirs/${safeNumber}.pdf` });
+          creditNoteWritten++;
+        } else {
+          creditNoteFailed++;
+        }
+      }
+    }
+  } catch (err) {
+    fatalError = err;
+    console.error('[accounting] ZIP fatal error:', err && err.message);
+  }
+
+  /* ── ÉTAPE 4 : résumé final (visible par le comptable) ─────── */
+  const summary = [
+    `Résumé de l'export — ${monthLabel}`,
+    '',
+    `Factures incluses : ${invoiceWritten}${invoiceFailed > 0 ? ` (${invoiceFailed} en échec)` : ''}`,
+    `Avoirs incluses  : ${creditNoteWritten}${creditNoteFailed > 0 ? ` (${creditNoteFailed} en échec)` : ''}`,
+    '',
+    fatalError
+      ? `⚠ ERREUR : ${fatalError.message || 'inconnue'} — l'export est probablement incomplet.`
+      : '✓ Export terminé sans erreur fatale.',
+    '',
+    `Généré le : ${new Date().toISOString()}`,
+  ].join('\r\n');
+  archive.append(summary, { name: 'SUMMARY.txt' });
 
   await archive.finalize();
 }
