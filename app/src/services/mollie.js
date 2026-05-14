@@ -13,6 +13,24 @@ function getApiKeyFromEnv() {
   return key;
 }
 
+/**
+ * Clé "Organization Access Token" (OAT) Mollie pour les endpoints
+ * scope-organization comme /settlements. Différente de la clé API
+ * standard (`live_xxx` / `test_xxx`) qui est scope-profil.
+ *
+ * Pour la générer côté Mollie :
+ *   Dashboard → Settings → Developers → Organization access tokens
+ *   → Generate new token → permissions `settlements.read` + `payments.read`
+ *
+ * Format : commence par `access_`. À mettre dans la variable d'env
+ * `MOLLIE_ORGANIZATION_TOKEN`. Fallback : la clé API standard (qui
+ * retournera une erreur explicite sur les endpoints organization).
+ */
+function getOrganizationTokenFromEnv() {
+  const token = getTrimmedString(process.env.MOLLIE_ORGANIZATION_TOKEN);
+  return token || getApiKeyFromEnv();
+}
+
 function formatAmountFromCents(cents) {
   const safe = Number.isFinite(cents) ? cents : 0;
   return (safe / 100).toFixed(2);
@@ -175,7 +193,7 @@ async function listRefunds(paymentId) {
  * @returns {Promise<Array>} settlements triés du plus récent au plus ancien
  */
 async function listSettlements({ from, to, limit = 250 } = {}) {
-  const apiKey = getApiKeyFromEnv();
+  const apiKey = getOrganizationTokenFromEnv();
   const out = [];
   let url = `${MOLLIE_BASE_URL}/settlements?limit=${Math.min(250, Math.max(1, limit))}`;
 
@@ -215,7 +233,7 @@ async function listSettlements({ from, to, limit = 250 } = {}) {
  * @returns {Promise<Array>}     payments avec id, amount, status, settlementAmount, refunds, etc.
  */
 async function listSettlementPayments(settlementId) {
-  const apiKey = getApiKeyFromEnv();
+  const apiKey = getOrganizationTokenFromEnv();
   const id = getTrimmedString(settlementId);
   if (!id) throw new Error('settlementId manquant');
 
@@ -240,7 +258,7 @@ async function listSettlementPayments(settlementId) {
  * paiements bruts (refunds soustraits).
  */
 async function listSettlementRefunds(settlementId) {
-  const apiKey = getApiKeyFromEnv();
+  const apiKey = getOrganizationTokenFromEnv();
   const id = getTrimmedString(settlementId);
   if (!id) throw new Error('settlementId manquant');
 

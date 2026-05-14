@@ -946,11 +946,24 @@ async function getMollieReconciliation({ year, month, skipMollie = false } = {})
   try {
     settlements = await mollie.listSettlements({ from, to });
   } catch (err) {
-    console.error('[accounting] listSettlements échec :', err && err.message);
+    const msg = err && err.message ? err.message : 'inconnue';
+    console.error('[accounting] listSettlements échec :', msg);
+
+    /* Cas typique : la clé MOLLIE_API_KEY est une clé profile-scope
+     * (`live_xxx` / `test_xxx`) qui ne peut PAS accéder à /settlements
+     * (endpoint organization). Mollie répond avec "This API endpoint
+     * is only available with an access token not restricted to a
+     * specific profile." On détecte ce motif pour donner un message
+     * actionnable à l'owner. */
+    const isOrgScopeError = /not restricted to a specific profile|access token/i.test(msg);
+
     return {
       year: y, month: m, from, to,
       configured: true,
-      message: `Erreur API Mollie : ${err && err.message ? err.message : 'inconnue'}`,
+      needsOrgToken: isOrgScopeError,
+      message: isOrgScopeError
+        ? "Mollie refuse l'accès aux virements avec la clé API standard. Il faut générer un \"Organization Access Token\" et le mettre dans la variable d'environnement MOLLIE_ORGANIZATION_TOKEN."
+        : `Erreur API Mollie : ${msg}`,
       settlements: [],
     };
   }
