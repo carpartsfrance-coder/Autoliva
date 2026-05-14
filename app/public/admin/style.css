@@ -1465,6 +1465,14 @@ input:where([type='file']):focus {
   top: 100%;
 }
 
+.left-1\/4 {
+  left: 25%;
+}
+
+.right-1\/4 {
+  right: 25%;
+}
+
 .z-10 {
   z-index: 10;
 }
@@ -2155,6 +2163,10 @@ input:where([type='file']):focus {
   max-width: 20rem;
 }
 
+.max-w-7xl {
+  max-width: 80rem;
+}
+
 .flex-1 {
   flex: 1 1 0%;
 }
@@ -2518,6 +2530,11 @@ input:where([type='file']):focus {
 .rounded-r {
   border-top-right-radius: 0.5rem;
   border-bottom-right-radius: 0.5rem;
+}
+
+.rounded-t {
+  border-top-left-radius: 0.5rem;
+  border-top-right-radius: 0.5rem;
 }
 
 .border {
@@ -3595,6 +3612,14 @@ input:where([type='file']):focus {
 
 .uppercase {
   text-transform: uppercase;
+}
+
+.capitalize {
+  text-transform: capitalize;
+}
+
+.normal-case {
+  text-transform: none;
 }
 
 .italic {
@@ -5349,6 +5374,10 @@ aside nav a {
     justify-content: space-between;
   }
 
+  .sm\:p-6 {
+    padding: 1.5rem;
+  }
+
   .sm\:px-4 {
     padding-left: 1rem;
     padding-right: 1rem;
@@ -5629,6 +5658,10 @@ aside nav a {
 
   .lg\:overflow-y-auto {
     overflow-y: auto;
+  }
+
+  .lg\:p-10 {
+    padding: 2.5rem;
   }
 
   .lg\:px-10 {

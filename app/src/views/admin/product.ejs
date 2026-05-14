@@ -402,6 +402,15 @@
             <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="compareAtPrice" name="compareAtPrice" placeholder="Ex: 249,90" type="text" value="<%= form && form.compareAtPrice ? form.compareAtPrice : '' %>" />
           </div>
 
+          <div class="md:order-11">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="cost">
+              Prix d'achat HT
+              <span class="text-slate-400 normal-case font-normal">(optionnel — pour le calcul de marge)</span>
+            </label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="cost" name="cost" placeholder="Ex: 89,00" type="text" value="<%= form && form.cost ? form.cost : '' %>" />
+            <div class="mt-1 text-xs text-slate-400">Sert au tableau de bord financier. Vide = marge non calculée pour ce produit.</div>
+          </div>
+
           <div class="md:col-span-4 md:order-12">
             <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="compatibleReferences">Références compatibles (1 par ligne)</label>
             <textarea class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary min-h-[90px]" id="compatibleReferences" name="compatibleReferences" placeholder="Ex: 0281011234 (une par ligne)"><%= form && typeof form.compatibleReferences !== 'undefined' ? form.compatibleReferences : '' %></textarea>

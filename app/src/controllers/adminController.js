@@ -6603,6 +6603,7 @@ async function getAdminNewProductPage(req, res) {
       compatibleReferences: '',
       price: '',
       compareAtPrice: '',
+      cost: '',
       inStock: true,
       stockQty: '',
       imageUrl: '',
@@ -6691,6 +6692,7 @@ async function postAdminCreateProduct(req, res, next) {
       compatibleReferences: getTrimmedString(req.body.compatibleReferences),
       price: getTrimmedString(req.body.price),
       compareAtPrice: getTrimmedString(req.body.compareAtPrice),
+      cost: getTrimmedString(req.body.cost),
       inStock: req.body.inStock === 'on' || req.body.inStock === 'true',
       stockQty: getTrimmedString(req.body.stockQty),
       imageUrl: getTrimmedString(req.body.imageUrl),
@@ -6806,6 +6808,7 @@ async function postAdminCreateProduct(req, res, next) {
 
     const priceCents = parsePriceToCents(form.price);
     const compareAtPriceCents = form.compareAtPrice ? parsePriceToCents(form.compareAtPrice) : null;
+    const costCents = form.cost ? parsePriceToCents(form.cost) : null;
     const consigneAmountCentsRaw = form.consigneAmount ? parsePriceToCents(form.consigneAmount) : 0;
     const consigneAmountCents = consigneAmountCentsRaw === null ? null : consigneAmountCentsRaw;
     const consigneDelayDays = clampInt(form.consigneDelayDays || '30', { min: 0, max: 3650, fallback: 30 });
@@ -6962,6 +6965,7 @@ async function postAdminCreateProduct(req, res, next) {
       compatibleReferences,
       priceCents,
       compareAtPriceCents,
+      costCents,
       options: parsedOptions.ok ? parsedOptions.options : [],
       optionTemplateIds: extractProductOptionTemplateObjectIds(parsedOptions.ok ? parsedOptions.options : []),
       consigne: {
@@ -7117,6 +7121,7 @@ async function getAdminEditProductPage(req, res, next) {
         compatibleReferences: Array.isArray(product.compatibleReferences) ? product.compatibleReferences.filter(Boolean).join('\n') : '',
         price: formatPriceForInput(product.priceCents),
         compareAtPrice: formatPriceForInput(product.compareAtPriceCents),
+        cost: formatPriceForInput(product.costCents),
         inStock: product.inStock !== false,
         stockQty: Number.isFinite(product.stockQty) ? String(product.stockQty) : '',
         imageUrl: product.imageUrl || '',
@@ -7248,6 +7253,7 @@ async function postAdminUpdateProduct(req, res, next) {
       compatibleReferences: getTrimmedString(req.body.compatibleReferences),
       price: getTrimmedString(req.body.price),
       compareAtPrice: getTrimmedString(req.body.compareAtPrice),
+      cost: getTrimmedString(req.body.cost),
       inStock: req.body.inStock === 'on' || req.body.inStock === 'true',
       stockQty: getTrimmedString(req.body.stockQty),
       imageUrl: getTrimmedString(req.body.imageUrl),
@@ -7370,6 +7376,7 @@ async function postAdminUpdateProduct(req, res, next) {
 
     const priceCents = parsePriceToCents(form.price);
     const compareAtPriceCents = form.compareAtPrice ? parsePriceToCents(form.compareAtPrice) : null;
+    const costCents = form.cost ? parsePriceToCents(form.cost) : null;
     const consigneAmountCentsRaw = form.consigneAmount ? parsePriceToCents(form.consigneAmount) : 0;
     const consigneAmountCents = consigneAmountCentsRaw === null ? null : consigneAmountCentsRaw;
     const consigneDelayDays = clampInt(form.consigneDelayDays || '30', { min: 0, max: 3650, fallback: 30 });
@@ -10198,6 +10205,62 @@ async function getAdminMarketingPage(req, res, next) {
   }
 }
 
+/* ════════════════════════════════════════════════════════════════
+ * /admin/finance — tableau de bord financier (owner uniquement)
+ * KPI : CA TTC/HT, marge brute, COGS, ticket moyen, taux remboursement,
+ * top produits par CA et par marge, tendance 12 mois.
+ * ════════════════════════════════════════════════════════════════ */
+async function getAdminFinancePage(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+
+    /* Période : ?period=YYYY-MM, défaut = mois courant */
+    const periodParam = typeof req.query.period === 'string' ? req.query.period.trim() : '';
+    const now = new Date();
+    let year = now.getFullYear();
+    let month = now.getMonth() + 1;
+    const m = /^(\d{4})-(\d{1,2})$/.exec(periodParam);
+    if (m) { year = parseInt(m[1], 10); month = parseInt(m[2], 10); }
+
+    if (!dbConnected) {
+      return res.render('admin/finance', {
+        title: `Admin - Finance - ${brand.NAME}`,
+        dbConnected: false,
+        summary: null, trend: [],
+        period: buildFinancePeriodNav(year, month),
+      });
+    }
+
+    const financeService = require('../services/financeService');
+    const [summary, trend] = await Promise.all([
+      financeService.getMonthlySummary(year, month),
+      financeService.getTwelveMonthTrend(new Date(year, month - 1, 1)),
+    ]);
+
+    return res.render('admin/finance', {
+      title: `Admin - Finance - ${brand.NAME}`,
+      dbConnected: true,
+      summary, trend,
+      period: buildFinancePeriodNav(year, month),
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+function buildFinancePeriodNav(year, month) {
+  const current = new Date(year, month - 1, 1);
+  const prev = new Date(year, month - 2, 1);
+  const next = new Date(year, month, 1);
+  return {
+    currentLabel: current.toLocaleString('fr-FR', { month: 'long', year: 'numeric' }),
+    currentPeriod: `${year}-${String(month).padStart(2, '0')}`,
+    prevPeriod: `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`,
+    nextPeriod: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`,
+    year, month,
+  };
+}
+
 module.exports = {
   getAdminHeroSettingsPage,
   postAdminHeroSettings,
@@ -10222,6 +10285,7 @@ module.exports = {
   postAdminCancelAllProductDrafts,
   getAdminDashboard,
   getAdminMarketingPage,
+  getAdminFinancePage,
   getAdminVisitorsListPage,
   getAdminVisitorDetailPage,
   getAdminVisitorEventsApi,

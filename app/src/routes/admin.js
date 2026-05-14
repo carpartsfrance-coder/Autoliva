@@ -172,6 +172,11 @@ router.post('/analytics/synonyme', requireAdminAuth, analyticsController.postAdd
 
 router.get('/marketing', requireAdminAuth, adminController.getAdminMarketingPage);
 
+/* /admin/finance : tableau de bord financier (CA, marge, ticket moyen,
+ * top produits). Owner uniquement parce que ça expose la marge brute
+ * et le coût d'achat fournisseur — pas pour les yeux des employés. */
+router.get('/finance', requireAdminAuth, requireAbility('settings.billing'), adminController.getAdminFinancePage);
+
 router.get('/visiteurs', requireAdminAuth, adminController.getAdminVisitorsListPage);
 router.get('/visiteurs/:sessionId', requireAdminAuth, adminController.getAdminVisitorDetailPage);
 router.get('/visiteurs/:sessionId/events', requireAdminAuth, adminController.getAdminVisitorEventsApi);
