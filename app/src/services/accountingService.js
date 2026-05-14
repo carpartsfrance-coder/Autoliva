@@ -726,18 +726,33 @@ async function buildMonthlyPdfZipBuffer(year, month) {
       .select('_id number invoice totalCents items billingAddress shippingAddress userId accountType currency shippingCostCents itemsSubtotalCents promoCode promoDiscountCents itemsTotalAfterDiscountCents clientDiscountCents createdAt')
       .lean();
 
-    /* select +creditNotes.pdfData : on force la lecture du Buffer
-     * stocké en base (champ marqué select:false par défaut).
+    /* Récupération des avoirs.
      *
-     * IMPORTANT : ne PAS lister `creditNotes` à côté de
-     * `+creditNotes.pdfData` dans le select — Mongoose lève alors
-     * "Path collision at creditNotes.pdfData remaining portion
-     * pdfData". Le `+` sur la sous-clé inclut déjà tout le parent. */
+     * Subtilité Mongoose : il ne faut PAS appeler `.lean()` ici parce que :
+     *
+     *  1. Avec `.select('+creditNotes.pdfData ...')` la projection envoyée
+     *     à MongoDB ne contient QUE creditNotes.pdfData (pas les autres
+     *     sous-champs). Du coup en lean on récupère un sous-doc {pdfData}
+     *     sans `number` ni `issuedAt` — la boucle interne (qui filtre par
+     *     issuedAt) skip alors TOUS les avoirs.
+     *
+     *  2. Avec lean, `pdfData` est retourné comme `BSON Binary` au lieu
+     *     d'un `Buffer` Node, ce qui casse `Buffer.isBuffer(cn.pdfData)`
+     *     et nous fait basculer inutilement sur la regen.
+     *
+     * Sans lean, Mongoose hydrate les docs complets : tous les sous-
+     * champs sont présents et `pdfData` est un vrai `Buffer`. Le surcoût
+     * mémoire est négligeable pour ~100 avoirs/mois max.
+     *
+     * On ne peut pas lister `creditNotes` en parent de
+     * `+creditNotes.pdfData` (path collision Mongo). Et expliciter tous
+     * les sous-champs (`creditNotes.number creditNotes.issuedAt …`) +
+     * convertir Binary→Buffer marche aussi mais c'est plus verbeux et
+     * fragile. Drop `.lean()` est la solution la plus simple et robuste. */
     const creditNoteOrders = await Order.find({
       'creditNotes.issuedAt': { $gte: from, $lt: to },
     })
-      .select('+creditNotes.pdfData _id number invoice totalCents items billingAddress shippingAddress userId accountType currency refunds')
-      .lean();
+      .select('+creditNotes.pdfData');
 
     /* Préfetch users (un seul find $in vs N findById) */
     const userIds = new Set();
@@ -868,9 +883,12 @@ async function getInvoicePdfBuffer(orderId) {
 }
 
 async function getCreditNotePdfBufferFor(orderId, creditNoteNumber) {
+  /* Pas de .lean() ici, même raison que dans buildMonthlyPdfZipBuffer :
+   * avec lean + .select('+creditNotes.pdfData'), seul pdfData est chargé
+   * (cn.number = undefined → find() ne matche jamais) et pdfData revient
+   * en BSON Binary au lieu de Buffer. */
   const order = await Order.findById(orderId)
-    .select('+creditNotes.pdfData')
-    .lean();
+    .select('+creditNotes.pdfData');
   if (!order || !Array.isArray(order.creditNotes)) return null;
   const cn = order.creditNotes.find((c) => c && c.number === creditNoteNumber);
   if (!cn) return null;
