@@ -341,25 +341,6 @@ async function getRefundsList(req, res, next) {
 }
 
 /* ════════════════════════════════════════════════════════════════
- * Réconciliation Mollie payouts ↔ factures
- * ════════════════════════════════════════════════════════════════ */
-
-async function getReconciliation(req, res, next) {
-  try {
-    const { year, month } = getRequestedMonth(req);
-    const data = await accountingService.getMollieReconciliation({ year, month });
-
-    return res.render('comptable/reconciliation', viewLocals(req, {
-      pageTitle: 'Réconciliation Mollie',
-      data,
-      period: buildPeriodNav(year, month),
-    }));
-  } catch (err) {
-    return next(err);
-  }
-}
-
-/* ════════════════════════════════════════════════════════════════
  * Exports CSV + ZIP
  * ════════════════════════════════════════════════════════════════ */
 
@@ -433,7 +414,6 @@ module.exports = {
   getCreditNotesList,
   getCreditNotePdf,
   getRefundsList,
-  getReconciliation,
   getMonthlyCsvExport,
   getMonthlyPdfZipExport,
   postLogout,

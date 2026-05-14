@@ -13,24 +13,6 @@ function getApiKeyFromEnv() {
   return key;
 }
 
-/**
- * Clé "Organization Access Token" (OAT) Mollie pour les endpoints
- * scope-organization comme /settlements. Différente de la clé API
- * standard (`live_xxx` / `test_xxx`) qui est scope-profil.
- *
- * Pour la générer côté Mollie :
- *   Dashboard → Settings → Developers → Organization access tokens
- *   → Generate new token → permissions `settlements.read` + `payments.read`
- *
- * Format : commence par `access_`. À mettre dans la variable d'env
- * `MOLLIE_ORGANIZATION_TOKEN`. Fallback : la clé API standard (qui
- * retournera une erreur explicite sur les endpoints organization).
- */
-function getOrganizationTokenFromEnv() {
-  const token = getTrimmedString(process.env.MOLLIE_ORGANIZATION_TOKEN);
-  return token || getApiKeyFromEnv();
-}
-
 function formatAmountFromCents(cents) {
   const safe = Number.isFinite(cents) ? cents : 0;
   return (safe / 100).toFixed(2);
@@ -180,103 +162,6 @@ async function listRefunds(paymentId) {
   return [];
 }
 
-/**
- * Liste les "settlements" Mollie = virements groupés que Mollie effectue
- * vers ton compte bancaire (1x/jour ou 1x/semaine selon ta config).
- *
- * Un settlement contient plusieurs paiements (les ventes encaissées de la
- * période). C'est l'objet de référence pour la réconciliation comptable :
- * tu vois 4 327 € arriver sur ton compte → quels paiements le composent ?
- *
- * Pagination : Mollie pagine 50 par défaut, max 250. On suit `_links.next`.
- *
- * @returns {Promise<Array>} settlements triés du plus récent au plus ancien
- */
-async function listSettlements({ from, to, limit = 250 } = {}) {
-  const apiKey = getOrganizationTokenFromEnv();
-  const out = [];
-  let url = `${MOLLIE_BASE_URL}/settlements?limit=${Math.min(250, Math.max(1, limit))}`;
-
-  while (url) {
-    const resp = await requestJson(url, { apiKey });
-    const items = resp && resp._embedded && Array.isArray(resp._embedded.settlements)
-      ? resp._embedded.settlements
-      : [];
-
-    /* Filtre date locale : si from/to sont passés, on garde uniquement les
-     * settlements dont settledAt tombe dans l'intervalle. Mollie ne supporte
-     * pas de filtre date côté serveur, donc on tronque côté client. */
-    for (const s of items) {
-      if (from || to) {
-        const d = s.settledAt ? new Date(s.settledAt) : null;
-        if (!d) continue;
-        if (from && d < from) {
-          /* settlements triés du plus récent au plus ancien : on peut break */
-          return out;
-        }
-        if (to && d >= to) continue;
-      }
-      out.push(s);
-    }
-
-    const next = resp && resp._links && resp._links.next && resp._links.next.href ? resp._links.next.href : null;
-    url = next;
-  }
-
-  return out;
-}
-
-/**
- * Liste les paiements inclus dans un settlement Mollie.
- *
- * @param {string} settlementId  ex: "stl_jDk30akdN"
- * @returns {Promise<Array>}     payments avec id, amount, status, settlementAmount, refunds, etc.
- */
-async function listSettlementPayments(settlementId) {
-  const apiKey = getOrganizationTokenFromEnv();
-  const id = getTrimmedString(settlementId);
-  if (!id) throw new Error('settlementId manquant');
-
-  const out = [];
-  let url = `${MOLLIE_BASE_URL}/settlements/${encodeURIComponent(id)}/payments?limit=250`;
-
-  while (url) {
-    const resp = await requestJson(url, { apiKey });
-    const items = resp && resp._embedded && Array.isArray(resp._embedded.payments)
-      ? resp._embedded.payments
-      : [];
-    out.push(...items);
-    url = resp && resp._links && resp._links.next && resp._links.next.href ? resp._links.next.href : null;
-  }
-
-  return out;
-}
-
-/**
- * Liste les refunds inclus dans un settlement Mollie (s'il y en a).
- * Utile pour expliquer pourquoi un payout est inférieur à la somme des
- * paiements bruts (refunds soustraits).
- */
-async function listSettlementRefunds(settlementId) {
-  const apiKey = getOrganizationTokenFromEnv();
-  const id = getTrimmedString(settlementId);
-  if (!id) throw new Error('settlementId manquant');
-
-  const out = [];
-  let url = `${MOLLIE_BASE_URL}/settlements/${encodeURIComponent(id)}/refunds?limit=250`;
-
-  while (url) {
-    const resp = await requestJson(url, { apiKey });
-    const items = resp && resp._embedded && Array.isArray(resp._embedded.refunds)
-      ? resp._embedded.refunds
-      : [];
-    out.push(...items);
-    url = resp && resp._links && resp._links.next && resp._links.next.href ? resp._links.next.href : null;
-  }
-
-  return out;
-}
-
 async function createRefund({ paymentId, amountCents, currency = 'EUR', description } = {}) {
   const apiKey = getApiKeyFromEnv();
   const id = getTrimmedString(paymentId);
@@ -299,7 +184,4 @@ module.exports = {
   getPayment,
   listRefunds,
   createRefund,
-  listSettlements,
-  listSettlementPayments,
-  listSettlementRefunds,
 };
