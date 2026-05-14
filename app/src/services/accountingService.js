@@ -727,11 +727,16 @@ async function buildMonthlyPdfZipBuffer(year, month) {
       .lean();
 
     /* select +creditNotes.pdfData : on force la lecture du Buffer
-     * stocké en base (champ marqué select:false par défaut). */
+     * stocké en base (champ marqué select:false par défaut).
+     *
+     * IMPORTANT : ne PAS lister `creditNotes` à côté de
+     * `+creditNotes.pdfData` dans le select — Mongoose lève alors
+     * "Path collision at creditNotes.pdfData remaining portion
+     * pdfData". Le `+` sur la sous-clé inclut déjà tout le parent. */
     const creditNoteOrders = await Order.find({
       'creditNotes.issuedAt': { $gte: from, $lt: to },
     })
-      .select('+creditNotes.pdfData _id number invoice totalCents items billingAddress shippingAddress userId accountType currency creditNotes refunds')
+      .select('+creditNotes.pdfData _id number invoice totalCents items billingAddress shippingAddress userId accountType currency refunds')
       .lean();
 
     /* Préfetch users (un seul find $in vs N findById) */
