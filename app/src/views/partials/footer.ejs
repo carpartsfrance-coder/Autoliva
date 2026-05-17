@@ -69,10 +69,32 @@
 <a class="hover:text-white" href="<%= _flp %>/legal/mentions-legales"><%= t('footer.legal') %></a>
 <a class="hover:text-white" href="<%= _flp %>/legal/cgu"><%= t('footer.cgu') %></a>
 <a class="hover:text-white" href="<%= _flp %>/legal/cgv"><%= t('footer.cgv') %></a>
+<button type="button" class="hover:text-white" onclick="window.cpfConsent && window.cpfConsent.open()"><%= t('footer.cookies') %></button>
 </div>
 </div>
 </div>
 </footer>
+<script>
+window.CPF_CONSENT_PRIVACY_URL = <%- JSON.stringify(_flp + '/legal/confidentialite') %>;
+window.CPF_CONSENT_I18N = {
+  'consent.banner.title': <%- JSON.stringify(t('consent.banner.title')) %>,
+  'consent.banner.body': <%- JSON.stringify(t('consent.banner.body', { url: _flp + '/legal/confidentialite' })) %>,
+  'consent.banner.acceptAll': <%- JSON.stringify(t('consent.banner.acceptAll')) %>,
+  'consent.banner.rejectAll': <%- JSON.stringify(t('consent.banner.rejectAll')) %>,
+  'consent.banner.customize': <%- JSON.stringify(t('consent.banner.customize')) %>,
+  'consent.modal.title': <%- JSON.stringify(t('consent.modal.title')) %>,
+  'consent.modal.intro': <%- JSON.stringify(t('consent.modal.intro')) %>,
+  'consent.modal.close': <%- JSON.stringify(t('consent.modal.close')) %>,
+  'consent.modal.save': <%- JSON.stringify(t('consent.modal.save')) %>,
+  'consent.modal.necessary.title': <%- JSON.stringify(t('consent.modal.necessary.title')) %>,
+  'consent.modal.necessary.desc': <%- JSON.stringify(t('consent.modal.necessary.desc')) %>,
+  'consent.modal.analytics.title': <%- JSON.stringify(t('consent.modal.analytics.title')) %>,
+  'consent.modal.analytics.desc': <%- JSON.stringify(t('consent.modal.analytics.desc')) %>,
+  'consent.modal.ads.title': <%- JSON.stringify(t('consent.modal.ads.title')) %>,
+  'consent.modal.ads.desc': <%- JSON.stringify(t('consent.modal.ads.desc')) %>
+};
+</script>
+<script src="/js/consent-banner.js" defer></script>
 
 <% const _cp = typeof currentPathWithoutLang !== 'undefined' ? currentPathWithoutLang : (typeof currentPath === 'string' ? currentPath : ''); %>
 <% const _pathOnly = _cp.split('?')[0].split('#')[0]; %>
