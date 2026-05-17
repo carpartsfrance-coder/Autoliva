@@ -22,6 +22,7 @@ coverage/
 
 public/css/*
 !public/css/sav.css
+!public/css/consent-banner.css
 
 public/uploads/
 !public/uploads/**/.gitkeep
