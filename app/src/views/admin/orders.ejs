@@ -18,31 +18,53 @@
     </div>
 
     <%
-      var _activeFiltersCount = 0;
-      if (filters) {
-        ['status','orderType','cloningStatus','returnFilter','type','source','period','utmCampaign','utmSource'].forEach(function(k){
-          if (filters[k]) _activeFiltersCount++;
-        });
-      }
+      // Compteur de filtres actifs (hors recherche & pagination)
+      const _activeFilterKeys = ['status','orderType','cloningStatus','returnFilter','type','source','period','utmCampaign','utmSource'];
+      let _activeFiltersCount = 0;
+      _activeFilterKeys.forEach(function(k){ if (filters && filters[k]) _activeFiltersCount++; });
+      const _hasAdvancedActive = !!(filters && (filters.type || filters.source || filters.utmCampaign || filters.utmSource || filters.returnFilter));
+      const _isCloningOrderType = filters && (filters.orderType === 'exchange_cloning' || filters.orderType === 'standalone_cloning');
     %>
-    <form action="/admin/commandes" class="lg:sticky lg:top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET">
-      <div class="flex flex-col xl:flex-row xl:items-center gap-4">
-        <div class="flex gap-2 flex-1">
-          <div class="relative flex-1">
-            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
-            <input class="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400" name="q" placeholder="Rechercher: n° commande, email, nom..." type="text" value="<%= filters && filters.q ? filters.q : '' %>" />
-          </div>
-          <button type="button" id="filters-toggle" class="lg:hidden inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-900 shrink-0" aria-expanded="<%= _activeFiltersCount > 0 ? 'true' : 'false' %>" aria-controls="filters-panel">
-            <span class="material-symbols-outlined text-lg">tune</span>
-            <span>Filtres</span>
-            <% if (_activeFiltersCount > 0) { %>
-              <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-slate-900 text-white text-xs font-bold"><%= _activeFiltersCount %></span>
+    <form action="/admin/commandes" class="lg:sticky lg:top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET" id="ordersFilterForm">
+      <%/* Ligne 1 : recherche + actions */%>
+      <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+        <div class="flex-1 relative">
+          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
+          <input class="w-full rounded-xl border border-slate-200 bg-white pl-11 pr-10 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 transition" name="q" placeholder="Rechercher : n° commande, email, nom client…" type="text" value="<%= filters && filters.q ? filters.q : '' %>" />
+          <% if (filters && filters.q) { %>
+            <button type="button" id="ordersClearSearch" class="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Effacer la recherche">
+              <span class="material-symbols-outlined text-base">close</span>
+            </button>
+          <% } %>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="toggleAdvancedFilters" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition" aria-expanded="<%= _hasAdvancedActive ? 'true' : 'false' %>" aria-controls="ordersAdvancedFilters">
+            <span class="material-symbols-outlined text-base">tune</span>
+            <span class="hidden sm:inline">Filtres avancés</span>
+            <span class="sm:hidden">Avancés</span>
+            <% if (_hasAdvancedActive) { %>
+              <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-slate-900 text-white">●</span>
             <% } %>
           </button>
+          <% if (_activeFiltersCount > 0 || (filters && filters.q)) { %>
+            <a href="/admin/commandes" class="inline-flex items-center gap-1.5 px-3 py-3 rounded-xl text-sm font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 transition" title="Réinitialiser tous les filtres">
+              <span class="material-symbols-outlined text-base">restart_alt</span>
+              <span class="hidden sm:inline">Réinitialiser</span>
+            </a>
+          <% } %>
+          <button class="btn btn-primary inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold" type="submit">
+            <span class="material-symbols-outlined text-base">filter_alt</span>
+            Filtrer
+          </button>
         </div>
+      </div>
 
-        <div id="filters-panel" class="<%= _activeFiltersCount > 0 ? 'flex' : 'hidden' %> lg:flex flex-col sm:flex-row gap-3 flex-wrap">
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="status">
+      <%/* Ligne 2 : filtres rapides (toujours visibles) */%>
+      <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+        <%/* Statut */%>
+        <label class="orders-filter relative block <%= filters && filters.status ? 'is-active' : '' %>">
+          <span class="material-symbols-outlined orders-filter-icon">flag</span>
+          <select class="orders-filter-select" name="status" aria-label="Filtrer par statut">
             <option value="">Tous les statuts</option>
             <option value="pending_payment" <%= filters && filters.status === 'pending_payment' ? 'selected' : '' %>>En attente paiement</option>
             <option value="paid" <%= filters && filters.status === 'paid' ? 'selected' : '' %>>Payée</option>
@@ -53,16 +75,26 @@
             <option value="cancelled" <%= filters && filters.status === 'cancelled' ? 'selected' : '' %>>Annulée</option>
             <option value="refunded" <%= filters && filters.status === 'refunded' ? 'selected' : '' %>>Remboursée</option>
           </select>
+          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+        </label>
 
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="orderType" id="orderTypeFilter">
+        <%/* Type de commande */%>
+        <label class="orders-filter relative block <%= filters && filters.orderType ? 'is-active' : '' %>">
+          <span class="material-symbols-outlined orders-filter-icon">shopping_bag</span>
+          <select class="orders-filter-select" name="orderType" id="orderTypeFilter" aria-label="Filtrer par type de commande">
             <option value="">Type de commande</option>
             <option value="standard" <%= filters && filters.orderType === 'standard' ? 'selected' : '' %>>Vente simple</option>
             <option value="exchange" <%= filters && filters.orderType === 'exchange' ? 'selected' : '' %>>Échange standard</option>
             <option value="exchange_cloning" <%= filters && filters.orderType === 'exchange_cloning' ? 'selected' : '' %>>Échange + Clonage</option>
             <option value="standalone_cloning" <%= filters && filters.orderType === 'standalone_cloning' ? 'selected' : '' %>>Service Clonage TCU</option>
           </select>
+          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+        </label>
 
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 <%= (filters && (filters.orderType === 'exchange_cloning' || filters.orderType === 'standalone_cloning')) ? '' : 'hidden' %>" name="cloningStatus" id="cloningStatusFilter">
+        <%/* Statut clonage (visible uniquement si type de commande lié au clonage) */%>
+        <label class="orders-filter relative block <%= filters && filters.cloningStatus ? 'is-active' : '' %> <%= _isCloningOrderType ? '' : 'hidden' %>" id="cloningStatusFilterWrap">
+          <span class="material-symbols-outlined orders-filter-icon">memory</span>
+          <select class="orders-filter-select" name="cloningStatus" id="cloningStatusFilter" aria-label="Filtrer par statut clonage">
             <option value="">Statut clonage</option>
             <option value="pending_label" <%= filters && filters.cloningStatus === 'pending_label' ? 'selected' : '' %>>Attente étiquette</option>
             <option value="label_sent" <%= filters && filters.cloningStatus === 'label_sent' ? 'selected' : '' %>>Étiquette envoyée</option>
@@ -72,74 +104,157 @@
             <option value="cloning_done" <%= filters && filters.cloningStatus === 'cloning_done' ? 'selected' : '' %>>Clonage terminé</option>
             <option value="cloning_failed" <%= filters && filters.cloningStatus === 'cloning_failed' ? 'selected' : '' %>>Clonage échoué</option>
           </select>
+          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+        </label>
 
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="returnFilter">
-            <option value="">Retour (tous)</option>
-            <option value="pending" <%= filters && filters.returnFilter === 'pending' ? 'selected' : '' %>>Retour attendu</option>
-            <option value="overdue" <%= filters && filters.returnFilter === 'overdue' ? 'selected' : '' %>>Retour en retard</option>
-          </select>
-
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="type">
-            <option value="">Tous les clients</option>
-            <option value="particulier" <%= filters && filters.type === 'particulier' ? 'selected' : '' %>>Particulier</option>
-            <option value="pro" <%= filters && filters.type === 'pro' ? 'selected' : '' %>>Professionnel</option>
-          </select>
-
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="source">
-            <option value="">Toutes les sources</option>
-            <option value="website" <%= filters && filters.source === 'website' ? 'selected' : '' %>>Site web</option>
-            <option value="phone" <%= filters && filters.source === 'phone' ? 'selected' : '' %>>T&eacute;l&eacute;phone</option>
-            <option value="email" <%= filters && filters.source === 'email' ? 'selected' : '' %>>Email</option>
-            <option value="whatsapp" <%= filters && filters.source === 'whatsapp' ? 'selected' : '' %>>WhatsApp</option>
-            <option value="leboncoin" <%= filters && filters.source === 'leboncoin' ? 'selected' : '' %>>Leboncoin</option>
-            <option value="marketplace" <%= filters && filters.source === 'marketplace' ? 'selected' : '' %>>Marketplace</option>
-            <option value="salon" <%= filters && filters.source === 'salon' ? 'selected' : '' %>>Salon</option>
-            <option value="other" <%= filters && filters.source === 'other' ? 'selected' : '' %>>Autre</option>
-          </select>
-
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="period">
+        <%/* Période */%>
+        <label class="orders-filter relative block <%= filters && filters.period ? 'is-active' : '' %>">
+          <span class="material-symbols-outlined orders-filter-icon">calendar_month</span>
+          <select class="orders-filter-select" name="period" aria-label="Filtrer par période">
             <option value="">Toutes périodes</option>
-            <option value="7d" <%= filters && filters.period === '7d' ? 'selected' : '' %>>7 jours</option>
-            <option value="30d" <%= filters && filters.period === '30d' ? 'selected' : '' %>>30 jours</option>
-            <option value="90d" <%= filters && filters.period === '90d' ? 'selected' : '' %>>90 jours</option>
-            <option value="365d" <%= filters && filters.period === '365d' ? 'selected' : '' %>>12 mois</option>
+            <option value="7d" <%= filters && filters.period === '7d' ? 'selected' : '' %>>7 derniers jours</option>
+            <option value="30d" <%= filters && filters.period === '30d' ? 'selected' : '' %>>30 derniers jours</option>
+            <option value="90d" <%= filters && filters.period === '90d' ? 'selected' : '' %>>90 derniers jours</option>
+            <option value="365d" <%= filters && filters.period === '365d' ? 'selected' : '' %>>12 derniers mois</option>
           </select>
+          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+        </label>
 
-          <%/* Filtres marketing : campagne + source UTM */%>
-          <input class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900 w-full sm:w-44" name="utmCampaign" type="text" placeholder="Campagne (utm_campaign)" value="<%= filters && filters.utmCampaign ? filters.utmCampaign : '' %>" />
-
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="utmSource">
-            <option value="">Toute origine pub</option>
-            <option value="google" <%= filters && filters.utmSource === 'google' ? 'selected' : '' %>>Google</option>
-            <option value="facebook" <%= filters && filters.utmSource === 'facebook' ? 'selected' : '' %>>Facebook</option>
-            <option value="instagram" <%= filters && filters.utmSource === 'instagram' ? 'selected' : '' %>>Instagram</option>
-            <option value="bing" <%= filters && filters.utmSource === 'bing' ? 'selected' : '' %>>Bing</option>
-            <option value="newsletter" <%= filters && filters.utmSource === 'newsletter' ? 'selected' : '' %>>Newsletter</option>
-          </select>
-
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" name="limit">
+        <%/* Pagination */%>
+        <label class="orders-filter relative block">
+          <span class="material-symbols-outlined orders-filter-icon">view_list</span>
+          <select class="orders-filter-select" name="limit" aria-label="Nombre de commandes par page">
             <% const oLimitCurrent = filters && filters.limit ? filters.limit : 20; %>
-            <option value="20" <%= oLimitCurrent === 20 ? 'selected' : '' %>>20 / page</option>
-            <option value="50" <%= oLimitCurrent === 50 ? 'selected' : '' %>>50 / page</option>
-            <option value="100" <%= oLimitCurrent === 100 ? 'selected' : '' %>>100 / page</option>
+            <option value="20" <%= oLimitCurrent === 20 ? 'selected' : '' %>>20 par page</option>
+            <option value="50" <%= oLimitCurrent === 50 ? 'selected' : '' %>>50 par page</option>
+            <option value="100" <%= oLimitCurrent === 100 ? 'selected' : '' %>>100 par page</option>
           </select>
+          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+        </label>
+      </div>
 
-          <button class="btn btn-secondary" type="submit">
-            Filtrer
-          </button>
+      <%/* Ligne 3 : filtres avancés (repliés par défaut, ouverts si actifs) */%>
+      <div id="ordersAdvancedFilters" class="<%= _hasAdvancedActive ? '' : 'hidden' %> mt-3 pt-3 border-t border-dashed border-slate-200">
+        <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-sm">tune</span>
+          Filtres avancés
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+          <%/* Type client */%>
+          <label class="orders-filter relative block <%= filters && filters.type ? 'is-active' : '' %>">
+            <span class="material-symbols-outlined orders-filter-icon">person</span>
+            <select class="orders-filter-select" name="type" aria-label="Filtrer par type de client">
+              <option value="">Tous les clients</option>
+              <option value="particulier" <%= filters && filters.type === 'particulier' ? 'selected' : '' %>>Particulier</option>
+              <option value="pro" <%= filters && filters.type === 'pro' ? 'selected' : '' %>>Professionnel</option>
+            </select>
+            <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+          </label>
+
+          <%/* Source */%>
+          <label class="orders-filter relative block <%= filters && filters.source ? 'is-active' : '' %>">
+            <span class="material-symbols-outlined orders-filter-icon">hub</span>
+            <select class="orders-filter-select" name="source" aria-label="Filtrer par source">
+              <option value="">Toutes les sources</option>
+              <option value="website" <%= filters && filters.source === 'website' ? 'selected' : '' %>>Site web</option>
+              <option value="phone" <%= filters && filters.source === 'phone' ? 'selected' : '' %>>T&eacute;l&eacute;phone</option>
+              <option value="email" <%= filters && filters.source === 'email' ? 'selected' : '' %>>Email</option>
+              <option value="whatsapp" <%= filters && filters.source === 'whatsapp' ? 'selected' : '' %>>WhatsApp</option>
+              <option value="leboncoin" <%= filters && filters.source === 'leboncoin' ? 'selected' : '' %>>Leboncoin</option>
+              <option value="marketplace" <%= filters && filters.source === 'marketplace' ? 'selected' : '' %>>Marketplace</option>
+              <option value="salon" <%= filters && filters.source === 'salon' ? 'selected' : '' %>>Salon</option>
+              <option value="other" <%= filters && filters.source === 'other' ? 'selected' : '' %>>Autre</option>
+            </select>
+            <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+          </label>
+
+          <%/* Retour */%>
+          <label class="orders-filter relative block <%= filters && filters.returnFilter ? 'is-active' : '' %>">
+            <span class="material-symbols-outlined orders-filter-icon">assignment_return</span>
+            <select class="orders-filter-select" name="returnFilter" aria-label="Filtrer par retour">
+              <option value="">Retour (tous)</option>
+              <option value="pending" <%= filters && filters.returnFilter === 'pending' ? 'selected' : '' %>>Retour attendu</option>
+              <option value="overdue" <%= filters && filters.returnFilter === 'overdue' ? 'selected' : '' %>>Retour en retard</option>
+            </select>
+            <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+          </label>
+
+          <%/* UTM source */%>
+          <label class="orders-filter relative block <%= filters && filters.utmSource ? 'is-active' : '' %>">
+            <span class="material-symbols-outlined orders-filter-icon">campaign</span>
+            <select class="orders-filter-select" name="utmSource" aria-label="Filtrer par origine publicitaire">
+              <option value="">Toute origine pub</option>
+              <option value="google" <%= filters && filters.utmSource === 'google' ? 'selected' : '' %>>Google</option>
+              <option value="facebook" <%= filters && filters.utmSource === 'facebook' ? 'selected' : '' %>>Facebook</option>
+              <option value="instagram" <%= filters && filters.utmSource === 'instagram' ? 'selected' : '' %>>Instagram</option>
+              <option value="bing" <%= filters && filters.utmSource === 'bing' ? 'selected' : '' %>>Bing</option>
+              <option value="newsletter" <%= filters && filters.utmSource === 'newsletter' ? 'selected' : '' %>>Newsletter</option>
+            </select>
+            <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+          </label>
+
+          <%/* UTM campaign */%>
+          <label class="orders-filter relative block <%= filters && filters.utmCampaign ? 'is-active' : '' %>">
+            <span class="material-symbols-outlined orders-filter-icon">sell</span>
+            <input class="orders-filter-input" name="utmCampaign" type="text" placeholder="Nom de campagne (utm_campaign)" value="<%= filters && filters.utmCampaign ? filters.utmCampaign : '' %>" aria-label="Filtrer par nom de campagne" />
+          </label>
         </div>
       </div>
     </form>
+
     <script>
-      (function () {
-        var btn = document.getElementById('filters-toggle');
-        var panel = document.getElementById('filters-panel');
-        if (!btn || !panel) return;
-        btn.addEventListener('click', function () {
-          var isHidden = panel.classList.toggle('hidden');
-          panel.classList.toggle('flex', !isHidden);
-          btn.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
-        });
+      (function(){
+        // Toggle filtres avancés
+        var advToggle = document.getElementById('toggleAdvancedFilters');
+        var advPanel = document.getElementById('ordersAdvancedFilters');
+        if (advToggle && advPanel) {
+          advToggle.addEventListener('click', function(){
+            var isOpen = !advPanel.classList.contains('hidden');
+            if (isOpen) {
+              advPanel.classList.add('hidden');
+              advToggle.setAttribute('aria-expanded', 'false');
+            } else {
+              advPanel.classList.remove('hidden');
+              advToggle.setAttribute('aria-expanded', 'true');
+            }
+          });
+        }
+
+        // Affiche/masque le statut clonage selon le type de commande
+        var orderTypeSel = document.getElementById('orderTypeFilter');
+        var cloningWrap = document.getElementById('cloningStatusFilterWrap');
+        var cloningSel = document.getElementById('cloningStatusFilter');
+        if (orderTypeSel && cloningWrap) {
+          orderTypeSel.addEventListener('change', function(){
+            var v = orderTypeSel.value;
+            if (v === 'exchange_cloning' || v === 'standalone_cloning') {
+              cloningWrap.classList.remove('hidden');
+            } else {
+              cloningWrap.classList.add('hidden');
+              if (cloningSel) cloningSel.value = '';
+            }
+          });
+        }
+
+        // Effacer la recherche
+        var clearSearch = document.getElementById('ordersClearSearch');
+        if (clearSearch) {
+          clearSearch.addEventListener('click', function(){
+            var input = document.querySelector('#ordersFilterForm input[name="q"]');
+            if (input) {
+              input.value = '';
+              document.getElementById('ordersFilterForm').submit();
+            }
+          });
+        }
+
+        // Auto-submit sur changement de select (UX plus fluide)
+        var form = document.getElementById('ordersFilterForm');
+        if (form) {
+          form.querySelectorAll('select').forEach(function(sel){
+            sel.addEventListener('change', function(){ form.submit(); });
+          });
+        }
       })();
     </script>
 
