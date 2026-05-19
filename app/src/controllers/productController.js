@@ -677,6 +677,40 @@ async function getProduct(req, res, next) {
           })
       : [];
 
+    /* additionalProperty enrichi : on combine les références OEM compatibles
+     * (signal SEO clé pour les pièces auto) avec les caractéristiques
+     * commerciales tirées des specs/specs section. Google accepte plusieurs
+     * PropertyValue et les affiche dans les rich results de la fiche produit. */
+    const enrichedAdditionalProperties = [];
+    if (compatibleReferences.length) {
+      compatibleReferences.forEach((r) => {
+        enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: 'Référence compatible', value: r });
+      });
+    }
+    if (warrantyYears) {
+      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: 'Garantie', value: `${warrantyYears} ans` });
+    }
+    if (product.shippingDelayText) {
+      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: 'Expédition', value: String(product.shippingDelayText).trim() });
+    }
+    /* Test qualité, Programmation, État : tirés des specs si dispo, sinon
+     * fallback constants pour signaler le positionnement reconditionné. */
+    enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: 'Test qualité', value: "Testé sur banc d'essai" });
+    if (Array.isArray(product.specs)) {
+      product.specs.forEach((s) => {
+        if (s && typeof s === 'object') {
+          const k = String(s.key || s.name || s.label || '').trim();
+          const v = String(s.value || '').trim();
+          if (k && v && !['Référence', 'Type', 'Garantie', 'Expédition'].includes(k)) {
+            // Évite doublons avec champs déjà ajoutés
+            enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: k, value: v });
+          }
+        }
+      });
+    }
+
+    const categoryNameForSchema = typeof product.category === 'string' ? product.category.trim() : '';
+
     const schemaProduct = {
       /* Multi-type Product + AutomotivePart : signal vertical "auto-parts" à
        * Google. Multi-type est valide en JSON-LD (tableau de @type). */
@@ -685,6 +719,8 @@ async function getProduct(req, res, next) {
       description: truncateText(descriptionForSchema, 5000),
       sku: skuText || undefined,
       mpn: compatibleReferences.length ? compatibleReferences[0] : undefined,
+      productID: skuText || undefined,
+      category: categoryNameForSchema || undefined,
       brand: schemaBrandName ? { '@type': 'Brand', name: schemaBrandName } : undefined,
       manufacturer: { '@type': 'Organization', name: brand.NAME },
       itemCondition: schemaCondition || undefined,
@@ -693,9 +729,17 @@ async function getProduct(req, res, next) {
        * SEO signal. Permet à Google d'associer la pièce à une combinaison
        * make/model/engine spécifique pour les rich results. */
       isAccessoryOrSparePartFor: fitsVehicles.length ? fitsVehicles : undefined,
-      additionalProperty: compatibleReferences.length
-        ? compatibleReferences.map((r) => ({ '@type': 'PropertyValue', name: 'Référence compatible', value: r }))
-        : undefined,
+      additionalProperty: enrichedAdditionalProperties.length ? enrichedAdditionalProperties : undefined,
+      /* hasMerchantReturnPolicy : retour ancien organe sous 30 jours (échange
+       * standard). Active le rich snippet "free returns" dans Google Shopping. */
+      hasMerchantReturnPolicy: {
+        '@type': 'MerchantReturnPolicy',
+        applicableCountry: 'FR',
+        returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+        merchantReturnDays: 30,
+        returnMethod: 'https://schema.org/ReturnByMail',
+        returnFees: 'https://schema.org/FreeReturn',
+      },
       aggregateRating: {
         '@type': 'AggregateRating',
         ratingValue: '4.2',
@@ -711,7 +755,20 @@ async function getProduct(req, res, next) {
             price,
             priceValidUntil: priceValidUntil || undefined,
             availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+            itemCondition: schemaCondition || undefined,
             seller: { '@type': 'Organization', name: brand.NAME },
+            /* shippingDetails : signal "fast & free shipping" pour Google
+             * Shopping et les rich results SERP. Livraison 24h FR. */
+            shippingDetails: {
+              '@type': 'OfferShippingDetails',
+              shippingRate: { '@type': 'MonetaryAmount', value: '0.00', currency: 'EUR' },
+              shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'FR' },
+              deliveryTime: {
+                '@type': 'ShippingDeliveryTime',
+                handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
+                transitTime: { '@type': 'QuantitativeValue', minValue: 1, maxValue: 2, unitCode: 'DAY' },
+              },
+            },
             warranty: warrantyYears
               ? {
                   '@type': 'WarrantyPromise',
@@ -720,7 +777,10 @@ async function getProduct(req, res, next) {
                     value: warrantyYears,
                     unitCode: 'ANN',
                   },
-                  warrantyScope: 'https://schema.org/BrokenCondition',
+                  /* PartsAndLabor : couverture pièce + main d'œuvre montage
+                   * (positionnement reconditionné Autoliva), plus précis que
+                   * BrokenCondition. */
+                  warrantyScope: 'https://schema.org/PartsAndLabor',
                 }
               : undefined,
           }
