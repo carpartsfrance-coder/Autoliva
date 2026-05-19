@@ -58,6 +58,12 @@ const EXACT_REDIRECTS = {
   '/product/mecatronique-dsg-7-dq200-pour-volskwagen-audi-seat-et-skoda':   '/product/mecatronique-dsg-7-dq200-pour-volkswagen-audi-seat-et-skoda/',
   '/product/mecatronique-dsg-7-dq200-pour-volskwagen-audi-seat-et-skoda/':  '/product/mecatronique-dsg-7-dq200-pour-volkswagen-audi-seat-et-skoda/',
 
+  // Hub legacy "Boite de transfert ATC 400" — page Car Parts France toujours
+  // indexée par Google (résultat page 1 FR) qui retournait 404 sur autoliva.
+  // Redirection vers la fiche produit FR pour récupérer le trafic perdu.
+  '/boite-de-transfert-atc-400':   '/product/boite-de-transfert-atc400-bmw-x3-e83-reconditionnee/',
+  '/boite-de-transfert-atc-400/':  '/product/boite-de-transfert-atc400-bmw-x3-e83-reconditionnee/',
+
   // ─────────────────────────────────────────────────────────────────────
   // Récupération trafic SEO carpartsfrance.fr — ajouté le 2026-04-30
   // suite audit GSC (top URLs en 404 après migration).

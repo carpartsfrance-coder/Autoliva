@@ -531,8 +531,33 @@ app.use('/comptable', comptableRouter);
  * (et un budget pour la maintenir), on ré-activera proprement.
  *
  * Garde en tête : Google a peut-être déjà indexé certaines URLs /en/ ; le 301
- * leur signale la consolidation vers FR sans perte de PageRank. */
+ * leur signale la consolidation vers FR sans perte de PageRank.
+ *
+ * Pour les fiches produit dont le slug EN diffère du slug FR (le strip
+ * générique mènerait à un 404), on mappe explicitement EN -> FR ci-dessous.
+ * Ces URLs sont/étaient indexées par Google et doivent rejoindre leur cible
+ * FR existante en une seule redirection 301. */
+const EN_PRODUCT_SLUG_OVERRIDES = {
+  // DQ250 — slug EN "reconditioned...integrated-tcu-and-program" vs FR "reconditionnee...tcu-integre"
+  '/en/product/mecatronique-dsg-6-reconditioned-dq250-02e-integrated-tcu-and-program':
+    '/product/mecatronique-dsg-6-reconditionnee-dq250-02e-tcu-integre/',
+  '/en/product/mecatronique-dsg-6-reconditioned-dq250-02e-integrated-tcu-and-program/':
+    '/product/mecatronique-dsg-6-reconditionnee-dq250-02e-tcu-integre/',
+};
+
 app.use('/en', (req, res) => {
+  // Express strip le mount path : req.path = "/product/foo/" (sans /en)
+  // req.originalUrl = "/en/product/foo/?qs=1" (avec /en + query string)
+  const qIdx = req.originalUrl.indexOf('?');
+  const fullPath = qIdx >= 0 ? req.originalUrl.slice(0, qIdx) : req.originalUrl;
+  const query = qIdx >= 0 ? req.originalUrl.slice(qIdx) : '';
+
+  // 1. Override explicite pour slugs EN qui diffèrent du FR
+  const override = EN_PRODUCT_SLUG_OVERRIDES[fullPath];
+  if (override) {
+    return res.redirect(301, override + query);
+  }
+  // 2. Strip générique /en/* -> /*
   const targetPath = req.originalUrl.replace(/^\/en(\/|$)/, '/') || '/';
   res.redirect(301, targetPath);
 });
