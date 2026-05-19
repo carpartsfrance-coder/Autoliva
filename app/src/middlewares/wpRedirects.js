@@ -64,6 +64,12 @@ const EXACT_REDIRECTS = {
   '/boite-de-transfert-atc-400':   '/product/boite-de-transfert-atc400-bmw-x3-e83-reconditionnee/',
   '/boite-de-transfert-atc-400/':  '/product/boite-de-transfert-atc400-bmw-x3-e83-reconditionnee/',
 
+  // DQ500 — ancien slug avec faute "volskwagen" + format anglais ("for-...-and-")
+  // toujours référencé dans l'index Google. Sans cette 301, l'URL renvoyait vers
+  // /produits?q=... (page de recherche, mauvais signal SEO + UX).
+  '/product/mecatronique-dsg7-dq500-for-volskwagen-audi-seat-and-skoda-0bh':   '/product/mecatronique-dsg7-dq500-0bh-echange-standard-vw-audi-seat-skoda/',
+  '/product/mecatronique-dsg7-dq500-for-volskwagen-audi-seat-and-skoda-0bh/':  '/product/mecatronique-dsg7-dq500-0bh-echange-standard-vw-audi-seat-skoda/',
+
   // ─────────────────────────────────────────────────────────────────────
   // Récupération trafic SEO carpartsfrance.fr — ajouté le 2026-04-30
   // suite audit GSC (top URLs en 404 après migration).

@@ -543,6 +543,11 @@ const EN_PRODUCT_SLUG_OVERRIDES = {
     '/product/mecatronique-dsg-6-reconditionnee-dq250-02e-tcu-integre/',
   '/en/product/mecatronique-dsg-6-reconditioned-dq250-02e-integrated-tcu-and-program/':
     '/product/mecatronique-dsg-6-reconditionnee-dq250-02e-tcu-integre/',
+  // DQ500 — variante /en/ de l'ancien slug fautif "volskwagen / for-...-and-"
+  '/en/product/mecatronique-dsg7-dq500-for-volskwagen-audi-seat-and-skoda-0bh':
+    '/product/mecatronique-dsg7-dq500-0bh-echange-standard-vw-audi-seat-skoda/',
+  '/en/product/mecatronique-dsg7-dq500-for-volskwagen-audi-seat-and-skoda-0bh/':
+    '/product/mecatronique-dsg7-dq500-0bh-echange-standard-vw-audi-seat-skoda/',
 };
 
 app.use('/en', (req, res) => {
