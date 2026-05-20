@@ -43,7 +43,8 @@
     "translate:blog:de": "node scripts/translate-blog-de.js --apply",
     "translate:blog:de:retry": "node scripts/translate-blog-de.js --apply --retranslate",
     "generate:blog:fr:dry": "node scripts/generate-blog-articles-fr.js",
-    "generate:blog:fr": "node scripts/generate-blog-articles-fr.js --apply"
+    "generate:blog:fr": "node scripts/generate-blog-articles-fr.js --apply",
+    "seo:gen-legacy-redirects": "node scripts/genLegacySlugRedirects.js"
   },
   "dependencies": {
     "@tailwindcss/container-queries": "^0.1.1",

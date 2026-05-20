@@ -1,5 +1,7 @@
 'use strict';
 
+const legacySlugRedirects = require('./legacySlugRedirects');
+
 /**
  * WordPress -> Node.js 301 redirect middleware.
  *
@@ -230,6 +232,15 @@ function wpRedirectsMiddleware(req, res, next) {
   if (exactTarget) {
     console.log(`[301] ${url} -> ${exactTarget}`);
     return res.redirect(301, exactTarget);
+  }
+
+  // 1b. Legacy slug redirects auto-générés (boite-de-transfert-X → boite-transfert-X
+  //     pour les fiches dont le slug canonique est sans "de", plus suffixes
+  //     historiques "a-neuf-garantie-2-ans" indexés par Google).
+  const legacyTarget = legacySlugRedirects[url] || legacySlugRedirects[url.toLowerCase()];
+  if (legacyTarget) {
+    console.log(`[301] ${url} -> ${legacyTarget} (legacy slug)`);
+    return res.redirect(301, legacyTarget);
   }
 
   // 2. WordPress artifacts -> 410 Gone
