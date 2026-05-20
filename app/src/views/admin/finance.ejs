@@ -378,6 +378,7 @@
                 <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="qtySold">Qté vendue <span class="sort-icon"></span></th>
                 <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="revenueTtc">CA TTC <span class="sort-icon">▼</span></th>
                 <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="revenueHt">CA HT <span class="sort-icon"></span></th>
+                <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="costCents" title="Prix d'achat HT unitaire — éditable">Prix achat HT <span class="sort-icon"></span></th>
                 <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="margin">Marge € <span class="sort-icon"></span></th>
                 <th class="px-4 py-3 text-right font-semibold cursor-pointer hover:bg-slate-100" data-sort="marginPct">Marge % <span class="sort-icon"></span></th>
               </tr>
@@ -385,11 +386,13 @@
             <tbody class="divide-y divide-slate-100" id="all-products-tbody">
               <% summary.allProductsSold.forEach(function (p) { %>
                 <tr class="hover:bg-slate-50"
+                    data-productid="<%= p.productId %>"
                     data-name="<%= (p.name || '').toLowerCase() %>"
                     data-sku="<%= (p.sku || '').toLowerCase() %>"
                     data-qtysold="<%= p.qtySold %>"
                     data-revenuettc="<%= p.revenueTtc %>"
                     data-revenueht="<%= p.revenueHt %>"
+                    data-costcents="<%= p.costCentsPerUnit != null ? p.costCentsPerUnit : -1 %>"
                     data-margin="<%= p.costKnown ? p.margin : -1 %>"
                     data-marginpct="<%= p.costKnown && p.marginPct != null ? p.marginPct : -1 %>">
                   <td class="px-4 py-3 text-slate-900 max-w-md truncate" title="<%= p.name %>"><%= p.name %></td>
@@ -398,15 +401,28 @@
                   <td class="px-4 py-3 text-right tabular-nums font-semibold text-slate-900"><%= (p.revenueTtc / 100).toFixed(2) %> €</td>
                   <td class="px-4 py-3 text-right tabular-nums text-slate-500"><%= (p.revenueHt / 100).toFixed(2) %> €</td>
                   <td class="px-4 py-3 text-right tabular-nums">
+                    <div class="inline-flex items-center justify-end gap-1">
+                      <input type="text"
+                             class="cost-inline-input w-24 rounded-md border border-slate-200 bg-white px-2 py-1 text-right text-sm tabular-nums focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:outline-none"
+                             value="<%= p.costCentsPerUnit != null ? (p.costCentsPerUnit / 100).toFixed(2).replace('.', ',') : '' %>"
+                             placeholder="—"
+                             inputmode="decimal"
+                             data-cost-input
+                             aria-label="Prix d'achat HT pour <%= p.name %>" />
+                      <span class="text-slate-400 text-xs">€</span>
+                      <span class="cost-inline-status w-4 text-xs" data-cost-status aria-live="polite"></span>
+                    </div>
+                  </td>
+                  <td class="px-4 py-3 text-right tabular-nums" data-margin-cell>
                     <% if (p.costKnown) { %>
                       <span class="<%= p.margin >= 0 ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold' %>">
                         <%= p.margin >= 0 ? '+' : '' %><%= (p.margin / 100).toFixed(2) %> €
                       </span>
                     <% } else { %>
-                      <span class="text-slate-300" title="Renseigne le prix d'achat sur la fiche produit pour calculer la marge">—</span>
+                      <span class="text-slate-300" title="Renseigne le prix d'achat sur cette ligne pour calculer la marge">—</span>
                     <% } %>
                   </td>
-                  <td class="px-4 py-3 text-right tabular-nums">
+                  <td class="px-4 py-3 text-right tabular-nums" data-marginpct-cell>
                     <% if (p.costKnown && p.marginPct != null) { %>
                       <span class="<%= p.marginPct >= 30 ? 'text-emerald-600' : (p.marginPct >= 10 ? 'text-amber-600' : 'text-rose-600') %>">
                         <%= p.marginPct.toFixed(1) %> %
@@ -430,11 +446,12 @@
                 <td class="px-4 py-3 text-right tabular-nums text-slate-500" id="all-products-revenueht-total">
                   <%= (summary.allProductsSold.reduce(function (s, p) { return s + p.revenueHt; }, 0) / 100).toFixed(2) %> €
                 </td>
+                <td class="px-4 py-3"></td>
                 <td class="px-4 py-3 text-right tabular-nums text-emerald-700" id="all-products-margin-total">
                   +<%= (summary.allProductsSold.filter(function (p) { return p.costKnown; }).reduce(function (s, p) { return s + p.margin; }, 0) / 100).toFixed(2) %> €
                 </td>
                 <td class="px-4 py-3 text-right text-xs text-slate-500" colspan="1">
-                  sur <%= summary.allProductsSold.filter(function (p) { return p.costKnown; }).length %> avec cost
+                  <span id="all-products-cost-count"><%= summary.allProductsSold.filter(function (p) { return p.costKnown; }).length %></span>/<%= summary.allProductsSold.length %> avec cost
                 </td>
               </tr>
             </tfoot>
@@ -443,13 +460,14 @@
       <% } %>
     </div>
 
-    <!-- JS pour tri + recherche client-side -->
+    <!-- JS pour tri + recherche + édition inline du prix d'achat -->
     <script>
       (function () {
         var tbody = document.getElementById('all-products-tbody');
         if (!tbody) return;
         var rows = Array.from(tbody.querySelectorAll('tr'));
         var search = document.getElementById('all-products-search');
+        var costCountEl = document.getElementById('all-products-cost-count');
 
         /* Re-calcule les totaux du footer en fonction des lignes visibles */
         function recomputeTotals() {
@@ -469,7 +487,154 @@
           document.getElementById('all-products-revenuettc-total').textContent = (ttc / 100).toFixed(2) + ' €';
           document.getElementById('all-products-revenueht-total').textContent = (ht / 100).toFixed(2) + ' €';
           document.getElementById('all-products-margin-total').textContent = '+' + (margin / 100).toFixed(2) + ' €';
+          if (costCountEl) costCountEl.textContent = withCost;
         }
+
+        /* ── Édition inline du prix d'achat HT ────────────────────────
+         * Au blur ou Enter sur l'input, POST /admin/api/produits/:id/cost.
+         * Mise à jour locale des cellules Marge / Marge % et du footer
+         * sans recharger la page. */
+        function parseCostInput(raw) {
+          if (typeof raw !== 'string') return { ok: false };
+          var trimmed = raw.trim();
+          if (!trimmed) return { ok: true, cents: null }; // vide = effacer
+          var normalized = trimmed.replace(/€/g, '').replace(/\s+/g, '').replace(',', '.');
+          var num = Number(normalized);
+          if (!isFinite(num) || num < 0) return { ok: false };
+          return { ok: true, cents: Math.round(num * 100) };
+        }
+
+        function formatCents(cents) {
+          return (cents / 100).toFixed(2).replace('.', ',');
+        }
+
+        function applyRowRecompute(row, costCents) {
+          var qty = Number(row.dataset.qtysold) || 0;
+          var ht = Number(row.dataset.revenueht) || 0;
+          var marginCell = row.querySelector('[data-margin-cell]');
+          var marginPctCell = row.querySelector('[data-marginpct-cell]');
+
+          if (costCents == null) {
+            row.dataset.costcents = -1;
+            row.dataset.margin = -1;
+            row.dataset.marginpct = -1;
+            if (marginCell) marginCell.innerHTML = '<span class="text-slate-300" title="Renseigne le prix d\'achat sur cette ligne pour calculer la marge">—</span>';
+            if (marginPctCell) marginPctCell.innerHTML = '<span class="text-slate-300">—</span>';
+            return;
+          }
+
+          var cogs = qty * costCents;
+          var margin = ht - cogs;
+          var marginPct = ht > 0 ? (margin / ht) * 100 : null;
+
+          row.dataset.costcents = costCents;
+          row.dataset.margin = margin;
+          row.dataset.marginpct = marginPct == null ? -1 : marginPct;
+
+          if (marginCell) {
+            var marginCls = margin >= 0 ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold';
+            marginCell.innerHTML = '<span class="' + marginCls + '">' + (margin >= 0 ? '+' : '') + (margin / 100).toFixed(2) + ' €</span>';
+          }
+          if (marginPctCell) {
+            if (marginPct == null) {
+              marginPctCell.innerHTML = '<span class="text-slate-300">—</span>';
+            } else {
+              var pctCls = marginPct >= 30 ? 'text-emerald-600' : (marginPct >= 10 ? 'text-amber-600' : 'text-rose-600');
+              marginPctCell.innerHTML = '<span class="' + pctCls + '">' + marginPct.toFixed(1) + ' %</span>';
+            }
+          }
+        }
+
+        function setStatus(statusEl, kind) {
+          if (!statusEl) return;
+          if (kind === 'saving') {
+            statusEl.textContent = '⋯';
+            statusEl.className = 'cost-inline-status w-4 text-xs text-slate-400';
+          } else if (kind === 'ok') {
+            statusEl.textContent = '✓';
+            statusEl.className = 'cost-inline-status w-4 text-xs text-emerald-600';
+            setTimeout(function () { statusEl.textContent = ''; }, 1500);
+          } else if (kind === 'error') {
+            statusEl.textContent = '✕';
+            statusEl.className = 'cost-inline-status w-4 text-xs text-rose-600';
+          } else {
+            statusEl.textContent = '';
+            statusEl.className = 'cost-inline-status w-4 text-xs';
+          }
+        }
+
+        function saveCost(input) {
+          var row = input.closest('tr');
+          if (!row) return;
+          var productId = row.dataset.productid;
+          if (!productId) return;
+          var statusEl = row.querySelector('[data-cost-status]');
+
+          var parsed = parseCostInput(input.value);
+          if (!parsed.ok) {
+            setStatus(statusEl, 'error');
+            input.title = 'Format invalide. Ex : 89,00';
+            return;
+          }
+          input.title = '';
+
+          // Si pas de changement vs valeur stockée, ne rien faire
+          var currentStored = Number(row.dataset.costcents);
+          var nextCents = parsed.cents == null ? -1 : parsed.cents;
+          if (currentStored === nextCents) {
+            setStatus(statusEl, null);
+            return;
+          }
+
+          setStatus(statusEl, 'saving');
+
+          var body = 'cost=' + encodeURIComponent(parsed.cents == null ? '' : formatCents(parsed.cents));
+          fetch('/admin/api/produits/' + encodeURIComponent(productId) + '/cost', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-Requested-With': 'XMLHttpRequest',
+              'Accept': 'application/json',
+            },
+            credentials: 'same-origin',
+            body: body,
+          })
+            .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+            .then(function (r) {
+              if (!r.ok || !r.data || r.data.ok !== true) {
+                throw new Error((r.data && r.data.error) || 'Erreur ' + (r.data && r.data.status || ''));
+              }
+              applyRowRecompute(row, r.data.costCents);
+              if (r.data.costFormatted) {
+                input.value = r.data.costFormatted;
+              } else if (r.data.costCents == null) {
+                input.value = '';
+              }
+              setStatus(statusEl, 'ok');
+              recomputeTotals();
+            })
+            .catch(function (err) {
+              setStatus(statusEl, 'error');
+              input.title = (err && err.message) || 'Erreur réseau';
+            });
+        }
+
+        tbody.querySelectorAll('[data-cost-input]').forEach(function (input) {
+          input.addEventListener('blur', function () { saveCost(input); });
+          input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              input.blur();
+            } else if (e.key === 'Escape') {
+              // Revenir à la valeur stockée
+              var row = input.closest('tr');
+              var stored = Number(row && row.dataset.costcents);
+              input.value = stored >= 0 ? formatCents(stored) : '';
+              setStatus(row && row.querySelector('[data-cost-status]'), null);
+              input.blur();
+            }
+          });
+        });
 
         /* Recherche : filtre name + sku */
         if (search) {

@@ -152,6 +152,7 @@ async function getMonthlySummary(year, month) {
           margin: 0,
           marginPct: null,
           costKnown: costPerUnit != null,
+          costCentsPerUnit: costPerUnit, // null si pas saisi — utilisé par l'éditeur inline /admin/finance
         };
         productAggs.set(productId, agg);
       }
