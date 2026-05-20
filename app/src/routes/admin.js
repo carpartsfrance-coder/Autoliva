@@ -264,6 +264,10 @@ router.post('/catalogue/:productId', requireAdminAuth, handleProductImageUpload,
 router.post('/catalogue/:productId/supprimer', requireAdminAuth, adminController.postAdminDeleteProduct);
 router.post('/catalogue/:productId/dupliquer', requireAdminAuth, adminController.postAdminDuplicateProduct);
 
+/* Édition inline du prix d'achat HT depuis /admin/finance (owner uniquement
+ * via settings.billing, comme la page finance elle-même). */
+router.post('/api/produits/:productId/cost', requireAdminAuth, requireAbility('settings.billing'), adminController.postAdminUpdateProductCostInline);
+
 const adminProductSearchHandler = typeof blogAdminController.getAdminProductSearchApi === 'function'
   ? blogAdminController.getAdminProductSearchApi
   : (req, res) => res.status(501).json({ ok: false, items: [], error: 'Recherche produits non disponible.' });

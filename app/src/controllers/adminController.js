@@ -7727,6 +7727,52 @@ async function postAdminDeleteProduct(req, res, next) {
   }
 }
 
+/* Édition inline du prix d'achat HT depuis /admin/finance.
+ * Accepte { cost: "89,00" } (string vide = effacer le coût).
+ * Renvoie { ok, costCents, costFormatted } pour permettre au front
+ * de recalculer la marge sans recharger la page. */
+async function postAdminUpdateProductCostInline(req, res) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) {
+      return res.status(503).json({ ok: false, error: 'Base de données indisponible.' });
+    }
+
+    const { productId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ ok: false, error: 'Identifiant produit invalide.' });
+    }
+
+    const raw = typeof req.body.cost === 'string' ? req.body.cost.trim() : '';
+    let costCents = null;
+    if (raw) {
+      costCents = parsePriceToCents(raw);
+      if (costCents === null) {
+        return res.status(400).json({ ok: false, error: 'Prix d\'achat invalide. Format attendu : 89,00' });
+      }
+    }
+
+    const updated = await Product.findByIdAndUpdate(
+      productId,
+      { $set: { costCents } },
+      { new: true }
+    ).select('_id costCents').lean();
+
+    if (!updated) {
+      return res.status(404).json({ ok: false, error: 'Produit introuvable.' });
+    }
+
+    return res.json({
+      ok: true,
+      costCents: updated.costCents,
+      costFormatted: updated.costCents != null ? formatPriceForInput(updated.costCents) : '',
+    });
+  } catch (err) {
+    console.error('[admin] postAdminUpdateProductCostInline failed:', err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur lors de la mise à jour.' });
+  }
+}
+
 async function postAdminDuplicateProduct(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -10339,6 +10385,7 @@ module.exports = {
   getAdminEditProductPage,
   postAdminUpdateProduct,
   postAdminDeleteProduct,
+  postAdminUpdateProductCostInline,
   postAdminDuplicateProduct,
   postAdminBulkDeleteProducts,
   getAdminClientsPage,
