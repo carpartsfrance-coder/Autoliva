@@ -548,6 +548,13 @@ const EN_PRODUCT_SLUG_OVERRIDES = {
     '/product/mecatronique-dsg7-dq500-0bh-echange-standard-vw-audi-seat-skoda/',
   '/en/product/mecatronique-dsg7-dq500-for-volskwagen-audi-seat-and-skoda-0bh/':
     '/product/mecatronique-dsg7-dq500-0bh-echange-standard-vw-audi-seat-skoda/',
+  // Porsche Macan 95B 95B341010 — variante /en/ de l'ancien slug long
+  // ("...reconditionnee-a-neuf-garantie-2-ans"). Indexé #1 Google sur la requête
+  // référence 95B341010 mais menait à /produits?q=... (perte conversion 100%).
+  '/en/product/boite-de-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee-a-neuf-garantie-2-ans':
+    '/product/boite-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee/',
+  '/en/product/boite-de-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee-a-neuf-garantie-2-ans/':
+    '/product/boite-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee/',
 };
 
 app.use('/en', (req, res) => {

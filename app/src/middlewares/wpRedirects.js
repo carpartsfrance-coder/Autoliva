@@ -70,6 +70,12 @@ const EXACT_REDIRECTS = {
   '/product/mecatronique-dsg7-dq500-for-volskwagen-audi-seat-and-skoda-0bh':   '/product/mecatronique-dsg7-dq500-0bh-echange-standard-vw-audi-seat-skoda/',
   '/product/mecatronique-dsg7-dq500-for-volskwagen-audi-seat-and-skoda-0bh/':  '/product/mecatronique-dsg7-dq500-0bh-echange-standard-vw-audi-seat-skoda/',
 
+  // Porsche Macan 95B 95B341010 — ancien slug long ("...reconditionnee-a-neuf-garantie-2-ans")
+  // toujours référencé dans l'index Google sur la requête référence 95B341010
+  // (top SERP). Sans cette 301, l'URL menait à /produits?q=... (page de recherche).
+  '/product/boite-de-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee-a-neuf-garantie-2-ans':   '/product/boite-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee/',
+  '/product/boite-de-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee-a-neuf-garantie-2-ans/':  '/product/boite-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee/',
+
   // ─────────────────────────────────────────────────────────────────────
   // Récupération trafic SEO carpartsfrance.fr — ajouté le 2026-04-30
   // suite audit GSC (top URLs en 404 après migration).
