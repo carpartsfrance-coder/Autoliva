@@ -192,31 +192,57 @@
 
       <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start lg:items-stretch">
         <div class="lg:col-span-7 flex flex-col gap-4 h-full">
-          <div class="relative w-full aspect-video rounded-xl bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-800 refined-shadow">
-            <% if (mainMediaItem) { %>
-              <% const _isMainVideo = mainMediaItem.type === 'video'; %>
-              <img alt="<%= product.name %> — photo principale" class="w-full h-full object-cover cursor-zoom-in<%= _isMainVideo ? ' hidden' : '' %>" data-main-image decoding="async" loading="eager" fetchpriority="high" width="800" height="450" <% if (!_isMainVideo) { %>src="<%= mainImage %>"<% } %> />
-              <video class="w-full h-full object-cover<%= _isMainVideo ? '' : ' hidden' %>" data-main-video controls preload="metadata" playsinline<% if (_isMainVideo) { %> src="<%= mainImage %>"<% } %>></video>
-            <% } else if (isService) { %>
-              <div class="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
-                <span class="material-symbols-outlined text-7xl text-primary/70">memory</span>
-                <span class="text-xs font-bold uppercase tracking-widest text-slate-500">Service à distance</span>
-                <span class="text-sm font-bold text-slate-700 dark:text-slate-300 text-center px-4 max-w-md">Clonage logiciel TCU mécatronique<br/>DSG &amp; S-tronic — 24h chrono</span>
-              </div>
-            <% } else { %>
-              <div class="w-full h-full flex items-center justify-center text-slate-400">
-                <span class="material-symbols-outlined text-6xl">inventory_2</span>
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:gap-4">
+            <% if (visibleThumbItems.length) { %>
+              <div class="grid grid-cols-4 gap-4 order-2 lg:order-1 lg:grid-cols-1 lg:gap-3 lg:w-20 xl:w-24 lg:flex-shrink-0">
+                <% visibleThumbItems.forEach((item, idx) => { %>
+                  <% const remainingItems = thumbMediaItems.length - 4; %>
+                  <% const _isThumbVideo = item.type === 'video'; %>
+                  <button aria-label="Voir <%= _isThumbVideo ? 'la vidéo' : 'l\'image' %> <%= idx + 1 %>" class="relative aspect-square rounded-lg overflow-hidden cursor-pointer border bg-white dark:bg-slate-900 refined-shadow transition-all <%= idx === 0 ? 'border-primary/20 ring-2 ring-primary' : 'border-slate-200 dark:border-slate-700 hover:border-primary' %>" data-thumb data-index="<%= idx %>" data-src="<%= item.url %>" data-type="<%= item.type %>" type="button">
+                    <% if (_isThumbVideo) { %>
+                      <video class="w-full h-full object-cover" muted playsinline preload="metadata">
+                        <source src="<%= item.url %>" />
+                      </video>
+                      <span class="absolute bottom-1 left-1 bg-black/70 text-white rounded-full p-1 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-sm leading-none">play_arrow</span>
+                      </span>
+                    <% } else { %>
+                      <img alt="<%= product.name %> — vue <%= idx + 1 %>" class="w-full h-full object-cover" decoding="async" loading="lazy" width="200" height="200" src="<%= item.url %>" />
+                    <% } %>
+                    <% if (idx === 3 && remainingItems > 0) { %>
+                      <span class="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white text-xs font-bold uppercase tracking-wider">+<%= remainingItems %> de plus</span>
+                    <% } %>
+                  </button>
+                <% }) %>
               </div>
             <% } %>
 
-            <% if (images.length > 1) { %>
-              <button aria-label="Image précédente" class="absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 text-slate-700 flex items-center justify-center refined-shadow hover:bg-white transition-all" data-gallery-prev type="button">
-                <span class="material-symbols-outlined">chevron_left</span>
-              </button>
-              <button aria-label="Image suivante" class="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 text-slate-700 flex items-center justify-center refined-shadow hover:bg-white transition-all" data-gallery-next type="button">
-                <span class="material-symbols-outlined">chevron_right</span>
-              </button>
-            <% } %>
+            <div class="relative w-full aspect-video lg:aspect-square lg:w-auto lg:flex-1 order-1 lg:order-2 rounded-xl bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-800 refined-shadow">
+              <% if (mainMediaItem) { %>
+                <% const _isMainVideo = mainMediaItem.type === 'video'; %>
+                <img alt="<%= product.name %> — photo principale" class="w-full h-full object-cover cursor-zoom-in<%= _isMainVideo ? ' hidden' : '' %>" data-main-image decoding="async" loading="eager" fetchpriority="high" width="800" height="450" <% if (!_isMainVideo) { %>src="<%= mainImage %>"<% } %> />
+                <video class="w-full h-full object-cover<%= _isMainVideo ? '' : ' hidden' %>" data-main-video controls preload="metadata" playsinline<% if (_isMainVideo) { %> src="<%= mainImage %>"<% } %>></video>
+              <% } else if (isService) { %>
+                <div class="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
+                  <span class="material-symbols-outlined text-7xl text-primary/70">memory</span>
+                  <span class="text-xs font-bold uppercase tracking-widest text-slate-500">Service à distance</span>
+                  <span class="text-sm font-bold text-slate-700 dark:text-slate-300 text-center px-4 max-w-md">Clonage logiciel TCU mécatronique<br/>DSG &amp; S-tronic — 24h chrono</span>
+                </div>
+              <% } else { %>
+                <div class="w-full h-full flex items-center justify-center text-slate-400">
+                  <span class="material-symbols-outlined text-6xl">inventory_2</span>
+                </div>
+              <% } %>
+
+              <% if (images.length > 1) { %>
+                <button aria-label="Image précédente" class="absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 text-slate-700 flex items-center justify-center refined-shadow hover:bg-white transition-all" data-gallery-prev type="button">
+                  <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <button aria-label="Image suivante" class="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 text-slate-700 flex items-center justify-center refined-shadow hover:bg-white transition-all" data-gallery-next type="button">
+                  <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+              <% } %>
+            </div>
           </div>
 
           <%# Lightbox — agrandir l'image au clic %>
@@ -233,30 +259,6 @@
             <img alt="" class="max-w-full max-h-full object-contain select-none" data-lightbox-img />
             <div class="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-xs font-semibold tracking-wider hidden" data-lightbox-counter></div>
           </div>
-
-          <% if (visibleThumbItems.length) { %>
-            <div class="grid grid-cols-4 gap-4">
-              <% visibleThumbItems.forEach((item, idx) => { %>
-                <% const remainingItems = thumbMediaItems.length - 4; %>
-                <% const _isThumbVideo = item.type === 'video'; %>
-                <button aria-label="Voir <%= _isThumbVideo ? 'la vidéo' : 'l\'image' %> <%= idx + 1 %>" class="relative aspect-square rounded-lg overflow-hidden cursor-pointer border bg-white dark:bg-slate-900 refined-shadow transition-all <%= idx === 0 ? 'border-primary/20 ring-2 ring-primary' : 'border-slate-200 dark:border-slate-700 hover:border-primary' %>" data-thumb data-index="<%= idx %>" data-src="<%= item.url %>" data-type="<%= item.type %>" type="button">
-                  <% if (_isThumbVideo) { %>
-                    <video class="w-full h-full object-cover" muted playsinline preload="metadata">
-                      <source src="<%= item.url %>" />
-                    </video>
-                    <span class="absolute bottom-1 left-1 bg-black/70 text-white rounded-full p-1 flex items-center justify-center">
-                      <span class="material-symbols-outlined text-sm leading-none">play_arrow</span>
-                    </span>
-                  <% } else { %>
-                    <img alt="<%= product.name %> — vue <%= idx + 1 %>" class="w-full h-full object-cover" decoding="async" loading="lazy" width="200" height="200" src="<%= item.url %>" />
-                  <% } %>
-                  <% if (idx === 3 && remainingItems > 0) { %>
-                    <span class="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white text-xs font-bold uppercase tracking-wider">+<%= remainingItems %> de plus</span>
-                  <% } %>
-                </button>
-              <% }) %>
-            </div>
-          <% } %>
 
           <% hiddenThumbItems.forEach((item, idx) => { %>
             <button class="hidden" data-thumb data-index="<%= idx + 4 %>" data-src="<%= item.url %>" data-type="<%= item.type %>" type="button"></button>
