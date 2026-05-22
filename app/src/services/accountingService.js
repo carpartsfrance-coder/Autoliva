@@ -772,8 +772,12 @@ async function buildMonthlyPdfZipBuffer(year, month) {
         const user = order.userId ? usersById.get(String(order.userId)) || null : null;
         const buffer = await buildOrderInvoicePdfBuffer({ order, user });
         if (buffer && buffer.length) {
-          const safeNumber = (order.invoice && order.invoice.number) || `commande-${order.number}`;
-          archive.append(buffer, { name: `factures/${safeNumber}.pdf` });
+          /* Nommage : numéro de commande en premier (pour navigation compta),
+             suivi du numéro de facture si dispo. Fallback sur juste le n° commande. */
+          const cpNum = order.number || `commande-${order._id || 'inconnue'}`;
+          const invNum = order.invoice && order.invoice.number ? order.invoice.number : '';
+          const safeName = invNum ? `${cpNum}_${invNum}` : cpNum;
+          archive.append(buffer, { name: `factures/${safeName}.pdf` });
           invoiceWritten++;
         } else {
           invoiceFailed++;
@@ -810,8 +814,11 @@ async function buildMonthlyPdfZipBuffer(year, month) {
         }
 
         if (buffer && buffer.length) {
-          const safeNumber = cn.number || `avoir-${order.number}-${cn._id || ''}`;
-          archive.append(buffer, { name: `avoirs/${safeNumber}.pdf` });
+          /* Nommage : numéro de commande en premier (cohérent avec les factures). */
+          const cpNum = order.number || `commande-${order._id || 'inconnue'}`;
+          const avNum = cn.number ? cn.number : `avoir-${cn._id || ''}`;
+          const safeName = `${cpNum}_${avNum}`;
+          archive.append(buffer, { name: `avoirs/${safeName}.pdf` });
           creditNoteWritten++;
         } else {
           creditNoteFailed++;
