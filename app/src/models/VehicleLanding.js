@@ -42,4 +42,18 @@ vehicleLandingSchema.index(
   { unique: true }
 );
 
+/* Validation : H1 et metaTitle ne doivent jamais être strictement identiques
+ * (Semrush warning "duplicate H1 and title tags"). Si l'admin saisit les deux
+ * et qu'ils matchent (case-insensitive), on vide h1Override pour basculer sur
+ * l'auto-template dans le controller. */
+vehicleLandingSchema.pre('save', function ensureH1NeqMetaTitle(next) {
+  if (this.h1Override && this.metaTitle) {
+    const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (norm(this.h1Override) === norm(this.metaTitle)) {
+      this.h1Override = '';
+    }
+  }
+  next();
+});
+
 module.exports = mongoose.model('VehicleLanding', vehicleLandingSchema);
