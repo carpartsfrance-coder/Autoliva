@@ -32,19 +32,13 @@ function toIsoDate(value) {
 
 /* ─── Helpers de rendu XML ────────────────────────────────────────────── */
 
-function renderUrlset(urls, { withImages = false, defaultPriority = null, defaultChangefreq = null } = {}) {
+function renderUrlset(urls, { withImages = false } = {}) {
   const ns = withImages
     ? `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">`
     : `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`;
 
   const body = urls.map((u) => {
     const lastmod = u.lastmod ? `\n    <lastmod>${escapeXml(u.lastmod)}</lastmod>` : '';
-    /* V5 — Priority + changefreq par URL (avec défaut par sitemap).
-     * Signal Google : 0.9 produits / 0.7 catégories+vehicles / 0.5 blog / etc. */
-    const pri = (u.priority !== undefined ? u.priority : defaultPriority);
-    const priority = pri !== null && pri !== undefined ? `\n    <priority>${escapeXml(String(pri))}</priority>` : '';
-    const cf = (u.changefreq !== undefined ? u.changefreq : defaultChangefreq);
-    const changefreq = cf ? `\n    <changefreq>${escapeXml(String(cf))}</changefreq>` : '';
     const imageXml = withImages
       ? (u.images || [])
         .filter(Boolean)
@@ -54,7 +48,7 @@ function renderUrlset(urls, { withImages = false, defaultPriority = null, defaul
         })
         .join('')
       : '';
-    return `  <url>\n    <loc>${escapeXml(u.loc)}</loc>${lastmod}${changefreq}${priority}${imageXml}\n  </url>`;
+    return `  <url>\n    <loc>${escapeXml(u.loc)}</loc>${lastmod}${imageXml}\n  </url>`;
   }).join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>\n${ns}\n${body}\n</urlset>\n`;
@@ -379,21 +373,12 @@ async function getLegacyFlatSitemap(req, res, next) {
   }
 }
 
-/* V5 — PRIORITY par type de sitemap.
- *
- * On signale à Google la hiérarchie commerciale du site : les fiches produits
- * sont les pages CANONICAL transactionnelles (0.9), suivies par les landings
- * véhicule (0.7) et les catégories (0.7), puis les pages institutionnelles
- * (0.6) et enfin le blog (0.5). Le blog était souvent priorisé sur les
- * fiches produits dans nos SERP — cette hiérarchie aide Google à recadrer.
- *
- * Changefreq aide aussi à signaler la fraîcheur attendue. */
 async function getSitemapPages(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildPagesUrls(baseUrl, dbConnected);
-    return sendXml(res, renderUrlset(urls, { defaultPriority: '0.6', defaultChangefreq: 'monthly' }));
+    return sendXml(res, renderUrlset(urls));
   } catch (err) {
     return next(err);
   }
@@ -403,7 +388,7 @@ async function getSitemapCategories(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
     const urls = await buildCategoriesUrls(req, dbConnected);
-    return sendXml(res, renderUrlset(urls, { defaultPriority: '0.7', defaultChangefreq: 'weekly' }));
+    return sendXml(res, renderUrlset(urls));
   } catch (err) {
     return next(err);
   }
@@ -414,7 +399,7 @@ async function getSitemapProducts(req, res, next) {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildProductsUrls(req, baseUrl, dbConnected);
-    return sendXml(res, renderUrlset(urls, { withImages: true, defaultPriority: '0.9', defaultChangefreq: 'weekly' }));
+    return sendXml(res, renderUrlset(urls, { withImages: true }));
   } catch (err) {
     return next(err);
   }
@@ -425,7 +410,7 @@ async function getSitemapVehicles(req, res, next) {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildVehiclesUrls(req, baseUrl, dbConnected);
-    return sendXml(res, renderUrlset(urls, { defaultPriority: '0.7', defaultChangefreq: 'weekly' }));
+    return sendXml(res, renderUrlset(urls));
   } catch (err) {
     return next(err);
   }
@@ -436,7 +421,7 @@ async function getSitemapReferences(req, res, next) {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildReferencesUrls(baseUrl, dbConnected);
-    return sendXml(res, renderUrlset(urls, { defaultPriority: '0.6', defaultChangefreq: 'monthly' }));
+    return sendXml(res, renderUrlset(urls));
   } catch (err) {
     return next(err);
   }
@@ -447,7 +432,7 @@ async function getSitemapBlog(req, res, next) {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildBlogUrls(baseUrl, dbConnected);
-    return sendXml(res, renderUrlset(urls, { withImages: true, defaultPriority: '0.5', defaultChangefreq: 'monthly' }));
+    return sendXml(res, renderUrlset(urls, { withImages: true }));
   } catch (err) {
     return next(err);
   }
@@ -458,7 +443,7 @@ async function getSitemapBlogDe(req, res, next) {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildBlogUrlsDe(baseUrl, dbConnected);
-    return sendXml(res, renderUrlset(urls, { withImages: true, defaultPriority: '0.4', defaultChangefreq: 'monthly' }));
+    return sendXml(res, renderUrlset(urls, { withImages: true }));
   } catch (err) {
     return next(err);
   }
