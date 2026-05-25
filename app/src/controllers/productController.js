@@ -671,22 +671,39 @@ async function getProduct(req, res, next) {
     /* Construit le tableau Vehicle pour le schema isAccessoryOrSparePartFor.
      * Permet à Google de comprendre EXACTEMENT quels véhicules cette pièce
      * équipe — critique pour les rich results sur queries véhicule-spécifique
-     * ("boîte de transfert audi q5"). Source : product.compatibility[]. */
+     * ("boîte de transfert audi q5"). Source : product.compatibility[].
+     *
+     * IMPORTANT : Vehicle hérite de Product dans Schema.org. Le validator
+     * Google considérait chaque Vehicle comme un "Product snippet" et exigeait
+     * un champ `name` + au moins un de aggregateRating/offers/review. Sans
+     * `name`, on déclenchait ~1099 erreurs structured data (cf. Semrush).
+     * Solution : on ajoute systématiquement un `name` "Brand Model (Years)". */
     const fitsVehicles = Array.isArray(product.compatibility)
       ? product.compatibility
           .filter((c) => c && c.make)
           .slice(0, 30) // évite des schemas démesurés
           .map((c) => {
+            const makeText = String(c.make).trim();
+            const modelText = c.model ? String(c.model).trim() : '';
+            const yearsText = c.years ? String(c.years).trim() : '';
+            const engineText = c.engine ? String(c.engine).trim() : '';
+            // name = "Brand Model (Years)" — sert le rich result et satisfait
+            // l'exigence Schema.org/Product (Vehicle hérite de Product).
+            const nameParts = [makeText];
+            if (modelText) nameParts.push(modelText);
+            const baseName = nameParts.join(' ');
+            const fullName = yearsText ? `${baseName} (${yearsText})` : baseName;
             const v = {
               '@type': 'Vehicle',
-              brand: { '@type': 'Brand', name: String(c.make).trim() },
+              name: fullName,
+              brand: { '@type': 'Brand', name: makeText },
             };
-            if (c.model) v.model = String(c.model).trim();
-            if (c.years) v.modelDate = String(c.years).trim();
-            if (c.engine) {
+            if (modelText) v.model = modelText;
+            if (yearsText) v.modelDate = yearsText;
+            if (engineText) {
               v.vehicleEngine = {
                 '@type': 'EngineSpecification',
-                name: String(c.engine).trim(),
+                name: engineText,
               };
             }
             return v;

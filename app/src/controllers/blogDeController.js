@@ -283,7 +283,7 @@ async function getBlogPostDe(req, res) {
     res.set('Content-Language', 'de');
 
     if (!slugParam) {
-      return res.status(404).render('errors/404', { title: `Seite nicht gefunden - ${brand.NAME}` });
+      return res.redirect(301, '/blog');
     }
     if (!dbConnected) {
       return res.status(503).render('errors/500', { title: `Fehler - ${brand.NAME}` });
@@ -291,11 +291,15 @@ async function getBlogPostDe(req, res) {
 
     const post = await BlogPost.findOne({ slug: slugParam, isPublished: true }).lean();
     if (!post) {
-      return res.status(404).render('errors/404', { title: `Seite nicht gefunden - ${brand.NAME}` });
+      // Article DE inexistant → on essaie l'équivalent FR avant de 404.
+      return res.redirect(301, `/blog/${encodeURIComponent(slugParam)}`);
     }
 
     if (!isTranslated(post)) {
-      return res.status(404).render('errors/404', { title: `Seite nicht gefunden - ${brand.NAME}` });
+      // L'article FR existe mais la traduction DE n'est pas faite → 301
+      // vers la version FR plutôt que 404 (préserve PageRank + UX). Élimine
+      // les ~6 alertes "4XX pages" sur /de/blog/* dans Semrush.
+      return res.redirect(301, `/blog/${encodeURIComponent(post.slug)}`);
     }
 
     const de = post.localizations.de;

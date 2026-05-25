@@ -116,17 +116,21 @@
     <div class="mb-10 sm:mb-16">
       <h2 class="text-xl sm:text-2xl home-display font-bold mb-4 sm:mb-8">Acheter par Marque</h2>
       <div class="flex gap-4 overflow-x-auto no-scrollbar -mx-4 px-4 sm:flex-wrap sm:justify-center sm:gap-6 sm:mx-0 sm:px-0">
+        <% /* Liste des marques affichées en page d'accueil. Seules celles dont
+              le slug existe dans la DB sont listées — pour éviter les liens
+              internes cassés (Citroën et Volvo n'ont aucun produit en DB,
+              Mercedes était mal slugifié et pointait vers /pieces-auto/mercedes
+              au lieu de /pieces-auto/mercedes-benz). */ %>
         <% const brands = [
           { label: 'Audi', make: 'Audi', img: '/images/brands/audi-logo.webp' },
           { label: 'BMW', make: 'BMW', img: '/images/brands/bmw-logo.webp' },
-          { label: 'Citroën', make: 'Citroën', img: '/images/brands/citroen-logo.webp' },
           { label: 'Ford', make: 'Ford', img: '/images/brands/ford-logo.webp' },
           { label: 'Honda', make: 'Honda', img: '/images/brands/honda-logo.png' },
           { label: 'Hyundai', make: 'Hyundai', img: '/images/brands/hyundai-logo.webp' },
           { label: 'Kia', make: 'Kia', img: '/images/brands/kia-logo.webp' },
           { label: 'Land Rover', make: 'Land Rover', img: '/images/brands/land-rover-logo.webp' },
           { label: 'Mazda', make: 'Mazda', img: '/images/brands/mazda-logo.webp' },
-          { label: 'Mercedes', make: 'Mercedes', img: '/images/brands/mercedes-benz-logo.webp' },
+          { label: 'Mercedes-Benz', make: 'Mercedes-Benz', img: '/images/brands/mercedes-benz-logo.webp' },
           { label: 'Mitsubishi', make: 'Mitsubishi', img: '/images/brands/mitsubishi-logo.webp' },
           { label: 'Nissan', make: 'Nissan', img: '/images/brands/nissan-logo.webp' },
           { label: 'Opel', make: 'Opel', img: '/images/brands/opel-logo.webp' },
@@ -136,7 +140,6 @@
           { label: 'Skoda', make: 'Skoda', img: '/images/brands/skoda-logo.webp' },
           { label: 'Toyota', make: 'Toyota', img: '/images/brands/toyota-logo.webp' },
           { label: 'Volkswagen', make: 'Volkswagen', img: '/images/brands/volkswagen-logo.webp' },
-          { label: 'Volvo', make: 'Volvo', img: '/images/brands/volvo-logo.webp' },
         ]; %>
         <% /* Slugify minimal en EJS pour générer /pieces-auto/<slug>.
               On utilise le même algo que productPublic.slugify côté serveur. */ %>
