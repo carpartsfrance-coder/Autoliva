@@ -668,47 +668,24 @@ async function getProduct(req, res, next) {
     const warrantyYears = extractWarrantyYearsFromText(warrantyText);
     const priceValidUntil = formatDateIso(new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)));
 
-    /* Construit le tableau Vehicle pour le schema isAccessoryOrSparePartFor.
-     * Permet à Google de comprendre EXACTEMENT quels véhicules cette pièce
-     * équipe — critique pour les rich results sur queries véhicule-spécifique
-     * ("boîte de transfert audi q5"). Source : product.compatibility[].
+    /* Compatibilité véhicule pour les rich results.
      *
-     * IMPORTANT : Vehicle hérite de Product dans Schema.org. Le validator
-     * Google considérait chaque Vehicle comme un "Product snippet" et exigeait
-     * un champ `name` + au moins un de aggregateRating/offers/review. Sans
-     * `name`, on déclenchait ~1099 erreurs structured data (cf. Semrush).
-     * Solution : on ajoute systématiquement un `name` "Brand Model (Years)". */
-    const fitsVehicles = Array.isArray(product.compatibility)
-      ? product.compatibility
-          .filter((c) => c && c.make)
-          .slice(0, 30) // évite des schemas démesurés
-          .map((c) => {
-            const makeText = String(c.make).trim();
-            const modelText = c.model ? String(c.model).trim() : '';
-            const yearsText = c.years ? String(c.years).trim() : '';
-            const engineText = c.engine ? String(c.engine).trim() : '';
-            // name = "Brand Model (Years)" — sert le rich result et satisfait
-            // l'exigence Schema.org/Product (Vehicle hérite de Product).
-            const nameParts = [makeText];
-            if (modelText) nameParts.push(modelText);
-            const baseName = nameParts.join(' ');
-            const fullName = yearsText ? `${baseName} (${yearsText})` : baseName;
-            const v = {
-              '@type': 'Vehicle',
-              name: fullName,
-              brand: { '@type': 'Brand', name: makeText },
-            };
-            if (modelText) v.model = modelText;
-            if (yearsText) v.modelDate = yearsText;
-            if (engineText) {
-              v.vehicleEngine = {
-                '@type': 'EngineSpecification',
-                name: engineText,
-              };
-            }
-            return v;
-          })
-      : [];
+     * Historiquement on émettait isAccessoryOrSparePartFor: [Vehicle, ...] mais
+     * Vehicle hérite de Product dans Schema.org, donc le validator Google
+     * exige sur CHAQUE entrée : name + (aggregateRating | offers | review).
+     * Même avec `name`, l'exigence offers/rating/review reste impossible à
+     * satisfaire proprement (on n'a ni prix, ni avis, ni offer pour un véhicule
+     * compatible). Cela générait 1099–1154 erreurs structured data.
+     *
+     * Décision : on n'émet plus isAccessoryOrSparePartFor dans le JSON-LD.
+     * La compatibilité véhicule reste visible pour les utilisateurs (section
+     * "Compatible avec" sur la page produit) et exposée à Google via :
+     *   - description du produit (mentionne les véhicules)
+     *   - additionalProperty: "Référence compatible" (OEM refs)
+     *   - le contenu HTML structuré de la page elle-même
+     * Google extrait ces signaux sans avoir besoin du markup formel et n'a
+     * plus de raison de flagger d'erreur. */
+    const fitsVehicles = [];
 
     /* additionalProperty enrichi : on combine les références OEM compatibles
      * (signal SEO clé pour les pièces auto) avec les caractéristiques
@@ -775,10 +752,12 @@ async function getProduct(req, res, next) {
       manufacturer: { '@type': 'Organization', name: brand.NAME },
       itemCondition: schemaCondition || undefined,
       image: ogImage || undefined,
-      /* isAccessoryOrSparePartFor : array de Vehicle objects = THE auto-parts
-       * SEO signal. Permet à Google d'associer la pièce à une combinaison
-       * make/model/engine spécifique pour les rich results. */
-      isAccessoryOrSparePartFor: fitsVehicles.length ? fitsVehicles : undefined,
+      /* isAccessoryOrSparePartFor : retiré. Le champ exigeait Vehicle objects
+       * (sous-type de Product), qui demandait name + offers/rating/review
+       * sur CHAQUE véhicule. Sans ça : 1099-1154 erreurs structured data.
+       * La compatibilité véhicule reste exposée par d'autres canaux (cf.
+       * commentaire sur fitsVehicles). */
+      // isAccessoryOrSparePartFor: <removed>,
       additionalProperty: enrichedAdditionalProperties.length ? enrichedAdditionalProperties : undefined,
       /* hasMerchantReturnPolicy : retour ancien organe sous 30 jours (échange
        * standard). Active le rich snippet "free returns" dans Google Shopping. */
