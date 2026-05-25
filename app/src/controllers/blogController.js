@@ -590,6 +590,26 @@ async function getBlogPost(req, res) {
     const canonicalUrl = (() => {
       const customPath = post.seo && post.seo.canonicalPath ? post.seo.canonicalPath.trim() : '';
       if (customPath) {
+        /* Si l'override DB pointe vers un AUTRE domaine que le host courant
+         * (cas des articles migrés depuis carpartsfrance.fr : la canonical
+         * stockée contient encore l'ancien domaine ET un slug différent),
+         * on ignore le host stocké et on garde uniquement le chemin local
+         * pour éviter les "non-canonical URL" dans le sitemap (cause des
+         * 2 alertes Semrush "wrong pages found in sitemap.xml"). */
+        if (/^https?:\/\//i.test(customPath)) {
+          try {
+            const parsed = new URL(customPath);
+            const currentHost = baseUrl ? new URL(baseUrl).host : '';
+            if (currentHost && parsed.host !== currentHost) {
+              // Domaine différent → on ignore le custom canonical, on retombe
+              // sur le canonical par défaut basé sur le slug courant.
+              return buildBlogPostCanonical(baseUrl, post.slug);
+            }
+          } catch (e) {
+            // URL malformée → fallback au canonical par défaut.
+            return buildBlogPostCanonical(baseUrl, post.slug);
+          }
+        }
         return resolveAbsoluteUrl(baseUrl, customPath);
       }
       return buildBlogPostCanonical(baseUrl, post.slug);
@@ -597,7 +617,26 @@ async function getBlogPost(req, res) {
 
     const computedDesc = truncateText(stripHtml(post.excerpt || contentHtml || ''), 160);
     const metaDescription = normalizeMetaText(post.seo && post.seo.metaDescription ? post.seo.metaDescription : computedDesc);
-    const title = clampSeoTitle(normalizeMetaText(post.seo && post.seo.metaTitle ? post.seo.metaTitle : `${post.title} - ${brand.NAME}`));
+    /* Title : on garantit toujours le suffix " | Autoliva" pour éviter que
+     * <title> et <h1> soient identiques (cause des 14 alertes Semrush
+     * "duplicate H1 and title tags" sur les articles blog). Si le DB
+     * metaTitle override est sans suffix, on l'ajoute ; sinon on respecte
+     * le format de l'éditeur. clampSeoTitle gère ensuite la limite 60 char. */
+    function ensureBrandSuffixOnBlogTitle(t) {
+      if (!t) return t;
+      const trimmed = String(t).trim();
+      const lower = trimmed.toLowerCase();
+      const lowerName = brand.NAME.toLowerCase();
+      // Si la marque est déjà en queue (suffix complet), on respecte.
+      if (lower.endsWith(`| ${lowerName}`) || lower.endsWith(`- ${lowerName}`) || lower.endsWith(lowerName)) {
+        return trimmed;
+      }
+      return `${trimmed} | ${brand.NAME}`;
+    }
+    const rawTitle = post.seo && post.seo.metaTitle
+      ? ensureBrandSuffixOnBlogTitle(post.seo.metaTitle)
+      : `${post.title} | ${brand.NAME}`;
+    const title = clampSeoTitle(normalizeMetaText(rawTitle));
 
     const excerptForView = post.excerpt || computedDesc;
 

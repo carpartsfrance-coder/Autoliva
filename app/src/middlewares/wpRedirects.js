@@ -161,6 +161,15 @@ const EXACT_REDIRECTS = {
   // PDF technique WordPress supprimé → article blog équivalent
   '/wp-content/uploads/2025/12/Revue-technique-Mecatronique-dsg-7-DQ200-0AM.pdf':
     '/blog/mecatronique-dsg7-dq200-diagnostic-prix-remplacement',
+
+  // Duplicate content L538 vs L538-AWD : les 2 modèles partagent les mêmes
+  // produits en DB et ont des titres quasi-identiques. On consolide vers
+  // la version "parent" L538 pour résoudre les 2 alertes Semrush
+  // "duplicate content" + "duplicate title tags".
+  '/pieces-auto/land-rover/range-rover-evoque-l538-awd':
+    '/pieces-auto/land-rover/range-rover-evoque-l538',
+  '/pieces-auto/land-rover/range-rover-evoque-l538-awd/':
+    '/pieces-auto/land-rover/range-rover-evoque-l538',
 };
 
 // ── 2. WordPress artifact patterns -> 410 Gone ──────────────────────────────

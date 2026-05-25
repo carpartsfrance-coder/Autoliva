@@ -323,6 +323,25 @@ app.get('/robots.txt', seoController.getRobotsTxt);
  * CDN propre, pas de pollution session sur un endpoint public crawlé. */
 app.get('/google-merchant-feed.xml', require('./routes/google-merchant-feed'));
 
+/* /go/whatsapp — endpoint de redirect 301 vers WhatsApp wa.me.
+ *
+ * Pourquoi : le lien direct https://wa.me/33756875025 retournait HTTP 429
+ * (rate limit WhatsApp) pour les crawlers SEO comme Semrush. Présent dans
+ * le footer = sur ~700 pages, donc 700 alertes "broken external links".
+ * En passant par un endpoint interne, Semrush voit un lien INTERNE 301,
+ * et la requête vers wa.me n'est faite que lors du clic utilisateur réel. */
+const WHATSAPP_NUMBER = '33756875025';
+app.get('/go/whatsapp', (req, res) => {
+  const rawText = typeof req.query.text === 'string' ? req.query.text.slice(0, 500) : '';
+  // Build wa.me URL avec ou sans message pré-rempli. wa.me attend des params
+  // URL-encoded standards ; on re-encode ce qu'on reçoit pour normaliser.
+  const target = rawText
+    ? `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(rawText)}`
+    : `https://wa.me/${WHATSAPP_NUMBER}`;
+  res.set('Cache-Control', 'public, max-age=86400');
+  return res.redirect(301, target);
+});
+
 app.use(
   session((() => {
     const sessionOptions = {

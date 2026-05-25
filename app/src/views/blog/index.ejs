@@ -12,6 +12,14 @@
       <span class="text-slate-600 dark:text-slate-200">Blog</span>
     </nav>
 
+    <% /* Fallback H1 quand il n'y a pas d'article "featured" (cas du /de/blog
+          quand aucune traduction n'est encore publiée, ou listing filtré
+          vide). Sans ce H1 la page n'a aucun heading principal → alerte
+          Semrush "missing H1 heading". */ %>
+    <% if (!featured) { %>
+      <h1 class="text-3xl lg:text-4xl font-display font-bold text-slate-900 dark:text-white mb-6"><%= typeof title === 'string' && title ? title.replace(/\s*[|\-]\s*Autoliva\s*$/i, '').trim() : 'Blog' %></h1>
+    <% } %>
+
     <% if (featured) { %>
       <section class="mb-10 group">
         <a class="block cursor-pointer" href="<%= featured.url %>">
