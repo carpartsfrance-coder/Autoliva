@@ -575,29 +575,130 @@ async function getProduct(req, res, next) {
       return '';
     };
 
+    /* ─────────────────────────────────────────────────────────────────
+     * SIGNAUX COMMERCIAUX (calculés EN PREMIER pour pouvoir les utiliser
+     * dans le title/H1/meta SEO et dans le trust banner visible).
+     *
+     * Avant V5, ces valeurs étaient calculées après le SEO title et donc
+     * pas exploitables dans le <title>. Conséquence : nos blogs gagnaient
+     * en SERP parce que leur titre contenait "prix" alors que la fiche
+     * produit n'avait aucun signal commercial.
+     * ───────────────────────────────────────────────────────────────── */
+    const price = Number.isFinite(product.priceCents) ? (product.priceCents / 100).toFixed(2) : undefined;
+    const priceInt = price ? Math.round(Number(price)) : null;
+    const priceTextShort = priceInt ? `${priceInt}€` : '';
+    const conditionTextEarly = (() => {
+      const specs = Array.isArray(product.specs) ? product.specs : [];
+      for (const s of specs) {
+        if (s && typeof s === 'object') {
+          const k = String(s.label || s.key || s.name || '').toLowerCase();
+          if (k.includes('état') || k.includes('etat')) return String(s.value || '').trim();
+        }
+      }
+      if (product.badges && product.badges.condition) return String(product.badges.condition).trim();
+      return '';
+    })();
+    /* Condition courte pour title : "neuf" / "reconditionné" / "occasion".
+     * Si product.name contient déjà "reconditionné" ou "neuf", on évite la
+     * répétition pour ne pas gaspiller des caractères précieux du title. */
+    const conditionShort = (() => {
+      const c = conditionTextEarly.toLowerCase();
+      const n = (product.name || '').toLowerCase();
+      if (n.includes('neuf') || n.includes('recondition') || n.includes('occasion')) return '';
+      if (c.includes('neuf')) return 'neuf';
+      if (c.includes('recondition')) return 'reconditionné';
+      if (c.includes('occasion')) return 'occasion';
+      return '';
+    })();
+    const warrantyTextEarly = (() => {
+      const specs = Array.isArray(product.specs) ? product.specs : [];
+      for (const s of specs) {
+        if (s && typeof s === 'object') {
+          const k = String(s.label || s.key || s.name || '').toLowerCase();
+          if (k.includes('garantie')) return String(s.value || '').trim();
+        }
+      }
+      if (product.badges && product.badges.topLeft) return String(product.badges.topLeft).trim();
+      return '';
+    })();
+    const warrantyYearsEarly = extractWarrantyYearsFromText(warrantyTextEarly);
+
     /* sanitizeBrandLeak : si l'override DB contient encore "CarParts France"
        (rebranding partiel), on remplace par brand.NAME courant. */
     const titleOverride = product.seo && typeof product.seo.metaTitle === 'string'
       ? sanitizeBrandLeak(product.seo.metaTitle.trim())
       : '';
 
-    /* Construit un title SEO en tenant dans ~60 caractères (limite SERP Google).
-       Stratégie : on tente la version complète, si trop longue on retire d'abord
-       la SKU (info technique moins recherchée), puis le brand véhicule, puis on
-       tronque le nom pour préserver le suffix marque. */
+    /* shortenProductName : transforme un product.name long et descriptif
+     * (souvent 100-130 caractères) en version compacte exploitable pour
+     * <title> et <h1>. Heuristiques :
+     *   - retire "/différentiel arrière" et alternatives après "/"
+     *   - retire les phrases " pour " redondantes
+     *   - retire les références OEM en queue ("- OEM 383004BF0A...")
+     *   - retire les références multiples séparées par virgule en queue
+     *   - tronque au mot le plus proche de maxLen
+     * Le résultat sert d'UX h1 visible + base du title SEO. */
+    function shortenProductName(raw, maxLen = 55) {
+      if (!raw) return '';
+      let s = String(raw).trim();
+      // 1. Drop OEM references in tail ("- OEM XXX...", "Références OEM ...")
+      s = s.replace(/\s*[-–—:]\s*(références?\s+)?OEM\s+.*$/i, '');
+      s = s.replace(/\s*[-–—:]\s*Réf(?:érence)?\.?\s+.*$/i, '');
+      // 2. Drop trailing comma-separated alternates ("model A, model B, ...")
+      //    Garde 2 modèles max avant virgule
+      const parts = s.split(',');
+      if (parts.length > 3) {
+        s = parts.slice(0, 3).join(',');
+      }
+      // 3. Simplifier "/différentiel arrière" et alternates similaires
+      s = s.replace(/\s*\/\s*différentiel(?:\s+arrière)?/i, '');
+      s = s.replace(/\s*\/\s*pont(?:\s+arrière)?/i, '');
+      // 4. "Pour Renault X et Nissan Y" → "Renault X & Nissan Y" (plus court)
+      s = s.replace(/\s+pour\s+/i, ' ');
+      s = s.replace(/\s+et\s+/g, ' & ');
+      // 5. Normalize whitespace
+      s = s.replace(/\s{2,}/g, ' ').trim();
+      // 6. Truncate au mot
+      if (s.length <= maxLen) return s;
+      const cut = s.slice(0, maxLen);
+      const lastSpace = cut.lastIndexOf(' ');
+      return (lastSpace > maxLen / 2 ? cut.slice(0, lastSpace) : cut).trim();
+    }
+
+    /* Construit un title SEO transactionnel dans 60 char.
+     *
+     * Avant : `${name} | Autoliva` — sans aucun signal commercial.
+     * Après : on intercale prix, condition (neuf/reconditionné) et garantie
+     * autant que possible. Le blog gagnait nos requêtes "prix" parce que son
+     * title contenait "prix" — on contre-attaque en mettant directement la
+     * valeur (1490€ + Garantie 2 ans) qui sont des signaux PLUS forts que
+     * le mot "prix".
+     *
+     * Stratégie : on génère 7 variantes de la plus riche à la plus basique,
+     * on prend la première qui tient dans 60 char. */
     const SEO_TITLE_MAX = 60;
-    function buildSeoTitleFitted(name, brandTxt, skuTxt) {
+    function buildSeoTitleFitted(name, brandTxt, skuTxt, priceText, warrantyYears, conditionShort) {
       const suffix = ` | ${brand.NAME}`;
+      const priceTag = priceText ? ` ${priceText}` : '';
+      const warrantyTag = warrantyYears ? ` Garantie ${warrantyYears} ans` : '';
+      const conditionTag = conditionShort ? ` ${conditionShort}` : '';
+      // Variantes décroissantes en richesse keywords commerciale.
+      // Le séparateur "·" est plus dense que " - " ou " | ".
       const variants = [
-        `${name}${brandTxt ? ` - ${brandTxt}` : ''}${skuTxt ? ` (Réf ${skuTxt})` : ''}${suffix}`,
-        `${name}${brandTxt ? ` - ${brandTxt}` : ''}${suffix}`,
+        `${name}${conditionTag} ·${priceTag} ·${warrantyTag}${suffix}`,
+        `${name}${conditionTag}${priceTag}${warrantyTag}${suffix}`,
+        `${name}${conditionTag} ·${priceTag}${suffix}`,
+        `${name}${priceTag}${warrantyTag}${suffix}`,
+        `${name}${conditionTag}${warrantyTag}${suffix}`,
+        `${name}${priceTag}${suffix}`,
+        `${name}${conditionTag}${suffix}`,
         `${name}${suffix}`,
       ];
       for (const v of variants) {
-        if (v.length <= SEO_TITLE_MAX) return v;
+        if (v.length <= SEO_TITLE_MAX) return v.replace(/\s+·\s+/g, ' · ').replace(/\s{2,}/g, ' ');
       }
-      // Toutes trop longues → on tronque le nom pour préserver " | Brand"
-      const maxNameLen = Math.max(10, SEO_TITLE_MAX - suffix.length - 1); // -1 pour ellipsis
+      // Toutes trop longues → on tronque le nom court pour préserver suffix
+      const maxNameLen = Math.max(15, SEO_TITLE_MAX - suffix.length - 1);
       const truncatedName = name.length > maxNameLen ? `${name.slice(0, maxNameLen).trim()}…` : name;
       return `${truncatedName}${suffix}`;
     }
@@ -634,11 +735,42 @@ async function getProduct(req, res, next) {
       if (s.length <= SEO_TITLE_MAX) return s;
       return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
     }
+    /* Nom court à utiliser dans le <title> ET le <h1> (au lieu de product.name
+     * brut qui peut faire 130 char). On garde product.name pour la DB, panier,
+     * admin, etc. — seul l'affichage SEO utilise la version courte. */
+    const seoShortName = shortenProductName(product.name, 48);
     const seoTitle = clampTitle(
       titleOverride
         ? ensureBrandSuffix(titleOverride)
-        : buildSeoTitleFitted(product.name, brandText, skuText),
+        : buildSeoTitleFitted(seoShortName, brandText, skuText, priceTextShort, warrantyYearsEarly, conditionShort),
     );
+
+    /* H1 visible : version "punchy" qui mêle nom court + condition + premier
+     * make/model compatibilité. Cible 60-90 char (UX + SEO).
+     * Avant V5 : <h1><%= product.name %></h1> = 130 char, non-optimisé.
+     * Après V5 : "Pont arrière neuf Renault Koleos Kadjar Nissan Qashqai". */
+    const seoH1 = (() => {
+      const base = seoShortName;
+      const conditionAdj = conditionShort ? ` ${conditionShort}` : '';
+      // Si le nom court contient déjà le nom du véhicule (ex: "Pont arrière
+      // Renault Koleos"), pas besoin d'en rajouter. Sinon on ajoute le premier
+      // véhicule de compat.
+      const baseLower = base.toLowerCase();
+      const firstMake = firstCompat && firstCompat.make ? String(firstCompat.make).trim() : '';
+      const hasMakeInName = firstMake && baseLower.includes(firstMake.toLowerCase());
+      const enrichedName = hasMakeInName || !firstMake
+        ? base
+        : `${base} ${firstMake}${firstCompat.model ? ' ' + firstCompat.model : ''}`;
+      // Insère "neuf/reconditionné" juste après le mot principal (avant la marque)
+      const finalH1 = conditionAdj && !enrichedName.toLowerCase().includes(conditionShort)
+        ? enrichedName.replace(/\s+/, conditionAdj + ' ')
+        : enrichedName;
+      // Cap à 90 chars (lisibilité + SEO)
+      if (finalH1.length <= 90) return finalH1;
+      const cut = finalH1.slice(0, 89);
+      const lastSpace = cut.lastIndexOf(' ');
+      return (lastSpace > 50 ? cut.slice(0, lastSpace) : cut).trim();
+    })();
 
     const descriptionOverride = product.seo && typeof product.seo.metaDescription === 'string'
       ? sanitizeBrandLeak(product.seo.metaDescription.trim())
@@ -646,8 +778,67 @@ async function getProduct(req, res, next) {
     const baseDesc = product.shortDescription || product.description || '';
     const baseDescPlain = toPlainText(baseDesc);
     const refsText = compatibleReferences.length ? compatibleReferences.slice(0, 6).join(', ') : '';
+
+    /* Meta description format "Question? Solution+Prix+USP" qui mime le
+     * format gagnant des articles blog. Cible 150-160 char.
+     *
+     * Format de référence (blog qui gagne nos requêtes) :
+     *   "Pont arrière Renault Koleos défaillant ? Symptômes, compatibilité
+     *    OEM 383004BF0A et pont reconditionné garanti 2 ans. Devis gratuit."
+     *
+     * Notre nouveau format produit :
+     *   "{Vehicle} {category} défaillant ? {category} {condition}
+     *    {oemTag}, {price}€, garantie {N} ans, livraison 24h. Devis gratuit."
+     *
+     * Si product.seo.metaDescription est fourni explicitement, on respecte. */
+    function buildTransactionalMetaDesc() {
+      const category = (() => {
+        const c = String(product.category || '').trim();
+        if (!c) return 'pièce';
+        // "Transmission > Mécatronique" → "Mécatronique"
+        return c.includes('>') ? c.split('>').pop().trim() : c;
+      })();
+      const veh = (firstCompat && (firstCompat.make || firstCompat.model))
+        ? [firstCompat.make, firstCompat.model].filter(Boolean).join(' ').trim()
+        : '';
+      const oemTag = skuText ? ` OEM ${skuText}` : '';
+      const condShort = conditionShort || (warrantyYearsEarly ? 'garanti' : '');
+      const priceTag = priceTextShort ? `, ${priceTextShort}` : '';
+      const warrantyTag = warrantyYearsEarly ? `, garantie ${warrantyYearsEarly} ans` : '';
+      const shippingTag = ', livraison 24h';
+      const cta = '. Devis gratuit.';
+      // Variantes par longueur (la plus rich first, fallback plus courte)
+      const variants = [
+        veh
+          ? `${category} ${veh} défaillant ? ${category} ${condShort}${oemTag}${priceTag}${warrantyTag}${shippingTag}${cta}`
+          : '',
+        veh
+          ? `${category} ${veh} défaillant ? ${category} ${condShort}${oemTag}${priceTag}${warrantyTag}${cta}`
+          : '',
+        veh
+          ? `Besoin d'un ${category} ${veh} ? ${condShort}${oemTag}${priceTag}${warrantyTag}${shippingTag}${cta}`
+          : '',
+        `${category} ${condShort}${oemTag}${priceTag}${warrantyTag}${shippingTag}${cta}`,
+        `${category} ${condShort}${priceTag}${warrantyTag}${cta}`,
+      ].filter(Boolean).map((v) => v.replace(/\s{2,}/g, ' ').trim());
+      for (const v of variants) {
+        if (v.length <= 160 && v.length >= 80) return v;
+      }
+      return variants[variants.length - 1] || '';
+    }
+    const transactionalMetaDesc = buildTransactionalMetaDesc();
+
+    // Auto-desc historique : fallback de dernier recours si transactional vide.
     const autoDesc = `Pièce auto ${product.name}${skuText ? ` (réf ${skuText})` : ''}${refsText ? ` (références compatibles ${refsText})` : ''}${compatText ? ` compatible ${compatText}` : ''}. Livraison rapide. Paiement sécurisé.`;
-    const metaDescription = truncateText(normalizeMetaText(toPlainText(descriptionOverride) || baseDescPlain || autoDesc), 160);
+    const metaDescription = truncateText(
+      normalizeMetaText(
+        toPlainText(descriptionOverride)
+        || transactionalMetaDesc
+        || baseDescPlain
+        || autoDesc,
+      ),
+      160,
+    );
 
     const images = [];
     if (product.imageUrl) images.push(buildSeoMediaUrl(product.imageUrl, product.name));
@@ -659,13 +850,16 @@ async function getProduct(req, res, next) {
     const mainImage = images.find(Boolean) || '';
     const ogImage = resolveAbsoluteUrl(req, mainImage);
 
-    const price = Number.isFinite(product.priceCents) ? (product.priceCents / 100).toFixed(2) : undefined;
+    // NOTE V5 : `price`, conditionText/warrantyYears sont déjà calculés EN HAUT
+    // de la fonction (priceTextShort, conditionTextEarly, warrantyYearsEarly)
+    // pour être utilisables dans le SEO title. On les ré-expose sous les noms
+    // historiques pour ne pas casser le code en aval qui les utilise.
     const descriptionForSchema = normalizeMetaText(metaDescription || toPlainText(product.shortDescription || product.description || autoDesc));
     const schemaBrandName = brandText || (firstCompat && typeof firstCompat.make === 'string' ? firstCompat.make.trim() : '');
-    const conditionText = findSpecValue('état', 'etat') || (product.badges && product.badges.condition ? String(product.badges.condition).trim() : '');
+    const conditionText = conditionTextEarly;
     const schemaCondition = mapSchemaCondition(conditionText);
-    const warrantyText = findSpecValue('garantie') || (product.badges && product.badges.topLeft ? String(product.badges.topLeft).trim() : '');
-    const warrantyYears = extractWarrantyYearsFromText(warrantyText);
+    const warrantyText = warrantyTextEarly;
+    const warrantyYears = warrantyYearsEarly;
     const priceValidUntil = formatDateIso(new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)));
 
     /* Compatibilité véhicule pour les rich results.
@@ -1052,6 +1246,27 @@ async function getProduct(req, res, next) {
       relatedProducts,
       relatedBlogPosts,
       productLinking,
+      /* V5 — locals SEO pour le template products/show.ejs :
+       * - seoH1 : titre H1 court (60-90 char) au lieu de product.name (130 char)
+       * - priceTextShort : "1490€" pour trust banner & H1
+       * - warrantyYearsForUi : 2 → "Garantie 2 ans" affiché
+       * - conditionForUi : "neuf" | "reconditionné" | ""
+       * - oemPrimary : première référence OEM compatible, pour H1 / trust block
+       * - mainCompatVehicle : "Renault Koleos" pour les sections SEO étoffées */
+      seoH1,
+      priceTextShort,
+      warrantyYearsForUi: warrantyYearsEarly,
+      conditionForUi: conditionShort || conditionTextEarly,
+      oemPrimary: compatibleReferences.length ? compatibleReferences[0] : (skuText || ''),
+      mainCompatVehicle: firstCompat
+        ? [firstCompat.make, firstCompat.model].filter(Boolean).join(' ').trim()
+        : '',
+      compatibleReferences,
+      productCategoryShort: (() => {
+        const c = String(product.category || '').trim();
+        if (!c) return '';
+        return c.includes('>') ? c.split('>').pop().trim() : c;
+      })(),
     });
   } catch (err) {
     return next(err);
