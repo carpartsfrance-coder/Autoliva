@@ -64,14 +64,46 @@ function buildAutoSeoText({ makeName, modelName, partTypeName, totalCount }) {
   return `<p>Notre catalogue de pièces auto reconditionnées ${makeName} couvre l'ensemble des modèles de la marque : ${totalCount} référence(s) testées sur banc, garanties 24 mois et expédiées rapidement. Toutes nos pièces ${makeName} bénéficient d'un paiement en 3x ou 4x sans frais.</p>`;
 }
 
+/* Construit un title 60 char max EN PRÉSERVANT le nom modèle complet.
+ *
+ * Avant : `Pièces auto ${make} ${model} reconditionnées | Autoliva`. Avec un
+ * modèle long (ex: "Range Rover Evoque (L538) AWD"), le résultat dépassait
+ * 60 char et clampSeoTitle tronquait au milieu du nom modèle, créant des
+ * doublons entre L538 et L538-AWD (cause des 2 alertes Semrush
+ * "duplicate title tags" + "duplicate content").
+ *
+ * Stratégie : on émet plusieurs variantes par ordre de préférence ;
+ * clampSeoTitle prend la plus longue qui tient en 60 char en commençant
+ * par celle qui contient le plus de mots-clés SEO. */
 function buildAutoTitle({ makeName, modelName, partTypeName }) {
+  const suffix = ` | ${brand.NAME}`;
+  const MAX = 60;
+  let candidates;
   if (modelName && partTypeName) {
-    return `${partTypeName} ${makeName} ${modelName} reconditionné | ${brand.NAME}`;
+    candidates = [
+      `${partTypeName} ${makeName} ${modelName} reconditionné${suffix}`,
+      `${partTypeName} ${makeName} ${modelName}${suffix}`,
+      `${partTypeName} ${modelName}${suffix}`,
+    ];
+  } else if (modelName) {
+    candidates = [
+      `Pièces auto ${makeName} ${modelName} reconditionnées${suffix}`,
+      `Pièces auto ${makeName} ${modelName}${suffix}`,
+      `${makeName} ${modelName}${suffix}`,
+    ];
+  } else {
+    candidates = [
+      `Pièces auto ${makeName} reconditionnées et garanties${suffix}`,
+      `Pièces auto ${makeName} reconditionnées${suffix}`,
+      `Pièces auto ${makeName}${suffix}`,
+    ];
   }
-  if (modelName) {
-    return `Pièces auto ${makeName} ${modelName} reconditionnées | ${brand.NAME}`;
+  for (const c of candidates) {
+    if (c.length <= MAX) return c;
   }
-  return `Pièces auto ${makeName} reconditionnées et garanties | ${brand.NAME}`;
+  // Toutes trop longues → on retourne la plus courte (clampSeoTitle finira
+  // de tronquer si besoin, mais le nom modèle est intact).
+  return candidates[candidates.length - 1];
 }
 
 function buildAutoMetaDescription({ makeName, modelName, partTypeName, totalCount }) {

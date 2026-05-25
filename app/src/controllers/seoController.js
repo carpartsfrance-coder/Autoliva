@@ -179,10 +179,31 @@ async function buildProductsUrls(req, baseUrl, dbConnected) {
   return urls;
 }
 
+/* Cache mémoire pour buildVehiclesUrls.
+ *
+ * Pourquoi : la construction fait jusqu'à ~2 000 requêtes DB séquentielles
+ * (countCompatibleProducts + listCategorySlugsForVehicle par modèle), ce
+ * qui faisait timeout le /sitemap-vehicles.xml et le /sitemap.xml (qui
+ * appelait aussi cette fonction pour vérifier que le sous-sitemap n'est
+ * pas vide). Semrush flaggait alors "Sitemap not found" et "page couldn't
+ * be crawled" — 4 errors. Cache 10 min suffit : la liste de véhicules
+ * change rarement, et un sitemap pas tout à fait à jour à 10 min près
+ * n'a aucun impact SEO. */
+const VEHICLE_URLS_CACHE = { value: null, expiresAt: 0 };
+const VEHICLE_URLS_TTL_MS = 10 * 60 * 1000; // 10 min
+
 async function buildVehiclesUrls(req, baseUrl, dbConnected) {
   if (!dbConnected) return [];
-  const urls = [];
   const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
+  const now = Date.now();
+  /* Cache hit : on retourne la liste précalculée si elle n'est pas expirée.
+   * NB : on cache par baseUrl (clé composite) pour gérer le cas où le
+   * site est servi depuis des hosts différents (rare mais possible). */
+  if (VEHICLE_URLS_CACHE.value && VEHICLE_URLS_CACHE.expiresAt > now
+      && VEHICLE_URLS_CACHE.baseUrl === baseUrl) {
+    return VEHICLE_URLS_CACHE.value;
+  }
+  const urls = [];
   try {
     const vehicleService = require('../services/vehicleLandingService');
     const makes = await vehicleService.listMakes();
@@ -202,7 +223,16 @@ async function buildVehiclesUrls(req, baseUrl, dbConnected) {
     }
   } catch (err) {
     console.error('[sitemap] vehicle landings : erreur ignorée :', err && err.message ? err.message : err);
+    // En cas d'erreur, si on a une version cachée même expirée, on la sert
+    // plutôt que de retourner un sitemap vide.
+    if (VEHICLE_URLS_CACHE.value && VEHICLE_URLS_CACHE.baseUrl === baseUrl) {
+      return VEHICLE_URLS_CACHE.value;
+    }
+    return [];
   }
+  VEHICLE_URLS_CACHE.value = urls;
+  VEHICLE_URLS_CACHE.expiresAt = now + VEHICLE_URLS_TTL_MS;
+  VEHICLE_URLS_CACHE.baseUrl = baseUrl;
   return urls;
 }
 
@@ -285,10 +315,19 @@ async function buildBlogUrlsDe(baseUrl, dbConnected) {
 
 /* /sitemap.xml — sitemap index pointant vers les sous-sitemaps.
    Si l'index est désactivé (SITEMAP_LEGACY_FLAT=true) on retourne le format
-   monolithique pour compat. */
+   monolithique pour compat.
+
+   IMPORTANT : on liste systématiquement tous les sous-sitemaps sans tester
+   leur contenu. La version précédente lançait des requêtes DB pour chacun
+   (buildVehiclesUrls fait un Vehicle.find() sur 2065 docs) afin de skipper
+   les sitemaps vides — résultat : timeout du /sitemap.xml et du
+   /sitemap-vehicles.xml en prod, flaggés par Semrush comme "sitemap not
+   found" + "page couldn't be crawled" (2 errors chacun).
+
+   Un sous-sitemap vide est valide pour Google (urlset vide accepté). On
+   préfère sur-lister que sous-lister. */
 async function getSitemapXml(req, res, next) {
   try {
-    const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
 
     if (process.env.SITEMAP_LEGACY_FLAT === 'true') {
@@ -297,32 +336,15 @@ async function getSitemapXml(req, res, next) {
 
     const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
     const now = new Date().toISOString();
-
-    /* Ne référence un sous-sitemap que s'il contient au moins 1 URL.
-     * Sinon Semrush/Google le flagge en "sitemap incorrect" (cause des
-     * 2 alertes "incorrect pages found in sitemap.xml"). */
-    const candidates = [
-      { path: '/sitemap-pages.xml', build: () => buildPagesUrls(baseUrl, dbConnected) },
-      { path: '/sitemap-categories.xml', build: () => buildCategoriesUrls(req, dbConnected) },
-      { path: '/sitemap-products.xml', build: () => buildProductsUrls(req, baseUrl, dbConnected) },
-      { path: '/sitemap-vehicles.xml', build: () => buildVehiclesUrls(req, baseUrl, dbConnected) },
-      { path: '/sitemap-references.xml', build: () => buildReferencesUrls(baseUrl, dbConnected) },
-      { path: '/sitemap-blog.xml', build: () => buildBlogUrls(baseUrl, dbConnected) },
-      { path: '/sitemap-blog-de.xml', build: () => buildBlogUrlsDe(baseUrl, dbConnected) },
+    const sitemaps = [
+      { loc: resolveUrl('/sitemap-pages.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-categories.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-products.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-references.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-blog.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-blog-de.xml'), lastmod: now },
     ];
-
-    const sitemaps = [];
-    for (const c of candidates) {
-      try {
-        const urls = await c.build();
-        if (Array.isArray(urls) && urls.length > 0) {
-          sitemaps.push({ loc: resolveUrl(c.path), lastmod: now });
-        }
-      } catch (e) {
-        // Silencieux : si un sous-sitemap échoue, on ne le liste pas (mais on
-        // continue avec les autres pour ne pas casser tout l'index).
-      }
-    }
 
     return sendXml(res, renderSitemapIndex(sitemaps));
   } catch (err) {

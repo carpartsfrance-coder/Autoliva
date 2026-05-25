@@ -105,7 +105,12 @@ window.CPF_CONSENT_I18N = {
 }; %>
 <% const _showWhatsAppButton = !/^\/(admin|panier|commande|product)(\/|$)/.test(_pathOnly); %>
 <% const _whatsAppMessage = encodeURIComponent(t('whatsapp.message')); %>
-<% const _whatsAppHref = `https://wa.me/33756875025?text=${_whatsAppMessage}`; %>
+<%
+  /* On passe par un endpoint interne /go/whatsapp qui 301 vers wa.me.
+   * Évite 705 alertes Semrush "broken external link" (wa.me retourne 429
+   * pour les crawlers). Pour l'utilisateur réel, comportement identique. */
+%>
+<% const _whatsAppHref = `/go/whatsapp?text=${_whatsAppMessage}`; %>
 
 <% const _showMobileNav = !/^\/(admin|commande)(\/|$)/.test(_cp); %>
 
