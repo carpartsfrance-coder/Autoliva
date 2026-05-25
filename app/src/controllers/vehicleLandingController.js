@@ -347,16 +347,22 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
   });
 }
 
-/* GET /pieces-auto/:make */
+/* GET /pieces-auto/:make
+ *
+ * Comportement quand le slug n'existe pas en DB : on redirige 301 vers le
+ * listing /pieces-auto au lieu de renvoyer 404. Cela évite les "broken
+ * internal links" Semrush sur les marques qui ont été retirées du catalogue
+ * (ex: /pieces-auto/citroen, /pieces-auto/volvo) tout en consolidant le
+ * PageRank vers la page parent. */
 async function getMakeLanding(req, res, next) {
   try {
     const makeSlug = String(req.params.make || '').trim().toLowerCase();
     if (!makeSlug) {
-      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+      return res.redirect(301, '/pieces-auto');
     }
     const make = await vehicleService.resolveMakeSlug(makeSlug);
     if (!make) {
-      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+      return res.redirect(301, '/pieces-auto');
     }
     return renderLanding(req, res, {
       makeName: make.name,
@@ -369,17 +375,27 @@ async function getMakeLanding(req, res, next) {
   }
 }
 
-/* GET /pieces-auto/:make/:model */
+/* GET /pieces-auto/:make/:model
+ *
+ * Si le model n'existe pas mais la make oui : 301 vers la page make (préserve
+ * PageRank). Si la make n'existe pas non plus : 301 vers le listing global.
+ * Élimine les ~95 alertes "4XX pages" sur des slugs véhicule trop précis
+ * (ex: bmw/x3-e83-2004-2010 → bmw/x3-e83 n'existe pas mais "bmw" oui). */
 async function getModelLanding(req, res, next) {
   try {
     const makeSlug = String(req.params.make || '').trim().toLowerCase();
     const modelSlug = String(req.params.model || '').trim().toLowerCase();
     if (!makeSlug || !modelSlug) {
-      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+      return res.redirect(301, '/pieces-auto');
     }
     const resolved = await vehicleService.resolveModelSlug(makeSlug, modelSlug);
     if (!resolved) {
-      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+      // Fallback : si la make seule existe, on redirige vers sa landing.
+      const fallbackMake = await vehicleService.resolveMakeSlug(makeSlug);
+      if (fallbackMake) {
+        return res.redirect(301, `/pieces-auto/${fallbackMake.slug}`);
+      }
+      return res.redirect(301, '/pieces-auto');
     }
     return renderLanding(req, res, {
       makeName: resolved.make.name,
@@ -401,18 +417,24 @@ async function getModelCategoryLanding(req, res, next) {
     const modelSlug = String(req.params.model || '').trim().toLowerCase();
     const categorySlug = String(req.params.category || '').trim().toLowerCase();
     if (!makeSlug || !modelSlug || !categorySlug) {
-      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+      return res.redirect(301, '/pieces-auto');
     }
     const resolved = await vehicleService.resolveModelSlug(makeSlug, modelSlug);
     if (!resolved) {
-      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+      // 301 vers le niveau parent existant (make si possible, sinon listing).
+      const fallbackMake = await vehicleService.resolveMakeSlug(makeSlug);
+      if (fallbackMake) {
+        return res.redirect(301, `/pieces-auto/${fallbackMake.slug}`);
+      }
+      return res.redirect(301, '/pieces-auto');
     }
     /* Résolution catégorie depuis le slug → name complet (ex: "Transmission > Mécatronique") */
     const Category = require('../models/Category');
     const catDoc = await Category.findOne({ slug: categorySlug, isActive: { $ne: false } })
       .select('name slug').lean();
     if (!catDoc) {
-      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+      // Catégorie absente : on retombe sur la landing model qui existe.
+      return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}`);
     }
     /* Le partTypeName affiché à l'utilisateur est le dernier segment de la
      * catégorie (ex: "Transmission > Mécatronique" → "Mécatronique") pour un

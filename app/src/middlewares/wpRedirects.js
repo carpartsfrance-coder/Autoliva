@@ -35,10 +35,16 @@ const EXACT_REDIRECTS = {
   '/a-propos/':           '/',
   '/mentions-legales':    '/legal/mentions-legales',
   '/mentions-legales/':   '/legal/mentions-legales',
-  '/privacy-policy':      '/legal/politique-de-confidentialite',
-  '/privacy-policy/':     '/legal/politique-de-confidentialite',
-  '/politique-de-confidentialite':  '/legal/politique-de-confidentialite',
-  '/politique-de-confidentialite/': '/legal/politique-de-confidentialite',
+  '/privacy-policy':      '/legal/confidentialite',
+  '/privacy-policy/':     '/legal/confidentialite',
+  '/politique-de-confidentialite':  '/legal/confidentialite',
+  '/politique-de-confidentialite/': '/legal/confidentialite',
+  // Le footer + plusieurs templates pointaient vers /legal/politique-de-confidentialite
+  // qui n'existe pas (vrai slug = /legal/confidentialite). Tant que les vues ne sont
+  // pas toutes corrigées, on garde un 301 ici pour absorber les liens externes
+  // existants (newsletter, emails, anciens partages sociaux).
+  '/legal/politique-de-confidentialite':  '/legal/confidentialite',
+  '/legal/politique-de-confidentialite/': '/legal/confidentialite',
   '/cgv':                 '/legal/cgv',
   '/cgv/':                '/legal/cgv',
   '/conditions-generales-de-vente':  '/legal/cgv',
