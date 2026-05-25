@@ -12,6 +12,25 @@ function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+/* Garde-fou title SEO : 60 char max (limite SERP Google). Préserve le suffix
+ * " | Brand" ou " - Brand" si présent, sinon tronque proprement. */
+const SEO_TITLE_MAX = 60;
+function clampSeoTitle(t) {
+  if (!t) return t;
+  const s = String(t).trim();
+  if (s.length <= SEO_TITLE_MAX) return s;
+  const suffixes = [` | ${brand.NAME}`, ` - ${brand.NAME}`];
+  for (const sx of suffixes) {
+    if (s.endsWith(sx)) {
+      const head = s.slice(0, s.length - sx.length).trim();
+      const maxHead = Math.max(20, SEO_TITLE_MAX - sx.length - 1);
+      const cut = head.length > maxHead ? `${head.slice(0, maxHead).trim()}…` : head;
+      return `${cut}${sx}`;
+    }
+  }
+  return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+}
+
 function normalizeComparableText(value) {
   let input = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (!input) return '';
@@ -342,7 +361,7 @@ function getBlogIndex(req, res) {
     const category = getTrimmedString(req.query.category);
     const page = Math.max(1, Number(req.query.page) || 1);
 
-    const title = `${brand.NAME} | Blog Expertise Automobile`;
+    const title = clampSeoTitle(`${brand.NAME} | Blog Expertise Automobile`);
     const metaDescription =
       "Guides techniques, conseils d'entretien et expertise automobile : retrouvez nos articles pour mieux choisir, diagnostiquer et entretenir vos pièces.";
 
@@ -578,7 +597,7 @@ async function getBlogPost(req, res) {
 
     const computedDesc = truncateText(stripHtml(post.excerpt || contentHtml || ''), 160);
     const metaDescription = normalizeMetaText(post.seo && post.seo.metaDescription ? post.seo.metaDescription : computedDesc);
-    const title = normalizeMetaText(post.seo && post.seo.metaTitle ? post.seo.metaTitle : `${post.title} - ${brand.NAME}`);
+    const title = clampSeoTitle(normalizeMetaText(post.seo && post.seo.metaTitle ? post.seo.metaTitle : `${post.title} - ${brand.NAME}`));
 
     const excerptForView = post.excerpt || computedDesc;
 

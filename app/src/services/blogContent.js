@@ -7,11 +7,49 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+/* Réécrit à la volée les anciens patterns d'URL WooCommerce/carpartsfrance
+ * qui peuvent traîner dans le contenu DB (articles blog, seoText admin, etc.).
+ * Évite que ces liens internes apparaissent en "broken internal links" dans
+ * Semrush. La règle complète est dans wpRedirects.js mais on les normalise
+ * AUSSI ici pour ne pas même les émettre dans le HTML rendu. */
+function rewriteLegacyInternalUrl(input) {
+  if (!input || typeof input !== 'string') return input;
+  let u = input;
+  // Domaines pleine URL → on retire pour traiter comme path relatif
+  u = u.replace(/^https?:\/\/(?:www\.)?carpartsfrance\.fr/i, '');
+  u = u.replace(/^https?:\/\/(?:www\.)?autoliva\.com/i, '');
+  // /produit/X → /product/X/
+  u = u.replace(/^\/produit\/([^/?#]+)\/?(\?[^#]*)?(#.*)?$/i, '/product/$1/$2$3');
+  // /produits/SLUG → /product/SLUG/ (le router /produits sert le listing, donc
+  // pas de capture avec slug sauf si le lien est explicite ; on n'agit qu'en
+  // présence d'un slug derrière)
+  u = u.replace(/^\/produits\/([^/?#]+)\/?(\?[^#]*)?(#.*)?$/i, '/product/$1/$2$3');
+  // /shop/X et /boutique/X → /product/X/
+  u = u.replace(/^\/(?:shop|boutique)\/([^/?#]+)\/?(\?[^#]*)?(#.*)?$/i, '/product/$1/$2$3');
+  // /product-category/X et /categorie-produit/X → /categorie/X
+  u = u.replace(/^\/(?:product-category|categorie-produit)\/([^/?#]+)\/?(\?[^#]*)?(#.*)?$/i, '/categorie/$1$2$3');
+  // /categorie/X/ (trailing slash) → /categorie/X
+  u = u.replace(/^\/categorie\/([^/?#]+)\/(\?[^#]*)?(#.*)?$/i, '/categorie/$1$2$3');
+  // /marque/X → /pieces-auto/X
+  u = u.replace(/^\/(?:marque|marque-voiture)\/([^/?#]+)\/?(\?[^#]*)?(#.*)?$/i, '/pieces-auto/$1$2$3');
+  // /tag/X → /produits?q=X
+  u = u.replace(/^\/(?:tag|tag-produit|product_tag)\/([^/?#]+)\/?$/i, (_, slug) => `/produits?q=${encodeURIComponent(slug)}`);
+  // ?add-to-cart=… présent dans un lien → /panier
+  if (/[?&]add-to-cart=/i.test(u)) u = '/panier';
+  return u;
+}
+
 function normalizeUrl(rawUrl) {
   const input = typeof rawUrl === 'string' ? rawUrl.trim() : '';
   if (!input) return '';
-  if (input.startsWith('/')) return input;
-  if (/^https?:\/\//i.test(input)) return input;
+  // Anchor pure
+  if (input.startsWith('#')) return input;
+  // mailto:, tel:, etc.
+  if (/^(?:mailto:|tel:|javascript:)/i.test(input)) return input;
+  // URL relative ou absolue HTTP : on normalise les patterns legacy
+  if (input.startsWith('/') || /^https?:\/\//i.test(input)) {
+    return rewriteLegacyInternalUrl(input);
+  }
   return '';
 }
 

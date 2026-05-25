@@ -31,6 +31,28 @@ function toJsonLdSafe(value) {
     .replace(/&/g, '\\u0026');
 }
 
+/* Garde-fou title SEO : 60 char max pour éviter la troncature SERP Google.
+ * Stratégie : si trop long, on retire d'abord la queue "| Brand" (l'auteur
+ * peut l'écrire en pleine lettre), sinon on tronque le contenu en préservant
+ * la queue " | Brand" pour garder la branding cohérence. */
+const SEO_TITLE_MAX = 60;
+function clampSeoTitle(t) {
+  if (!t) return t;
+  const s = String(t).trim();
+  if (s.length <= SEO_TITLE_MAX) return s;
+  const suffix = ` | ${brand.NAME}`;
+  // Si le title contient le suffix, on tronque la partie head pour le préserver.
+  if (s.endsWith(suffix)) {
+    const head = s.slice(0, s.length - suffix.length).trim();
+    const maxHead = Math.max(20, SEO_TITLE_MAX - suffix.length - 1);
+    const cut = head.length > maxHead ? `${head.slice(0, maxHead).trim()}…` : head;
+    const candidate = `${cut}${suffix}`;
+    if (candidate.length <= SEO_TITLE_MAX) return candidate;
+    return `${candidate.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+  }
+  return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+}
+
 /* Auto-templates de contenu SEO (utilisés quand pas de VehicleLanding admin) */
 function buildAutoSeoText({ makeName, modelName, partTypeName, totalCount }) {
   if (modelName && partTypeName) {
@@ -83,7 +105,7 @@ async function listMakes(req, res, next) {
 
     const baseUrl = getPublicBaseUrlFromReq(req);
     const canonicalUrl = baseUrl ? `${baseUrl}/pieces-auto` : '/pieces-auto';
-    const title = `Pièces auto reconditionnées par marque | ${brand.NAME}`;
+    const title = clampSeoTitle(`Pièces auto reconditionnées par marque | ${brand.NAME}`);
     const metaDescription = `Trouvez vos pièces auto reconditionnées et garanties 2 ans, classées par marque véhicule. Catalogue complet : Audi, BMW, Peugeot, Renault, Volkswagen et plus. Livraison 24-48h.`;
 
     const jsonLd = toJsonLdSafe({
@@ -132,9 +154,21 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
     presetCategoryName: presetCategoryName || undefined,
   });
 
-  /* 404 si la combinaison n'a aucun produit (évite thin content + crawl gaspillé) */
+  /* Si la combinaison n'a aucun produit : au lieu de servir un 404 (qui crée
+   * des "broken internal links" + "4XX pages" dans Semrush), on redirige en
+   * 301 vers le parent le plus précis qui a du contenu :
+   *   - /pieces-auto/:make/:model/:category  →  /pieces-auto/:make/:model
+   *   - /pieces-auto/:make/:model            →  /pieces-auto/:make
+   *   - /pieces-auto/:make                   →  /pieces-auto
+   * Bénéfice : préserve le PageRank, supprime les 42 pages 4XX. */
   if (data.totalCount === 0) {
-    return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    if (partTypeSlug && modelSlug) {
+      return res.redirect(301, `/pieces-auto/${makeSlug}/${modelSlug}`);
+    }
+    if (modelSlug) {
+      return res.redirect(301, `/pieces-auto/${makeSlug}`);
+    }
+    return res.redirect(301, '/pieces-auto');
   }
 
   const baseUrl = getPublicBaseUrlFromReq(req);
@@ -154,9 +188,9 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
     partType: partTypeSlug,
   });
 
-  const title = (override && override.metaTitle)
+  const title = clampSeoTitle((override && override.metaTitle)
     ? override.metaTitle
-    : buildAutoTitle({ makeName, modelName, partTypeName });
+    : buildAutoTitle({ makeName, modelName, partTypeName }));
   const metaDescription = (override && override.metaDescription)
     ? override.metaDescription
     : buildAutoMetaDescription({ makeName, modelName, partTypeName, totalCount: data.totalCount });
@@ -235,14 +269,31 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
   const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
   const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
 
-  /* Computed h1 + breadcrumb name pour le template */
-  const h1 = (override && override.h1Override)
-    ? override.h1Override
-    : (modelName && partTypeName)
-      ? `${partTypeName} ${makeName} ${modelName} reconditionné`
-      : modelName
-        ? `Pièces auto ${makeName} ${modelName}`
-        : `Pièces auto ${makeName}`;
+  /* Computed h1 + breadcrumb name pour le template.
+   * IMPORTANT : H1 doit toujours différer du <title> pour éviter
+   * les warnings Semrush "duplicate H1 and title tags" (14 pages).
+   * Si l'admin a saisi un h1Override identique au metaTitle, on retombe
+   * sur l'auto-template pour garantir la différenciation. */
+  function buildAutoH1() {
+    if (modelName && partTypeName) return `${partTypeName} ${makeName} ${modelName} reconditionné`;
+    if (modelName) return `Pièces auto ${makeName} ${modelName}`;
+    return `Pièces auto ${makeName}`;
+  }
+  function normalizeForCompare(s) {
+    return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+  let h1 = (override && override.h1Override) ? override.h1Override : buildAutoH1();
+  // Si l'override H1 est strictement identique au title (case-insensitive après
+  // strip du suffixe " | Brand"), on bascule sur l'auto-template.
+  const titleWithoutSuffix = title.replace(new RegExp(`\\s*[|\\-]\\s*${brand.NAME}\\s*$`, 'i'), '').trim();
+  if (normalizeForCompare(h1) === normalizeForCompare(title)
+   || normalizeForCompare(h1) === normalizeForCompare(titleWithoutSuffix)) {
+    h1 = buildAutoH1();
+  }
+  // Fallback final si même l'auto-template matche : on ajoute un qualifier.
+  if (normalizeForCompare(h1) === normalizeForCompare(titleWithoutSuffix)) {
+    h1 = `${h1} : catalogue, garantie 2 ans`;
+  }
 
   /* Maillage interne : matrice de liens contextuels (modèles enfants,
      catégories disponibles, articles blog liés, sibling pages…). Géré par

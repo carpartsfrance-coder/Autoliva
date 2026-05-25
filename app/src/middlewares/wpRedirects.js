@@ -194,7 +194,73 @@ const DYNAMIC_REDIRECTS = [
     pattern: /^\/product\/([^/?#]+)$/i,
     target: (match) => `/product/${match[1].toLowerCase()}/`,
   },
+  // FR singulier WooCommerce: /produit/[slug]  ->  /product/[slug]/
+  {
+    pattern: /^\/produit\/([^/?#]+)\/?$/i,
+    target: (match) => `/product/${match[1].toLowerCase()}/`,
+  },
+  // FR pluriel d'un slug produit qui devrait pointer vers la fiche.
+  // /produits/[slug]  ->  /product/[slug]/  (note : /produits sans slug = listing,
+  // déjà géré par le router donc on capture seulement avec slug derrière).
+  {
+    pattern: /^\/produits\/([^/?#]+)\/?$/i,
+    target: (match) => `/product/${match[1].toLowerCase()}/`,
+  },
+  // Catégories WP fréquentes : /categorie-produit/[slug]
+  {
+    pattern: /^\/categorie-produit\/([^/?#]+)\/?$/i,
+    target: (match) => `/categorie/${match[1].toLowerCase()}`,
+  },
+  // /shop/[slug] WC legacy
+  {
+    pattern: /^\/shop\/([^/?#]+)\/?$/i,
+    target: (match) => `/product/${match[1].toLowerCase()}/`,
+  },
+  // /boutique/[slug] (FR shop)
+  {
+    pattern: /^\/boutique\/([^/?#]+)\/?$/i,
+    target: (match) => `/product/${match[1].toLowerCase()}/`,
+  },
+  // Tags WP: /tag-produit/[slug]  ->  recherche /produits?q=[slug]
+  {
+    pattern: /^\/(?:tag|tag-produit|product_tag)\/([^/?#]+)\/?$/i,
+    target: (match) => `/produits?q=${encodeURIComponent(match[1])}`,
+  },
+  // Marques véhicule WC sur autoliva : /marque/audi  ->  /pieces-auto/audi
+  {
+    pattern: /^\/(?:marque|marque-voiture)\/([^/?#]+)\/?$/i,
+    target: (match) => `/pieces-auto/${match[1].toLowerCase()}`,
+  },
+  // Pages auteur WP (cas non-couvert par GONE_PATTERNS si une URL custom existe)
+  {
+    pattern: /^\/author\/([^/?#]+)\/?$/i,
+    target: () => '/blog',
+  },
+  // /blog/category/[slug]  ->  /blog?category=[slug]
+  {
+    pattern: /^\/blog\/category\/([^/?#]+)\/?$/i,
+    target: (match) => `/blog?category=${encodeURIComponent(match[1])}`,
+  },
 ];
+
+// ── 4. Query-string patterns: add-to-cart, p=ID, etc. ──────────────────────
+//
+// Ces URLs WC ne devraient jamais arriver sur le nouveau site, mais quand
+// elles le font (vieux backlinks, partages…), on les neutralise proprement
+// au lieu de renvoyer 200 avec page vide ou 404.
+function tryQueryRedirect(req) {
+  const q = req.query || {};
+  // ?add-to-cart=ID → panier
+  if (q['add-to-cart']) return '/panier';
+  // ?remove_item=, ?undo_item=, ?empty-cart= → panier
+  if (q.remove_item || q.undo_item || q['empty-cart']) return '/panier';
+  // ?p=ID, ?page_id=, ?attachment_id= → home (gone géré par GONE_PATTERNS mais
+  // certains crawleurs envoient ces params sur le path racine).
+  if (q.p || q.page_id || q.attachment_id) return '/';
+  // ?orderby=, ?per_page=, ?paged= seuls (sans path) → /produits
+  if (req.path === '/' && (q.orderby || q.per_page || q.paged)) return '/produits';
+  return null;
+}
 
 // ── Middleware ────────────────────────────────────────────────────────────────
 
@@ -232,6 +298,13 @@ function wpRedirectsMiddleware(req, res, next) {
         return res.redirect(301, target);
       }
     }
+  }
+
+  // 4. Query-string-based legacy redirects (WooCommerce ?add-to-cart=, ?p=…)
+  const qTarget = tryQueryRedirect(req);
+  if (qTarget && qTarget !== req.originalUrl) {
+    console.log(`[301-q] ${req.originalUrl} -> ${qTarget}`);
+    return res.redirect(301, qTarget);
   }
 
   return next();

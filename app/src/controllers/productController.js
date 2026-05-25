@@ -602,27 +602,43 @@ async function getProduct(req, res, next) {
       return `${truncatedName}${suffix}`;
     }
     /* Si l'override DB n'a pas de suffix marque, on l'ajoute pour cohérence
-       SEO (sinon certaines fiches s'affichent sans " | Autoliva" en SERP). */
+       SEO (sinon certaines fiches s'affichent sans " | Autoliva" en SERP).
+       Respecte STRICTEMENT SEO_TITLE_MAX (60 char) pour éviter la troncature
+       SERP de Google (cause des 37 alertes Semrush "title too long"). */
     function ensureBrandSuffix(t) {
       if (!t) return t;
       const suffix = ` | ${brand.NAME}`;
       const trimmed = t.trim();
-      if (trimmed.endsWith(suffix)) return trimmed;
+      // Déjà conforme avec ou sans suffix
+      if (trimmed.length <= SEO_TITLE_MAX && trimmed.endsWith(suffix)) return trimmed;
       const lower = trimmed.toLowerCase();
       const lowerName = brand.NAME.toLowerCase();
-      /* Si le brand est déjà mentionné en fin (avec un autre séparateur), on
-         laisse tel quel — l'auteur a probablement choisi cette tournure. */
-      if (lower.endsWith(lowerName)) return trimmed;
-      /* Si l'ajout du suffix dépasse 65 caractères, on tronque le nom. */
+      // Si le brand est déjà présent en fin (autre séparateur), on n'ajoute
+      // pas le suffix mais on tronque quand même si > 60.
+      if (lower.endsWith(lowerName)) {
+        if (trimmed.length <= SEO_TITLE_MAX) return trimmed;
+        return `${trimmed.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+      }
+      // Cas standard : on essaie d'ajouter le suffix dans la limite 60 ; sinon
+      // on tronque la partie titre pour préserver " | Brand".
       const candidate = `${trimmed}${suffix}`;
-      if (candidate.length <= 65) return candidate;
-      const maxLen = Math.max(20, 65 - suffix.length - 1);
+      if (candidate.length <= SEO_TITLE_MAX) return candidate;
+      const maxLen = Math.max(20, SEO_TITLE_MAX - suffix.length - 1);
       const cut = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen).trim()}…` : trimmed;
       return `${cut}${suffix}`;
     }
-    const seoTitle = titleOverride
-      ? ensureBrandSuffix(titleOverride)
-      : buildSeoTitleFitted(product.name, brandText, skuText);
+    /* Garde-fou ultime : quoi qu'il arrive, jamais > SEO_TITLE_MAX. */
+    function clampTitle(t) {
+      if (!t) return t;
+      const s = String(t).trim();
+      if (s.length <= SEO_TITLE_MAX) return s;
+      return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+    }
+    const seoTitle = clampTitle(
+      titleOverride
+        ? ensureBrandSuffix(titleOverride)
+        : buildSeoTitleFitted(product.name, brandText, skuText),
+    );
 
     const descriptionOverride = product.seo && typeof product.seo.metaDescription === 'string'
       ? sanitizeBrandLeak(product.seo.metaDescription.trim())
@@ -711,10 +727,27 @@ async function getProduct(req, res, next) {
 
     const categoryNameForSchema = typeof product.category === 'string' ? product.category.trim() : '';
 
+    // aggregateRating : on n'émet le bloc que si on a des avis RÉELS
+    // en DB. Les valeurs hardcodées (4.2 / 37) étaient flaggées invalides par
+    // Semrush et exposaient à un manual action Google (rich snippet trompeur).
+    const realRatings = product.ratings || product.reviews || null;
+    const realRatingValue = realRatings && (realRatings.average || realRatings.value);
+    const realRatingCount = realRatings && (realRatings.count || realRatings.total);
+    const aggregateRatingBlock = (realRatingValue && realRatingCount && Number(realRatingCount) > 0)
+      ? {
+          '@type': 'AggregateRating',
+          ratingValue: String(realRatingValue),
+          ratingCount: String(realRatingCount),
+          bestRating: '5',
+          worstRating: '1',
+        }
+      : undefined;
+
     const schemaProduct = {
-      /* Multi-type Product + AutomotivePart : signal vertical "auto-parts" à
-       * Google. Multi-type est valide en JSON-LD (tableau de @type). */
-      '@type': ['Product', 'AutomotivePart'],
+      /* @type='Product' uniquement : AutomotivePart n'est pas un type
+       * Schema.org valide (causait 908 erreurs structured data). Le signal
+       * "auto-parts" passe via category + isAccessoryOrSparePartFor. */
+      '@type': 'Product',
       name: product.name,
       description: truncateText(descriptionForSchema, 5000),
       sku: skuText || undefined,
@@ -740,13 +773,7 @@ async function getProduct(req, res, next) {
         returnMethod: 'https://schema.org/ReturnByMail',
         returnFees: 'https://schema.org/FreeReturn',
       },
-      aggregateRating: {
-        '@type': 'AggregateRating',
-        ratingValue: '4.2',
-        bestRating: '5',
-        worstRating: '1',
-        ratingCount: '37',
-      },
+      aggregateRating: aggregateRatingBlock,
       offers: price
         ? {
             '@type': 'Offer',

@@ -30,6 +30,24 @@ function normalizeMetaText(value) {
   return value.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 
+/* Garde-fou title SEO : 60 char max (limite SERP Google). */
+const SEO_TITLE_MAX = 60;
+function clampSeoTitle(t) {
+  if (!t) return t;
+  const s = String(t).trim();
+  if (s.length <= SEO_TITLE_MAX) return s;
+  const suffix = ` | ${brand.NAME}`;
+  if (s.endsWith(suffix)) {
+    const head = s.slice(0, s.length - suffix.length).trim();
+    const maxHead = Math.max(20, SEO_TITLE_MAX - suffix.length - 1);
+    const cut = head.length > maxHead ? `${head.slice(0, maxHead).trim()}…` : head;
+    const candidate = `${cut}${suffix}`;
+    if (candidate.length <= SEO_TITLE_MAX) return candidate;
+    return `${candidate.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+  }
+  return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+}
+
 function toSafeJsonLd(value) {
   return JSON.stringify(value)
     .replace(/</g, '\\u003c')
@@ -79,7 +97,7 @@ async function listCategories(req, res, next) {
         }));
     }
 
-    const title = `Catégories - ${brand.NAME}`;
+    const title = clampSeoTitle(`Catégories - ${brand.NAME}`);
     const metaDescription = 'Découvre toutes nos catégories de pièces auto : moteur, freinage, carrosserie, électricité, entretien et plus.';
     const baseUrl = getPublicBaseUrlFromReq(req);
     const langPrefix = req.lang === 'en' ? '/en' : '';
@@ -179,7 +197,11 @@ async function getCategory(req, res, next) {
      * au-dessus du H1 rappelle déjà la hiérarchie. */
     const rawName = getTrimmedString(category.name);
     const name = formatCategoryDisplayName(rawName);
-    const title = `${name} - Pièces auto | ${brand.NAME}`;
+    /* Title clampé à 60 char + override DB éventuel.
+     * Si DB a un metaTitle custom, on respecte mais on clamp toujours. */
+    const dbMetaTitle = category.seo && typeof category.seo.metaTitle === 'string'
+      ? category.seo.metaTitle.trim() : '';
+    const title = clampSeoTitle(dbMetaTitle || `${name} - Pièces auto | ${brand.NAME}`);
     const metaDescription = buildCategoryMetaDescription(name, data.totalCount);
 
     const canonicalBase = buildCategoryPublicUrl(category, { req });

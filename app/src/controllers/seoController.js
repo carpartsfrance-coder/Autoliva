@@ -288,6 +288,7 @@ async function buildBlogUrlsDe(baseUrl, dbConnected) {
    monolithique pour compat. */
 async function getSitemapXml(req, res, next) {
   try {
+    const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
 
     if (process.env.SITEMAP_LEGACY_FLAT === 'true') {
@@ -296,15 +297,32 @@ async function getSitemapXml(req, res, next) {
 
     const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
     const now = new Date().toISOString();
-    const sitemaps = [
-      { loc: resolveUrl('/sitemap-pages.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-categories.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-products.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-references.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-blog.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-blog-de.xml'), lastmod: now },
+
+    /* Ne référence un sous-sitemap que s'il contient au moins 1 URL.
+     * Sinon Semrush/Google le flagge en "sitemap incorrect" (cause des
+     * 2 alertes "incorrect pages found in sitemap.xml"). */
+    const candidates = [
+      { path: '/sitemap-pages.xml', build: () => buildPagesUrls(baseUrl, dbConnected) },
+      { path: '/sitemap-categories.xml', build: () => buildCategoriesUrls(req, dbConnected) },
+      { path: '/sitemap-products.xml', build: () => buildProductsUrls(req, baseUrl, dbConnected) },
+      { path: '/sitemap-vehicles.xml', build: () => buildVehiclesUrls(req, baseUrl, dbConnected) },
+      { path: '/sitemap-references.xml', build: () => buildReferencesUrls(baseUrl, dbConnected) },
+      { path: '/sitemap-blog.xml', build: () => buildBlogUrls(baseUrl, dbConnected) },
+      { path: '/sitemap-blog-de.xml', build: () => buildBlogUrlsDe(baseUrl, dbConnected) },
     ];
+
+    const sitemaps = [];
+    for (const c of candidates) {
+      try {
+        const urls = await c.build();
+        if (Array.isArray(urls) && urls.length > 0) {
+          sitemaps.push({ loc: resolveUrl(c.path), lastmod: now });
+        }
+      } catch (e) {
+        // Silencieux : si un sous-sitemap échoue, on ne le liste pas (mais on
+        // continue avec les autres pour ne pas casser tout l'index).
+      }
+    }
 
     return sendXml(res, renderSitemapIndex(sitemaps));
   } catch (err) {

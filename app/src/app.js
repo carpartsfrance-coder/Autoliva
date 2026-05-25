@@ -566,7 +566,11 @@ app.use('/de/blog', require('./routes/blogDe'));
  * Comportement temporaire jusqu'à ce qu'on traduise produits/catégories. */
 app.use('/de', (req, res) => {
   const targetPath = req.originalUrl.replace(/^\/de(\/|$)/, '/') || '/';
-  res.redirect(302, targetPath); // 302 (temporaire) car DE est en cours de roll-out
+  // 301 (permanent) : consolide le PageRank côté FR. Les routes /de/blog
+  // ci-dessus sont déclarées AVANT ce catchall, donc le blog DE reste
+  // accessible. Quand on ajoutera des produits/catégories DE, on déclarera
+  // simplement leur router au-dessus, ils auront la priorité sur ce 301.
+  res.redirect(301, targetPath);
 });
 
 app.use((req, res) => {
