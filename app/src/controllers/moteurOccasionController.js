@@ -19,6 +19,7 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 
 const emailService = require('../services/emailService');
+const { sendSms } = require('../services/smsService');
 const { captureContactLead } = require('../services/leadCapture');
 const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
@@ -557,6 +558,17 @@ async function postDevis(req, res, next) {
         });
       } catch (err) {
         console.error('[moteur-occasion] ack email failed:', err && err.message);
+      }
+    }
+
+    // 2b) SMS de confirmation immédiat (best-effort) — le client vient de donner
+    // son numéro, un SMS instantané rassure fortement et réduit l'anxiété d'attente.
+    if (cleanPhone) {
+      try {
+        const smsText = `Autoliva : demande de devis ${quoteRef} bien recue ! Un technicien vous recontacte sous 24h ouvrees (email ou tel). Urgent ? ${brand.PHONE}`;
+        await sendSms({ to: cleanPhone, text: smsText });
+      } catch (err) {
+        console.error('[moteur-occasion] ack SMS failed:', err && err.message);
       }
     }
 
