@@ -50,7 +50,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
   // En dev local, baseUrl pointe sur localhost → on force autoliva.com pour les assets email.
   const publicSite = 'https://autoliva.com';
   const logoUrl = publicSite + '/images/logo-autoliva.png';
-  const moteursUrl = publicSite + '/moteurs';
+  const catalogueUrl = publicSite + '/produits';
   const phoneIntl = brandObj.PHONE_INTL || '+33465845488';
   const phoneDisplay = brandObj.PHONE || '04 65 84 54 88';
   const greeting = safeFirstName ? `Bonjour ${safeFirstName},` : 'Bonjour,';
@@ -177,7 +177,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
       <!-- TRUST STRIP : une ligne discrète au lieu d'un gros bloc -->
       <tr><td style="padding:24px 32px 8px;">
         <p style="margin:0;padding:14px 18px;background:#fafbfc;border:1px solid #eef0f3;border-radius:8px;font-size:13px;color:#475569;text-align:center;line-height:1.5;">
-          Banc d'essai obligatoire · Kilométrage certifié · Garantie 12 mois sans franchise
+          Banc d'essai obligatoire · Kilométrage certifié · Garantie jusqu'à 12 mois sans franchise
         </p>
       </td></tr>
 
@@ -186,7 +186,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
           <tr>
             <td>
-              <a href="${moteursUrl}" style="display:inline-block;background:#E1001A;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">Voir d'autres moteurs livrés</a>
+              <a href="${catalogueUrl}" style="display:inline-block;background:#E1001A;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">Découvrir notre catalogue</a>
             </td>
             <td align="right" style="font-size:13px;color:#64748b;">
               Urgent ? <a href="tel:${phoneIntl}" style="color:#0f172a;font-weight:700;text-decoration:none;">${phoneDisplay}</a>
@@ -197,7 +197,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
 
       <!-- SIGNATURE -->
       <tr><td style="padding:24px 32px 8px;border-top:1px solid #f1f2f4;">
-        <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.6;">Bonne route,<br><strong>L'équipe technique Autoliva</strong></p>
+        <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.6;">À très vite,<br><strong>L'équipe technique Autoliva</strong></p>
       </td></tr>
 
       <!-- FOOTER -->
@@ -326,7 +326,7 @@ function buildServiceJsonLd({ baseUrl }) {
     areaServed: { '@type': 'Country', name: 'France' },
     url,
     description:
-      "Moteurs d'occasion essence et diesel testés sur banc d'essai (compression, étanchéité, endoscopie), kilométrage certifié, garantie 12 mois sans franchise kilométrique transférable à la revente.",
+      "Moteurs d'occasion essence et diesel testés sur banc d'essai (compression, étanchéité, endoscopie), kilométrage certifié, garantie jusqu'à 12 mois sans franchise kilométrique transférable à la revente.",
     offers: {
       '@type': 'Offer',
       url,
@@ -356,9 +356,9 @@ function renderPage(res, req, opts) {
   const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
   const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
 
-  const title = `Moteur d'occasion testé, certifié, garanti 12 mois — ${brand.NAME}`;
+  const title = `Moteur d'occasion testé, certifié, garanti jusqu'à 12 mois — ${brand.NAME}`;
   const metaDescription =
-    "Moteurs d'occasion essence et diesel : banc d'essai obligatoire (compression, étanchéité, endoscopie), kilométrage certifié, garantie 12 mois sans franchise kilométrique, transférable. Devis en 24h.";
+    "Moteurs d'occasion essence et diesel : banc d'essai obligatoire (compression, étanchéité, endoscopie), kilométrage certifié, garantie jusqu'à 12 mois sans franchise kilométrique, transférable. Devis en 24h.";
   const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}${LANDING_PATH}` : `${langPrefix}${LANDING_PATH}`;
 
   return res.status(opts.statusCode || 200).render('moteur-occasion/index', {
