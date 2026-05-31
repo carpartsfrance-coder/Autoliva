@@ -10,7 +10,7 @@
     * Mobile  : scroll-up rapide après scroll-down (proxy de "user about to leave")
 */%>
 <% var _eiPath = (typeof currentPathWithoutLang !== 'undefined' ? currentPathWithoutLang : (typeof currentPath === 'string' ? currentPath : '')).split('?')[0].split('#')[0]; %>
-<% var _showExitIntent = !/^\/(admin|commande|panier|compte|legal|sav)(\/|$)/.test(_eiPath) && !(typeof currentUser !== 'undefined' && currentUser); %>
+<% var _showExitIntent = !/^\/(admin|commande|panier|compte|legal|sav|moteurs)(\/|$)/.test(_eiPath) && !(typeof currentUser !== 'undefined' && currentUser); %>
 
 <% if (_showExitIntent) { %>
 <div id="exit-intent-popup" class="fixed inset-0 z-[60] hidden items-center justify-center p-4 bg-black/60 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="ei-title">
