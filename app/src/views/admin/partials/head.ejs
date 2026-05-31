@@ -14,7 +14,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="/admin/style.css" />
+    <link rel="stylesheet" href="/admin/style.css?v=<%= (typeof assetVersions !== 'undefined' && assetVersions.adminCss) || Date.now() %>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" />

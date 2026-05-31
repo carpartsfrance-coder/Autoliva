@@ -16,6 +16,15 @@ module.exports = {
         'accent-dark': '#111827',
         'border-light': '#E5E7EB',
         'border-dark': '#374151',
+        brand: {
+          dark: '#0A1120',
+          darker: '#060B15',
+          card: '#131C31',
+          red: '#E1001A',
+          redhover: '#B50015',
+          gray: '#F8F9FA',
+          textgray: '#8B95A5',
+        },
       },
       fontFamily: {
         display: ['Inter', 'sans-serif'],

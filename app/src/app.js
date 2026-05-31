@@ -396,8 +396,22 @@ app.use((req, res, next) => {
   next();
 });
 
+// Cache-buster basé sur le mtime des CSS compilés.
+// Calculé au boot pour éviter un stat() à chaque requête.
+const _fs = require('fs');
+const _path = require('path');
+function _safeMtime(relPath) {
+  try { return Math.floor(_fs.statSync(_path.join(__dirname, '..', 'public', relPath)).mtimeMs); }
+  catch (_) { return Date.now(); }
+}
+const ASSET_VERSIONS = {
+  mainCss: _safeMtime('css/styles.css'),
+  adminCss: _safeMtime('admin/style.css'),
+};
+
 app.use((req, res, next) => {
   res.locals.brand = brand;
+  res.locals.assetVersions = ASSET_VERSIONS;
   next();
 });
 
