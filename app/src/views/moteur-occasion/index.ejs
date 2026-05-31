@@ -212,6 +212,19 @@ Envoyer ma demande
   var subtitle = document.querySelector('[data-step-subtitle]');
   var recap = form.querySelector('[data-step1-recap]');
 
+  // ── Tracking funnel (GTM dataLayer) ──
+  window.dataLayer = window.dataLayer || [];
+  function track(ev, extra) {
+    try { window.dataLayer.push(Object.assign({ event: ev, funnel: 'moteur-occasion' }, extra || {})); } catch (e) {}
+  }
+  // form_start : 1er focus sur un champ du formulaire (une seule fois)
+  var _formStarted = false;
+  form.addEventListener('focusin', function () {
+    if (_formStarted) return;
+    _formStarted = true;
+    track('form_start');
+  });
+
   function goStep(n) {
     if (n === 1) {
       step1.classList.remove('hidden'); step2.classList.add('hidden');
@@ -226,6 +239,7 @@ Envoyer ma demande
       bar2.classList.add('bg-brand-red'); bar2.classList.remove('bg-gray-200');
       if (counter) counter.textContent = '2 / 2';
       if (subtitle) subtitle.textContent = 'Étape 2 — Comment vous joindre';
+      track('funnel_step2_view');
       // Récap pour rappel + bouton modifier
       var plate = plateInput ? plateInput.value.trim() : '';
       var engineTypeChecked = form.querySelector('input[name="engineType"]:checked');
@@ -243,6 +257,7 @@ Envoyer ma demande
       return;
     }
     errMsg.classList.add('hidden');
+    track('funnel_step1_complete');
     goStep(2);
   });
 
@@ -535,7 +550,7 @@ const popularEngines = [
 <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path></svg>
 Livré client
 </div>
-<a href="#quote-form" class="w-full bg-brand-red hover:bg-brand-redhover text-white font-semibold py-2.5 rounded-lg transition text-sm flex items-center justify-center gap-2">
+<a href="#quote-form" data-cta="engine-card" class="w-full bg-brand-red hover:bg-brand-redhover text-white font-semibold py-2.5 rounded-lg transition text-sm flex items-center justify-center gap-2">
 Demander mon devis
 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </a>
@@ -566,7 +581,7 @@ Demander mon devis
 <h2 class="text-3xl md:text-4xl font-bold mb-4">On source votre moteur, même hors catalogue</h2>
 <p class="text-brand-textgray text-lg mb-9 max-w-2xl mx-auto">Donnez-nous votre plaque ou votre code moteur : on le trouve dans notre réseau et on vous envoie un devis personnalisé sous 24&nbsp;h.</p>
 <div class="flex flex-col sm:flex-row gap-4 justify-center">
-<a href="#quote-form" class="inline-flex items-center justify-center gap-2 bg-brand-red hover:bg-brand-redhover text-white font-bold py-4 px-8 rounded-lg transition shadow-lg shadow-brand-red/30">
+<a href="#quote-form" data-cta="sourcing" class="inline-flex items-center justify-center gap-2 bg-brand-red hover:bg-brand-redhover text-white font-bold py-4 px-8 rounded-lg transition shadow-lg shadow-brand-red/30">
 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 Demander mon devis gratuit
 </a>
@@ -727,7 +742,7 @@ Demander mon devis gratuit
 <h2 class="text-3xl md:text-4xl font-bold mb-4 text-gray-900">Une question sans réponse ?</h2>
 <p class="text-gray-600 text-lg mb-9 max-w-2xl mx-auto">Demandez votre devis gratuit : notre équipe technique vous répond sous 24&nbsp;h, par mail ou par téléphone, avec le prix, les photos et la disponibilité de votre moteur.</p>
 <div class="flex flex-col sm:flex-row gap-4 justify-center">
-<a href="#quote-form" class="inline-flex items-center justify-center gap-2 bg-brand-red hover:bg-brand-redhover text-white font-bold py-4 px-8 rounded-lg transition shadow-lg shadow-brand-red/30">
+<a href="#quote-form" data-cta="final-faq" class="inline-flex items-center justify-center gap-2 bg-brand-red hover:bg-brand-redhover text-white font-bold py-4 px-8 rounded-lg transition shadow-lg shadow-brand-red/30">
 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 Demander mon devis gratuit
 </a>
@@ -770,7 +785,7 @@ Demander mon devis gratuit
 <!-- Mobile : barre pleine largeur en bas -->
 <div class="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
 <div class="flex gap-2">
-<a href="#quote-form" class="flex-1 inline-flex items-center justify-center gap-2 bg-brand-red text-white font-bold py-3 rounded-full text-sm">
+<a href="#quote-form" data-cta="sticky-mobile" class="flex-1 inline-flex items-center justify-center gap-2 bg-brand-red text-white font-bold py-3 rounded-full text-sm">
 Demander mon devis gratuit
 </a>
 <a href="tel:+33465845488" class="inline-flex items-center justify-center w-12 shrink-0 border-2 border-gray-300 text-brand-red rounded-full" aria-label="Appeler">
@@ -779,7 +794,7 @@ Demander mon devis gratuit
 </div>
 </div>
 <!-- Desktop : bouton flottant coin bas-droite -->
-<a href="#quote-form" class="hidden lg:inline-flex fixed bottom-6 right-6 z-40 items-center gap-2 bg-brand-red hover:bg-brand-redhover text-white font-bold py-4 px-7 rounded-full shadow-xl shadow-brand-red/30 transition">
+<a href="#quote-form" data-cta="sticky-desktop" class="hidden lg:inline-flex fixed bottom-6 right-6 z-40 items-center gap-2 bg-brand-red hover:bg-brand-redhover text-white font-bold py-4 px-7 rounded-full shadow-xl shadow-brand-red/30 transition">
 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 Demander mon devis gratuit
 </a>
@@ -798,6 +813,24 @@ Demander mon devis gratuit
   }
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
+})();
+</script>
+
+<!-- Tracking clics CTA (quel emplacement convertit le mieux) -->
+<script>
+(function () {
+  window.dataLayer = window.dataLayer || [];
+  document.addEventListener('click', function (e) {
+    var a = e.target && e.target.closest ? e.target.closest('a[data-cta]') : null;
+    if (!a) return;
+    try {
+      window.dataLayer.push({
+        event: 'cta_click',
+        funnel: 'moteur-occasion',
+        cta_location: a.getAttribute('data-cta') || 'unknown'
+      });
+    } catch (err) {}
+  }, true);
 })();
 </script>
 <% } %>
