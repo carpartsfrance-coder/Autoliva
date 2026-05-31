@@ -16,6 +16,7 @@
 <nav class="hidden lg:flex items-center gap-6 text-sm font-semibold text-slate-600">
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/" <%= _navActive('/') ? 'aria-current="page"' : '' %>><%= t('nav.home') %></a>
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/produits" <%= _navActive('/produits') ? 'aria-current="page"' : '' %>><%= t('nav.catalog') %></a>
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/moteurs') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/moteurs" <%= _navActive('/moteurs') ? 'aria-current="page"' : '' %>><%= t('nav.engines') %></a>
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/blog') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/blog" <%= _navActive('/blog') ? 'aria-current="page"' : '' %>><%= t('nav.blog') %></a>
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/contact') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/contact" <%= _navActive('/contact') ? 'aria-current="page"' : '' %>><%= t('nav.contact') %></a>
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/devis') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/devis" <%= _navActive('/devis') ? 'aria-current="page"' : '' %>><%= t('nav.quote') %></a>
@@ -104,6 +105,10 @@
         </a>
         <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/produits">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">storefront</span><%= t('nav.catalog') %></span>
+          <span class="material-symbols-outlined text-slate-300">chevron_right</span>
+        </a>
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/moteurs') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/moteurs">
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">precision_manufacturing</span><%= t('nav.engines') %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
         <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/blog') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/blog">

@@ -8,6 +8,7 @@ const { checkOrderAlerts } = require('./checkOrderAlerts');
 const { sendConsigneReminders } = require('./sendConsigneReminders');
 const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations } = require('./savCronJobs');
 const { reconcileScalapayOrders } = require('./reconcileScalapayOrders');
+const { runEngineQuoteReminders } = require('./sendEngineQuoteReminders');
 
 function startScheduler() {
   // Detect abandoned carts every hour (at minute 0)
@@ -111,7 +112,18 @@ function startScheduler() {
     }
   });
 
+  // Relances devis moteurs : tous les jours à 09:30 (J+3, J+7, J+14 auto-lost)
+  cron.schedule('30 9 * * *', async () => {
+    console.log('[scheduler] Lancement relances devis moteurs...');
+    try {
+      await runEngineQuoteReminders();
+    } catch (err) {
+      console.error('[scheduler] Erreur relances devis moteurs:', err.message || err);
+    }
+  });
+
   console.log('[scheduler] CRON paniers abandonnés programmé (détection :00, relances :05)');
+  console.log('[scheduler] CRON relances devis moteurs programmé (09:30 quotidien)');
   console.log('[scheduler] CRON SAV programmé (SLA :15, relances 09:05)');
   console.log('[scheduler] CRON alertes commandes programmé (:10)');
   console.log('[scheduler] CRON relances consigne programmé (09:00 quotidien)');
