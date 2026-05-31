@@ -153,7 +153,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:6px;">
                 <tr>
                   <td style="padding:11px 14px;background:#fafbfc;border-left:3px solid #3b82f6;border-radius:4px;">
-                    <p style="margin:0;font-size:13px;color:#1f2937;line-height:1.55;"><strong style="color:#1d4ed8;">Sourcing réseau —</strong> on trouve le moteur, on le réceptionne, banc d'essai obligatoire, puis expédition. Délai indicatif <strong>5 à 10 jours</strong>.</p>
+                    <p style="margin:0;font-size:13px;color:#1f2937;line-height:1.55;"><strong style="color:#1d4ed8;">Sourcing réseau —</strong> on trouve le moteur, on le réceptionne, banc d'essai obligatoire, puis expédition. <strong>Délai confirmé dans votre devis</strong>.</p>
                   </td>
                 </tr>
               </table>
@@ -541,7 +541,7 @@ async function postDevis(req, res, next) {
           ``,
           `Selon le stock :`,
           `• En stock atelier → expédition 48-72h après accord`,
-          `• Sourcing réseau → réception atelier, banc d'essai obligatoire, expédition sous 5 à 10 jours`,
+          `• Sourcing réseau → réception atelier, banc d'essai obligatoire, expédition. Délai confirmé dans votre devis.`,
           ``,
           `Aucun moteur n'est expédié sans passer par notre banc d'essai.`,
           ``,
