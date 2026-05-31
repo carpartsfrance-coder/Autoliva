@@ -280,6 +280,8 @@ function dt(v) {
                   : tplCondition === 'occasion'
                     ? 'Moteur d\'occasion intégralement testé sur banc d\'essai avant expédition.'
                     : '';
+              // Garantie selon l'état (cohérent avec le devis PDF/email) : reconditionné 12 mois, occasion 6 mois
+              const tplWarranty = (tplCondition === 'reconditionne_chemise_fonte' || tplCondition === 'reconditionne_complet') ? 12 : 6;
               const tplStock = engineQuote.stock.location === 'atelier'
                 ? 'Le moteur est actuellement dans notre atelier, déjà passé sur banc d\'essai.'
                 : engineQuote.stock.location === 'sourcing'
@@ -305,7 +307,7 @@ function dt(v) {
                 `Pour rappel, nos engagements :`,
                 `• Banc d'essai obligatoire (compression, étanchéité, endoscopie)`,
                 `• Kilométrage certifié et photo du compteur transmise`,
-                `• Garantie 12 mois sans franchise kilométrique`,
+                `• Garantie ${tplWarranty} mois sans franchise kilométrique`,
                 tplShippingBullet,
                 ``,
                 `À votre disposition pour toute question.`,
