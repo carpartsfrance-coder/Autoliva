@@ -25,6 +25,115 @@ const abandonedCartNoteSchema = new mongoose.Schema(
   { _id: true }
 );
 
+/**
+ * Sous-document pour le workflow "Devis moteur d'occasion".
+ * Présent uniquement sur les leads avec captureSource = 'landing_moteurs'.
+ * Permet au commercial de saisir l'identification moteur, le stock, la
+ * tarification (marge auto), et de stocker les photos (moteur, km, banc).
+ */
+const engineQuotePhotoSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true },                // ObjectId GridFS (string)
+    url: { type: String, required: true },               // /sav-files/<id>
+    filename: { type: String, default: '' },
+    mime: { type: String, default: '' },
+    size: { type: Number, default: 0 },
+    uploadedAt: { type: Date, default: Date.now },
+    uploadedByName: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
+const engineQuoteSentSchema = new mongoose.Schema(
+  {
+    sentAt: { type: Date, default: Date.now },
+    pdfId: { type: String, default: '' },
+    pdfUrl: { type: String, default: '' },
+    sellPriceHt: { type: Number, default: 0 },
+    sellPriceTtc: { type: Number, default: 0 },
+    depositCents: { type: Number, default: 0 },
+    mollieUrl: { type: String, default: '' },
+    mollieId: { type: String, default: '' },
+    customMessage: { type: String, default: '' },
+    sentByName: { type: String, default: '' },
+    openedAt: { type: Date, default: null },     // 1er pixel d'ouverture email
+    openCount: { type: Number, default: 0 },     // nombre total d'ouvertures
+    payClickedAt: { type: Date, default: null }, // 1er clic sur le bouton paiement
+    payClickCount: { type: Number, default: 0 }, // nombre total de clics paiement
+    pdfViewedAt: { type: Date, default: null },  // 1ère vue du PDF en ligne (lien tracké)
+    pdfViewCount: { type: Number, default: 0 },  // nombre total de vues PDF en ligne
+    /** Snapshot des photos jointes au moment de l'envoi (URLs GridFS) */
+    attachedPhotos: {
+      type: [{ id: String, url: String, filename: String, category: String }],
+      default: [],
+    },
+  },
+  { _id: true }
+);
+
+const engineQuoteReminderSchema = new mongoose.Schema(
+  {
+    type: { type: String, enum: ['j3', 'j7', 'j14_lost'], required: true },
+    sentAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+const engineQuoteSchema = new mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ['new', 'analyzing', 'quote_sent', 'acompte_recu', 'won', 'lost'],
+      default: 'new',
+    },
+    identifiedEngine: {
+      code: { type: String, default: '', trim: true },      // ex: 'M48.50'
+      model: { type: String, default: '', trim: true },     // ex: 'Porsche Cayenne Turbo 4.5 V8 — 955 Turbo'
+      year: { type: String, default: '', trim: true },      // ex: '2005'
+      mileage: { type: Number, default: 0, min: 0 },        // km au compteur du moteur donneur
+      condition: {                                          // état/reconditionnement
+        type: String,
+        enum: ['', 'occasion', 'reconditionne_chemise_fonte', 'reconditionne_complet'],
+        default: '',
+      },
+    },
+    stock: {
+      location: {
+        type: String,
+        enum: ['atelier', 'sourcing', 'indisponible', ''],
+        default: '',
+      },
+      estimatedDelay: { type: String, default: '', trim: true },
+    },
+    pricing: {
+      purchasePrice: { type: Number, default: 0, min: 0 },  // HT en €
+      additionalFees: { type: Number, default: 0, min: 0 }, // port, palette, frais
+      sellPrice: { type: Number, default: 0, min: 0 },      // HT en €
+      vatRate: { type: Number, default: 20, min: 0, max: 100 },
+    },
+    photos: {
+      engine: { type: [engineQuotePhotoSchema], default: [] },
+      kmReading: { type: [engineQuotePhotoSchema], default: [] },
+    },
+    updatedAt: { type: Date, default: null },
+    updatedByName: { type: String, default: '', trim: true },
+
+    /** Historique des envois de devis au client */
+    sentQuotes: { type: [engineQuoteSentSchema], default: [] },
+    /** Relances automatiques envoyées (anti-doublon cron) */
+    remindersSent: { type: [engineQuoteReminderSchema], default: [] },
+
+    /** Paiement acompte reçu (webhook Mollie) */
+    payment: {
+      mollieId: { type: String, default: '' },
+      amountCents: { type: Number, default: 0 },
+      status: { type: String, default: '' },     // 'paid', 'failed', etc.
+      paidAt: { type: Date, default: null },
+    },
+  },
+  { _id: false }
+);
+
 const abandonedCartSchema = new mongoose.Schema(
   {
     sessionId: { type: String, required: true, trim: true, index: true },
@@ -41,7 +150,7 @@ const abandonedCartSchema = new mongoose.Schema(
      */
     captureSource: {
       type: String,
-      enum: ['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'cart_activity', 'blog_cta', 'manual', ''],
+      enum: ['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'cart_activity', 'blog_cta', 'landing_moteurs', 'manual', ''],
       default: '',
       index: true,
     },
@@ -71,6 +180,9 @@ const abandonedCartSchema = new mongoose.Schema(
 
     /** Notes internes admin (chronologique) */
     notes: { type: [abandonedCartNoteSchema], default: [] },
+
+    /** Workflow devis moteur (rempli par commercial dans /admin/devis-moteurs) */
+    engineQuote: { type: engineQuoteSchema, default: null },
 
     /**
      * Demande explicite saisie par le client dans /devis ou /contact.

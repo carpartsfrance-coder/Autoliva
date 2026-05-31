@@ -1,0 +1,164 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'engine-quotes' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+      <div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Devis moteurs'}] }) %>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Devis moteurs d'occasion</div>
+        <div class="mt-1 text-sm text-slate-500">Workflow commercial dédié — identification, sourcing, tarification, photos.</div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="mt-8 grid grid-cols-2 lg:grid-cols-6 gap-4">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Total</div>
+        <div class="mt-1 text-2xl font-bold text-slate-900"><%= stats.total %></div>
+      </div>
+      <div class="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+        <div class="text-xs uppercase tracking-widest text-blue-500 font-semibold">Nouveau</div>
+        <div class="mt-1 text-2xl font-bold text-blue-700"><%= stats.newCount %></div>
+      </div>
+      <div class="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
+        <div class="text-xs uppercase tracking-widest text-amber-500 font-semibold">En analyse</div>
+        <div class="mt-1 text-2xl font-bold text-amber-700"><%= stats.analyzing %></div>
+      </div>
+      <div class="rounded-2xl border border-violet-100 bg-violet-50/40 p-4">
+        <div class="text-xs uppercase tracking-widest text-violet-500 font-semibold">Devis envoyés</div>
+        <div class="mt-1 text-2xl font-bold text-violet-700"><%= stats.quoteSent %></div>
+      </div>
+      <div class="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+        <div class="text-xs uppercase tracking-widest text-emerald-500 font-semibold">CA en attente</div>
+        <div class="mt-1 text-2xl font-bold text-emerald-700"><%= fmt(stats.caExpected) %> €</div>
+      </div>
+      <div class="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+        <div class="text-xs uppercase tracking-widest text-emerald-500 font-semibold">Marge prévue</div>
+        <div class="mt-1 text-2xl font-bold text-emerald-700"><%= fmt(stats.marginExpected) %> €</div>
+      </div>
+    </div>
+
+    <!-- Filtres -->
+    <form action="/admin/devis-moteurs" method="GET" class="mt-6 bg-white rounded-2xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3">
+      <input name="q" value="<%= filters.q || '' %>" placeholder="Recherche : nom, plaque, dossier, moteur…" class="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500">
+      <select name="status" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+        <option value="">Tous statuts</option>
+        <% Object.keys(statusLabels).forEach(function(s) { %>
+          <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>><%= statusLabels[s].label %></option>
+        <% }) %>
+      </select>
+      <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-5 py-2.5 rounded-xl text-sm">Filtrer</button>
+      <% if (filters.q || filters.status) { %>
+        <a href="/admin/devis-moteurs" class="px-5 py-2.5 text-sm text-slate-600 hover:text-slate-900">Réinitialiser</a>
+      <% } %>
+    </form>
+
+    <!-- Tableau -->
+    <% if (items.length === 0) { %>
+      <div class="mt-8 bg-white rounded-2xl border border-slate-200 p-12 text-center">
+        <p class="text-slate-500">Aucun devis moteur ne correspond aux filtres.</p>
+      </div>
+    <% } else { %>
+      <div class="mt-6 bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+              <tr>
+                <th class="text-left px-4 py-3 font-semibold">Dossier</th>
+                <th class="text-left px-4 py-3 font-semibold">Client</th>
+                <th class="text-left px-4 py-3 font-semibold">Véhicule / Moteur</th>
+                <th class="text-left px-4 py-3 font-semibold">Statut</th>
+                <th class="text-left px-4 py-3 font-semibold">Stock</th>
+                <th class="text-right px-4 py-3 font-semibold">Vente HT</th>
+                <th class="text-right px-4 py-3 font-semibold">Marge</th>
+                <th class="text-center px-4 py-3 font-semibold">Photos</th>
+                <th class="text-right px-4 py-3 font-semibold"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <% items.forEach(function(it) { %>
+                <tr class="hover:bg-slate-50 transition">
+                  <td class="px-4 py-3 align-top">
+                    <div class="flex items-center gap-2">
+                      <div class="font-mono text-xs font-semibold text-slate-900"><%= it.ref || '—' %></div>
+                      <% if (it.priority === 'hot') { %>
+                        <span title="Lead chaud : nouveau, complet, moins de 24h" class="inline-flex items-center text-xs font-bold text-orange-600">🔥</span>
+                      <% } else if (it.priority === 'cold') { %>
+                        <span title="Lead froid : pas de suivi depuis 7+ jours" class="inline-flex items-center text-xs">🥶</span>
+                      <% } %>
+                    </div>
+                    <div class="text-xs text-slate-400 mt-1"><%= new Date(it.receivedAt).toLocaleDateString('fr-FR', {day:'2-digit',month:'short',year:'numeric'}) %></div>
+                    <% if (it.sentQuoteCount > 0) { %>
+                      <div class="text-[10px] text-violet-600 mt-0.5">Envoyé il y a <%= Math.floor((Date.now() - new Date(it.lastSentAt).getTime()) / (24*60*60*1000)) %>j</div>
+                      <div class="flex items-center gap-1 mt-1 flex-wrap">
+                        <% if (it.lastSentPayClicked) { %>
+                          <span class="inline-flex items-center text-[10px] font-semibold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-full" title="A cliqué sur le bouton de paiement">💳 Paiement cliqué</span>
+                        <% } else if (it.lastSentPdfViewed) { %>
+                          <span class="inline-flex items-center text-[10px] font-semibold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-full" title="A consulté le PDF en ligne">📄 PDF vu</span>
+                        <% } else if (it.lastSentOpened) { %>
+                          <span class="inline-flex items-center text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full" title="Email ouvert <%= it.lastSentOpenCount || 1 %> fois">👁 Ouvert<%= (it.lastSentOpenCount > 1) ? ' ×' + it.lastSentOpenCount : '' %></span>
+                        <% } else { %>
+                          <span class="inline-flex items-center text-[10px] font-medium text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-full">Non ouvert</span>
+                        <% } %>
+                      </div>
+                    <% } %>
+                  </td>
+                  <td class="px-4 py-3 align-top">
+                    <div class="font-medium text-slate-900"><%= it.displayName %></div>
+                    <div class="text-xs text-slate-500 mt-0.5"><%= it.phone %></div>
+                    <% if (it.email) { %><div class="text-xs text-slate-400"><%= it.email %></div><% } %>
+                  </td>
+                  <td class="px-4 py-3 align-top">
+                    <div class="font-mono text-xs text-slate-700"><%= it.plate || '—' %></div>
+                    <% if (it.identifiedEngineModel || it.identifiedEngineCode) { %>
+                      <div class="text-xs text-slate-500 mt-0.5">
+                        <%= it.identifiedEngineModel %>
+                        <% if (it.identifiedEngineCode) { %><span class="font-mono">· <%= it.identifiedEngineCode %></span><% } %>
+                      </div>
+                    <% } else { %>
+                      <div class="text-xs text-amber-600 mt-0.5">À identifier</div>
+                    <% } %>
+                  </td>
+                  <td class="px-4 py-3 align-top">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold <%= it.statusBadge.className %>"><%= it.statusBadge.label %></span>
+                  </td>
+                  <td class="px-4 py-3 align-top">
+                    <% if (it.stockLabel) { %>
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <%= it.stockClass %>"><%= it.stockLabel %></span>
+                    <% } else { %>
+                      <span class="text-xs text-slate-300">—</span>
+                    <% } %>
+                  </td>
+                  <td class="px-4 py-3 align-top text-right font-mono text-sm">
+                    <% if (it.sellPrice > 0) { %><%= fmt(it.sellPrice) %> €<% } else { %><span class="text-slate-300">—</span><% } %>
+                  </td>
+                  <td class="px-4 py-3 align-top text-right font-mono text-sm">
+                    <% if (it.marginEur !== 0) { %>
+                      <div class="font-bold <%= it.marginColor %>"><%= fmt(it.marginEur) %> €</div>
+                      <div class="text-xs <%= it.marginColor %>"><%= it.marginPct.toFixed(1) %>%</div>
+                    <% } else { %><span class="text-slate-300">—</span><% } %>
+                  </td>
+                  <td class="px-4 py-3 align-top text-center">
+                    <% if (it.photoCount > 0) { %>
+                      <span class="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+                        <span class="material-symbols-outlined text-sm" style="font-size:14px">photo_camera</span>
+                        <%= it.photoCount %>
+                      </span>
+                    <% } else { %><span class="text-slate-300 text-xs">—</span><% } %>
+                  </td>
+                  <td class="px-4 py-3 align-top text-right">
+                    <a href="/admin/devis-moteurs/<%= it.id %>" class="text-red-600 hover:text-red-700 font-semibold text-sm">Ouvrir →</a>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</main>
+
+<%- include('./partials/footer') %>

@@ -1,0 +1,781 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'engine-quotes' }) %>
+
+<%
+function dt(v) {
+  if (!v) return '—';
+  return new Date(v).toLocaleString('fr-FR', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+%>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8 max-w-7xl mx-auto">
+
+    <!-- Breadcrumb + retour -->
+    <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Devis moteurs', url: '/admin/devis-moteurs'}, {label: cart.ref || cart.displayName}] }) %>
+
+    <!-- Header -->
+    <div class="mt-4 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 font-mono"><%= cart.ref || 'Sans référence' %></h1>
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold <%= engineQuote.statusBadge.className %>"><%= engineQuote.statusBadge.label %></span>
+        </div>
+        <p class="mt-1 text-sm text-slate-500">Reçu le <%= dt(cart.receivedAt) %><% if (engineQuote.updatedAt) { %> · Modifié par <%= engineQuote.updatedByName %> le <%= dt(engineQuote.updatedAt) %><% } %></p>
+      </div>
+
+      <!-- Changement de statut -->
+      <form action="/admin/devis-moteurs/<%= cart.id %>/status" method="POST" data-autosave class="flex items-center gap-3">
+        <select name="status" class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold">
+          <% Object.keys(statusLabels).forEach(function(s) { %>
+            <option value="<%= s %>" <%= engineQuote.status === s ? 'selected' : '' %>><%= statusLabels[s].label %></option>
+          <% }) %>
+        </select>
+        <span data-save-indicator class="text-xs text-slate-400 transition-opacity opacity-0">Enregistré ✓</span>
+      </form>
+    </div>
+
+    <!-- Bandeau ACOMPTE REÇU (paiement Mollie validé) -->
+    <% if (engineQuote.payment && engineQuote.payment.status === 'paid') { %>
+      <div class="mt-6 rounded-2xl bg-emerald-50 border-2 border-emerald-300 p-4 flex items-center gap-3">
+        <span class="material-symbols-outlined text-emerald-600" style="font-size:28px">paid</span>
+        <div>
+          <p class="font-bold text-emerald-900">Acompte payé — moteur réservé</p>
+          <p class="text-sm text-emerald-800">
+            <%= fmt((engineQuote.payment.amountCents || 0) / 100) %> € reçu
+            <% if (engineQuote.payment.paidAt) { %> le <%= new Date(engineQuote.payment.paidAt).toLocaleString('fr-FR', {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}) %><% } %>
+            · lance la préparation et l'expédition.
+          </p>
+        </div>
+      </div>
+    <% } %>
+
+    <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- ─── COLONNE GAUCHE (2/3) ─── -->
+      <div class="lg:col-span-2 space-y-6">
+
+        <!-- Bloc IDENTIFICATION MOTEUR -->
+        <form action="/admin/devis-moteurs/<%= cart.id %>/engine" method="POST" data-autosave class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="text-lg font-semibold text-slate-900">Identification moteur</h2>
+              <p class="text-xs text-slate-500 mt-0.5">Renseigne le moteur exact après analyse du dossier</p>
+            </div>
+            <span data-save-indicator class="text-xs text-slate-400 transition-opacity opacity-0">Enregistré ✓</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Code moteur</label>
+              <input name="code" value="<%= engineQuote.identifiedEngine.code || '' %>" placeholder="ex: M48.50" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Année / Plage</label>
+              <input name="year" value="<%= engineQuote.identifiedEngine.year || '' %>" placeholder="ex: 2002-2006" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Désignation moteur</label>
+              <input name="model" value="<%= engineQuote.identifiedEngine.model || '' %>" placeholder="ex: Porsche Cayenne Turbo 4.5 V8 — 955 Turbo" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+              <p class="text-xs text-slate-400 mt-1">Modèle complet + finition libre — affiché tel quel sur le devis</p>
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Kilométrage certifié</label>
+              <input type="number" name="mileage" min="0" step="1000" value="<%= engineQuote.identifiedEngine.mileage || '' %>" placeholder="ex: 128 000" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+              <p class="text-xs text-slate-400 mt-1">Affiché sur le devis client</p>
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-semibold text-slate-500 mb-2">État du moteur (affiché sur le devis)</label>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <% Object.keys(conditionLabels).forEach(function(key) { if (!key) return; %>
+                  <label class="cursor-pointer border-2 border-slate-200 hover:border-slate-300 has-[:checked]:border-red-500 has-[:checked]:bg-red-50 rounded-lg p-2.5 text-center transition block">
+                    <input type="radio" name="condition" value="<%= key %>" <%= engineQuote.identifiedEngine.condition === key ? 'checked' : '' %> class="sr-only peer">
+                    <span class="block text-xs font-bold text-slate-700 peer-checked:text-red-700 leading-tight"><%= conditionLabels[key].admin %></span>
+                  </label>
+                <% }) %>
+              </div>
+              <p class="text-xs text-slate-400 mt-1.5">Reconditionné = badge premium visible sur le PDF et l'email</p>
+            </div>
+          </div>
+        </form>
+
+        <!-- Bloc STOCK -->
+        <form action="/admin/devis-moteurs/<%= cart.id %>/stock" method="POST" data-autosave class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="text-lg font-semibold text-slate-900">Stock & sourcing</h2>
+              <p class="text-xs text-slate-500 mt-0.5">Provenance du moteur et délai estimé</p>
+            </div>
+            <span data-save-indicator class="text-xs text-slate-400 transition-opacity opacity-0">Enregistré ✓</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <% [['atelier', 'En stock atelier'], ['sourcing', 'Sourcing réseau'], ['indisponible', 'Indisponible']].forEach(function(opt) { %>
+              <label class="cursor-pointer border-2 border-slate-200 hover:border-slate-300 has-[:checked]:border-red-500 has-[:checked]:bg-red-50 rounded-xl p-3 text-center transition block">
+                <input type="radio" name="location" value="<%= opt[0] %>" <%= engineQuote.stock.location === opt[0] ? 'checked' : '' %> class="sr-only peer">
+                <span class="block text-sm font-semibold text-slate-700 peer-checked:text-red-700"><%= opt[1] %></span>
+              </label>
+            <% }) %>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1">Délai estimé</label>
+            <!-- Boutons rapides : remplissent le champ + déclenchent l'auto-save -->
+            <div class="flex flex-wrap gap-2 mb-2" data-delay-chips>
+              <% const delayPresets = ['48-72h', '5-7 jours', '7-10 jours', '10-15 jours']; %>
+              <% delayPresets.forEach(function(preset) { %>
+                <button type="button" data-delay-preset="<%= preset %>" class="px-3 py-1.5 rounded-full border text-xs font-semibold transition <%= engineQuote.stock.estimatedDelay === preset ? 'border-red-500 bg-red-50 text-red-700' : 'border-slate-200 text-slate-600 hover:border-slate-300' %>"><%= preset %></button>
+              <% }) %>
+            </div>
+            <input name="estimatedDelay" data-delay-input value="<%= engineQuote.stock.estimatedDelay || '' %>" placeholder="ou saisis un délai sur mesure…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            <p class="text-xs text-slate-400 mt-1">Pour info fournisseur, utilise les notes internes en bas de page</p>
+          </div>
+        </form>
+
+        <!-- Bloc TARIFICATION & MARGE -->
+        <form action="/admin/devis-moteurs/<%= cart.id %>/pricing" method="POST" data-autosave class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h2 class="text-lg font-semibold text-slate-900">Tarification &amp; marge</h2>
+              <p class="text-xs text-slate-500 mt-0.5">La marge se calcule automatiquement en temps réel</p>
+            </div>
+            <span data-save-indicator class="text-xs text-slate-400 transition-opacity opacity-0">Enregistré ✓</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Prix d'achat HT (€)</label>
+              <input type="number" step="0.01" min="0" name="purchasePrice" value="<%= engineQuote.pricing.purchasePrice || '' %>" data-margin-input data-cost class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Frais annexes HT (€)</label>
+              <input type="number" step="0.01" min="0" name="additionalFees" value="<%= engineQuote.pricing.additionalFees || '' %>" data-margin-input data-cost placeholder="port, palette…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Prix de vente HT (€)</label>
+              <input type="number" step="0.01" min="0" name="sellPrice" value="<%= engineQuote.pricing.sellPrice || '' %>" data-margin-input data-sell class="w-full rounded-lg border-2 border-slate-300 px-3 py-2 text-sm font-mono font-bold focus:ring-2 focus:ring-red-500 focus:border-red-500">
+            </div>
+          </div>
+
+          <!-- Marge calculée live -->
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 rounded-xl p-4">
+            <div>
+              <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Coût total</div>
+              <div data-margin-cost class="mt-1 text-lg font-bold font-mono text-slate-900">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Marge brute</div>
+              <div data-margin-eur class="mt-1 text-lg font-bold font-mono text-slate-900">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">% marge</div>
+              <div data-margin-pct class="mt-1 text-lg font-bold font-mono text-slate-900">—</div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Vente TTC</div>
+              <div data-margin-ttc class="mt-1 text-lg font-bold font-mono text-slate-900">—</div>
+            </div>
+          </div>
+
+          <input type="hidden" name="vatRate" value="<%= engineQuote.pricing.vatRate || 20 %>">
+          <p class="mt-3 text-xs text-slate-400">TVA appliquée : <%= engineQuote.pricing.vatRate || 20 %>% · Seuil orange &lt; 25% · Seuil rouge &lt; 15%</p>
+        </form>
+
+        <!-- Bloc PHOTOS -->
+        <section id="photos" class="bg-white rounded-2xl border border-slate-200 p-6">
+          <div class="mb-4">
+            <h2 class="text-lg font-semibold text-slate-900">Photos du dossier</h2>
+            <p class="text-xs text-slate-500 mt-0.5">Photos jointes au devis envoyé au client</p>
+          </div>
+
+          <% const photoCategories = [
+            { key: 'engine',    label: 'Photos moteur',       hint: 'Bloc moteur, accessoires, étiquettes, banc d\'essai' },
+            { key: 'kmReading', label: 'Relevé kilométrique', hint: 'Photo du compteur du véhicule donneur' },
+          ]; %>
+
+          <% photoCategories.forEach(function(cat) { %>
+            <div class="mb-6 last:mb-0">
+              <div class="flex items-center justify-between mb-2">
+                <div>
+                  <h3 class="text-sm font-semibold text-slate-700"><%= cat.label %></h3>
+                  <p class="text-xs text-slate-400"><%= cat.hint %></p>
+                </div>
+                <form action="/admin/devis-moteurs/<%= cart.id %>/photo/<%= cat.key %>" method="POST" enctype="multipart/form-data" class="flex items-center gap-2">
+                  <label class="cursor-pointer text-xs font-semibold text-red-600 hover:text-red-700">
+                    + Ajouter (1 ou plusieurs)
+                    <input type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/heic" multiple class="hidden" onchange="this.form.submit()">
+                  </label>
+                </form>
+              </div>
+              <% const photos = (engineQuote.photos[cat.key] || []); %>
+              <% if (photos.length === 0) { %>
+                <div class="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center text-xs text-slate-400">
+                  Aucune photo
+                </div>
+              <% } else { %>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <% photos.forEach(function(p) { %>
+                    <div class="relative group rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+                      <a href="<%= p.url %>" target="_blank">
+                        <img src="<%= p.url %>" alt="<%= p.filename %>" class="w-full h-32 object-cover">
+                      </a>
+                      <form action="/admin/devis-moteurs/<%= cart.id %>/photo/<%= cat.key %>/<%= p.id %>/delete" method="POST" class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition" onsubmit="return confirm('Supprimer cette photo ?')">
+                        <button type="submit" class="bg-red-600 hover:bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">×</button>
+                      </form>
+                    </div>
+                  <% }) %>
+                </div>
+              <% } %>
+            </div>
+          <% }) %>
+        </section>
+
+<!-- Bloc ENVOI DU DEVIS -->
+        <section id="send-quote" class="bg-white rounded-2xl border-2 border-red-200 p-6 bg-gradient-to-br from-red-50/30 to-transparent">
+          <div class="mb-4 flex items-center justify-between">
+            <div>
+              <h2 class="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                <span class="material-symbols-outlined text-red-600">send</span>
+                Envoyer le devis au client
+              </h2>
+              <p class="text-xs text-slate-500 mt-0.5">Génère un PDF brandé + envoie au client par email</p>
+            </div>
+          </div>
+
+          <% // Calcul initial — sera actualisé en temps réel par le JS au bas de la page
+             const initialCanSend = cart.email && engineQuote.pricing.sellPrice > 0;
+             const noEmail = !cart.email;
+          %>
+          <!-- Warning email manquant : permanent si le client n'a pas d'email -->
+          <% if (noEmail) { %>
+            <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 mb-4">
+              ⚠️ Le client n'a pas fourni d'email — devis non envoyable.
+            </div>
+          <% } %>
+
+          <!-- Warning prix vente manquant — mis à jour en JS via data-warn-price -->
+          <div data-warn-price class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800 mb-4 <%= (noEmail || engineQuote.pricing.sellPrice > 0) ? 'hidden' : '' %>">
+            ⚠️ Renseigne d'abord le prix de vente HT dans le bloc Tarification ci-dessus.
+          </div>
+
+          <!-- Warning champs essentiels vides — mis à jour en JS via data-warn-missing -->
+          <div data-warn-missing class="rounded-lg bg-orange-50 border-2 border-orange-300 p-3 mb-4 text-sm hidden">
+            <p class="font-bold text-orange-900 mb-1">⚠️ Champs essentiels vides — le PDF sera incomplet</p>
+            <p class="text-orange-800">Renseigne avant d'envoyer :</p>
+            <ul data-warn-missing-list class="text-orange-800 mt-1 ml-4 list-disc"></ul>
+            <p class="text-xs text-orange-700 mt-2">L'envoi reste possible, mais le devis manquera de détails (zones vides sur le PDF).</p>
+          </div>
+          <% { %>
+            <% // Template commercial pré-rempli — le commercial peut éditer avant envoi
+              const tplFirstName = (cart.firstName && cart.lastName) ? cart.firstName : '';
+              const tplPlate = cart.plate || 'votre véhicule';
+              const tplModel = engineQuote.identifiedEngine.model || 'le moteur demandé';
+              const tplCode = engineQuote.identifiedEngine.code ? ' (' + engineQuote.identifiedEngine.code + ')' : '';
+              const tplMileage = engineQuote.identifiedEngine.mileage > 0
+                ? new Intl.NumberFormat('fr-FR').format(engineQuote.identifiedEngine.mileage) + ' km certifiés au compteur'
+                : '';
+              const tplCondition = engineQuote.identifiedEngine.condition;
+              const tplConditionLine = tplCondition === 'reconditionne_chemise_fonte'
+                ? 'Il s\'agit d\'un moteur reconditionné avec chemisage fonte — la solution premium pour fiabiliser durablement votre bloc moteur.'
+                : tplCondition === 'reconditionne_complet'
+                  ? 'Il s\'agit d\'un moteur entièrement reconditionné dans notre atelier.'
+                  : tplCondition === 'occasion'
+                    ? 'Moteur d\'occasion intégralement testé sur banc d\'essai avant expédition.'
+                    : '';
+              const tplStock = engineQuote.stock.location === 'atelier'
+                ? 'Le moteur est actuellement dans notre atelier, déjà passé sur banc d\'essai.'
+                : engineQuote.stock.location === 'sourcing'
+                  ? 'Le moteur est sur commande sur notre réseau professionnel. Il passera obligatoirement sur banc d\'essai à l\'atelier avant expédition.'
+                  : '';
+              const tplDelay = engineQuote.stock.estimatedDelay ? ' Délai estimé : ' + engineQuote.stock.estimatedDelay + '.' : '';
+              // Bullet "expédition" adapté au scénario stock (pas de 48-72h si c'est sur commande)
+              const tplShippingBullet = engineQuote.stock.location === 'atelier'
+                ? '• Expédition Europe en 48-72h après accord'
+                : engineQuote.stock.location === 'sourcing'
+                  ? '• Expédition Europe sous 48-72h une fois le moteur validé sur notre banc d\'essai'
+                  : '• Expédition sécurisée Europe (palette, scellés, attestation)';
+              const defaultMessage = [
+                tplFirstName ? `Bonjour ${tplFirstName},` : 'Bonjour,',
+                ``,
+                `Suite à votre demande pour ${tplPlate}, voici notre devis personnalisé pour ${tplModel}${tplCode}.`,
+                tplConditionLine ? `\n${tplConditionLine}` : '',
+                tplMileage ? `\nKilométrage : ${tplMileage}.` : '',
+                tplStock ? `\n${tplStock}${tplDelay}` : '',
+                ``,
+                `Vous trouverez en pièces jointes le devis détaillé au format PDF et les photos du moteur.`,
+                ``,
+                `Pour rappel, nos engagements :`,
+                `• Banc d'essai obligatoire (compression, étanchéité, endoscopie)`,
+                `• Kilométrage certifié et photo du compteur transmise`,
+                `• Garantie 12 mois sans franchise kilométrique`,
+                tplShippingBullet,
+                ``,
+                `À votre disposition pour toute question.`,
+                ``,
+                `L'équipe technique Autoliva`,
+              ].filter(s => s !== null).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+            %>
+            <form action="/admin/devis-moteurs/<%= cart.id %>/send-quote" method="POST" class="space-y-4">
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="text-xs font-semibold text-slate-500">Message commercial (modifiable)</label>
+                  <button type="button" onclick="document.querySelector('[name=customMessage]').value=this.dataset.tpl" data-tpl="<%= defaultMessage.replace(/&/g,'&amp;').replace(/"/g,'&quot;') %>" class="text-xs text-slate-400 hover:text-slate-600">↻ Recharger le template</button>
+                </div>
+                <textarea name="customMessage" rows="10" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 font-sans"><%= defaultMessage %></textarea>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-500 mb-2">Mode de paiement proposé au client</label>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <% [
+                    { val: 0,   lbl: 'Aucun',           hint: 'Pas de paiement en ligne' },
+                    { val: 30,  lbl: 'Acompte 30%',     hint: 'Réservation' },
+                    { val: 50,  lbl: 'Acompte 50%',     hint: 'Engagement fort' },
+                    { val: 100, lbl: 'Paiement intégral', hint: 'En une fois' },
+                  ].forEach(function(opt, i) { %>
+                    <label class="cursor-pointer border-2 border-slate-200 hover:border-slate-300 has-[:checked]:border-red-500 has-[:checked]:bg-red-50 rounded-lg p-2.5 text-center transition block">
+                      <input type="radio" name="depositPct" value="<%= opt.val %>" <%= (i === 1 ? 'checked' : '') %> class="sr-only peer">
+                      <span class="block text-sm font-bold text-slate-700 peer-checked:text-red-700"><%= opt.lbl %></span>
+                      <span class="block text-[10px] text-slate-400 mt-0.5"><%= opt.hint %></span>
+                    </label>
+                  <% }) %>
+                </div>
+              </div>
+
+              <div>
+                <label class="flex items-center gap-2 text-sm <%= mollieEnabled ? 'text-slate-700 cursor-pointer' : 'text-slate-400' %>">
+                  <input type="checkbox" name="createMollie" <%= mollieEnabled ? 'checked' : 'disabled' %>>
+                  <span>Inclure le bouton de paiement cliquable Mollie dans le PDF et l'email<% if (!mollieEnabled) { %> <em class="text-xs">(désactivé — défini ENGINE_QUOTE_MOLLIE_ENABLED=true)</em><% } %></span>
+                </label>
+              </div>
+
+              <div class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-1">
+                <div class="text-slate-700">📧 Email vers <strong><%= cart.email %></strong></div>
+                <div class="text-slate-700">📎 PDF en pièce jointe (<%= cart.ref %>)</div>
+                <div class="text-slate-700">🏷️ Statut passera à <strong>"Devis envoyé"</strong> + relances auto J+3 / J+7 activées</div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
+                <button type="submit" formaction="/admin/devis-moteurs/<%= cart.id %>/preview-email" formtarget="_blank" formnovalidate onclick="return true" class="bg-white border-2 border-slate-300 hover:border-slate-400 text-slate-700 font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2">
+                  <span class="material-symbols-outlined" style="font-size:16px">visibility</span>
+                  Aperçu email
+                </button>
+                <button type="submit" formaction="/admin/devis-moteurs/<%= cart.id %>/preview-pdf" formtarget="_blank" formnovalidate onclick="return true" class="bg-white border-2 border-slate-300 hover:border-slate-400 text-slate-700 font-semibold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2">
+                  <span class="material-symbols-outlined" style="font-size:16px">picture_as_pdf</span>
+                  Aperçu PDF
+                </button>
+                <button type="submit" data-send-btn onclick="return confirm('Envoyer le devis au client <%= cart.email %> ?')" <%= initialCanSend ? '' : 'disabled' %> class="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:cursor-not-allowed disabled:hover:bg-slate-300">
+                  <span class="material-symbols-outlined" style="font-size:16px">send</span>
+                  Envoyer
+                </button>
+              </div>
+              <p class="text-xs text-slate-400 text-center">Les 2 aperçus s'ouvrent dans un nouvel onglet · l'envoi reste à confirmer</p>
+            </form>
+          <% } %>
+        </section>
+
+        <!-- Bloc HISTORIQUE -->
+        <% if (engineQuote.sentQuotes && engineQuote.sentQuotes.length > 0) { %>
+        <section id="history" class="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 class="text-lg font-semibold text-slate-900 mb-4">Historique des envois</h2>
+          <div class="space-y-3">
+            <% engineQuote.sentQuotes.forEach(function(sq) { %>
+              <div class="border border-slate-200 rounded-xl p-4">
+                <div class="flex items-start justify-between gap-4">
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                      <span class="text-sm font-semibold text-slate-900">Devis envoyé</span>
+                      <span class="text-xs text-slate-400">par <%= sq.sentByName || 'Admin' %></span>
+                      <% if (sq.openedAt) { %>
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full" title="Email ouvert <%= sq.openCount || 1 %> fois">
+                          <span class="material-symbols-outlined" style="font-size:13px">visibility</span>
+                          Ouvert<%= (sq.openCount && sq.openCount > 1) ? ' ×' + sq.openCount : '' %>
+                        </span>
+                      <% } else { %>
+                        <span class="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full" title="Pas encore ouvert (ou images bloquées côté client)">
+                          <span class="material-symbols-outlined" style="font-size:13px">mark_email_unread</span>
+                          Non ouvert
+                        </span>
+                      <% } %>
+                      <% if (sq.pdfViewedAt) { %>
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full" title="PDF consulté en ligne <%= sq.pdfViewCount || 1 %> fois">
+                          <span class="material-symbols-outlined" style="font-size:13px">picture_as_pdf</span>
+                          PDF vu<%= (sq.pdfViewCount && sq.pdfViewCount > 1) ? ' ×' + sq.pdfViewCount : '' %>
+                        </span>
+                      <% } %>
+                      <% if (sq.payClickedAt) { %>
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full" title="A cliqué sur le bouton de paiement <%= sq.payClickCount || 1 %> fois">
+                          <span class="material-symbols-outlined" style="font-size:13px">credit_card</span>
+                          Paiement cliqué<%= (sq.payClickCount && sq.payClickCount > 1) ? ' ×' + sq.payClickCount : '' %>
+                        </span>
+                      <% } %>
+                    </div>
+                    <div class="text-xs text-slate-500">
+                      <%= new Date(sq.sentAt).toLocaleString('fr-FR', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) %>
+                      · TTC <strong class="text-slate-700 font-mono"><%= fmt(sq.sellPriceTtc) %> €</strong>
+                      <% if (sq.depositCents) { %> · Acompte <strong class="text-slate-700 font-mono"><%= fmt(sq.depositCents / 100) %> €</strong><% } %>
+                      <% if (sq.openedAt) { %> · ouvert le <%= new Date(sq.openedAt).toLocaleString('fr-FR', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) %><% } %>
+                      <% if (sq.pdfViewedAt) { %> · PDF vu le <%= new Date(sq.pdfViewedAt).toLocaleString('fr-FR', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) %><% } %>
+                      <% if (sq.payClickedAt) { %> · paiement cliqué le <%= new Date(sq.payClickedAt).toLocaleString('fr-FR', {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) %><% } %>
+                    </div>
+                    <% if (sq.mollieUrl) { %><div class="text-xs text-blue-600 mt-1 truncate"><a href="<%= sq.mollieUrl %>" target="_blank">Lien Mollie →</a></div><% } %>
+                  </div>
+                  <% if (sq.pdfUrl) { %>
+                    <a href="<%= sq.pdfUrl %>" target="_blank" class="text-xs font-semibold text-red-600 hover:text-red-700 whitespace-nowrap shrink-0">📄 PDF →</a>
+                  <% } %>
+                </div>
+
+                <% if (sq.attachedPhotos && sq.attachedPhotos.length > 0) { %>
+                  <div class="mt-3 pt-3 border-t border-slate-100">
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2"><%= sq.attachedPhotos.length %> photo<%= sq.attachedPhotos.length > 1 ? 's' : '' %> jointe<%= sq.attachedPhotos.length > 1 ? 's' : '' %> au devis</p>
+                    <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
+                      <% sq.attachedPhotos.forEach(function(p) { %>
+                        <a href="<%= p.url %>" target="_blank" class="block rounded-lg overflow-hidden border border-slate-200 bg-slate-50 hover:border-red-300 transition" title="<%= p.filename %> · <%= p.category %>">
+                          <img src="<%= p.url %>" alt="<%= p.filename %>" class="w-full h-16 object-cover">
+                        </a>
+                      <% }) %>
+                    </div>
+                  </div>
+                <% } %>
+
+                <% if (sq.customMessage) { %>
+                  <div class="mt-3 pt-3 border-t border-slate-100">
+                    <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Message envoyé</p>
+                    <p class="text-xs text-slate-600 whitespace-pre-wrap line-clamp-3"><%= sq.customMessage %></p>
+                  </div>
+                <% } %>
+              </div>
+            <% }) %>
+          </div>
+
+          <% if (engineQuote.remindersSent && engineQuote.remindersSent.length > 0) { %>
+            <div class="mt-4 pt-4 border-t border-slate-100">
+              <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Relances auto</p>
+              <div class="flex flex-wrap gap-2">
+                <% engineQuote.remindersSent.forEach(function(r) { %>
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold <%= r.type === 'j14_lost' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700' %>">
+                    <%= r.type === 'j3' ? 'J+3' : r.type === 'j7' ? 'J+7' : 'Auto-perdu J+14' %> · <%= new Date(r.sentAt).toLocaleDateString('fr-FR') %>
+                  </span>
+                <% }) %>
+              </div>
+            </div>
+          <% } %>
+        </section>
+        <% } %>
+
+        <!-- Bloc NOTES -->
+        <section id="notes" class="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 class="text-lg font-semibold text-slate-900 mb-4">Notes internes</h2>
+
+          <form action="/admin/devis-moteurs/<%= cart.id %>/note" method="POST" class="mb-4">
+            <textarea name="text" rows="3" placeholder="Ajouter une note (visible uniquement par l'équipe)…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500" required></textarea>
+            <button type="submit" class="mt-2 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold px-4 py-2 rounded-lg">Ajouter la note</button>
+          </form>
+
+          <% if (cart.notes.length === 0) { %>
+            <p class="text-xs text-slate-400">Aucune note.</p>
+          <% } else { %>
+            <div class="space-y-3">
+              <% cart.notes.forEach(function(n) { %>
+                <div class="border-l-2 border-slate-200 pl-3 py-1">
+                  <div class="text-xs text-slate-500"><strong class="text-slate-700"><%= n.addedByName || 'Admin' %></strong> · <%= dt(n.addedAt) %></div>
+                  <div class="text-sm text-slate-800 mt-1 whitespace-pre-wrap"><%= n.text %></div>
+                </div>
+              <% }) %>
+            </div>
+          <% } %>
+        </section>
+
+      </div>
+
+      <!-- ─── COLONNE DROITE (1/3) ─── -->
+      <aside class="space-y-6">
+
+        <!-- Coordonnées client -->
+        <section class="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Demandeur</h2>
+          <div class="space-y-3">
+            <div>
+              <div class="text-xs text-slate-400">Nom</div>
+              <div class="font-medium text-slate-900"><%= cart.displayName %></div>
+            </div>
+            <% if (cart.phone) { %>
+              <div>
+                <div class="text-xs text-slate-400">Téléphone</div>
+                <a href="tel:<%= cart.phone %>" class="font-medium text-red-600 hover:underline"><%= cart.phone %></a>
+              </div>
+            <% } %>
+            <% if (cart.email) { %>
+              <div>
+                <div class="text-xs text-slate-400">Email</div>
+                <a href="mailto:<%= cart.email %>" class="font-medium text-red-600 hover:underline break-all"><%= cart.email %></a>
+              </div>
+            <% } %>
+          </div>
+        </section>
+
+        <!-- Demande initiale -->
+        <section class="bg-white rounded-2xl border border-slate-200 p-6">
+          <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Demande initiale</h2>
+          <div class="space-y-3">
+            <div>
+              <div class="text-xs text-slate-400">Plaque / châssis / code</div>
+              <div class="font-mono font-semibold text-slate-900"><%= cart.plate || '—' %></div>
+            </div>
+            <div>
+              <div class="text-xs text-slate-400">Type demandé</div>
+              <div class="text-sm text-slate-700"><%= cart.vehicle || '—' %></div>
+            </div>
+            <% if (cart.message) { %>
+              <div>
+                <div class="text-xs text-slate-400">Message</div>
+                <div class="text-sm text-slate-700 italic">"<%= cart.message %>"</div>
+              </div>
+            <% } %>
+          </div>
+        </section>
+
+        <!-- Attribution -->
+        <% if (cart.attribution && (cart.attribution.source || cart.attribution.campaign)) { %>
+          <section class="bg-white rounded-2xl border border-slate-200 p-6">
+            <h2 class="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Source du lead</h2>
+            <div class="space-y-2 text-sm text-slate-700">
+              <% if (cart.attribution.source) { %><div><span class="text-xs text-slate-400">Source :</span> <%= cart.attribution.source %></div><% } %>
+              <% if (cart.attribution.medium) { %><div><span class="text-xs text-slate-400">Medium :</span> <%= cart.attribution.medium %></div><% } %>
+              <% if (cart.attribution.campaign) { %><div><span class="text-xs text-slate-400">Campagne :</span> <%= cart.attribution.campaign %></div><% } %>
+              <% if (cart.attribution.gclid) { %><div class="text-xs text-slate-400 font-mono break-all"><%= cart.attribution.gclid %></div><% } %>
+            </div>
+          </section>
+        <% } %>
+
+      </aside>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// ─── Boutons rapides "Délai estimé" ───
+(function () {
+  const input = document.querySelector('[data-delay-input]');
+  const chips = document.querySelectorAll('[data-delay-preset]');
+  if (!input || !chips.length) return;
+
+  function syncChips() {
+    chips.forEach(c => {
+      const active = c.dataset.delayPreset === input.value.trim();
+      c.classList.toggle('border-red-500', active);
+      c.classList.toggle('bg-red-50', active);
+      c.classList.toggle('text-red-700', active);
+      c.classList.toggle('border-slate-200', !active);
+      c.classList.toggle('text-slate-600', !active);
+    });
+  }
+
+  chips.forEach(chip => {
+    chip.addEventListener('click', function () {
+      // Re-cliquer un chip actif le désélectionne (vide le champ)
+      input.value = (input.value.trim() === chip.dataset.delayPreset) ? '' : chip.dataset.delayPreset;
+      // Déclenche l'auto-save du formulaire Stock
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      syncChips();
+    });
+  });
+
+  // Si l'utilisateur tape en manuel, garde les chips synchros
+  input.addEventListener('input', syncChips);
+})();
+
+// ─── Auto-save : tout form avec data-autosave envoie en AJAX au change/blur ───
+(function () {
+  const forms = document.querySelectorAll('form[data-autosave]');
+  forms.forEach(form => {
+    const indicator = form.querySelector('[data-save-indicator]');
+    let timer = null;
+    let lastPayload = '';
+
+    function showStatus(state) {
+      if (!indicator) return;
+      if (state === 'saving') {
+        indicator.textContent = 'Enregistrement…';
+        indicator.classList.remove('text-emerald-600', 'text-rose-600');
+        indicator.classList.add('text-slate-400');
+        indicator.style.opacity = 1;
+      } else if (state === 'saved') {
+        indicator.textContent = 'Enregistré ✓';
+        indicator.classList.remove('text-slate-400', 'text-rose-600');
+        indicator.classList.add('text-emerald-600');
+        indicator.style.opacity = 1;
+        setTimeout(() => { indicator.style.opacity = 0; }, 1800);
+      } else if (state === 'error') {
+        indicator.textContent = '⚠ Erreur enregistrement';
+        indicator.classList.remove('text-slate-400', 'text-emerald-600');
+        indicator.classList.add('text-rose-600');
+        indicator.style.opacity = 1;
+      }
+    }
+
+    async function save() {
+      // IMPORTANT : on envoie en application/x-www-form-urlencoded (PAS FormData
+      // multipart) car le serveur parse uniquement urlencoded sur ces routes.
+      // FormData → multipart → req.body vide → champs non persistés.
+      const fd = new FormData(form);
+      const params = new URLSearchParams();
+      for (const [k, v] of fd.entries()) params.append(k, v);
+      const payloadStr = params.toString();
+      if (payloadStr === lastPayload) return; // pas de changement réel
+      lastPayload = payloadStr;
+      showStatus('saving');
+      try {
+        const res = await fetch(form.action, {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: params,
+          credentials: 'same-origin',
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        showStatus('saved');
+      } catch (err) {
+        console.error('Autosave failed:', err);
+        showStatus('error');
+      }
+    }
+
+    // Debounced save (300ms après changement)
+    function scheduleSave() {
+      clearTimeout(timer);
+      timer = setTimeout(save, 300);
+    }
+
+    // Initial snapshot (pour ne pas spammer au load)
+    lastPayload = new URLSearchParams(new FormData(form)).toString();
+
+    form.addEventListener('change', scheduleSave);        // radio, select, checkbox
+    form.addEventListener('input', scheduleSave);         // text, number, textarea
+    form.addEventListener('blur', save, true);            // blur immédiat (capture phase)
+    form.addEventListener('submit', e => { e.preventDefault(); save(); });
+  });
+})();
+
+// ─── Live update du bloc "Envoyer le devis" selon les autres formulaires ───
+// Surveille les changements dans les blocs Identification / Stock / Tarification
+// et met à jour les warnings + le bouton Envoyer en temps réel.
+(function () {
+  const noEmail = <%= noEmail ? 'true' : 'false' %>;
+  const warnPrice = document.querySelector('[data-warn-price]');
+  const warnMissing = document.querySelector('[data-warn-missing]');
+  const warnMissingList = document.querySelector('[data-warn-missing-list]');
+  const sendBtn = document.querySelector('[data-send-btn]');
+  if (!warnPrice || !warnMissing || !sendBtn) return;
+
+  function val(name, formAction) {
+    const form = document.querySelector('form[action$="' + formAction + '"]');
+    if (!form) return '';
+    const el = form.elements.namedItem(name);
+    if (!el) return '';
+    if (el.type === 'radio' || el.length) {
+      // RadioNodeList ou node radio unique
+      if (el.value !== undefined && el.checked !== undefined) return el.checked ? el.value : '';
+      const checked = Array.from(el).find(x => x.checked);
+      return checked ? checked.value : '';
+    }
+    return el.value || '';
+  }
+
+  function compute() {
+    const sellPrice = Number(val('sellPrice', '/pricing')) || 0;
+    const code = val('code', '/engine').trim();
+    const model = val('model', '/engine').trim();
+    const mileage = Number(val('mileage', '/engine')) || 0;
+    const condition = val('condition', '/engine');
+    const stock = val('location', '/stock');
+
+    const canSend = !noEmail && sellPrice > 0;
+
+    // Warning prix
+    warnPrice.classList.toggle('hidden', noEmail || sellPrice > 0);
+
+    // Warning champs essentiels
+    const missing = [];
+    if (!code && !model) missing.push('identification moteur (code et modèle vides)');
+    if (!mileage) missing.push('kilométrage');
+    if (!condition) missing.push('état du moteur (occasion / reconditionné)');
+    if (!stock) missing.push('stock (atelier / sourcing)');
+
+    if (canSend && missing.length > 0) {
+      warnMissing.classList.remove('hidden');
+      warnMissingList.innerHTML = missing.map(m => '<li>' + m + '</li>').join('');
+    } else {
+      warnMissing.classList.add('hidden');
+    }
+
+    // Bouton Envoyer activé/désactivé
+    sendBtn.disabled = !canSend;
+  }
+
+  // Écoute tous les inputs des 3 formulaires pertinents
+  ['/engine', '/stock', '/pricing'].forEach(action => {
+    const form = document.querySelector('form[action$="' + action + '"]');
+    if (form) {
+      form.addEventListener('input', compute);
+      form.addEventListener('change', compute);
+    }
+  });
+  compute();
+})();
+
+// Calcul de marge live
+(function () {
+  const root = document.querySelector('form[action*="/pricing"]');
+  if (!root) return;
+  const vat = <%= engineQuote.pricing.vatRate || 20 %>;
+  const inputs = root.querySelectorAll('[data-margin-input]');
+  const out = {
+    cost: root.querySelector('[data-margin-cost]'),
+    eur:  root.querySelector('[data-margin-eur]'),
+    pct:  root.querySelector('[data-margin-pct]'),
+    ttc:  root.querySelector('[data-margin-ttc]'),
+  };
+  function num(el) { return Number(String(el.value).replace(',', '.')) || 0; }
+  function fmtEur(n) { return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + ' €'; }
+  function color(pct) {
+    if (pct >= 25) return 'text-emerald-700';
+    if (pct >= 15) return 'text-amber-700';
+    return 'text-rose-700';
+  }
+  function recompute() {
+    const purchase = num(root.querySelector('[name=purchasePrice]'));
+    const fees = num(root.querySelector('[name=additionalFees]'));
+    const sell = num(root.querySelector('[name=sellPrice]'));
+    const cost = purchase + fees;
+    const marginEur = sell - cost;
+    const marginPct = sell > 0 ? (marginEur / sell) * 100 : 0;
+    const ttc = sell * (1 + vat / 100);
+
+    out.cost.textContent = sell || cost ? fmtEur(cost) : '—';
+    out.eur.textContent  = sell || cost ? fmtEur(marginEur) : '—';
+    out.pct.textContent  = sell > 0 ? marginPct.toFixed(1) + ' %' : '—';
+    out.ttc.textContent  = sell > 0 ? fmtEur(ttc) : '—';
+
+    // Couleurs
+    ['text-emerald-700','text-amber-700','text-rose-700','text-slate-900'].forEach(c => {
+      out.eur.classList.remove(c); out.pct.classList.remove(c);
+    });
+    if (sell > 0) {
+      const cls = color(marginPct);
+      out.eur.classList.add(cls);
+      out.pct.classList.add(cls);
+    } else {
+      out.eur.classList.add('text-slate-900');
+      out.pct.classList.add('text-slate-900');
+    }
+  }
+  inputs.forEach(el => el.addEventListener('input', recompute));
+  recompute();
+})();
+</script>
+
+<%- include('./partials/footer') %>

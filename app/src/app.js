@@ -519,6 +519,9 @@ app.use('/admin/api/sav', savApi.adminRouter);
 // Endpoint : POST /api/blog/import-from-url
 app.use('/api/blog', require('./routes/api/blogImport'));
 
+// Devis moteurs API publique : webhook Mollie acompte + pixel tracking email
+app.use('/api/devis-moteurs', require('./routes/api/engineQuote'));
+
 // SAV — fichiers stockés en MongoDB (GridFS), avec auth contextuelle
 app.use('/sav-files', require('./routes/savFiles'));
 

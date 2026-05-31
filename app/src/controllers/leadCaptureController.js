@@ -224,7 +224,7 @@ async function upsertLead({ req, email, phone, firstName, captureSource, product
     if (firstName && !existing.firstName) update.$set.firstName = firstName;
 
     /* Promote captureSource selon priorité (devis/contact prennent priorité sur cart_activity) */
-    const priority = ['', 'cart_activity', 'newsletter', 'guest_checkout', 'user', 'contact', 'devis', 'manual'];
+    const priority = ['', 'cart_activity', 'newsletter', 'guest_checkout', 'user', 'contact', 'devis', 'landing_moteurs', 'manual'];
     const currIdx = priority.indexOf(existing.captureSource || '');
     const newIdx = priority.indexOf(captureSource);
     if (newIdx > currIdx) update.$set.captureSource = captureSource;
