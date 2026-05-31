@@ -8,6 +8,7 @@ const productController = require('../controllers/productController');
 const contactController = require('../controllers/contactController');
 const legacyRedirectController = require('../controllers/legacyRedirectController');
 const leadCaptureController = require('../controllers/leadCaptureController');
+const moteurOccasionController = require('../controllers/moteurOccasionController');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const brand = require('../config/brand');
 
@@ -36,6 +37,10 @@ router.post('/devis', (req, res, next) => {
 });
 
 router.get('/notre-histoire', aboutController.getAboutPage);
+
+// Landing « Moteur d'occasion » : capture leads + SEO/Ads moteurs
+router.get('/moteurs', moteurOccasionController.getLanding);
+router.post('/moteurs/devis', moteurOccasionController.postDevis);
 
 // Entrée principale : sélection du motif SAV
 router.get('/sav', savController.getMotifSelect);

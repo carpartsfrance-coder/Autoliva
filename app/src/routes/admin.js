@@ -15,6 +15,7 @@ const mongoose = require('mongoose');
 const adminController = require('../controllers/adminController');
 const savAdminController = require('../controllers/savAdminController');
 const abandonedCartAdminController = require('../controllers/abandonedCartAdminController');
+const engineQuoteAdminController = require('../controllers/engineQuoteAdminController');
 const orderEmailAdminController = require('../controllers/orderEmailAdminController');
 const internalNoteAdminController = require('../controllers/internalNoteAdminController');
 const blogAdminController = require('../controllers/blogAdminController');
@@ -304,6 +305,32 @@ router.post('/api/leads/:id/email/preview', requireAdminAuth, abandonedCartAdmin
 router.post('/api/leads/:id/sms', requireAdminAuth, abandonedCartAdminController.postLeadSendSms);
 router.post('/api/leads/:id/status', requireAdminAuth, abandonedCartAdminController.postLeadSetStatus);
 router.post('/api/leads/:id/note', requireAdminAuth, abandonedCartAdminController.postLeadAddNote);
+
+/* ──────────────────────────────────────────────────────────────────────
+ * /admin/devis-moteurs — workflow commercial dédié moteurs d'occasion
+ * (extrait des leads avec captureSource = 'landing_moteurs')
+ * ────────────────────────────────────────────────────────────────────── */
+const multer = require('multer');
+const engineQuotePhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 12 * 1024 * 1024 }, // 12 MB max par photo
+  fileFilter: (req, file, cb) => {
+    const ok = /^image\/(jpeg|png|webp|heic|heif)$/.test(file.mimetype);
+    cb(ok ? null : new Error('Format image non supporté'), ok);
+  },
+});
+router.get('/devis-moteurs', requireAdminAuth, engineQuoteAdminController.getEngineQuotesList);
+router.get('/devis-moteurs/:id', requireAdminAuth, engineQuoteAdminController.getEngineQuoteDetail);
+router.post('/devis-moteurs/:id/status', requireAdminAuth, engineQuoteAdminController.postChangeStatus);
+router.post('/devis-moteurs/:id/engine', requireAdminAuth, engineQuoteAdminController.postUpdateEngine);
+router.post('/devis-moteurs/:id/stock', requireAdminAuth, engineQuoteAdminController.postUpdateStock);
+router.post('/devis-moteurs/:id/pricing', requireAdminAuth, engineQuoteAdminController.postUpdatePricing);
+router.post('/devis-moteurs/:id/note', requireAdminAuth, engineQuoteAdminController.postAddNote);
+router.post('/devis-moteurs/:id/photo/:category', requireAdminAuth, engineQuotePhotoUpload.array('photo', 10), engineQuoteAdminController.postUploadPhoto);
+router.post('/devis-moteurs/:id/photo/:category/:photoId/delete', requireAdminAuth, engineQuoteAdminController.postDeletePhoto);
+router.post('/devis-moteurs/:id/preview-pdf', requireAdminAuth, engineQuoteAdminController.postPreviewPdf);
+router.post('/devis-moteurs/:id/preview-email', requireAdminAuth, engineQuoteAdminController.postPreviewEmail);
+router.post('/devis-moteurs/:id/send-quote', requireAdminAuth, engineQuoteAdminController.postSendQuote);
 
 router.get('/codes-promo', requireAdminAuth, adminController.getAdminPromoCodesPage);
 router.post('/codes-promo', requireAdminAuth, adminController.postAdminCreatePromoCode);
