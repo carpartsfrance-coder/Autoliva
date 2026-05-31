@@ -9,12 +9,18 @@
 
 <!-- BEGIN: Hero Section -->
 <section class="bg-brand-dark/80 text-white relative overflow-hidden" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDMawRtsrJ1Y95tAA5GJuKeoV0TdGlogrQB4-_6_h9zuGPuWsOyRjIFumcEqk6frcZwcR9C_fznBtCHRMNtlACh6xyKyev-WpxjozrX_QhW84sFRVlOJsLcB_1Jq5TS76x7HwsgRfwhJiBCp3lStKgH-3g9lIhcjhvSwSU2flgk5OipHbeoCNerT2my9QGrEzmWKH6j_FgUlwk9JyMje4HpMD7sT9i9IADdrj3vWzDFnB1WOGTjYk331ZA1gpI7uuU6QI5vKVQzWrU'); background-size: cover; background-position: center center; background-repeat: no-repeat;">
-<div class="max-w-[1400px] mx-auto px-6 py-16 lg:py-24 relative z-10 flex flex-col lg:flex-row gap-12 justify-between items-center">
-<div class="lg:w-1/2">
-<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-4">Moteurs d'occasion premium</p>
-<h1 class="text-5xl lg:text-6xl font-bold leading-tight mb-6">Des moteurs testés,<br>garantis,<br><span class="text-brand-red">prêts à performer.</span></h1>
-<p class="text-brand-textgray text-lg mb-10 max-w-xl">Tous nos moteurs sont testés sur banc, certifiés et prêts à être expédiés rapidement partout en Europe.</p>
-<div class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-10 border-t border-gray-800 pt-8">
+<div class="max-w-[1400px] mx-auto px-6 py-10 lg:py-24 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-y-8 lg:gap-x-12 lg:items-center">
+
+<!-- ACCROCHE : visible en haut sur mobile (order-1) comme sur desktop (colonne gauche, ligne 1) -->
+<div class="order-1 lg:col-span-7 lg:col-start-1 lg:row-start-1">
+<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-3">Moteurs d'occasion premium</p>
+<h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-4 lg:mb-6">Des moteurs testés,<br>garantis,<br><span class="text-brand-red">prêts à performer.</span></h1>
+<p class="text-brand-textgray text-base lg:text-lg max-w-xl">Tous nos moteurs sont testés sur banc, certifiés et prêts à être expédiés rapidement partout en Europe.</p>
+</div>
+
+<!-- PREUVES : sous le formulaire sur mobile (order-3), sous l'accroche sur desktop (colonne gauche, ligne 2) -->
+<div class="order-3 lg:col-span-7 lg:col-start-1 lg:row-start-2">
+<div class="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8 border-t border-gray-800 pt-8">
 <div>
 <svg class="w-8 h-8 text-white mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <h3 class="font-bold text-sm mb-1">Moteurs testés et certifiés</h3>
@@ -30,10 +36,6 @@
 <h3 class="font-bold text-sm mb-1">Garantie incluse 12 mois</h3>
 <p class="text-xs text-brand-textgray">Sans franchise kilométrique</p>
 </div>
-<div>
-<h3 class="font-bold text-sm mb-1"><br></h3>
-<p class="text-xs text-brand-textgray flex items-center gap-1"></p>
-</div>
 </div>
 <div class="inline-flex items-center gap-3 bg-brand-darker border border-gray-700 rounded-lg p-4">
 <div class="bg-gray-800 p-2 rounded-full text-white">
@@ -45,7 +47,8 @@
 </div>
 </div>
 </div>
-<div id="quote-form" class="lg:w-[450px] w-full shrink-0 scroll-mt-28">
+
+<div id="quote-form" class="order-2 lg:col-span-5 lg:col-start-8 lg:row-start-1 lg:row-span-2 w-full scroll-mt-28">
 <div class="bg-white rounded-2xl p-8 shadow-2xl text-gray-800">
 
 <% if (successMessage) { %>
