@@ -25,16 +25,60 @@ function dt(v) {
         <p class="mt-1 text-sm text-slate-500">Reçu le <%= dt(cart.receivedAt) %><% if (engineQuote.updatedAt) { %> · Modifié par <%= engineQuote.updatedByName %> le <%= dt(engineQuote.updatedAt) %><% } %></p>
       </div>
 
-      <!-- Changement de statut -->
-      <form action="/admin/devis-moteurs/<%= cart.id %>/status" method="POST" data-autosave class="flex items-center gap-3">
-        <select name="status" class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold">
-          <% Object.keys(statusLabels).forEach(function(s) { %>
-            <option value="<%= s %>" <%= engineQuote.status === s ? 'selected' : '' %>><%= statusLabels[s].label %></option>
-          <% }) %>
-        </select>
-        <span data-save-indicator class="text-xs text-slate-400 transition-opacity opacity-0">Enregistré ✓</span>
-      </form>
+      <div class="flex flex-col items-stretch lg:items-end gap-3">
+        <!-- Changement de statut -->
+        <form action="/admin/devis-moteurs/<%= cart.id %>/status" method="POST" data-autosave class="flex items-center gap-3">
+          <select name="status" class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold">
+            <% Object.keys(statusLabels).forEach(function(s) { %>
+              <option value="<%= s %>" <%= engineQuote.status === s ? 'selected' : '' %>><%= statusLabels[s].label %></option>
+            <% }) %>
+          </select>
+          <span data-save-indicator class="text-xs text-slate-400 transition-opacity opacity-0">Enregistré ✓</span>
+        </form>
+
+        <!-- Archiver / Supprimer -->
+        <div class="flex items-center gap-2">
+          <% if (cart.archived) { %>
+            <form action="/admin/devis-moteurs/<%= cart.id %>/archive" method="POST">
+              <input type="hidden" name="archived" value="0">
+              <input type="hidden" name="returnTo" value="/admin/devis-moteurs/<%= cart.id %>">
+              <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-2 text-sm font-semibold transition">
+                <span class="material-symbols-outlined" style="font-size:18px">unarchive</span>
+                Désarchiver
+              </button>
+            </form>
+          <% } else { %>
+            <form action="/admin/devis-moteurs/<%= cart.id %>/archive" method="POST">
+              <input type="hidden" name="archived" value="1">
+              <input type="hidden" name="returnTo" value="/admin/devis-moteurs/<%= cart.id %>">
+              <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 px-3 py-2 text-sm font-semibold transition">
+                <span class="material-symbols-outlined" style="font-size:18px">archive</span>
+                Archiver
+              </button>
+            </form>
+          <% } %>
+          <form action="/admin/devis-moteurs/<%= cart.id %>/delete" method="POST" onsubmit="return confirm('Supprimer définitivement ce dossier ?\n\nIrréversible : le lead, ses photos et PDF seront effacés.');">
+            <button type="submit" class="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-white text-rose-600 hover:bg-rose-50 px-3 py-2 text-sm font-semibold transition">
+              <span class="material-symbols-outlined" style="font-size:18px">delete</span>
+              Supprimer
+            </button>
+          </form>
+        </div>
+      </div>
     </div>
+
+    <!-- Bandeau ARCHIVÉ -->
+    <% if (cart.archived) { %>
+      <div class="mt-6 rounded-2xl bg-slate-100 border border-slate-300 p-4 flex items-center gap-3">
+        <span class="material-symbols-outlined text-slate-500" style="font-size:24px">inventory_2</span>
+        <div class="text-sm text-slate-600">
+          <span class="font-semibold text-slate-800">Dossier archivé</span>
+          <% if (cart.archivedByName) { %> par <%= cart.archivedByName %><% } %>
+          <% if (cart.archivedAt) { %> le <%= dt(cart.archivedAt) %><% } %>
+          — il n'apparaît plus dans la liste active.
+        </div>
+      </div>
+    <% } %>
 
     <!-- Bandeau ACOMPTE REÇU (paiement Mollie validé) -->
     <% if (engineQuote.payment && engineQuote.payment.status === 'paid') { %>

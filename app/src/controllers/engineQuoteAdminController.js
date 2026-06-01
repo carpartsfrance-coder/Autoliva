@@ -94,8 +94,12 @@ async function getEngineQuotesList(req, res, next) {
   try {
     const statusFilter = typeof req.query.status === 'string' ? req.query.status.trim() : '';
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    // Vue active (défaut) ou archivés. Les archivés sont sortis de la liste
+    // active pour la désencombrer, mais restent consultables via le toggle.
+    const view = req.query.view === 'archived' ? 'archived' : 'active';
 
     const query = { captureSource: 'landing_moteurs' };
+    query.archived = view === 'archived' ? true : { $ne: true };
     if (statusFilter && STATUS_LABELS[statusFilter]) {
       query['engineQuote.status'] = statusFilter;
     }
@@ -192,12 +196,20 @@ async function getEngineQuotesList(req, res, next) {
       marginExpected: items.filter(i => i.status === 'quote_sent').reduce((s, i) => s + i.marginEur, 0),
     };
 
+    // Compteur d'archivés (pour le badge du toggle), indépendant des filtres.
+    const archivedCount = await AbandonedCart.countDocuments({
+      captureSource: 'landing_moteurs',
+      archived: true,
+    });
+
     return res.render('admin/engine-quotes', {
       title: 'Devis moteurs · Admin',
       activeKey: 'engine-quotes',
       items,
       stats,
       filters: { status: statusFilter, q },
+      view,
+      archivedCount,
       statusLabels: STATUS_LABELS,
       fmt,
     });
@@ -233,6 +245,9 @@ async function getEngineQuoteDetail(req, res, next) {
         firstName: cart.firstName,
         lastName: cart.lastName,
         receivedAt: cart.lastActivityAt || cart.createdAt,
+        archived: !!cart.archived,
+        archivedAt: cart.archivedAt || null,
+        archivedByName: cart.archivedByName || '',
         ref: (cart.requested && cart.requested.ref) || '',
         plate: (cart.requested && cart.requested.plate) || '',
         vehicle: (cart.requested && cart.requested.vehicle) || '',
@@ -425,6 +440,73 @@ async function postAddNote(req, res, next) {
       }
     );
     return res.redirect('/admin/devis-moteurs/' + id + '#notes');
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/* ─── ARCHIVAGE / SUPPRESSION ─────────────────────────────────────────── */
+
+/**
+ * Valide une URL de retour : doit rester dans /admin/devis-moteurs
+ * (anti open-redirect). Sinon on retombe sur le fallback fourni.
+ */
+function safeReturnTo(value, fallback) {
+  const v = String(value || '');
+  return /^\/admin\/devis-moteurs(\/|\?|$)/.test(v) ? v : fallback;
+}
+
+/**
+ * Archive ou désarchive un lead (body.archived = '1' pour archiver, '0' pour
+ * désarchiver). Réversible — ne supprime rien.
+ */
+async function postSetArchive(req, res, next) {
+  try {
+    const id = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
+    const archive = String((req.body || {}).archived) === '1';
+    const admin = getAdminInfo(req);
+
+    await AbandonedCart.updateOne(
+      { _id: id, captureSource: 'landing_moteurs' },
+      archive
+        ? { $set: { archived: true, archivedAt: new Date(), archivedByName: admin.name } }
+        : { $set: { archived: false, archivedAt: null, archivedByName: '' } }
+    );
+
+    if (isAjax(req)) return res.json({ ok: true, archived: archive });
+    return res.redirect(safeReturnTo((req.body || {}).returnTo, '/admin/devis-moteurs'));
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * Supprime DÉFINITIVEMENT un lead devis-moteur (spam, test, doublon).
+ * Irréversible. Nettoie aussi les fichiers GridFS associés (photos + PDF
+ * envoyés) pour ne pas laisser d'orphelins. Réservé aux landing_moteurs.
+ */
+async function postDelete(req, res, next) {
+  try {
+    const id = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
+
+    const cart = await AbandonedCart.findOne({ _id: id, captureSource: 'landing_moteurs' }).lean();
+    if (!cart) return res.status(404).send('Not found');
+
+    // Collecte les fichiers GridFS rattachés (photos moteur/km + PDF envoyés)
+    const eq = cart.engineQuote || {};
+    const fileIds = [];
+    ((eq.photos && eq.photos.engine) || []).forEach((p) => { if (p && p.id) fileIds.push(p.id); });
+    ((eq.photos && eq.photos.kmReading) || []).forEach((p) => { if (p && p.id) fileIds.push(p.id); });
+    (eq.sentQuotes || []).forEach((s) => { if (s && s.pdfId) fileIds.push(s.pdfId); });
+    for (const fid of fileIds) {
+      try { await storage.deleteFile(fid); } catch (_) {}
+    }
+
+    await AbandonedCart.deleteOne({ _id: id, captureSource: 'landing_moteurs' });
+
+    return res.redirect('/admin/devis-moteurs');
   } catch (err) {
     return next(err);
   }
@@ -907,6 +989,8 @@ module.exports = {
   postAddNote,
   postUploadPhoto,
   postDeletePhoto,
+  postSetArchive,
+  postDelete,
   postSendQuote,
   postPreviewPdf,
   postPreviewEmail,
