@@ -370,20 +370,47 @@ function dt(v) {
 
               <div>
                 <label class="block text-xs font-semibold text-slate-500 mb-2">Mode de paiement proposé au client</label>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div class="grid grid-cols-3 md:grid-cols-4 gap-2">
                   <% [
-                    { val: 0,   lbl: 'Aucun',           hint: 'Pas de paiement en ligne' },
-                    { val: 30,  lbl: 'Acompte 30%',     hint: 'Réservation' },
-                    { val: 50,  lbl: 'Acompte 50%',     hint: 'Engagement fort' },
-                    { val: 100, lbl: 'Paiement intégral', hint: 'En une fois' },
-                  ].forEach(function(opt, i) { %>
+                    { val: 0,   lbl: 'Aucun', hint: 'Pas de paiement' },
+                    { val: 10,  lbl: '10 %',  hint: 'Acompte' },
+                    { val: 15,  lbl: '15 %',  hint: 'Acompte' },
+                    { val: 20,  lbl: '20 %',  hint: 'Acompte' },
+                    { val: 30,  lbl: '30 %',  hint: 'Réservation' },
+                    { val: 50,  lbl: '50 %',  hint: 'Engagement fort' },
+                    { val: 100, lbl: '100 %', hint: 'Intégral' },
+                  ].forEach(function(opt) { %>
                     <label class="cursor-pointer border-2 border-slate-200 hover:border-slate-300 has-[:checked]:border-red-500 has-[:checked]:bg-red-50 rounded-lg p-2.5 text-center transition block">
-                      <input type="radio" name="depositPct" value="<%= opt.val %>" <%= (i === 1 ? 'checked' : '') %> class="sr-only peer">
+                      <input type="radio" name="depositPct" value="<%= opt.val %>" <%= (opt.val === 30 ? 'checked' : '') %> class="sr-only peer" data-deposit-radio>
                       <span class="block text-sm font-bold text-slate-700 peer-checked:text-red-700"><%= opt.lbl %></span>
                       <span class="block text-[10px] text-slate-400 mt-0.5"><%= opt.hint %></span>
                     </label>
                   <% }) %>
                 </div>
+                <div class="mt-2 flex items-center gap-2">
+                  <label for="depositPctCustom" class="text-xs font-semibold text-slate-500 whitespace-nowrap">Autre %</label>
+                  <input type="number" id="depositPctCustom" name="depositPctCustom" min="1" max="100" step="1" placeholder="ex : 22" class="w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500" data-deposit-custom>
+                  <span class="text-[11px] text-slate-400">prioritaire sur les boutons si renseigné</span>
+                </div>
+                <script>
+                  (function () {
+                    var custom = document.querySelector('[data-deposit-custom]');
+                    var radios = document.querySelectorAll('[data-deposit-radio]');
+                    if (!custom || !radios.length) return;
+                    // Saisie d'un % libre → on décoche les presets (une seule sélection visible)
+                    custom.addEventListener('input', function () {
+                      if (custom.value !== '') {
+                        radios.forEach(function (r) { r.checked = false; });
+                      }
+                    });
+                    // Clic sur un preset → on vide le champ libre
+                    radios.forEach(function (r) {
+                      r.addEventListener('change', function () {
+                        if (r.checked) custom.value = '';
+                      });
+                    });
+                  })();
+                </script>
               </div>
 
               <div>
