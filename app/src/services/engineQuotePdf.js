@@ -45,6 +45,12 @@ function fmtDateFr(d) {
   if (!d) return '';
   return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
 }
+// Format compact (numérique) avec heure : 02/06/2026 09:31
+function fmtDateTimeShort(d) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    + ' ' + new Date(d).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
 function fmtMileage(km) {
   if (!km) return '';
   return String(km).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' km';
@@ -87,7 +93,8 @@ function buildQuotePdf(input) {
     const depositTtc = (Number(input.depositCents) || 0) / 100;
     const isFull = depositTtc > 0 && Math.abs(depositTtc - sellTtc) < 0.01;
     const remainingTtc = Math.max(sellTtc - depositTtc, 0);
-    const validUntil = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    // Validité 24h : le moteur peut être vendu entre-temps → on crée l'urgence.
+    const validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     // ─── Helpers de dessin ──────────────────────────────────────────
     function bullet(cx, cy, color) {
@@ -146,7 +153,7 @@ function buildQuotePdf(input) {
         'autoliva.com',
       ].join(' · ');
       doc.text(left, M, fY + 7, { width: W - 60, lineBreak: false });
-      doc.text('Page ' + pageLabel, M, fY + 7, { width: W, align: 'right', lineBreak: false });
+      // Le numéro de page (Page X/Y) est écrit en fin de génération (numérotation dynamique).
     }
 
     // ═════════════════════════════════════════════════════════════════
@@ -170,10 +177,10 @@ function buildQuotePdf(input) {
       let cy = y + 28;
       lines.forEach((line, i) => {
         if (i === 0) {
-          doc.fontSize(10).font('Helvetica-Bold').fillColor(C_TEXT).text(line, x + 14, cy, { width: cw - 28, lineBreak: false, ellipsis: true });
+          doc.fontSize(10).font('Helvetica-Bold').fillColor(C_TEXT).text(line, x + 14, cy, { width: cw - 28, height: 12, lineBreak: false, ellipsis: true });
           cy += 13;
         } else {
-          doc.fontSize(8.5).font('Helvetica').fillColor(C_TEXT_MUTED).text(line, x + 14, cy, { width: cw - 28, lineBreak: false, ellipsis: true });
+          doc.fontSize(8.5).font('Helvetica').fillColor(C_TEXT_MUTED).text(line, x + 14, cy, { width: cw - 28, height: 10, lineBreak: false, ellipsis: true });
           cy += 11;
         }
       });
@@ -193,9 +200,8 @@ function buildQuotePdf(input) {
     ]);
     infoCard(M + (cw + gp) * 2, y, 'Informations devis', [
       'N° ' + (input.quoteRef || '—'),
-      'Émis le ' + fmtDateFr(new Date()),
-      'Valable jusqu\'au ' + fmtDateFr(validUntil),
-      'Devis personnalisé',
+      'Émis le ' + fmtDateTimeShort(new Date()),
+      'Valable 24h seulement',
     ]);
     y += ch + 12;
 
@@ -221,7 +227,7 @@ function buildQuotePdf(input) {
       M + 14, y + 36, { width: descMaxW, lineBreak: true, ellipsis: true, height: 26 }
     );
     doc.fontSize(8).font('Helvetica').fillColor(C_TEXT_MUTED).text(
-      `Compatible véhicule ${input.plate || '—'} · garantie ${warrantyMonths} mois sans limite km · valide jusqu'au ${fmtDateFr(validUntil)}`,
+      `Compatible véhicule ${input.plate || '—'} · garantie ${warrantyMonths} mois sans limite km · devis valable 24h (le moteur peut être vendu entre-temps)`,
       M + 14, y + 66, { width: descMaxW, lineBreak: true, height: 30, ellipsis: true }
     );
 
@@ -392,42 +398,24 @@ function buildQuotePdf(input) {
     );
     y += inclH + 12;
 
-    // ─── PHOTOS DU MOTEUR (rangée de vignettes) ────────────────────
+    // Photos désormais présentées en grand sur des pages dédiées (voir fin du PDF),
+    // remplacé : on rappelle juste leur présence si on en a.
     const photos = Array.isArray(input.photos) ? input.photos.filter(p => p && p.buffer) : [];
     if (photos.length > 0) {
-      const maxThumbs = Math.min(photos.length, 5);
-      const thumbGap = 8;
-      const thumbW = (W - thumbGap * (maxThumbs - 1)) / maxThumbs;
-      const thumbH = Math.min(thumbW * 0.72, 90); // ratio paysage, plafonné
-      const blockH = thumbH + 28;
-      card(M, y, W, blockH, C_WHITE);
-      doc.fontSize(8).font('Helvetica-Bold').fillColor(C_NAVY).text('PHOTOS DU MOTEUR', M + 14, y + 10, { characterSpacing: 1, lineBreak: false });
-      const thumbsY = y + 24;
-      for (let i = 0; i < maxThumbs; i++) {
-        const tx = M + 14 + i * ((W - 28 - thumbGap * (maxThumbs - 1)) / maxThumbs + thumbGap);
-        const tw = (W - 28 - thumbGap * (maxThumbs - 1)) / maxThumbs;
-        try {
-          // Fond gris au cas où l'image ne remplit pas
-          doc.save();
-          doc.roundedRect(tx, thumbsY, tw, thumbH - 4, 4).fill(C_BG_VARIANT);
-          doc.restore();
-          // Image centrée dans la vignette en gardant le ratio
-          doc.image(photos[i].buffer, tx, thumbsY, { fit: [tw, thumbH - 4], align: 'center', valign: 'center' });
-          // Bord
-          doc.roundedRect(tx, thumbsY, tw, thumbH - 4, 4).strokeColor(C_OUTLINE_LT).lineWidth(0.5).stroke();
-        } catch (e) {
-          // Format non supporté par pdfkit → vignette grise avec texte
-          doc.save();
-          doc.roundedRect(tx, thumbsY, tw, thumbH - 4, 4).fillAndStroke(C_BG_VARIANT, C_OUTLINE_LT);
-          doc.restore();
-          doc.fontSize(6).font('Helvetica').fillColor(C_TEXT_MUTED).text('photo', tx, thumbsY + (thumbH - 4) / 2 - 3, { width: tw, align: 'center', lineBreak: false });
-        }
-      }
-      // Mention photos HD en PJ si plus de photos que de vignettes
-      if (photos.length > maxThumbs) {
-        doc.fontSize(7).font('Helvetica').fillColor(C_TEXT_MUTED).text('+ ' + (photos.length - maxThumbs) + ' autre(s) en pièces jointes de l\'email', M + 14, y + blockH - 11, { lineBreak: false });
-      }
-      y += blockH + 12;
+      const inclH2 = 26;
+      card(M, y, W, inclH2, C_WHITE);
+      doc.save().circle(M + 22, y + 13, 9).strokeColor(C_NAVY).lineWidth(1).stroke().restore();
+      doc.fontSize(8).font('Helvetica-Bold').fillColor(C_NAVY).text('PHOTOS', M + 42, y + 9, { characterSpacing: 1, lineBreak: false });
+      const engineN = photos.filter(p => p.category !== 'kmReading').length;
+      const kmN = photos.filter(p => p.category === 'kmReading').length;
+      const parts = [];
+      if (engineN) parts.push(engineN + ' photo' + (engineN > 1 ? 's' : '') + ' du moteur');
+      if (kmN) parts.push(kmN + ' relevé' + (kmN > 1 ? 's' : '') + ' kilométrique' + (kmN > 1 ? 's' : ''));
+      doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text(
+        parts.join(' · ') + ' — voir pages suivantes',
+        M + 90, y + 9, { width: W - 105, lineBreak: false, ellipsis: true }
+      );
+      y += inclH2 + 12;
     }
 
     // ─── MOT DU COMMERCIAL (truncé pour tenir sur page 1) ──────────
@@ -457,7 +445,7 @@ function buildQuotePdf(input) {
       }
     }
 
-    drawFooter('1/2');
+    drawFooter();
 
     // ═════════════════════════════════════════════════════════════════
     // PAGE 2 — Annexe technique et conditions
@@ -570,7 +558,7 @@ function buildQuotePdf(input) {
 
     // ─── CONDITIONS IMPORTANTES ────────────────────────────────────
     const condItems = [
-      'Le devis est valable 30 jours à compter de sa date d\'émission.',
+      'Le devis est valable 24h : le moteur restant disponible à la vente, il peut être cédé à un autre client entre-temps.',
       'Les prix sont exprimés en euros. TVA française au taux en vigueur.',
       'L\'acceptation du devis vaut commande après validation du paiement.',
       'Les délais de disponibilité et d\'expédition sont confirmés au moment de la réservation.',
@@ -592,7 +580,68 @@ function buildQuotePdf(input) {
       cdY += 16;
     });
 
-    drawFooter('2/2');
+    drawFooter();
+
+    // ═════════════════════════════════════════════════════════════════
+    // PAGES PHOTOS (dédiées) — grandes images, moteur puis relevé km
+    // ═════════════════════════════════════════════════════════════════
+    /**
+     * Dessine une (ou plusieurs) page(s) de photos en grand format.
+     * 2 photos par page max (l'une au-dessus de l'autre), titre en tête.
+     */
+    function drawPhotoPages(title, subtitle, list) {
+      if (!list || !list.length) return;
+      const perPage = 2;
+      for (let i = 0; i < list.length; i += perPage) {
+        doc.addPage();
+        drawHeader();
+        let py = 98;
+        // Titre de section
+        doc.fontSize(16).font('Helvetica-Bold').fillColor(C_NAVY).text(title, M, py, { lineBreak: false });
+        doc.rect(M, py + 23, 38, 3).fill(C_RED);
+        if (subtitle) {
+          doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text(subtitle, M, py + 30, { width: W, lineBreak: false });
+        }
+        py += 44;
+
+        const slots = list.slice(i, i + perPage);
+        // Espace dispo entre py et le footer
+        const bottomLimit = PH - 60;
+        const gap = 14;
+        const slotH = (bottomLimit - py - gap * (slots.length - 1)) / slots.length;
+
+        slots.forEach((p, k) => {
+          const sy = py + k * (slotH + gap);
+          // Cadre gris arrondi
+          doc.save();
+          doc.roundedRect(M, sy, W, slotH, 8).fill(C_BG_VARIANT);
+          doc.restore();
+          try {
+            doc.image(p.buffer, M + 8, sy + 8, { fit: [W - 16, slotH - 16], align: 'center', valign: 'center' });
+          } catch (e) {
+            doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text('Photo non affichable', M, sy + slotH / 2 - 6, { width: W, align: 'center', lineBreak: false });
+          }
+          doc.roundedRect(M, sy, W, slotH, 8).strokeColor(C_OUTLINE_LT).lineWidth(0.8).stroke();
+        });
+
+        drawFooter(); // le label de page sera réécrit à la fin (numérotation dynamique)
+      }
+    }
+
+    const enginePhotos = photos.filter(p => p.category !== 'kmReading');
+    const kmPhotos = photos.filter(p => p.category === 'kmReading');
+    drawPhotoPages('Photos du moteur', 'Photos réelles du moteur proposé · dossier ' + (input.quoteRef || ''), enginePhotos);
+    drawPhotoPages('Relevé kilométrique', 'Photo du compteur du véhicule donneur · dossier ' + (input.quoteRef || ''), kmPhotos);
+
+    // ─── Numérotation dynamique des pages (X / total) ──────────────
+    const range = doc.bufferedPageRange();
+    const total = range.count;
+    for (let i = 0; i < total; i++) {
+      doc.switchToPage(range.start + i);
+      const fY = PH - 36 - 16;
+      doc.fontSize(7).font('Helvetica').fillColor(C_TEXT_MUTED)
+        .text('Page ' + (i + 1) + '/' + total, M, fY + 7, { width: W, align: 'right', lineBreak: false });
+    }
 
     doc.end();
   });
