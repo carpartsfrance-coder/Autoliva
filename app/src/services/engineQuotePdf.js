@@ -405,6 +405,7 @@ function buildQuotePdf(input) {
       const inclH2 = 26;
       card(M, y, W, inclH2, C_WHITE);
       doc.save().circle(M + 22, y + 13, 9).strokeColor(C_NAVY).lineWidth(1).stroke().restore();
+      checkmark(M + 22, y + 13, C_NAVY, 7);
       doc.fontSize(8).font('Helvetica-Bold').fillColor(C_NAVY).text('PHOTOS', M + 42, y + 9, { characterSpacing: 1, lineBreak: false });
       const engineN = photos.filter(p => p.category !== 'kmReading').length;
       const kmN = photos.filter(p => p.category === 'kmReading').length;
@@ -418,7 +419,10 @@ function buildQuotePdf(input) {
       y += inclH2 + 12;
     }
 
-    // ─── MOT DU COMMERCIAL (truncé pour tenir sur page 1) ──────────
+    // ─── MOT DU COMMERCIAL ─────────────────────────────────────────
+    // S'il tient dans l'espace restant en page 1 → on l'affiche ici.
+    // Sinon → page dédiée (rendue plus bas), JAMAIS tronqué.
+    let commercialMsgForPage = '';
     if (input.customMessage && input.customMessage.trim()) {
       // Strip \r (textarea CRLF) qui se rend en "Ð" dans Helvetica WinAnsi
       // Compress aussi les \n\n+ multiples en double saut max
@@ -427,21 +431,27 @@ function buildQuotePdf(input) {
         .replace(/\r/g, '\n')
         .replace(/\n{3,}/g, '\n\n')
         .trim();
-      const msg = truncate(cleanMsg, photos.length > 0 ? 380 : 600);
+      const innerW = W - 28;
       const maxBoxBottom = PH - 70; // marge pour footer
       const availableH = maxBoxBottom - y;
-      if (availableH > 50) {
-        const innerW = W - 28;
-        const textH = doc.heightOfString(msg, { width: innerW, lineGap: 2 });
-        const boxH = Math.min(textH + 50, availableH);
+      doc.fontSize(9).font('Helvetica');
+      const textH = doc.heightOfString(cleanMsg, { width: innerW, lineGap: 2 });
+      const neededH = textH + 50;
+
+      if (availableH >= neededH && availableH > 50) {
+        // Tient en page 1 → on l'affiche ici en entier
+        const boxH = neededH;
         card(M, y, W, boxH, C_WHITE);
         doc.save().fillColor(C_BG_LIGHT).circle(M + 14, y + 14, 7).fill().restore();
         bullet(M + 14, y + 14, C_NAVY);
         doc.fontSize(7.5).font('Helvetica-Bold').fillColor(C_NAVY).text('MOT DU COMMERCIAL', M + 28, y + 10, { characterSpacing: 1, lineBreak: false });
         doc.fontSize(9).font('Helvetica').fillColor(C_TEXT).text(
-          msg, M + 14, y + 34, { width: innerW, height: boxH - 44, lineGap: 2, ellipsis: true }
+          cleanMsg, M + 14, y + 34, { width: innerW, lineGap: 2 }
         );
         y += boxH + 8;
+      } else {
+        // Trop long → page dédiée (rendue après l'annexe)
+        commercialMsgForPage = cleanMsg;
       }
     }
 
@@ -581,6 +591,24 @@ function buildQuotePdf(input) {
     });
 
     drawFooter();
+
+    // ═════════════════════════════════════════════════════════════════
+    // PAGE MESSAGE DU COMMERCIAL (si trop long pour la page 1)
+    // ═════════════════════════════════════════════════════════════════
+    if (commercialMsgForPage) {
+      doc.addPage();
+      drawHeader();
+      let my = 98;
+      doc.fontSize(16).font('Helvetica-Bold').fillColor(C_NAVY).text('Message du commercial', M, my, { lineBreak: false });
+      doc.rect(M, my + 23, 38, 3).fill(C_RED);
+      my += 40;
+      const innerW = W - 28;
+      card(M, my, W, PH - 70 - my, C_WHITE);
+      doc.fontSize(11).font('Helvetica').fillColor(C_TEXT).text(
+        commercialMsgForPage, M + 14, my + 16, { width: innerW, lineGap: 3 }
+      );
+      drawFooter();
+    }
 
     // ═════════════════════════════════════════════════════════════════
     // PAGES PHOTOS (dédiées) — grandes images, moteur puis relevé km
