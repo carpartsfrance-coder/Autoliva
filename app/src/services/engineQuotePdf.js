@@ -125,6 +125,28 @@ function buildQuotePdf(input) {
       doc.roundedRect(x, y, w, h, 6).strokeColor(C_OUTLINE_LT).lineWidth(0.8).stroke();
       doc.restore();
     }
+    // Flèche droite dessinée en primitive (WinAnsi ne rend pas "→")
+    function rightArrow(x, cy, color, len) {
+      const l = len || 7;
+      doc.save().strokeColor(color).lineWidth(1.2).lineCap('round').lineJoin('round')
+        .moveTo(x, cy).lineTo(x + l, cy)
+        .moveTo(x + l - 3, cy - 3).lineTo(x + l, cy).lineTo(x + l - 3, cy + 3)
+        .stroke().restore();
+    }
+    // Bouton d'action rempli (CTA paiement) : rectangle arrondi + label centré
+    // (blanc) + flèche, toute la surface étant un lien cliquable.
+    function payButton(x, y, w, h, label, url) {
+      doc.save().roundedRect(x, y, w, h, 5).fill(C_RED).restore();
+      const fs = 9;
+      doc.fontSize(fs).font('Helvetica-Bold');
+      const tw = doc.widthOfString(label);
+      const gap = 6, arrowLen = 8;
+      const groupW = tw + gap + arrowLen;
+      const startX = x + (w - groupW) / 2;
+      doc.fillColor(C_WHITE).text(label, startX, y + (h - fs) / 2 - 1, { lineBreak: false });
+      rightArrow(startX + tw + gap, y + h / 2, C_WHITE, arrowLen);
+      if (url) doc.link(x, y, w, h, url);
+    }
 
     // ─── Header (commun aux 2 pages) ────────────────────────────────
     function drawHeader() {
@@ -378,8 +400,7 @@ function buildQuotePdf(input) {
         ty += 14;
       }
       if (input.mollieUrl) {
-        doc.fontSize(8).font('Helvetica-Bold').fillColor(C_RED).text('Payer en ligne >>', totX + 14, ty + 2, { width: totW - 28, align: 'right', lineBreak: false });
-        doc.link(totX + totW - 100, ty, 86, 14, input.mollieUrl);
+        payButton(totX + 14, ty + 4, totW - 28, 24, isFull ? 'Payer en ligne' : 'Payer l\'acompte en ligne', input.mollieUrl);
       }
     }
 
