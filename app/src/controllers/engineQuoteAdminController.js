@@ -276,6 +276,21 @@ function buildUpdate(req) {
   };
 }
 
+/**
+ * Initialise engineQuote en sous-document vide s'il est null.
+ * Indispensable : le schéma a `default: null`, donc sur les leads dont le
+ * devis n'a jamais été touché (ou créés avant la feature), un
+ * `$set: { 'engineQuote.x.y': ... }` échoue avec
+ * « Cannot create field 'x' in element {engineQuote: null} » → 500.
+ * On ne crée le sous-doc que s'il est null (idempotent, ne touche rien sinon).
+ */
+async function ensureEngineQuote(id) {
+  await AbandonedCart.updateOne(
+    { _id: id, captureSource: 'landing_moteurs', engineQuote: null },
+    { $set: { engineQuote: {} } }
+  );
+}
+
 function isAjax(req) {
   return req.xhr || req.get('X-Requested-With') === 'XMLHttpRequest' || req.get('Accept') === 'application/json';
 }
@@ -292,6 +307,7 @@ async function postChangeStatus(req, res, next) {
     if (!STATUS_LABELS[newStatus]) return res.status(400).send('Statut invalide');
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
 
+    await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
       { _id: id, captureSource: 'landing_moteurs' },
       {
@@ -314,6 +330,7 @@ async function postUpdateEngine(req, res, next) {
     const id = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
     const b = req.body || {};
+    await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
       { _id: id, captureSource: 'landing_moteurs' },
       {
@@ -343,6 +360,7 @@ async function postUpdateStock(req, res, next) {
     const b = req.body || {};
     const loc = String(b.location || '').trim();
     if (loc && !STOCK_LABELS[loc]) return res.status(400).send('Stock invalide');
+    await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
       { _id: id, captureSource: 'landing_moteurs' },
       {
@@ -364,6 +382,7 @@ async function postUpdatePricing(req, res, next) {
     const id = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
     const b = req.body || {};
+    await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
       { _id: id, captureSource: 'landing_moteurs' },
       {
@@ -390,6 +409,7 @@ async function postAddNote(req, res, next) {
     if (!text) return res.redirect('/admin/devis-moteurs/' + id);
 
     const admin = getAdminInfo(req);
+    await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
       { _id: id, captureSource: 'landing_moteurs' },
       {
@@ -456,6 +476,7 @@ async function postUploadPhoto(req, res, next) {
       });
     }
 
+    await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
       { _id: id },
       {
@@ -478,6 +499,7 @@ async function postDeletePhoto(req, res, next) {
     if (!ALLOWED_CATEGORIES.has(category)) return res.status(400).send('Catégorie invalide');
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
 
+    await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
       { _id: id, captureSource: 'landing_moteurs' },
       {
