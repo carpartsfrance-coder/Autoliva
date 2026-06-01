@@ -29,21 +29,28 @@
 
 <!-- PREUVES : sous le formulaire sur mobile (order-3), sous l'accroche sur desktop (colonne gauche, ligne 2) -->
 <div class="order-3 lg:col-span-7 lg:col-start-1 lg:row-start-2">
-<div class="grid grid-cols-2 md:grid-cols-3 gap-6 mb-8 border-t border-gray-800 pt-8">
+<!-- Mobile : liste verticale icône+texte (lisible, alignée) · Desktop : grille 3 colonnes -->
+<div class="flex flex-col divide-y divide-gray-800 md:grid md:grid-cols-3 md:gap-6 md:divide-y-0 mb-8 border-t border-gray-800 pt-2 md:pt-8">
+<div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
+<svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
-<svg class="w-8 h-8 text-white mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
-<h3 class="font-bold text-sm mb-1">Moteurs testés et certifiés</h3>
+<h3 class="font-bold text-sm mb-0.5 md:mb-1">Moteurs testés et certifiés</h3>
 <p class="text-xs text-brand-textgray">Contrôlés sur banc d'essai</p>
 </div>
+</div>
+<div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
+<svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
-<svg class="w-8 h-8 text-white mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
-<h3 class="font-bold text-sm mb-1">Livraison rapide sous 48 à 72h</h3>
+<h3 class="font-bold text-sm mb-0.5 md:mb-1">Livraison rapide sous 48 à 72h</h3>
 <p class="text-xs text-brand-textgray">Partout en Europe</p>
 </div>
+</div>
+<div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
+<svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
-<svg class="w-8 h-8 text-white mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
-<h3 class="font-bold text-sm mb-1">Garantie jusqu'à 12 mois</h3>
+<h3 class="font-bold text-sm mb-0.5 md:mb-1">Garantie jusqu'à 12 mois</h3>
 <p class="text-xs text-brand-textgray">Sans franchise kilométrique</p>
+</div>
 </div>
 </div>
 <div class="inline-flex items-center gap-3 bg-brand-darker border border-gray-700 rounded-lg p-4">
