@@ -122,15 +122,13 @@ function buildQuotePdf(input) {
     // ─── Header (commun aux 2 pages) ────────────────────────────────
     function drawHeader() {
       const logoPath = path.join(__dirname, '..', '..', 'public', 'images', 'logo-autoliva.png');
-      let cx = M;
+      // Logo seul à gauche (le nom "Autoliva" est déjà dans l'image du logo).
       if (fs.existsSync(logoPath)) {
-        try { doc.image(logoPath, M, 36, { height: 30 }); cx = M + 100; } catch (_) {}
+        try { doc.image(logoPath, M, 38, { height: 34 }); } catch (_) {}
+      } else {
+        // Fallback texte si l'image manque
+        doc.fontSize(24).font('Helvetica-Bold').fillColor(C_NAVY).text(brand.NAME || 'Autoliva', M, 38, { lineGap: -4 });
       }
-      doc.fontSize(24).font('Helvetica-Bold').fillColor(C_NAVY).text(brand.NAME || 'Autoliva', cx, 38, { lineGap: -4 });
-      doc.fontSize(8).font('Helvetica').fillColor(C_TEXT_MUTED).text(
-        'Pièces automobiles contrôlées · moteurs, boîtes et transmissions',
-        cx, 62
-      );
       doc.fontSize(20).font('Helvetica-Bold').fillColor(C_NAVY).text('DEVIS', M + W - 200, 40, { width: 200, align: 'right', characterSpacing: 1.5 });
       doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text('Moteur occasion', M + W - 200, 64, { width: 200, align: 'right' });
       doc.moveTo(M, 84).lineTo(M + W, 84).strokeColor(C_OUTLINE_LT).lineWidth(0.6).stroke();
@@ -287,19 +285,19 @@ function buildQuotePdf(input) {
       articleY += 16;
     }
     doc.fontSize(10).font('Helvetica-Bold').fillColor(C_TEXT).text(
-      truncate(engineTitle, 80), M + 14, articleY, { width: articleW, lineBreak: false, ellipsis: true }
+      truncate(engineTitle, 80), M + 14, articleY, { width: articleW, height: 13, lineBreak: false, ellipsis: true }
     );
     articleY += 14;
     if (engineSubParts) {
       doc.fontSize(8).font('Helvetica').fillColor(C_TEXT_MUTED).text(
-        truncate(engineSubParts, 110), M + 14, articleY, { width: articleW, lineBreak: false, ellipsis: true }
+        truncate(engineSubParts, 110), M + 14, articleY, { width: articleW, height: 11, lineBreak: false, ellipsis: true }
       );
       articleY += 12;
     }
     if (input.stockLabel) {
       doc.fontSize(8).font('Helvetica-Bold').fillColor(C_RED).text(
         input.stockLabel + (input.delay ? ' · ' + input.delay : ''),
-        M + 14, articleY, { width: articleW, lineBreak: false, ellipsis: true }
+        M + 14, articleY, { width: articleW, height: 11, lineBreak: false, ellipsis: true }
       );
     }
     doc.fontSize(10).font('Helvetica').fillColor(C_TEXT_MUTED).text(warrantyMonths + ' mois', M + W - 240, tr + 22, { width: 100, align: 'center', lineBreak: false });
@@ -330,7 +328,7 @@ function buildQuotePdf(input) {
       depositTtc > 0
         ? (isFull ? 'Paiement intégral : ' + eur(depositTtc) : 'Acompte immédiat : ' + eur(depositTtc))
         : 'Paiement à confirmer avec notre équipe',
-      (/stock/i.test(input.stockLabel || '') ? 'Solde après moteur testé et déclaré conforme (rapport + attestation)' : 'Solde après moteur sourcé, testé et déclaré conforme (rapport + attestation)'),
+      (/stock/i.test(input.stockLabel || '') ? 'Solde après test et attestation de conformité' : 'Solde après sourcing, test et attestation de conformité'),
       'Paiement sécurisé par carte bancaire ou virement',
       'Lien de paiement transmis par email',
     ];
@@ -338,7 +336,7 @@ function buildQuotePdf(input) {
     bullets.forEach(b => {
       bullet(M + 18, bY + 4, C_RED);
       doc.fontSize(8.5).font('Helvetica').fillColor(C_TEXT).text(
-        truncate(b, 80), M + 26, bY, { width: modW - 40, lineBreak: false, ellipsis: true }
+        truncate(b, 70), M + 26, bY, { width: modW - 40, height: 11, lineBreak: false, ellipsis: true }
       );
       bY += 14;
     });
