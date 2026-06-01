@@ -212,6 +212,15 @@ const abandonedCartSchema = new mongoose.Schema(
     manualSmsSent: { type: Number, default: 0 },
     lastManualContactAt: { type: Date, default: null },
 
+    /**
+     * Archivage manuel admin : sort le lead de la liste active de
+     * /admin/devis-moteurs sans le supprimer (gagnés/perdus/traités qui
+     * encombrent la vue). Réversible via "Désarchiver".
+     */
+    archived: { type: Boolean, default: false, index: true },
+    archivedAt: { type: Date, default: null },
+    archivedByName: { type: String, default: '', trim: true },
+
     abandonedAt: { type: Date, required: true, index: true },
     lastActivityAt: { type: Date, default: Date.now, index: true },
     lastRemindedAt: { type: Date, default: null },

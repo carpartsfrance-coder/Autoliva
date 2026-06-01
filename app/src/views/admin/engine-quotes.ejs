@@ -40,8 +40,24 @@
       </div>
     </div>
 
+    <!-- Toggle Actifs / Archivés -->
+    <div class="mt-6 inline-flex rounded-xl border border-slate-200 bg-white p-1">
+      <a href="/admin/devis-moteurs<%= filters.status ? ('?status=' + filters.status) : '' %>"
+         class="px-4 py-2 rounded-lg text-sm font-semibold transition <%= view === 'active' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900' %>">
+        Actifs
+      </a>
+      <a href="/admin/devis-moteurs?view=archived<%= filters.status ? ('&status=' + filters.status) : '' %>"
+         class="px-4 py-2 rounded-lg text-sm font-semibold transition flex items-center gap-1.5 <%= view === 'archived' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:text-slate-900' %>">
+        Archivés
+        <% if (archivedCount > 0) { %>
+          <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-bold <%= view === 'archived' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500' %>"><%= archivedCount %></span>
+        <% } %>
+      </a>
+    </div>
+
     <!-- Filtres -->
-    <form action="/admin/devis-moteurs" method="GET" class="mt-6 bg-white rounded-2xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3">
+    <form action="/admin/devis-moteurs" method="GET" class="mt-4 bg-white rounded-2xl border border-slate-200 p-4 flex flex-col md:flex-row gap-3">
+      <% if (view === 'archived') { %><input type="hidden" name="view" value="archived"><% } %>
       <input name="q" value="<%= filters.q || '' %>" placeholder="Recherche : nom, plaque, dossier, moteur…" class="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500">
       <select name="status" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
         <option value="">Tous statuts</option>
@@ -51,7 +67,7 @@
       </select>
       <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-5 py-2.5 rounded-xl text-sm">Filtrer</button>
       <% if (filters.q || filters.status) { %>
-        <a href="/admin/devis-moteurs" class="px-5 py-2.5 text-sm text-slate-600 hover:text-slate-900">Réinitialiser</a>
+        <a href="/admin/devis-moteurs<%= view === 'archived' ? '?view=archived' : '' %>" class="px-5 py-2.5 text-sm text-slate-600 hover:text-slate-900">Réinitialiser</a>
       <% } %>
     </form>
 
@@ -149,7 +165,31 @@
                     <% } else { %><span class="text-slate-300 text-xs">—</span><% } %>
                   </td>
                   <td class="px-4 py-3 align-top text-right">
-                    <a href="/admin/devis-moteurs/<%= it.id %>" class="text-red-600 hover:text-red-700 font-semibold text-sm">Ouvrir →</a>
+                    <div class="flex items-center justify-end gap-1.5">
+                      <a href="/admin/devis-moteurs/<%= it.id %>" class="text-red-600 hover:text-red-700 font-semibold text-sm whitespace-nowrap">Ouvrir →</a>
+                      <% if (view === 'archived') { %>
+                        <form action="/admin/devis-moteurs/<%= it.id %>/archive" method="POST" class="inline">
+                          <input type="hidden" name="archived" value="0">
+                          <input type="hidden" name="returnTo" value="/admin/devis-moteurs?view=archived">
+                          <button type="submit" title="Désarchiver" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition">
+                            <span class="material-symbols-outlined" style="font-size:18px">unarchive</span>
+                          </button>
+                        </form>
+                      <% } else { %>
+                        <form action="/admin/devis-moteurs/<%= it.id %>/archive" method="POST" class="inline">
+                          <input type="hidden" name="archived" value="1">
+                          <input type="hidden" name="returnTo" value="/admin/devis-moteurs">
+                          <button type="submit" title="Archiver (sortir de la liste active)" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition">
+                            <span class="material-symbols-outlined" style="font-size:18px">archive</span>
+                          </button>
+                        </form>
+                      <% } %>
+                      <form action="/admin/devis-moteurs/<%= it.id %>/delete" method="POST" class="inline" onsubmit="return confirm('Supprimer définitivement ce dossier ?\n\nIrréversible : le lead, ses photos et PDF seront effacés.');">
+                        <button type="submit" title="Supprimer définitivement" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition">
+                          <span class="material-symbols-outlined" style="font-size:18px">delete</span>
+                        </button>
+                      </form>
+                    </div>
                   </td>
                 </tr>
               <% }) %>
