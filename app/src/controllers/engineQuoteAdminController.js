@@ -80,6 +80,17 @@ function safeNumber(value, fallback = 0) {
   return isNaN(n) ? fallback : n;
 }
 
+/**
+ * Résout le pourcentage d'acompte à partir du body du formulaire.
+ * Le champ libre `depositPctCustom` est PRIORITAIRE sur les presets radio
+ * `depositPct` dès qu'il est renseigné (> 0). Résultat borné à [0, 100].
+ */
+function resolveDepositPct(b) {
+  const custom = safeNumber((b || {}).depositPctCustom, 0);
+  const raw = custom > 0 ? custom : safeNumber((b || {}).depositPct, 0);
+  return Math.max(0, Math.min(100, raw));
+}
+
 function getAdminInfo(req) {
   const a = req && req.session && req.session.admin ? req.session.admin : {};
   return {
@@ -627,7 +638,7 @@ async function prepareQuoteData(req, opts) {
 
   const b = req.body || {};
   const customMessage = String(b.customMessage || '').trim().slice(0, 2000);
-  const depositPct = Math.max(0, Math.min(100, Number(b.depositPct) || 0));
+  const depositPct = resolveDepositPct(b);
   const depositTtc = depositPct > 0 ? (sellTtc * depositPct / 100) : 0;
   const depositCents = Math.round(depositTtc * 100);
   const createMollie = String(b.createMollie || '').toLowerCase() === 'on' && MOLLIE_ENABLED && depositCents > 0;
@@ -768,7 +779,7 @@ async function postSendQuote(req, res, next) {
 
     const b = req.body || {};
     const customMessage = String(b.customMessage || '').trim().slice(0, 2000);
-    const depositPct = Math.max(0, Math.min(100, Number(b.depositPct) || 0));
+    const depositPct = resolveDepositPct(b);
     const depositTtc = depositPct > 0 ? (sellTtc * depositPct / 100) : 0;
     const depositCents = Math.round(depositTtc * 100);
     const createMollie = String(b.createMollie || '').toLowerCase() === 'on' && MOLLIE_ENABLED && depositCents > 0;
