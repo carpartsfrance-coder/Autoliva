@@ -32,10 +32,23 @@ async function compressImage(buffer, mime) {
     if (img.width > MAX_WIDTH) {
       img.resize({ w: MAX_WIDTH });
     }
-    const out = await img.getBuffer('image/jpeg', { quality: JPEG_QUALITY });
+    // Le JPEG ne gère pas la transparence : jimp remplit alors les zones
+    // transparentes en NOIR par défaut. Les images à fond transparent (ex:
+    // visuels marketing PNG) ressortaient donc sur fond noir chez le client.
+    // → on aplatit sur un fond BLANC avant l'export JPEG.
+    let toEncode = img;
+    let hadAlpha = false;
+    if (typeof img.hasAlpha === 'function' && img.hasAlpha()) {
+      hadAlpha = true;
+      const bg = new Jimp({ width: img.width, height: img.height, color: 0xffffffff });
+      bg.composite(img, 0, 0);
+      toEncode = bg;
+    }
+    const out = await toEncode.getBuffer('image/jpeg', { quality: JPEG_QUALITY });
     // Si la "compression" a paradoxalement grossi (petite image déjà optimisée),
-    // on garde l'original.
-    if (out.length >= buffer.length) {
+    // on garde l'original — SAUF si l'image avait de la transparence, car
+    // renvoyer le PNG transparent ramènerait le fond noir côté client.
+    if (out.length >= buffer.length && !hadAlpha) {
       return { buffer, mime: mime || 'image/jpeg' };
     }
     return { buffer: out, mime: 'image/jpeg' };
