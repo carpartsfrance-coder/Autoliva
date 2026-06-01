@@ -14,6 +14,12 @@
       font-size: 16px !important;
     }
   }
+  /* Bande de logos partenaires : défilement auto en boucle infinie (marquee).
+     Les logos sont dupliqués 2× dans le HTML ; on translate de -50% → boucle parfaite. */
+  @keyframes brand-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  .brand-marquee-track { animation: brand-marquee 28s linear infinite; will-change: transform; }
+  .brand-marquee:hover .brand-marquee-track { animation-play-state: paused; }
+  @media (prefers-reduced-motion: reduce) { .brand-marquee-track { animation: none; } }
 </style>
 
 <!-- BEGIN: Hero Section -->
@@ -305,29 +311,26 @@ Envoyer ma demande
 <section class="border-b border-gray-100 py-10">
 <div class="max-w-[1400px] mx-auto px-6">
 <p class="text-center text-xs font-bold text-gray-400 uppercase tracking-widest mb-8">Nos moteurs ont été montés par</p>
-<div class="flex justify-between items-center relative">
-<button class="w-10 h-10 bg-white rounded-full shadow flex items-center justify-center text-gray-400 hover:text-gray-800 z-10" aria-label="Précédent"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button>
-<div class="flex justify-around items-center w-full px-8 gap-6 overflow-hidden">
-<div class="h-16 w-36 flex items-center justify-center shrink-0 grayscale hover:grayscale-0 transition duration-300">
-<img alt="Porsche" class="max-h-full max-w-full object-contain" src="/images/partenaires/logo-porsche.webp" loading="lazy">
+<!-- Bande de logos en défilement auto infini. Masques dégradés sur les bords.
+     Les logos sont listés 2× (la piste fait 200% de large, on translate de -50%). -->
+<div class="brand-marquee relative overflow-hidden" style="-webkit-mask-image:linear-gradient(to right,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(to right,transparent,#000 8%,#000 92%,transparent);">
+<div class="brand-marquee-track flex items-center gap-12 w-max">
+<% var _brands = [
+  ['Porsche','/images/partenaires/logo-porsche.webp'],
+  ['Simplici Car','/images/partenaires/LOGO-SIMPLICI-CAR-NOIR-copie.png'],
+  ['Flat 44','/images/partenaires/Logo-FLAT44-contact.png'],
+  ['Mougins Autosport','/images/partenaires/mougins-autosport.webp'],
+  ['Sun Motors','/images/partenaires/sun-motors.webp'],
+  ['Chassay Automobiles','/images/partenaires/chassay-automobiles.png']
+]; %>
+<% for (var _dup = 0; _dup < 2; _dup++) { %>
+<% _brands.forEach(function(b){ %>
+<div class="h-14 w-32 md:h-16 md:w-36 flex items-center justify-center shrink-0 grayscale hover:grayscale-0 opacity-70 hover:opacity-100 transition duration-300">
+<img alt="<%= b[0] %>" class="max-h-full max-w-full object-contain" src="<%= b[1] %>" loading="lazy" <%= _dup === 1 ? 'aria-hidden="true"' : '' %>>
 </div>
-<div class="h-16 w-36 flex items-center justify-center shrink-0 grayscale hover:grayscale-0 transition duration-300">
-<img alt="Simplici Car" class="max-h-full max-w-full object-contain" src="/images/partenaires/LOGO-SIMPLICI-CAR-NOIR-copie.png" loading="lazy">
+<% }); %>
+<% } %>
 </div>
-<div class="h-16 w-36 flex items-center justify-center shrink-0 grayscale hover:grayscale-0 transition duration-300">
-<img alt="Flat 44" class="max-h-full max-w-full object-contain" src="/images/partenaires/Logo-FLAT44-contact.png" loading="lazy">
-</div>
-<div class="h-16 w-36 flex items-center justify-center shrink-0 grayscale hover:grayscale-0 transition duration-300">
-<img alt="Mougins Autosport" class="max-h-full max-w-full object-contain" src="/images/partenaires/mougins-autosport.webp" loading="lazy">
-</div>
-<div class="h-16 w-36 flex items-center justify-center shrink-0 grayscale hover:grayscale-0 transition duration-300">
-<img alt="Sun Motors" class="max-h-full max-w-full object-contain" src="/images/partenaires/sun-motors.webp" loading="lazy">
-</div>
-<div class="h-16 w-36 flex items-center justify-center shrink-0 grayscale hover:grayscale-0 transition duration-300">
-<img alt="Chassay Automobiles" class="max-h-full max-w-full object-contain" src="/images/partenaires/chassay-automobiles.png" loading="lazy">
-</div>
-</div>
-<button class="w-10 h-10 bg-white rounded-full shadow flex items-center justify-center text-gray-400 hover:text-gray-800 z-10" aria-label="Suivant"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></button>
 </div>
 </div>
 </section>
