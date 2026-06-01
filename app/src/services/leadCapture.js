@@ -167,11 +167,22 @@ async function captureContactLead({ req, mode, email, firstName, lastName, phone
         },
       };
 
-      // N'écrase l'email/phone que s'ils sont vides actuellement
+      // N'écrase l'email/phone que s'ils sont vides actuellement.
       if (cleanEmail && !existing.email) update.$set.email = cleanEmail;
       if (cleanPhone && !existing.phone) update.$set.phone = cleanPhone;
       if (cleanFirst && !existing.firstName) update.$set.firstName = cleanFirst;
       if (cleanLast && !existing.lastName) update.$set.lastName = cleanLast;
+
+      // EXCEPTION : sur une demande explicite (contact/devis), si le client
+      // saisit un email DIFFÉRENT de celui déjà au dossier, il corrige
+      // probablement une faute (ex: hmail.com → gmail.com) → on met à jour
+      // l'email et on archive l'ancien en note (sinon le devis part à la
+      // mauvaise adresse et le lead semble "perdu").
+      const isExplicit = mode === 'devis' || mode === 'contact';
+      const emailChanged = isExplicit && cleanEmail && existing.email && cleanEmail !== existing.email;
+      if (emailChanged) {
+        update.$set.email = cleanEmail;
+      }
 
       // Promote captureSource: contact/devis prennent priorité sur cart_activity/guest_checkout
       const priority = ['', 'cart_activity', 'newsletter', 'guest_checkout', 'user', 'contact', 'devis', 'landing_moteurs', 'manual'];
@@ -188,6 +199,10 @@ async function captureContactLead({ req, mode, email, firstName, lastName, phone
          et si la nouvelle demande est différente, on archive l'ancienne dans contextMessage */
       const ex = existing.requested || {};
       const archivedDemands = [];
+      // Si l'email a été corrigé, on garde une trace de l'ancien dans la note.
+      if (emailChanged) {
+        archivedDemands.push(`email corrigé (ancien: ${existing.email})`);
+      }
       ['vehicle', 'vin', 'plate', 'ref', 'message'].forEach((k) => {
         if (requested[k] && !ex[k]) {
           update.$set[`requested.${k}`] = requested[k];
