@@ -808,37 +808,21 @@ async function postSendQuote(req, res, next) {
     // Photos pour le PDF (compressées → JPEG, supporté par pdfkit)
     const pdfPhotos = photosWithBuffers.map(p => ({ buffer: p.buffer, category: p.category }));
 
-    // 1) Génère le PDF (avec photos intégrées)
-    const pdfBuffer = await buildQuotePdf({
-      quoteRef,
-      customerName: ((cart.firstName || '') + ' ' + (cart.lastName || '')).trim() || cart.email,
-      customerEmail: cart.email,
-      customerPhone: cart.phone,
-      plate: (cart.requested && cart.requested.plate) || '',
-      engine: eq.identifiedEngine || {},
-      pricing: { sellPrice: sellHt, vatRate, purchasePrice: pricing.purchasePrice, additionalFees: pricing.additionalFees },
-      stockLabel: stockLabelClient,
-      delay,
-      depositCents,
-      customMessage,
-      conditionLabel: conditionInfo.client,
-      conditionBadge: conditionInfo.short,
-      isReconditionne: conditionKey.startsWith('reconditionne'),
-      photos: pdfPhotos,
-    });
+    // 1) Prépare l'ID du sentQuote + URLs de tracking AVANT le PDF : le PDF
+    //    doit pouvoir embarquer le bouton de paiement cliquable, donc le lien
+    //    Mollie + le lien tracké doivent exister avant de générer le PDF.
+    const sentQuoteObjectId = new mongoose.Types.ObjectId();
+    const publicBase = (process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
+    const trackBase = publicBase + '/api/devis-moteurs';
+    const trackSuffix = '/' + String(cart._id) + '/' + String(sentQuoteObjectId);
+    const trackPixelUrl = trackBase + '/track-open' + trackSuffix;
+    // Lien "voir le PDF en ligne" tracké (vue PDF) — PDF stocké en GridFS
+    const pdfTrackUrl = trackBase + '/track-pdf' + trackSuffix;
 
-    // 2) Persiste le PDF dans GridFS
-    const pdfSaved = await storage.saveBuffer({
-      buffer: pdfBuffer,
-      filename: `Devis-${quoteRef || cart._id}.pdf`,
-      mime: 'application/pdf',
-      metadata: { kind: 'engine_quote_pdf', engineQuoteId: String(cart._id), quoteRef },
-    });
-
-    // 3) Optionnel : Mollie payment link pour l'acompte
+    // 2) Crée le lien de paiement Mollie (acompte) AVANT le PDF, pour que le
+    //    bouton "Payer en ligne" du PDF puisse y pointer (via le lien tracké).
     let mollieUrl = '';
     let mollieId = '';
-    const publicBase = (process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
     if (createMollie) {
       try {
         const payment = await mollie.createPayment({
@@ -856,19 +840,41 @@ async function postSendQuote(req, res, next) {
         console.error('[engine-quote] Mollie payment creation failed:', err && err.message);
       }
     }
-
-    // ID du sentQuote généré en amont → permet d'insérer le pixel tracking
-    // pointant sur cet enregistrement précis avant même l'insert en BDD.
-    const sentQuoteObjectId = new mongoose.Types.ObjectId();
-    const trackBase = publicBase + '/api/devis-moteurs';
-    const trackSuffix = '/' + String(cart._id) + '/' + String(sentQuoteObjectId);
-    const trackPixelUrl = trackBase + '/track-open' + trackSuffix;
-    // Lien paiement tracké (clic) — seulement si un lien Mollie existe
+    // Lien paiement tracké (clic) — seulement si un lien Mollie existe.
+    // Utilisé à la fois dans l'email ET le PDF → un clic depuis l'un ou l'autre
+    // est compté comme "paiement cliqué".
     const payTrackUrl = mollieUrl ? (trackBase + '/track-pay' + trackSuffix) : '';
-    // Lien "voir le PDF en ligne" tracké (vue PDF) — PDF stocké en GridFS
-    const pdfTrackUrl = trackBase + '/track-pdf' + trackSuffix;
 
-    // 4) Prépare les photos à joindre à l'email (buffers compressés en JPEG)
+    // 3) Génère le PDF (photos intégrées + bouton de paiement cliquable si un
+    //    lien Mollie a été créé ; sinon mollieUrl vide → aucun bouton, inchangé)
+    const pdfBuffer = await buildQuotePdf({
+      quoteRef,
+      customerName: ((cart.firstName || '') + ' ' + (cart.lastName || '')).trim() || cart.email,
+      customerEmail: cart.email,
+      customerPhone: cart.phone,
+      plate: (cart.requested && cart.requested.plate) || '',
+      engine: eq.identifiedEngine || {},
+      pricing: { sellPrice: sellHt, vatRate, purchasePrice: pricing.purchasePrice, additionalFees: pricing.additionalFees },
+      stockLabel: stockLabelClient,
+      delay,
+      depositCents,
+      mollieUrl: payTrackUrl || mollieUrl,
+      customMessage,
+      conditionLabel: conditionInfo.client,
+      conditionBadge: conditionInfo.short,
+      isReconditionne: conditionKey.startsWith('reconditionne'),
+      photos: pdfPhotos,
+    });
+
+    // 4) Persiste le PDF dans GridFS
+    const pdfSaved = await storage.saveBuffer({
+      buffer: pdfBuffer,
+      filename: `Devis-${quoteRef || cart._id}.pdf`,
+      mime: 'application/pdf',
+      metadata: { kind: 'engine_quote_pdf', engineQuoteId: String(cart._id), quoteRef },
+    });
+
+    // 5) Prépare les photos à joindre à l'email (buffers compressés en JPEG)
     const photoAttachments = photosWithBuffers.map((p, i) => {
       const catLabel = p.category === 'engine' ? 'moteur' : 'km';
       return {
@@ -878,7 +884,7 @@ async function postSendQuote(req, res, next) {
       };
     });
 
-    // 5) Envoie l'email avec PDF + photos en pièces jointes
+    // 6) Envoie l'email avec PDF + photos en pièces jointes
     const firstNameForEmail = (cart.firstName && cart.lastName) ? cart.firstName : '';
     const html = buildQuoteEmailHtml({
       quoteRef,
@@ -939,7 +945,7 @@ async function postSendQuote(req, res, next) {
       console.error('[engine-quote] Email envoi devis échoué:', sendResult);
     }
 
-    // 6) Persiste l'historique (avec snapshot photos) + change statut
+    // 7) Persiste l'historique (avec snapshot photos) + change statut
     const photoSnapshot = allPhotos.map(p => ({
       id: p.id,
       url: p.url,
