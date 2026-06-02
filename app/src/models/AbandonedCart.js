@@ -73,7 +73,7 @@ const engineQuoteSentSchema = new mongoose.Schema(
 
 const engineQuoteReminderSchema = new mongoose.Schema(
   {
-    type: { type: String, enum: ['j3', 'j7', 'j14', 'j14_lost', 'j21_lost'], required: true },
+    type: { type: String, enum: ['j3', 'j7', 'j14', 'j14_lost', 'j21_lost', 'hot_pdf', 'hot_pay'], required: true },
     sentAt: { type: Date, default: Date.now },
   },
   { _id: false }
