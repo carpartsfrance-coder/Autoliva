@@ -122,7 +122,7 @@ async function postMollieWebhook(req, res) {
                 <li style="margin-bottom:6px;">Vous recevrez un email dès l'expédition, avec le suivi transporteur.</li>
                 <li>Le solde sera à régler une fois le moteur testé et déclaré conforme.</li>
               </ul>
-              <p style="margin:0 0 6px;font-size:14px;color:#374151;">Une question ? Répondez à cet email ou appelez-nous au <a href="tel:${brand.PHONE_INTL || '+33465845488'}" style="color:#E1001A;font-weight:700;text-decoration:none;">${brand.PHONE || '04 65 84 54 88'}</a>.</p>
+              <p style="margin:0 0 6px;font-size:14px;color:#374151;">Une question ? Répondez à cet email ou appelez-nous au <a href="tel:${brand.PHONE_MOTEUR_INTL || '+33465848539'}" style="color:#E1001A;font-weight:700;text-decoration:none;">${brand.PHONE_MOTEUR || '04 65 84 85 39'}</a>.</p>
               <p style="margin:18px 0 0;font-size:14px;color:#1f2937;">À très vite,<br><strong>L'équipe technique Autoliva</strong></p>
               <p style="margin:16px 0 0;font-size:11px;color:#94a3b8;">Référence à conserver : ${quoteRef}</p>
             </div>`;
@@ -136,7 +136,7 @@ async function postMollieWebhook(req, res) {
             `- Email d'expédition avec le suivi transporteur.`,
             `- Solde à régler une fois le moteur testé et déclaré conforme.`,
             ``,
-            `Une question ? ${brand.PHONE || '04 65 84 54 88'}`,
+            `Une question ? ${brand.PHONE_MOTEUR || '04 65 84 85 39'}`,
             ``,
             `L'équipe technique Autoliva`,
             `Référence : ${quoteRef}`,

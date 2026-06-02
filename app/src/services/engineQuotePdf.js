@@ -171,7 +171,7 @@ function buildQuotePdf(input) {
       const left = [
         brand.NAME || 'Autoliva',
         brand.EMAIL_CONTACT || 'contact@autoliva.com',
-        brand.PHONE || '04 65 84 54 88',
+        brand.PHONE_MOTEUR || '04 65 84 85 39',
         'autoliva.com',
       ].join(' · ');
       doc.text(left, M, fY + 7, { width: W - 60, lineBreak: false });
@@ -211,7 +211,7 @@ function buildQuotePdf(input) {
     infoCard(M, y, 'Émetteur', [
       brand.NAME || 'Autoliva',
       brand.EMAIL_CONTACT || 'contact@autoliva.com',
-      brand.PHONE || '04 65 84 54 88',
+      brand.PHONE_MOTEUR || '04 65 84 85 39',
       'autoliva.com',
     ]);
     infoCard(M + cw + gp, y, 'Client', [

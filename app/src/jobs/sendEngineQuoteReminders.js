@@ -52,8 +52,8 @@ async function sendReminder(cart, type) {
     plate,
     sellTtc: lastSent.sellPriceTtc || 0,
     daysSince,
-    brandPhone: brand.PHONE,
-    brandPhoneIntl: brand.PHONE_INTL,
+    brandPhone: brand.PHONE_MOTEUR,
+    brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
   });
 
   const subject = type === 'j7'

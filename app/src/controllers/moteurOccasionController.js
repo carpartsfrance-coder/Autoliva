@@ -51,8 +51,8 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
   // En dev local, baseUrl pointe sur localhost → on force autoliva.com pour les assets email.
   const publicSite = 'https://autoliva.com';
   const logoUrl = publicSite + '/images/logo-autoliva.png';
-  const phoneIntl = brandObj.PHONE_INTL || '+33465845488';
-  const phoneDisplay = brandObj.PHONE || '04 65 84 54 88';
+  const phoneIntl = brandObj.PHONE_MOTEUR_INTL || '+33465848539';
+  const phoneDisplay = brandObj.PHONE_MOTEUR || '04 65 84 85 39';
   const greeting = safeFirstName ? `Bonjour ${safeFirstName},` : 'Bonjour,';
 
   return `<!DOCTYPE html>
@@ -313,7 +313,7 @@ function buildServiceJsonLd({ baseUrl }) {
       '@type': 'Organization',
       name: brand.NAME,
       url: brand.SITE_URL,
-      telephone: brand.PHONE_INTL,
+      telephone: brand.PHONE_MOTEUR_INTL,
       email: brand.EMAIL_CONTACT,
     },
     areaServed: { '@type': 'Country', name: 'France' },
@@ -538,7 +538,7 @@ async function postDevis(req, res, next) {
           ``,
           `Aucun moteur n'est expédié sans passer par notre banc d'essai.`,
           ``,
-          `Besoin urgent ? ${brand.PHONE}`,
+          `Besoin urgent ? ${brand.PHONE_MOTEUR}`,
           ``,
           `L'équipe Autoliva`,
         ].filter(Boolean).join('\n');
@@ -557,7 +557,7 @@ async function postDevis(req, res, next) {
     // son numéro, un SMS instantané rassure fortement et réduit l'anxiété d'attente.
     if (cleanPhone) {
       try {
-        const smsText = `Autoliva : demande de devis ${quoteRef} bien recue ! Un technicien vous recontacte sous 24h ouvrees (email ou tel). Urgent ? ${brand.PHONE}`;
+        const smsText = `Autoliva : demande de devis ${quoteRef} bien recue ! Un technicien vous recontacte sous 24h ouvrees (email ou tel). Urgent ? ${brand.PHONE_MOTEUR}`;
         await sendSms({ to: cleanPhone, text: smsText });
       } catch (err) {
         console.error('[moteur-occasion] ack SMS failed:', err && err.message);

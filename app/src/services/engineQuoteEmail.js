@@ -209,7 +209,7 @@ function buildQuoteEmailHtml(opts) {
       <p style="margin:0 0 14px;font-size:14px;font-weight:700;color:${NAVY};">L'équipe technique Autoliva</p>
       <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
         Devis valable 24h (le moteur peut être vendu entre-temps) · Référence : <strong style="color:#475569;">${escapeHtml(opts.quoteRef)}</strong><br>
-        <a href="mailto:contact@autoliva.com" style="color:#2563eb;text-decoration:none;">contact@autoliva.com</a> · <a href="tel:${escapeHtml(opts.brandPhoneIntl || '+33465845488')}" style="color:#64748b;text-decoration:none;">${escapeHtml(opts.brandPhone || '04 65 84 54 88')}</a> · <a href="${PUBLIC_SITE}" style="color:#2563eb;text-decoration:none;">autoliva.com</a>
+        <a href="mailto:contact@autoliva.com" style="color:#2563eb;text-decoration:none;">contact@autoliva.com</a> · <a href="tel:${escapeHtml(opts.brandPhoneIntl || '+33465848539')}" style="color:#64748b;text-decoration:none;">${escapeHtml(opts.brandPhone || '04 65 84 85 39')}</a> · <a href="${PUBLIC_SITE}" style="color:#2563eb;text-decoration:none;">autoliva.com</a>
       </p>
     </td></tr></table>
   </td></tr>
@@ -254,7 +254,7 @@ function buildReminderEmailHtml(opts) {
     <p style="margin:0 0 8px;font-size:14px;color:#1f2937;line-height:1.6;">Bonne journée,<br><strong>L'équipe Autoliva</strong></p>
   </td></tr>
   <tr><td style="padding:0 32px 24px;">
-    <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.5;"><a href="mailto:contact@autoliva.com" style="color:#94a3b8;">contact@autoliva.com</a> · <a href="tel:${escapeHtml(opts.brandPhoneIntl || '+33465845488')}" style="color:#94a3b8;text-decoration:none;">${escapeHtml(opts.brandPhone || '04 65 84 54 88')}</a></p>
+    <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.5;"><a href="mailto:contact@autoliva.com" style="color:#94a3b8;">contact@autoliva.com</a> · <a href="tel:${escapeHtml(opts.brandPhoneIntl || '+33465848539')}" style="color:#94a3b8;text-decoration:none;">${escapeHtml(opts.brandPhone || '04 65 84 85 39')}</a></p>
   </td></tr>
 </table>
 </td></tr>
