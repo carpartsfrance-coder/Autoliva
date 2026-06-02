@@ -17,6 +17,7 @@
 
 const AbandonedCart = require('../models/AbandonedCart');
 const emailService = require('../services/emailService');
+const { sendSms } = require('../services/smsService');
 const { buildReminderEmailHtml } = require('../services/engineQuoteEmail');
 const brand = require('../config/brand');
 
@@ -125,6 +126,11 @@ async function sendReminder(cart, type) {
 
   const daysSince = Math.floor((Date.now() - new Date(lastSent.sentAt).getTime()) / MS_DAY);
 
+  // CTA tracké : "Revoir mon devis" passe par /track-pdf (enregistre la vue
+  // puis redirige vers le PDF). "Réserver" → lien Mollie si dispo.
+  const pdfUrl = publicBase() + '/api/devis-moteurs/track-pdf/' + cart._id + '/' + lastSent._id;
+  const mollieUrl = lastSent.mollieUrl || '';
+
   const html = buildReminderEmailHtml({
     type,
     quoteRef,
@@ -134,24 +140,44 @@ async function sendReminder(cart, type) {
     daysSince,
     brandPhone: brand.PHONE_MOTEUR,
     brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
+    pdfUrl,
+    mollieUrl,
   });
 
-  const subject = type === 'j7'
-    ? `Votre devis ${quoteRef} est toujours actif`
-    : `On reste dispo pour votre devis ${quoteRef}`;
+  const subject = type === 'j14'
+    ? `Dernier rappel — votre devis ${quoteRef}`
+    : type === 'j7'
+      ? `Votre devis ${quoteRef} — je peux reconfirmer la dispo`
+      : `On reste dispo pour votre devis ${quoteRef}`;
 
-  const text = `Bonjour,\n\nJe voulais m'assurer que vous avez bien reçu mon devis ${quoteRef} envoyé il y a ${daysSince} jour(s). Si vous avez la moindre question, n'hésitez pas.\n\nL'équipe Autoliva`;
+  const text = `Bonjour,\n\nJe reviens vers vous au sujet de mon devis ${quoteRef} (envoyé il y a ${daysSince} jour(s)). Un devis n'étant garanti que 24h (le moteur peut partir, les prix bougent), dites-moi si vous êtes toujours intéressé : je reconfirme la disponibilité et le prix du jour.\n\nL'équipe Autoliva\n${brand.PHONE_MOTEUR}`;
 
   const result = await emailService.sendEmail({
     toEmail: cart.email,
     subject,
     html,
     text,
+    // Le mail invite à répondre → la réponse doit arriver dans une boîte
+    // surveillée (et pas l'adresse d'envoi).
+    replyTo: { email: brand.EMAIL_CONTACT, name: brand.NAME },
   });
 
   if (!result || result.ok === false) {
     console.error('[engineQuoteReminders] envoi échoué pour', cart._id, type);
     return false;
+  }
+
+  // SMS pour les relances chaudes (J+7 last-chance, J+14 dernier rappel).
+  // ~98% de taux d'ouverture → fort levier sur un devis à plusieurs centaines €.
+  if ((type === 'j7' || type === 'j14') && cart.phone) {
+    try {
+      const smsText = type === 'j14'
+        ? `Autoliva : dernier rappel pour votre devis ${quoteRef}. Sans nouvelle on cloture le dossier. Toujours interesse ? Appelez ${brand.PHONE_MOTEUR}`
+        : `Autoliva : votre devis ${quoteRef} (moteur) est toujours d'actualite. Une question ou reserver le moteur ? Appelez ${brand.PHONE_MOTEUR}`;
+      await sendSms({ to: cart.phone, text: smsText });
+    } catch (err) {
+      console.warn('[engineQuoteReminders] SMS', type, 'échoué pour', cart._id, err && err.message);
+    }
   }
 
   await AbandonedCart.updateOne(
@@ -171,11 +197,11 @@ async function markAsLost(cart) {
     {
       $push: {
         notes: {
-          text: 'Auto-marqué "Perdu" après 14j sans réponse au devis envoyé.',
+          text: 'Auto-marqué "Perdu" après 21j sans réponse au devis envoyé (relances J+3, J+7, J+14 sans retour).',
           addedByName: 'System (relance auto)',
           addedAt: new Date(),
         },
-        'engineQuote.remindersSent': { type: 'j14_lost', sentAt: new Date() },
+        'engineQuote.remindersSent': { type: 'j21_lost', sentAt: new Date() },
       },
       $set: {
         'engineQuote.status': 'lost',
@@ -208,7 +234,7 @@ async function runEngineQuoteReminders() {
     'engineQuote.sentQuotes.0': { $exists: true },
   }).limit(500);
 
-  let countJ3 = 0, countJ7 = 0, countLost = 0;
+  let countJ3 = 0, countJ7 = 0, countJ14 = 0, countLost = 0;
 
   for (const cart of carts) {
     const eq = cart.engineQuote || {};
@@ -217,13 +243,19 @@ async function runEngineQuoteReminders() {
     const ageMs = now - new Date(lastSent.sentAt).getTime();
     const ageDays = ageMs / MS_DAY;
 
-    // J+14 : marquage perdu
-    if (ageDays >= 14 && !hasReminder(eq, 'j14_lost')) {
+    // J+21 : marquage perdu (cadence allongée : un achat moteur se réfléchit)
+    if (ageDays >= 21 && !hasReminder(eq, 'j21_lost') && !hasReminder(eq, 'j14_lost')) {
       await markAsLost(cart);
       countLost++;
       continue;
     }
-    // J+7 : relance last-chance
+    // J+14 : relance finale "dernier rappel" (+ SMS)
+    if (ageDays >= 14 && !hasReminder(eq, 'j14')) {
+      const ok = await sendReminder(cart, 'j14');
+      if (ok) countJ14++;
+      continue;
+    }
+    // J+7 : relance last-chance (+ SMS)
     if (ageDays >= 7 && !hasReminder(eq, 'j7')) {
       const ok = await sendReminder(cart, 'j7');
       if (ok) countJ7++;
@@ -237,8 +269,8 @@ async function runEngineQuoteReminders() {
     }
   }
 
-  console.log(`[engineQuoteReminders] J+3=${countJ3} J+7=${countJ7} lost=${countLost} sur ${carts.length} devis envoyés`);
-  return { countJ3, countJ7, countLost, total: carts.length };
+  console.log(`[engineQuoteReminders] J+3=${countJ3} J+7=${countJ7} J+14=${countJ14} lost=${countLost} sur ${carts.length} devis envoyés`);
+  return { countJ3, countJ7, countJ14, countLost, total: carts.length };
 }
 
 module.exports = { runEngineQuoteReminders, alertUnquotedLeads };

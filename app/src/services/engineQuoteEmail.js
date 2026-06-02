@@ -225,11 +225,34 @@ function buildQuoteEmailHtml(opts) {
  */
 function buildReminderEmailHtml(opts) {
   const greeting = opts.firstName ? 'Bonjour ' + escapeHtml(opts.firstName) + ',' : 'Bonjour,';
-  const isLastChance = opts.type === 'j7';
-  const subject = isLastChance ? 'Votre devis Autoliva est toujours actif' : 'On reste dispo pour votre devis moteur';
-  const heroLine = isLastChance
-    ? 'Je voulais m\'assurer que vous avez bien reçu mon devis envoyé il y a une semaine.'
-    : 'Je voulais m\'assurer que mon devis vous est bien parvenu il y a quelques jours.';
+  const type = opts.type || 'j3';
+
+  // 3 variantes. NB cohérence : le devis est annoncé "valable 24h" (le moteur
+  // peut être vendu / le prix bouge). Les relances n'affirment donc PAS que le
+  // devis est "toujours actif" → elles proposent de RE-confirmer dispo + prix.
+  let subject, heroLine, ctaLine;
+  if (type === 'j14') {
+    subject = 'Dernier rappel — votre devis moteur';
+    heroLine = 'Sans nouvelle de votre part, je vais bientôt clôturer votre dossier.';
+    ctaLine = 'Si votre projet est toujours d\'actualité, dites-le moi : je re-vérifie la disponibilité du moteur et je vous reconfirme le prix du jour.';
+  } else if (type === 'j7') {
+    subject = 'Votre devis moteur — je peux reconfirmer la dispo';
+    heroLine = 'Je voulais m\'assurer que mon devis vous est bien parvenu il y a une semaine.';
+    ctaLine = 'Comme un devis n\'est garanti que 24h (le moteur peut partir et les prix bougent), dites-moi si vous êtes toujours intéressé : je reconfirme la disponibilité et le prix pour vous.';
+  } else {
+    subject = 'On reste dispo pour votre devis moteur';
+    heroLine = 'Je voulais m\'assurer que mon devis vous est bien parvenu il y a quelques jours.';
+    ctaLine = 'Si vous avez la moindre question, n\'hésitez pas — je suis là pour ça. Et si vous voulez avancer, je reconfirme la disponibilité du moteur et le prix du jour.';
+  }
+
+  // CTA : "Revoir mon devis" (lien tracké → PDF) + "Réserver" si lien Mollie.
+  const ctaBlock = (opts.pdfUrl || opts.mollieUrl) ? `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 22px;">
+      <tr>
+        ${opts.pdfUrl ? `<td style="border-radius:8px;background:${RED};"><a href="${escapeHtml(opts.pdfUrl)}" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;">Revoir mon devis</a></td>` : ''}
+        ${opts.mollieUrl ? `<td style="padding-left:10px;"><a href="${escapeHtml(opts.mollieUrl)}" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:700;color:${RED};text-decoration:none;border:2px solid ${RED};border-radius:8px;">Réserver le moteur</a></td>` : ''}
+      </tr>
+    </table>` : '';
 
   return `<!DOCTYPE html>
 <html lang="fr"><head>
@@ -250,7 +273,8 @@ function buildReminderEmailHtml(opts) {
       <p style="margin:0 0 6px;font-size:13px;color:#64748b;">Véhicule : <strong style="color:#0f172a;">${escapeHtml(opts.plate || '—')}</strong></p>
       <p style="margin:0;font-size:13px;color:#64748b;">Total TTC : <strong style="color:${RED};font-family:'SF Mono',monospace;">${fmtEur(opts.sellTtc)}</strong></p>
     </div>
-    <p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.6;">${isLastChance ? 'Si vous êtes toujours intéressé, je peux confirmer la disponibilité du moteur. Une simple réponse à cet email me suffit.' : 'Si vous avez la moindre question, n\'hésitez pas — je suis là pour ça.'}</p>
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">${ctaLine}</p>
+    ${ctaBlock}
     <p style="margin:0 0 8px;font-size:14px;color:#1f2937;line-height:1.6;">Bonne journée,<br><strong>L'équipe Autoliva</strong></p>
   </td></tr>
   <tr><td style="padding:0 32px 24px;">
