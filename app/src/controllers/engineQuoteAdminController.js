@@ -18,7 +18,8 @@ const AbandonedCart = require('../models/AbandonedCart');
 const storage = require('../services/savFileStorage');
 const emailService = require('../services/emailService');
 const { buildQuotePdf } = require('../services/engineQuotePdf');
-const { buildQuoteEmailHtml } = require('../services/engineQuoteEmail');
+const { buildQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
+const { sendSms } = require('../services/smsService');
 const { compressImage } = require('../services/imageCompress');
 const mollie = require('../services/mollie');
 const brand = require('../config/brand');
@@ -280,6 +281,7 @@ async function getEngineQuoteDetail(req, res, next) {
         sentQuotes: (eq.sentQuotes || []).slice().sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt)),
         remindersSent: eq.remindersSent || [],
         payment: eq.payment || null,
+        shipment: (eq.shipment && eq.shipment.shippedAt) ? eq.shipment : null,
       },
       mollieEnabled: MOLLIE_ENABLED,
       statusLabels: STATUS_LABELS,
@@ -518,6 +520,86 @@ async function postDelete(req, res, next) {
     await AbandonedCart.deleteOne({ _id: id, captureSource: 'landing_moteurs' });
 
     return res.redirect('/admin/devis-moteurs');
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/* ─── EXPÉDITION ──────────────────────────────────────────────────────── */
+
+/**
+ * Marque le moteur expédié + envoie au client l'email (et SMS) de suivi.
+ * Tient la promesse de la confirmation d'acompte ("email à l'expédition").
+ */
+async function postShipment(req, res, next) {
+  try {
+    const id = req.params.id;
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
+    const cart = await AbandonedCart.findOne({ _id: id, captureSource: 'landing_moteurs' });
+    if (!cart) return res.status(404).send('Not found');
+
+    const b = req.body || {};
+    const carrier = String(b.carrier || '').trim().slice(0, 80);
+    const trackingNumber = String(b.trackingNumber || '').trim().slice(0, 120);
+    let trackingUrl = String(b.trackingUrl || '').trim().slice(0, 500);
+    if (trackingUrl && !/^https?:\/\//i.test(trackingUrl)) trackingUrl = ''; // n'accepte qu'une URL http(s)
+    if (!carrier && !trackingNumber) {
+      return res.status(400).send('Renseigne au moins le transporteur ou le n° de suivi');
+    }
+
+    const admin = getAdminInfo(req);
+    const quoteRef = (cart.requested && cart.requested.ref) || '';
+    const firstNameForEmail = (cart.firstName && cart.lastName) ? cart.firstName : '';
+    const plate = (cart.requested && cart.requested.plate) || '';
+
+    // Email client (best-effort)
+    let emailSentAt = null;
+    if (cart.email) {
+      const html = buildShipmentEmailHtml({
+        firstName: firstNameForEmail, quoteRef, carrier, trackingNumber, trackingUrl, plate,
+        brandPhone: brand.PHONE_MOTEUR, brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
+      });
+      const text = `Bonjour,\n\nVotre moteur (dossier ${quoteRef}) vient d'etre expedie.\nTransporteur : ${carrier}\n${trackingNumber ? 'N° de suivi : ' + trackingNumber + '\n' : ''}${trackingUrl ? 'Suivi : ' + trackingUrl + '\n' : ''}\nLe solde sera a regler une fois le moteur recu, teste conforme et l'attestation transmise.\n\nL'equipe Autoliva\n${brand.PHONE_MOTEUR}`;
+      try {
+        const r = await emailService.sendEmail({
+          toEmail: cart.email,
+          subject: `Votre moteur ${quoteRef} est expédié — Autoliva`,
+          html, text,
+          replyTo: { email: brand.EMAIL_CONTACT, name: brand.NAME },
+        });
+        if (r && r.ok !== false) emailSentAt = new Date();
+      } catch (err) { console.error('[engine-quote] shipment email failed:', err && err.message); }
+    }
+
+    // SMS client (best-effort)
+    if (cart.phone) {
+      try {
+        const smsText = `Autoliva : votre moteur (${quoteRef}) est expedie !${trackingNumber ? ' Suivi ' + carrier + ' : ' + trackingNumber : ''}${trackingUrl ? ' ' + trackingUrl : ''} Question ? ${brand.PHONE_MOTEUR}`.slice(0, 320);
+        await sendSms({ to: cart.phone, text: smsText });
+      } catch (err) { console.warn('[engine-quote] shipment SMS failed:', err && err.message); }
+    }
+
+    await ensureEngineQuote(id);
+    await AbandonedCart.updateOne(
+      { _id: id, captureSource: 'landing_moteurs' },
+      {
+        $set: {
+          'engineQuote.shipment': {
+            carrier, trackingNumber, trackingUrl,
+            shippedAt: new Date(), shippedByName: admin.name, emailSentAt,
+          },
+          ...buildUpdate(req),
+        },
+        $push: {
+          notes: {
+            text: `Moteur marqué expédié (${carrier}${trackingNumber ? ' · ' + trackingNumber : ''})${emailSentAt ? ' — email client envoyé' : ''}.`,
+            addedBy: admin.id, addedByName: admin.name, addedAt: new Date(),
+          },
+        },
+      }
+    );
+
+    return res.redirect('/admin/devis-moteurs/' + id + '#expedition');
   } catch (err) {
     return next(err);
   }
@@ -1008,6 +1090,7 @@ module.exports = {
   postDeletePhoto,
   postSetArchive,
   postDelete,
+  postShipment,
   postSendQuote,
   postPreviewPdf,
   postPreviewEmail,

@@ -290,4 +290,48 @@ function buildReminderEmailHtml(opts) {
 </body></html>`;
 }
 
-module.exports = { buildQuoteEmailHtml, buildReminderEmailHtml };
+/**
+ * Email d'expédition — envoyé quand le commercial marque le moteur expédié.
+ * Tient la promesse faite dans la confirmation d'acompte ("email à l'expédition").
+ */
+function buildShipmentEmailHtml(opts) {
+  const greeting = opts.firstName ? 'Bonjour ' + escapeHtml(opts.firstName) + ',' : 'Bonjour,';
+  const carrier = escapeHtml(opts.carrier || 'notre transporteur');
+  const tracking = escapeHtml(opts.trackingNumber || '');
+  const trackBtn = opts.trackingUrl ? `
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 22px;">
+      <tr><td style="border-radius:8px;background:${RED};"><a href="${escapeHtml(opts.trackingUrl)}" style="display:inline-block;padding:12px 24px;font-size:14px;font-weight:700;color:#fff;text-decoration:none;border-radius:8px;">Suivre mon colis</a></td></tr>
+    </table>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="fr"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Votre moteur est expédié</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1f2937;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f4f5f7;padding:32px 12px;">
+<tr><td align="center">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;background:#fff;border-radius:14px;overflow:hidden;border:1px solid #e5e7eb;">
+  <tr><td style="padding:24px 32px;border-bottom:1px solid #f1f2f4;"><img src="${LOGO_URL}" alt="Autoliva" width="140" style="display:block;border:0;height:auto;width:140px;"></td></tr>
+  <tr><td style="padding:32px 32px 8px;">
+    <p style="margin:0 0 6px;font-size:13px;color:#10b981;font-weight:600;">Bonne nouvelle</p>
+    <h1 style="margin:0 0 16px;font-size:23px;line-height:1.3;font-weight:700;color:#0f172a;">${greeting}</h1>
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">Votre moteur (dossier <strong>${escapeHtml(opts.quoteRef || '')}</strong>${opts.plate ? ` — ${escapeHtml(opts.plate)}` : ''}) vient d'être <strong>expédié</strong>.</p>
+    <div style="background:#fafbfc;border:1px solid #eef0f3;border-radius:10px;padding:16px;margin-bottom:16px;">
+      <p style="margin:0 0 6px;font-size:13px;color:#64748b;">Transporteur : <strong style="color:#0f172a;">${carrier}</strong></p>
+      ${tracking ? `<p style="margin:0;font-size:13px;color:#64748b;">N° de suivi : <strong style="color:#0f172a;font-family:'SF Mono',monospace;">${tracking}</strong></p>` : ''}
+    </div>
+    ${trackBtn}
+    <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">Pour rappel, le <strong>solde</strong> est à régler une fois le moteur reçu, testé conforme et l'attestation transmise.</p>
+    <p style="margin:0 0 8px;font-size:14px;color:#1f2937;line-height:1.6;">À très vite,<br><strong>L'équipe technique Autoliva</strong></p>
+  </td></tr>
+  <tr><td style="padding:0 32px 24px;">
+    <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.5;"><a href="mailto:contact@autoliva.com" style="color:#94a3b8;">contact@autoliva.com</a> · <a href="tel:${escapeHtml(opts.brandPhoneIntl || '+33465848539')}" style="color:#94a3b8;text-decoration:none;">${escapeHtml(opts.brandPhone || '04 65 84 85 39')}</a></p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`;
+}
+
+module.exports = { buildQuoteEmailHtml, buildReminderEmailHtml, buildShipmentEmailHtml };

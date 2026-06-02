@@ -328,6 +328,7 @@ router.post('/devis-moteurs/:id/pricing', requireAdminAuth, engineQuoteAdminCont
 router.post('/devis-moteurs/:id/note', requireAdminAuth, engineQuoteAdminController.postAddNote);
 router.post('/devis-moteurs/:id/archive', requireAdminAuth, engineQuoteAdminController.postSetArchive);
 router.post('/devis-moteurs/:id/delete', requireAdminAuth, engineQuoteAdminController.postDelete);
+router.post('/devis-moteurs/:id/expedition', requireAdminAuth, engineQuoteAdminController.postShipment);
 router.post('/devis-moteurs/:id/photo/:category', requireAdminAuth, engineQuotePhotoUpload.array('photo', 10), engineQuoteAdminController.postUploadPhoto);
 router.post('/devis-moteurs/:id/photo/:category/:photoId/delete', requireAdminAuth, engineQuoteAdminController.postDeletePhoto);
 router.post('/devis-moteurs/:id/preview-pdf', requireAdminAuth, engineQuoteAdminController.postPreviewPdf);

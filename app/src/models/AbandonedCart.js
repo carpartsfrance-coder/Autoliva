@@ -130,6 +130,16 @@ const engineQuoteSchema = new mongoose.Schema(
       status: { type: String, default: '' },     // 'paid', 'failed', etc.
       paidAt: { type: Date, default: null },
     },
+
+    /** Expédition (posée par le commercial depuis le back-office) */
+    shipment: {
+      carrier: { type: String, default: '' },         // ex: 'DPD', 'Chronopost', 'Affrètement palette'
+      trackingNumber: { type: String, default: '' },
+      trackingUrl: { type: String, default: '' },
+      shippedAt: { type: Date, default: null },
+      shippedByName: { type: String, default: '' },
+      emailSentAt: { type: Date, default: null },
+    },
   },
   { _id: false }
 );
