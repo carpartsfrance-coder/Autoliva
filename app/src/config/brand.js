@@ -117,6 +117,10 @@ const brand = {
   EMAIL_NOREPLY: env('BRAND_EMAIL_NOREPLY', preset.EMAIL_NOREPLY),
   PHONE: env('BRAND_PHONE', preset.PHONE),
   PHONE_INTL: env('BRAND_PHONE_INTL', preset.PHONE_INTL),
+  // Numéro dédié au commercial "moteurs" — utilisé sur tout le tunnel moteur
+  // (landing, devis email + PDF, SMS, relances). Distinct du PHONE général.
+  PHONE_MOTEUR: env('BRAND_PHONE_MOTEUR', '04 65 84 85 39'),
+  PHONE_MOTEUR_INTL: env('BRAND_PHONE_MOTEUR_INTL', '+33465848539'),
   SMS_SENDER_ID: env('SMS_SENDER_ID', preset.SMS_SENDER_ID),
 
   // Visuels
