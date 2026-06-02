@@ -199,6 +199,27 @@ function dt(v) {
             </div>
           </div>
 
+          <!-- Aide au calcul du prix de vente depuis une marge cible -->
+          <div class="flex flex-wrap items-end gap-3 mb-4 p-3 rounded-xl border border-dashed border-slate-300 bg-slate-50/60">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Calcul auto · marge cible</label>
+              <div class="flex items-center gap-1">
+                <input type="number" step="1" min="0" max="95" value="30" data-target-margin class="w-20 rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                <span class="text-sm font-semibold text-slate-500">%</span>
+              </div>
+            </div>
+            <button type="button" data-calc-sell class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-4 py-2 rounded-lg text-sm inline-flex items-center gap-1.5">
+              <span class="material-symbols-outlined" style="font-size:16px">calculate</span>
+              Calculer le prix de vente
+            </button>
+            <div class="flex items-center gap-1">
+              <% [25, 30, 35, 40].forEach(function(m) { %>
+                <button type="button" data-margin-chip="<%= m %>" class="text-xs font-semibold text-slate-600 border border-slate-200 hover:border-slate-400 hover:bg-white rounded-full px-2.5 py-1 transition"><%= m %>%</button>
+              <% }) %>
+            </div>
+            <p class="basis-full text-[11px] text-slate-400">Remplit le prix de vente HT pour atteindre cette marge (calculée sur le prix de vente). Renseigne d'abord le prix d'achat. Tu peux toujours ajuster ensuite.</p>
+          </div>
+
           <!-- Marge calculée live -->
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3 bg-slate-50 rounded-xl p-4">
             <div>
@@ -848,6 +869,32 @@ function dt(v) {
   }
   inputs.forEach(el => el.addEventListener('input', recompute));
   recompute();
+
+  // ─── Calcul auto du prix de vente depuis une marge cible ───
+  // Marge = taux de marque (sur le prix de vente) → vente = coût / (1 - m/100),
+  // cohérent avec l'affichage "% marge" ci-dessus.
+  const sellInput = root.querySelector('[name=sellPrice]');
+  const targetInput = root.querySelector('[data-target-margin]');
+  const calcBtn = root.querySelector('[data-calc-sell]');
+  function computeSellFromMargin() {
+    const purchase = num(root.querySelector('[name=purchasePrice]'));
+    const fees = num(root.querySelector('[name=additionalFees]'));
+    const cost = purchase + fees;
+    if (cost <= 0) { alert('Renseigne d\'abord le prix d\'achat (et les frais annexes).'); return; }
+    let m = Number(String(targetInput.value).replace(',', '.')) || 0;
+    m = Math.max(0, Math.min(95, m)); // borne : évite la division par ~0 à 100%
+    const sell = cost / (1 - m / 100);
+    sellInput.value = (Math.round(sell * 100) / 100).toFixed(2);
+    // Déclenche le recalcul de marge ET l'autosave (form écoute 'input')
+    sellInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  if (calcBtn) calcBtn.addEventListener('click', computeSellFromMargin);
+  root.querySelectorAll('[data-margin-chip]').forEach(function (chip) {
+    chip.addEventListener('click', function () {
+      targetInput.value = chip.getAttribute('data-margin-chip');
+      computeSellFromMargin();
+    });
+  });
 })();
 </script>
 
