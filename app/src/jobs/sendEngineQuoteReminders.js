@@ -129,7 +129,8 @@ async function sendReminder(cart, type) {
   // CTA tracké : "Revoir mon devis" passe par /track-pdf (enregistre la vue
   // puis redirige vers le PDF). "Réserver" → lien Mollie si dispo.
   const pdfUrl = publicBase() + '/api/devis-moteurs/track-pdf/' + cart._id + '/' + lastSent._id;
-  const mollieUrl = lastSent.mollieUrl || '';
+  // En win-back, l'ancien lien Mollie a sûrement expiré → pas de bouton Réserver.
+  const mollieUrl = type === 'winback' ? '' : (lastSent.mollieUrl || '');
 
   const html = buildReminderEmailHtml({
     type,
@@ -144,11 +145,13 @@ async function sendReminder(cart, type) {
     mollieUrl,
   });
 
-  const subject = type === 'j14'
-    ? `Dernier rappel — votre devis ${quoteRef}`
-    : type === 'j7'
-      ? `Votre devis ${quoteRef} — je peux reconfirmer la dispo`
-      : `On reste dispo pour votre devis ${quoteRef}`;
+  const subject = type === 'winback'
+    ? `Toujours à la recherche de votre moteur ?`
+    : type === 'j14'
+      ? `Dernier rappel — votre devis ${quoteRef}`
+      : type === 'j7'
+        ? `Votre devis ${quoteRef} — je peux reconfirmer la dispo`
+        : `On reste dispo pour votre devis ${quoteRef}`;
 
   const text = `Bonjour,\n\nJe reviens vers vous au sujet de mon devis ${quoteRef} (envoyé il y a ${daysSince} jour(s)). Un devis n'étant garanti que 24h (le moteur peut partir, les prix bougent), dites-moi si vous êtes toujours intéressé : je reconfirme la disponibilité et le prix du jour.\n\nL'équipe Autoliva\n${brand.PHONE_MOTEUR}`;
 
@@ -284,6 +287,39 @@ async function alertHotLeads() {
   return { hotPay, hotPdf };
 }
 
+/**
+ * WIN-BACK — relance les leads PERDUS automatiquement (sans réponse) ~30j
+ * après le devis. Récupère une part des perdus à coût quasi nul.
+ * Cible uniquement les perdus AUTO (marqueur j21_lost/j14_lost), pas les
+ * perdus marqués manuellement par un commercial. Anti-doublon via 'winback'.
+ */
+async function winBackLostLeads() {
+  const now = Date.now();
+  const carts = await AbandonedCart.find({
+    captureSource: 'landing_moteurs',
+    'engineQuote.status': 'lost',
+    'engineQuote.sentQuotes.0': { $exists: true },
+  }).limit(500);
+
+  let count = 0;
+  for (const cart of carts) {
+    const eq = cart.engineQuote || {};
+    if (!cart.email) continue;
+    if (hasReminder(eq, 'winback')) continue;
+    // Perdu AUTO seulement (sans réponse aux relances), pas perdu manuel.
+    if (!hasReminder(eq, 'j21_lost') && !hasReminder(eq, 'j14_lost')) continue;
+    const lastSent = getLatestSentQuote(eq);
+    if (!lastSent) continue;
+    const ageDays = (now - new Date(lastSent.sentAt).getTime()) / MS_DAY;
+    if (ageDays < 30) continue;
+
+    const ok = await sendReminder(cart, 'winback');
+    if (ok) count++;
+  }
+  console.log(`[engineQuoteReminders] winback=${count} (sur ${carts.length} perdus)`);
+  return { count };
+}
+
 async function runEngineQuoteReminders() {
   const now = Date.now();
 
@@ -300,6 +336,13 @@ async function runEngineQuoteReminders() {
     await alertHotLeads();
   } catch (err) {
     console.error('[engineQuoteReminders] alertHotLeads error:', err && err.message);
+  }
+
+  // 0ter) Win-back : relancer les perdus automatiques ~30j après le devis.
+  try {
+    await winBackLostLeads();
+  } catch (err) {
+    console.error('[engineQuoteReminders] winBackLostLeads error:', err && err.message);
   }
 
   const cutoff = new Date(now - 3 * MS_DAY); // candidats : envoi ≥ 3 jours
@@ -350,4 +393,4 @@ async function runEngineQuoteReminders() {
   return { countJ3, countJ7, countJ14, countLost, total: carts.length };
 }
 
-module.exports = { runEngineQuoteReminders, alertUnquotedLeads, alertHotLeads };
+module.exports = { runEngineQuoteReminders, alertUnquotedLeads, alertHotLeads, winBackLostLeads };
