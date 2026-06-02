@@ -51,7 +51,6 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
   // En dev local, baseUrl pointe sur localhost → on force autoliva.com pour les assets email.
   const publicSite = 'https://autoliva.com';
   const logoUrl = publicSite + '/images/logo-autoliva.png';
-  const catalogueUrl = publicSite + '/produits';
   const phoneIntl = brandObj.PHONE_INTL || '+33465845488';
   const phoneDisplay = brandObj.PHONE || '04 65 84 54 88';
   const greeting = safeFirstName ? `Bonjour ${safeFirstName},` : 'Bonjour,';
@@ -182,18 +181,11 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
         </p>
       </td></tr>
 
-      <!-- CTA + urgence -->
+      <!-- Aide / urgence (transactionnel, sans CTA marketing) -->
       <tr><td style="padding:18px 32px 28px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
-          <tr>
-            <td>
-              <a href="${catalogueUrl}" style="display:inline-block;background:#E1001A;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:14px;">Découvrir notre catalogue</a>
-            </td>
-            <td align="right" style="font-size:13px;color:#64748b;">
-              Urgent ? <a href="tel:${phoneIntl}" style="color:#0f172a;font-weight:700;text-decoration:none;">${phoneDisplay}</a>
-            </td>
-          </tr>
-        </table>
+        <p style="margin:0;font-size:13px;color:#64748b;line-height:1.6;">
+          Une question ou c'est urgent ? Appelez-nous au <a href="tel:${phoneIntl}" style="color:#0f172a;font-weight:700;text-decoration:none;">${phoneDisplay}</a> — on vous répond directement.
+        </p>
       </td></tr>
 
       <!-- SIGNATURE -->

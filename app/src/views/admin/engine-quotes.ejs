@@ -116,7 +116,7 @@
                         <% } else if (it.lastSentOpened) { %>
                           <span class="inline-flex items-center text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full" title="Email ouvert <%= it.lastSentOpenCount || 1 %> fois">👁 Ouvert<%= (it.lastSentOpenCount > 1) ? ' ×' + it.lastSentOpenCount : '' %></span>
                         <% } else { %>
-                          <span class="inline-flex items-center text-[10px] font-medium text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-full">Non ouvert</span>
+                          <span class="inline-flex items-center text-[10px] font-medium text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-full" title="Devis envoyé — suivi via vue PDF / clic paiement">Envoyé</span>
                         <% } %>
                       </div>
                     <% } %>
