@@ -95,6 +95,47 @@ function dt(v) {
       </div>
     <% } %>
 
+    <!-- EXPÉDITION & SUIVI -->
+    <section id="expedition" class="mt-6 bg-white rounded-2xl border border-slate-200 p-6">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="material-symbols-outlined text-slate-500" style="font-size:20px">local_shipping</span>
+        <h2 class="text-lg font-semibold text-slate-900">Expédition &amp; suivi</h2>
+      </div>
+      <p class="text-xs text-slate-500 mb-4">Marque le moteur expédié et envoie au client l'email + SMS de suivi (tient la promesse de la confirmation d'acompte).</p>
+
+      <% if (engineQuote.shipment) { %>
+        <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-4">
+          <p class="font-semibold text-emerald-900">📦 Expédié<% if (engineQuote.shipment.shippedAt) { %> le <%= new Date(engineQuote.shipment.shippedAt).toLocaleString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) %><% } %><% if (engineQuote.shipment.shippedByName) { %> par <%= engineQuote.shipment.shippedByName %><% } %></p>
+          <p class="text-sm text-emerald-800 mt-1">Transporteur : <strong><%= engineQuote.shipment.carrier || '—' %></strong><% if (engineQuote.shipment.trackingNumber) { %> · Suivi : <strong class="font-mono"><%= engineQuote.shipment.trackingNumber %></strong><% } %></p>
+          <% if (engineQuote.shipment.trackingUrl) { %><p class="text-sm mt-1"><a href="<%= engineQuote.shipment.trackingUrl %>" target="_blank" rel="noopener" class="text-blue-600 hover:underline">Lien de suivi →</a></p><% } %>
+          <p class="text-xs text-emerald-700 mt-2"><%= engineQuote.shipment.emailSentAt ? '✓ Email de suivi envoyé au client' : 'Email non envoyé (pas d’email client)' %></p>
+        </div>
+      <% } %>
+
+      <form action="/admin/devis-moteurs/<%= cart.id %>/expedition" method="POST" class="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3" onsubmit="return confirm('Envoyer l\'email + SMS d\'expédition au client ?');">
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Transporteur</label>
+          <input name="carrier" value="<%= engineQuote.shipment ? engineQuote.shipment.carrier : '' %>" list="carriers-list" placeholder="DPD, Chronopost, palette…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+          <datalist id="carriers-list"><option value="DPD"></option><option value="Chronopost"></option><option value="Colissimo"></option><option value="GLS"></option><option value="UPS"></option><option value="Affrètement palette"></option></datalist>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">N° de suivi</label>
+          <input name="trackingNumber" value="<%= engineQuote.shipment ? engineQuote.shipment.trackingNumber : '' %>" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 mb-1">Lien de suivi (URL)</label>
+          <input name="trackingUrl" type="url" value="<%= engineQuote.shipment ? engineQuote.shipment.trackingUrl : '' %>" placeholder="https://…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+        </div>
+        <div class="md:col-span-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <p class="text-xs text-slate-400">Email + SMS de suivi envoyés au client<% if (!cart.email) { %> (pas d'email : SMS seul)<% } %>.</p>
+          <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-5 py-2.5 rounded-xl text-sm inline-flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined" style="font-size:16px">local_shipping</span>
+            <%= engineQuote.shipment ? 'Mettre à jour + renvoyer' : 'Marquer expédié + envoyer' %>
+          </button>
+        </div>
+      </form>
+    </section>
+
     <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
       <!-- ─── COLONNE GAUCHE (2/3) ─── -->
