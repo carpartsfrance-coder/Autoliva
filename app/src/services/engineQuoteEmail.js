@@ -217,7 +217,6 @@ function buildQuoteEmailHtml(opts) {
 </table>
 </td></tr>
 </table>
-${opts.trackPixelUrl ? `<img src="${escapeHtml(opts.trackPixelUrl)}" alt="" width="1" height="1" style="display:block;width:1px;height:1px;border:0;overflow:hidden;">` : ''}
 </body></html>`;
 }
 

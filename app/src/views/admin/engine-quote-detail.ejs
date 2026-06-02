@@ -483,11 +483,6 @@ function dt(v) {
                           <span class="material-symbols-outlined" style="font-size:13px">visibility</span>
                           Ouvert<%= (sq.openCount && sq.openCount > 1) ? ' ×' + sq.openCount : '' %>
                         </span>
-                      <% } else { %>
-                        <span class="inline-flex items-center gap-1 text-xs text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full" title="Pas encore ouvert (ou images bloquées côté client)">
-                          <span class="material-symbols-outlined" style="font-size:13px">mark_email_unread</span>
-                          Non ouvert
-                        </span>
                       <% } %>
                       <% if (sq.pdfViewedAt) { %>
                         <span class="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full" title="PDF consulté en ligne <%= sq.pdfViewCount || 1 %> fois">
