@@ -14,6 +14,7 @@ const mongoose = require('mongoose');
 
 const adminController = require('../controllers/adminController');
 const savAdminController = require('../controllers/savAdminController');
+const smsSettingsAdminController = require('../controllers/smsSettingsAdminController');
 const abandonedCartAdminController = require('../controllers/abandonedCartAdminController');
 const engineQuoteAdminController = require('../controllers/engineQuoteAdminController');
 const orderEmailAdminController = require('../controllers/orderEmailAdminController');
@@ -155,6 +156,9 @@ router.get('/', requireAdminAuth, adminController.getAdminDashboard);
 router.get('/sav', requireAdminAuth, savAdminController.getSavDashboard);
 router.get('/sav/tickets', requireAdminAuth, savAdminController.getSavTickets);
 router.get('/sav/tickets/:numero', requireAdminAuth, savAdminController.getSavTicketDetail);
+router.get('/parametres/sms', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.getSmsSettingsPage);
+router.post('/parametres/sms', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.postSmsSettings);
+router.post('/parametres/sms/test', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.postSmsTest);
 router.get('/parametres/sav', requireAdminAuth, savAdminController.getSavSettings);
 router.get('/parametres/audit', requireAdminAuth, savAdminController.getAuditLog);
 router.get('/parametres/integrations', requireAdminAuth, savAdminController.getIntegrations);
