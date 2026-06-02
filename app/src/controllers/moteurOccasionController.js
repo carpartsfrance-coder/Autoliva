@@ -20,6 +20,7 @@ const crypto = require('crypto');
 
 const emailService = require('../services/emailService');
 const { sendSms } = require('../services/smsService');
+const { resolveSms } = require('../services/smsSettings');
 const { captureContactLead } = require('../services/leadCapture');
 const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
@@ -557,8 +558,8 @@ async function postDevis(req, res, next) {
     // son numéro, un SMS instantané rassure fortement et réduit l'anxiété d'attente.
     if (cleanPhone) {
       try {
-        const smsText = `Autoliva : demande de devis ${quoteRef} bien recue ! Un technicien vous recontacte sous 24h ouvrees (email ou tel). Urgent ? ${brand.PHONE_MOTEUR}`;
-        await sendSms({ to: cleanPhone, text: smsText });
+        const { enabled: smsOn, text: smsText } = await resolveSms('moteur_ack', { quoteRef, phoneMoteur: brand.PHONE_MOTEUR });
+        if (smsOn && smsText) await sendSms({ to: cleanPhone, text: smsText });
       } catch (err) {
         console.error('[moteur-occasion] ack SMS failed:', err && err.message);
       }

@@ -18,6 +18,7 @@
 const AbandonedCart = require('../models/AbandonedCart');
 const emailService = require('../services/emailService');
 const { sendSms } = require('../services/smsService');
+const { resolveSms } = require('../services/smsSettings');
 const { buildReminderEmailHtml } = require('../services/engineQuoteEmail');
 const brand = require('../config/brand');
 
@@ -174,10 +175,9 @@ async function sendReminder(cart, type) {
   // ~98% de taux d'ouverture → fort levier sur un devis à plusieurs centaines €.
   if ((type === 'j7' || type === 'j14') && cart.phone) {
     try {
-      const smsText = type === 'j14'
-        ? `Autoliva : dernier rappel pour votre devis ${quoteRef}. Sans nouvelle on cloture le dossier. Toujours interesse ? Appelez ${brand.PHONE_MOTEUR}`
-        : `Autoliva : votre devis ${quoteRef} (moteur) est toujours d'actualite. Une question ou reserver le moteur ? Appelez ${brand.PHONE_MOTEUR}`;
-      await sendSms({ to: cart.phone, text: smsText });
+      const smsKey = type === 'j14' ? 'moteur_relance_j14' : 'moteur_relance_j7';
+      const { enabled: smsOn, text: smsBody } = await resolveSms(smsKey, { quoteRef, phoneMoteur: brand.PHONE_MOTEUR });
+      if (smsOn && smsBody) await sendSms({ to: cart.phone, text: smsBody });
     } catch (err) {
       console.warn('[engineQuoteReminders] SMS', type, 'échoué pour', cart._id, err && err.message);
     }

@@ -2,6 +2,7 @@ const { buildCarrierTrackingUrl } = require('./trackingLinks');
 const { getSiteUrlFromEnv } = require('./siteUrl');
 const Order = require('../models/Order');
 const brand = require('../config/brand');
+const { resolveSms } = require('./smsSettings');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -152,80 +153,63 @@ async function sendSms({ to, text } = {}) {
   }
 }
 
-// ─── Templates SMS ──────────────────────────────────────────────────────────
+// ─── Variables des SMS (le texte vient désormais du catalogue paramétrable) ──
+// Chaque fonction renvoie l'objet de variables, ou null si données manquantes.
 
-function smsOrderConfirmation({ order }) {
+function varsOrderConfirmation({ order }) {
   if (!order || !order.number) return null;
-  const total = formatCents(order.totalCents);
-  return `${brand.NAME} : commande #${order.number} confirmee ! Montant : ${total}€ TTC. Suivez-la ici : ${orderUrl(order)} — Besoin d'aide ? ${brand.PHONE}`;
+  return { brand: brand.NAME, orderNumber: order.number, total: formatCents(order.totalCents), orderUrl: orderUrl(order), phone: brand.PHONE };
 }
 
-function smsShipmentTracking({ order, shipment }) {
+function varsShipmentTracking({ order, shipment }) {
   if (!order || !shipment) return null;
   const carrier = getTrimmedString(shipment.carrier) || 'transporteur';
   const trackingUrl = buildCarrierTrackingUrl(shipment.carrier, shipment.trackingNumber);
   const trackingPart = trackingUrl ? `Suivi ${carrier} : ${trackingUrl}` : `N° suivi ${carrier} : ${shipment.trackingNumber}`;
-  return `${brand.NAME} : votre commande #${order.number} est expediee ! ${trackingPart} — Delai : 24-72h. Question ? ${brand.PHONE}`;
+  return { brand: brand.NAME, orderNumber: order.number, trackingPart, phone: brand.PHONE };
 }
 
-function smsDeliveryConfirmed({ order }) {
+function varsDeliveryConfirmed({ order }) {
   if (!order) return null;
-  return `${brand.NAME} : votre commande #${order.number} a ete livree. Tout est OK ? Repondez a cet SMS ou appelez le ${brand.PHONE}. Merci pour votre confiance !`;
+  return { brand: brand.NAME, orderNumber: order.number, phone: brand.PHONE };
 }
 
-function smsConsigneReminderSoon({ order }) {
+function varsConsigneReminderSoon({ order }) {
   if (!order || !order.consigne || !order.consigne.lines) return null;
   const line = order.consigne.lines.find((l) => l.dueAt && !l.receivedAt);
   if (!line) return null;
-  const dueDate = formatDate(line.dueAt);
-  return `${brand.NAME} : rappel, votre ancienne piece (commande #${order.number}) est a retourner avant le ${dueDate}. Details : ${orderUrl(order)} — ${brand.PHONE}`;
+  return { brand: brand.NAME, orderNumber: order.number, dueDate: formatDate(line.dueAt), orderUrl: orderUrl(order), phone: brand.PHONE };
 }
 
-function smsConsigneOverdue({ order }) {
+function varsConsigneOverdue({ order }) {
   if (!order || !order.consigne || !order.consigne.lines) return null;
   const overdue = order.consigne.lines.filter((l) => l.dueAt && !l.receivedAt && new Date(l.dueAt) < new Date());
   if (!overdue.length) return null;
   const totalCents = overdue.reduce((sum, l) => sum + (l.amountCents || 0), 0);
-  const amount = formatCents(totalCents);
-  return `${brand.NAME} : URGENT — la date de retour consigne pour la commande #${order.number} est depassee. Montant du : ${amount}€. Contactez-nous : ${brand.PHONE}`;
+  return { brand: brand.NAME, orderNumber: order.number, amount: formatCents(totalCents), phone: brand.PHONE };
 }
 
-function smsConsigneReceived({ order }) {
+function varsConsigneReceived({ order }) {
   if (!order) return null;
-  return `${brand.NAME} : nous avons bien recu votre ancienne piece (commande #${order.number}). Consigne regularisee. Merci ! Details : ${orderUrl(order)}`;
+  return { brand: brand.NAME, orderNumber: order.number, orderUrl: orderUrl(order) };
 }
 
-function smsCloningLabelSent({ order }) {
+// Les 4 étapes de clonage partagent les mêmes variables.
+function varsCloning({ order }) {
   if (!order) return null;
-  return `${brand.NAME} : votre etiquette UPS pour le clonage (commande #${order.number}) est prete. Consultez votre email ou : ${orderUrl(order)} — ${brand.PHONE}`;
+  return { brand: brand.NAME, orderNumber: order.number, orderUrl: orderUrl(order), phone: brand.PHONE };
 }
 
-function smsCloningPieceReceived({ order }) {
-  if (!order) return null;
-  return `${brand.NAME} : nous avons recu votre piece pour clonage (commande #${order.number}). Programmation en cours, comptez 2-5 jours. Suivi : ${orderUrl(order)}`;
-}
-
-function smsCloningDone({ order }) {
-  if (!order) return null;
-  return `${brand.NAME} : clonage termine pour la commande #${order.number} ! Expedition sous 24-48h. Vous recevrez le suivi par email. Details : ${orderUrl(order)}`;
-}
-
-function smsCloningFailed({ order }) {
-  if (!order) return null;
-  return `${brand.NAME} : le clonage (commande #${order.number}) n'a pas pu aboutir. Nous vous contactons rapidement pour la suite. Appelez-nous : ${brand.PHONE}`;
-}
-
-function smsAbandonedCart({ cart }) {
+function varsAbandonedCart({ cart }) {
   if (!cart) return null;
   const base = getBaseUrl();
   const recoveryUrl = cart.recoveryToken ? `${base}/panier/recuperer/${cart.recoveryToken}` : base;
-  return `${brand.NAME} : votre panier vous attend ! Finalisez votre commande ici : ${recoveryUrl} — Stock limite. Question ? ${brand.PHONE}`;
+  return { brand: brand.NAME, recoveryUrl, phone: brand.PHONE };
 }
 
-function smsOrderStatusChange({ order, newStatus }) {
+function varsOrderStatusChange({ order, newStatus }) {
   if (!order) return null;
-  const label = STATUS_LABELS[newStatus] || newStatus || '';
-  return `${brand.NAME} : commande #${order.number} mise a jour → ${label}. Details : ${orderUrl(order)} — ${brand.PHONE}`;
+  return { brand: brand.NAME, orderNumber: order.number, statusLabel: STATUS_LABELS[newStatus] || newStatus || '', orderUrl: orderUrl(order), phone: brand.PHONE };
 }
 
 // ─── Public send functions ──────────────────────────────────────────────────
@@ -241,78 +225,70 @@ async function sendAndLog({ order, phone, text, smsType }) {
   return result;
 }
 
+// Branche un envoi sur le resolver (activé/désactivé + texte paramétrable).
+async function sendResolved({ key, vars, order, phone, smsType, logToOrder = true }) {
+  if (!vars) return { ok: false, reason: 'template_failed' };
+  const { enabled, text } = await resolveSms(key, vars);
+  if (!enabled) return { ok: false, reason: 'disabled' };
+  if (!text) return { ok: false, reason: 'template_failed' };
+  return logToOrder ? sendAndLog({ order, phone, text, smsType }) : sendSms({ to: phone, text });
+}
+
 async function sendOrderConfirmationSms({ order, user } = {}) {
   const phone = resolvePhoneFromOrder(order);
   if (!phone) return { ok: false, reason: 'no_phone' };
   if (user && !user.smsOptIn) return { ok: false, reason: 'no_optin' };
-  const text = smsOrderConfirmation({ order });
-  if (!text) return { ok: false, reason: 'template_failed' };
-  return sendAndLog({ order, phone, text, smsType: 'order_confirmation' });
+  return sendResolved({ key: 'order_confirmation', vars: varsOrderConfirmation({ order }), order, phone, smsType: 'order_confirmation' });
 }
 
 async function sendShipmentTrackingSms({ order, user, shipment } = {}) {
   const phone = resolvePhoneFromOrder(order);
   if (!phone) return { ok: false, reason: 'no_phone' };
   if (user && !user.smsOptIn) return { ok: false, reason: 'no_optin' };
-  const text = smsShipmentTracking({ order, shipment });
-  if (!text) return { ok: false, reason: 'template_failed' };
-  return sendAndLog({ order, phone, text, smsType: 'shipment_tracking' });
+  return sendResolved({ key: 'shipment_tracking', vars: varsShipmentTracking({ order, shipment }), order, phone, smsType: 'shipment_tracking' });
 }
 
 async function sendDeliveryConfirmedSms({ order, user } = {}) {
   const phone = resolvePhoneFromOrder(order);
   if (!phone) return { ok: false, reason: 'no_phone' };
   if (user && !user.smsOptIn) return { ok: false, reason: 'no_optin' };
-  const text = smsDeliveryConfirmed({ order });
-  if (!text) return { ok: false, reason: 'template_failed' };
-  return sendAndLog({ order, phone, text, smsType: 'delivery_confirmed' });
+  return sendResolved({ key: 'delivery_confirmed', vars: varsDeliveryConfirmed({ order }), order, phone, smsType: 'delivery_confirmed' });
 }
 
 async function sendConsigneReminderSoonSms({ order, user } = {}) {
   const phone = resolvePhoneFromOrder(order);
   if (!phone) return { ok: false, reason: 'no_phone' };
   if (user && !user.smsOptIn) return { ok: false, reason: 'no_optin' };
-  const text = smsConsigneReminderSoon({ order });
-  if (!text) return { ok: false, reason: 'template_failed' };
-  return sendAndLog({ order, phone, text, smsType: 'consigne_reminder_soon' });
+  return sendResolved({ key: 'consigne_reminder_soon', vars: varsConsigneReminderSoon({ order }), order, phone, smsType: 'consigne_reminder_soon' });
 }
 
 async function sendConsigneOverdueSms({ order, user } = {}) {
   const phone = resolvePhoneFromOrder(order);
   if (!phone) return { ok: false, reason: 'no_phone' };
   if (user && !user.smsOptIn) return { ok: false, reason: 'no_optin' };
-  const text = smsConsigneOverdue({ order });
-  if (!text) return { ok: false, reason: 'template_failed' };
-  return sendAndLog({ order, phone, text, smsType: 'consigne_overdue' });
+  return sendResolved({ key: 'consigne_overdue', vars: varsConsigneOverdue({ order }), order, phone, smsType: 'consigne_overdue' });
 }
 
 async function sendConsigneReceivedSms({ order, user } = {}) {
   const phone = resolvePhoneFromOrder(order);
   if (!phone) return { ok: false, reason: 'no_phone' };
   if (user && !user.smsOptIn) return { ok: false, reason: 'no_optin' };
-  const text = smsConsigneReceived({ order });
-  if (!text) return { ok: false, reason: 'template_failed' };
-  return sendAndLog({ order, phone, text, smsType: 'consigne_received' });
+  return sendResolved({ key: 'consigne_received', vars: varsConsigneReceived({ order }), order, phone, smsType: 'consigne_received' });
 }
 
 async function sendCloningStepSms({ order, user, step } = {}) {
   const phone = resolvePhoneFromOrder(order);
   if (!phone) return { ok: false, reason: 'no_phone' };
   if (user && !user.smsOptIn) return { ok: false, reason: 'no_optin' };
-
-  const builders = {
-    label_sent: smsCloningLabelSent,
-    piece_received: smsCloningPieceReceived,
-    cloning_done: smsCloningDone,
-    cloning_failed: smsCloningFailed,
+  const keyByStep = {
+    label_sent: 'cloning_label_sent',
+    piece_received: 'cloning_piece_received',
+    cloning_done: 'cloning_done',
+    cloning_failed: 'cloning_failed',
   };
-
-  const builder = builders[step];
-  if (!builder) return { ok: false, reason: 'unknown_step' };
-
-  const text = builder({ order });
-  if (!text) return { ok: false, reason: 'template_failed' };
-  return sendAndLog({ order, phone, text, smsType: `cloning_${step}` });
+  const key = keyByStep[step];
+  if (!key) return { ok: false, reason: 'unknown_step' };
+  return sendResolved({ key, vars: varsCloning({ order }), order, phone, smsType: `cloning_${step}` });
 }
 
 async function sendAbandonedCartSms({ cart, user } = {}) {
@@ -325,19 +301,14 @@ async function sendAbandonedCartSms({ cart, user } = {}) {
   }
   if (!phone) return { ok: false, reason: 'no_phone' };
   if (user && !user.smsOptIn) return { ok: false, reason: 'no_optin' };
-
-  const text = smsAbandonedCart({ cart });
-  if (!text) return { ok: false, reason: 'template_failed' };
-  return sendSms({ to: phone, text });
+  return sendResolved({ key: 'abandoned_cart', vars: varsAbandonedCart({ cart }), phone, smsType: 'abandoned_cart', logToOrder: false });
 }
 
 async function sendOrderStatusChangeSms({ order, user, newStatus } = {}) {
   const phone = resolvePhoneFromOrder(order);
   if (!phone) return { ok: false, reason: 'no_phone' };
   if (user && !user.smsOptIn) return { ok: false, reason: 'no_optin' };
-  const text = smsOrderStatusChange({ order, newStatus });
-  if (!text) return { ok: false, reason: 'template_failed' };
-  return sendAndLog({ order, phone, text, smsType: 'status_change' });
+  return sendResolved({ key: 'status_change', vars: varsOrderStatusChange({ order, newStatus }), order, phone, smsType: 'status_change' });
 }
 
 /**
