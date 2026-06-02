@@ -614,5 +614,6 @@ async function postDevis(req, res, next) {
 module.exports = {
   getLanding,
   postDevis,
+  buildAckEmailHtml,
   _internal: { LANDING_DATA, CAPTURE_SOURCE, LANDING_PATH },
 };

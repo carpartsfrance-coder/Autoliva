@@ -334,4 +334,36 @@ function buildShipmentEmailHtml(opts) {
 </body></html>`;
 }
 
-module.exports = { buildQuoteEmailHtml, buildReminderEmailHtml, buildShipmentEmailHtml };
+/**
+ * Email de confirmation d'acompte (envoyé par le webhook Mollie quand
+ * l'acompte est payé). Extrait ici pour réutilisation + prévisualisation.
+ * @param {{firstName?:string, quoteRef?:string, amountEur?:number, brandPhone?:string, brandPhoneIntl?:string}} opts
+ */
+function buildAcompteConfirmationHtml(opts) {
+  const greeting = opts.firstName ? `Bonjour ${escapeHtml(opts.firstName)},` : 'Bonjour,';
+  const ref = escapeHtml(opts.quoteRef || '');
+  const amount = fmtEur(opts.amountEur != null ? opts.amountEur : 0);
+  return `
+            <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;max-width:560px;margin:0 auto;color:#1f2937;line-height:1.6;">
+              <div style="text-align:center;padding:8px 0 16px;">
+                <img src="${LOGO_URL}" alt="Autoliva" width="150" style="display:inline-block;border:0;height:auto;">
+              </div>
+              <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;padding:20px 24px;text-align:center;margin-bottom:20px;">
+                <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#047857;text-transform:uppercase;letter-spacing:.04em;">Acompte bien reçu</p>
+                <p style="margin:0;font-size:28px;font-weight:800;color:#047857;">${amount}</p>
+              </div>
+              <p style="margin:0 0 14px;font-size:16px;">${greeting}</p>
+              <p style="margin:0 0 14px;font-size:15px;color:#374151;">Merci, votre acompte est confirmé : <strong>votre moteur est officiellement réservé</strong> (dossier <strong>${ref}</strong>).</p>
+              <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#0f172a;">Et maintenant ?</p>
+              <ul style="margin:0 0 18px;padding-left:18px;font-size:14px;color:#374151;">
+                <li style="margin-bottom:6px;">Nous lançons la préparation et le passage sur banc d'essai (si ce n'est pas déjà fait).</li>
+                <li style="margin-bottom:6px;">Vous recevrez un email dès l'expédition, avec le suivi transporteur.</li>
+                <li>Le solde sera à régler une fois le moteur testé et déclaré conforme.</li>
+              </ul>
+              <p style="margin:0 0 6px;font-size:14px;color:#374151;">Une question ? Répondez à cet email ou appelez-nous au <a href="tel:${escapeHtml(opts.brandPhoneIntl || '+33465848539')}" style="color:#E1001A;font-weight:700;text-decoration:none;">${escapeHtml(opts.brandPhone || '04 65 84 85 39')}</a>.</p>
+              <p style="margin:18px 0 0;font-size:14px;color:#1f2937;">À très vite,<br><strong>L'équipe technique Autoliva</strong></p>
+              <p style="margin:16px 0 0;font-size:11px;color:#94a3b8;">Référence à conserver : ${ref}</p>
+            </div>`;
+}
+
+module.exports = { buildQuoteEmailHtml, buildReminderEmailHtml, buildShipmentEmailHtml, buildAcompteConfirmationHtml };

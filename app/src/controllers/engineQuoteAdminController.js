@@ -840,6 +840,69 @@ async function postPreviewEmail(req, res, next) {
   }
 }
 
+/* ─── APERÇU DES MAILS AUTOMATIQUES (back-office) ───────────────────────── */
+
+const PREVIEW_LABELS = {
+  ack: 'Accusé de réception', j3: 'Relance J+3', j7: 'Relance J+7',
+  j14: 'Relance J+14', winback: 'Win-back J+30', acompte: 'Confirmation acompte',
+  expedition: 'Expédition',
+};
+
+/**
+ * Rend l'aperçu (non envoyé) d'un mail automatique du tunnel moteur, avec les
+ * vraies données du dossier. Permet au commercial de voir ce que reçoit le
+ * client (accusé, relances J+3/J+7/J+14, win-back, acompte, expédition).
+ */
+async function getPreviewMail(req, res, next) {
+  try {
+    const id = req.params.id;
+    const type = String(req.params.type || '').trim();
+    if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).render('errors/404');
+    if (!PREVIEW_LABELS[type]) return res.status(400).send('Type de mail inconnu');
+
+    const cart = await AbandonedCart.findOne({ _id: id, captureSource: 'landing_moteurs' }).lean();
+    if (!cart) return res.status(404).render('errors/404');
+
+    const eq = cart.engineQuote || {};
+    const quoteRef = (cart.requested && cart.requested.ref) || '';
+    const plate = (cart.requested && cart.requested.plate) || '';
+    const firstName = (cart.firstName && cart.lastName) ? cart.firstName : '';
+    const pricing = eq.pricing || {};
+    const sellTtc = (Number(pricing.sellPrice) || 0) * (1 + (Number(pricing.vatRate) || 20) / 100);
+    const lastSent = (eq.sentQuotes || []).slice().sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))[0] || null;
+    const phoneOpts = { brandPhone: brand.PHONE_MOTEUR, brandPhoneIntl: brand.PHONE_MOTEUR_INTL };
+    const base = (process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
+
+    const { buildReminderEmailHtml, buildShipmentEmailHtml: buildShip, buildAcompteConfirmationHtml } = require('../services/engineQuoteEmail');
+
+    let html;
+    if (type === 'ack') {
+      const { buildAckEmailHtml } = require('./moteurOccasionController');
+      html = buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel: (cart.requested && cart.requested.vehicle) || '', baseUrl: base, brandObj: brand });
+    } else if (['j3', 'j7', 'j14', 'winback'].includes(type)) {
+      const pdfUrl = lastSent ? `${base}/api/devis-moteurs/track-pdf/${cart._id}/${lastSent._id}` : '';
+      const mollieUrl = (type === 'winback' || !lastSent) ? '' : (lastSent.mollieUrl || '');
+      html = buildReminderEmailHtml({ type, quoteRef, firstName, plate, sellTtc: (lastSent && lastSent.sellPriceTtc) || sellTtc, pdfUrl, mollieUrl, ...phoneOpts });
+    } else if (type === 'acompte') {
+      const amountEur = (eq.payment && eq.payment.amountCents) ? eq.payment.amountCents / 100
+        : (lastSent && lastSent.depositCents) ? lastSent.depositCents / 100
+          : sellTtc * 0.3;
+      html = buildAcompteConfirmationHtml({ firstName, quoteRef, amountEur, ...phoneOpts });
+    } else if (type === 'expedition') {
+      const sh = eq.shipment || {};
+      html = buildShip({ firstName, quoteRef, plate, carrier: sh.carrier || 'DPD', trackingNumber: sh.trackingNumber || '(n° de suivi)', trackingUrl: sh.trackingUrl || '', ...phoneOpts });
+    }
+
+    const banner = `<div style="background:#fef3c7;border-bottom:2px solid #f59e0b;padding:10px 20px;font-family:-apple-system,sans-serif;font-size:13px;color:#78350f;text-align:center;">
+      <strong>🔍 APERÇU — ${PREVIEW_LABELS[type]}</strong> · dossier ${quoteRef || cart._id} · destinataire prévu : <strong>${cart.email || '(pas d\'email)'}</strong> · <em>non envoyé</em>
+    </div>`;
+    res.set('Content-Type', 'text/html; charset=utf-8');
+    return res.send(banner + html);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 /* ─── ENVOI DU DEVIS AU CLIENT ────────────────────────────────────────── */
 
 async function postSendQuote(req, res, next) {
@@ -1094,4 +1157,5 @@ module.exports = {
   postSendQuote,
   postPreviewPdf,
   postPreviewEmail,
+  getPreviewMail,
 };
