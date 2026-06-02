@@ -221,6 +221,13 @@ const abandonedCartSchema = new mongoose.Schema(
     archivedAt: { type: Date, default: null },
     archivedByName: { type: String, default: '', trim: true },
 
+    /**
+     * Alertes SLA internes déjà envoyées au commercial pour ce lead moteur
+     * (anti-doublon). Ex : 'sla_24h', 'sla_48h'. Stocké à la RACINE car
+     * engineQuote peut être null sur un lead jamais ouvert.
+     */
+    slaAlertsSent: { type: [String], default: [] },
+
     abandonedAt: { type: Date, required: true, index: true },
     lastActivityAt: { type: Date, default: Date.now, index: true },
     lastRemindedAt: { type: Date, default: null },

@@ -32,6 +32,86 @@ function getLatestSentQuote(eq) {
   return arr.slice().sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))[0];
 }
 
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function getCommercialEmail() {
+  const fromEnv = String(process.env.LEAD_FORM_TO_EMAIL || process.env.CONTACT_FORM_TO_EMAIL || '').trim();
+  return fromEnv || brand.EMAIL_CONTACT;
+}
+
+function publicBase() {
+  return (process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
+}
+
+/**
+ * ALERTE SLA INTERNE — un lead moteur reçu mais TOUJOURS PAS deviser après X h.
+ * Le commercial a eu la notif à T0 ; ici on le relance pour qu'il agisse (sinon
+ * un lead chaud peut rester sans devis indéfiniment, aucune relance ne le
+ * couvrant — les relances client ne ciblent que les devis déjà envoyés).
+ *
+ * 2 niveaux : 24h puis 48h. Anti-doublon via cart.slaAlertsSent (racine, car
+ * engineQuote peut être null sur un lead jamais ouvert).
+ */
+async function alertUnquotedLeads() {
+  const now = Date.now();
+  const commercialEmail = getCommercialEmail();
+  if (!commercialEmail) return { count24: 0, count48: 0 };
+
+  const leads = await AbandonedCart.find({
+    captureSource: 'landing_moteurs',
+    manualStatus: null,
+    $or: [
+      { engineQuote: null },
+      { 'engineQuote.status': { $in: ['new', 'analyzing'] } },
+    ],
+  }).limit(500);
+
+  let count24 = 0, count48 = 0;
+
+  for (const cart of leads) {
+    const ageH = (now - new Date(cart.createdAt).getTime()) / (60 * 60 * 1000);
+    const sent = cart.slaAlertsSent || [];
+    let level = null;
+    if (ageH >= 48 && !sent.includes('sla_48h')) level = 'sla_48h';
+    else if (ageH >= 24 && !sent.includes('sla_24h')) level = 'sla_24h';
+    if (!level) continue;
+
+    const hours = level === 'sla_48h' ? 48 : 24;
+    const urgent = hours >= 48;
+    const quoteRef = (cart.requested && cart.requested.ref) || '';
+    const displayName = ((cart.firstName || '') + ' ' + (cart.lastName || '')).trim() || cart.email || cart.phone || '—';
+    const plate = (cart.requested && cart.requested.plate) || '';
+    const adminUrl = publicBase() + '/admin/devis-moteurs/' + cart._id;
+
+    const subject = `${urgent ? '🔴 URGENT — ' : '⏰ '}Lead moteur non deviser depuis ${hours}h — ${quoteRef || displayName}`;
+    const html = `<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
+      <h2 style="margin:0 0 8px;">${urgent ? 'RELANCE — ' : ''}Lead moteur à traiter (${hours}h sans devis)</h2>
+      <p style="margin:0 0 10px;">Demande reçue il y a <strong>${Math.floor(ageH)}h</strong>, toujours <strong>sans devis envoyé</strong>.</p>
+      <p style="margin:0 0 6px;"><strong>Dossier :</strong> ${escapeHtml(quoteRef)}</p>
+      <p style="margin:0 0 6px;"><strong>Client :</strong> ${escapeHtml(displayName)}</p>
+      ${cart.email ? `<p style="margin:0 0 6px;"><strong>Email :</strong> <a href="mailto:${escapeHtml(cart.email)}">${escapeHtml(cart.email)}</a></p>` : ''}
+      ${cart.phone ? `<p style="margin:0 0 6px;"><strong>Téléphone :</strong> <a href="tel:${escapeHtml(cart.phone)}">${escapeHtml(cart.phone)}</a></p>` : ''}
+      ${plate ? `<p style="margin:0 0 6px;"><strong>Véhicule :</strong> ${escapeHtml(plate)}</p>` : ''}
+      <p style="margin:16px 0 0;"><a href="${adminUrl}" style="display:inline-block;background:#0b2046;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;">Ouvrir le dossier →</a></p>
+    </div>`;
+    const text = `Lead moteur non deviser depuis ${hours}h\nDossier: ${quoteRef}\nClient: ${displayName}\nEmail: ${cart.email || '-'}\nTel: ${cart.phone || '-'}\nVehicule: ${plate || '-'}\n${adminUrl}`;
+
+    try {
+      const r = await emailService.sendEmail({ toEmail: commercialEmail, subject, html, text, replyTo: cart.email || undefined });
+      if (r && r.ok !== false) {
+        await AbandonedCart.updateOne({ _id: cart._id }, { $addToSet: { slaAlertsSent: level } });
+        if (level === 'sla_48h') count48++; else count24++;
+      }
+    } catch (err) {
+      console.error('[engineQuoteReminders] SLA alert échouée pour', cart._id, err && err.message);
+    }
+  }
+  console.log(`[engineQuoteReminders] SLA alerts: 24h=${count24} 48h=${count48} (sur ${leads.length} leads à traiter)`);
+  return { count24, count48 };
+}
+
 async function sendReminder(cart, type) {
   const eq = cart.engineQuote || {};
   const lastSent = getLatestSentQuote(eq);
@@ -111,6 +191,14 @@ async function markAsLost(cart) {
 
 async function runEngineQuoteReminders() {
   const now = Date.now();
+
+  // 0) Alerte interne SLA : leads reçus mais non deviser (24h / 48h).
+  try {
+    await alertUnquotedLeads();
+  } catch (err) {
+    console.error('[engineQuoteReminders] alertUnquotedLeads error:', err && err.message);
+  }
+
   const cutoff = new Date(now - 3 * MS_DAY); // candidats : envoi ≥ 3 jours
 
   // On cherche les leads avec status='quote_sent' et au moins un sentQuote
@@ -153,4 +241,4 @@ async function runEngineQuoteReminders() {
   return { countJ3, countJ7, countLost, total: carts.length };
 }
 
-module.exports = { runEngineQuoteReminders };
+module.exports = { runEngineQuoteReminders, alertUnquotedLeads };
