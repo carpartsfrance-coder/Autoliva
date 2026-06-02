@@ -67,6 +67,14 @@ async function sendAbandonedCartReminders() {
     const eligibleCarts = await AbandonedCart.find({
       // Skip leads with manual status (admin a déjà pris la main)
       manualStatus: null,
+      // Ne relancer QUE de vrais paniers abandonnés. Les leads "non panier"
+      // (demande de devis moteur, formulaire contact/devis) sont stockés comme
+      // AbandonedCart avec status 'abandoned' par défaut, mais ne représentent
+      // PAS un panier : sans cette exclusion, un client qui demande un devis
+      // moteur recevait des relances "votre panier vous attend". On exige aussi
+      // au moins un article (un rappel de panier vide n'a aucun sens).
+      captureSource: { $nin: ['landing_moteurs', 'contact', 'devis'] },
+      'items.0': { $exists: true },
       $or: [
         // Abandoned for > 1h but < 24h (eligible for reminder 1)
         {
