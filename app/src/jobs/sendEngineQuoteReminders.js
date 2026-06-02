@@ -215,6 +215,75 @@ async function markAsLost(cart) {
   console.log(`[engineQuoteReminders] auto-lost pour ${cart._id}`);
 }
 
+/**
+ * RELANCE COMPORTEMENTALE — alerte interne sur les leads CHAUDS.
+ * On exploite le tracking déjà en place (PDF consulté / clic paiement) pour
+ * router l'attention du commercial vers les leads les plus engagés : une
+ * relance perso au bon moment convertit bien mieux qu'un email auto.
+ *
+ *  - clic paiement sans finaliser  → 🔥 très chaud (acompte abandonné)
+ *  - devis consulté en ligne        → chaud (engagé)
+ *
+ * Anti-doublon via engineQuote.remindersSent (types 'hot_pay' / 'hot_pdf').
+ */
+async function alertHotLeads() {
+  const commercialEmail = getCommercialEmail();
+  if (!commercialEmail) return { hotPay: 0, hotPdf: 0 };
+
+  const carts = await AbandonedCart.find({
+    captureSource: 'landing_moteurs',
+    manualStatus: null,
+    'engineQuote.status': 'quote_sent',
+    'engineQuote.sentQuotes.0': { $exists: true },
+  }).limit(500);
+
+  let hotPay = 0, hotPdf = 0;
+
+  for (const cart of carts) {
+    const eq = cart.engineQuote || {};
+    const lastSent = getLatestSentQuote(eq);
+    if (!lastSent) continue;
+
+    let type = null, reason = '', emoji = '';
+    if (lastSent.payClickedAt && !hasReminder(eq, 'hot_pay')) {
+      type = 'hot_pay'; emoji = '🔥'; reason = 'a CLIQUÉ sur le bouton de paiement sans finaliser (acompte abandonné)';
+    } else if (lastSent.pdfViewedAt && !hasReminder(eq, 'hot_pdf')) {
+      type = 'hot_pdf'; emoji = '👀'; reason = 'a CONSULTÉ son devis en ligne';
+    }
+    if (!type) continue;
+
+    const quoteRef = (cart.requested && cart.requested.ref) || '';
+    const displayName = ((cart.firstName || '') + ' ' + (cart.lastName || '')).trim() || cart.email || cart.phone || '—';
+    const adminUrl = publicBase() + '/admin/devis-moteurs/' + cart._id;
+    const subject = `${emoji} Lead chaud — ${displayName} ${type === 'hot_pay' ? 'a cliqué payer' : 'a vu le devis'} (${quoteRef})`;
+    const html = `<div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
+      <h2 style="margin:0 0 8px;">${emoji} Signal d'achat — relance perso recommandée</h2>
+      <p style="margin:0 0 10px;"><strong>${escapeHtml(displayName)}</strong> ${escapeHtml(reason)}.</p>
+      <p style="margin:0 0 6px;"><strong>Dossier :</strong> ${escapeHtml(quoteRef)}</p>
+      ${cart.email ? `<p style="margin:0 0 6px;"><strong>Email :</strong> <a href="mailto:${escapeHtml(cart.email)}">${escapeHtml(cart.email)}</a></p>` : ''}
+      ${cart.phone ? `<p style="margin:0 0 6px;"><strong>Téléphone :</strong> <a href="tel:${escapeHtml(cart.phone)}">${escapeHtml(cart.phone)}</a></p>` : ''}
+      <p style="margin:12px 0 0;color:#6b7280;font-size:13px;">Conseil : un appel maintenant pendant que l'intérêt est chaud convertit nettement mieux.</p>
+      <p style="margin:16px 0 0;"><a href="${adminUrl}" style="display:inline-block;background:#d32f2f;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;">Ouvrir le dossier →</a></p>
+    </div>`;
+    const text = `${reason}\nClient: ${displayName}\nDossier: ${quoteRef}\nEmail: ${cart.email || '-'}\nTel: ${cart.phone || '-'}\n${adminUrl}`;
+
+    try {
+      const r = await emailService.sendEmail({ toEmail: commercialEmail, subject, html, text, replyTo: cart.email || undefined });
+      if (r && r.ok !== false) {
+        await AbandonedCart.updateOne(
+          { _id: cart._id },
+          { $push: { 'engineQuote.remindersSent': { type, sentAt: new Date() } } }
+        );
+        if (type === 'hot_pay') hotPay++; else hotPdf++;
+      }
+    } catch (err) {
+      console.error('[engineQuoteReminders] hot lead alert échouée pour', cart._id, err && err.message);
+    }
+  }
+  console.log(`[engineQuoteReminders] hot leads: pay=${hotPay} pdf=${hotPdf} (sur ${carts.length} devis envoyés)`);
+  return { hotPay, hotPdf };
+}
+
 async function runEngineQuoteReminders() {
   const now = Date.now();
 
@@ -223,6 +292,14 @@ async function runEngineQuoteReminders() {
     await alertUnquotedLeads();
   } catch (err) {
     console.error('[engineQuoteReminders] alertUnquotedLeads error:', err && err.message);
+  }
+
+  // 0bis) Relance comportementale : alerter le commercial sur les leads chauds
+  // (devis consulté / paiement cliqué) pour une relance perso.
+  try {
+    await alertHotLeads();
+  } catch (err) {
+    console.error('[engineQuoteReminders] alertHotLeads error:', err && err.message);
   }
 
   const cutoff = new Date(now - 3 * MS_DAY); // candidats : envoi ≥ 3 jours
@@ -273,4 +350,4 @@ async function runEngineQuoteReminders() {
   return { countJ3, countJ7, countJ14, countLost, total: carts.length };
 }
 
-module.exports = { runEngineQuoteReminders, alertUnquotedLeads };
+module.exports = { runEngineQuoteReminders, alertUnquotedLeads, alertHotLeads };
