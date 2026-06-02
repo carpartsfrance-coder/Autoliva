@@ -133,14 +133,28 @@ async function sendAbandonedCartReminders() {
           continue;
         }
 
-        // Défense en profondeur : si le client a passé une commande payée
-        // depuis l'abandon (sans avoir cliqué le lien recovery), on skip et
-        // on marque le panier comme recovered. Évite que le client reçoive
-        // des relances après avoir commandé.
-        if (cart.userId) {
-          try {
+        // Défense en profondeur : si le client a déjà passé une commande PAYÉE
+        // depuis l'abandon (quel que soit le moyen de paiement — Mollie,
+        // Scalapay, virement… — et sans avoir cliqué le lien recovery), on
+        // marque le panier recovered et on n'envoie PAS de relance.
+        //
+        // On matche par userId ET par EMAIL : chaque commande (même invité) est
+        // rattachée à un User créé avec l'email du client. Sans le match email,
+        // un achat invité (userId du panier = null) n'était jamais détecté →
+        // le client continuait à recevoir des relances après avoir payé.
+        try {
+          const orderUserIds = [];
+          if (cart.userId) orderUserIds.push(cart.userId);
+          if (cart.email) {
+            const buyer = await User.findOne({ email: String(cart.email).trim().toLowerCase() })
+              .select('_id').lean();
+            if (buyer && !orderUserIds.some((id) => String(id) === String(buyer._id))) {
+              orderUserIds.push(buyer._id);
+            }
+          }
+          if (orderUserIds.length) {
             const subsequentPaidOrder = await Order.findOne({
-              userId: cart.userId,
+              userId: { $in: orderUserIds },
               paymentStatus: 'paid',
               createdAt: { $gte: cart.abandonedAt },
             }).select('_id number').lean();
@@ -150,11 +164,11 @@ async function sendAbandonedCartReminders() {
                 { _id: cart._id },
                 { $set: { status: 'recovered', recoveredAt: now } }
               );
-              console.log(`[cart-reminders] Panier ${cart._id} marqué recovered (commande ${subsequentPaidOrder.number || subsequentPaidOrder._id} passée depuis l'abandon)`);
+              console.log(`[cart-reminders] Panier ${cart._id} marqué recovered (commande ${subsequentPaidOrder.number || subsequentPaidOrder._id} payée depuis l'abandon)`);
               continue;
             }
-          } catch (_) { /* non-bloquant, on continue avec l'envoi normal */ }
-        }
+          }
+        } catch (_) { /* non-bloquant, on continue avec l'envoi normal */ }
 
         // Send the email
         const result = await sendAbandonedCartReminder({
