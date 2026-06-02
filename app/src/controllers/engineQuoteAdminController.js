@@ -1103,6 +1103,27 @@ async function postSendQuote(req, res, next) {
       console.error('[engine-quote] Email envoi devis échoué:', sendResult);
     }
 
+    // 6bis) SMS "devis prêt" (best-effort) — garantit que le client VOIT son
+    // devis (~98% d'ouverture) même si l'email passe en spam. Le lien tracké
+    // (/track-pdf) amène droit au devis ET enregistre "PDF vu" → ce qui
+    // déclenche l'alerte "lead chaud" → le commercial rappelle au bon moment.
+    if (cart.phone) {
+      try {
+        // Format GSM-7 (évite l'espace insécable de toLocaleString qui forcerait
+        // l'encodage Unicode → segments de 70 car. au lieu de 160).
+        const totalTtcFmt = sellTtc.toFixed(2).replace('.', ',') + ' €';
+        const { enabled: smsOn, text: smsBody } = await resolveSms('moteur_devis', {
+          quoteRef,
+          totalTtc: totalTtcFmt,
+          pdfUrl: pdfTrackUrl,
+          phoneMoteur: brand.PHONE_MOTEUR,
+        });
+        if (smsOn && smsBody) await sendSms({ to: cart.phone, text: smsBody });
+      } catch (err) {
+        console.warn('[engine-quote] devis SMS failed:', err && err.message);
+      }
+    }
+
     // 7) Persiste l'historique (avec snapshot photos) + change statut
     const photoSnapshot = allPhotos.map(p => ({
       id: p.id,

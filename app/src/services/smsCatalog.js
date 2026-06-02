@@ -100,6 +100,12 @@ const CATALOG = [
     example: { quoteRef: 'AUT-2026-06-7AB12', phoneMoteur: '04 65 84 85 39' },
   },
   {
+    key: 'moteur_devis', category: 'Moteur', label: 'Devis envoyé (notification + lien)',
+    defaultTemplate: "Autoliva : votre devis {quoteRef} est pret ({totalTtc}) ! Le voir : {pdfUrl} - Valable 24h, stock limite. Questions ? {phoneMoteur}",
+    vars: [['quoteRef', 'N° de dossier devis'], ['totalTtc', 'Montant total TTC'], ['pdfUrl', 'Lien pour voir le devis (tracké)'], ['phoneMoteur', 'Téléphone commercial moteurs']],
+    example: { quoteRef: 'AUT-2026-06-7AB12', totalTtc: '1466,40 €', pdfUrl: 'https://autoliva.com/api/devis-moteurs/track-pdf/AAA/BBB', phoneMoteur: '04 65 84 85 39' },
+  },
+  {
     key: 'moteur_relance_j7', category: 'Moteur', label: 'Relance devis J+7',
     defaultTemplate: "Autoliva : votre devis {quoteRef} (moteur) est toujours d'actualite. Une question ou reserver le moteur ? Appelez {phoneMoteur}",
     vars: [['quoteRef', 'N° de dossier devis'], ['phoneMoteur', 'Téléphone commercial moteurs']],
