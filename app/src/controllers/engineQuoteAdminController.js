@@ -20,6 +20,7 @@ const emailService = require('../services/emailService');
 const { buildQuotePdf } = require('../services/engineQuotePdf');
 const { buildQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
 const { sendSms } = require('../services/smsService');
+const { resolveSms } = require('../services/smsSettings');
 const { compressImage } = require('../services/imageCompress');
 const mollie = require('../services/mollie');
 const brand = require('../config/brand');
@@ -574,8 +575,9 @@ async function postShipment(req, res, next) {
     // SMS client (best-effort)
     if (cart.phone) {
       try {
-        const smsText = `Autoliva : votre moteur (${quoteRef}) est expedie !${trackingNumber ? ' Suivi ' + carrier + ' : ' + trackingNumber : ''}${trackingUrl ? ' ' + trackingUrl : ''} Question ? ${brand.PHONE_MOTEUR}`.slice(0, 320);
-        await sendSms({ to: cart.phone, text: smsText });
+        const trackingPart = `${trackingNumber ? ' Suivi ' + carrier + ' : ' + trackingNumber : ''}${trackingUrl ? ' ' + trackingUrl : ''}`;
+        const { enabled: smsOn, text: smsBody } = await resolveSms('moteur_expedition', { quoteRef, trackingPart, phoneMoteur: brand.PHONE_MOTEUR });
+        if (smsOn && smsBody) await sendSms({ to: cart.phone, text: smsBody.slice(0, 320) });
       } catch (err) { console.warn('[engine-quote] shipment SMS failed:', err && err.message); }
     }
 
