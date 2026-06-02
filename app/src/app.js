@@ -527,6 +527,9 @@ app.post('/api/analytics/track', analyticsController.postTrackEvent);
 
 // SAV API (REST JSON)
 app.use('/api/sav', savApi.publicRouter);
+// API "agent" SAV (clé Bearer dédiée) — montée AVANT l'adminRouter qui applique
+// globalement requireAdminToken, pour que /admin/api/sav/agent ait sa propre auth.
+app.use('/admin/api/sav/agent', require('./routes/api/savAgent'));
 app.use('/admin/api/sav', savApi.adminRouter);
 
 // Blog API : import server-to-server depuis URL markdown (Bearer token)
