@@ -136,6 +136,31 @@ function dt(v) {
       </form>
     </section>
 
+    <!-- APERÇU DES MAILS AUTOMATIQUES -->
+    <section class="mt-6 bg-white rounded-2xl border border-slate-200 p-6">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="material-symbols-outlined text-slate-500" style="font-size:20px">drafts</span>
+        <h2 class="text-lg font-semibold text-slate-900">Aperçu des mails automatiques</h2>
+      </div>
+      <p class="text-xs text-slate-500 mb-4">Visualise ce que reçoit le client pour ce dossier (relances incluses). S'ouvre dans un nouvel onglet — <strong>rien n'est envoyé</strong>.</p>
+      <div class="flex flex-wrap gap-2">
+        <% [
+          { t: 'ack', l: 'Accusé de réception' },
+          { t: 'j3', l: 'Relance J+3' },
+          { t: 'j7', l: 'Relance J+7' },
+          { t: 'j14', l: 'Relance J+14' },
+          { t: 'winback', l: 'Win-back J+30' },
+          { t: 'acompte', l: 'Confirmation acompte' },
+          { t: 'expedition', l: 'Expédition' }
+        ].forEach(function(m) { %>
+          <a href="/admin/devis-moteurs/<%= cart.id %>/preview-mail/<%= m.t %>" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 transition">
+            <span class="material-symbols-outlined" style="font-size:15px">open_in_new</span>
+            <%= m.l %>
+          </a>
+        <% }) %>
+      </div>
+    </section>
+
     <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
       <!-- ─── COLONNE GAUCHE (2/3) ─── -->

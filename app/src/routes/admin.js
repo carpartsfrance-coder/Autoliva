@@ -333,6 +333,7 @@ router.post('/devis-moteurs/:id/photo/:category', requireAdminAuth, engineQuoteP
 router.post('/devis-moteurs/:id/photo/:category/:photoId/delete', requireAdminAuth, engineQuoteAdminController.postDeletePhoto);
 router.post('/devis-moteurs/:id/preview-pdf', requireAdminAuth, engineQuoteAdminController.postPreviewPdf);
 router.post('/devis-moteurs/:id/preview-email', requireAdminAuth, engineQuoteAdminController.postPreviewEmail);
+router.get('/devis-moteurs/:id/preview-mail/:type', requireAdminAuth, engineQuoteAdminController.getPreviewMail);
 router.post('/devis-moteurs/:id/send-quote', requireAdminAuth, engineQuoteAdminController.postSendQuote);
 
 router.get('/codes-promo', requireAdminAuth, adminController.getAdminPromoCodesPage);
