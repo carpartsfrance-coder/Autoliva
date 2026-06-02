@@ -231,7 +231,11 @@ function buildReminderEmailHtml(opts) {
   // peut être vendu / le prix bouge). Les relances n'affirment donc PAS que le
   // devis est "toujours actif" → elles proposent de RE-confirmer dispo + prix.
   let subject, heroLine, ctaLine;
-  if (type === 'j14') {
+  if (type === 'winback') {
+    subject = 'Toujours à la recherche de votre moteur ?';
+    heroLine = 'Il y a quelques semaines, vous cherchiez un moteur et je vous avais préparé un devis.';
+    ctaLine = 'Si votre projet est toujours d\'actualité, dites-le moi : les stocks et les prix bougent souvent, je vous refais un point disponibilité + tarif du jour, sans engagement.';
+  } else if (type === 'j14') {
     subject = 'Dernier rappel — votre devis moteur';
     heroLine = 'Sans nouvelle de votre part, je vais bientôt clôturer votre dossier.';
     ctaLine = 'Si votre projet est toujours d\'actualité, dites-le moi : je re-vérifie la disponibilité du moteur et je vous reconfirme le prix du jour.';
