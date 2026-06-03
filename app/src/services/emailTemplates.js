@@ -590,6 +590,13 @@ function buildConsigneReminderSoonEmail({ order, user, baseUrl } = {}) {
   const pending = lines.filter((l) => l && !l.receivedAt && l.dueAt);
   if (!pending.length) return null;
 
+  /* Consigne ENCAISSÉE à la commande → message inversé : le client a déjà
+   * payé sa caution, il faut renvoyer le core pour la RÉCUPÉRER (et non
+   * « sinon elle devient due »). */
+  const pendingChargedCents = pending.reduce((s, l) => s + ((l && l.charged && Number.isFinite(l.chargedCents)) ? l.chargedCents : 0), 0);
+  const isCharged = pendingChargedCents > 0;
+  const chargedLabel = formatEuro(pendingChargedCents);
+
   const soonRows = pending
     .map((l) => {
       const name = l.name ? escapeHtml(l.name) : 'Pièce';
@@ -605,14 +612,22 @@ function buildConsigneReminderSoonEmail({ order, user, baseUrl } = {}) {
     .join('');
 
   const orderUrl = baseUrl && orderId ? `${baseUrl.replace(/\/$/, '')}/compte/commandes/${encodeURIComponent(orderId)}` : '';
-  const subject = number
-    ? `Rappel consigne : retour à prévoir (commande #${number})`
-    : 'Rappel consigne : retour à prévoir';
+  const subject = isCharged
+    ? (number ? `Récupérez votre caution : renvoyez votre pièce (commande #${number})` : 'Récupérez votre caution : renvoyez votre pièce')
+    : (number ? `Rappel consigne : retour à prévoir (commande #${number})` : 'Rappel consigne : retour à prévoir');
+
+  const introHtml = isCharged
+    ? `Renvoyez-nous votre ancienne pièce avant la date limite pour être <strong>remboursé de votre caution de ${escapeHtml(chargedLabel)}</strong>.`
+    : 'Il vous reste peu de temps pour nous retourner votre ancienne pièce.';
+
+  const footerHtml = isCharged
+    ? `<div style="margin-top:12px;padding:12px 14px;border:1px solid #dcfce7;background:#f0fdf4;border-radius:14px;color:#14532d;font-size:13px;line-height:1.6;">Votre caution de <strong>${escapeHtml(chargedLabel)}</strong> vous est <strong>intégralement remboursée</strong> dès réception de votre ancien organe.</div>`
+    : `<div style="margin-top:12px;font-size:12px;line-height:1.6;color:#64748b;">La consigne n’est pas encaissée à l’achat, mais elle devient due si la pièce n’est pas retournée à temps.</div>`;
 
   const bodyHtml = `
-<div style="font-size:16px;font-weight:900;">${firstName ? `${escapeHtml(firstName)}, ` : ''}rappel consigne</div>
+<div style="font-size:16px;font-weight:900;">${firstName ? `${escapeHtml(firstName)}, ` : ''}${isCharged ? 'récupérez votre caution' : 'rappel consigne'}</div>
 <div style="margin-top:10px;font-size:14px;line-height:1.6;color:#334155;">
-  Il vous reste peu de temps pour nous retourner votre ancienne pièce.
+  ${introHtml}
 </div>
 
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top:16px;">
@@ -621,19 +636,19 @@ function buildConsigneReminderSoonEmail({ order, user, baseUrl } = {}) {
 
 ${renderPrimaryButton({ href: orderUrl, label: 'Voir le détail de ma consigne' })}
 
-<div style="margin-top:12px;font-size:12px;line-height:1.6;color:#64748b;">
-  La consigne n’est pas encaissée à l’achat, mais elle devient due si la pièce n’est pas retournée à temps.
-</div>`;
+${footerHtml}`;
 
   return {
     subject,
     html: renderEmailLayout({
       title: subject,
-      preheader: 'Rappel consigne',
+      preheader: isCharged ? `Renvoyez votre pièce pour récupérer votre caution de ${chargedLabel}` : 'Rappel consigne',
       bodyHtml,
       baseUrl,
     }),
-    text: 'Rappel consigne : pensez à retourner votre ancienne pièce avant la date limite.',
+    text: isCharged
+      ? `Renvoyez votre ancienne pièce avant la date limite pour récupérer votre caution de ${chargedLabel}.`
+      : 'Rappel consigne : pensez à retourner votre ancienne pièce avant la date limite.',
   };
 }
 
@@ -670,20 +685,35 @@ function buildConsigneOverdueEmail({ order, user, baseUrl } = {}) {
     return sum + qty * amt;
   }, 0);
 
+  /* Consigne ENCAISSÉE → message inversé : récupérer la caution payée. */
+  const pendingChargedCents = pending.reduce((s, l) => s + ((l && l.charged && Number.isFinite(l.chargedCents)) ? l.chargedCents : 0), 0);
+  const isCharged = pendingChargedCents > 0;
+  const chargedLabel = formatEuro(pendingChargedCents);
+
   const orderUrl = baseUrl && orderId ? `${baseUrl.replace(/\/$/, '')}/compte/commandes/${encodeURIComponent(orderId)}` : '';
-  const subject = number
-    ? `Consigne en retard : action requise (commande #${number})`
-    : 'Consigne en retard : action requise';
+  const subject = isCharged
+    ? (number ? `Votre caution vous attend : renvoyez votre pièce (commande #${number})` : 'Votre caution vous attend : renvoyez votre pièce')
+    : (number ? `Consigne en retard : action requise (commande #${number})` : 'Consigne en retard : action requise');
+
+  const titleLine = isCharged
+    ? `${firstName ? `${escapeHtml(firstName)}, ` : ''}votre caution n’est pas encore récupérée`
+    : `${firstName ? `${escapeHtml(firstName)}, ` : ''}consigne en retard`;
+
+  const introLine = isCharged
+    ? 'Nous n’avons pas encore reçu votre ancienne pièce, et la date limite est dépassée. Renvoyez-la pour récupérer votre caution.'
+    : 'Nous n’avons pas encore reçu l’ancienne pièce. La date limite est dépassée.';
+
+  const calloutHtml = isCharged
+    ? `<div style="margin-top:12px;padding:12px 14px;border:1px solid #dcfce7;background:#f0fdf4;border-radius:14px;color:#14532d;font-size:13px;line-height:1.6;">Caution <strong>remboursable dès réception</strong> de votre ancien organe : <strong>${escapeHtml(chargedLabel)}</strong>.</div>`
+    : `<div style="margin-top:12px;padding:12px 14px;border:1px solid #fee2e2;background:#fff1f2;border-radius:14px;color:#881337;font-size:13px;line-height:1.6;">Montant total de consigne concerné : <strong>${escapeHtml(formatEuro(totalDueCents))}</strong>.</div>`;
 
   const bodyHtml = `
-<div style="font-size:16px;font-weight:900;">${firstName ? `${escapeHtml(firstName)}, ` : ''}consigne en retard</div>
+<div style="font-size:16px;font-weight:900;">${titleLine}</div>
 <div style="margin-top:10px;font-size:14px;line-height:1.6;color:#334155;">
-  Nous n’avons pas encore reçu l’ancienne pièce. La date limite est dépassée.
+  ${introLine}
 </div>
 
-<div style="margin-top:12px;padding:12px 14px;border:1px solid #fee2e2;background:#fff1f2;border-radius:14px;color:#881337;font-size:13px;line-height:1.6;">
-  Montant total de consigne concerné : <strong>${escapeHtml(formatEuro(totalDueCents))}</strong>.
-</div>
+${calloutHtml}
 
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-top:16px;">
   ${overdueRows}
@@ -699,11 +729,13 @@ ${renderPrimaryButton({ href: orderUrl, label: 'Voir le détail de ma commande' 
     subject,
     html: renderEmailLayout({
       title: subject,
-      preheader: 'Consigne en retard',
+      preheader: isCharged ? `Récupérez votre caution de ${chargedLabel}` : 'Consigne en retard',
       bodyHtml,
       baseUrl,
     }),
-    text: `Consigne en retard${number ? ` (commande #${number})` : ''}.`,
+    text: isCharged
+      ? `Renvoyez votre ancienne pièce pour récupérer votre caution de ${chargedLabel}${number ? ` (commande #${number})` : ''}.`
+      : `Consigne en retard${number ? ` (commande #${number})` : ''}.`,
   };
 }
 
