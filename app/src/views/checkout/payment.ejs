@@ -172,8 +172,8 @@
               <div class="mt-2 rounded-2xl border border-slate-200 bg-white p-4">
                 <div class="flex items-start justify-between gap-4">
                   <div>
-                    <div class="font-black text-slate-900">VIN du véhicule / plaque</div>
-                    <div class="mt-1 text-xs text-slate-600">Facultatif mais recommandé pour un contrôle de compatibilité avant expédition. Vous pouvez renseigner soit la plaque FR, soit le VIN.</div>
+                    <div class="font-black text-slate-900">Votre véhicule — plaque ou VIN <span class="text-rose-600">*</span></div>
+                    <div class="mt-1 text-xs text-slate-600"><span class="font-semibold text-slate-700">Obligatoire</span> : nous vérifions la compatibilité de votre pièce avant expédition. Renseignez soit la plaque française, soit le VIN (numéro de châssis).</div>
                   </div>
                   <div class="w-10 h-10 rounded-xl bg-slate-900/5 text-slate-700 flex items-center justify-center flex-shrink-0">
                     <span class="material-symbols-outlined">directions_car</span>
@@ -184,24 +184,21 @@
 
                 <div class="mt-4 <%= _vehType === 'plate' ? '' : 'hidden' %>" data-vehicle-panel="plate">
                   <label class="block text-xs font-black uppercase tracking-widest text-slate-400" for="vehiclePlate">Plaque (France)</label>
-                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="vehiclePlate" name="vehiclePlate" placeholder="Ex : AB-123-CD" type="text" value="<%= _vehPlate %>" />
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="vehiclePlate" name="vehiclePlate" placeholder="Ex : AB-123-CD" type="text" value="<%= _vehPlate %>" data-vehicle-input="plate" <%= _vehType === 'plate' ? 'required' : '' %> />
                   <button class="mt-2 text-xs font-black text-primary hover:underline" data-vehicle-switch="vin" type="button">Plaque non française / je n’ai pas la plaque → utiliser le VIN</button>
                 </div>
 
                 <div class="mt-4 <%= _vehType === 'vin' ? '' : 'hidden' %>" data-vehicle-panel="vin">
                   <label class="block text-xs font-black uppercase tracking-widest text-slate-400" for="vehicleVin">VIN (numéro de châssis)</label>
-                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="vehicleVin" name="vehicleVin" placeholder="Ex : VF1..." type="text" value="<%= _vehVin %>" />
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="vehicleVin" name="vehicleVin" placeholder="Ex : VF1..." type="text" value="<%= _vehVin %>" data-vehicle-input="vin" <%= _vehType === 'vin' ? 'required' : '' %> />
                   <button class="mt-2 text-xs font-black text-primary hover:underline" data-vehicle-switch="plate" type="button">Revenir à la plaque France</button>
                 </div>
 
-                <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <label class="flex items-start gap-3">
-                    <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="vehicleConsent" type="checkbox" value="true" <%= _vehConsentChecked ? 'checked' : '' %> />
-                    <span class="text-xs text-slate-600 leading-normal">
-                      J’accepte que la plaque/VIN soit utilisée uniquement pour vérifier la compatibilité et/ou programmer la pièce si nécessaire.
-                      <span class="block mt-1 text-[11px] text-slate-500">Si vous ne le souhaitez pas, laissez le champ vide.</span>
-                    </span>
-                  </label>
+                <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <p class="text-[11px] text-slate-500 leading-normal flex items-start gap-1.5">
+                    <span class="material-symbols-outlined" style="font-size:14px">lock</span>
+                    <span>Plaque/VIN utilisés <strong>uniquement</strong> pour vérifier la compatibilité et/ou programmer votre pièce. Aucune autre utilisation.</span>
+                  </p>
                 </div>
               </div>
 
@@ -335,6 +332,9 @@
 
     if (!typeInput || !panelPlate || !panelVin || !switches || !switches.length) return;
 
+    var plateInput = panelPlate.querySelector('[data-vehicle-input="plate"]');
+    var vinInput = panelVin.querySelector('[data-vehicle-input="vin"]');
+
     function setType(type) {
       var t = type === 'vin' ? 'vin' : 'plate';
       typeInput.value = t;
@@ -342,9 +342,15 @@
       if (t === 'vin') {
         panelPlate.classList.add('hidden');
         panelVin.classList.remove('hidden');
+        // Le champ caché ne doit PAS être "required" (sinon le navigateur bloque
+        // la soumission sur un champ non focusable) — on déplace l'obligation.
+        if (plateInput) plateInput.required = false;
+        if (vinInput) vinInput.required = true;
       } else {
         panelVin.classList.add('hidden');
         panelPlate.classList.remove('hidden');
+        if (vinInput) vinInput.required = false;
+        if (plateInput) plateInput.required = true;
       }
     }
 
