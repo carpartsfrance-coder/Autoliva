@@ -1191,8 +1191,137 @@ async function postSendQuote(req, res, next) {
   }
 }
 
+/* ─── TABLEAU DE CONVERSION (FUNNEL) ─────────────────────────────────────
+ * Agrège le tunnel devis moteur sur une période : leads → chiffrés → PDF
+ * consulté → converti (acompte/gagné), avec temps de réponse et fuite n°1.
+ * NB : l'ouverture email (pixel) est volontairement reléguée en métrique
+ * secondaire — elle est peu fiable (Apple Mail/Gmail bloquent les pixels) et
+ * le canal SMS n'« ouvre » jamais l'email. Le vrai signal d'engagement est
+ * « PDF consulté » (clic sur le lien email OU SMS). */
+const FUNNEL_MS_DAY = 24 * 60 * 60 * 1000;
+
+function fmtDelay(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return '—';
+  const minutes = ms / (60 * 1000);
+  if (minutes < 60) return Math.round(minutes) + ' min';
+  const hours = ms / (60 * 60 * 1000);
+  if (hours < 48) return String(Math.round(hours * 10) / 10).replace('.', ',') + ' h';
+  return String(Math.round((hours / 24) * 10) / 10).replace('.', ',') + ' j';
+}
+
+function median(arr) {
+  if (!arr.length) return NaN;
+  const s = arr.slice().sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+async function getEngineQuoteFunnel(req, res, next) {
+  try {
+    const period = ['30d', 'month', '90d', 'all'].includes(req.query.period) ? req.query.period : '30d';
+    const periodLabels = { '30d': '30 derniers jours', month: 'Ce mois-ci', '90d': '90 derniers jours', all: 'Depuis le début' };
+    const now = new Date();
+    let since = null;
+    if (period === 'month') since = new Date(now.getFullYear(), now.getMonth(), 1);
+    else if (period === '90d') since = new Date(now.getTime() - 90 * FUNNEL_MS_DAY);
+    else if (period === '30d') since = new Date(now.getTime() - 30 * FUNNEL_MS_DAY);
+
+    const query = { captureSource: 'landing_moteurs' };
+    if (since) query.createdAt = { $gte: since };
+
+    const carts = await AbandonedCart.find(query)
+      .select('createdAt engineQuote.status engineQuote.sentQuotes')
+      .lean();
+
+    let leads = carts.length;
+    let quoted = 0, opened = 0, pdfViewed = 0, payClicked = 0, converted = 0, won = 0, lost = 0, unquoted = 0;
+    const responseTimes = [];
+
+    for (const c of carts) {
+      const eq = c.engineQuote || {};
+      const sq = Array.isArray(eq.sentQuotes) ? eq.sentQuotes : [];
+      const status = eq.status || 'new';
+
+      if (sq.length) {
+        quoted += 1;
+        let firstSent = null;
+        for (const s of sq) {
+          if (s && s.sentAt && (!firstSent || new Date(s.sentAt) < new Date(firstSent))) firstSent = s.sentAt;
+        }
+        if (firstSent && c.createdAt) {
+          const dt = new Date(firstSent).getTime() - new Date(c.createdAt).getTime();
+          if (dt >= 0) responseTimes.push(dt);
+        }
+        if (sq.some((s) => s && s.openedAt)) opened += 1;
+        if (sq.some((s) => s && s.pdfViewedAt)) pdfViewed += 1;
+        if (sq.some((s) => s && s.payClickedAt)) payClicked += 1;
+      } else if (status === 'new' || status === 'analyzing') {
+        unquoted += 1;
+      }
+
+      if (status === 'acompte_recu' || status === 'won') converted += 1;
+      if (status === 'won') won += 1;
+      if (status === 'lost') lost += 1;
+    }
+
+    const pct = (n) => (leads > 0 ? Math.round((n / leads) * 1000) / 10 : 0);
+    const step = (n, prev) => (prev > 0 ? Math.round((n / prev) * 1000) / 10 : null);
+
+    const stages = [
+      { key: 'leads', label: 'Leads reçus', hint: 'demandes de devis', count: leads, ofLeads: 100, fromPrev: null },
+      { key: 'quoted', label: 'Devis chiffrés', hint: 'tu as envoyé un devis', count: quoted, ofLeads: pct(quoted), fromPrev: step(quoted, leads) },
+      { key: 'pdf', label: 'PDF consulté', hint: 'le client a vu le devis', count: pdfViewed, ofLeads: pct(pdfViewed), fromPrev: step(pdfViewed, quoted) },
+      { key: 'converted', label: 'Acompte / gagné', hint: 'le client a payé', count: converted, ofLeads: pct(converted), fromPrev: step(converted, pdfViewed) },
+    ];
+
+    // Fuite n°1 = transition avec la plus grosse perte absolue
+    let biggestDrop = null;
+    for (let i = 1; i < stages.length; i += 1) {
+      const lossN = stages[i - 1].count - stages[i].count;
+      if (lossN > 0 && (!biggestDrop || lossN > biggestDrop.lossN)) {
+        const lossPct = stages[i - 1].count > 0 ? Math.round((lossN / stages[i - 1].count) * 100) : 0;
+        biggestDrop = { fromKey: stages[i - 1].key, from: stages[i - 1].label, to: stages[i].label, lossN, lossPct };
+      }
+    }
+
+    // Conseil contextuel selon la fuite n°1
+    const adviceByStage = {
+      quoted: 'Tu ne chiffres pas tous tes leads (ou pas assez vite). Sur le moteur, le premier qui chiffre gagne : vise un devis < 2 h. Regarde le « temps de réponse » ci-dessous.',
+      pdf: 'Tes devis partent mais le client ne les ouvre pas. Soit le canal ne passe pas (email en spam → le SMS lien court aide), soit l\'objet/le SMS ne donne pas envie de cliquer.',
+      converted: 'Le client VOIT le devis mais ne paie pas. C\'est du prix, de la confiance (photos, garantie, avis) ou de la relance/closing. C\'est le levier le plus rentable à travailler.',
+    };
+    const advice = biggestDrop ? (adviceByStage[biggestDrop.to === 'Devis chiffrés' ? 'quoted' : biggestDrop.to === 'PDF consulté' ? 'pdf' : 'converted'] || '') : '';
+
+    const respMedian = median(responseTimes);
+    const respAvg = responseTimes.length ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length : NaN;
+
+    return res.render('admin/engine-quote-funnel', {
+      title: 'Conversion devis · Admin',
+      activeKey: 'engine-quotes',
+      period,
+      periodLabel: periodLabels[period],
+      stages,
+      biggestDrop,
+      advice,
+      unquoted,
+      opened,
+      payClicked,
+      won,
+      lost,
+      leads,
+      conversionGlobalPct: pct(converted),
+      respMedianLabel: fmtDelay(respMedian),
+      respAvgLabel: fmtDelay(respAvg),
+      respSample: responseTimes.length,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
   getEngineQuotesList,
+  getEngineQuoteFunnel,
   getEngineQuoteDetail,
   postChangeStatus,
   postUpdateEngine,
