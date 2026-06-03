@@ -276,20 +276,64 @@ async function processConsigneRefund({ orderId, adminEmail = 'admin', sendEmail 
     return { ok: false, errorCode: 'invalid_order_id', error: 'Identifiant de commande invalide.' };
   }
 
-  const order = await Order.findById(orderId);
+  const now = new Date();
+  const STALE_MS = 2 * 60 * 1000; // un verrou plus vieux que 2 min est périmé
+  const staleBefore = new Date(now.getTime() - STALE_MS);
+
+  /* ── Verrou atomique anti-double-remboursement ──────────────────
+   * On « réserve » la commande AVANT tout appel Mollie. La condition ne
+   * matche QUE si : consigne encaissée, pas déjà remboursée, et aucun
+   * remboursement en cours (ou verrou périmé > 2 min). Un 2e clic ou deux
+   * requêtes concurrentes ne pourront pas matcher → pas de double-débit.
+   * findOneAndUpdate est atomique côté MongoDB. */
+  const order = await Order.findOneAndUpdate(
+    {
+      _id: orderId,
+      'consigne.chargedTotalCents': { $gt: 0 },
+      $and: [
+        { $or: [{ 'consigne.refundedTotalCents': { $exists: false } }, { 'consigne.refundedTotalCents': 0 }] },
+        {
+          $or: [
+            { 'consigne.refundInProgressAt': { $exists: false } },
+            { 'consigne.refundInProgressAt': null },
+            { 'consigne.refundInProgressAt': { $lt: staleBefore } },
+          ],
+        },
+      ],
+    },
+    { $set: { 'consigne.refundInProgressAt': now } },
+    { new: true }
+  );
+
+  /* Claim refusé → on précise pourquoi (UX admin). */
   if (!order) {
-    return { ok: false, errorCode: 'order_not_found', error: 'Commande introuvable.' };
+    const cur = await Order.findById(orderId).select('consigne number').lean();
+    if (!cur) return { ok: false, errorCode: 'order_not_found', error: 'Commande introuvable.' };
+    const charged = (cur.consigne && Number(cur.consigne.chargedTotalCents)) || 0;
+    if (charged <= 0) {
+      return { ok: false, errorCode: 'no_consigne_charged', error: 'Aucune consigne n’a été encaissée à la commande — rien à rembourser.' };
+    }
+    if (cur.consigne && Number(cur.consigne.refundedTotalCents) > 0) {
+      return { ok: false, errorCode: 'consigne_already_refunded', error: 'La consigne a déjà été remboursée.' };
+    }
+    return { ok: false, errorCode: 'refund_in_progress', error: 'Un remboursement de cette consigne est déjà en cours. Patiente quelques secondes puis recharge la page.' };
   }
 
-  const consigne = order.consigne || {};
-  const chargedTotal = Number(consigne.chargedTotalCents) || 0;
-  if (chargedTotal <= 0) {
-    return { ok: false, errorCode: 'no_consigne_charged', error: 'Aucune consigne n’a été encaissée à la commande — rien à rembourser.' };
-  }
+  /* À partir d'ici on DÉTIENT le verrou : en cas d'échec on le relâche
+   * pour permettre une nouvelle tentative. */
+  const releaseLock = async () => {
+    try {
+      await Order.updateOne({ _id: orderId }, { $set: { 'consigne.refundInProgressAt': null } });
+    } catch (relErr) {
+      console.error('[refund-service] Libération du verrou consigne échouée :', relErr && relErr.message ? relErr.message : relErr);
+    }
+  };
 
-  const alreadyRefundedConsigne = Number(consigne.refundedTotalCents) || 0;
+  const chargedTotal = Number(order.consigne.chargedTotalCents) || 0;
+  const alreadyRefundedConsigne = Number(order.consigne.refundedTotalCents) || 0;
   const amount = chargedTotal - alreadyRefundedConsigne;
   if (amount <= 0) {
+    await releaseLock();
     return { ok: false, errorCode: 'consigne_already_refunded', error: 'La consigne a déjà été remboursée.' };
   }
 
@@ -297,6 +341,7 @@ async function processConsigneRefund({ orderId, adminEmail = 'admin', sendEmail 
   const alreadyRefundedAll = totalRefundedCents(order);
   const orderTotal = Number(order.totalCents) || 0;
   if (alreadyRefundedAll + amount > orderTotal) {
+    await releaseLock();
     return {
       ok: false,
       errorCode: 'amount_exceeds_total',
@@ -324,14 +369,13 @@ async function processConsigneRefund({ orderId, adminEmail = 'admin', sendEmail 
       providerStatus = 'manual';
     }
   } catch (providerErr) {
+    await releaseLock();
     return {
       ok: false,
       errorCode: 'provider_error',
       error: `Le remboursement Mollie a échoué : ${providerErr && providerErr.message ? providerErr.message : 'erreur inconnue'}.`,
     };
   }
-
-  const now = new Date();
 
   /* Marque les lignes de consigne encaissées non encore remboursées. */
   (order.consigne.lines || []).forEach((l) => {
@@ -347,6 +391,7 @@ async function processConsigneRefund({ orderId, adminEmail = 'admin', sendEmail 
   order.consigne.refundedAt = now;
   order.consigne.refundMethod = method;
   order.consigne.refundProviderRefundId = providerRefundId;
+  order.consigne.refundInProgressAt = null; // succès → on libère le verrou
 
   /* Trace compta — caution hors-TVA, donc aucun avoir TVA généré. */
   const refundEntry = {

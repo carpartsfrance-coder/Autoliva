@@ -351,6 +351,9 @@ const orderSchema = new mongoose.Schema(
       refundedAt: { type: Date, default: null },
       refundMethod: { type: String, default: '', trim: true },
       refundProviderRefundId: { type: String, default: '', trim: true },
+      /* Verrou anti-double-remboursement : posé avant l'appel Mollie,
+       * relâché en cas d'échec, périmé automatiquement après 2 min. */
+      refundInProgressAt: { type: Date, default: null },
     },
     shipments: { type: [shipmentSchema], default: [] },
     refunds: { type: [refundSchema], default: [] },
