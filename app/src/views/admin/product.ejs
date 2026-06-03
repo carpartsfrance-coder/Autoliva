@@ -431,6 +431,10 @@
                 <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="consigneDelayDays" name="consigneDelayDays" type="number" min="0" max="3650" value="<%= form && typeof form.consigneDelayDays !== 'undefined' ? form.consigneDelayDays : '30' %>" />
               </div>
             </div>
+            <div class="mt-4 flex items-start gap-3">
+              <input class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary" id="consigneChargeUpfront" name="consigneChargeUpfront" type="checkbox" <%= form && form.consigneChargeUpfront ? 'checked' : '' %> />
+              <label class="text-sm text-slate-600 dark:text-gray-300" for="consigneChargeUpfront"><span class="font-semibold">Encaisser la consigne à la commande</span> (caution hors-TVA, remboursée au retour du core). Si décoché : modèle actuel « sans caution », facturée seulement en cas de non-retour.</label>
+            </div>
           </div>
 
           <div class="md:col-span-4 md:order-14">

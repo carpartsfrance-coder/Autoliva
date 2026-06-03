@@ -144,8 +144,26 @@ function normalizeProduct(product) {
       enabled: consigneEnabled,
       amountCents: consigneAmountCents,
       delayDays: consigneDelayDays,
+      chargeUpfront: rawConsigne.chargeUpfront === true,
     },
   };
+}
+
+/**
+ * Somme des consignes ENCAISSÉES à la commande (produits avec
+ * consigne.enabled && consigne.chargeUpfront), en centimes.
+ * @param {Array<{product:Object, quantity:number}>} items
+ */
+function computeUpfrontConsigneCents(items) {
+  let total = 0;
+  for (const it of items || []) {
+    const p = it && it.product;
+    if (p && p.consigne && p.consigne.enabled && p.consigne.chargeUpfront
+      && Number.isFinite(p.consigne.amountCents) && p.consigne.amountCents > 0) {
+      total += Math.floor(p.consigne.amountCents) * (Number(it.quantity) || 1);
+    }
+  }
+  return total;
 }
 
 function formatEuro(totalCents) {
@@ -914,6 +932,7 @@ async function getShipping(req, res, next) {
     checkout.billingAddressId = guestCheckout ? '' : selectedBillingAddressId;
 
     const { viewItems, itemsTotalCents } = await buildCartView(dbConnected, cart);
+    const consigneChargeCents = computeUpfrontConsigneCents(viewItems);
 
     if (viewItems.length === 0) {
       return res.redirect('/panier');
@@ -956,6 +975,7 @@ async function getShipping(req, res, next) {
       shippingCostCents: selectedMethod.priceCents,
       clientDiscountPercent: userDiscountPercent,
       promo,
+      consigneChargeCents,
     });
 
     return res.render('checkout/shipping', {
@@ -992,6 +1012,7 @@ async function getShipping(req, res, next) {
       promoCode: appliedPromoCode,
       promoDiscountCents: computed.promoDiscountCents,
       itemsTotalAfterDiscountCents: computed.itemsTotalAfterDiscountCents,
+      consigneChargeCents: computed.consigneChargeCents,
     });
   } catch (err) {
    return next(err);
@@ -1412,6 +1433,7 @@ async function getPayment(req, res, next) {
     const shippingMethodKey = typeof checkout.shippingMethod === 'string' ? checkout.shippingMethod : '';
 
     const { viewItems, itemsTotalCents } = await buildCartView(dbConnected, cart);
+    const consigneChargeCents = computeUpfrontConsigneCents(viewItems);
 
     if (viewItems.length === 0) {
       return res.redirect('/panier');
@@ -1523,6 +1545,7 @@ async function getPayment(req, res, next) {
       shippingCostCents: selectedMethod.priceCents,
       clientDiscountPercent,
       promo,
+      consigneChargeCents,
     });
 
     return res.render('checkout/payment', {
@@ -1805,6 +1828,7 @@ async function postPayment(req, res, next) {
     const cloningCheckItems = [];
     let itemsTotalCents = 0;
     let hasConsigne = false;
+    let consigneChargeCents = 0;
     let hasStandaloneCloning = false;
 
     for (const item of rawItems) {
@@ -1848,6 +1872,9 @@ async function postPayment(req, res, next) {
 
       if (product.consigne && product.consigne.enabled && Number.isFinite(product.consigne.amountCents) && product.consigne.amountCents > 0) {
         hasConsigne = true;
+        const upfront = product.consigne.chargeUpfront === true;
+        const lineConsigneCents = Math.floor(product.consigne.amountCents) * item.quantity;
+        if (upfront) consigneChargeCents += lineConsigneCents;
         consigneLines.push({
           productId: new mongoose.Types.ObjectId(String(product._id)),
           name: product.name,
@@ -1858,6 +1885,8 @@ async function postPayment(req, res, next) {
           startAt: null,
           dueAt: null,
           receivedAt: null,
+          charged: upfront,
+          chargedCents: upfront ? lineConsigneCents : 0,
         });
       }
 
@@ -1924,6 +1953,7 @@ async function postPayment(req, res, next) {
       shippingCostCents: selectedMethod.priceCents,
       clientDiscountPercent: Number.isFinite(user.discountPercent) ? user.discountPercent : 0,
       promo,
+      consigneChargeCents,
     });
 
     const shippingCostCents = computed.shippingCostCents;
@@ -1962,7 +1992,7 @@ async function postPayment(req, res, next) {
           mollieProfileId: paymentProvider === 'mollie' ? getMollieProfileId() : '',
           totalCents,
           items: orderItems,
-          consigne: { lines: consigneLines },
+          consigne: { lines: consigneLines, chargedTotalCents: consigneChargeCents },
           shippingAddress: addressSnapshot,
           billingAddress: billingAddressSnapshot,
           shippingMethod: selectedMethod.id,

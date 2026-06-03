@@ -329,6 +329,12 @@
               <span class="text-slate-500">Livraison</span>
               <span class="font-semibold <%= shippingCostCents === 0 ? 'text-green-600' : 'text-slate-700' %>"><%= shippingCostCents === 0 ? 'Gratuit' : (shippingCostCents / 100).toFixed(2).replace('.', ',') + ' €' %></span>
             </div>
+            <% if (typeof consigneChargeCents !== 'undefined' && consigneChargeCents > 0) { %>
+              <div class="flex items-start justify-between gap-3">
+                <span class="text-slate-500">Consigne <span class="block text-[11px] text-emerald-600">remboursée au retour</span></span>
+                <span class="font-semibold text-slate-700"><%= (consigneChargeCents / 100).toFixed(2).replace('.', ',') %> €</span>
+              </div>
+            <% } %>
           </div>
 
           <div class="mt-4 pt-4 border-t-2 border-slate-200 flex items-center justify-between">
