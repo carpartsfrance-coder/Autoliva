@@ -88,19 +88,19 @@ async function sendSms({ to, text } = {}) {
   const apiKey = getTrimmedString(process.env.BREVO_API_KEY);
   if (!apiKey) {
     console.error('[SMS] BREVO_API_KEY manquant : SMS non envoyé');
-    return { ok: false, reason: 'missing_api_key' };
+    return { ok: false, reason: 'missing_api_key', message: 'Clé API Brevo absente (BREVO_API_KEY non configurée sur le serveur).' };
   }
 
   const phone = normalizePhoneFR(to);
   if (!phone) {
     console.error('[SMS] Numéro invalide ou absent :', to);
-    return { ok: false, reason: 'invalid_phone' };
+    return { ok: false, reason: 'invalid_phone', message: 'Numéro de téléphone invalide ou absent.' };
   }
 
   const sender = getTrimmedString(process.env.SMS_SENDER_ID) || 'CarParts';
   const content = getTrimmedString(text);
   if (!content) {
-    return { ok: false, reason: 'empty_body' };
+    return { ok: false, reason: 'empty_body', message: 'Le texte du SMS est vide.' };
   }
 
   // En dev, rediriger vers un numéro de test
@@ -145,12 +145,35 @@ async function sendSms({ to, text } = {}) {
     }
 
     const errorBody = await res.text();
+    let parsed = null;
+    try { parsed = JSON.parse(errorBody); } catch (_) { /* texte brut */ }
+    const message = brevoFriendlyMessage(res.status, parsed, errorBody);
     console.error('[SMS] Brevo refusé :', res.status, res.statusText, errorBody ? errorBody.slice(0, 500) : '');
-    return { ok: false, reason: 'brevo_error', status: res.status };
+    return { ok: false, reason: 'brevo_error', status: res.status, message };
   } catch (err) {
     console.error('[SMS] Erreur envoi :', err && err.message ? err.message : err);
-    return { ok: false, reason: 'network_error' };
+    return { ok: false, reason: 'network_error', message: 'Erreur réseau en contactant Brevo (réessaie).' };
   }
+}
+
+/** Traduit une erreur Brevo en message clair pour le back-office. */
+function brevoFriendlyMessage(status, parsed, rawBody) {
+  const code = parsed && parsed.code ? String(parsed.code) : '';
+  const msg = parsed && parsed.message ? String(parsed.message) : '';
+  const hay = `${code} ${msg} ${rawBody || ''}`.toLowerCase();
+  if (status === 402 || hay.includes('credit')) {
+    return 'Crédits SMS épuisés sur ton compte Brevo. Recharge des crédits SMS (Brevo → SMS → Crédits), puis réessaie.';
+  }
+  if (status === 401 || hay.includes('unauthorized') || hay.includes('api key')) {
+    return 'Clé API Brevo invalide ou expirée (variable BREVO_API_KEY).';
+  }
+  if (hay.includes('sender')) {
+    return 'Expéditeur SMS refusé par Brevo (SMS_SENDER_ID) — il doit être validé dans ton compte Brevo.';
+  }
+  if (status === 400) {
+    return 'Brevo a refusé la requête : ' + (msg || 'numéro ou paramètre invalide') + '.';
+  }
+  return "Brevo a refusé l'envoi" + (status ? ` (HTTP ${status})` : '') + (msg ? ` : ${msg}` : '') + '.';
 }
 
 // ─── Variables des SMS (le texte vient désormais du catalogue paramétrable) ──

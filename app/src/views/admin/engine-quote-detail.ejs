@@ -265,7 +265,7 @@ function dt(v) {
             </div>
           </div>
 
-          <!-- Coûts de contrôle (auto) : port de test + MO de test → frais annexes -->
+          <!-- Coûts de contrôle (port de test + MO de test) — TOUJOURS inclus dans la marge -->
           <div class="flex flex-wrap items-end gap-3 mb-4 p-3 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/40">
             <div>
               <label class="block text-xs font-semibold text-slate-500 mb-1">Port de test (€)</label>
@@ -279,11 +279,11 @@ function dt(v) {
               <label class="block text-xs font-semibold text-slate-500 mb-1">Temps test (h)</label>
               <input type="number" step="0.5" min="0" data-ctrl-hours value="<%= controlCostDefaults.testHours %>" class="w-20 rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
             </div>
-            <button type="button" data-apply-ctrl class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg text-sm inline-flex items-center gap-1.5">
-              <span class="material-symbols-outlined" style="font-size:16px">build</span>
-              Inclure dans les frais (<span data-ctrl-total>—</span> €)
-            </button>
-            <p class="basis-full text-[11px] text-slate-400">Port fournisseur→atelier + ta main-d'œuvre de test (taux × temps). « Inclure » remplit les frais annexes → ta marge affichée devient ta <strong>vraie</strong> marge. La livraison client (refacturée) n'est pas comptée.</p>
+            <div class="pb-2">
+              <div class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Coûts de contrôle inclus</div>
+              <div class="text-lg font-bold font-mono text-emerald-700"><span data-ctrl-total>—</span> €</div>
+            </div>
+            <p class="basis-full text-[11px] text-slate-400"><strong>Toujours déduits de ta marge</strong> (port fournisseur→atelier + ta main-d'œuvre de test) → la marge affichée est ta <strong>vraie</strong> marge, sans rien cliquer. Modifiable ici pour un moteur particulier. La livraison client (refacturée) n'est pas comptée.</p>
           </div>
 
           <!-- Aide au calcul du prix de vente depuis une marge cible -->
@@ -922,11 +922,21 @@ function dt(v) {
     if (pct >= 15) return 'text-amber-700';
     return 'text-rose-700';
   }
+  // Coûts de contrôle (port test + MO) — TOUJOURS inclus dès qu'un moteur est
+  // chiffré. Lit les champs via querySelector (pas de const → pas de souci
+  // d'ordre d'initialisation).
+  function controlCost(purchase) {
+    if (!(purchase > 0)) return 0;
+    const port = num(root.querySelector('[data-ctrl-port]'));
+    const rate = num(root.querySelector('[data-ctrl-rate]'));
+    const hours = num(root.querySelector('[data-ctrl-hours]'));
+    return port + rate * hours;
+  }
   function recompute() {
     const purchase = num(root.querySelector('[name=purchasePrice]'));
     const fees = num(root.querySelector('[name=additionalFees]'));
     const sell = num(root.querySelector('[name=sellPrice]'));
-    const cost = purchase + fees;
+    const cost = purchase + fees + controlCost(purchase);
     const marginEur = sell - cost;
     const marginPct = sell > 0 ? (marginEur / sell) * 100 : 0;
     const ttc = sell * (1 + vat / 100);
@@ -952,23 +962,19 @@ function dt(v) {
   inputs.forEach(el => el.addEventListener('input', recompute));
   recompute();
 
-  // ─── Coûts de contrôle (port de test + MO de test) → frais annexes ───
+  // ─── Coûts de contrôle (port de test + MO de test) — affichage + live ───
   const ctrlPort = root.querySelector('[data-ctrl-port]');
   const ctrlRate = root.querySelector('[data-ctrl-rate]');
   const ctrlHours = root.querySelector('[data-ctrl-hours]');
   const ctrlTotalEl = root.querySelector('[data-ctrl-total]');
-  const applyCtrlBtn = root.querySelector('[data-apply-ctrl]');
-  const feesInput = root.querySelector('[name=additionalFees]');
-  function ctrlTotal() { return num(ctrlPort) + num(ctrlRate) * num(ctrlHours); }
   function refreshCtrlTotal() {
-    if (ctrlTotalEl) ctrlTotalEl.textContent = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(ctrlTotal());
+    const raw = num(ctrlPort) + num(ctrlRate) * num(ctrlHours);
+    if (ctrlTotalEl) ctrlTotalEl.textContent = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(raw);
   }
-  [ctrlPort, ctrlRate, ctrlHours].forEach(function (el) { if (el) el.addEventListener('input', refreshCtrlTotal); });
-  refreshCtrlTotal();
-  if (applyCtrlBtn && feesInput) applyCtrlBtn.addEventListener('click', function () {
-    feesInput.value = (Math.round(ctrlTotal() * 100) / 100).toFixed(2);
-    feesInput.dispatchEvent(new Event('input', { bubbles: true })); // recalc marge + autosave
+  [ctrlPort, ctrlRate, ctrlHours].forEach(function (el) {
+    if (el) el.addEventListener('input', function () { refreshCtrlTotal(); recompute(); });
   });
+  refreshCtrlTotal();
 
   // ─── Calcul auto du prix de vente depuis une marge cible ───
   // Marge = taux de marque (sur le prix de vente) → vente = coût / (1 - m/100),
@@ -979,8 +985,8 @@ function dt(v) {
   function computeSellFromMargin() {
     const purchase = num(root.querySelector('[name=purchasePrice]'));
     const fees = num(root.querySelector('[name=additionalFees]'));
-    const cost = purchase + fees;
-    if (cost <= 0) { alert('Renseigne d\'abord le prix d\'achat (et les frais annexes).'); return; }
+    if (purchase <= 0) { alert('Renseigne d\'abord le prix d\'achat.'); return; }
+    const cost = purchase + fees + controlCost(purchase); // marge cible calculée sur le coût RÉEL (contrôle inclus)
     let m = Number(String(targetInput.value).replace(',', '.')) || 0;
     m = Math.max(0, Math.min(95, m)); // borne : évite la division par ~0 à 100%
     const sell = cost / (1 - m / 100);

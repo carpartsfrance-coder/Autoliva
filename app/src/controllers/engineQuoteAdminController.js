@@ -84,8 +84,13 @@ function fmt(n) {
 
 function calcMargin(p) {
   if (!p) return { marginEur: 0, marginPct: 0 };
+  const purchase = Number(p.purchasePrice) || 0;
+  const fees = Number(p.additionalFees) || 0;
   const sell = Number(p.sellPrice) || 0;
-  const cost = (Number(p.purchasePrice) || 0) + (Number(p.additionalFees) || 0);
+  // Coûts de contrôle (port test + MO) TOUJOURS inclus dès qu'un moteur est
+  // chiffré → la marge affichée partout (liste, funnel, détail) est la VRAIE marge.
+  const control = purchase > 0 ? CONTROL_COST_TOTAL : 0;
+  const cost = purchase + fees + control;
   const marginEur = sell - cost;
   const marginPct = sell > 0 ? (marginEur / sell) * 100 : 0;
   return { marginEur, marginPct };
@@ -102,6 +107,7 @@ function getMarginColor(pct) {
 // afficher la VRAIE marge. La livraison finale (refacturée au client) n'y est
 // PAS — ce n'est pas un coût. Valeurs Killian (2026-06) ; modifiables ici.
 const CONTROL_COST_DEFAULTS = { portTest: 140, hourlyRate: 100, testHours: 2 };
+const CONTROL_COST_TOTAL = CONTROL_COST_DEFAULTS.portTest + CONTROL_COST_DEFAULTS.hourlyRate * CONTROL_COST_DEFAULTS.testHours;
 
 function safeNumber(value, fallback = 0) {
   const n = Number(String(value || '').replace(',', '.'));
