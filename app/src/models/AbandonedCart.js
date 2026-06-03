@@ -62,6 +62,8 @@ const engineQuoteSentSchema = new mongoose.Schema(
     payClickCount: { type: Number, default: 0 }, // nombre total de clics paiement
     pdfViewedAt: { type: Date, default: null },  // 1ère vue du PDF en ligne (lien tracké)
     pdfViewCount: { type: Number, default: 0 },  // nombre total de vues PDF en ligne
+    /** Code court pour le lien SMS de marque : autoliva.com/d/<shortCode>. */
+    shortCode: { type: String, default: '', index: true },
     /** Snapshot des photos jointes au moment de l'envoi (URLs GridFS) */
     attachedPhotos: {
       type: [{ id: String, url: String, filename: String, category: String }],

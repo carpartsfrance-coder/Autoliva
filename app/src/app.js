@@ -539,6 +539,9 @@ app.use('/api/blog', require('./routes/api/blogImport'));
 // Devis moteurs API publique : webhook Mollie acompte + pixel tracking email
 app.use('/api/devis-moteurs', require('./routes/api/engineQuote'));
 
+// Lien court de marque pour le SMS de devis : /d/<shortCode> → vue trackée + PDF
+app.get('/d/:code', require('./controllers/engineQuotePublicController').getShortDevisLink);
+
 // SAV — fichiers stockés en MongoDB (GridFS), avec auth contextuelle
 app.use('/sav-files', require('./routes/savFiles'));
 
