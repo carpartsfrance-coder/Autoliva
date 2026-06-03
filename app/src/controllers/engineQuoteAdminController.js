@@ -97,6 +97,12 @@ function getMarginColor(pct) {
   return 'text-rose-700';
 }
 
+// Coûts de CONTRÔLE absorbés par moteur (port test fournisseur→atelier + MO
+// de test). Servent à pré-remplir les « frais annexes » du calculateur pour
+// afficher la VRAIE marge. La livraison finale (refacturée au client) n'y est
+// PAS — ce n'est pas un coût. Valeurs Killian (2026-06) ; modifiables ici.
+const CONTROL_COST_DEFAULTS = { portTest: 140, hourlyRate: 100, testHours: 2 };
+
 function safeNumber(value, fallback = 0) {
   const n = Number(String(value || '').replace(',', '.'));
   return isNaN(n) ? fallback : n;
@@ -270,6 +276,7 @@ async function getEngineQuoteDetail(req, res, next) {
     return res.render('admin/engine-quote-detail', {
       title: `Devis ${cart.requested && cart.requested.ref || ''} · Admin`,
       activeKey: 'engine-quotes',
+      controlCostDefaults: CONTROL_COST_DEFAULTS,
       cart: {
         id: String(cart._id),
         displayName,
