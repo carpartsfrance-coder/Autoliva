@@ -110,8 +110,11 @@ const engineQuoteSchema = new mongoose.Schema(
     pricing: {
       purchasePrice: { type: Number, default: 0, min: 0 },  // HT en €
       additionalFees: { type: Number, default: 0, min: 0 }, // port, palette, frais
-      sellPrice: { type: Number, default: 0, min: 0 },      // HT en €
+      sellPrice: { type: Number, default: 0, min: 0 },      // HT (régime normal) OU prix tout compris (régime marge)
       vatRate: { type: Number, default: 20, min: 0, max: 100 },
+      // Régime de TVA : 'margin' = TVA sur marge (art. 297 A CGI, moteurs d'occasion
+      // achetés à des particuliers/casses), 'normal' = TVA 20% sur le prix total.
+      vatScheme: { type: String, enum: ['normal', 'margin'], default: 'margin' },
     },
     photos: {
       engine: { type: [engineQuotePhotoSchema], default: [] },
