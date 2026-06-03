@@ -70,7 +70,14 @@ async function postSmsTest(req, res) {
     const text = renderTemplate(tpl, entry.example);
     const r = await sendSms({ to: phone, text });
     if (r && r.ok) return res.json({ ok: true, text });
-    return res.status(502).json({ ok: false, error: (r && r.reason) || 'Échec de l’envoi', text });
+    // Remonte le message clair (ex. « Crédits SMS épuisés ») au lieu du code brut.
+    return res.status(502).json({
+      ok: false,
+      error: (r && r.message) || (r && r.reason) || 'Échec de l’envoi',
+      reason: r && r.reason,
+      status: r && r.status,
+      text,
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: (err && err.message) || 'Erreur' });
   }
