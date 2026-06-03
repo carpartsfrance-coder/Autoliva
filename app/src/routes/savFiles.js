@@ -8,7 +8,11 @@
  *   3. Suivi invité (req.session.savGuest) si le numéro de ticket en session
  *      correspond à `metadata.ticketNumero`.
  *   4. Magic link (?tk=…) si le token HMAC correspond au ticket+email.
- *   5. Fichier sans `ticketNumero` (ex : procédures internes) → admin requis.
+ *   5. PDF de devis moteur (`metadata.kind === 'engine_quote_pdf'`) → servi au
+ *      porteur du lien (envoyé au client par email/SMS), même modèle de
+ *      confiance que le reste du parcours devis public (identifiants GridFS
+ *      non devinables). Aucun compte requis.
+ *   6. Fichier sans `ticketNumero` (ex : procédures internes) → admin requis.
  *
  * Querystring optionnel `?download=1` → force `Content-Disposition: attachment`.
  */
@@ -61,6 +65,11 @@ router.get('/:id', async (req, res) => {
     // --- Auth ---
     let allowed = false;
     if (await isAdmin(req)) {
+      allowed = true;
+    } else if (meta.kind === 'engine_quote_pdf') {
+      // PDF de devis moteur : destiné à être ouvert par le client via le lien
+      // (email/SMS). L'identifiant GridFS non devinable fait office de jeton,
+      // comme le reste du parcours devis public. Pas de compte requis.
       allowed = true;
     } else if (ticketNumero) {
       if (await userOwnsTicket(req, ticketNumero)) allowed = true;
