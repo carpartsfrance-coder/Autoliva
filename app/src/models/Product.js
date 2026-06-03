@@ -25,6 +25,18 @@ const productSchema = new mongoose.Schema(
       amountCents: { type: Number, default: 0, min: 0 },
       delayDays: { type: Number, default: 30, min: 0, max: 3650 },
     },
+
+    /* Pièces incluses / non incluses (surtout moteurs reconditionnés).
+     * Optionnels et vides par défaut → aucun impact sur les produits
+     * existants ; les blocs ne s'affichent que s'ils sont remplis. */
+    inclusions: { type: [String], default: [] },
+    exclusions: { type: [String], default: [] },
+
+    /* Garantie produit (mois + texte libre). Optionnelle. */
+    warranty: {
+      months: { type: Number, default: 0, min: 0 },
+      text: { type: String, default: '', trim: true },
+    },
     inStock: { type: Boolean, default: true },
     stockQty: { type: Number, default: null, min: 0 },
     /* isPublished : drapeau de publication SEO. true par défaut (compat avec
