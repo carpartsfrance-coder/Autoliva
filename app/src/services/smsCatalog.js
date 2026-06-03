@@ -95,31 +95,31 @@ const CATALOG = [
   // ─────────── MOTEUR ───────────
   {
     key: 'moteur_ack', category: 'Moteur', label: 'Accusé de réception (devis)',
-    defaultTemplate: "Autoliva : demande de devis {quoteRef} bien enregistrée ! Un technicien vous recontacte sous 24h ouvrées (email ou tel). Urgent ? {phoneMoteur}",
+    defaultTemplate: "Autoliva : demande de devis {quoteRef} bien enregistrée !\nUn technicien vous recontacte sous 24h ouvrées (email ou tel).\nUrgent ? {phoneMoteur}",
     vars: [['quoteRef', 'N° de dossier devis'], ['phoneMoteur', 'Téléphone commercial moteurs']],
     example: { quoteRef: 'AUT-2026-06-7AB12', phoneMoteur: '04 65 84 85 39' },
   },
   {
     key: 'moteur_devis', category: 'Moteur', label: 'Devis envoyé (notification + lien)',
-    defaultTemplate: "Autoliva : votre devis {quoteRef} est disponible ({totalTtc}) ! Le voir : {pdfUrl} - Valable 24h, stock limité. Questions ? {phoneMoteur}",
+    defaultTemplate: "Autoliva : votre devis {quoteRef} est disponible ({totalTtc}) !\nLe voir : {pdfUrl}\nValable 24h, stock limité.\nQuestions ? {phoneMoteur}",
     vars: [['quoteRef', 'N° de dossier devis'], ['totalTtc', 'Montant total TTC'], ['pdfUrl', 'Lien court pour voir le devis (tracké)'], ['phoneMoteur', 'Téléphone commercial moteurs']],
     example: { quoteRef: 'AUT-2026-06-7AB12', totalTtc: '1466,40 €', pdfUrl: 'https://autoliva.com/d/Xa7Qk2', phoneMoteur: '04 65 84 85 39' },
   },
   {
     key: 'moteur_relance_j7', category: 'Moteur', label: 'Relance devis J+7',
-    defaultTemplate: "Autoliva : votre devis {quoteRef} (moteur) est toujours d'actualité. Une question ou réserver le moteur ? Appelez {phoneMoteur}",
+    defaultTemplate: "Autoliva : votre devis {quoteRef} (moteur) est toujours d'actualité.\nUne question ou réserver le moteur ? Appelez {phoneMoteur}",
     vars: [['quoteRef', 'N° de dossier devis'], ['phoneMoteur', 'Téléphone commercial moteurs']],
     example: { quoteRef: 'AUT-2026-06-7AB12', phoneMoteur: '04 65 84 85 39' },
   },
   {
     key: 'moteur_relance_j14', category: 'Moteur', label: 'Relance devis J+14 (dernier rappel)',
-    defaultTemplate: "Autoliva : dernier rappel pour votre devis {quoteRef}. Sans nouvelle on ferme le dossier. Toujours intéressé ? Appelez {phoneMoteur}",
+    defaultTemplate: "Autoliva : dernier rappel pour votre devis {quoteRef}.\nSans nouvelle on ferme le dossier.\nToujours intéressé ? Appelez {phoneMoteur}",
     vars: [['quoteRef', 'N° de dossier devis'], ['phoneMoteur', 'Téléphone commercial moteurs']],
     example: { quoteRef: 'AUT-2026-06-7AB12', phoneMoteur: '04 65 84 85 39' },
   },
   {
     key: 'moteur_expedition', category: 'Moteur', label: 'Expédition moteur',
-    defaultTemplate: "Autoliva : votre moteur ({quoteRef}) est expédié !{trackingPart} Question ? {phoneMoteur}",
+    defaultTemplate: "Autoliva : votre moteur ({quoteRef}) est expédié !{trackingPart}\nQuestion ? {phoneMoteur}",
     vars: [['quoteRef', 'N° de dossier devis'], ['trackingPart', 'Suivi (transporteur + n° + lien)'], ['phoneMoteur', 'Téléphone commercial moteurs']],
     example: { quoteRef: 'AUT-2026-06-7AB12', trackingPart: ' Suivi DPD : XYZ789', phoneMoteur: '04 65 84 85 39' },
   },
