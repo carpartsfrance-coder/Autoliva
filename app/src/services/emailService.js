@@ -2,6 +2,7 @@ const {
   buildOrderConfirmationEmail,
   buildConsigneStartEmail,
   buildConsigneReceivedEmail,
+  buildConsigneRefundEmail,
   buildShipmentTrackingEmail,
   buildConsigneReminderSoonEmail,
   buildConsigneOverdueEmail,
@@ -325,6 +326,13 @@ async function sendConsigneReceivedEmail({ order, user } = {}) {
   return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
 }
 
+async function sendConsigneRefundEmail({ order, user, amountCents, method } = {}) {
+  if (!order || !user || !user.email) return { ok: false, reason: 'missing_data' };
+  const baseUrl = getBaseUrl();
+  const built = buildConsigneRefundEmail({ order, user, amountCents, method, baseUrl });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
+}
+
 async function sendShipmentTrackingEmail({ order, user, shipment } = {}) {
   if (!order || !user || !user.email || !shipment) return { ok: false, reason: 'missing_data' };
   const baseUrl = getBaseUrl();
@@ -638,6 +646,7 @@ module.exports = {
   sendOrderConfirmationEmail,
   sendConsigneStartEmail,
   sendConsigneReceivedEmail,
+  sendConsigneRefundEmail,
   sendShipmentTrackingEmail,
   sendConsigneReminderSoonEmail,
   sendConsigneOverdueEmail,

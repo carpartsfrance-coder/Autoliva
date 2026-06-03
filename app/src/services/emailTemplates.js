@@ -439,6 +439,46 @@ ${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}`;
   };
 }
 
+function buildConsigneRefundEmail({ order, user, amountCents, method, baseUrl } = {}) {
+  const number = order && order.number ? String(order.number) : '';
+  const orderId = order && order._id ? String(order._id) : '';
+  const firstName = user && user.firstName ? String(user.firstName).trim() : '';
+  const amount = formatEuro(Number.isFinite(amountCents) ? amountCents : 0);
+
+  const subject = number ? `Consigne remboursée - commande #${number}` : 'Consigne remboursée';
+  const orderUrl = baseUrl && orderId ? `${baseUrl.replace(/\/$/, '')}/compte/commandes/${encodeURIComponent(orderId)}` : '';
+
+  const delayNote = method === 'mollie'
+    ? 'Le montant réapparaîtra sur le moyen de paiement utilisé lors de la commande, généralement sous 1 à 3 jours ouvrés selon votre banque.'
+    : 'Le virement de remboursement vous a été adressé.';
+
+  const bodyHtml = `
+<div style="font-size:16px;font-weight:900;">${firstName ? `Bonne nouvelle ${escapeHtml(firstName)} !` : 'Bonne nouvelle !'}</div>
+<div style="margin-top:10px;font-size:14px;line-height:1.6;color:#334155;">
+  Nous avons bien reçu votre ancien organe (core)${number ? ` pour la commande <strong>#${escapeHtml(number)}</strong>` : ''}.
+  Votre <strong>consigne</strong> vous est donc intégralement remboursée.
+</div>
+
+<div style="margin-top:14px;padding:16px 18px;border:1px solid #dcfce7;background:#f0fdf4;border-radius:14px;color:#14532d;">
+  <div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#16a34a;">Montant remboursé</div>
+  <div style="margin-top:4px;font-size:26px;font-weight:900;color:#14532d;">${escapeHtml(amount)}</div>
+  <div style="margin-top:8px;font-size:12px;line-height:1.6;color:#15803d;">${escapeHtml(delayNote)}</div>
+</div>
+
+${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}`;
+
+  return {
+    subject,
+    html: renderEmailLayout({
+      title: subject,
+      preheader: `Votre consigne de ${amount} vous a été remboursée`,
+      bodyHtml,
+      baseUrl,
+    }),
+    text: `Votre consigne de ${amount} vous a été remboursée pour la commande${number ? ` #${number}` : ''}. ${delayNote}`,
+  };
+}
+
 function buildShipmentTrackingEmail({ order, user, shipment, baseUrl, meta } = {}) {
   const number = order && order.number ? String(order.number) : '';
   const orderId = order && order._id ? String(order._id) : '';
@@ -1338,6 +1378,7 @@ module.exports = {
   buildOrderConfirmationEmail,
   buildConsigneStartEmail,
   buildConsigneReceivedEmail,
+  buildConsigneRefundEmail,
   buildShipmentTrackingEmail,
   buildConsigneReminderSoonEmail,
   buildConsigneOverdueEmail,

@@ -256,6 +256,146 @@ async function processOrderRefund({
 }
 
 /* ════════════════════════════════════════════════════════════════
+ * Remboursement de la CONSIGNE (caution hors-TVA) au retour du core
+ * ════════════════════════════════════════════════════════════════
+ *
+ * Distinct de processOrderRefund — un retour de caution n'est PAS un
+ * remboursement commercial :
+ *   - rembourse uniquement la consigne ENCAISSÉE (consigne.chargedTotalCents)
+ *   - n'émet PAS d'avoir TVA (la caution n'était pas du CA taxable)
+ *   - ne bascule PAS le statut commande en partially_refunded (le client
+ *     garde sa pièce ; l'échange s'est déroulé normalement)
+ *   - marque consigne.lines[].refundedAt/refundedCents + consigne.refunded*
+ *   - trace tout de même dans Order.refunds[] (kind:'consigne') pour la compta
+ *
+ * Validation MANUELLE : déclenché par l'admin depuis la fiche commande
+ * une fois l'ancien organe physiquement reçu.
+ */
+async function processConsigneRefund({ orderId, adminEmail = 'admin', sendEmail = true } = {}) {
+  if (!mongoose.Types.ObjectId.isValid(String(orderId))) {
+    return { ok: false, errorCode: 'invalid_order_id', error: 'Identifiant de commande invalide.' };
+  }
+
+  const order = await Order.findById(orderId);
+  if (!order) {
+    return { ok: false, errorCode: 'order_not_found', error: 'Commande introuvable.' };
+  }
+
+  const consigne = order.consigne || {};
+  const chargedTotal = Number(consigne.chargedTotalCents) || 0;
+  if (chargedTotal <= 0) {
+    return { ok: false, errorCode: 'no_consigne_charged', error: 'Aucune consigne n’a été encaissée à la commande — rien à rembourser.' };
+  }
+
+  const alreadyRefundedConsigne = Number(consigne.refundedTotalCents) || 0;
+  const amount = chargedTotal - alreadyRefundedConsigne;
+  if (amount <= 0) {
+    return { ok: false, errorCode: 'consigne_already_refunded', error: 'La consigne a déjà été remboursée.' };
+  }
+
+  /* Sécurité : ne jamais dépasser le total remboursable de la commande. */
+  const alreadyRefundedAll = totalRefundedCents(order);
+  const orderTotal = Number(order.totalCents) || 0;
+  if (alreadyRefundedAll + amount > orderTotal) {
+    return {
+      ok: false,
+      errorCode: 'amount_exceeds_total',
+      error: `Le montant de la consigne (${(amount / 100).toFixed(2)} €) dépasse le plafond remboursable restant de la commande.`,
+    };
+  }
+
+  /* Méthode : Mollie si paiement capturé, sinon manuel (virement à faire). */
+  const method = order.molliePaymentId && order.molliePaymentStatus === 'paid' ? 'mollie' : 'manual';
+  let providerRefundId = '';
+  let providerStatus = '';
+  let providerRawResponse = null;
+
+  try {
+    if (method === 'mollie') {
+      const resp = await mollie.createRefund({
+        paymentId: order.molliePaymentId,
+        amountCents: amount,
+        description: `Remboursement consigne (commande ${order.number})`,
+      });
+      providerRefundId = resp && resp.id ? String(resp.id) : '';
+      providerStatus = resp && resp.status ? String(resp.status) : '';
+      providerRawResponse = resp;
+    } else {
+      providerStatus = 'manual';
+    }
+  } catch (providerErr) {
+    return {
+      ok: false,
+      errorCode: 'provider_error',
+      error: `Le remboursement Mollie a échoué : ${providerErr && providerErr.message ? providerErr.message : 'erreur inconnue'}.`,
+    };
+  }
+
+  const now = new Date();
+
+  /* Marque les lignes de consigne encaissées non encore remboursées. */
+  (order.consigne.lines || []).forEach((l) => {
+    if (!l) return;
+    const lineCharged = Number(l.chargedCents) || 0;
+    if (l.charged && lineCharged > 0 && !l.refundedAt) {
+      l.refundedAt = now;
+      l.refundedCents = lineCharged;
+    }
+  });
+
+  order.consigne.refundedTotalCents = alreadyRefundedConsigne + amount;
+  order.consigne.refundedAt = now;
+  order.consigne.refundMethod = method;
+  order.consigne.refundProviderRefundId = providerRefundId;
+
+  /* Trace compta — caution hors-TVA, donc aucun avoir TVA généré. */
+  const refundEntry = {
+    amountCents: amount,
+    reason: 'Remboursement consigne (retour du core)',
+    kind: 'consigne',
+    method,
+    providerRefundId,
+    providerStatus,
+    providerRawResponse,
+    creditNoteNumber: '',
+    lines: [],
+    createdAt: now,
+    createdBy: adminEmail,
+    notes: 'Caution hors-TVA remboursée au retour de l’ancien organe.',
+  };
+  order.refunds.push(refundEntry);
+
+  /* IMPORTANT : pas de changement de order.status — un retour de caution
+   * fait partie du cycle de vie normal de l'échange. */
+  await order.save();
+
+  /* Email de confirmation au client (best effort). */
+  if (sendEmail && order.userId) {
+    try {
+      const user = await User.findById(order.userId).lean();
+      if (user && user.email) {
+        const sendRes = await emailService.sendConsigneRefundEmail({
+          order: order.toObject ? order.toObject() : order,
+          user,
+          amountCents: amount,
+          method,
+        });
+        await emailService.logEmailSent({
+          orderId: order._id,
+          emailType: 'consigne_refund',
+          recipientEmail: user.email,
+          result: sendRes,
+        });
+      }
+    } catch (mailErr) {
+      console.error('[refund-service] Email remboursement consigne échoué :', mailErr && mailErr.message ? mailErr.message : mailErr);
+    }
+  }
+
+  return { ok: true, refund: refundEntry, amountCents: amount, method, providerRefundId };
+}
+
+/* ════════════════════════════════════════════════════════════════
  * Synchronisation des remboursements créés EN DEHORS de notre site
  * ════════════════════════════════════════════════════════════════
  *
@@ -386,6 +526,7 @@ async function syncMollieRefundsForOrder({ orderId, mollieRefunds = [] } = {}) {
 
 module.exports = {
   processOrderRefund,
+  processConsigneRefund,
   syncMollieRefundsForOrder,
   nextCreditNoteNumber,
   totalRefundedCents,

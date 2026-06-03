@@ -392,12 +392,11 @@ async function postAdminMarkOrderConsigneReceived(req, res, next) {
         return d;
       })();
 
+      /* Spread pour PRÉSERVER les champs d'encaissement (charged,
+       * chargedCents, refundedAt, refundedCents) ajoutés pour la consigne
+       * encaissée à la commande — sinon ils seraient effacés. */
       return {
-        productId: l.productId,
-        name: l.name,
-        sku: l.sku || '',
-        quantity: l.quantity,
-        amountCents: l.amountCents,
+        ...l,
         delayDays,
         startAt,
         dueAt,
@@ -405,7 +404,9 @@ async function postAdminMarkOrderConsigneReceived(req, res, next) {
       };
     });
 
-    await Order.updateOne({ _id: orderId }, { $set: { consigne: { lines: updatedLines } } });
+    /* $set ciblé sur consigne.lines uniquement : ne PAS écraser le reste de
+     * l'objet consigne (chargedTotalCents, refundedTotalCents, refundedAt…). */
+    await Order.updateOne({ _id: orderId }, { $set: { 'consigne.lines': updatedLines } });
 
     try {
       const refreshed = await Order.findById(orderId)
@@ -2896,6 +2897,21 @@ async function getAdminOrderDetailPage(req, res, next) {
     const totalAllCents = viewConsigneLines
       .reduce((sum, l) => sum + (Number(l.totalCents) || 0), 0);
 
+    /* ── Consigne ENCAISSÉE à la commande (caution hors-TVA) ─────────
+     * Pilote le bouton « Rembourser la consigne » (Phase 2, validation
+     * manuelle au retour du core). */
+    const consigneChargedCents = orderDoc.consigne && Number.isFinite(orderDoc.consigne.chargedTotalCents)
+      ? orderDoc.consigne.chargedTotalCents
+      : 0;
+    const consigneRefundedCents = orderDoc.consigne && Number.isFinite(orderDoc.consigne.refundedTotalCents)
+      ? orderDoc.consigne.refundedTotalCents
+      : 0;
+    const consigneRefundableCents = Math.max(0, consigneChargedCents - consigneRefundedCents);
+    const consigneWasCharged = consigneChargedCents > 0;
+    const consigneAllReceived = viewConsigneLines.length > 0 && viewConsigneLines.every((l) => l && l.isReceived);
+    /* refundService ne gère que mollie/manuel pour la caution. */
+    const consigneRefundMethod = orderDoc.molliePaymentId && orderDoc.molliePaymentStatus === 'paid' ? 'mollie' : 'manual';
+
     const consigne = {
       hasConsigne: viewConsigneLines.length > 0,
       hasPending: viewConsigneLines.some((l) => l && l.isPending),
@@ -2905,6 +2921,20 @@ async function getAdminOrderDetailPage(req, res, next) {
       totalDueCents,
       totalAll: formatEuro(totalAllCents),
       totalAllCents,
+      /* Encaissement / remboursement de la caution */
+      wasCharged: consigneWasCharged,
+      chargedTotalCents: consigneChargedCents,
+      chargedTotal: formatEuro(consigneChargedCents),
+      refundedTotalCents: consigneRefundedCents,
+      refundedTotal: formatEuro(consigneRefundedCents),
+      refundableCents: consigneRefundableCents,
+      refundable: formatEuro(consigneRefundableCents),
+      canRefund: consigneWasCharged && consigneRefundableCents > 0,
+      isRefunded: consigneWasCharged && consigneRefundableCents <= 0,
+      allReceived: consigneAllReceived,
+      refundMethod: consigneRefundMethod,
+      refundedAt: orderDoc.consigne && orderDoc.consigne.refundedAt ? formatDateTimeFR(orderDoc.consigne.refundedAt) : '',
+      refundProviderRefundId: orderDoc.consigne && orderDoc.consigne.refundProviderRefundId ? orderDoc.consigne.refundProviderRefundId : '',
     };
 
     const timelineSteps = buildTimelineSteps(orderDoc);
@@ -3780,6 +3810,56 @@ async function postAdminRefundOrder(req, res, next) {
         ok: true,
         message: req.session.adminOrderSuccess,
         data: { refund: { amountCents, method: result.refund.method }, creditNote: result.creditNote ? { number: result.creditNote.number } : null },
+      });
+    }
+    return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/* Remboursement de la CONSIGNE (caution hors-TVA) au retour du core.
+ * Distinct du remboursement commercial : pas d'avoir TVA, ne change pas le
+ * statut commande. Montant non saisissable — c'est toujours la caution
+ * encaissée restante (anti-erreur). Validation manuelle par l'admin. */
+async function postAdminRefundConsigne(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const { orderId } = req.params;
+
+    if (!dbConnected) {
+      req.session.adminOrderError = 'La base de données n’est pas disponible.';
+      return res.redirect('/admin/commandes');
+    }
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    }
+
+    const adminEmail = req.session && req.session.admin && req.session.admin.email
+      ? String(req.session.admin.email)
+      : 'admin';
+
+    /* Notification client activée par défaut, désactivable via sendEmail=off. */
+    const sendEmail = !(req.body.sendEmail === 'off' || req.body.sendEmail === 'false' || req.body.sendEmail === '0');
+
+    const refundService = require('../services/refundService');
+    const result = await refundService.processConsigneRefund({ orderId, adminEmail, sendEmail });
+
+    if (!result.ok) {
+      console.error(`[admin-consigne-refund] Échec pour commande ${orderId} :`, result.errorCode, result.error);
+      req.session.adminOrderError = result.error || 'Le remboursement de la consigne a échoué.';
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: result.error, errorCode: result.errorCode });
+      return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+    }
+
+    const methodLabel = result.method === 'mollie' ? 'Mollie (automatique)' : 'manuel (virement à effectuer)';
+    const emailPart = sendEmail ? ' Email client envoyé.' : '';
+    req.session.adminOrderSuccess = `Consigne de ${(result.amountCents / 100).toFixed(2)} € remboursée via ${methodLabel}.${emailPart}`;
+    if (wantsJsonResponse(req)) {
+      return res.json({
+        ok: true,
+        message: req.session.adminOrderSuccess,
+        data: { amountCents: result.amountCents, method: result.method, providerRefundId: result.providerRefundId || '' },
       });
     }
     return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
@@ -10389,6 +10469,7 @@ module.exports = {
   postAdminAddOrderShipment,
   getAdminShipmentDocument,
   postAdminRefundOrder,
+  postAdminRefundConsigne,
   getAdminOrderCreditNotePdf,
   postAdminUploadOrderDocument,
   getAdminOrderDocument,
