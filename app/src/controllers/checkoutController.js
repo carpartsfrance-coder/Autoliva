@@ -1620,19 +1620,22 @@ async function postPayment(req, res, next) {
     const vehiclePlate = vehicleIdentifierType === 'plate' ? normalizeVehicleIdentifier(rawPlate) : '';
     const vehicleVin = vehicleIdentifierType === 'vin' ? normalizeVehicleIdentifier(rawVin) : '';
     const vehicleProvided = Boolean(vehiclePlate || vehicleVin);
-    const vehicleConsent = isTruthyFormValue(req.body && req.body.vehicleConsent);
 
+    // Plaque ou VIN OBLIGATOIRE : indispensable pour vérifier la compatibilité
+    // et/ou programmer la pièce commandée. Base légale RGPD = nécessité
+    // contractuelle → le consentement est implicite dès que la donnée est
+    // fournie (plus de case séparée à cocher).
     checkout.vehicle = {
       identifierType: vehicleIdentifierType,
       plate: vehiclePlate,
       vin: vehicleVin,
-      consentAt: vehicleProvided && vehicleConsent ? new Date() : null,
+      consentAt: vehicleProvided ? new Date() : null,
       providedAt: vehicleProvided ? new Date() : null,
     };
 
-    if (vehicleProvided && !vehicleConsent) {
+    if (!vehicleProvided) {
       req.session.checkoutError =
-        "Merci de cocher l'accord pour utiliser la plaque/VIN afin de vérifier la compatibilité et/ou programmer la pièce.";
+        'Merci de renseigner votre plaque d’immatriculation ou votre VIN — obligatoire pour vérifier la compatibilité de la pièce.';
       return res.redirect('/commande/paiement');
     }
 
@@ -2008,7 +2011,7 @@ async function postPayment(req, res, next) {
                 identifierType: vehicleIdentifierType,
                 plate: vehiclePlate,
                 vin: vehicleVin,
-                consentAt: vehicleConsent ? new Date() : null,
+                consentAt: new Date(), // fourni = consentement implicite (nécessité contractuelle)
                 providedAt: new Date(),
               }
             : undefined,
