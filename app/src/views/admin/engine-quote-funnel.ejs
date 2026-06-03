@@ -1,0 +1,131 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'engine-quotes' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8">
+
+    <%- include('./partials/breadcrumb', { breadcrumbs: [{ label: 'Devis moteurs', url: '/admin/devis-moteurs' }, { label: 'Conversion' }] }) %>
+
+    <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mt-2">
+      <div>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Tableau de conversion</div>
+        <div class="mt-1 text-sm text-slate-500">Où tes leads moteur se transforment — ou s'arrêtent. Période : <strong><%= periodLabel %></strong>.</div>
+      </div>
+      <div class="flex items-center gap-1 rounded-xl bg-slate-100 p-1 text-sm">
+        <% const periods = [['30d','30 j'],['month','Ce mois'],['90d','90 j'],['all','Tout']]; %>
+        <% periods.forEach(function(p){ %>
+          <a href="/admin/devis-moteurs/conversion?period=<%= p[0] %>"
+             class="px-3 py-1.5 rounded-lg font-semibold <%= period === p[0] ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800' %>"><%= p[1] %></a>
+        <% }) %>
+      </div>
+    </div>
+
+    <% if (leads === 0) { %>
+      <div class="mt-10 rounded-2xl border border-slate-200 bg-white p-10 text-center">
+        <div class="text-lg font-semibold text-slate-900">Aucun lead moteur sur cette période</div>
+        <div class="mt-1 text-sm text-slate-500">Élargis la période, ou c'est le signal n°1 : ton tunnel manque de demandes en haut.</div>
+      </div>
+    <% } else { %>
+
+      <!-- Bandeau résumé -->
+      <div class="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Conversion globale</div>
+          <div class="mt-1 text-2xl font-bold text-slate-900"><%= conversionGlobalPct %> %</div>
+          <div class="mt-0.5 text-xs text-slate-400">leads → acompte/gagné</div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Temps de réponse</div>
+          <div class="mt-1 text-2xl font-bold text-slate-900"><%= respMedianLabel %></div>
+          <div class="mt-0.5 text-xs text-slate-400">médian (moy. <%= respAvgLabel %> · <%= respSample %> devis)</div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 <%= unquoted > 0 ? 'ring-1 ring-amber-200' : '' %>">
+          <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Leads non chiffrés</div>
+          <div class="mt-1 text-2xl font-bold <%= unquoted > 0 ? 'text-amber-700' : 'text-slate-900' %>"><%= unquoted %></div>
+          <div class="mt-0.5 text-xs text-slate-400">en attente d'un devis</div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4">
+          <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Gagné / Perdu</div>
+          <div class="mt-1 text-2xl font-bold text-slate-900"><span class="text-emerald-700"><%= won %></span> / <span class="text-rose-600"><%= lost %></span></div>
+          <div class="mt-0.5 text-xs text-slate-400">sur la période</div>
+        </div>
+      </div>
+
+      <!-- Entonnoir -->
+      <div class="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+        <div class="text-sm font-semibold text-slate-900 mb-5">L'entonnoir, étape par étape</div>
+        <% const colors = { leads:'bg-blue-500', quoted:'bg-violet-500', pdf:'bg-amber-500', converted:'bg-emerald-500' }; %>
+        <div class="space-y-4">
+          <% stages.forEach(function(s){ var w = Math.max(s.ofLeads, 7); %>
+            <div>
+              <div class="flex items-baseline justify-between gap-3 mb-1">
+                <div class="text-sm">
+                  <span class="font-semibold text-slate-900"><%= s.label %></span>
+                  <span class="text-slate-400">· <%= s.hint %></span>
+                </div>
+                <div class="text-xs text-slate-500 shrink-0">
+                  <% if (s.fromPrev !== null) { %>
+                    <span class="font-semibold <%= s.fromPrev < 50 ? 'text-rose-600' : 'text-slate-600' %>"><%= s.fromPrev %> %</span> de l'étape précédente
+                  <% } %>
+                </div>
+              </div>
+              <div class="relative h-10 rounded-xl bg-slate-100 overflow-hidden">
+                <div class="h-full <%= colors[s.key] %> flex items-center px-3 transition-all" style="width: <%= w %>%">
+                  <span class="text-white font-bold text-sm whitespace-nowrap"><%= s.count %></span>
+                </div>
+                <div class="absolute inset-y-0 right-3 flex items-center">
+                  <span class="text-xs font-semibold text-slate-400"><%= s.ofLeads %> % des leads</span>
+                </div>
+              </div>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+
+      <!-- Fuite n°1 + conseil -->
+      <% if (biggestDrop) { %>
+        <div class="mt-6 rounded-2xl border border-rose-200 bg-rose-50 p-6">
+          <div class="flex items-start gap-3">
+            <span class="material-symbols-outlined text-rose-600 mt-0.5">water_drop</span>
+            <div>
+              <div class="text-sm font-bold text-rose-900">Fuite n°1 : <%= biggestDrop.from %> → <%= biggestDrop.to %></div>
+              <div class="mt-1 text-sm text-rose-800">Tu perds <strong><%= biggestDrop.lossN %> lead<%= biggestDrop.lossN > 1 ? 's' : '' %></strong> à cette étape (<%= biggestDrop.lossPct %> % de perte). C'est là qu'il faut agir en priorité.</div>
+              <% if (advice) { %><div class="mt-3 text-sm text-rose-900 bg-white/60 rounded-lg p-3 border border-rose-100"><strong>Que faire :</strong> <%= advice %></div><% } %>
+            </div>
+          </div>
+        </div>
+      <% } %>
+
+      <!-- Métriques secondaires -->
+      <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+          <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-2">Signaux d'intérêt</div>
+          <div class="flex items-center justify-between py-1.5 text-sm border-b border-slate-100">
+            <span class="text-slate-600">Ont cliqué « Payer » (intention forte)</span>
+            <span class="font-bold text-slate-900"><%= payClicked %></span>
+          </div>
+          <div class="flex items-center justify-between py-1.5 text-sm">
+            <span class="text-slate-600">Ouvertures email <span class="text-slate-400">(peu fiable)</span></span>
+            <span class="font-bold text-slate-400"><%= opened %></span>
+          </div>
+          <div class="mt-2 text-xs text-slate-400">L'ouverture email est sous-estimée (Apple/Gmail bloquent le pixel, et le SMS n'ouvre pas l'email). Fie-toi à « PDF consulté ».</div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+          <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-2">Lecture rapide</div>
+          <ul class="text-sm text-slate-600 space-y-1.5">
+            <li>• <strong>Chiffrés faible</strong> → manque de leads OU réponse trop lente.</li>
+            <li>• <strong>PDF consulté faible</strong> → le devis n'arrive pas / ne donne pas envie d'ouvrir.</li>
+            <li>• <strong>Converti faible</strong> → vus mais pas payés : prix, confiance, relance.</li>
+          </ul>
+        </div>
+      </div>
+
+    <% } %>
+
+    <div class="mt-8">
+      <a href="/admin/devis-moteurs" class="text-sm font-semibold text-slate-500 hover:text-slate-800">← Retour aux devis</a>
+    </div>
+
+  </div>
+</main>
