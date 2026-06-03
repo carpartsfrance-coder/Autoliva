@@ -257,6 +257,9 @@ function normalizeProduct(product) {
       enabled: consigneEnabled,
       amountCents: consigneAmountCents,
       delayDays: consigneDelayDays,
+      // Indispensable pour la fiche produit : sans ça, « Encaisser la caution »
+      // était perdu à l'affichage → la page montrait « Sans caution » à tort.
+      chargeUpfront: rawConsigne.chargeUpfront === true,
     },
     compareAtPriceCents,
     badges,
