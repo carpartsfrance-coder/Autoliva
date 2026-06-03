@@ -6625,6 +6625,10 @@ async function getAdminNewProductPage(req, res) {
       consigneEnabled: false,
       consigneAmount: '',
       consigneDelayDays: '30',
+      inclusions: '',
+      exclusions: '',
+      warrantyMonths: '',
+      warrantyText: '',
       showKeyPoints: true,
       showSpecs: true,
       showReconditioning: true,
@@ -6717,6 +6721,10 @@ async function postAdminCreateProduct(req, res, next) {
       consigneEnabled: req.body.consigneEnabled === 'on' || req.body.consigneEnabled === 'true',
       consigneAmount: getTrimmedString(req.body.consigneAmount),
       consigneDelayDays: getTrimmedString(req.body.consigneDelayDays),
+      inclusions: getTrimmedString(req.body.inclusions),
+      exclusions: getTrimmedString(req.body.exclusions),
+      warrantyMonths: getTrimmedString(req.body.warrantyMonths),
+      warrantyText: getTrimmedString(req.body.warrantyText),
       showKeyPoints: req.body.showKeyPoints === 'on' || req.body.showKeyPoints === 'true',
       showSpecs: req.body.showSpecs === 'on' || req.body.showSpecs === 'true',
       showReconditioning: req.body.showReconditioning === 'on' || req.body.showReconditioning === 'true',
@@ -6878,6 +6886,10 @@ async function postAdminCreateProduct(req, res, next) {
     const faqs = parseFaqsFromLines(form.faqs);
     const relatedBlogPostIds = parseObjectIdListFromLines(form.relatedBlogPostIds);
     const compatibleReferences = parseLinesToArray(form.compatibleReferences);
+    const inclusions = parseLinesToArray(form.inclusions);
+    const exclusions = parseLinesToArray(form.exclusions);
+    const warrantyMonths = Math.max(0, parseInt(form.warrantyMonths, 10) || 0);
+    const warrantyText = form.warrantyText || '';
 
     const baseSlug = slugify(form.slug || form.name) || 'produit';
 
@@ -6986,6 +6998,9 @@ async function postAdminCreateProduct(req, res, next) {
       description: form.description,
       keyPoints,
       specs,
+      inclusions,
+      exclusions,
+      warranty: { months: warrantyMonths, text: warrantyText },
       reconditioningSteps,
       compatibility,
       faqs,
@@ -7138,6 +7153,10 @@ async function getAdminEditProductPage(req, res, next) {
         shortDescription: product.shortDescription || '',
         description: product.description || '',
         keyPoints: Array.isArray(product.keyPoints) ? product.keyPoints.filter(Boolean).join('\n') : '',
+        inclusions: Array.isArray(product.inclusions) ? product.inclusions.filter(Boolean).join('\n') : '',
+        exclusions: Array.isArray(product.exclusions) ? product.exclusions.filter(Boolean).join('\n') : '',
+        warrantyMonths: product.warranty && product.warranty.months ? String(product.warranty.months) : '',
+        warrantyText: (product.warranty && product.warranty.text) || '',
         specs: Array.isArray(product.specs)
           ? product.specs
               .filter((s) => s && (s.label || s.value))
@@ -7278,6 +7297,10 @@ async function postAdminUpdateProduct(req, res, next) {
       consigneEnabled: req.body.consigneEnabled === 'on' || req.body.consigneEnabled === 'true',
       consigneAmount: getTrimmedString(req.body.consigneAmount),
       consigneDelayDays: getTrimmedString(req.body.consigneDelayDays),
+      inclusions: getTrimmedString(req.body.inclusions),
+      exclusions: getTrimmedString(req.body.exclusions),
+      warrantyMonths: getTrimmedString(req.body.warrantyMonths),
+      warrantyText: getTrimmedString(req.body.warrantyText),
       showKeyPoints: req.body.showKeyPoints === 'on' || req.body.showKeyPoints === 'true',
       showSpecs: req.body.showSpecs === 'on' || req.body.showSpecs === 'true',
       showReconditioning: req.body.showReconditioning === 'on' || req.body.showReconditioning === 'true',
@@ -7540,6 +7563,10 @@ async function postAdminUpdateProduct(req, res, next) {
     const faqs = parseFaqsFromLines(form.faqs);
     const relatedBlogPostIds = parseObjectIdListFromLines(form.relatedBlogPostIds);
     const compatibleReferences = parseLinesToArray(form.compatibleReferences);
+    const inclusions = parseLinesToArray(form.inclusions);
+    const exclusions = parseLinesToArray(form.exclusions);
+    const warrantyMonths = Math.max(0, parseInt(form.warrantyMonths, 10) || 0);
+    const warrantyText = form.warrantyText || '';
 
     const desiredSlug = slugify(form.slug);
     const stableSlug = desiredSlug
@@ -7656,6 +7683,11 @@ async function postAdminUpdateProduct(req, res, next) {
     const setPatch = {};
     if (hasKeyPoints) setPatch.keyPoints = keyPoints;
     if (hasSpecs) setPatch.specs = specs;
+    if (Object.prototype.hasOwnProperty.call(req.body, 'inclusions')) setPatch.inclusions = inclusions;
+    if (Object.prototype.hasOwnProperty.call(req.body, 'exclusions')) setPatch.exclusions = exclusions;
+    if (Object.prototype.hasOwnProperty.call(req.body, 'warrantyMonths') || Object.prototype.hasOwnProperty.call(req.body, 'warrantyText')) {
+      setPatch.warranty = { months: warrantyMonths, text: warrantyText };
+    }
     if (hasSectionsInputs) {
       setPatch.sections = {
         showKeyPoints: form.showKeyPoints,

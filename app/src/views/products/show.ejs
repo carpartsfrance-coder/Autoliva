@@ -65,7 +65,9 @@
       <% const keyType = findSpec('type') || product.category || ''; %>
       <% const keyEtat = findSpec('état') || findSpec('etat') || conditionBadge || ''; %>
       <% const keyProgrammation = findSpec('programmation') || ''; %>
-      <% const keyGarantie = findSpec('garantie') || topLeftBadge || ''; %>
+      <% const keyGarantie = (product.warranty && Number(product.warranty.months) > 0)
+        ? (product.warranty.months + ' mois' + (product.warranty.text ? ' — ' + product.warranty.text : ''))
+        : (findSpec('garantie') || topLeftBadge || ''); %>
       <% const optionGroups = Array.isArray(product.displayOptions) ? product.displayOptions : []; %>
       <% const compGrouped = {}; %>
       <% (Array.isArray(product.compatibility) ? product.compatibility : []).forEach((c) => {
@@ -85,6 +87,12 @@
         : []; %>
       <% const keyPointsList = Array.isArray(product.keyPoints)
         ? product.keyPoints.map((v) => String(v || '').trim()).filter(Boolean)
+        : []; %>
+      <% const inclusionsList = Array.isArray(product.inclusions)
+        ? product.inclusions.map((v) => String(v || '').trim()).filter(Boolean)
+        : []; %>
+      <% const exclusionsList = Array.isArray(product.exclusions)
+        ? product.exclusions.map((v) => String(v || '').trim()).filter(Boolean)
         : []; %>
       <% const summaryPoints = keyPointsList.length
         ? keyPointsList.slice(0, 3)
@@ -628,6 +636,37 @@
                   <% }) %>
                 </div>
               </div>
+
+              <% if (inclusionsList.length || exclusionsList.length) { %>
+                <div class="mt-6 bg-slate-50 dark:bg-slate-900 rounded-2xl p-8 border border-slate-300 dark:border-slate-700 refined-shadow">
+                  <h4 class="text-lg font-bold uppercase text-slate-900 dark:text-white mb-6 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">checklist</span>
+                    Contenu de l'offre
+                  </h4>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <% if (inclusionsList.length) { %>
+                      <div>
+                        <p class="text-xs font-bold uppercase tracking-wider text-emerald-600 mb-3">Inclus</p>
+                        <ul class="space-y-2">
+                          <% inclusionsList.forEach((it) => { %>
+                            <li class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200"><span class="material-symbols-outlined text-emerald-600 text-base leading-5">check_circle</span><span><%= it %></span></li>
+                          <% }) %>
+                        </ul>
+                      </div>
+                    <% } %>
+                    <% if (exclusionsList.length) { %>
+                      <div>
+                        <p class="text-xs font-bold uppercase tracking-wider text-rose-600 mb-3">Non inclus</p>
+                        <ul class="space-y-2">
+                          <% exclusionsList.forEach((it) => { %>
+                            <li class="flex items-start gap-2 text-sm text-slate-500"><span class="material-symbols-outlined text-rose-500 text-base leading-5">cancel</span><span><%= it %></span></li>
+                          <% }) %>
+                        </ul>
+                      </div>
+                    <% } %>
+                  </div>
+                </div>
+              <% } %>
             </div>
           </div>
 
