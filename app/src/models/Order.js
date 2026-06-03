@@ -68,6 +68,10 @@ const refundSchema = new mongoose.Schema(
   {
     amountCents: { type: Number, required: true, min: 1 },
     reason: { type: String, default: '', trim: true },
+    /* Nature du remboursement : 'standard' (remboursement commercial, donne
+     * lieu à un avoir TVA) vs 'consigne' (retour de caution hors-TVA, pas
+     * d'avoir, ne change pas le statut commercial de la commande). */
+    kind: { type: String, enum: ['standard', 'consigne'], default: 'standard' },
     method: {
       type: String,
       enum: ['mollie', 'scalapay', 'manual', 'bank_transfer', 'cash', 'other'],
@@ -342,6 +346,11 @@ const orderSchema = new mongoose.Schema(
       /* Somme des consignes ENCAISSÉES à la commande (caution hors-TVA).
        * Incluse dans totalCents mais EXCLUE de la base TVA sur la facture. */
       chargedTotalCents: { type: Number, default: 0, min: 0 },
+      /* Remboursement de la caution au retour du core (validation manuelle). */
+      refundedTotalCents: { type: Number, default: 0, min: 0 },
+      refundedAt: { type: Date, default: null },
+      refundMethod: { type: String, default: '', trim: true },
+      refundProviderRefundId: { type: String, default: '', trim: true },
     },
     shipments: { type: [shipmentSchema], default: [] },
     refunds: { type: [refundSchema], default: [] },
