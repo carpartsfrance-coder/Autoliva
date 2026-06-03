@@ -86,10 +86,14 @@ function buildQuotePdf(input) {
     // ─── Données pré-calculées ───────────────────────────────────────
     const sellHt = Number(input.pricing && input.pricing.sellPrice) || 0;
     const vatRate = Number(input.pricing && input.pricing.vatRate) || 20;
+    // Régime de TVA : 'margin' (TVA sur marge, art. 297 A CGI) = défaut pour les
+    // moteurs d'occasion. En marge, le prix de vente EST le prix tout compris
+    // (pas de +20 %) et on ne détaille PAS la TVA au client.
+    const isMarginScheme = !(input.pricing && input.pricing.vatScheme === 'normal');
     // Garantie dérivée de l'état du moteur : occasion 6 mois, reconditionné 12 mois.
     const warrantyMonths = Number(input.warrantyMonths) || (input.isReconditionne ? 12 : 6);
-    const vatAmount = sellHt * (vatRate / 100);
-    const sellTtc = sellHt + vatAmount;
+    const vatAmount = isMarginScheme ? 0 : sellHt * (vatRate / 100);
+    const sellTtc = isMarginScheme ? sellHt : sellHt + vatAmount;
     const depositTtc = (Number(input.depositCents) || 0) / 100;
     const isFull = depositTtc > 0 && Math.abs(depositTtc - sellTtc) < 0.01;
     const remainingTtc = Math.max(sellTtc - depositTtc, 0);
@@ -260,7 +264,7 @@ function buildQuotePdf(input) {
       doc.fontSize(7).font('Helvetica-Bold').fillColor(C_TEXT_MUTED).text(label, x, y + 12, { width: pcW, align: 'center', characterSpacing: 1, lineBreak: false });
       doc.fontSize(12).font('Helvetica-Bold').fillColor(valueColor).text(value, x, y + 30, { width: pcW, align: 'center', lineBreak: false });
     }
-    priceCard(pcStartX, pcY, 'TOTAL TTC', eur(sellTtc), C_NAVY);
+    priceCard(pcStartX, pcY, isMarginScheme ? 'PRIX TOTAL' : 'TOTAL TTC', eur(sellTtc), C_NAVY);
     priceCard(pcStartX + pcW + pcGap, pcY, isFull ? 'PAIEMENT' : 'ACOMPTE', depositTtc > 0 ? eur(depositTtc) : '—', C_RED);
     priceCard(pcStartX + (pcW + pcGap) * 2, pcY, 'SOLDE', remainingTtc > 0 && !isFull ? eur(remainingTtc) : '—', C_NAVY);
 
@@ -284,7 +288,7 @@ function buildQuotePdf(input) {
     doc.fontSize(8).font('Helvetica-Bold').fillColor(C_WHITE);
     doc.text('ARTICLE', M + 14, y + 7, { characterSpacing: 1, lineBreak: false });
     doc.text('GARANTIE', M + W - 240, y + 7, { width: 100, align: 'center', characterSpacing: 1, lineBreak: false });
-    doc.text('PRIX HT', M + W - 130, y + 7, { width: 116, align: 'right', characterSpacing: 1, lineBreak: false });
+    doc.text(isMarginScheme ? 'PRIX' : 'PRIX HT', M + W - 130, y + 7, { width: 116, align: 'right', characterSpacing: 1, lineBreak: false });
 
     const tr = y + thH;
     // Engine description sur 1-2 lignes max
@@ -377,18 +381,30 @@ function buildQuotePdf(input) {
     doc.fontSize(7.5).font('Helvetica-Bold').fillColor(C_NAVY).text('TOTAUX', totX + 28, y + 10, { characterSpacing: 1, lineBreak: false });
 
     let ty = y + 38;
-    doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text('Sous-total HT', totX + 14, ty, { lineBreak: false });
-    doc.text(eur(sellHt), totX + 14, ty, { width: totW - 28, align: 'right', lineBreak: false });
-    ty += 16;
-    doc.text('TVA ' + vatRate + '%', totX + 14, ty, { lineBreak: false });
-    doc.text(eur(vatAmount), totX + 14, ty, { width: totW - 28, align: 'right', lineBreak: false });
-    ty += 14;
-    doc.moveTo(totX + 14, ty).lineTo(totX + totW - 14, ty).strokeColor(C_OUTLINE_LT).lineWidth(0.5).stroke();
-    ty += 8;
+    if (isMarginScheme) {
+      // Régime de la marge : aucun détail HT/TVA. Prix net tout compris + mention légale.
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(C_TEXT).text('Prix total', totX + 14, ty, { lineBreak: false });
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(C_NAVY).text(eur(sellTtc), totX + 14, ty - 1, { width: totW - 28, align: 'right', lineBreak: false });
+      ty += 19;
+      doc.fontSize(6.5).font('Helvetica').fillColor(C_TEXT_MUTED).text(
+        'TVA sur marge - art. 297 A du CGI. TVA non récupérable par l\'acheteur.',
+        totX + 14, ty, { width: totW - 28, lineBreak: true }
+      );
+      ty += 18;
+    } else {
+      doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text('Sous-total HT', totX + 14, ty, { lineBreak: false });
+      doc.text(eur(sellHt), totX + 14, ty, { width: totW - 28, align: 'right', lineBreak: false });
+      ty += 16;
+      doc.text('TVA ' + vatRate + '%', totX + 14, ty, { lineBreak: false });
+      doc.text(eur(vatAmount), totX + 14, ty, { width: totW - 28, align: 'right', lineBreak: false });
+      ty += 14;
+      doc.moveTo(totX + 14, ty).lineTo(totX + totW - 14, ty).strokeColor(C_OUTLINE_LT).lineWidth(0.5).stroke();
+      ty += 8;
 
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(C_TEXT).text('Total TTC', totX + 14, ty, { lineBreak: false });
-    doc.fontSize(12).font('Helvetica-Bold').fillColor(C_NAVY).text(eur(sellTtc), totX + 14, ty - 1, { width: totW - 28, align: 'right', lineBreak: false });
-    ty += 18;
+      doc.fontSize(10).font('Helvetica-Bold').fillColor(C_TEXT).text('Total TTC', totX + 14, ty, { lineBreak: false });
+      doc.fontSize(12).font('Helvetica-Bold').fillColor(C_NAVY).text(eur(sellTtc), totX + 14, ty - 1, { width: totW - 28, align: 'right', lineBreak: false });
+      ty += 18;
+    }
 
     if (depositTtc > 0) {
       doc.fontSize(10).font('Helvetica-Bold').fillColor(C_TEXT).text(isFull ? 'Total à payer' : 'Acompte à payer', totX + 14, ty, { lineBreak: false });

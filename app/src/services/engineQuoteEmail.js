@@ -45,6 +45,8 @@ function buildQuoteEmailHtml(opts) {
   const remaining = Math.max(sellTtc - depositTtc, 0);
   const isFull = depositTtc > 0 && Math.abs(depositTtc - sellTtc) < 0.01;
   const vatRate = opts.vatRate != null ? Number(opts.vatRate) : 20;
+  // Régime de la marge (défaut) : prix net tout compris, pas de détail HT/TVA.
+  const isMarginScheme = opts.vatScheme !== 'normal';
   // Garantie dérivée de l'état du moteur : occasion 6 mois, reconditionné 12 mois.
   const warrantyMonths = opts.warrantyMonths != null ? Number(opts.warrantyMonths) : (opts.isReconditionne ? 12 : 6);
 
@@ -172,14 +174,15 @@ function buildQuoteEmailHtml(opts) {
       <td class="col-r" width="276" style="vertical-align:top;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #e5e7eb;border-radius:14px;"><tr><td style="padding:20px;">
           <p style="${lbl}">Récapitulatif</p>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+          ${isMarginScheme ? '' : `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             <tr><td style="padding:2px 0;font-size:14px;color:${NAVY};">Prix HT</td><td style="padding:2px 0;font-size:14px;color:${NAVY};text-align:right;">${fmtEur(sellHt)}</td></tr>
             <tr><td style="padding:2px 0 12px;font-size:14px;color:${NAVY};">TVA ${vatRate}%</td><td style="padding:2px 0 12px;font-size:14px;color:${NAVY};text-align:right;">${fmtEur(sellTtc - sellHt)}</td></tr>
-          </table>
-          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #f1f5f9;"><tr>
-            <td style="padding-top:12px;font-size:14px;font-weight:700;color:${NAVY};vertical-align:bottom;">Total TTC</td>
+          </table>`}
+          <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="${isMarginScheme ? '' : 'border-top:1px solid #f1f5f9;'}"><tr>
+            <td style="padding-top:12px;font-size:14px;font-weight:700;color:${NAVY};vertical-align:bottom;">${isMarginScheme ? 'Prix total' : 'Total TTC'}</td>
             <td style="padding-top:12px;font-size:22px;font-weight:800;color:${RED};text-align:right;line-height:1;">${fmtEur(sellTtc)}</td>
           </tr></table>
+          ${isMarginScheme ? `<p style="margin:8px 0 0;font-size:10px;color:#94a3b8;line-height:1.4;">TVA sur marge — art. 297 A du CGI. TVA non récupérable par l'acheteur.</p>` : ''}
         </td></tr></table>
         ${reservationCard}
       </td>

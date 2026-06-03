@@ -250,6 +250,19 @@ function dt(v) {
             <span data-save-indicator class="text-xs text-slate-400 transition-opacity opacity-0">Enregistré ✓</span>
           </div>
 
+          <%
+            var _scheme = (engineQuote.pricing && engineQuote.pricing.vatScheme === 'normal') ? 'normal' : 'margin';
+          %>
+          <input type="hidden" name="vatScheme" value="<%= _scheme %>" data-vat-scheme data-margin-input>
+          <div class="mb-5 flex flex-wrap items-center gap-2">
+            <span class="text-xs font-semibold text-slate-500">Régime TVA :</span>
+            <div class="inline-flex rounded-xl bg-slate-100 p-1 text-xs">
+              <button type="button" data-scheme-btn="margin" class="px-3 py-1.5 rounded-lg font-semibold transition">TVA sur marge</button>
+              <button type="button" data-scheme-btn="normal" class="px-3 py-1.5 rounded-lg font-semibold transition">Régime normal</button>
+            </div>
+            <span data-scheme-hint class="text-[11px] text-slate-400"></span>
+          </div>
+
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div>
               <label class="block text-xs font-semibold text-slate-500 mb-1">Prix d'achat HT (€)</label>
@@ -260,7 +273,7 @@ function dt(v) {
               <input type="number" step="0.01" min="0" name="additionalFees" value="<%= engineQuote.pricing.additionalFees || '' %>" data-margin-input data-cost placeholder="port, palette…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-500 mb-1">Prix de vente HT (€)</label>
+              <label class="block text-xs font-semibold text-slate-500 mb-1"><span data-sell-label>Prix de vente HT (€)</span></label>
               <input type="number" step="0.01" min="0" name="sellPrice" value="<%= engineQuote.pricing.sellPrice || '' %>" data-margin-input data-sell class="w-full rounded-lg border-2 border-slate-300 px-3 py-2 text-sm font-mono font-bold focus:ring-2 focus:ring-red-500 focus:border-red-500">
             </div>
           </div>
@@ -314,7 +327,7 @@ function dt(v) {
               <div data-margin-cost class="mt-1 text-lg font-bold font-mono text-slate-900">—</div>
             </div>
             <div>
-              <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Marge brute</div>
+              <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider" data-label-eur>Marge nette</div>
               <div data-margin-eur class="mt-1 text-lg font-bold font-mono text-slate-900">—</div>
             </div>
             <div>
@@ -322,7 +335,7 @@ function dt(v) {
               <div data-margin-pct class="mt-1 text-lg font-bold font-mono text-slate-900">—</div>
             </div>
             <div>
-              <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider">Vente TTC</div>
+              <div class="text-xs text-slate-500 font-semibold uppercase tracking-wider" data-label-ttc>TVA sur marge</div>
               <div data-margin-ttc class="mt-1 text-lg font-bold font-mono text-slate-900">—</div>
             </div>
           </div>
@@ -932,19 +945,29 @@ function dt(v) {
     const hours = num(root.querySelector('[data-ctrl-hours]'));
     return port + rate * hours;
   }
+  const schemeInput = root.querySelector('[data-vat-scheme]');
+  function isMargin() { return !schemeInput || schemeInput.value !== 'normal'; }
   function recompute() {
     const purchase = num(root.querySelector('[name=purchasePrice]'));
     const fees = num(root.querySelector('[name=additionalFees]'));
     const sell = num(root.querySelector('[name=sellPrice]'));
     const cost = purchase + fees + controlCost(purchase);
-    const marginEur = sell - cost;
+    let marginEur, fourth;
+    if (isMargin()) {
+      // TVA sur marge = (vente − achat) × taux/(100+taux), si marge positive.
+      const tvaMarge = sell > purchase ? (sell - purchase) * vat / (100 + vat) : 0;
+      marginEur = sell - cost - tvaMarge;
+      fourth = tvaMarge;                  // 4e carte = TVA sur marge
+    } else {
+      marginEur = sell - cost;
+      fourth = sell * (1 + vat / 100);    // 4e carte = Vente TTC
+    }
     const marginPct = sell > 0 ? (marginEur / sell) * 100 : 0;
-    const ttc = sell * (1 + vat / 100);
 
     out.cost.textContent = sell || cost ? fmtEur(cost) : '—';
     out.eur.textContent  = sell || cost ? fmtEur(marginEur) : '—';
     out.pct.textContent  = sell > 0 ? marginPct.toFixed(1) + ' %' : '—';
-    out.ttc.textContent  = sell > 0 ? fmtEur(ttc) : '—';
+    out.ttc.textContent  = sell > 0 ? fmtEur(fourth) : '—';
 
     // Couleurs
     ['text-emerald-700','text-amber-700','text-rose-700','text-slate-900'].forEach(c => {
@@ -959,7 +982,38 @@ function dt(v) {
       out.pct.classList.add('text-slate-900');
     }
   }
+
+  // ─── Toggle régime TVA (marge / normal) ───
+  const labelTtc = root.querySelector('[data-label-ttc]');
+  const labelSell = root.querySelector('[data-sell-label]');
+  const schemeHint = root.querySelector('[data-scheme-hint]');
+  const schemeBtns = root.querySelectorAll('[data-scheme-btn]');
+  function syncSchemeUI() {
+    const margin = isMargin();
+    if (labelTtc) labelTtc.textContent = margin ? 'TVA sur marge' : 'Vente TTC';
+    if (labelSell) labelSell.textContent = margin ? 'Prix de vente — tout compris (€)' : 'Prix de vente HT (€)';
+    if (schemeHint) schemeHint.textContent = margin
+      ? 'Prix tout compris · TVA sur (vente − achat) · art. 297 A CGI'
+      : 'TVA 20% ajoutée au prix HT';
+    schemeBtns.forEach(function (b) {
+      const active = b.getAttribute('data-scheme-btn') === (margin ? 'margin' : 'normal');
+      b.classList.toggle('bg-white', active);
+      b.classList.toggle('shadow-sm', active);
+      b.classList.toggle('text-slate-900', active);
+      b.classList.toggle('text-slate-500', !active);
+    });
+  }
+  schemeBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (schemeInput) schemeInput.value = b.getAttribute('data-scheme-btn');
+      syncSchemeUI();
+      recompute();
+      if (schemeInput) schemeInput.dispatchEvent(new Event('input', { bubbles: true })); // autosave
+    });
+  });
+
   inputs.forEach(el => el.addEventListener('input', recompute));
+  syncSchemeUI();
   recompute();
 
   // ─── Coûts de contrôle (port de test + MO de test) — affichage + live ───

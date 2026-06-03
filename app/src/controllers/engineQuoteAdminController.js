@@ -82,6 +82,42 @@ function fmt(n) {
   return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
 }
 
+/* Régime de TVA : true = TVA sur marge (défaut), false = régime normal. */
+function isMarginScheme(pricing) {
+  return !pricing || pricing.vatScheme !== 'normal';
+}
+
+/* TVA réellement due selon le régime.
+ * - marge : (vente − achat) × taux/(100+taux), uniquement si marge positive
+ * - normal : sur la marge aussi côté trésorerie, mais ici on ne calcule que ce
+ *   qui grève la marge nette du vendeur → en normal la TVA se neutralise (HT). */
+function vatOnMargin(pricing) {
+  const sell = Number(pricing && pricing.sellPrice) || 0;
+  const purchase = Number(pricing && pricing.purchasePrice) || 0;
+  const vatRate = Number(pricing && pricing.vatRate) || 20;
+  if (!isMarginScheme(pricing)) return 0;
+  return sell > purchase ? (sell - purchase) * vatRate / (100 + vatRate) : 0;
+}
+
+/* Prix payé par le client + TVA, selon le régime. Source unique pour le devis,
+ * l'email et le paiement. */
+function computeQuoteTotals(pricing) {
+  const sell = Number(pricing && pricing.sellPrice) || 0;
+  const purchase = Number(pricing && pricing.purchasePrice) || 0;
+  const vatRate = Number(pricing && pricing.vatRate) || 20;
+  const margin = isMarginScheme(pricing);
+  let clientTotal;
+  let vatAmount;
+  if (margin) {
+    clientTotal = sell; // prix TOUT COMPRIS — pas de +20%
+    vatAmount = sell > purchase ? (sell - purchase) * vatRate / (100 + vatRate) : 0; // TVA sur marge (non détaillée au client)
+  } else {
+    vatAmount = sell * vatRate / 100;
+    clientTotal = sell + vatAmount;
+  }
+  return { sell, purchase, vatRate, isMargin: margin, vatAmount, clientTotal };
+}
+
 function calcMargin(p) {
   if (!p) return { marginEur: 0, marginPct: 0 };
   const purchase = Number(p.purchasePrice) || 0;
@@ -90,7 +126,9 @@ function calcMargin(p) {
   // Coûts de contrôle (port test + MO) TOUJOURS inclus dès qu'un moteur est
   // chiffré → la marge affichée partout (liste, funnel, détail) est la VRAIE marge.
   const control = purchase > 0 ? CONTROL_COST_TOTAL : 0;
-  const cost = purchase + fees + control;
+  // En régime de la marge, la TVA sur marge grève directement la marge nette.
+  const tvaMarge = vatOnMargin(p);
+  const cost = purchase + fees + control + tvaMarge;
   const marginEur = sell - cost;
   const marginPct = sell > 0 ? (marginEur / sell) * 100 : 0;
   return { marginEur, marginPct };
@@ -453,6 +491,7 @@ async function postUpdatePricing(req, res, next) {
           'engineQuote.pricing.additionalFees': safeNumber(b.additionalFees),
           'engineQuote.pricing.sellPrice': safeNumber(b.sellPrice),
           'engineQuote.pricing.vatRate': safeNumber(b.vatRate, 20),
+          'engineQuote.pricing.vatScheme': b.vatScheme === 'normal' ? 'normal' : 'margin',
           ...buildUpdate(req),
         },
       }
@@ -750,8 +789,10 @@ async function prepareQuoteData(req, opts) {
   const sellHt = Number(pricing.sellPrice) || 0;
   if (sellHt <= 0) return { error: { code: 400, msg: 'Renseigne d\'abord le prix de vente HT' } };
 
-  const vatRate = Number(pricing.vatRate) || 20;
-  const sellTtc = sellHt * (1 + vatRate / 100);
+  const totals = computeQuoteTotals(pricing);
+  const vatRate = totals.vatRate;
+  const sellTtc = totals.clientTotal; // régime marge : = prix tout compris (pas de +20%)
+  const vatScheme = totals.isMargin ? 'margin' : 'normal';
 
   const b = req.body || {};
   const customMessage = String(b.customMessage || '').trim().slice(0, 2000);
@@ -790,7 +831,7 @@ async function prepareQuoteData(req, opts) {
   const firstNameForEmail = (cart.firstName && cart.lastName) ? cart.firstName : '';
 
   return {
-    cart, eq, sellHt, vatRate, sellTtc,
+    cart, eq, sellHt, vatRate, sellTtc, vatScheme,
     depositPct, depositTtc, depositCents, createMollie,
     customMessage, quoteRef,
     stockLocation, stockLabelClient, delay,
@@ -813,7 +854,7 @@ async function postPreviewPdf(req, res, next) {
       customerPhone: d.cart.phone,
       plate: (d.cart.requested && d.cart.requested.plate) || '',
       engine: d.eq.identifiedEngine || {},
-      pricing: { sellPrice: d.sellHt, vatRate: d.vatRate, purchasePrice: (d.eq.pricing || {}).purchasePrice, additionalFees: (d.eq.pricing || {}).additionalFees },
+      pricing: { sellPrice: d.sellHt, vatRate: d.vatRate, vatScheme: d.vatScheme, purchasePrice: (d.eq.pricing || {}).purchasePrice, additionalFees: (d.eq.pricing || {}).additionalFees },
       stockLabel: d.stockLabelClient,
       delay: d.delay,
       depositCents: d.depositCents,
@@ -849,6 +890,7 @@ async function postPreviewEmail(req, res, next) {
       sellTtc: d.sellTtc,
       depositTtc: d.depositTtc,
       vatRate: d.vatRate,
+      vatScheme: d.vatScheme,
       stockLocation: d.stockLocation,
       mollieUrl: d.createMollie ? 'https://example.com/preview-mollie' : '',
       customMessage: d.customMessage,
@@ -903,7 +945,7 @@ async function getPreviewMail(req, res, next) {
     const plate = (cart.requested && cart.requested.plate) || '';
     const firstName = (cart.firstName && cart.lastName) ? cart.firstName : '';
     const pricing = eq.pricing || {};
-    const sellTtc = (Number(pricing.sellPrice) || 0) * (1 + (Number(pricing.vatRate) || 20) / 100);
+    const sellTtc = computeQuoteTotals(pricing).clientTotal;
     const lastSent = (eq.sentQuotes || []).slice().sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))[0] || null;
     const phoneOpts = { brandPhone: brand.PHONE_MOTEUR, brandPhoneIntl: brand.PHONE_MOTEUR_INTL };
     const base = (process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
@@ -952,10 +994,12 @@ async function postSendQuote(req, res, next) {
     const eq = cart.engineQuote || {};
     const pricing = eq.pricing || {};
     const sellHt = Number(pricing.sellPrice) || 0;
-    if (sellHt <= 0) return res.status(400).send('Renseigne d\'abord le prix de vente HT');
+    if (sellHt <= 0) return res.status(400).send('Renseigne d\'abord le prix de vente');
 
-    const vatRate = Number(pricing.vatRate) || 20;
-    const sellTtc = sellHt * (1 + vatRate / 100);
+    const _totals = computeQuoteTotals(pricing);
+    const vatRate = _totals.vatRate;
+    const sellTtc = _totals.clientTotal; // régime marge : prix tout compris
+    const vatScheme = _totals.isMargin ? 'margin' : 'normal';
 
     const b = req.body || {};
     const customMessage = String(b.customMessage || '').trim().slice(0, 2000);
@@ -1045,7 +1089,7 @@ async function postSendQuote(req, res, next) {
       customerPhone: cart.phone,
       plate: (cart.requested && cart.requested.plate) || '',
       engine: eq.identifiedEngine || {},
-      pricing: { sellPrice: sellHt, vatRate, purchasePrice: pricing.purchasePrice, additionalFees: pricing.additionalFees },
+      pricing: { sellPrice: sellHt, vatRate, vatScheme, purchasePrice: pricing.purchasePrice, additionalFees: pricing.additionalFees },
       stockLabel: stockLabelClient,
       delay,
       depositCents,
@@ -1088,6 +1132,7 @@ async function postSendQuote(req, res, next) {
       sellTtc,
       depositTtc,
       vatRate,
+      vatScheme,
       stockLocation,
       mollieUrl,
       customMessage,
