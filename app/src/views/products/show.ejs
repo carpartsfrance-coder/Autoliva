@@ -115,6 +115,9 @@
       <% const installmentAmountCents = installmentEligible ? Math.round(basePriceCents / installmentCount) : 0; %>
       <% const shippingDelayText = product && product.shippingDelayText ? String(product.shippingDelayText).trim() : ''; %>
       <% const hasConsigne = product && product.consigne && product.consigne.enabled && product.consigne.amountCents > 0; %>
+      <% const consigneUpfront = hasConsigne && product.consigne.chargeUpfront === true; %>
+      <% const consigneAmountEuro = hasConsigne ? (product.consigne.amountCents / 100).toFixed(2).replace('.', ',') : ''; %>
+      <% const consigneDelayDays = hasConsigne ? (product.consigne.delayDays || 30) : 30; %>
       <% const stockLabel = product.inStock ? 'En stock' : 'Sur commande'; %>
       <% const subtitleParts = []; %>
       <% if (makes.length) { %>
@@ -153,7 +156,7 @@
             { icon: 'verified', label: keyGarantie || 'Garantie 24 Mois' },
             { icon: 'terminal', label: keyProgrammation || 'Programmation Incluse' },
             { icon: 'analytics', label: 'Testé sur banc' },
-            { icon: 'lock_open', label: 'Sans caution' },
+            consigneUpfront ? { icon: 'verified_user', label: 'Consigne remboursable' } : { icon: 'lock_open', label: 'Sans caution' },
           ]; %>
       <% const faqCount = Array.isArray(product.faqs) ? product.faqs.length : 0; %>
       <% const faqPreviewCards = Array.isArray(product.faqs)
@@ -318,7 +321,7 @@
                 </div>
               </div>
             </div>
-            <p class="text-left md:text-right text-xs italic <%= hasConsigne ? 'text-emerald-600 font-semibold' : 'text-slate-400' %>"><%= hasConsigne ? 'Échange standard sans caution • Retour ancien organe sous 30 jours' : (shippingDelayText || (product.inStock ? 'Livraison rapide en France' : 'Disponible sur commande')) %></p>
+            <p class="text-left md:text-right text-xs italic <%= hasConsigne ? 'text-emerald-600 font-semibold' : 'text-slate-400' %>"><%= hasConsigne ? (consigneUpfront ? ('Consigne ' + consigneAmountEuro + ' € remboursée au retour sous ' + consigneDelayDays + ' jours') : ('Échange standard sans caution • Retour ancien organe sous ' + consigneDelayDays + ' jours')) : (shippingDelayText || (product.inStock ? 'Livraison rapide en France' : 'Disponible sur commande')) %></p>
           </div>
 
           <form action="/panier/ajouter/<%= product._id %>" class="flex flex-col gap-4 lg:flex-1" data-add-to-cart-form data-product-id="<%= product._id %>" data-product-sku="<%= product.sku || product._id %>" data-product-image="<%= mainImage %>" data-product-name="<%= product.name %>" data-product-category="<%= product.category || '' %>" data-product-brand="<%= _ga4Brand %>" data-product-price-cents="<%= basePriceCents %>" method="POST">
@@ -449,7 +452,7 @@
                             </div>
                           </div>
                         </div>
-                        <div class="mt-4 text-xs text-slate-500">Aucune caution n'est demandée à la commande. En cas de non-retour après 30 jours, la consigne sera facturée.</div>
+                        <div class="mt-4 text-xs text-slate-500"><% if (consigneUpfront) { %>Consigne de <%= consigneAmountEuro %> € encaissée à la commande, <strong class="text-emerald-600">intégralement remboursée</strong> au retour de votre ancien organe sous <%= consigneDelayDays %> jours.<% } else { %>Aucune caution n'est demandée à la commande. En cas de non-retour après <%= consigneDelayDays %> jours, la consigne sera facturée.<% } %></div>
                       </div>
                     <% } %>
                   </div>

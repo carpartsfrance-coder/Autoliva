@@ -34,9 +34,12 @@ function computePromoDiscountCents(itemsSubtotalCentsAfterClient, promo) {
   return Math.min(subtotal, Math.round((subtotal * pct) / 100));
 }
 
-function computePricing({ itemsSubtotalCents, shippingCostCents, clientDiscountPercent = 0, promo = null } = {}) {
+function computePricing({ itemsSubtotalCents, shippingCostCents, clientDiscountPercent = 0, promo = null, consigneChargeCents = 0 } = {}) {
   const itemsSubtotal = clampCents(itemsSubtotalCents);
   const shipping = clampCents(shippingCostCents);
+  // Consigne encaissée (caution) : ajoutée au total APRÈS remises — une caution
+  // ne se remise pas et n'est jamais réduite par un code promo.
+  const consigne = clampCents(consigneChargeCents);
 
   const clientDiscountCents = computeClientDiscountCents(itemsSubtotal, clientDiscountPercent);
   const afterClient = Math.max(0, itemsSubtotal - clientDiscountCents);
@@ -44,7 +47,7 @@ function computePricing({ itemsSubtotalCents, shippingCostCents, clientDiscountP
   const promoDiscountCents = computePromoDiscountCents(afterClient, promo);
   const afterPromo = Math.max(0, afterClient - promoDiscountCents);
 
-  const totalCents = clampCents(afterPromo + shipping);
+  const totalCents = clampCents(afterPromo + shipping + consigne);
 
   return {
     itemsSubtotalCents: itemsSubtotal,
@@ -54,6 +57,7 @@ function computePricing({ itemsSubtotalCents, shippingCostCents, clientDiscountP
     promoCode: promo && promo.code ? String(promo.code) : '',
     promoDiscountCents,
     itemsTotalAfterDiscountCents: afterPromo,
+    consigneChargeCents: consigne,
     totalCents,
   };
 }

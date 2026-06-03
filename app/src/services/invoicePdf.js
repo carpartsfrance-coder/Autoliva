@@ -76,8 +76,14 @@ function computeTotals(order) {
     ? order.totalCents
     : itemsTotalAfterDiscountCents + shippingCostCents;
 
-  const htCents = Math.round(totalCents / 1.2);
-  const vatCents = totalCents - htCents;
+  // Consigne encaissée = caution remboursable → HORS base TVA (pas du CA taxable).
+  const consigneChargedCents = order && order.consigne && Number.isFinite(order.consigne.chargedTotalCents)
+    ? order.consigne.chargedTotalCents
+    : 0;
+  const taxableCents = Math.max(0, totalCents - consigneChargedCents);
+
+  const htCents = Math.round(taxableCents / 1.2);
+  const vatCents = taxableCents - htCents;
 
   return {
     itemsSubtotalCents,
@@ -85,6 +91,7 @@ function computeTotals(order) {
     shippingCostCents,
     clientDiscountCents,
     promoDiscountCents,
+    consigneChargedCents,
     totalCents,
     htCents,
     vatCents,
@@ -300,9 +307,10 @@ async function buildOrderInvoicePdfBuffer({ order, user } = {}) {
       if (totals.promoDiscountCents > 0) summaryLines.push({ label: 'Code promo', value: `- ${formatEuro(totals.promoDiscountCents)}` });
       if (totals.shippingCostCents > 0) summaryLines.push({ label: 'Frais de transport', value: formatEuro(totals.shippingCostCents) });
       if (totals.shippingCostCents === 0) summaryLines.push({ label: 'Frais de transport (offerts)', value: formatEuro(0) });
+      if (totals.consigneChargedCents > 0) summaryLines.push({ label: 'Consigne (caution remboursable, hors TVA)', value: formatEuro(totals.consigneChargedCents) });
 
       summaryLines.push({ label: 'Total TTC', value: formatEuro(totals.totalCents) });
-      summaryLines.push({ label: 'Total HT', value: formatEuro(totals.htCents) });
+      summaryLines.push({ label: 'Total HT (hors consigne)', value: formatEuro(totals.htCents) });
       summaryLines.push({ label: 'TVA (20%)', value: formatEuro(totals.vatCents) });
 
       const labelW = 250;

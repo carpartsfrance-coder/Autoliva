@@ -118,6 +118,11 @@ const consigneLineSchema = new mongoose.Schema(
     startAt: { type: Date, default: null },
     dueAt: { type: Date, default: null, index: true },
     receivedAt: { type: Date, default: null },
+    /* Consigne ENCAISSÉE à la commande (caution hors-TVA) — vs simple suivi. */
+    charged: { type: Boolean, default: false },
+    chargedCents: { type: Number, default: 0, min: 0 },
+    refundedAt: { type: Date, default: null },
+    refundedCents: { type: Number, default: 0, min: 0 },
   },
   { timestamps: false }
 );
@@ -334,6 +339,9 @@ const orderSchema = new mongoose.Schema(
     smsSent: { type: [smsSentSchema], default: [] },
     consigne: {
       lines: { type: [consigneLineSchema], default: [] },
+      /* Somme des consignes ENCAISSÉES à la commande (caution hors-TVA).
+       * Incluse dans totalCents mais EXCLUE de la base TVA sur la facture. */
+      chargedTotalCents: { type: Number, default: 0, min: 0 },
     },
     shipments: { type: [shipmentSchema], default: [] },
     refunds: { type: [refundSchema], default: [] },

@@ -24,6 +24,10 @@ const productSchema = new mongoose.Schema(
       enabled: { type: Boolean, default: false },
       amountCents: { type: Number, default: 0, min: 0 },
       delayDays: { type: Number, default: 30, min: 0, max: 3650 },
+      /* Si true : la consigne est ENCAISSÉE à la commande (caution, hors-TVA),
+       * remboursée au retour du core. Si false (défaut) : modèle "sans caution"
+       * actuel (facturée seulement en cas de non-retour). */
+      chargeUpfront: { type: Boolean, default: false },
     },
 
     /* Pièces incluses / non incluses (surtout moteurs reconditionnés).
