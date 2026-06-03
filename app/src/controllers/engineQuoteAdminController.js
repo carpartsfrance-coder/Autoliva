@@ -13,6 +13,7 @@
  *   - Changer le statut workflow
  */
 
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const AbandonedCart = require('../models/AbandonedCart');
 const storage = require('../services/savFileStorage');
@@ -26,6 +27,25 @@ const mollie = require('../services/mollie');
 const brand = require('../config/brand');
 
 const MOLLIE_ENABLED = String(process.env.ENGINE_QUOTE_MOLLIE_ENABLED || '').toLowerCase() === 'true';
+
+// Alphabet sans caractères ambigus (0/O, 1/I/l) pour les liens courts SMS.
+const SHORT_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+function randomShortCode(len) {
+  const bytes = crypto.randomBytes(len);
+  let out = '';
+  for (let i = 0; i < len; i += 1) out += SHORT_CODE_ALPHABET[bytes[i] % SHORT_CODE_ALPHABET.length];
+  return out;
+}
+/** Génère un shortCode unique pour le lien SMS de marque (autoliva.com/d/<code>). */
+async function generateUniqueShortCode() {
+  for (let i = 0; i < 5; i += 1) {
+    const code = randomShortCode(7);
+    // eslint-disable-next-line no-await-in-loop
+    const exists = await AbandonedCart.exists({ 'engineQuote.sentQuotes.shortCode': code });
+    if (!exists) return code;
+  }
+  return randomShortCode(10); // collision quasi impossible
+}
 
 const STATUS_LABELS = {
   new:          { label: 'Nouveau',       className: 'bg-blue-50 text-blue-700 border border-blue-200' },
@@ -1103,10 +1123,16 @@ async function postSendQuote(req, res, next) {
       console.error('[engine-quote] Email envoi devis échoué:', sendResult);
     }
 
+    // Lien court de marque pour le SMS (autoliva.com/d/<code>) : bien plus
+    // lisible et rassurant que la longue URL /api/devis-moteurs/track-pdf/…
+    // qui débordait sur 4 lignes. Enregistre la vue "PDF" comme le lien tracké.
+    const shortCode = await generateUniqueShortCode();
+    const pdfShortUrl = publicBase + '/d/' + shortCode;
+
     // 6bis) SMS "devis prêt" (best-effort) — garantit que le client VOIT son
-    // devis (~98% d'ouverture) même si l'email passe en spam. Le lien tracké
-    // (/track-pdf) amène droit au devis ET enregistre "PDF vu" → ce qui
-    // déclenche l'alerte "lead chaud" → le commercial rappelle au bon moment.
+    // devis (~98% d'ouverture) même si l'email passe en spam. Le lien court
+    // amène droit au devis ET enregistre "PDF vu" → ce qui déclenche l'alerte
+    // "lead chaud" → le commercial rappelle au bon moment.
     if (cart.phone) {
       try {
         // Format GSM-7 (évite l'espace insécable de toLocaleString qui forcerait
@@ -1115,7 +1141,7 @@ async function postSendQuote(req, res, next) {
         const { enabled: smsOn, text: smsBody } = await resolveSms('moteur_devis', {
           quoteRef,
           totalTtc: totalTtcFmt,
-          pdfUrl: pdfTrackUrl,
+          pdfUrl: pdfShortUrl,
           phoneMoteur: brand.PHONE_MOTEUR,
         });
         if (smsOn && smsBody) await sendSms({ to: cart.phone, text: smsBody });
@@ -1141,6 +1167,7 @@ async function postSendQuote(req, res, next) {
             sentAt: new Date(),
             pdfId: pdfSaved.id,
             pdfUrl: pdfSaved.url,
+            shortCode,
             sellPriceHt: sellHt,
             sellPriceTtc: sellTtc,
             depositCents,

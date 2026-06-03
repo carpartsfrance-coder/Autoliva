@@ -259,4 +259,37 @@ async function getTrackPdf(req, res) {
   }
 }
 
-module.exports = { postMollieWebhook, getTrackOpen, getTrackPay, getTrackPdf };
+/**
+ * GET /d/:code
+ * Lien court de marque envoyé par SMS (« Le voir : autoliva.com/d/Xa7Qk2 »).
+ * Résout le devis via son shortCode, enregistre la vue (comme /track-pdf)
+ * puis redirige vers le PDF (désormais servi par /sav-files au porteur du lien).
+ */
+async function getShortDevisLink(req, res) {
+  const fallback = (brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
+  try {
+    const code = String(req.params.code || '');
+    if (mongoose.connection.readyState !== 1) return res.redirect(302, fallback);
+    if (!/^[A-Za-z0-9]{4,16}$/.test(code)) return res.redirect(302, fallback);
+
+    const cart = await AbandonedCart.findOne({ 'engineQuote.sentQuotes.shortCode': code });
+    if (!cart || !cart.engineQuote || !Array.isArray(cart.engineQuote.sentQuotes)) {
+      return res.redirect(302, fallback);
+    }
+    const sq = cart.engineQuote.sentQuotes.find((s) => s && s.shortCode === code);
+    if (!sq) return res.redirect(302, fallback);
+
+    sq.pdfViewCount = (sq.pdfViewCount || 0) + 1;
+    if (!sq.pdfViewedAt) sq.pdfViewedAt = new Date();
+    await cart.save();
+
+    const dest = String(sq.pdfUrl || '');
+    if (dest.startsWith('/') || /^https?:\/\//i.test(dest)) return res.redirect(302, dest);
+    return res.redirect(302, fallback);
+  } catch (err) {
+    console.error('[engine-quote-short-link]', err && err.message);
+    return res.redirect(302, fallback);
+  }
+}
+
+module.exports = { postMollieWebhook, getTrackOpen, getTrackPay, getTrackPdf, getShortDevisLink };
