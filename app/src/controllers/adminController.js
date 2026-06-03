@@ -3152,19 +3152,19 @@ async function postAdminUpdateOrderStatus(req, res, next) {
             const delayDays = Number.isFinite(l.delayDays) ? Math.max(0, Math.floor(l.delayDays)) : 30;
             const dueAt = new Date(now);
             dueAt.setDate(dueAt.getDate() + delayDays);
+            /* Spread pour PRÉSERVER les champs d'encaissement (charged,
+             * chargedCents, refundedAt, refundedCents) — sinon le passage en
+             * « delivered » effacerait l'info de consigne encaissée. */
             return {
-              productId: l.productId,
-              name: l.name,
-              sku: l.sku || '',
-              quantity: l.quantity,
-              amountCents: l.amountCents,
+              ...l,
               delayDays,
               startAt: now,
               dueAt,
-              receivedAt: null,
             };
           });
-          setPatch.consigne = { lines: updatedLines };
+          /* Chemin pointé : ne PAS écraser le reste de l'objet consigne
+           * (chargedTotalCents, refundedTotalCents…). */
+          setPatch['consigne.lines'] = updatedLines;
         }
       }
 
