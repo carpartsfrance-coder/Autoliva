@@ -265,6 +265,27 @@ function dt(v) {
             </div>
           </div>
 
+          <!-- Coûts de contrôle (auto) : port de test + MO de test → frais annexes -->
+          <div class="flex flex-wrap items-end gap-3 mb-4 p-3 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/40">
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Port de test (€)</label>
+              <input type="number" step="1" min="0" data-ctrl-port value="<%= controlCostDefaults.portTest %>" class="w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Taux atelier (€/h)</label>
+              <input type="number" step="1" min="0" data-ctrl-rate value="<%= controlCostDefaults.hourlyRate %>" class="w-24 rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Temps test (h)</label>
+              <input type="number" step="0.5" min="0" data-ctrl-hours value="<%= controlCostDefaults.testHours %>" class="w-20 rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+            </div>
+            <button type="button" data-apply-ctrl class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-4 py-2 rounded-lg text-sm inline-flex items-center gap-1.5">
+              <span class="material-symbols-outlined" style="font-size:16px">build</span>
+              Inclure dans les frais (<span data-ctrl-total>—</span> €)
+            </button>
+            <p class="basis-full text-[11px] text-slate-400">Port fournisseur→atelier + ta main-d'œuvre de test (taux × temps). « Inclure » remplit les frais annexes → ta marge affichée devient ta <strong>vraie</strong> marge. La livraison client (refacturée) n'est pas comptée.</p>
+          </div>
+
           <!-- Aide au calcul du prix de vente depuis une marge cible -->
           <div class="flex flex-wrap items-end gap-3 mb-4 p-3 rounded-xl border border-dashed border-slate-300 bg-slate-50/60">
             <div>
@@ -930,6 +951,24 @@ function dt(v) {
   }
   inputs.forEach(el => el.addEventListener('input', recompute));
   recompute();
+
+  // ─── Coûts de contrôle (port de test + MO de test) → frais annexes ───
+  const ctrlPort = root.querySelector('[data-ctrl-port]');
+  const ctrlRate = root.querySelector('[data-ctrl-rate]');
+  const ctrlHours = root.querySelector('[data-ctrl-hours]');
+  const ctrlTotalEl = root.querySelector('[data-ctrl-total]');
+  const applyCtrlBtn = root.querySelector('[data-apply-ctrl]');
+  const feesInput = root.querySelector('[name=additionalFees]');
+  function ctrlTotal() { return num(ctrlPort) + num(ctrlRate) * num(ctrlHours); }
+  function refreshCtrlTotal() {
+    if (ctrlTotalEl) ctrlTotalEl.textContent = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(ctrlTotal());
+  }
+  [ctrlPort, ctrlRate, ctrlHours].forEach(function (el) { if (el) el.addEventListener('input', refreshCtrlTotal); });
+  refreshCtrlTotal();
+  if (applyCtrlBtn && feesInput) applyCtrlBtn.addEventListener('click', function () {
+    feesInput.value = (Math.round(ctrlTotal() * 100) / 100).toFixed(2);
+    feesInput.dispatchEvent(new Event('input', { bubbles: true })); // recalc marge + autosave
+  });
 
   // ─── Calcul auto du prix de vente depuis une marge cible ───
   // Marge = taux de marque (sur le prix de vente) → vente = coût / (1 - m/100),
