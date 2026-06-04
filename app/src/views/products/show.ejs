@@ -304,7 +304,7 @@
             <button aria-label="Image suivante" class="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition hidden" data-lightbox-next type="button">
               <span class="material-symbols-outlined">chevron_right</span>
             </button>
-            <img alt="" class="max-w-full max-h-full object-contain select-none" data-lightbox-img />
+            <img alt="<%= product.name %>" class="max-w-full max-h-full object-contain select-none" data-lightbox-img />
             <div class="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/80 text-xs font-semibold tracking-wider hidden" data-lightbox-counter></div>
           </div>
 
@@ -552,7 +552,7 @@
 
           <div class="rounded-xl bg-slate-50 p-3 flex items-center gap-3 mb-4">
             <% if (mainImage) { %>
-              <img src="<%= mainImage %>" alt="" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
+              <img src="<%= mainImage %>" alt="<%= product.name %>" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" />
             <% } %>
             <div class="text-sm font-medium text-slate-700 truncate"><%= product.name %></div>
           </div>
@@ -1530,7 +1530,6 @@
           <span class="text-[13px] md:text-sm font-bold text-slate-900 truncate leading-tight" data-sticky-atc-desktop-name></span>
           <div class="flex items-baseline gap-2 mt-0.5">
             <span class="text-primary font-black text-lg" data-sticky-atc-desktop-price></span>
-            <span class="text-slate-500 text-[11px] font-semibold">TTC</span>
           </div>
         </div>
 
@@ -1538,7 +1537,7 @@
         <div class="hidden xl:flex items-center gap-5 text-xs font-semibold text-slate-600 shrink-0 mr-2">
           <span class="flex items-center gap-1.5">
             <span class="material-symbols-outlined text-base text-emerald-600">local_shipping</span>
-            Livraison 24/48h
+            <%= (product && product.shippingDelayText && String(product.shippingDelayText).trim()) ? String(product.shippingDelayText).trim() : 'Livraison rapide' %>
           </span>
           <span class="flex items-center gap-1.5">
             <span class="material-symbols-outlined text-base text-emerald-600">verified</span>
@@ -1576,9 +1575,11 @@
       var priceEl = document.querySelector('[data-price-display]');
       var priceHtEl = document.querySelector('[data-price-display-ht]'); // si présent → prix HT mis en avant
       // Prix affiché dans la barre sticky : HT en avant si TVA récupérable, sinon TTC.
+      // L'unité (HT / TTC) est portée par la chaîne elle-même → pas de label statique.
       function currentStickyPrice() {
         if (priceHtEl) return priceHtEl.textContent.trim() + ' € HT';
-        return (priceEl && priceEl.textContent.trim()) || '';
+        var ttc = (priceEl && priceEl.textContent.trim()) || '';
+        return ttc ? (ttc + ' TTC') : '';
       }
       var addToCartForm = document.querySelector('[data-add-to-cart-form]');
       var productName = (h1 && h1.textContent.trim())

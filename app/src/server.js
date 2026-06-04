@@ -20,6 +20,9 @@ async function start() {
       // Seed one-shot des blocs d'information « Conditions » de départ.
       const { seedInfoBlocks } = require('./migrations/seedInfoBlocks');
       await seedInfoBlocks(mongoose.connection);
+      // Remplace le contenu placeholder des blocs seedés par le vrai contenu.
+      const { updateInfoBlocksContent } = require('./migrations/updateInfoBlocksContent');
+      await updateInfoBlocksContent(mongoose.connection);
       startScheduler();
     } catch (err) {
       console.error('Erreur de connexion MongoDB :', err.message);
