@@ -65,7 +65,7 @@
 
         <div class="lg:col-span-2">
           <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500" for="content">Contenu (markdown simple)</label>
-          <textarea class="mt-2 w-full min-h-[220px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-mono" id="content" name="content" placeholder="Texte du bloc. Markdown simple supporté : **gras**, listes avec - , titres ## ..."></textarea>
+          <textarea class="mt-2 w-full min-h-[220px] rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-mono" id="content" name="content" data-md-editor placeholder="Texte du bloc. Boutons ci-dessus pour le gras, les listes, etc. Entrée = nouvelle ligne."></textarea>
         </div>
 
         <div class="lg:col-span-2 flex justify-end">
@@ -144,7 +144,7 @@
 
                   <div class="lg:col-span-2">
                     <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Contenu (markdown simple)</label>
-                    <textarea class="mt-2 w-full min-h-[220px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-mono" name="content"><%= block.content %></textarea>
+                    <textarea class="mt-2 w-full min-h-[220px] rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-mono" name="content" data-md-editor><%= block.content %></textarea>
                   </div>
 
                   <div class="lg:col-span-2 flex justify-end">
@@ -163,6 +163,75 @@
       <% } %>
     </section>
   </div>
+
+  <script>
+    (function () {
+      function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+      function inline(s){ s=esc(s); s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>'); s=s.replace(/\*([^*]+)\*/g,'<em>$1</em>'); return s; }
+      // Doit rester cohérent avec services/infoBlockContent.js (rendu serveur).
+      function render(text){
+        var lines=String(text||'').replace(/\r\n?/g,'\n').split('\n');
+        var out=[], para=[], list=null;
+        function fp(){ if(para.length){ out.push('<p>'+para.join('<br>')+'</p>'); para=[]; } }
+        function fl(){ if(list&&list.length){ out.push('<ul>'+list.map(function(li){return '<li>'+li+'</li>';}).join('')+'</ul>'); } list=null; }
+        for (var i=0;i<lines.length;i++){
+          var t=lines[i].trim();
+          if(!t){ fp(); fl(); continue; }
+          var h=t.match(/^(#{1,3})\s+(.*)$/); var it=t.match(/^[-*]\s+(.*)$/);
+          if(h){ fp(); fl(); var lv=Math.min(h[1].length+1,4); out.push('<h'+lv+'>'+inline(h[2])+'</h'+lv+'>'); continue; }
+          if(it){ fp(); if(!list)list=[]; list.push(inline(it[1])); continue; }
+          fl(); para.push(inline(t));
+        }
+        fp(); fl();
+        return out.join('\n');
+      }
+      function wrap(ta, before, after){
+        var s=ta.selectionStart, e=ta.selectionEnd, v=ta.value;
+        var sel=v.slice(s,e) || 'texte';
+        ta.value=v.slice(0,s)+before+sel+after+v.slice(e);
+        ta.focus();
+        ta.selectionStart=s+before.length; ta.selectionEnd=s+before.length+sel.length;
+        ta.dispatchEvent(new Event('input'));
+      }
+      function prefixLines(ta, prefix){
+        var s=ta.selectionStart, e=ta.selectionEnd, v=ta.value;
+        var ls=v.lastIndexOf('\n',s-1)+1;
+        var le=v.indexOf('\n',e); if(le===-1) le=v.length;
+        var block=v.slice(ls,le).split('\n').map(function(l){ return l ? prefix+l : prefix; }).join('\n');
+        ta.value=v.slice(0,ls)+block+v.slice(le);
+        ta.focus(); ta.dispatchEvent(new Event('input'));
+      }
+      var BTNS=[
+        {label:'Gras', t:'wrap', a:'**', b:'**'},
+        {label:'Italique', t:'wrap', a:'*', b:'*'},
+        {label:'Titre', t:'prefix', p:'## '},
+        {label:'Liste', t:'prefix', p:'- '}
+      ];
+      Array.prototype.forEach.call(document.querySelectorAll('textarea[data-md-editor]'), function(ta){
+        if (ta.dataset.mdReady) return; ta.dataset.mdReady='1';
+        var bar=document.createElement('div');
+        bar.className='flex flex-wrap items-center gap-2 mb-2';
+        BTNS.forEach(function(b){
+          var btn=document.createElement('button'); btn.type='button';
+          btn.className='inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition';
+          btn.textContent=b.label;
+          btn.addEventListener('click', function(){ if(b.t==='wrap') wrap(ta,b.a,b.b); else prefixLines(ta,b.p); });
+          bar.appendChild(btn);
+        });
+        var hint=document.createElement('span'); hint.className='text-xs text-slate-400';
+        hint.textContent='Astuce : Entrée = nouvelle ligne · ligne vide = nouveau paragraphe';
+        bar.appendChild(hint);
+        ta.parentNode.insertBefore(bar, ta);
+
+        var prevWrap=document.createElement('div'); prevWrap.className='mt-2';
+        prevWrap.innerHTML='<div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-1">Aperçu</div><div class="product-html rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700" data-md-preview style="min-height:40px"></div>';
+        ta.parentNode.insertBefore(prevWrap, ta.nextSibling);
+        var preview=prevWrap.querySelector('[data-md-preview]');
+        function sync(){ preview.innerHTML=render(ta.value) || '<span style="color:#94a3b8">(vide)</span>'; }
+        ta.addEventListener('input', sync); sync();
+      });
+    })();
+  </script>
 </main>
 
 <%- include('./partials/footer') %>
