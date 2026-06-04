@@ -168,7 +168,12 @@
         'Merci.',
       ].join('\n'); %>
       <% const compatibilityContactUrl = '/contact?subject=compatibilite&partRef=' + encodeURIComponent(ref) + '&message=' + encodeURIComponent(compatibilityPrefillMessage); %>
-      <% const qualityHighlights = isService
+      <%# Badges MANUELS (4 textes libres saisis en admin) — affichés tels quels.
+          Si aucun n'est rempli → fallback sur les badges auto (rétrocompat). %>
+      <% const manualBadgeCards = (product.badges && Array.isArray(product.badges.cards))
+        ? product.badges.cards.map((s) => String(s || '').trim()).filter(Boolean).slice(0, 4)
+        : []; %>
+      <% const autoHighlights = isService
         ? [
             { icon: 'euro', label: '199€ Prix fixe' },
             { icon: 'bolt', label: 'Clonage en 24h' },
@@ -181,6 +186,9 @@
             { icon: 'analytics', label: 'Testé sur banc' },
             consigneUpfront ? { icon: 'verified_user', label: 'Consigne remboursable' } : { icon: 'lock_open', label: 'Sans caution' },
           ]; %>
+      <% const qualityHighlights = manualBadgeCards.length
+        ? manualBadgeCards.map((label) => ({ icon: 'check_circle', label, manual: true }))
+        : autoHighlights; %>
       <% const faqCount = Array.isArray(product.faqs) ? product.faqs.length : 0; %>
       <% const faqPreviewCards = Array.isArray(product.faqs)
         ? product.faqs.filter((f) => f && f.question && f.answer).slice(0, 3)
@@ -205,7 +213,7 @@
       <% if (technicalSpecs.length < 6) pushTechnicalSpec('Référence', ref); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec('Type', keyType); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec('État', keyEtat); %>
-      <% if (technicalSpecs.length < 6) pushTechnicalSpec('Programmation', keyProgrammation || 'Selon version'); %>
+      <% if (technicalSpecs.length < 6 && keyProgrammation) pushTechnicalSpec('Programmation', keyProgrammation); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec('Garantie', keyGarantie || 'Incluse'); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec('Expédition', shippingDelayText || 'Sous 24/48h'); %>
 
@@ -302,14 +310,16 @@
             <button class="hidden" data-thumb data-index="<%= idx + 4 %>" data-src="<%= item.url %>" data-type="<%= item.type %>" type="button"></button>
           <% }) %>
 
+          <% if (qualityHighlights.length) { %>
           <div class="grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-4 mt-1">
             <% qualityHighlights.forEach((item) => { %>
-              <div class="flex flex-col items-center p-2 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-center refined-shadow">
+              <div class="flex flex-col items-center justify-center p-2 sm:p-4 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 text-center refined-shadow">
                 <span class="material-symbols-outlined text-primary text-2xl sm:text-3xl mb-1 sm:mb-2"><%= item.icon %></span>
-                <span class="text-[10px] sm:text-xs font-bold uppercase tracking-tight text-slate-900 dark:text-white"><%= item.label %></span>
+                <span class="text-[10px] sm:text-xs font-bold <%= item.manual ? 'normal-case leading-tight' : 'uppercase tracking-tight' %> text-slate-900 dark:text-white"><%= item.label %></span>
               </div>
             <% }) %>
           </div>
+          <% } %>
 
           <% if (hasVideo) { %>
             <div class="flex justify-start">

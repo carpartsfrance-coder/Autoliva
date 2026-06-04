@@ -65,6 +65,9 @@ const productSchema = new mongoose.Schema(
     badges: {
       topLeft: { type: String, default: '', trim: true },
       condition: { type: String, default: '', trim: true },
+      // Jusqu'à 4 badges texte LIBRES, saisis à la main, affichés tels quels
+      // sous la galerie (remplacent les badges auto-générés).
+      cards: { type: [String], default: [] },
     },
 
     galleryUrls: { type: [String], default: [] },

@@ -4756,7 +4756,7 @@ function getRequiredProductContentError({ form, hasMainImage }) {
 
   if (!hasMainImage) missing.push('image principale');
   if (!getTrimmedString(form && form.specType)) missing.push('type');
-  if (!getTrimmedString(form && form.specProgrammation)) missing.push('programmation');
+  // Programmation : facultative (sans objet pour les moteurs).
   if (!getTrimmedString(form && form.badgeTopLeft)) missing.push('garantie');
   if (!getTrimmedString(form && form.badgeCondition)) missing.push('état');
   if (!getTrimmedString(form && form.shortDescription)) missing.push('résumé');
@@ -6696,6 +6696,10 @@ async function getAdminNewProductPage(req, res) {
       imageUrl: '',
       badgeTopLeft: '',
       badgeCondition: '',
+      badge1: '',
+      badge2: '',
+      badge3: '',
+      badge4: '',
       galleryUrls: '',
       shortDescription: '',
       description: '',
@@ -6792,6 +6796,10 @@ async function postAdminCreateProduct(req, res, next) {
       imageUrl: getTrimmedString(req.body.imageUrl),
       badgeTopLeft: getTrimmedString(req.body.badgeTopLeft),
       badgeCondition: getTrimmedString(req.body.badgeCondition),
+      badge1: getTrimmedString(req.body.badge1),
+      badge2: getTrimmedString(req.body.badge2),
+      badge3: getTrimmedString(req.body.badge3),
+      badge4: getTrimmedString(req.body.badge4),
       galleryUrls: getTrimmedString(req.body.galleryUrls),
       galleryTypes: getTrimmedString(req.body.galleryTypes),
       shortDescription: getTrimmedString(req.body.shortDescription),
@@ -7084,6 +7092,7 @@ async function postAdminCreateProduct(req, res, next) {
       badges: {
         topLeft: form.badgeTopLeft,
         condition: form.badgeCondition,
+        cards: [form.badge1, form.badge2, form.badge3, form.badge4].map((s) => getTrimmedString(s)).filter(Boolean).slice(0, 4),
       },
       galleryUrls,
       galleryTypes,
@@ -7236,6 +7245,10 @@ async function getAdminEditProductPage(req, res, next) {
         imageUrl: product.imageUrl || '',
         badgeTopLeft: product.badges && product.badges.topLeft ? product.badges.topLeft : '',
         badgeCondition: product.badges && product.badges.condition ? product.badges.condition : '',
+        badge1: product.badges && Array.isArray(product.badges.cards) && product.badges.cards[0] ? product.badges.cards[0] : '',
+        badge2: product.badges && Array.isArray(product.badges.cards) && product.badges.cards[1] ? product.badges.cards[1] : '',
+        badge3: product.badges && Array.isArray(product.badges.cards) && product.badges.cards[2] ? product.badges.cards[2] : '',
+        badge4: product.badges && Array.isArray(product.badges.cards) && product.badges.cards[3] ? product.badges.cards[3] : '',
         galleryUrls: Array.isArray(product.galleryUrls) ? product.galleryUrls.filter(Boolean).join('\n') : '',
         // Tableau parallèle aligné sur galleryUrls (image|video). Reconstitue '' pour les indices manquants
         // (anciens produits sans galleryTypes) — le client mappera 'image' par défaut.
@@ -7365,6 +7378,10 @@ async function postAdminUpdateProduct(req, res, next) {
       imageUrl: getTrimmedString(req.body.imageUrl),
       badgeTopLeft: getTrimmedString(req.body.badgeTopLeft),
       badgeCondition: getTrimmedString(req.body.badgeCondition),
+      badge1: getTrimmedString(req.body.badge1),
+      badge2: getTrimmedString(req.body.badge2),
+      badge3: getTrimmedString(req.body.badge3),
+      badge4: getTrimmedString(req.body.badge4),
       galleryUrls: getTrimmedString(req.body.galleryUrls),
       galleryTypes: getTrimmedString(req.body.galleryTypes),
       shortDescription: getTrimmedString(req.body.shortDescription),
@@ -7743,6 +7760,7 @@ async function postAdminUpdateProduct(req, res, next) {
           badges: {
             topLeft: form.badgeTopLeft,
             condition: form.badgeCondition,
+            cards: [form.badge1, form.badge2, form.badge3, form.badge4].map((s) => getTrimmedString(s)).filter(Boolean).slice(0, 4),
           },
           galleryUrls,
           galleryTypes,

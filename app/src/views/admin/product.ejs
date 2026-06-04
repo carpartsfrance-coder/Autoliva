@@ -594,8 +594,8 @@
               <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="specType" name="specType" required type="text" placeholder="Ex: Boîte de vitesses" value="<%= specTypeValue %>" />
             </div>
             <div>
-              <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="specProgrammation">Programmation (Caractéristiques principales) <span class="text-red-600">*</span></label>
-              <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="specProgrammation" name="specProgrammation" required type="text" placeholder="Ex: Oui / Non / À coder" value="<%= specProgrammationValue %>" />
+              <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="specProgrammation">Programmation (Caractéristiques principales) <span class="text-slate-400 normal-case font-normal">— facultatif</span></label>
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="specProgrammation" name="specProgrammation" type="text" placeholder="Ex: Oui / Non / À coder (laisser vide si sans objet)" value="<%= specProgrammationValue %>" />
             </div>
             <div>
               <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="badgeTopLeft">Garantie (affiché sur la fiche produit) <span class="text-red-600">*</span></label>
@@ -604,6 +604,17 @@
             <div>
               <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="badgeCondition">État (affiché sur la fiche produit) <span class="text-red-600">*</span></label>
               <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="badgeCondition" name="badgeCondition" placeholder="Ex: Reconditionné" required type="text" value="<%= form && form.badgeCondition ? form.badgeCondition : '' %>" />
+            </div>
+          </div>
+
+          <div class="mt-6 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 p-4">
+            <div class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-1">Badges fiche produit · 4 cartes sous la galerie</div>
+            <p class="text-xs text-slate-500 mb-3">Texte libre, <strong>affiché tel quel</strong>. Laisse un champ vide pour masquer sa carte. Si les 4 sont vides, les badges automatiques sont conservés. ~30 caractères recommandés par badge.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" name="badge1" type="text" placeholder="Échange standard" value="<%= form && form.badge1 ? form.badge1 : '' %>" />
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" name="badge2" type="text" placeholder="Garantie 12 mois" value="<%= form && form.badge2 ? form.badge2 : '' %>" />
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" name="badge3" type="text" placeholder="Testé sur banc" value="<%= form && form.badge3 ? form.badge3 : '' %>" />
+              <input class="w-full bg-gray-50 dark:bg-gray-900 border border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" name="badge4" type="text" placeholder="Livré nu (bloc + culasse)" value="<%= form && form.badge4 ? form.badge4 : '' %>" />
             </div>
           </div>
 

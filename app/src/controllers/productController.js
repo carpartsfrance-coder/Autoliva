@@ -166,8 +166,12 @@ function normalizeProduct(product) {
       ? {
           topLeft: typeof product.badges.topLeft === 'string' ? product.badges.topLeft.trim() : '',
           condition: typeof product.badges.condition === 'string' ? product.badges.condition.trim() : '',
+          // Badges texte libres — sinon perdus à l'affichage de la fiche.
+          cards: Array.isArray(product.badges.cards)
+            ? product.badges.cards.map((s) => String(s || '').trim()).filter(Boolean).slice(0, 4)
+            : [],
         }
-      : { topLeft: '', condition: '' };
+      : { topLeft: '', condition: '', cards: [] };
 
   const galleryUrls = Array.isArray(product.galleryUrls)
     ? product.galleryUrls.filter((v) => typeof v === 'string' && v.trim()).map((v) => v.trim())
