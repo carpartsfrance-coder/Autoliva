@@ -6494,15 +6494,54 @@ async function postAdminDeleteShippingClass(req, res, next) {
       return res.redirect('/admin/expedition');
     }
 
-    const usedCount = await Product.countDocuments({ shippingClassId: new mongoose.Types.ObjectId(classId) });
-    if (usedCount > 0) {
-      if (wantsJsonResponse(req)) return res.status(409).json({ ok: false, error: 'Impossible de supprimer : classe utilisée par des produits.' });
-      req.session.adminShippingClassError = 'Impossible de supprimer : classe utilisée par des produits.';
+    const objId = new mongoose.Types.ObjectId(classId);
+    const usedCount = await Product.countDocuments({ shippingClassId: objId });
+
+    // Cible de réaffectation : un id de classe valide, ou null (= « aucune »,
+    // les produits/catégories retomberont sur la classe par défaut au checkout).
+    const rawTarget = (req.body && typeof req.body.reassignToId === 'string')
+      ? req.body.reassignToId.trim()
+      : '';
+
+    const failReassign = (status, msg) => {
+      if (wantsJsonResponse(req)) return res.status(status).json({ ok: false, error: msg });
+      req.session.adminShippingClassError = msg;
       return res.redirect('/admin/expedition');
+    };
+
+    let newClassId = null; // null = aucune classe (utilisera la classe par défaut)
+
+    if (usedCount > 0) {
+      // Réaffectation obligatoire : il faut indiquer quoi faire des produits.
+      if (!rawTarget) {
+        return failReassign(409, 'Impossible de supprimer : classe utilisée par des produits. Choisissez une classe de réaffectation.');
+      }
+      if (rawTarget !== 'none') {
+        if (!mongoose.Types.ObjectId.isValid(rawTarget) || rawTarget === String(classId)) {
+          return failReassign(400, 'Réaffectation invalide : choisissez une autre classe d\'expédition.');
+        }
+        const target = await ShippingClass.findById(rawTarget).select('_id').lean();
+        if (!target) return failReassign(400, 'Classe de réaffectation introuvable.');
+        newClassId = target._id;
+      }
+    } else if (rawTarget && rawTarget !== 'none'
+      && mongoose.Types.ObjectId.isValid(rawTarget) && rawTarget !== String(classId)) {
+      // Aucun produit, mais une cible a quand même été fournie → on la respecte.
+      const target = await ShippingClass.findById(rawTarget).select('_id').lean();
+      if (target) newClassId = target._id;
     }
 
+    // Réaffecter les produits ET les catégories qui pointent sur cette classe,
+    // pour ne laisser aucune référence orpheline.
+    await Product.updateMany({ shippingClassId: objId }, { $set: { shippingClassId: newClassId } });
+    await Category.updateMany({ shippingClassId: objId }, { $set: { shippingClassId: newClassId } });
+
     await ShippingClass.findByIdAndDelete(classId);
-    if (wantsJsonResponse(req)) return res.json({ ok: true, message: 'Classe d\'expédition supprimée.', data: { deletedIds: [classId] } });
+
+    const okMsg = usedCount > 0
+      ? `Classe supprimée. ${usedCount} produit(s) réaffecté(s).`
+      : 'Classe d\'expédition supprimée.';
+    if (wantsJsonResponse(req)) return res.json({ ok: true, message: okMsg, data: { deletedIds: [classId] } });
     return res.redirect('/admin/expedition');
   } catch (err) {
     return next(err);
