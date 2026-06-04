@@ -13,6 +13,7 @@ const PromoRedemption = require('../models/PromoRedemption');
 const VehicleMake = require('../models/VehicleMake');
 const ShippingClass = require('../models/ShippingClass');
 const ProductOptionTemplate = require('../models/ProductOptionTemplate');
+const InfoBlock = require('../models/InfoBlock');
 const ProductDraftGeneration = require('../models/ProductDraftGeneration');
 const InternalNote = require('../models/InternalNote');
 
@@ -6712,6 +6713,8 @@ async function getAdminNewProductPage(req, res) {
     ? await listProductOptionTemplates({ includeInactive: true })
     : [];
 
+  const infoBlocksLibrary = dbConnected ? await listInfoBlocks({ includeInactive: false }) : [];
+
   return res.render('admin/product', {
     title: 'Admin - Nouveau produit',
     dbConnected,
@@ -6797,6 +6800,8 @@ async function getAdminNewProductPage(req, res) {
       isDefault: c.isDefault === true,
     })),
     productOptionTemplates,
+    infoBlocksLibrary,
+    selectedInfoBlockIds: [],
     compatIndex,
     productId: null,
     latestAiDraftJob: null,
@@ -7108,6 +7113,8 @@ async function postAdminCreateProduct(req, res, next) {
     const galleryTypes = galleryUrlsFromForm.map((_, i) => (galleryTypesFromForm[i] === 'video' ? 'video' : 'image'))
       .concat(extraGalleryTypes);
 
+    const resolvedInfoBlockIds = await resolveInfoBlockIds(req.body.infoBlockIds);
+
     const createData = {
       name: form.name,
       sku: form.sku,
@@ -7125,6 +7132,7 @@ async function postAdminCreateProduct(req, res, next) {
       costCents,
       options: parsedOptions.ok ? parsedOptions.options : [],
       optionTemplateIds: extractProductOptionTemplateObjectIds(parsedOptions.ok ? parsedOptions.options : []),
+      infoBlockIds: resolvedInfoBlockIds,
       consigne: {
         enabled: form.consigneEnabled === true && (Number.isFinite(consigneAmountCents) ? consigneAmountCents : 0) > 0,
         amountCents: Number.isFinite(consigneAmountCents) ? consigneAmountCents : 0,
@@ -7256,6 +7264,15 @@ async function getAdminEditProductPage(req, res, next) {
     const compatIndex = dbConnected
       ? await getCompatibilityIndex()
       : { makes: [], modelsByMake: {} };
+
+    // Blocs d'information : bibliothèque (actifs) + sélection de la fiche.
+    // Si la fiche n'a encore aucun bloc, pré-sélection par catégorie.
+    const infoBlocksLibrary = dbConnected ? await listInfoBlocks({ includeInactive: false }) : [];
+    const storedInfoBlockIds = Array.isArray(product.infoBlockIds) ? product.infoBlockIds.map((id) => String(id)) : [];
+    const selectedInfoBlockIds = storedInfoBlockIds.length
+      ? storedInfoBlockIds
+      : defaultInfoBlockIdsForCategory(product.category, infoBlocksLibrary);
+
     const adminUserId = getAdminUserIdFromRequest(req);
     const latestAiDraftJobDoc = await ProductDraftGeneration.findOne({
       productId: product._id,
@@ -7382,6 +7399,8 @@ async function getAdminEditProductPage(req, res, next) {
         isDefault: c.isDefault === true,
       })),
       productOptionTemplates,
+      infoBlocksLibrary,
+      selectedInfoBlockIds,
       compatIndex,
       productId: String(product._id),
       latestAiDraftJob: buildProductDraftJobView(latestAiDraftJobDoc, { includeDraft: true }),
@@ -7780,6 +7799,8 @@ async function postAdminUpdateProduct(req, res, next) {
       await mediaStorage.deleteFromUrl(url);
     }
 
+    const resolvedInfoBlockIds = await resolveInfoBlockIds(req.body.infoBlockIds);
+
     const updated = await Product.findByIdAndUpdate(
       productId,
       {
@@ -7800,6 +7821,7 @@ async function postAdminUpdateProduct(req, res, next) {
           costCents,
           options: parsedOptions.ok ? parsedOptions.options : [],
           optionTemplateIds: extractProductOptionTemplateObjectIds(parsedOptions.ok ? parsedOptions.options : []),
+          infoBlockIds: resolvedInfoBlockIds,
           consigne: {
             enabled: form.consigneEnabled === true && (Number.isFinite(consigneAmountCents) ? consigneAmountCents : 0) > 0,
             amountCents: Number.isFinite(consigneAmountCents) ? consigneAmountCents : 0,
@@ -10547,6 +10569,26 @@ function importNonNegInt(value, fallback = 0) {
   return Math.round(n);
 }
 
+// Résout une liste de slugs de blocs (import) en ObjectIds via la map du ctx.
+// Retourne { ids, unknown } (slugs inconnus rapportés en avertissement).
+function resolveImportInfoBlocks(rawBlocs, bySlugMap) {
+  const arr = Array.isArray(rawBlocs) ? rawBlocs : (typeof rawBlocs === 'string' ? [rawBlocs] : []);
+  const seen = new Set();
+  const ids = [];
+  const unknown = [];
+  for (const s of arr) {
+    const slug = slugify(String(s || ''));
+    if (!slug) continue;
+    const id = bySlugMap && bySlugMap.get(slug);
+    if (id) {
+      if (!seen.has(slug)) { seen.add(slug); ids.push(id); }
+    } else if (!unknown.includes(slug)) {
+      unknown.push(slug);
+    }
+  }
+  return { ids, unknown };
+}
+
 // Mappe + valide un produit du JSON d'import (mode CRÉATION).
 // ctx = { categoryNames:Set<lower>, shippingByName:Map<lower,ObjectId>,
 //         existingSlugById:Map<slug,productId>, batchSlugs:Set<string> }
@@ -10679,6 +10721,14 @@ function mapAndValidateImportProduct(raw, ctx) {
     }
   }
 
+  // Blocs d'information par slug (facultatif). Slugs inconnus → avertissement.
+  let infoBlockIds = [];
+  if (raw.blocs_information != null) {
+    const resolved = resolveImportInfoBlocks(raw.blocs_information, ctx.infoBlockBySlug);
+    infoBlockIds = resolved.ids;
+    if (resolved.unknown.length) warnings.push(`Bloc(s) d'information inconnu(s) ignoré(s) : ${resolved.unknown.join(', ')}.`);
+  }
+
   if (errors.length) return { errors, warnings, createData: null, statut };
 
   // Réserve le slug pour éviter les collisions intra-lot.
@@ -10721,6 +10771,7 @@ function mapAndValidateImportProduct(raw, ctx) {
     compatibility,
     faqs,
     relatedBlogPostIds: [],
+    infoBlockIds,
     media: { videoUrl: '' },
     seo: { metaTitle, metaDescription },
     isPublished,
@@ -10786,6 +10837,12 @@ function buildImportUpdate(raw, ctx, existing) {
   if (importHas(raw, 'inclus')) set.inclusions = importStrArray(raw.inclus);
   if (importHas(raw, 'non_inclus')) set.exclusions = importStrArray(raw.non_inclus);
   if (importHas(raw, 'points_techniques')) set.keyPoints = importStrArray(raw.points_techniques);
+
+  if (importHas(raw, 'blocs_information')) {
+    const resolved = resolveImportInfoBlocks(raw.blocs_information, ctx.infoBlockBySlug);
+    set.infoBlockIds = resolved.ids;
+    if (resolved.unknown.length) warnings.push(`Bloc(s) d'information inconnu(s) ignoré(s) : ${resolved.unknown.join(', ')}.`);
+  }
 
   if (importHas(raw, 'slug')) {
     const slug = slugify(importStr(raw.slug));
@@ -10981,8 +11038,10 @@ async function postAdminImportProducts(req, res) {
     const existingSlugById = new Map(
       slugDocs.map((p) => [importStr(p.slug), String(p._id)]).filter(([s]) => s)
     );
+    const infoBlockDocs = await InfoBlock.find({}).select('_id slug').lean();
+    const infoBlockBySlug = new Map(infoBlockDocs.map((b) => [importStr(b.slug).toLowerCase(), b._id]));
 
-    const ctx = { categoryNames, shippingByName, existingSlugById, batchSlugs: new Set() };
+    const ctx = { categoryNames, shippingByName, existingSlugById, infoBlockBySlug, batchSlugs: new Set() };
 
     const results = [];
     let created = 0;
@@ -11158,6 +11217,7 @@ function buildProductExportJson(p) {
       : [],
     meta_title: importStr(seo.metaTitle),
     meta_description: importStr(seo.metaDescription),
+    blocs_information: [], // renseigné (slugs) par le handler d'export
     statut: p.isPublished === false ? 'brouillon' : 'publie',
   };
 }
@@ -11180,6 +11240,11 @@ async function getAdminExportProduct(req, res) {
       const sc = await ShippingClass.findById(p.shippingClassId).select('name').lean();
       if (sc) json.classe_expedition = importStr(sc.name);
     }
+    if (Array.isArray(p.infoBlockIds) && p.infoBlockIds.length) {
+      const blocks = await InfoBlock.find({ _id: { $in: p.infoBlockIds } }).select('_id slug').lean();
+      const bySlugId = new Map(blocks.map((b) => [String(b._id), b.slug]));
+      json.blocs_information = p.infoBlockIds.map((id) => bySlugId.get(String(id))).filter(Boolean);
+    }
 
     const filename = `produit-${importStr(p.slug) || String(p._id)}.json`;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -11188,6 +11253,246 @@ async function getAdminExportProduct(req, res) {
   } catch (err) {
     console.error('[admin] getAdminExportProduct failed:', err);
     return res.status(500).json({ ok: false, error: 'Erreur serveur pendant l\'export.' });
+  }
+}
+
+/* =========================================================================
+ * BLOCS D'INFORMATION RÉUTILISABLES (bibliothèque + CRUD)
+ * Mêmes principes que la bibliothèque d'options. Voir models/InfoBlock.js.
+ * ========================================================================= */
+
+const INFO_BLOCK_POSITIONS = InfoBlock.POSITIONS;
+const INFO_BLOCK_POSITION_LABELS = {
+  description_end: 'Fin de description',
+  after_inclusions: 'Après « pièces incluses / non incluses »',
+  dedicated_tab: 'Onglet dédié (« Bon à savoir »)',
+};
+const INFO_BLOCK_POSITION_OPTIONS = INFO_BLOCK_POSITIONS.map((v) => ({
+  value: v,
+  label: INFO_BLOCK_POSITION_LABELS[v],
+}));
+
+function parseInfoBlockPayload(body) {
+  const title = getTrimmedString(body && body.title);
+  if (!title) return { ok: false, error: 'Le titre du bloc est obligatoire.' };
+  let slug = slugify(getTrimmedString(body && body.slug) || title);
+  if (!slug) slug = 'bloc';
+  const content = typeof (body && body.content) === 'string' ? body.content.trim() : '';
+  let position = getTrimmedString(body && body.position);
+  if (!INFO_BLOCK_POSITIONS.includes(position)) position = 'description_end';
+  const autoCategories = String((body && body.autoCategories) || '')
+    .split(/[\n,]/)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  const sortOrder = clampInt(body && body.sortOrder, { min: 0, max: 9999, fallback: 0 });
+  return { ok: true, data: { title, slug, content, position, autoCategories, sortOrder } };
+}
+
+async function listInfoBlocks({ includeInactive = true } = {}) {
+  const query = includeInactive ? {} : { isActive: true };
+  const blocks = await InfoBlock.find(query).sort({ sortOrder: 1, title: 1 }).lean();
+  return blocks.map((b) => ({
+    id: String(b._id),
+    title: b.title || '',
+    slug: b.slug || '',
+    content: b.content || '',
+    position: b.position || 'description_end',
+    positionLabel: INFO_BLOCK_POSITION_LABELS[b.position] || INFO_BLOCK_POSITION_LABELS.description_end,
+    autoCategories: Array.isArray(b.autoCategories) ? b.autoCategories : [],
+    autoCategoriesText: Array.isArray(b.autoCategories) ? b.autoCategories.join(', ') : '',
+    isActive: b.isActive !== false,
+    sortOrder: Number.isFinite(b.sortOrder) ? b.sortOrder : 0,
+  }));
+}
+
+// Résout une liste d'ids (form / import) en ObjectIds valides ET existants,
+// dans l'ordre fourni, sans doublon.
+async function resolveInfoBlockIds(rawIds) {
+  let arr = [];
+  if (Array.isArray(rawIds)) arr = rawIds;
+  else if (typeof rawIds === 'string' && rawIds.trim()) arr = [rawIds];
+  const valid = arr.map((x) => String(x || '').trim()).filter((x) => mongoose.Types.ObjectId.isValid(x));
+  if (!valid.length) return [];
+  const found = await InfoBlock.find({ _id: { $in: valid } }).select('_id').lean();
+  const foundSet = new Set(found.map((b) => String(b._id)));
+  const seen = new Set();
+  const out = [];
+  for (const id of valid) {
+    if (foundSet.has(id) && !seen.has(id)) {
+      seen.add(id);
+      out.push(new mongoose.Types.ObjectId(id));
+    }
+  }
+  return out;
+}
+
+// Résout des SLUGS de blocs (import JSON) en ObjectIds, dans l'ordre fourni.
+async function resolveInfoBlockIdsFromSlugs(rawSlugs) {
+  let arr = [];
+  if (Array.isArray(rawSlugs)) arr = rawSlugs;
+  else if (typeof rawSlugs === 'string' && rawSlugs.trim()) arr = [rawSlugs];
+  const slugs = arr.map((s) => slugify(String(s || ''))).filter(Boolean);
+  if (!slugs.length) return { ids: [], unknown: [] };
+  const found = await InfoBlock.find({ slug: { $in: slugs } }).select('_id slug').lean();
+  const bySlug = new Map(found.map((b) => [b.slug, b._id]));
+  const seen = new Set();
+  const ids = [];
+  const unknown = [];
+  for (const s of slugs) {
+    if (bySlug.has(s)) {
+      if (!seen.has(s)) { seen.add(s); ids.push(bySlug.get(s)); }
+    } else if (!unknown.includes(s)) {
+      unknown.push(s);
+    }
+  }
+  return { ids, unknown };
+}
+
+// Pré-sélection par catégorie : blocs dont une autoCategory est contenue dans
+// la catégorie du produit (insensible à la casse).
+function defaultInfoBlockIdsForCategory(category, blocks) {
+  const cat = String(category || '').toLowerCase();
+  if (!cat) return [];
+  return (blocks || [])
+    .filter((b) => b.isActive && Array.isArray(b.autoCategories) && b.autoCategories.some((kw) => kw && cat.includes(kw)))
+    .map((b) => b.id);
+}
+
+async function getAdminInfoBlocksPage(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const successMessage = req.session.adminInfoBlockSuccess || null;
+    const errorMessage = req.session.adminInfoBlockError || null;
+    delete req.session.adminInfoBlockSuccess;
+    delete req.session.adminInfoBlockError;
+
+    if (!dbConnected) {
+      return res.render('admin/info-blocks', {
+        title: "Admin - Blocs d'information",
+        dbConnected,
+        successMessage: null,
+        errorMessage: "La base de données n'est pas disponible.",
+        blocks: [],
+        positions: INFO_BLOCK_POSITION_OPTIONS,
+      });
+    }
+
+    const blocks = await listInfoBlocks({ includeInactive: true });
+    return res.render('admin/info-blocks', {
+      title: "Admin - Blocs d'information",
+      dbConnected,
+      successMessage,
+      errorMessage,
+      blocks,
+      positions: INFO_BLOCK_POSITION_OPTIONS,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function postAdminCreateInfoBlock(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) {
+      req.session.adminInfoBlockError = "La base de données n'est pas disponible.";
+      return res.redirect('/admin/catalogue/blocs');
+    }
+    const parsed = parseInfoBlockPayload(req.body);
+    if (!parsed.ok) {
+      req.session.adminInfoBlockError = parsed.error || 'Bloc invalide.';
+      return res.redirect('/admin/catalogue/blocs');
+    }
+    try {
+      const count = await InfoBlock.countDocuments({});
+      await InfoBlock.create({
+        ...parsed.data,
+        sortOrder: parsed.data.sortOrder || count,
+        isActive: true,
+      });
+      req.session.adminInfoBlockSuccess = "Bloc d'information créé.";
+    } catch (e) {
+      req.session.adminInfoBlockError = (e && e.code === 11000)
+        ? 'Un bloc existe déjà avec ce slug.'
+        : 'Création du bloc impossible.';
+    }
+    return res.redirect('/admin/catalogue/blocs');
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function postAdminUpdateInfoBlock(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) {
+      req.session.adminInfoBlockError = "La base de données n'est pas disponible.";
+      return res.redirect('/admin/catalogue/blocs');
+    }
+    const { blockId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(blockId)) {
+      req.session.adminInfoBlockError = 'Bloc introuvable.';
+      return res.redirect('/admin/catalogue/blocs');
+    }
+    const existing = await InfoBlock.findById(blockId).select('_id').lean();
+    if (!existing) {
+      req.session.adminInfoBlockError = 'Bloc introuvable.';
+      return res.redirect('/admin/catalogue/blocs');
+    }
+    const parsed = parseInfoBlockPayload(req.body);
+    if (!parsed.ok) {
+      req.session.adminInfoBlockError = parsed.error || 'Bloc invalide.';
+      return res.redirect('/admin/catalogue/blocs');
+    }
+    try {
+      await InfoBlock.findByIdAndUpdate(blockId, { $set: parsed.data });
+      req.session.adminInfoBlockSuccess = 'Bloc mis à jour.';
+    } catch (e) {
+      req.session.adminInfoBlockError = (e && e.code === 11000)
+        ? 'Un autre bloc utilise déjà ce slug.'
+        : 'Mise à jour du bloc impossible.';
+    }
+    return res.redirect('/admin/catalogue/blocs');
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function postAdminToggleInfoBlock(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) return res.redirect('/admin/catalogue/blocs');
+    const { blockId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(blockId)) {
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false });
+      return res.redirect('/admin/catalogue/blocs');
+    }
+    const b = await InfoBlock.findById(blockId).select('isActive').lean();
+    if (b) await InfoBlock.findByIdAndUpdate(blockId, { $set: { isActive: !(b.isActive !== false) } });
+    if (wantsJsonResponse(req)) return res.json({ ok: true });
+    return res.redirect('/admin/catalogue/blocs');
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function postAdminDeleteInfoBlock(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) return res.redirect('/admin/catalogue/blocs');
+    const { blockId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(blockId)) {
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false });
+      return res.redirect('/admin/catalogue/blocs');
+    }
+    await InfoBlock.findByIdAndDelete(blockId);
+    // Détache le bloc supprimé de toutes les fiches (pas de référence orpheline).
+    await Product.updateMany({ infoBlockIds: blockId }, { $pull: { infoBlockIds: blockId } });
+    if (wantsJsonResponse(req)) return res.json({ ok: true });
+    req.session.adminInfoBlockSuccess = 'Bloc supprimé.';
+    return res.redirect('/admin/catalogue/blocs');
+  } catch (err) {
+    return next(err);
   }
 }
 
@@ -11257,6 +11562,11 @@ module.exports = {
   postAdminCreateProductOptionTemplate,
   postAdminUpdateProductOptionTemplate,
   postAdminToggleProductOptionTemplate,
+  getAdminInfoBlocksPage,
+  postAdminCreateInfoBlock,
+  postAdminUpdateInfoBlock,
+  postAdminToggleInfoBlock,
+  postAdminDeleteInfoBlock,
   getAdminNewProductPage,
   postAdminCreateProduct,
   getAdminEditProductPage,

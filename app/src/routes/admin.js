@@ -256,6 +256,13 @@ router.get('/catalogue/options', requireAdminAuth, adminController.getAdminProdu
 router.post('/catalogue/options', requireAdminAuth, adminController.postAdminCreateProductOptionTemplate);
 router.post('/catalogue/options/:templateId', requireAdminAuth, adminController.postAdminUpdateProductOptionTemplate);
 router.post('/catalogue/options/:templateId/toggle', requireAdminAuth, adminController.postAdminToggleProductOptionTemplate);
+
+// Bibliothèque de blocs d'information réutilisables
+router.get('/catalogue/blocs', requireAdminAuth, adminController.getAdminInfoBlocksPage);
+router.post('/catalogue/blocs', requireAdminAuth, adminController.postAdminCreateInfoBlock);
+router.post('/catalogue/blocs/:blockId', requireAdminAuth, adminController.postAdminUpdateInfoBlock);
+router.post('/catalogue/blocs/:blockId/toggle', requireAdminAuth, adminController.postAdminToggleInfoBlock);
+router.post('/catalogue/blocs/:blockId/supprimer', requireAdminAuth, adminController.postAdminDeleteInfoBlock);
 router.post('/api/products/generate-draft', requireAdminAuth, adminController.postAdminGenerateProductDraft);
 router.get('/api/products/generate-draft/:jobId', requireAdminAuth, adminController.getAdminGenerateProductDraftStatus);
 router.post('/api/products/generate-draft/:jobId/cancel', requireAdminAuth, adminController.postAdminCancelProductDraft);

@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const BlogPost = require('../models/BlogPost');
+const InfoBlock = require('../models/InfoBlock');
 const demoProducts = require('../demoProducts');
 const sanitizeHtml = require('sanitize-html');
 const { markdownToHtml } = require('../services/blogContent');
@@ -285,6 +286,37 @@ function normalizeProduct(product) {
   };
 }
 
+// Charge les blocs d'information ACTIFS attachés au produit, rend leur contenu
+// markdown en HTML, et les regroupe par position d'affichage (dans l'ordre du
+// produit). Une modif du bloc se répercute partout (chargé à la volée).
+const INFO_BLOCK_EMPTY_GROUPS = { description_end: [], after_inclusions: [], dedicated_tab: [] };
+
+async function loadInfoBlocksByPosition(product) {
+  const grouped = { description_end: [], after_inclusions: [], dedicated_tab: [] };
+  const ids = Array.isArray(product && product.infoBlockIds) ? product.infoBlockIds : [];
+  const validIds = ids
+    .map((id) => (id == null ? '' : String(id)))
+    .filter((id) => mongoose.Types.ObjectId.isValid(id));
+  if (!validIds.length) return grouped;
+
+  const docs = await InfoBlock.find({ _id: { $in: validIds }, isActive: true })
+    .select('_id title content position')
+    .lean();
+  const byId = new Map(docs.map((d) => [String(d._id), d]));
+
+  for (const id of validIds) {
+    const d = byId.get(String(id));
+    if (!d) continue;
+    const pos = grouped[d.position] ? d.position : 'description_end';
+    grouped[pos].push({
+      id: String(d._id),
+      title: typeof d.title === 'string' ? d.title.trim() : '',
+      html: markdownToHtml(typeof d.content === 'string' ? d.content : ''),
+    });
+  }
+  return grouped;
+}
+
 function truncateText(value, max) {
   const input = typeof value === 'string' ? value.trim() : '';
   if (!input) return '';
@@ -563,6 +595,11 @@ async function getProduct(req, res, next) {
         title: `Page introuvable - ${brand.NAME}`,
       });
     }
+
+    // Blocs d'information attachés (rendus markdown → HTML, groupés par position).
+    product.infoBlocksByPosition = dbConnected
+      ? await loadInfoBlocksByPosition(product)
+      : INFO_BLOCK_EMPTY_GROUPS;
 
     // On ne redirige vers l'URL canonique /product/<slug>/ QUE si le produit a
     // un vrai slug. Sans slug, cette canonique retomberait sur un slug qui ne
