@@ -350,13 +350,17 @@
                 <div class="md:hidden text-sm text-slate-400 line-through"><%= formatMoney(compareAt) %> €</div>
               <% } %>
               <div class="text-left md:text-right">
-                <span class="text-4xl font-black text-primary" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="<%= installmentCount %>" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(product.priceCents) %> €</span>
-                <div class="text-[11px] uppercase tracking-wide text-slate-400">TTC</div>
                 <% if (product.vatRecoverable) { %>
-                  <div class="mt-1.5 flex flex-wrap items-center md:justify-end gap-2">
-                    <span class="text-base font-bold text-slate-700 dark:text-slate-200"><span data-price-display-ht><%= formatMoney(Math.round(product.priceCents / 1.2)) %></span> € HT</span>
+                  <%# Clientèle pro : prix HT mis en avant, TTC en rappel discret %>
+                  <span class="text-4xl font-black text-primary"><span data-price-display-ht><%= formatMoney(Math.round(product.priceCents / 1.2)) %></span> € HT</span>
+                  <div class="mt-1 flex flex-wrap items-center md:justify-end gap-2">
+                    <span class="text-sm font-medium text-slate-500 dark:text-slate-400"><span data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="<%= installmentCount %>" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(product.priceCents) %> €</span> TTC</span>
                     <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">TVA 20% récupérable</span>
                   </div>
+                <% } else { %>
+                  <%# Régime de la marge / particuliers : prix net (TTC) affiché seul %>
+                  <span class="text-4xl font-black text-primary" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="<%= installmentCount %>" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(product.priceCents) %> €</span>
+                  <div class="text-[11px] uppercase tracking-wide text-slate-400">TTC</div>
                 <% } %>
                 <div class="mt-1 flex items-center md:justify-end gap-1 text-xs text-slate-500 <%= installmentEligible ? '' : 'hidden' %>" data-installment-wrapper>
                   <span class="material-symbols-outlined text-sm text-slate-400">credit_card</span>
@@ -1556,6 +1560,12 @@
       /* Populate name & price from existing DOM (les 2 barres partagent les sources) */
       var h1 = document.querySelector('h1');
       var priceEl = document.querySelector('[data-price-display]');
+      var priceHtEl = document.querySelector('[data-price-display-ht]'); // si présent → prix HT mis en avant
+      // Prix affiché dans la barre sticky : HT en avant si TVA récupérable, sinon TTC.
+      function currentStickyPrice() {
+        if (priceHtEl) return priceHtEl.textContent.trim() + ' € HT';
+        return (priceEl && priceEl.textContent.trim()) || '';
+      }
       var addToCartForm = document.querySelector('[data-add-to-cart-form]');
       var productName = (h1 && h1.textContent.trim())
         || (addToCartForm && addToCartForm.getAttribute('data-product-name'))
@@ -1565,7 +1575,7 @@
             var m = document.querySelector('[data-main-image]');
             return m && m.src ? m.src : '';
           })();
-      var productPrice = (priceEl && priceEl.textContent.trim()) || '';
+      var productPrice = currentStickyPrice();
 
       var nameSpan = stickyBar.querySelector('[data-sticky-atc-name]');
       var priceSpan = stickyBar.querySelector('[data-sticky-atc-price]');
@@ -1588,13 +1598,14 @@
 
         /* Sync prix dynamique : si l'utilisateur change une option qui modifie le prix,
          * le bouton sticky desktop reflète la nouvelle valeur. */
-        if (priceEl && typeof MutationObserver !== 'undefined') {
+        var priceObserved = priceHtEl || priceEl;
+        if (priceObserved && typeof MutationObserver !== 'undefined') {
           var priceMo = new MutationObserver(function () {
-            var newPrice = priceEl.textContent.trim();
+            var newPrice = currentStickyPrice();
             if (priceSpan) priceSpan.textContent = newPrice;
             if (priceSpanD) priceSpanD.textContent = newPrice;
           });
-          priceMo.observe(priceEl, { childList: true, characterData: true, subtree: true });
+          priceMo.observe(priceObserved, { childList: true, characterData: true, subtree: true });
         }
       }
 
