@@ -695,6 +695,11 @@ async function getProduct(req, res, next) {
      * commerciales tirées des specs/specs section. Google accepte plusieurs
      * PropertyValue et les affiche dans les rich results de la fiche produit. */
     const enrichedAdditionalProperties = [];
+    // Code moteur (ex: CLHA) : identifiant n°1 recherché par les garagistes.
+    const engineCode = typeof product.engineCode === 'string' ? product.engineCode.trim() : '';
+    if (engineCode) {
+      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: 'Code moteur', value: engineCode });
+    }
     if (compatibleReferences.length) {
       compatibleReferences.forEach((r) => {
         enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: 'Référence compatible', value: r });
@@ -748,7 +753,7 @@ async function getProduct(req, res, next) {
       name: product.name,
       description: truncateText(descriptionForSchema, 5000),
       sku: skuText || undefined,
-      mpn: compatibleReferences.length ? compatibleReferences[0] : undefined,
+      mpn: engineCode || (compatibleReferences.length ? compatibleReferences[0] : undefined),
       productID: skuText || undefined,
       category: categoryNameForSchema || undefined,
       brand: schemaBrandName ? { '@type': 'Brand', name: schemaBrandName } : undefined,

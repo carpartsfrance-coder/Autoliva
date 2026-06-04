@@ -55,7 +55,7 @@ async function getSuggest(req, res, next) {
 
     if (dbConnected) {
       products = await Product.find({})
-        .select('_id name sku brand priceCents imageUrl galleryUrls slug category shortDescription description compatibleReferences compatibility specs keyPoints tags')
+        .select('_id name sku engineCode brand priceCents imageUrl galleryUrls slug category shortDescription description compatibleReferences compatibility specs keyPoints tags')
         .lean();
     } else {
       products = Array.isArray(demoProducts)
