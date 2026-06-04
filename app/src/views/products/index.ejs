@@ -362,40 +362,57 @@
             <% }) %>
           </div>
 
-          <div class="flex flex-col sm:flex-row items-center justify-between gap-6 py-8 border-t border-gray-200 mt-8">
-            <a class="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-primary <%= page <= 1 ? 'pointer-events-none opacity-40' : '' %>" href="<%= buildUrl({ page: Math.max(1, (page || 1) - 1) }) %>">
-              <span class="material-symbols-outlined">chevron_left</span>
-              Précédent
-            </a>
+          <%
+            const _last = Math.max(1, Number(totalPages) || 1);
+            const _current = Math.min(Math.max(1, Number(page) || 1), _last);
+          %>
+          <% if (_last > 1) { %>
+            <%
+              const _prevPage = Math.max(1, _current - 1);
+              const _nextPage = Math.min(_last, _current + 1);
+              const _delta = 1;
+              const _win = [];
+              const _left = Math.max(2, _current - _delta);
+              const _right = Math.min(_last - 1, _current + _delta);
+              _win.push(1);
+              if (_left > 2) _win.push('…');
+              for (let i = _left; i <= _right; i++) _win.push(i);
+              if (_right < _last - 1) _win.push('…');
+              if (_last > 1) _win.push(_last);
+            %>
+            <nav class="flex items-center justify-between sm:justify-center gap-2 sm:gap-3 py-8 border-t border-gray-200 mt-8" aria-label="Pagination des produits">
+              <%# Précédent %>
+              <a <%- _current <= 1 ? 'aria-disabled="true" tabindex="-1"' : 'rel="prev"' %>
+                 class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white h-10 px-3 sm:px-4 text-sm font-bold text-gray-600 hover:border-primary hover:text-primary transition <%= _current <= 1 ? 'pointer-events-none opacity-40' : '' %>"
+                 href="<%= buildUrl({ page: _prevPage }) %>" aria-label="Page précédente">
+                <span class="material-symbols-outlined text-lg">chevron_left</span>
+                <span class="hidden sm:inline">Précédent</span>
+              </a>
 
-            <div class="flex items-center gap-2">
-              <% const current = Number(page) || 1;
-                 const last = Number(totalPages) || 1;
-                 const pagesToShow = [];
-                 for (let i = 1; i <= Math.min(3, last); i++) pagesToShow.push(i);
-                 if (last > 1) {
-                   if (!pagesToShow.includes(current) && current > 1 && current < last) pagesToShow.push(current);
-                   if (!pagesToShow.includes(last) && last <= current + 2) {
-                     for (let i = Math.max(1, last - 2); i <= last; i++) pagesToShow.push(i);
-                   }
-                 }
-                 const uniq = Array.from(new Set(pagesToShow)).sort((a,b) => a-b);
-              %>
+              <%# Numéros (desktop) %>
+              <div class="hidden sm:flex items-center gap-1.5">
+                <% _win.forEach((pNum) => { %>
+                  <% if (pNum === '…') { %>
+                    <span class="w-10 h-10 flex items-center justify-center text-gray-400 select-none">…</span>
+                  <% } else if (pNum === _current) { %>
+                    <span aria-current="page" class="w-10 h-10 rounded-full bg-primary text-white font-bold text-sm flex items-center justify-center shadow-sm"><%= pNum %></span>
+                  <% } else { %>
+                    <a class="w-10 h-10 rounded-full border border-gray-200 bg-white text-gray-700 font-bold text-sm flex items-center justify-center hover:border-primary hover:text-primary transition" href="<%= buildUrl({ page: pNum }) %>" aria-label="Page <%= pNum %>"><%= pNum %></a>
+                  <% } %>
+                <% }) %>
+              </div>
+              <%# Indicateur (mobile) %>
+              <div class="sm:hidden text-sm font-bold text-gray-500">Page <%= _current %> / <%= _last %></div>
 
-              <% uniq.forEach((pNum, idx) => { %>
-                <% const prev = idx > 0 ? uniq[idx - 1] : null; %>
-                <% if (prev !== null && pNum - prev > 1) { %>
-                  <span class="px-2 text-gray-400">...</span>
-                <% } %>
-                <a class="w-10 h-10 rounded-full font-bold text-sm flex items-center justify-center <%= pNum === current ? 'bg-primary text-white' : 'hover:bg-gray-100' %>" href="<%= buildUrl({ page: pNum }) %>"><%= pNum %></a>
-              <% }) %>
-            </div>
-
-            <a class="flex items-center gap-2 text-sm font-bold text-gray-500 hover:text-primary <%= (page || 1) >= (totalPages || 1) ? 'pointer-events-none opacity-40' : '' %>" href="<%= buildUrl({ page: Math.min((totalPages || 1), (page || 1) + 1) }) %>">
-              Suivant
-              <span class="material-symbols-outlined">chevron_right</span>
-            </a>
-          </div>
+              <%# Suivant %>
+              <a <%- _current >= _last ? 'aria-disabled="true" tabindex="-1"' : 'rel="next"' %>
+                 class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white h-10 px-3 sm:px-4 text-sm font-bold text-gray-600 hover:border-primary hover:text-primary transition <%= _current >= _last ? 'pointer-events-none opacity-40' : '' %>"
+                 href="<%= buildUrl({ page: _nextPage }) %>" aria-label="Page suivante">
+                <span class="hidden sm:inline">Suivant</span>
+                <span class="material-symbols-outlined text-lg">chevron_right</span>
+              </a>
+            </nav>
+          <% } %>
         <% } %>
       </div>
     </div>
