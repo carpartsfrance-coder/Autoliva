@@ -4,6 +4,7 @@ const Product = require('../models/Product');
 const Category = require('../models/Category');
 const BlogPost = require('../models/BlogPost');
 const InfoBlock = require('../models/InfoBlock');
+const { renderInfoBlockHtml } = require('../services/infoBlockContent');
 const demoProducts = require('../demoProducts');
 const sanitizeHtml = require('sanitize-html');
 const { markdownToHtml } = require('../services/blogContent');
@@ -311,7 +312,7 @@ async function loadInfoBlocksByPosition(product) {
     grouped[pos].push({
       id: String(d._id),
       title: typeof d.title === 'string' ? d.title.trim() : '',
-      html: markdownToHtml(typeof d.content === 'string' ? d.content : ''),
+      html: renderInfoBlockHtml(typeof d.content === 'string' ? d.content : ''),
     });
   }
   return grouped;
