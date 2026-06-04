@@ -41,7 +41,7 @@ function getProductHelpers() {
   return require('../controllers/productController');
 }
 
-const PER_PAGE = 12;
+const PER_PAGE = 24;
 
 /**
  * Prépare TOUT le payload nécessaire au render du template products/index.ejs.
