@@ -142,6 +142,9 @@ const productSchema = new mongoose.Schema(
           model: { type: String, default: '', trim: true },
           years: { type: String, default: '', trim: true },
           engine: { type: String, default: '', trim: true },
+          // Puissance (optionnelle) : kW et chevaux DIN.
+          kw: { type: Number, default: 0, min: 0 },
+          ch: { type: Number, default: 0, min: 0 },
         },
       ],
       default: [],

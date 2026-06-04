@@ -205,6 +205,8 @@ function normalizeProduct(product) {
           model: typeof c.model === 'string' ? c.model.trim() : '',
           years: typeof c.years === 'string' ? c.years.trim() : '',
           engine: typeof c.engine === 'string' ? c.engine.trim() : '',
+          kw: Number(c.kw) > 0 ? Number(c.kw) : 0,
+          ch: Number(c.ch) > 0 ? Number(c.ch) : 0,
         }))
         .filter((c) => c.make || c.model || c.years || c.engine)
     : [];
