@@ -126,14 +126,21 @@
       <% const consigneAmountEuro = hasConsigne ? (product.consigne.amountCents / 100).toFixed(2).replace('.', ',') : ''; %>
       <% const consigneDelayDays = hasConsigne ? (product.consigne.delayDays || 30) : 30; %>
       <% const stockLabel = product.inStock ? 'En stock' : 'Sur commande'; %>
-      <% const subtitleParts = []; %>
-      <% if (makes.length) { %>
-        <% subtitleParts.push('Pour ' + makes.slice(0, 4).join(', ')); %>
-      <% } else if (product.brand) { %>
-        <% subtitleParts.push('Pour ' + String(product.brand).trim()); %>
-      <% } %>
-      <% if (ref) subtitleParts.push('Série ' + ref); %>
-      <% const productSubtitle = subtitleParts.join(' - '); %>
+      <%# Code moteur (ex: CLHA) — info n°1 recherchée par le client. %>
+      <% const engineCodeVal = (product.engineCode && String(product.engineCode).trim()) ? String(product.engineCode).trim() : ''; %>
+      <% let productSubtitle; %>
+      <% if (engineCodeVal) {
+           // Sous-titre prioritaire : code moteur + référence (les marques sont déjà dans le titre H1).
+           const _st = ['Code moteur : ' + engineCodeVal];
+           if (ref) _st.push('Réf. ' + ref);
+           productSubtitle = _st.join(' · ');
+         } else {
+           const subtitleParts = [];
+           if (makes.length) { subtitleParts.push('Pour ' + makes.slice(0, 4).join(', ')); }
+           else if (product.brand) { subtitleParts.push('Pour ' + String(product.brand).trim()); }
+           if (ref) subtitleParts.push('Série ' + ref);
+           productSubtitle = subtitleParts.join(' - ');
+         } %>
       <% const isService = product && product.serviceType === 'standalone_cloning'; %>
       <% const heroBadge = isService
         ? (topLeftBadge || 'Service à distance')
@@ -182,6 +189,10 @@
         if (!spec || technicalSpecs.length >= 6) return;
         pushTechnicalSpec(spec.label, spec.value);
       }); %>
+      <% if (technicalSpecs.length < 6 && engineCodeVal) {
+           var _compatCodes = Array.isArray(product.compatibleReferences) ? product.compatibleReferences.filter(Boolean).slice(0, 2) : [];
+           pushTechnicalSpec('Code moteur', engineCodeVal + (_compatCodes.length ? ' (compatible ' + _compatCodes.join(', ') + ')' : ''));
+         } %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec('Référence', ref); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec('Type', keyType); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec('État', keyEtat); %>

@@ -57,6 +57,7 @@ const PHRASE_ALIASES = new Map([
 
 const FIELD_WEIGHTS = [
   ['name', 14],
+  ['engineCode', 13],
   ['sku', 12],
   ['compatibleReferences', 11],
   ['compatibility', 10],
@@ -222,6 +223,7 @@ function buildSearchDocument(product) {
   const fields = {
     name: normalizeSearchText(product && product.name),
     sku: normalizeSearchText(product && product.sku),
+    engineCode: normalizeSearchText(product && product.engineCode),
     brand: normalizeSearchText(product && product.brand),
     category: normalizeSearchText(product && product.category),
     shortDescription: normalizeSearchText(product && product.shortDescription),

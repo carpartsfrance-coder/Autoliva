@@ -367,6 +367,12 @@
             <div class="mt-2 text-xs text-slate-500">Recommandé si vous gérez beaucoup de produits.</div>
           </div>
 
+          <div class="md:order-6">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="engineCode">Code moteur</label>
+            <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="engineCode" name="engineCode" type="text" placeholder="Ex: CLHA" value="<%= form && form.engineCode ? form.engineCode : '' %>" data-validate data-pattern="^[A-Za-z0-9_.:-]*$" data-error="Lettres, chiffres, - ou _ uniquement" />
+            <div class="mt-2 text-xs text-slate-500">Code principal du moteur. Les variantes (CXXB…) vont dans « Références compatibles ».</div>
+          </div>
+
           <div class="md:order-7">
             <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="stockQty">Stock</label>
             <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="stockQty" name="stockQty" placeholder="Laisse vide si non géré" type="number" min="0" value="<%= form && typeof form.stockQty !== 'undefined' ? form.stockQty : '' %>" />

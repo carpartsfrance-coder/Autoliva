@@ -6,6 +6,9 @@ const productSchema = new mongoose.Schema(
     category: { type: String, default: 'Autre', trim: true },
     brand: { type: String, default: '', trim: true },
     sku: { type: String, default: '', trim: true },
+    // Code moteur principal (ex: CLHA). Les variantes/équivalences (CXXB…) vont
+    // dans compatibleReferences. Indexé pour la recherche + SEO (schema.org mpn).
+    engineCode: { type: String, default: '', trim: true, index: true },
     slug: { type: String, default: '', trim: true, lowercase: true },
     serviceType: {
       type: String,

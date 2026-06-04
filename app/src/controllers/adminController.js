@@ -6676,6 +6676,7 @@ async function getAdminNewProductPage(req, res) {
       name: '',
       slug: '',
       sku: '',
+      engineCode: '',
       brand: '',
       category: '',
       shippingClassId: '',
@@ -6723,6 +6724,7 @@ async function getAdminNewProductPage(req, res) {
       form: {
         name: '',
         sku: '',
+        engineCode: '',
         brand: '',
         category: '',
         imageUrl: '',
@@ -6770,6 +6772,7 @@ async function postAdminCreateProduct(req, res, next) {
       name: getTrimmedString(req.body.name),
       slug: getTrimmedString(req.body.slug),
       sku: getTrimmedString(req.body.sku),
+      engineCode: getTrimmedString(req.body.engineCode),
       brand: getTrimmedString(req.body.brand),
       category: getTrimmedString(req.body.category),
       shippingClassId: getTrimmedString(req.body.shippingClassId),
@@ -7051,6 +7054,7 @@ async function postAdminCreateProduct(req, res, next) {
     const createData = {
       name: form.name,
       sku: form.sku,
+      engineCode: form.engineCode,
       brand: form.brand,
       slug: baseSlug,
       category: form.category || 'Autre',
@@ -7212,6 +7216,7 @@ async function getAdminEditProductPage(req, res, next) {
         name: product.name || '',
         slug: product.slug || '',
         sku: product.sku || '',
+        engineCode: product.engineCode || '',
         brand: product.brand || '',
         category: product.category || '',
         shippingClassId,
@@ -7288,6 +7293,7 @@ async function getAdminEditProductPage(req, res, next) {
         form: {
           name: product.name || '',
           sku: product.sku || '',
+          engineCode: product.engineCode || '',
           brand: product.brand || '',
           category: product.category || '',
           imageUrl: product.imageUrl || '',
@@ -7349,6 +7355,7 @@ async function postAdminUpdateProduct(req, res, next) {
       name: getTrimmedString(req.body.name),
       slug: getTrimmedString(req.body.slug),
       sku: getTrimmedString(req.body.sku),
+      engineCode: getTrimmedString(req.body.engineCode),
       brand: getTrimmedString(req.body.brand),
       category: getTrimmedString(req.body.category),
       shippingClassId: getTrimmedString(req.body.shippingClassId),
@@ -7716,6 +7723,7 @@ async function postAdminUpdateProduct(req, res, next) {
         $set: {
           name: form.name,
           sku: form.sku,
+          engineCode: form.engineCode,
           brand: form.brand,
           slug: stableSlug,
           category: form.category || 'Autre',
