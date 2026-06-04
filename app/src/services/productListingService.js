@@ -240,6 +240,11 @@ async function prepareProductListingData(req, options = {}) {
 
   const filter = {};
 
+  // Exclut les brouillons (isPublished === false), ex. produits importés non
+  // encore publiés, du listing public. Les produits existants ont isPublished
+  // à true par défaut → aucun impact sur le catalogue actuel.
+  filter.isPublished = { $ne: false };
+
   if (selectedVehicleMake || selectedVehicleModel) {
     const elem = {};
     if (selectedVehicleMake) {

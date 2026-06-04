@@ -272,7 +272,9 @@ const siteSettings = require('./services/siteSettings');
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-app.use(express.json());
+// Limite relevée à 2 Mo : l'import produits par JSON (/admin/api/products/import)
+// peut envoyer un lot de plusieurs centaines de fiches.
+app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: false }));
 
 let compression = null;

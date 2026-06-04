@@ -261,6 +261,9 @@ router.get('/api/products/generate-draft/:jobId', requireAdminAuth, adminControl
 router.post('/api/products/generate-draft/:jobId/cancel', requireAdminAuth, adminController.postAdminCancelProductDraft);
 router.post('/api/products/generate-draft/cancel-all', requireAdminAuth, adminController.postAdminCancelAllProductDrafts);
 
+// Import produits par JSON (tableau de produits à clés FR) + rapport d'erreurs.
+router.post('/api/products/import', requireAdminAuth, adminController.postAdminImportProducts);
+
 router.get('/catalogue/nouveau', requireAdminAuth, adminController.getAdminNewProductPage);
 router.post('/catalogue/nouveau', requireAdminAuth, handleProductImageUpload, adminController.postAdminCreateProduct);
 router.post('/catalogue/generer-ia-multi', requireAdminAuth, adminController.postAdminBulkGenerateProductDrafts);
@@ -269,6 +272,8 @@ router.get('/catalogue/:productId', requireAdminAuth, adminController.getAdminEd
 router.post('/catalogue/:productId', requireAdminAuth, handleProductImageUpload, adminController.postAdminUpdateProduct);
 router.post('/catalogue/:productId/supprimer', requireAdminAuth, adminController.postAdminDeleteProduct);
 router.post('/catalogue/:productId/dupliquer', requireAdminAuth, adminController.postAdminDuplicateProduct);
+// Export d'une fiche au format JSON d'import (modèle réutilisable).
+router.get('/catalogue/:productId/export', requireAdminAuth, adminController.getAdminExportProduct);
 
 /* Édition inline du prix d'achat HT depuis /admin/finance (owner uniquement
  * via settings.billing, comme la page finance elle-même). */

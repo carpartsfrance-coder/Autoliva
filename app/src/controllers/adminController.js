@@ -10500,6 +10500,420 @@ function buildFinancePeriodNav(year, month) {
   };
 }
 
+/* =========================================================================
+ * IMPORT / EXPORT PRODUITS PAR JSON
+ *
+ * - POST /admin/api/products/import : crée des produits depuis un tableau JSON
+ *   à clés FR. Validation par produit + rapport d'erreurs ; un produit invalide
+ *   n'est PAS créé (les autres le sont). Import en « brouillon » par défaut.
+ * - GET  /admin/catalogue/:productId/export : renvoie un produit existant au
+ *   format JSON d'import (sert de modèle réutilisable).
+ *
+ * Réutilise les mêmes helpers que la création via le formulaire
+ * (parsePriceToCents, slugify, clampInt, upsertSpecPair) → parité garantie.
+ * ========================================================================= */
+
+// Prix d'import : accepte un nombre (en euros) ou une chaîne ("1 200,50 €").
+function parseImportPriceCents(value) {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 0) return null;
+    return Math.round(value * 100);
+  }
+  if (typeof value === 'string') return parsePriceToCents(value);
+  return null;
+}
+
+function importStr(value) {
+  if (typeof value === 'string') return value.trim();
+  if (value == null) return '';
+  return String(value).trim();
+}
+
+function importStrArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((v) => importStr(v)).filter(Boolean);
+}
+
+function importNonNegInt(value, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return fallback;
+  return Math.round(n);
+}
+
+// Mappe + valide un produit du JSON d'import.
+// ctx = { categoryNames:Set<lower>, shippingByName:Map<lower,ObjectId>,
+//         existingSlugs:Set<string>, batchSlugs:Set<string> }
+function mapAndValidateImportProduct(raw, ctx) {
+  const errors = [];
+  const warnings = [];
+
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { errors: ['Entrée invalide : un objet JSON est attendu.'], warnings, createData: null, statut: 'brouillon' };
+  }
+
+  const name = importStr(raw.nom);
+  if (!name) errors.push('Champ « nom » manquant.');
+
+  const priceCents = parseImportPriceCents(raw.prix_ttc);
+  if (priceCents === null) errors.push('Champ « prix_ttc » manquant ou invalide.');
+
+  const category = importStr(raw.categorie);
+  if (!category) {
+    errors.push('Champ « categorie » manquant.');
+  } else if (category.toLowerCase() !== 'autre' && !ctx.categoryNames.has(category.toLowerCase())) {
+    errors.push(`Catégorie inconnue : « ${category} ».`);
+  }
+
+  let shippingClassId = null;
+  const shippingName = importStr(raw.classe_expedition);
+  if (shippingName) {
+    const id = ctx.shippingByName.get(shippingName.toLowerCase());
+    if (!id) errors.push(`Classe d'expédition inconnue : « ${shippingName} ».`);
+    else shippingClassId = id;
+  }
+
+  const metaTitle = importStr(raw.meta_title);
+  if (metaTitle && (metaTitle.length < 50 || metaTitle.length > 60)) {
+    errors.push(`meta_title hors plage 50–60 caractères (actuel : ${metaTitle.length}).`);
+  }
+  const metaDescription = importStr(raw.meta_description);
+  if (metaDescription && (metaDescription.length < 140 || metaDescription.length > 160)) {
+    warnings.push(`meta_description hors plage conseillée 140–160 caractères (actuel : ${metaDescription.length}).`);
+  }
+
+  const consigneRaw = (raw.consigne && typeof raw.consigne === 'object') ? raw.consigne : {};
+  const consigneEnabled = consigneRaw.active === true;
+  let consigneAmountCents = 0;
+  if (consigneEnabled) {
+    const amt = parseImportPriceCents(consigneRaw.montant);
+    if (amt === null) errors.push('consigne.montant invalide alors que la consigne est active.');
+    else consigneAmountCents = amt;
+  }
+  const consigneDelayDays = clampInt(
+    consigneRaw.delai_jours != null ? consigneRaw.delai_jours : 30,
+    { min: 0, max: 3650, fallback: 30 }
+  );
+
+  const type = importStr(raw.type);
+  const programmation = importStr(raw.programmation);
+  const etat = importStr(raw.etat_affiche);
+  const resume = importStr(raw.resume);
+  const description = importStr(raw.description);
+
+  const warrantyMonths = importNonNegInt(raw.garantie_mois, 0);
+  const warrantyText = importStr(raw.garantie_detail);
+  // Badge garantie (haut-gauche) dérivé de la garantie.
+  const badgeTopLeft = warrantyMonths > 0
+    ? `Garantie ${warrantyMonths} mois`
+    : (warrantyText ? warrantyText.slice(0, 40) : '');
+
+  const cards = importStrArray(raw.badges).slice(0, 4);
+
+  let compatibility = [];
+  if (raw.compatibilites != null) {
+    if (!Array.isArray(raw.compatibilites)) {
+      errors.push('« compatibilites » doit être un tableau.');
+    } else {
+      compatibility = raw.compatibilites
+        .map((c) => ({
+          make: importStr(c && c.marque),
+          model: importStr(c && c.modele),
+          years: importStr(c && c.annees),
+          engine: importStr(c && c.motorisation),
+          kw: importNonNegInt(c && c.kw, 0),
+          ch: importNonNegInt(c && c.ch, 0),
+        }))
+        .filter((c) => c.make || c.model || c.years || c.engine);
+    }
+  }
+
+  let faqs = [];
+  if (Array.isArray(raw.faq)) {
+    faqs = raw.faq
+      .map((f) => ({ question: importStr(f && f.question), answer: importStr(f && f.reponse) }))
+      .filter((f) => f.question && f.answer);
+  }
+
+  let reconditioningSteps = [];
+  if (Array.isArray(raw.etapes_reconditionnement)) {
+    reconditioningSteps = raw.etapes_reconditionnement
+      .map((s) => ({ title: importStr(s && s.type), description: importStr(s && s.description) }))
+      .filter((s) => s.title || s.description);
+  }
+
+  const specs = [];
+  if (type) upsertSpecPair(specs, 'type', 'Type', type);
+  if (programmation) upsertSpecPair(specs, 'programmation', 'Programmation', programmation);
+
+  const imageUrl = importStr(raw.image_url || raw.image);
+  const galleryUrls = importStrArray(raw.images);
+  const galleryTypes = galleryUrls.map(() => 'image');
+
+  let slug = slugify(importStr(raw.slug) || name) || 'produit';
+  if (ctx.existingSlugs.has(slug) || ctx.batchSlugs.has(slug)) {
+    errors.push(`Slug déjà utilisé : « ${slug} ». Renseignez un « slug » unique.`);
+  }
+
+  let statut = importStr(raw.statut).toLowerCase();
+  if (statut !== 'publie' && statut !== 'brouillon') statut = 'brouillon';
+  let isPublished = statut === 'publie';
+  // Garde-fou : on ne publie pas un produit incomplet → rétrograde en brouillon.
+  if (isPublished) {
+    const missing = [];
+    if (!type) missing.push('type');
+    if (!etat) missing.push('etat_affiche');
+    if (!resume) missing.push('resume');
+    if (!description) missing.push('description');
+    if (!imageUrl && !galleryUrls.length) missing.push('image');
+    if (missing.length) {
+      isPublished = false;
+      statut = 'brouillon';
+      warnings.push(`Publication refusée (manque : ${missing.join(', ')}) → importé en brouillon.`);
+    }
+  }
+
+  if (errors.length) return { errors, warnings, createData: null, statut };
+
+  // Réserve le slug pour éviter les collisions intra-lot.
+  ctx.batchSlugs.add(slug);
+
+  const createData = {
+    name,
+    sku: importStr(raw.sku),
+    engineCode: importStr(raw.code_moteur),
+    brand: importStr(raw.marque),
+    slug,
+    category: category || 'Autre',
+    shippingClassId,
+    shippingDelayText: importStr(raw.delai_expedition),
+    compatibleReferences: importStrArray(raw.references_compatibles),
+    priceCents,
+    vatRecoverable: raw.tva_recuperable === true,
+    compareAtPriceCents: null,
+    costCents: null,
+    consigne: {
+      enabled: consigneEnabled && consigneAmountCents > 0,
+      amountCents: consigneAmountCents,
+      delayDays: consigneDelayDays,
+      chargeUpfront: consigneRaw.encaissee === true,
+    },
+    inStock: true,
+    stockQty: null,
+    imageUrl,
+    badges: { topLeft: badgeTopLeft, condition: etat, cards },
+    galleryUrls,
+    galleryTypes,
+    shortDescription: resume,
+    description,
+    keyPoints: importStrArray(raw.points_techniques),
+    specs,
+    inclusions: importStrArray(raw.inclus),
+    exclusions: importStrArray(raw.non_inclus),
+    warranty: { months: warrantyMonths, text: warrantyText },
+    reconditioningSteps,
+    compatibility,
+    faqs,
+    relatedBlogPostIds: [],
+    media: { videoUrl: '' },
+    seo: { metaTitle, metaDescription },
+    isPublished,
+    sections: {
+      showKeyPoints: true,
+      showSpecs: true,
+      showReconditioning: true,
+      showCompatibility: true,
+      showFaq: true,
+      showVideo: true,
+      showSupportBox: true,
+      showRelatedProducts: true,
+    },
+  };
+
+  return { errors: [], warnings, createData, statut };
+}
+
+async function postAdminImportProducts(req, res) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) return res.status(503).json({ ok: false, error: 'Base de données indisponible.' });
+
+    const body = req.body;
+    const items = Array.isArray(body)
+      ? body
+      : (body && Array.isArray(body.produits))
+        ? body.produits
+        : (body && Array.isArray(body.products))
+          ? body.products
+          : null;
+
+    if (!items) {
+      return res.status(400).json({ ok: false, error: 'Corps attendu : un tableau de produits, ou { "produits": [ ... ] }.' });
+    }
+    if (!items.length) {
+      return res.status(400).json({ ok: false, error: 'Aucun produit à importer.' });
+    }
+    if (items.length > 500) {
+      return res.status(413).json({ ok: false, error: 'Trop de produits en un seul lot (max 500). Découpez l\'import.' });
+    }
+
+    const categoryDocs = await Category.find({}).select('name').lean();
+    const categoryNames = new Set(categoryDocs.map((c) => importStr(c.name).toLowerCase()).filter(Boolean));
+    const shippingDocs = await ShippingClass.find({}).select('_id name').lean();
+    const shippingByName = new Map(shippingDocs.map((c) => [importStr(c.name).toLowerCase(), c._id]));
+    const slugDocs = await Product.find({}).select('slug').lean();
+    const existingSlugs = new Set(slugDocs.map((p) => importStr(p.slug)).filter(Boolean));
+
+    const ctx = { categoryNames, shippingByName, existingSlugs, batchSlugs: new Set() };
+
+    const results = [];
+    let created = 0;
+    let failed = 0;
+    let drafts = 0;
+    let published = 0;
+
+    for (let i = 0; i < items.length; i++) {
+      const raw = items[i];
+      const nom = importStr(raw && raw.nom);
+      const { errors, warnings, createData, statut } = mapAndValidateImportProduct(raw, ctx);
+
+      if (!createData || errors.length) {
+        failed++;
+        results.push({ index: i, nom, status: 'error', errors, warnings });
+        continue;
+      }
+
+      try {
+        const doc = await Product.create(createData);
+        created++;
+        if (createData.isPublished) published++;
+        else drafts++;
+        results.push({
+          index: i,
+          nom,
+          status: 'created',
+          statut,
+          slug: createData.slug,
+          id: String(doc._id),
+          warnings,
+        });
+      } catch (e) {
+        failed++;
+        ctx.batchSlugs.delete(createData.slug); // libère le slug réservé
+        results.push({
+          index: i,
+          nom,
+          status: 'error',
+          errors: ['Échec d\'écriture en base : ' + (e && e.message ? e.message : 'erreur inconnue') + '.'],
+          warnings,
+        });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      summary: { total: items.length, created, failed, brouillons: drafts, publies: published },
+      results,
+    });
+  } catch (err) {
+    console.error('[admin] postAdminImportProducts failed:', err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur pendant l\'import.' });
+  }
+}
+
+// Construit la représentation JSON d'import d'un produit (pour servir de modèle).
+function buildProductExportJson(p) {
+  const euros = (cents) => (Number.isFinite(cents) ? Math.round(cents) / 100 : 0);
+  const specByLabel = (label) => {
+    const s = Array.isArray(p.specs)
+      ? p.specs.find((x) => x && importStr(x.label).toLowerCase() === label)
+      : null;
+    return s ? importStr(s.value) : '';
+  };
+  const consigne = p.consigne || {};
+  const warranty = p.warranty || {};
+  const badges = p.badges || {};
+  const seo = p.seo || {};
+
+  return {
+    nom: importStr(p.name),
+    prix_ttc: euros(p.priceCents),
+    tva_recuperable: p.vatRecoverable === true,
+    categorie: importStr(p.category),
+    marque: importStr(p.brand),
+    sku: importStr(p.sku),
+    slug: importStr(p.slug),
+    code_moteur: importStr(p.engineCode),
+    references_compatibles: Array.isArray(p.compatibleReferences) ? p.compatibleReferences.map(importStr).filter(Boolean) : [],
+    consigne: {
+      active: consigne.enabled === true,
+      encaissee: consigne.chargeUpfront === true,
+      montant: euros(consigne.amountCents),
+      delai_jours: importNonNegInt(consigne.delayDays, 30),
+    },
+    inclus: Array.isArray(p.inclusions) ? p.inclusions.map(importStr).filter(Boolean) : [],
+    non_inclus: Array.isArray(p.exclusions) ? p.exclusions.map(importStr).filter(Boolean) : [],
+    points_techniques: Array.isArray(p.keyPoints) ? p.keyPoints.map(importStr).filter(Boolean) : [],
+    garantie_mois: importNonNegInt(warranty.months, 0),
+    garantie_detail: importStr(warranty.text),
+    badges: (Array.isArray(badges.cards) ? badges.cards.map(importStr) : []).slice(0, 4),
+    delai_expedition: importStr(p.shippingDelayText),
+    classe_expedition: '', // renseigné par le handler si une classe est liée
+    type: specByLabel('type'),
+    programmation: specByLabel('programmation'),
+    etat_affiche: importStr(badges.condition),
+    resume: importStr(p.shortDescription),
+    description: importStr(p.description),
+    compatibilites: Array.isArray(p.compatibility)
+      ? p.compatibility.map((c) => ({
+          marque: importStr(c.make),
+          modele: importStr(c.model),
+          annees: importStr(c.years),
+          motorisation: importStr(c.engine),
+          kw: importNonNegInt(c.kw, 0),
+          ch: importNonNegInt(c.ch, 0),
+        }))
+      : [],
+    faq: Array.isArray(p.faqs)
+      ? p.faqs.map((f) => ({ question: importStr(f.question), reponse: importStr(f.answer) }))
+      : [],
+    etapes_reconditionnement: Array.isArray(p.reconditioningSteps)
+      ? p.reconditioningSteps.map((s) => ({ type: importStr(s.title), description: importStr(s.description) }))
+      : [],
+    meta_title: importStr(seo.metaTitle),
+    meta_description: importStr(seo.metaDescription),
+    statut: p.isPublished === false ? 'brouillon' : 'publie',
+  };
+}
+
+async function getAdminExportProduct(req, res) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) return res.status(503).json({ ok: false, error: 'Base de données indisponible.' });
+
+    const { productId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ ok: false, error: 'Identifiant produit invalide.' });
+    }
+
+    const p = await Product.findById(productId).lean();
+    if (!p) return res.status(404).json({ ok: false, error: 'Produit introuvable.' });
+
+    const json = buildProductExportJson(p);
+    if (p.shippingClassId) {
+      const sc = await ShippingClass.findById(p.shippingClassId).select('name').lean();
+      if (sc) json.classe_expedition = importStr(sc.name);
+    }
+
+    const filename = `produit-${importStr(p.slug) || String(p._id)}.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(JSON.stringify(json, null, 2));
+  } catch (err) {
+    console.error('[admin] getAdminExportProduct failed:', err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur pendant l\'export.' });
+  }
+}
+
 module.exports = {
   getAdminHeroSettingsPage,
   postAdminHeroSettings,
@@ -10572,6 +10986,8 @@ module.exports = {
   postAdminUpdateProduct,
   postAdminDeleteProduct,
   postAdminUpdateProductCostInline,
+  postAdminImportProducts,
+  getAdminExportProduct,
   postAdminDuplicateProduct,
   postAdminBulkDeleteProducts,
   getAdminClientsPage,
