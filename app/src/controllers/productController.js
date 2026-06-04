@@ -384,6 +384,18 @@ async function getProductBySlug(req, res, next) {
 
     const hit = await Product.findOne({ slug }).select('_id').lean();
     if (!hit || !hit._id) {
+      // Aucun produit pour ce slug. Si le paramètre est un ObjectId valide
+      // (cas d'un produit sans slug : son URL canonique retombe sur l'id),
+      // on tente une résolution par _id pour que la fiche reste accessible
+      // (ex. bouton « Voir en ligne » de l'admin) plutôt que d'envoyer vers
+      // la recherche.
+      if (mongoose.Types.ObjectId.isValid(raw)) {
+        const byId = await Product.findById(raw).select('_id').lean();
+        if (byId && byId._id) {
+          req.params.id = String(byId._id);
+          return getProduct(req, res, next);
+        }
+      }
       return res.redirect(301, `/produits?q=${encodeURIComponent(raw)}`);
     }
 
@@ -552,9 +564,15 @@ async function getProduct(req, res, next) {
       });
     }
 
+    // On ne redirige vers l'URL canonique /product/<slug>/ QUE si le produit a
+    // un vrai slug. Sans slug, cette canonique retomberait sur un slug qui ne
+    // résout pas (basé sur le nom ou l'id) → on rend la fiche en place sur
+    // /produits/<id> plutôt que d'envoyer l'utilisateur vers la recherche
+    // (ex. bouton « Voir en ligne » de l'admin sur une fiche sans slug).
+    const hasRealSlug = !!(product && typeof product.slug === 'string' && product.slug.trim());
     const canonicalPath = buildProductPublicPath(product);
     const requestedPath = `${req.baseUrl || ''}${req.path || ''}`;
-    if (canonicalPath && requestedPath && canonicalPath !== requestedPath) {
+    if (hasRealSlug && canonicalPath && requestedPath && canonicalPath !== requestedPath) {
       return res.redirect(301, canonicalPath);
     }
 
