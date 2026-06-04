@@ -131,6 +131,18 @@ const productSchema = new mongoose.Schema(
       default: [],
     },
 
+    /* Blocs d'information réutilisables attachés à cette fiche (référencés par
+     * id → une modif du bloc se répercute partout). Voir models/InfoBlock.js. */
+    infoBlockIds: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'InfoBlock',
+        },
+      ],
+      default: [],
+    },
+
     reconditioningSteps: {
       type: [
         {

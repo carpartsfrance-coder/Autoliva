@@ -17,6 +17,9 @@ async function start() {
       // mécatroniques/TCU, ponts/différentiels, boîtes de transfert.
       const { applyVatRecoverableParts } = require('./migrations/applyVatRecoverableParts');
       await applyVatRecoverableParts(mongoose.connection);
+      // Seed one-shot des blocs d'information « Conditions » de départ.
+      const { seedInfoBlocks } = require('./migrations/seedInfoBlocks');
+      await seedInfoBlocks(mongoose.connection);
       startScheduler();
     } catch (err) {
       console.error('Erreur de connexion MongoDB :', err.message);

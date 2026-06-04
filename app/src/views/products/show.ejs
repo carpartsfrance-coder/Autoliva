@@ -110,6 +110,8 @@
       <% const exclusionsList = Array.isArray(product.exclusions)
         ? product.exclusions.map((v) => String(v || '').trim()).filter(Boolean)
         : []; %>
+      <%# Blocs d'information groupés par position (chargés côté contrôleur). %>
+      <% var _ib = (product && product.infoBlocksByPosition) ? product.infoBlocksByPosition : { description_end: [], after_inclusions: [], dedicated_tab: [] }; %>
       <% const summaryPoints = keyPointsList.length
         ? keyPointsList.slice(0, 3)
         : [
@@ -630,6 +632,7 @@
         <input class="hidden" id="tab-tech" name="product-tabs" type="radio" />
         <% if (vehicleCount > 0) { %><input class="hidden" id="tab-vehicles" name="product-tabs" type="radio" /><% } %>
         <input class="hidden" id="tab-process" name="product-tabs" type="radio" />
+        <% if (_ib.dedicated_tab && _ib.dedicated_tab.length) { %><input class="hidden" id="tab-info" name="product-tabs" type="radio" /><% } %>
         <input class="hidden" id="tab-faq" name="product-tabs" type="radio" />
 
         <div class="tabs-nav flex border-b-2 border-slate-200 dark:border-slate-800 overflow-x-auto whitespace-nowrap no-scrollbar">
@@ -637,6 +640,7 @@
           <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-tech">Fiche technique</label>
           <% if (vehicleCount > 0) { %><label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-vehicles">Véhicules compatibles (<%= vehicleCount %>)</label><% } %>
           <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-process">Processus qualité</label>
+          <% if (_ib.dedicated_tab && _ib.dedicated_tab.length) { %><label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-info">Bon à savoir</label><% } %>
           <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-faq">FAQ (<%= faqCount %>)</label>
         </div>
 
@@ -720,7 +724,18 @@
                 </div>
               <% } %>
             </div>
+            <%# Blocs d'information : fin de description, puis après inclus/non-inclus %>
+            <%- include('./partials/info-blocks', { blocks: _ib.description_end }) %>
+            <%- include('./partials/info-blocks', { blocks: _ib.after_inclusions }) %>
           </div>
+
+          <% if (_ib.dedicated_tab && _ib.dedicated_tab.length) { %>
+          <div class="tab-content" id="content-info">
+            <div class="py-10 max-w-3xl">
+              <%- include('./partials/info-blocks', { blocks: _ib.dedicated_tab }) %>
+            </div>
+          </div>
+          <% } %>
 
           <div class="tab-content" id="content-tech">
             <div class="py-10 grid grid-cols-1 xl:grid-cols-[minmax(0,0.92fr)_minmax(340px,1.08fr)] gap-10">

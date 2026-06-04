@@ -698,6 +698,40 @@
             <% } %>
           </div>
 
+          <%# Blocs d'information réutilisables attachés à cette fiche %>
+          <div class="rounded-2xl border border-border-light dark:border-border-dark bg-gray-50 dark:bg-gray-900/50 p-5">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <div class="text-sm font-bold text-slate-900 dark:text-white">Blocs d'information</div>
+                <div class="mt-1 text-xs text-slate-500">Cochez les blocs (conditions, garanties, consigne...) à afficher sur cette fiche. Pré-cochés selon la catégorie, modifiable ici. Une modif du bloc se répercute sur toutes les fiches.</div>
+              </div>
+              <a class="inline-flex items-center justify-center rounded-lg bg-white dark:bg-gray-800 border border-border-light dark:border-border-dark px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition" href="/admin/catalogue/blocs" target="_blank" rel="noopener">
+                <span class="material-symbols-outlined mr-2 text-sm">settings</span>
+                Gérer les blocs
+              </a>
+            </div>
+
+            <% var _infoBlocks = (typeof infoBlocksLibrary !== 'undefined' && infoBlocksLibrary) ? infoBlocksLibrary : []; %>
+            <% var _selInfoBlocks = (typeof selectedInfoBlockIds !== 'undefined' && selectedInfoBlockIds) ? selectedInfoBlockIds : []; %>
+            <% if (_infoBlocks.length) { %>
+              <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <% _infoBlocks.forEach(function (b) { %>
+                  <label class="flex items-start gap-3 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition">
+                    <input class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary" type="checkbox" name="infoBlockIds" value="<%= b.id %>" <%= _selInfoBlocks.indexOf(b.id) !== -1 ? 'checked' : '' %> />
+                    <span class="min-w-0">
+                      <span class="block text-sm font-semibold text-slate-900 dark:text-white truncate"><%= b.title %></span>
+                      <span class="block text-xs text-slate-500"><%= b.positionLabel %> · <%= b.slug %></span>
+                    </span>
+                  </label>
+                <% }); %>
+              </div>
+            <% } else { %>
+              <div class="mt-4 rounded-xl border border-dashed border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-4 text-sm text-slate-500">
+                Aucun bloc d'information actif. Créez-en depuis la bibliothèque, puis revenez ici.
+              </div>
+            <% } %>
+          </div>
+
           <div class="rounded-2xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-950/40 p-5">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
