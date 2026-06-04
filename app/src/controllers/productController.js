@@ -1112,6 +1112,9 @@ async function getProduct(req, res, next) {
       ogImage,
       ogSiteName: brand.NAME,
       ogType: 'product',
+      // Brouillon (isPublished:false) → non indexable, mais les liens restent suivis.
+      // Évite l'indexation prématurée d'une fiche non publiée (accessible en aperçu).
+      metaRobots: product.isPublished === false ? 'noindex, follow' : undefined,
       jsonLd,
       dbConnected,
       returnTo: req.originalUrl,

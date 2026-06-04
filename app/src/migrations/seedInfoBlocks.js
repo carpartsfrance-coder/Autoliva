@@ -39,27 +39,36 @@ const MOTEURS_CONTENT = [
 ].join('\n');
 
 const MECA_CONTENT = [
-  '- La mécatronique est livrée **vierge** ou pré-codée selon la référence : un **codage / adaptation** par valise (VCDS, ODIS...) est requis après montage.',
-  '- Un **réglage de base** (apprentissage des points de patinage) est indispensable pour un fonctionnement optimal.',
-  '- Garantie applicable après montage par un professionnel et réalisation des adaptations.',
+  'Nos mécatroniques (calculateurs de boîte DSG / S-tronic) sont reconditionnées et testées sur banc avant expédition.',
   '',
-  '*(Bloc de départ — à compléter selon vos conditions.)*',
+  '**Après le montage :**',
+  '- Un **codage / adaptation** par valise (VCDS, ODIS...) est nécessaire selon la référence.',
+  '- Un **réglage de base** (apprentissage des points de patinage) est indispensable pour un fonctionnement optimal.',
+  '',
+  '**Garantie** applicable après montage et adaptations réalisés par un professionnel.',
+  '',
+  'Besoin d\'aide pour le codage ? Contactez-nous, nous vous guidons.',
 ].join('\n');
 
 const BV_CONTENT = [
-  '- Boîte contrôlée et testée avant expédition.',
-  '- Remplacement du **kit d\'embrayage** et de l\'**huile de boîte** conseillé lors du montage.',
-  '- Retour de l\'ancienne pièce selon les conditions de consigne.',
+  'Nos boîtes de vitesses sont contrôlées et testées avant expédition.',
   '',
-  '*(Bloc de départ — à compléter selon vos conditions.)*',
+  '**Lors du montage, nous recommandons :**',
+  '- le remplacement du **kit d\'embrayage** (boîtes manuelles) ;',
+  '- une **vidange** avec une huile conforme aux préconisations constructeur.',
+  '',
+  'Le retour de votre ancienne boîte peut être demandé selon les conditions de consigne indiquées sur la fiche.',
 ].join('\n');
 
 const CONSIGNE_CONTENT = [
-  '- Une **consigne** (caution **hors TVA**) peut s\'appliquer ; elle est remboursée au retour de votre ancienne pièce.',
-  '- Le retour s\'effectue sur le **support de transport fourni**, dans le délai indiqué.',
-  '- Prévenez-nous de la disponibilité de la pièce pour organiser l\'enlèvement.',
+  'La **consigne** est une caution (**hors TVA**) demandée à la commande sur certaines pièces en échange standard. Elle vous est **intégralement remboursée** au retour de votre ancienne pièce.',
   '',
-  '*(Bloc de départ — à compléter selon vos conditions.)*',
+  '**Comment ça marche :**',
+  '- Vous recevez votre pièce reconditionnée avec un **support de transport** prévu pour le retour.',
+  '- Vous renvoyez votre ancienne pièce sur ce même support, dans le délai indiqué sur la fiche.',
+  '- Dès réception et vérification, la consigne est remboursée.',
+  '',
+  '**Bon à savoir :** l\'ancienne pièce doit être complète et non cassée. Prévenez-nous dès qu\'elle est prête pour organiser l\'enlèvement.',
 ].join('\n');
 
 const SEED_BLOCKS = [
@@ -136,4 +145,4 @@ async function seedInfoBlocks(connection) {
   }
 }
 
-module.exports = { seedInfoBlocks, MARKER_KEY };
+module.exports = { seedInfoBlocks, MARKER_KEY, SEED_BLOCKS };
