@@ -185,6 +185,80 @@
                 </button>
                 <div id="selectedCount" class="text-xs font-bold text-slate-500">0 sélectionné</div>
               </div>
+
+              <%# Barre d'édition en masse — visible dès qu'un produit est sélectionné %>
+              <div id="bulkEditBar" class="hidden flex-wrap items-end gap-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
+                <div class="self-center text-xs font-bold uppercase tracking-wider text-slate-700">Modifier la sélection :</div>
+                <div>
+                  <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1" for="bulkField">Champ</label>
+                  <select id="bulkField" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold">
+                    <option value="status">Statut (en ligne / brouillon)</option>
+                    <option value="stock">Stock (en stock / hors stock)</option>
+                    <option value="quantity">Quantité</option>
+                    <option value="price">Prix</option>
+                    <option value="vat">TVA récupérable</option>
+                    <option value="category">Catégorie</option>
+                  </select>
+                </div>
+
+                <div data-bv="status">
+                  <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Valeur</label>
+                  <select id="bvStatus" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold">
+                    <option value="publie">Publié (en ligne)</option>
+                    <option value="brouillon">Brouillon</option>
+                  </select>
+                </div>
+                <div data-bv="stock" class="hidden">
+                  <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Valeur</label>
+                  <select id="bvStock" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold">
+                    <option value="in">En stock</option>
+                    <option value="out">Hors stock</option>
+                  </select>
+                </div>
+                <div data-bv="quantity" class="hidden">
+                  <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Quantité</label>
+                  <input id="bvQuantity" type="number" min="0" step="1" placeholder="Ex : 5" class="w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold" />
+                </div>
+                <div data-bv="price" class="hidden flex items-end gap-2">
+                  <div>
+                    <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Mode</label>
+                    <select id="bvPriceMode" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold">
+                      <option value="set">Définir (€)</option>
+                      <option value="inc_pct">Augmenter (%)</option>
+                      <option value="dec_pct">Baisser (%)</option>
+                      <option value="inc_eur">Augmenter (€)</option>
+                      <option value="dec_eur">Baisser (€)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Valeur</label>
+                    <input id="bvPriceAmount" type="number" min="0" step="0.01" placeholder="Ex : 10" class="w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold" />
+                  </div>
+                </div>
+                <div data-bv="vat" class="hidden">
+                  <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Valeur</label>
+                  <select id="bvVat" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold">
+                    <option value="on">TVA récupérable</option>
+                    <option value="off">Non récupérable</option>
+                  </select>
+                </div>
+                <div data-bv="category" class="hidden">
+                  <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Catégorie</label>
+                  <select id="bvCategory" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold">
+                    <% if (typeof categoryOptions !== 'undefined' && categoryOptions && categoryOptions.length) { %>
+                      <% categoryOptions.forEach((opt) => { %>
+                        <option value="<%= opt.value %>"><%= opt.label %></option>
+                      <% }) %>
+                    <% } %>
+                  </select>
+                </div>
+
+                <button id="bulkApplyBtn" type="button" class="btn btn-primary">
+                  <span class="material-symbols-outlined mr-2 text-base">check</span>
+                  Appliquer
+                </button>
+                <div id="bulkEditMsg" class="self-center text-xs font-semibold"></div>
+              </div>
               <div>
                 <div class="grid gap-3 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
                   <div>
@@ -260,6 +334,7 @@
                     Stock<span class="sort-icon material-symbols-outlined"><%= cSortIcon('stock') %></span>
                   </a>
                 </th>
+                <th class="px-6 py-4">Statut</th>
                 <th class="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -299,6 +374,13 @@
                       <span class="badge badge-success">En stock</span>
                     <% } else { %>
                       <span class="badge badge-warning">Stock limité</span>
+                    <% } %>
+                  </td>
+                  <td class="px-6 py-4">
+                    <% if (p.isPublished) { %>
+                      <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest">En ligne</span>
+                    <% } else { %>
+                      <span class="inline-flex items-center rounded-full bg-amber-50 text-amber-800 px-3 py-1 text-[10px] font-semibold uppercase tracking-widest">Brouillon</span>
                     <% } %>
                   </td>
                   <td class="px-6 py-4 text-right">
@@ -358,17 +440,26 @@
             var cancelAllAiBtn = document.getElementById('cancelAllAiBtn');
             var selectedCount = document.getElementById('selectedCount');
             var checkboxes = Array.prototype.slice.call(document.querySelectorAll('.rowSelect'));
+            var bulkEditBar = document.getElementById('bulkEditBar');
+            var bulkField = document.getElementById('bulkField');
+            var bulkApplyBtn = document.getElementById('bulkApplyBtn');
+            var bulkEditMsg = document.getElementById('bulkEditMsg');
 
             /* Confirm attributes on bulk buttons — handled by admin-ajax.js */
             if (bulkBtn) bulkBtn.setAttribute('data-confirm', 'Supprimer les produits sélectionnés ?');
             if (bulkGenerateBtn) bulkGenerateBtn.setAttribute('data-confirm', 'Lancer la génération IA pour les produits sélectionnés ?');
             if (cancelAllAiBtn) cancelAllAiBtn.setAttribute('data-confirm', 'Arrêter toutes les générations IA actives ?');
 
+            function selectedIds() {
+              return checkboxes.filter(function (c) { return c && c.checked; }).map(function (c) { return c.value; });
+            }
+
             function updateState() {
               var count = checkboxes.filter(function (c) { return c && c.checked; }).length;
               if (selectedCount) selectedCount.textContent = count + ' sélectionné' + (count > 1 ? 's' : '');
               if (bulkBtn) bulkBtn.disabled = count === 0;
               if (bulkGenerateBtn) bulkGenerateBtn.disabled = count === 0;
+              if (bulkEditBar) bulkEditBar.style.display = count > 0 ? 'flex' : 'none';
               if (selectAll) {
                 selectAll.checked = count > 0 && count === checkboxes.length;
                 selectAll.indeterminate = count > 0 && count < checkboxes.length;
@@ -386,6 +477,55 @@
             checkboxes.forEach(function (c) {
               c.addEventListener('change', updateState);
             });
+
+            /* ----- Modification en masse ----- */
+            function showValueControl() {
+              if (!bulkField) return;
+              var field = bulkField.value;
+              Array.prototype.forEach.call(document.querySelectorAll('[data-bv]'), function (el) {
+                el.style.display = (el.getAttribute('data-bv') === field) ? '' : 'none';
+              });
+            }
+            function currentBulkValue() {
+              var field = bulkField.value;
+              var byId = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
+              if (field === 'price') return { value: byId('bvPriceAmount'), mode: byId('bvPriceMode') };
+              if (field === 'status') return { value: byId('bvStatus') };
+              if (field === 'stock') return { value: byId('bvStock') };
+              if (field === 'quantity') return { value: byId('bvQuantity') };
+              if (field === 'vat') return { value: byId('bvVat') };
+              if (field === 'category') return { value: byId('bvCategory') };
+              return { value: '' };
+            }
+            var FIELD_LABELS = { status: 'Statut', stock: 'Stock', quantity: 'Quantité', price: 'Prix', vat: 'TVA récupérable', category: 'Catégorie' };
+            if (bulkField) { bulkField.addEventListener('change', showValueControl); showValueControl(); }
+
+            if (bulkApplyBtn) {
+              bulkApplyBtn.addEventListener('click', function () {
+                var ids = selectedIds();
+                if (!ids.length) return;
+                var field = bulkField.value;
+                var v = currentBulkValue();
+                if (!window.confirm('Modifier ' + ids.length + ' produit(s) — ' + (FIELD_LABELS[field] || field) + ' ?')) return;
+                bulkApplyBtn.disabled = true;
+                if (bulkEditMsg) { bulkEditMsg.textContent = 'Application…'; bulkEditMsg.className = 'self-center text-xs font-semibold text-slate-500'; }
+                fetch('/admin/catalogue/modifier-multi', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                  body: JSON.stringify({ productIds: ids, field: field, value: v.value, mode: v.mode })
+                })
+                  .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Réponse invalide.' }; }); })
+                  .then(function (j) {
+                    if (j && j.ok) { window.location.reload(); return; }
+                    bulkApplyBtn.disabled = false;
+                    if (bulkEditMsg) { bulkEditMsg.textContent = (j && j.error) || 'Échec.'; bulkEditMsg.className = 'self-center text-xs font-semibold text-red-600'; }
+                  })
+                  .catch(function () {
+                    bulkApplyBtn.disabled = false;
+                    if (bulkEditMsg) { bulkEditMsg.textContent = 'Erreur réseau.'; bulkEditMsg.className = 'self-center text-xs font-semibold text-red-600'; }
+                  });
+              });
+            }
 
             updateState();
           })();

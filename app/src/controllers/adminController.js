@@ -6152,6 +6152,8 @@ async function getAdminCatalogPage(req, res, next) {
       price: formatEuro(p.priceCents),
       inStock: p.inStock,
       stockQty: Number.isFinite(p.stockQty) ? p.stockQty : null,
+      isPublished: p.isPublished !== false,
+      vatRecoverable: p.vatRecoverable === true,
       aiDraft: latestJobsByProductId.get(String(p._id)) || null,
     }));
 
@@ -11496,6 +11498,115 @@ async function postAdminDeleteInfoBlock(req, res, next) {
   }
 }
 
+/* =========================================================================
+ * MODIFICATION EN MASSE DES PRODUITS (catalogue)
+ * POST /admin/catalogue/modifier-multi — applique un changement (statut, stock,
+ * quantité, prix, TVA, catégorie) à une sélection de produits. Réponse JSON.
+ * ========================================================================= */
+async function postAdminBulkUpdateProducts(req, res) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) return res.status(503).json({ ok: false, error: 'Base de données indisponible.' });
+
+    const ids = parseAdminSelectedIds(req.body && (req.body.productIds || req.body.ids));
+    const validIds = ids
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+    if (!validIds.length) return res.status(400).json({ ok: false, error: 'Aucun produit sélectionné.' });
+
+    const field = getTrimmedString(req.body && req.body.field);
+    const value = req.body && req.body.value;
+    const filter = { _id: { $in: validIds } };
+    let update = null;
+    let pipeline = null;
+    let label = '';
+
+    switch (field) {
+      case 'status': {
+        const pub = String(value) === 'publie';
+        update = { $set: { isPublished: pub } };
+        label = pub ? 'Publié (en ligne)' : 'Brouillon';
+        break;
+      }
+      case 'stock': {
+        const inStock = String(value) === 'in';
+        update = { $set: { inStock } };
+        label = inStock ? 'En stock' : 'Hors stock';
+        break;
+      }
+      case 'quantity': {
+        const n = Number(value);
+        if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+          return res.status(400).json({ ok: false, error: 'Quantité invalide (entier ≥ 0).' });
+        }
+        update = { $set: { stockQty: n, inStock: n > 0 } };
+        label = 'Quantité = ' + n;
+        break;
+      }
+      case 'vat': {
+        const on = String(value) === 'on';
+        update = { $set: { vatRecoverable: on } };
+        label = on ? 'TVA récupérable' : 'TVA non récupérable';
+        break;
+      }
+      case 'category': {
+        const cat = getTrimmedString(value);
+        if (!cat) return res.status(400).json({ ok: false, error: 'Catégorie manquante.' });
+        update = { $set: { category: cat } };
+        label = 'Catégorie : ' + cat;
+        break;
+      }
+      case 'price': {
+        const mode = getTrimmedString(req.body && req.body.mode) || 'set';
+        const amount = Number(String(value == null ? '' : value).replace(',', '.'));
+        if (!Number.isFinite(amount) || amount < 0) {
+          return res.status(400).json({ ok: false, error: 'Valeur de prix invalide.' });
+        }
+        if (mode === 'set') {
+          update = { $set: { priceCents: Math.round(amount * 100) } };
+          label = 'Prix = ' + amount.toFixed(2) + ' €';
+        } else if (mode === 'inc_pct' || mode === 'dec_pct') {
+          if (mode === 'dec_pct' && amount > 100) {
+            return res.status(400).json({ ok: false, error: 'Une baisse de plus de 100 % est impossible.' });
+          }
+          const factor = mode === 'inc_pct' ? (1 + amount / 100) : (1 - amount / 100);
+          pipeline = [{ $set: { priceCents: { $round: [{ $multiply: ['$priceCents', factor] }, 0] } } }];
+          label = (mode === 'inc_pct' ? '+' : '−') + amount + ' %';
+        } else if (mode === 'inc_eur' || mode === 'dec_eur') {
+          const cents = Math.round(amount * 100);
+          const expr = mode === 'inc_eur'
+            ? { $add: ['$priceCents', cents] }
+            : { $max: [0, { $subtract: ['$priceCents', cents] }] };
+          pipeline = [{ $set: { priceCents: expr } }];
+          label = (mode === 'inc_eur' ? '+' : '−') + amount.toFixed(2) + ' €';
+        } else {
+          return res.status(400).json({ ok: false, error: 'Mode de prix inconnu.' });
+        }
+        break;
+      }
+      default:
+        return res.status(400).json({ ok: false, error: 'Champ non pris en charge.' });
+    }
+
+    const result = pipeline
+      ? await Product.updateMany(filter, pipeline)
+      : await Product.updateMany(filter, update);
+    const modified = (result && (result.modifiedCount != null ? result.modifiedCount : result.nModified)) || 0;
+
+    return res.json({
+      ok: true,
+      modified,
+      matched: validIds.length,
+      field,
+      label,
+      message: `${modified} produit(s) modifié(s) — ${label}.`,
+    });
+  } catch (err) {
+    console.error('[admin] postAdminBulkUpdateProducts failed:', err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur pendant la modification en masse.' });
+  }
+}
+
 module.exports = {
   getAdminHeroSettingsPage,
   postAdminHeroSettings,
@@ -11577,6 +11688,7 @@ module.exports = {
   getAdminExportProduct,
   postAdminDuplicateProduct,
   postAdminBulkDeleteProducts,
+  postAdminBulkUpdateProducts,
   getAdminClientsPage,
   getAdminClientDetailPage,
   postAdminUpdateClientDiscount,

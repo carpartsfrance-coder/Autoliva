@@ -275,6 +275,7 @@ router.get('/catalogue/nouveau', requireAdminAuth, adminController.getAdminNewPr
 router.post('/catalogue/nouveau', requireAdminAuth, handleProductImageUpload, adminController.postAdminCreateProduct);
 router.post('/catalogue/generer-ia-multi', requireAdminAuth, adminController.postAdminBulkGenerateProductDrafts);
 router.post('/catalogue/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteProducts);
+router.post('/catalogue/modifier-multi', requireAdminAuth, adminController.postAdminBulkUpdateProducts);
 router.get('/catalogue/:productId', requireAdminAuth, adminController.getAdminEditProductPage);
 router.post('/catalogue/:productId', requireAdminAuth, handleProductImageUpload, adminController.postAdminUpdateProduct);
 router.post('/catalogue/:productId/supprimer', requireAdminAuth, adminController.postAdminDeleteProduct);
