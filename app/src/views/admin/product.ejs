@@ -383,6 +383,11 @@
             <label class="text-sm font-semibold text-slate-500 dark:text-gray-300" for="inStock">Produit en stock</label>
           </div>
 
+          <div class="flex items-start gap-3 md:col-span-4 md:order-9">
+            <input class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary" id="vatRecoverable" name="vatRecoverable" type="checkbox" <%= form && form.vatRecoverable ? 'checked' : '' %> />
+            <label class="text-sm text-slate-500 dark:text-gray-300" for="vatRecoverable"><span class="font-semibold">TVA récupérable (20 %)</span> — affiche le prix HT + TTC sur la fiche. À cocher pour les produits au régime normal (PAS pour le régime de la marge, ex. moteurs d'occasion).</label>
+          </div>
+
           <div class="md:order-9">
             <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="shippingDelayText">Délai d'expédition (affiché sur la fiche produit)</label>
             <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="shippingDelayText" name="shippingDelayText" placeholder="Ex: Expédition sous 24/48h • Expédition sous 3 jours • Sur commande" type="text" value="<%= form && typeof form.shippingDelayText !== 'undefined' ? form.shippingDelayText : '' %>" />
