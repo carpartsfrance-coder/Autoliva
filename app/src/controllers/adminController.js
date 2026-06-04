@@ -10540,9 +10540,9 @@ function importNonNegInt(value, fallback = 0) {
   return Math.round(n);
 }
 
-// Mappe + valide un produit du JSON d'import.
+// Mappe + valide un produit du JSON d'import (mode CRÉATION).
 // ctx = { categoryNames:Set<lower>, shippingByName:Map<lower,ObjectId>,
-//         existingSlugs:Set<string>, batchSlugs:Set<string> }
+//         existingSlugById:Map<slug,productId>, batchSlugs:Set<string> }
 function mapAndValidateImportProduct(raw, ctx) {
   const errors = [];
   const warnings = [];
@@ -10650,7 +10650,7 @@ function mapAndValidateImportProduct(raw, ctx) {
   const galleryTypes = galleryUrls.map(() => 'image');
 
   let slug = slugify(importStr(raw.slug) || name) || 'produit';
-  if (ctx.existingSlugs.has(slug) || ctx.batchSlugs.has(slug)) {
+  if (ctx.existingSlugById.has(slug) || ctx.batchSlugs.has(slug)) {
     errors.push(`Slug déjà utilisé : « ${slug} ». Renseignez un « slug » unique.`);
   }
 
@@ -10732,6 +10732,216 @@ function mapAndValidateImportProduct(raw, ctx) {
   return { errors: [], warnings, createData, statut };
 }
 
+// Présence d'une clé dans le JSON (patch partiel : seuls les champs présents
+// sont écrasés).
+function importHas(raw, key) {
+  return Object.prototype.hasOwnProperty.call(raw, key);
+}
+
+// Construit un patch $set (mode MISE À JOUR par SKU). Ne touche QUE les champs
+// présents dans le JSON ; ne touche JAMAIS aux images existantes. Valide
+// uniquement les champs envoyés. `existing` = fiche actuelle (lean).
+function buildImportUpdate(raw, ctx, existing) {
+  const errors = [];
+  const warnings = [];
+  const set = {};
+
+  if (importHas(raw, 'nom')) {
+    const name = importStr(raw.nom);
+    if (!name) errors.push('« nom » présent mais vide.');
+    else set.name = name;
+  }
+  if (importHas(raw, 'prix_ttc')) {
+    const c = parseImportPriceCents(raw.prix_ttc);
+    if (c === null) errors.push('« prix_ttc » invalide.');
+    else set.priceCents = c;
+  }
+  if (importHas(raw, 'tva_recuperable')) set.vatRecoverable = raw.tva_recuperable === true;
+  if (importHas(raw, 'categorie')) {
+    const cat = importStr(raw.categorie);
+    if (!cat) errors.push('« categorie » présente mais vide.');
+    else if (cat.toLowerCase() !== 'autre' && !ctx.categoryNames.has(cat.toLowerCase())) {
+      errors.push(`Catégorie inconnue : « ${cat} ».`);
+    } else set.category = cat;
+  }
+  if (importHas(raw, 'marque')) set.brand = importStr(raw.marque);
+  // Le SKU sert de clé de correspondance : on ne le réécrit que s'il change
+  // réellement (sinon « { sku, faq } » ne doit toucher QUE la FAQ).
+  if (importHas(raw, 'sku')) {
+    const newSku = importStr(raw.sku);
+    if (newSku && newSku !== importStr(existing.sku)) set.sku = newSku;
+  }
+  if (importHas(raw, 'code_moteur')) set.engineCode = importStr(raw.code_moteur);
+  if (importHas(raw, 'references_compatibles')) set.compatibleReferences = importStrArray(raw.references_compatibles);
+  if (importHas(raw, 'delai_expedition')) set.shippingDelayText = importStr(raw.delai_expedition);
+  if (importHas(raw, 'resume')) set.shortDescription = importStr(raw.resume);
+  if (importHas(raw, 'description')) set.description = importStr(raw.description);
+  if (importHas(raw, 'inclus')) set.inclusions = importStrArray(raw.inclus);
+  if (importHas(raw, 'non_inclus')) set.exclusions = importStrArray(raw.non_inclus);
+  if (importHas(raw, 'points_techniques')) set.keyPoints = importStrArray(raw.points_techniques);
+
+  if (importHas(raw, 'slug')) {
+    const slug = slugify(importStr(raw.slug));
+    if (!slug) {
+      errors.push('« slug » présent mais vide/invalide.');
+    } else {
+      const owner = ctx.existingSlugById.get(slug);
+      if ((owner && owner !== String(existing._id)) || ctx.batchSlugs.has(slug)) {
+        errors.push(`Slug déjà utilisé : « ${slug} ».`);
+      } else {
+        set.slug = slug;
+      }
+    }
+  }
+
+  if (importHas(raw, 'classe_expedition')) {
+    const sn = importStr(raw.classe_expedition);
+    if (!sn) {
+      set.shippingClassId = null; // vide explicite → détache la classe
+    } else {
+      const id = ctx.shippingByName.get(sn.toLowerCase());
+      if (!id) errors.push(`Classe d'expédition inconnue : « ${sn} ».`);
+      else set.shippingClassId = id;
+    }
+  }
+
+  if (importHas(raw, 'consigne')) {
+    const cr = (raw.consigne && typeof raw.consigne === 'object') ? raw.consigne : {};
+    const enabled = cr.active === true;
+    let amt = 0;
+    if (enabled) {
+      const a = parseImportPriceCents(cr.montant);
+      if (a === null) errors.push('consigne.montant invalide alors que la consigne est active.');
+      else amt = a;
+    }
+    const delay = clampInt(cr.delai_jours != null ? cr.delai_jours : 30, { min: 0, max: 3650, fallback: 30 });
+    set.consigne = {
+      enabled: enabled && amt > 0,
+      amountCents: amt,
+      delayDays: delay,
+      chargeUpfront: cr.encaissee === true,
+    };
+  }
+
+  // Garantie → warranty.* + badge garantie (dot-notation : ne touche pas aux
+  // autres sous-champs de warranty/badges).
+  const existingWm = importNonNegInt(existing.warranty && existing.warranty.months, 0);
+  if (importHas(raw, 'garantie_mois')) {
+    const m = importNonNegInt(raw.garantie_mois, 0);
+    set['warranty.months'] = m;
+    set['badges.topLeft'] = m > 0
+      ? `Garantie ${m} mois`
+      : (importHas(raw, 'garantie_detail') ? importStr(raw.garantie_detail).slice(0, 40) : '');
+  }
+  if (importHas(raw, 'garantie_detail')) {
+    set['warranty.text'] = importStr(raw.garantie_detail);
+    if (!importHas(raw, 'garantie_mois')) {
+      set['badges.topLeft'] = existingWm > 0
+        ? `Garantie ${existingWm} mois`
+        : importStr(raw.garantie_detail).slice(0, 40);
+    }
+  }
+
+  if (importHas(raw, 'badges')) set['badges.cards'] = importStrArray(raw.badges).slice(0, 4);
+  if (importHas(raw, 'etat_affiche')) set['badges.condition'] = importStr(raw.etat_affiche);
+
+  // Specs Type/Programmation : fusion dans les specs existantes (sans perdre
+  // d'éventuelles autres specs).
+  if (importHas(raw, 'type') || importHas(raw, 'programmation')) {
+    const specs = Array.isArray(existing.specs)
+      ? existing.specs.map((s) => ({ label: importStr(s.label), value: importStr(s.value) }))
+      : [];
+    if (importHas(raw, 'type')) upsertSpecPair(specs, 'type', 'Type', importStr(raw.type));
+    if (importHas(raw, 'programmation')) upsertSpecPair(specs, 'programmation', 'Programmation', importStr(raw.programmation));
+    set.specs = specs;
+  }
+
+  if (importHas(raw, 'compatibilites')) {
+    if (!Array.isArray(raw.compatibilites)) {
+      errors.push('« compatibilites » doit être un tableau.');
+    } else {
+      set.compatibility = raw.compatibilites
+        .map((c) => ({
+          make: importStr(c && c.marque),
+          model: importStr(c && c.modele),
+          years: importStr(c && c.annees),
+          engine: importStr(c && c.motorisation),
+          kw: importNonNegInt(c && c.kw, 0),
+          ch: importNonNegInt(c && c.ch, 0),
+        }))
+        .filter((c) => c.make || c.model || c.years || c.engine);
+    }
+  }
+  if (importHas(raw, 'faq')) {
+    if (!Array.isArray(raw.faq)) {
+      errors.push('« faq » doit être un tableau.');
+    } else {
+      set.faqs = raw.faq
+        .map((f) => ({ question: importStr(f && f.question), answer: importStr(f && f.reponse) }))
+        .filter((f) => f.question && f.answer);
+    }
+  }
+  if (importHas(raw, 'etapes_reconditionnement')) {
+    if (!Array.isArray(raw.etapes_reconditionnement)) {
+      errors.push('« etapes_reconditionnement » doit être un tableau.');
+    } else {
+      set.reconditioningSteps = raw.etapes_reconditionnement
+        .map((s) => ({ title: importStr(s && s.type), description: importStr(s && s.description) }))
+        .filter((s) => s.title || s.description);
+    }
+  }
+
+  if (importHas(raw, 'meta_title')) {
+    const mt = importStr(raw.meta_title);
+    if (mt && (mt.length < 50 || mt.length > 60)) {
+      errors.push(`meta_title hors plage 50–60 caractères (actuel : ${mt.length}).`);
+    } else {
+      set['seo.metaTitle'] = mt;
+    }
+  }
+  if (importHas(raw, 'meta_description')) {
+    const md = importStr(raw.meta_description);
+    if (md && (md.length < 140 || md.length > 160)) {
+      warnings.push(`meta_description hors plage conseillée 140–160 caractères (actuel : ${md.length}).`);
+    }
+    set['seo.metaDescription'] = md;
+  }
+
+  // Statut → isPublished. Garde-fou publication évalué sur la fiche FUSIONNÉE
+  // (existant + patch). Les images existantes comptent (on n'y touche pas).
+  if (importHas(raw, 'statut')) {
+    const st = importStr(raw.statut).toLowerCase();
+    if (st === 'brouillon') {
+      set.isPublished = false;
+    } else if (st === 'publie') {
+      const mType = set.specs
+        ? (set.specs.find((s) => importStr(s.label).toLowerCase() === 'type') || {}).value
+        : ((Array.isArray(existing.specs) ? existing.specs.find((s) => importStr(s.label).toLowerCase() === 'type') : null) || {}).value;
+      const mEtat = importHas(raw, 'etat_affiche') ? set['badges.condition'] : (existing.badges && existing.badges.condition);
+      const mResume = importHas(raw, 'resume') ? set.shortDescription : existing.shortDescription;
+      const mDesc = importHas(raw, 'description') ? set.description : existing.description;
+      const hasImage = !!(importStr(existing.imageUrl) || (Array.isArray(existing.galleryUrls) && existing.galleryUrls.some((u) => importStr(u))));
+      const missing = [];
+      if (!importStr(mType)) missing.push('type');
+      if (!importStr(mEtat)) missing.push('etat_affiche');
+      if (!importStr(mResume)) missing.push('resume');
+      if (!importStr(mDesc)) missing.push('description');
+      if (!hasImage) missing.push('image');
+      if (missing.length) {
+        set.isPublished = false;
+        warnings.push(`Publication refusée (manque : ${missing.join(', ')}) → reste en brouillon.`);
+      } else {
+        set.isPublished = true;
+      }
+    }
+    // statut inconnu → on ne change pas isPublished
+  }
+
+  // IMAGES : volontairement ignorées en mise à jour (image_url / images).
+
+  return { errors, warnings, set };
+}
+
 async function postAdminImportProducts(req, res) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -10761,24 +10971,80 @@ async function postAdminImportProducts(req, res) {
     const shippingDocs = await ShippingClass.find({}).select('_id name').lean();
     const shippingByName = new Map(shippingDocs.map((c) => [importStr(c.name).toLowerCase(), c._id]));
     const slugDocs = await Product.find({}).select('slug').lean();
-    const existingSlugs = new Set(slugDocs.map((p) => importStr(p.slug)).filter(Boolean));
+    const existingSlugById = new Map(
+      slugDocs.map((p) => [importStr(p.slug), String(p._id)]).filter(([s]) => s)
+    );
 
-    const ctx = { categoryNames, shippingByName, existingSlugs, batchSlugs: new Set() };
+    const ctx = { categoryNames, shippingByName, existingSlugById, batchSlugs: new Set() };
 
     const results = [];
     let created = 0;
+    let updated = 0;
     let failed = 0;
     let drafts = 0;
     let published = 0;
 
     for (let i = 0; i < items.length; i++) {
       const raw = items[i];
-      const nom = importStr(raw && raw.nom);
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        failed++;
+        results.push({ index: i, nom: '', status: 'error', errors: ['Entrée invalide : un objet JSON est attendu.'], warnings: [] });
+        continue;
+      }
+      const nom = importStr(raw.nom);
+      const sku = importStr(raw.sku);
+
+      // Mise à jour par SKU si un produit existant porte ce SKU.
+      const existing = sku ? await Product.findOne({ sku }).lean() : null;
+
+      if (existing) {
+        const { errors, warnings, set } = buildImportUpdate(raw, ctx, existing);
+        if (errors.length) {
+          failed++;
+          results.push({ index: i, nom: nom || importStr(existing.name), sku, status: 'error', errors, warnings });
+          continue;
+        }
+        try {
+          if (Object.keys(set).length > 0) {
+            await Product.updateOne({ _id: existing._id }, { $set: set });
+            // garde la map des slugs cohérente si le slug a changé
+            if (set.slug) existingSlugById.set(set.slug, String(existing._id));
+          }
+          updated++;
+          const isPub = (typeof set.isPublished === 'boolean')
+            ? set.isPublished
+            : existing.isPublished !== false;
+          results.push({
+            index: i,
+            nom: nom || importStr(existing.name),
+            sku,
+            status: 'updated',
+            statut: isPub ? 'publie' : 'brouillon',
+            slug: set.slug || importStr(existing.slug),
+            id: String(existing._id),
+            fields: Object.keys(set),
+            warnings,
+          });
+        } catch (e) {
+          failed++;
+          results.push({
+            index: i,
+            nom: nom || importStr(existing.name),
+            sku,
+            status: 'error',
+            errors: ['Échec de mise à jour en base : ' + (e && e.message ? e.message : 'erreur inconnue') + '.'],
+            warnings,
+          });
+        }
+        continue;
+      }
+
+      // Sinon : création (comportement existant).
       const { errors, warnings, createData, statut } = mapAndValidateImportProduct(raw, ctx);
 
       if (!createData || errors.length) {
         failed++;
-        results.push({ index: i, nom, status: 'error', errors, warnings });
+        results.push({ index: i, nom, sku, status: 'error', errors, warnings });
         continue;
       }
 
@@ -10787,9 +11053,12 @@ async function postAdminImportProducts(req, res) {
         created++;
         if (createData.isPublished) published++;
         else drafts++;
+        // réserve le slug pour le reste du lot
+        existingSlugById.set(createData.slug, String(doc._id));
         results.push({
           index: i,
           nom,
+          sku,
           status: 'created',
           statut,
           slug: createData.slug,
@@ -10802,6 +11071,7 @@ async function postAdminImportProducts(req, res) {
         results.push({
           index: i,
           nom,
+          sku,
           status: 'error',
           errors: ['Échec d\'écriture en base : ' + (e && e.message ? e.message : 'erreur inconnue') + '.'],
           warnings,
@@ -10811,7 +11081,7 @@ async function postAdminImportProducts(req, res) {
 
     return res.json({
       ok: true,
-      summary: { total: items.length, created, failed, brouillons: drafts, publies: published },
+      summary: { total: items.length, created, updated, failed, brouillons: drafts, publies: published },
       results,
     });
   } catch (err) {
