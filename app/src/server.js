@@ -13,6 +13,10 @@ async function start() {
     try {
       await mongoose.connect(mongoUri);
       console.log('MongoDB connectée');
+      // Migration one-shot (garde-fou par marqueur) : TVA récupérable sur les
+      // mécatroniques/TCU, ponts/différentiels, boîtes de transfert.
+      const { applyVatRecoverableParts } = require('./migrations/applyVatRecoverableParts');
+      await applyVatRecoverableParts(mongoose.connection);
       startScheduler();
     } catch (err) {
       console.error('Erreur de connexion MongoDB :', err.message);
