@@ -94,6 +94,13 @@
           Voir en ligne
         </button>
 
+        <% if (mode === 'edit' && productId) { %>
+          <a class="px-4 py-2 text-sm font-semibold border border-border-light dark:border-border-dark rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-all flex items-center gap-2" href="/admin/catalogue/<%= productId %>/export" title="Télécharger cette fiche au format JSON (modèle d'import)">
+            <span class="material-symbols-outlined text-lg">download</span>
+            Exporter JSON
+          </a>
+        <% } %>
+
         <button class="btn btn-primary" form="productForm" type="submit" <%= dbConnected ? '' : 'disabled' %>>
           <span class="material-symbols-outlined text-lg">save</span>
           Enregistrer
