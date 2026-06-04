@@ -82,6 +82,22 @@
         if (engine) compGrouped[make].engines.add(engine);
       }); %>
       <% const compMakes = Object.keys(compGrouped); %>
+      <%# Liste DÉTAILLÉE par véhicule (1 ligne = 1 véhicule) pour l'onglet dédié. %>
+      <% const compatVehicles = (Array.isArray(product.compatibility) ? product.compatibility : []).map((c) => {
+           const make = c && c.make ? String(c.make).trim() : '';
+           const model = c && c.model ? String(c.model).trim() : '';
+           const years = c && c.years ? String(c.years).trim() : '';
+           const engine = c && c.engine ? String(c.engine).trim() : '';
+           const kw = c && Number(c.kw) > 0 ? Number(c.kw) : 0;
+           const ch = c && Number(c.ch) > 0 ? Number(c.ch) : 0;
+           let power = '';
+           if (kw && ch) power = kw + ' kW / ' + ch + ' ch';
+           else if (ch) power = ch + ' ch';
+           else if (kw) power = kw + ' kW';
+           return { make, model, years, engine, power };
+         }).filter((v) => v.make || v.model || v.engine); %>
+      <% compatVehicles.sort((a, b) => (a.make + a.model + a.engine).localeCompare(b.make + b.model + b.engine, 'fr')); %>
+      <% const vehicleCount = compatVehicles.length; %>
       <% const compatibleReferences = Array.isArray(product.compatibleReferences)
         ? product.compatibleReferences.map((v) => String(v || '').trim()).filter(Boolean)
         : []; %>
@@ -592,12 +608,14 @@
       <div class="mt-16">
         <input checked class="hidden" id="tab-description" name="product-tabs" type="radio" />
         <input class="hidden" id="tab-tech" name="product-tabs" type="radio" />
+        <% if (vehicleCount > 0) { %><input class="hidden" id="tab-vehicles" name="product-tabs" type="radio" /><% } %>
         <input class="hidden" id="tab-process" name="product-tabs" type="radio" />
         <input class="hidden" id="tab-faq" name="product-tabs" type="radio" />
 
         <div class="tabs-nav flex border-b-2 border-slate-200 dark:border-slate-800 overflow-x-auto whitespace-nowrap no-scrollbar">
           <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-description">Description</label>
           <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-tech">Fiche technique</label>
+          <% if (vehicleCount > 0) { %><label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-vehicles">Véhicules compatibles (<%= vehicleCount %>)</label><% } %>
           <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-process">Processus qualité</label>
           <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-faq">FAQ (<%= faqCount %>)</label>
         </div>
@@ -811,6 +829,43 @@
                 <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> Conserver la facture pour faire valoir la garantie</li>
               </ul>
             </div>
+          </div>
+
+          <div class="tab-content" id="content-vehicles">
+            <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 refined-shadow">
+              <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 flex items-center justify-between gap-4">
+                <div>
+                  <h2 class="text-lg font-bold uppercase text-slate-900 dark:text-white">Véhicules compatibles</h2>
+                  <p class="mt-1 text-sm text-slate-500">Vérifiez toujours votre VIN ou le code moteur avant validation — <%= vehicleCount %> véhicule<%= vehicleCount > 1 ? 's' : '' %> référencé<%= vehicleCount > 1 ? 's' : '' %>.</p>
+                </div>
+                <span class="shrink-0 inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-bold"><%= vehicleCount %></span>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                  <thead class="bg-white dark:bg-slate-950 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    <tr>
+                      <th class="px-5 sm:px-6 py-4">Marque</th>
+                      <th class="px-5 sm:px-6 py-4">Modèle</th>
+                      <th class="px-5 sm:px-6 py-4">Années</th>
+                      <th class="px-5 sm:px-6 py-4">Motorisation</th>
+                      <th class="px-5 sm:px-6 py-4">Puissance</th>
+                    </tr>
+                  </thead>
+                  <tbody class="text-[13px]">
+                    <% compatVehicles.forEach((v) => { %>
+                      <tr class="border-t border-slate-100 dark:border-slate-700/50">
+                        <td class="px-5 sm:px-6 py-3 font-bold text-slate-900 dark:text-white whitespace-nowrap"><%= v.make %></td>
+                        <td class="px-5 sm:px-6 py-3 text-slate-600 dark:text-slate-300"><%= v.model %></td>
+                        <td class="px-5 sm:px-6 py-3 text-slate-500 whitespace-nowrap"><%= v.years || '—' %></td>
+                        <td class="px-5 sm:px-6 py-3 text-slate-500"><%= v.engine || '—' %></td>
+                        <td class="px-5 sm:px-6 py-3 text-slate-400 italic whitespace-nowrap"><%= v.power || '—' %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p class="mt-4 text-xs text-slate-400">Liste indicative. En cas de doute, vérifiez avec votre plaque ou votre VIN — notre équipe valide la compatibilité avant expédition.</p>
           </div>
 
           <div class="tab-content" id="content-process">

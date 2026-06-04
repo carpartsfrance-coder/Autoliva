@@ -4923,8 +4923,11 @@ function formatCompatibilityLines(items) {
           const model = getTrimmedString(item && item.model);
           const years = getTrimmedString(item && item.years);
           const engine = getTrimmedString(item && item.engine);
+          const kw = Number(item && item.kw) || 0;
+          const ch = Number(item && item.ch) || 0;
           if (!make && !model && !years && !engine) return '';
-          return `${make} | ${model} | ${years} | ${engine}`.trim();
+          const base = `${make} | ${model} | ${years} | ${engine}`;
+          return (kw || ch) ? `${base} | ${kw || ''} | ${ch || ''}` : base.trim();
         })
         .filter(Boolean)
         .join('\n')
@@ -5573,6 +5576,7 @@ function parseStepsFromLines(value) {
 }
 
 function splitParts(line) {
+  if (line.includes('\t')) return line.split('\t').map((p) => p.trim()); // collage Excel
   if (line.includes('|')) return line.split('|').map((p) => p.trim());
   if (line.includes(';')) return line.split(';').map((p) => p.trim());
   return line.split(',').map((p) => p.trim());
@@ -5588,10 +5592,12 @@ function parseCompatibilityFromLines(value) {
     const model = (parts[1] || '').trim();
     const years = (parts[2] || '').trim();
     const engine = (parts[3] || '').trim();
+    const kw = parseInt(String(parts[4] || '').replace(/[^0-9]/g, ''), 10) || 0;
+    const ch = parseInt(String(parts[5] || '').replace(/[^0-9]/g, ''), 10) || 0;
 
     if (!make && !model && !years && !engine) continue;
 
-    items.push({ make, model, years, engine });
+    items.push({ make, model, years, engine, kw, ch });
   }
 
   return items;
@@ -7258,12 +7264,7 @@ async function getAdminEditProductPage(req, res, next) {
               .map((s) => `${s.title || ''}: ${s.description || ''}`.trim())
               .join('\n')
           : '',
-        compatibility: Array.isArray(product.compatibility)
-          ? product.compatibility
-              .filter((c) => c && (c.make || c.model || c.years || c.engine))
-              .map((c) => `${c.make || ''} | ${c.model || ''} | ${c.years || ''} | ${c.engine || ''}`.trim())
-              .join('\n')
-          : '',
+        compatibility: formatCompatibilityLines(product.compatibility),
         faqs: Array.isArray(product.faqs)
           ? product.faqs
               .filter((f) => f && (f.question || f.answer))
@@ -7306,12 +7307,7 @@ async function getAdminEditProductPage(req, res, next) {
                 .map((f) => `${f.question || ''} | ${f.answer || ''}`.trim())
                 .join('\n')
             : '',
-          compatibility: Array.isArray(product.compatibility)
-            ? product.compatibility
-                .filter((c) => c && (c.make || c.model || c.years || c.engine))
-                .map((c) => `${c.make || ''} | ${c.model || ''} | ${c.years || ''} | ${c.engine || ''}`.trim())
-                .join('\n')
-            : '',
+          compatibility: formatCompatibilityLines(product.compatibility),
           metaTitle: product.seo && product.seo.metaTitle ? product.seo.metaTitle : '',
           metaDescription: product.seo && product.seo.metaDescription ? product.seo.metaDescription : '',
         },

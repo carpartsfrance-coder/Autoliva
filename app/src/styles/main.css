@@ -153,6 +153,7 @@ details > summary::-webkit-details-marker {
 
 #tab-description:checked ~ .tabs-nav label[for='tab-description'],
 #tab-tech:checked ~ .tabs-nav label[for='tab-tech'],
+#tab-vehicles:checked ~ .tabs-nav label[for='tab-vehicles'],
 #tab-process:checked ~ .tabs-nav label[for='tab-process'],
 #tab-faq:checked ~ .tabs-nav label[for='tab-faq'] {
   color: #dc2626;
@@ -164,6 +165,7 @@ details > summary::-webkit-details-marker {
 }
 #tab-description:checked ~ .tab-content-container #content-description,
 #tab-tech:checked ~ .tab-content-container #content-tech,
+#tab-vehicles:checked ~ .tab-content-container #content-vehicles,
 #tab-process:checked ~ .tab-content-container #content-process,
 #tab-faq:checked ~ .tab-content-container #content-faq {
   display: block;
