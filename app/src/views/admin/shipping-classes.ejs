@@ -137,15 +137,39 @@
                   </form>
 
                   <div class="mt-3">
-                    <form action="/admin/expedition/<%= c.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette classe ?">
-                      <button class="btn btn-danger" type="submit" <%= (dbConnected && c.canDelete) ? '' : 'disabled' %>>
+                    <% if (c.isDefault) { %>
+                      <%# Classe par défaut : non supprimable tant qu'elle est la référence de secours %>
+                      <button class="btn btn-danger" type="button" disabled>
                         <span class="material-symbols-outlined mr-2 text-base">delete</span>
                         Supprimer
                       </button>
-                      <% if (!c.canDelete) { %>
-                        <span class="ml-3 text-xs text-slate-500">Impossible : utilisée par des produits ou classe par défaut.</span>
-                      <% } %>
-                    </form>
+                      <span class="ml-3 text-xs text-slate-500">Classe par défaut : désignez d'abord une autre classe « Par défaut » avant de la supprimer.</span>
+                    <% } else if (c.usedCount > 0) { %>
+                      <%# Utilisée par des produits : on réaffecte avant de supprimer %>
+                      <form action="/admin/expedition/<%= c.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Réaffecter les <%= c.usedCount %> produit(s) vers la classe choisie, puis supprimer « <%= c.name %> » ?" class="flex flex-col gap-2 sm:flex-row sm:items-center sm:flex-wrap">
+                        <label class="text-xs font-semibold text-slate-500" for="reassign-<%= c.id %>">Réaffecter les <%= c.usedCount %> produit(s) vers :</label>
+                        <select id="reassign-<%= c.id %>" name="reassignToId" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold">
+                          <% shippingClasses.forEach((o) => { %>
+                            <% if (o.id !== c.id) { %>
+                              <option value="<%= o.id %>" <%= o.isDefault ? 'selected' : '' %>><%= o.name %><%= o.isDefault ? ' — par défaut' : '' %><%= o.isActive ? '' : ' (inactive)' %></option>
+                            <% } %>
+                          <% }) %>
+                          <option value="none">Aucune — utilisera la classe par défaut</option>
+                        </select>
+                        <button class="btn btn-danger" type="submit" <%= dbConnected ? '' : 'disabled' %>>
+                          <span class="material-symbols-outlined mr-2 text-base">delete</span>
+                          Réaffecter et supprimer
+                        </button>
+                      </form>
+                    <% } else { %>
+                      <%# Libre : suppression simple %>
+                      <form action="/admin/expedition/<%= c.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette classe ?">
+                        <button class="btn btn-danger" type="submit" <%= dbConnected ? '' : 'disabled' %>>
+                          <span class="material-symbols-outlined mr-2 text-base">delete</span>
+                          Supprimer
+                        </button>
+                      </form>
+                    <% } %>
                   </div>
                 </div>
               <% }) %>
