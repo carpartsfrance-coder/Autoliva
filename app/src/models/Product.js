@@ -18,6 +18,9 @@ const productSchema = new mongoose.Schema(
     },
     priceCents: { type: Number, required: true, min: 0 },
     compareAtPriceCents: { type: Number, default: null, min: 0 },
+    /* TVA récupérable à 20 % (régime normal) → la fiche affiche prix HT + TTC.
+     * Si false (ex. régime de la marge), seul le TTC/prix net est montré. */
+    vatRecoverable: { type: Boolean, default: false },
     /* Prix d'achat fournisseur HT en centimes. Utilisé pour calculer
      * la marge brute dans le tableau de bord financier (/admin/finance).
      * Optionnel : null = inconnu, la marge sera affichée "—" pour les

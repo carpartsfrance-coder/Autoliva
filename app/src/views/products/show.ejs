@@ -352,6 +352,12 @@
               <div class="text-left md:text-right">
                 <span class="text-4xl font-black text-primary" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="<%= installmentCount %>" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(product.priceCents) %> €</span>
                 <div class="text-[11px] uppercase tracking-wide text-slate-400">TTC</div>
+                <% if (product.vatRecoverable) { %>
+                  <div class="mt-1.5 flex flex-wrap items-center md:justify-end gap-2">
+                    <span class="text-base font-bold text-slate-700 dark:text-slate-200"><span data-price-display-ht><%= formatMoney(Math.round(product.priceCents / 1.2)) %></span> € HT</span>
+                    <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">TVA 20% récupérable</span>
+                  </div>
+                <% } %>
                 <div class="mt-1 flex items-center md:justify-end gap-1 text-xs text-slate-500 <%= installmentEligible ? '' : 'hidden' %>" data-installment-wrapper>
                   <span class="material-symbols-outlined text-sm text-slate-400">credit_card</span>
                   <span>ou 3 × <span data-installment-amount><%= formatMoney(installmentAmountCents) %> €</span> sans frais</span>
@@ -1063,6 +1069,7 @@
           var originalSubmitDisabled = !!(addToCartSubmit && addToCartSubmit.disabled);
 
           var priceEl = document.querySelector('[data-price-display]');
+          var priceHtEl = document.querySelector('[data-price-display-ht]'); // prix HT (TVA récupérable)
           var installmentWrapper = document.querySelector('[data-installment-wrapper]');
           var installmentAmountEl = document.querySelector('[data-installment-amount]');
           var optionInputs = Array.prototype.slice.call(document.querySelectorAll('[data-option-input]') || []);
@@ -1108,6 +1115,7 @@
             var pricing = computeOptionPricing();
             var next = (pricing.absolute !== null ? pricing.absolute : base) + pricing.delta;
             priceEl.textContent = formatMoney(next) + ' €';
+            if (priceHtEl) priceHtEl.textContent = formatMoney(Math.round(next / 1.2)); // HT = TTC / 1,20
             syncInstallmentDisplay(next);
           }
 
