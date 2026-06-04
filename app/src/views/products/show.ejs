@@ -68,6 +68,13 @@
       <% const keyGarantie = (product.warranty && Number(product.warranty.months) > 0)
         ? (product.warranty.months + ' mois' + (product.warranty.text ? ' — ' + product.warranty.text : ''))
         : (findSpec('garantie') || topLeftBadge || ''); %>
+      <%# Libellé court de garantie pour la barre sticky (dynamique selon le produit,
+          plus de « Garantie 2 ans » en dur qui contredisait la vraie garantie). %>
+      <% const stickyWarranty = (function () {
+           var g = keyGarantie ? String(keyGarantie).split('—')[0].split(' - ')[0].trim() : '';
+           if (!g) return 'Garantie incluse';
+           return /garantie/i.test(g) ? g : ('Garantie ' + g);
+         })(); %>
       <% const optionGroups = Array.isArray(product.displayOptions) ? product.displayOptions : []; %>
       <% const compGrouped = {}; %>
       <% (Array.isArray(product.compatibility) ? product.compatibility : []).forEach((c) => {
@@ -1440,7 +1447,7 @@
           </span>
           <span class="flex items-center gap-1.5">
             <span class="material-symbols-outlined text-base text-emerald-600">verified</span>
-            Garantie 2 ans
+            <%= stickyWarranty %>
           </span>
           <span class="flex items-center gap-1.5">
             <span class="material-symbols-outlined text-base text-emerald-600">payments</span>
