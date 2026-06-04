@@ -418,7 +418,7 @@ function getBlogIndex(req, res) {
       ...((showFeatured && featuredDoc && featuredDoc.slug) ? { slug: { $ne: featuredDoc.slug } } : {}),
     };
 
-    const perPage = 4;
+    const perPage = 12;
     const total = await BlogPost.countDocuments(listingFilter);
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     const safePage = Math.min(page, totalPages);
