@@ -15,24 +15,37 @@ function getBaseUrl() {
 }
 
 /**
- * Normalise un numéro FR vers E.164 (+33…).
- * Accepte : 06…, +336…, 0033…, 336…
- * Retourne '' si le numéro n'est pas exploitable.
+ * Normalise un numéro FR vers E.164 (+33…). Robuste aux saisies clients
+ * courantes — c'est CRITIQUE : un numéro mal saisi = SMS jamais envoyé.
+ *
+ * Gère notamment :
+ *  - 06/07…, 0X……                          (national classique)
+ *  - +33 6…, 0033 6…, 33 6…                  (international standard)
+ *  - +33 06…, 0033 06…, +330763…            (indicatif + 0 redondant — TRÈS fréquent)
+ *  - 763450222 (mobile sans le 0 initial)
+ *  - espaces, points, tirets, parenthèses, lettres (« tel: », « Tél »…)
+ * Retourne '' si le numéro reste inexploitable (étranger, trop court, etc.).
  */
 function normalizePhoneFR(phone) {
-  const raw = getTrimmedString(phone).replace(/[\s.\-()]/g, '');
+  // Ne garde que chiffres et '+'.
+  let raw = getTrimmedString(phone).replace(/[^\d+]/g, '');
   if (!raw) return '';
 
-  // Déjà au format +33…
-  if (/^\+33[1-9]\d{8}$/.test(raw)) return raw;
+  // Préfixes internationaux FR → forme nationale 0X……
+  if (raw.startsWith('+33')) raw = '0' + raw.slice(3);
+  else if (raw.startsWith('0033')) raw = '0' + raw.slice(4);
+  else if (/^33[1-9]\d{8}$/.test(raw)) raw = '0' + raw.slice(2);
 
-  // 0033…
-  if (/^0033[1-9]\d{8}$/.test(raw)) return `+${raw.slice(2)}`;
+  // Retire un éventuel '+' résiduel (numéro étranger ⇒ sera rejeté plus bas).
+  raw = raw.replace(/\+/g, '');
 
-  // 33… sans +
-  if (/^33[1-9]\d{8}$/.test(raw)) return `+${raw}`;
+  // Effondre les zéros de tête (cas « +33 07… » → « 00 7… » → « 0 7… »).
+  raw = raw.replace(/^0+/, '0');
 
-  // 0X XX XX XX XX (format FR classique)
+  // Mobile/fixe saisi sans le 0 initial (« 763450222 ») → on ajoute le 0.
+  if (/^[1-9]\d{8}$/.test(raw)) raw = '0' + raw;
+
+  // Numéro FR national valide : 0 suivi de 9 chiffres (1er ∈ 1-9).
   if (/^0[1-9]\d{8}$/.test(raw)) return `+33${raw.slice(1)}`;
 
   return '';
