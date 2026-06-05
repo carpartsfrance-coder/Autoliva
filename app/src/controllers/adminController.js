@@ -2074,6 +2074,8 @@ async function getAdminDashboard(req, res, next) {
         pipeline: { pendingLabel: 0, labelSent: 0, pieceInTransit: 0, pieceReceived: 0, cloningInProgress: 0, cloningDone: 0, cloningFailed: 0 },
         weeklyChart: { labels: ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'], values: [0, 0, 0, 0, 0, 0, 0], prevValues: [0, 0, 0, 0, 0, 0, 0] },
         monthlyChart: { labels: [], values: [] },
+        period: { key: '6m', label: '6 derniers mois', from: '', to: '', granularity: 'month' },
+        periodKpis: null,
         activities: [],
       });
     }
@@ -2084,6 +2086,48 @@ async function getAdminDashboard(req, res, next) {
     const startMonth = new Date(now);
     startMonth.setDate(1);
     startMonth.setHours(0, 0, 0, 0);
+
+    /* ── Sélecteur de période (presets ou dates exactes ?from=&to=) ── */
+    const PERIOD_KEYS = ['7d', '30d', '90d', '6m', '12m', 'year'];
+    const parsePeriodDate = (s) => {
+      const m = typeof s === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim()) : null;
+      if (!m) return null;
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return Number.isNaN(d.getTime()) ? null : d;
+    };
+    const _pFrom = parsePeriodDate(req.query.from);
+    const _pTo = parsePeriodDate(req.query.to);
+    let periodKey;
+    let rangeStart;
+    let rangeEnd;
+    if (_pFrom && _pTo && _pFrom <= _pTo) {
+      periodKey = 'custom';
+      rangeStart = new Date(_pFrom); rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd = new Date(_pTo); rangeEnd.setHours(23, 59, 59, 999);
+    } else {
+      periodKey = (typeof req.query.period === 'string' && PERIOD_KEYS.includes(req.query.period.trim()))
+        ? req.query.period.trim() : '6m';
+      rangeEnd = new Date(now);
+      rangeStart = new Date(now);
+      if (periodKey === '7d') rangeStart.setDate(rangeStart.getDate() - 6);
+      else if (periodKey === '30d') rangeStart.setDate(rangeStart.getDate() - 29);
+      else if (periodKey === '90d') rangeStart.setDate(rangeStart.getDate() - 89);
+      else if (periodKey === '6m') { rangeStart.setMonth(rangeStart.getMonth() - 5); rangeStart.setDate(1); }
+      else if (periodKey === '12m') { rangeStart.setMonth(rangeStart.getMonth() - 11); rangeStart.setDate(1); }
+      else if (periodKey === 'year') { rangeStart = new Date(now.getFullYear(), 0, 1); }
+      rangeStart.setHours(0, 0, 0, 0);
+    }
+    const rangeDays = Math.max(1, Math.round((rangeEnd - rangeStart) / 86400000));
+    const periodGranularity = rangeDays <= 92 ? 'day' : 'month';
+    const _periodLabels = { '7d': '7 derniers jours', '30d': '30 derniers jours', '90d': '90 derniers jours', '6m': '6 derniers mois', '12m': '12 derniers mois', year: 'Cette année', custom: 'Période personnalisée' };
+    const _toInputDate = (d) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    const periodInfo = {
+      key: periodKey,
+      label: _periodLabels[periodKey] || '6 derniers mois',
+      from: _toInputDate(rangeStart),
+      to: _toInputDate(rangeEnd),
+      granularity: periodGranularity,
+    };
 
     const excludeCancelled = { status: { $nin: ['cancelled', 'draft', 'refunded'] }, archived: { $ne: true }, deletedAt: null };
 
@@ -2115,6 +2159,9 @@ async function getAdminDashboard(req, res, next) {
     let prevWeekValues = [0, 0, 0, 0, 0, 0, 0];
     let monthLabels = [];
     let monthValues = [];
+    let periodRevenueCents = 0;
+    let periodOrders = 0;
+    let periodAvgBasketCents = 0;
 
     if (showFinancials) {
       // CA encaissé strict : statuts payés uniquement (exclut pending_payment)
@@ -2165,36 +2212,55 @@ async function getAdminDashboard(req, res, next) {
         prevWeekValues.push(Math.round((dailyMap.get(pkey) || 0) / 100));
       }
 
-      /* ── Monthly line chart data (last 6 months) ── */
-      const sixMonthsAgo = new Date(now);
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-      sixMonthsAgo.setDate(1);
-      sixMonthsAgo.setHours(0, 0, 0, 0);
-
-      const monthlyRevenueAgg = await Order.aggregate([
-        { $match: { createdAt: { $gte: sixMonthsAgo }, ...paidOnly } },
+      /* ── Série C.A. sur la PÉRIODE sélectionnée (granularité jour ou mois) ── */
+      const _revFmt = periodGranularity === 'day' ? '%Y-%m-%d' : '%Y-%m';
+      const revenueAgg = await Order.aggregate([
+        { $match: { createdAt: { $gte: rangeStart, $lte: rangeEnd }, ...paidOnly } },
         {
           $group: {
-            _id: { $dateToString: { format: '%Y-%m', date: '$createdAt', timezone: 'Europe/Paris' } },
+            _id: { $dateToString: { format: _revFmt, date: '$createdAt', timezone: 'Europe/Paris' } },
             total: { $sum: '$totalCents' },
             count: { $sum: 1 },
           },
         },
-        { $sort: { _id: 1 } },
       ]);
-      const monthlyMap = new Map(monthlyRevenueAgg.map((m) => [m._id, m]));
-
+      const revenueMap = new Map(revenueAgg.map((r) => [r._id, r]));
+      const monthNamesFR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
       monthLabels = [];
       monthValues = [];
-      const monthNamesFR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
-      for (let i = 0; i < 6; i++) {
-        const md = new Date(sixMonthsAgo);
-        md.setMonth(md.getMonth() + i);
-        const key = md.toISOString().slice(0, 7);
-        monthLabels.push(monthNamesFR[md.getMonth()] + ' ' + md.getFullYear());
-        const entry = monthlyMap.get(key);
-        monthValues.push(Math.round((entry ? entry.total : 0) / 100));
+      if (periodGranularity === 'day') {
+        const dayKeyFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' });
+        const dayLabelFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: 'short' });
+        const cur = new Date(rangeStart); cur.setHours(12, 0, 0, 0);
+        let guard = 0;
+        while (cur <= rangeEnd && guard < 400) {
+          const e = revenueMap.get(dayKeyFmt.format(cur));
+          monthLabels.push(dayLabelFmt.format(cur));
+          monthValues.push(Math.round((e ? e.total : 0) / 100));
+          cur.setDate(cur.getDate() + 1);
+          guard += 1;
+        }
+      } else {
+        const cur = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 15, 12, 0, 0);
+        let guard = 0;
+        while (cur <= rangeEnd && guard < 60) {
+          const key = cur.getFullYear() + '-' + String(cur.getMonth() + 1).padStart(2, '0');
+          const e = revenueMap.get(key);
+          monthLabels.push(monthNamesFR[cur.getMonth()] + ' ' + cur.getFullYear());
+          monthValues.push(Math.round((e ? e.total : 0) / 100));
+          cur.setMonth(cur.getMonth() + 1);
+          guard += 1;
+        }
       }
+
+      /* ── KPIs sur la période sélectionnée ── */
+      const periodAgg = await Order.aggregate([
+        { $match: { createdAt: { $gte: rangeStart, $lte: rangeEnd }, ...paidOnly } },
+        { $group: { _id: null, total: { $sum: '$totalCents' }, count: { $sum: 1 } } },
+      ]);
+      periodRevenueCents = periodAgg && periodAgg[0] ? Number(periodAgg[0].total) : 0;
+      periodOrders = periodAgg && periodAgg[0] ? Number(periodAgg[0].count) : 0;
+      periodAvgBasketCents = periodOrders > 0 ? Math.round(periodRevenueCents / periodOrders) : 0;
 
       /* ── Average basket + top products (basés sur commandes payées) ── */
       ordersThisMonth = await Order.countDocuments({ createdAt: { $gte: startMonth }, ...paidOnly });
@@ -2280,6 +2346,12 @@ async function getAdminDashboard(req, res, next) {
       pipeline,
       weeklyChart: { labels: weekLabels, values: weekValues, prevValues: prevWeekValues },
       monthlyChart: { labels: monthLabels, values: monthValues },
+      period: periodInfo,
+      periodKpis: showFinancials ? {
+        revenue: formatEuro(periodRevenueCents),
+        orders: periodOrders,
+        avgBasket: formatEuro(periodAvgBasketCents),
+      } : null,
       activities,
     });
   } catch (err) {
