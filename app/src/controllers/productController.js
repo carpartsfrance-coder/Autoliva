@@ -538,12 +538,19 @@ async function listProducts(req, res, next) {
     if (req.session) {
       if (req.query.vehicleClear === '1' || req.query.vehicleClear === 'true') {
         delete req.session.vehicle;
-      } else if (typeof req.query.vehicleMake === 'string' && req.query.vehicleMake.trim()) {
-        req.session.vehicle = {
-          make: req.query.vehicleMake.trim(),
-          model: typeof req.query.vehicleModel === 'string' ? req.query.vehicleModel.trim() : '',
-          engine: typeof req.query.vehicleEngine === 'string' ? req.query.vehicleEngine.trim() : '',
-        };
+      } else if (typeof req.query.vehicleMake === 'string') {
+        // Le filtre/sélecteur a été soumis (param présent) → on reflète le choix.
+        // Marque vide = l'utilisateur a retiré le véhicule → on oublie la session.
+        const mk = req.query.vehicleMake.trim();
+        if (mk) {
+          req.session.vehicle = {
+            make: mk,
+            model: typeof req.query.vehicleModel === 'string' ? req.query.vehicleModel.trim() : '',
+            engine: typeof req.query.vehicleEngine === 'string' ? req.query.vehicleEngine.trim() : '',
+          };
+        } else {
+          delete req.session.vehicle;
+        }
       }
     }
 

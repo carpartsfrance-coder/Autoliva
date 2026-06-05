@@ -14,6 +14,7 @@
   const qVal = overrides.q !== undefined ? overrides.q : (typeof searchQuery !== 'undefined' ? searchQuery : '');
   const vehicleMakeVal = overrides.vehicleMake !== undefined ? overrides.vehicleMake : (typeof selectedVehicleMake !== 'undefined' ? selectedVehicleMake : '');
   const vehicleModelVal = overrides.vehicleModel !== undefined ? overrides.vehicleModel : (typeof selectedVehicleModel !== 'undefined' ? selectedVehicleModel : '');
+  const vehicleEngineVal = overrides.vehicleEngine !== undefined ? overrides.vehicleEngine : (typeof selectedVehicleEngine !== 'undefined' ? selectedVehicleEngine : '');
   const mainCatVal = overrides.mainCategory !== undefined ? overrides.mainCategory : (typeof selectedMainCategory !== 'undefined' ? selectedMainCategory : '');
   const subCatVal = overrides.subCategory !== undefined ? overrides.subCategory : (typeof selectedSubCategory !== 'undefined' ? selectedSubCategory : '');
   const stockVal = overrides.stock !== undefined ? overrides.stock : (typeof selectedStock !== 'undefined' ? selectedStock : '');
@@ -25,6 +26,7 @@
   if (qVal) params.set('q', qVal);
   if (vehicleMakeVal) params.set('vehicleMake', vehicleMakeVal);
   if (vehicleModelVal) params.set('vehicleModel', vehicleModelVal);
+  if (vehicleEngineVal) params.set('vehicleEngine', vehicleEngineVal);
   /* Sur une page catégorie, on n'inclut PAS mainCategory dans l'URL si c'est
      la même que celle pré-sélectionnée par le slug (sinon URL redondante). */
   const skipMainCat = _categoryContext && mainCatVal && mainCatVal === _categoryContext.name;
@@ -44,6 +46,7 @@
   (typeof searchQuery !== 'undefined' && searchQuery) ? 1 : 0,
   (typeof selectedVehicleMake !== 'undefined' && selectedVehicleMake) ? 1 : 0,
   (typeof selectedVehicleModel !== 'undefined' && selectedVehicleModel) ? 1 : 0,
+  (typeof selectedVehicleEngine !== 'undefined' && selectedVehicleEngine) ? 1 : 0,
   selectedStock === 'in' ? 1 : 0,
   selectedMainCategory ? 1 : 0,
   selectedSubCategory ? 1 : 0,
@@ -53,7 +56,8 @@
 
 <main class="products-listing flex-1 bg-gray-50">
   <div class="max-w-7xl mx-auto px-4 lg:px-8 py-6 sm:py-8">
-    <%# ── Sélecteur de véhicule persistant ─────────────────────────────── %>
+    <%# Bandeau d'état : rappelle le véhicule actif (le choix se fait dans les
+        filtres à gauche — pas de 2e sélecteur ici pour éviter le doublon). %>
     <% var _vMake = (typeof selectedVehicleMake !== 'undefined' && selectedVehicleMake) ? selectedVehicleMake : ''; %>
     <% var _vModel = (typeof selectedVehicleModel !== 'undefined' && selectedVehicleModel) ? selectedVehicleModel : ''; %>
     <% var _vEngine = (typeof selectedVehicleEngine !== 'undefined' && selectedVehicleEngine) ? selectedVehicleEngine : ''; %>
@@ -66,22 +70,10 @@
             <div class="font-bold text-slate-900 truncate"><%= _vMake %><%= _vModel ? ' ' + _vModel : '' %><%= _vEngine ? ' · ' + _vEngine : '' %></div>
           </div>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <button type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" data-vs-toggle>Changer</button>
-          <a href="/produits?vehicleClear=1" class="rounded-xl px-4 py-2 text-sm font-bold text-slate-500 hover:text-primary">Effacer</a>
-        </div>
-      </div>
-      <div class="mb-6 hidden" data-vs-panel>
-        <%- include('../partials/vehicle-selector', { vsMake: _vMake, vsModel: _vModel, vsEngine: _vEngine, vsButtonLabel: 'Appliquer' }) %>
-      </div>
-      <script>(function(){var t=document.querySelector('[data-vs-toggle]');var p=document.querySelector('[data-vs-panel]');if(t&&p)t.addEventListener('click',function(){p.classList.toggle('hidden');});})();</script>
-    <% } else { %>
-      <div class="mb-6 rounded-2xl border border-slate-200 bg-white px-5 py-5 sm:px-6">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="material-symbols-outlined text-primary">directions_car</span>
-          <div class="font-bold text-slate-900">Trouvez les pièces pour votre véhicule</div>
-        </div>
-        <%- include('../partials/vehicle-selector', {}) %>
+        <a href="/produits?vehicleClear=1" class="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:text-primary hover:border-primary transition">
+          <span class="material-symbols-outlined text-base">close</span>
+          Effacer le véhicule
+        </a>
       </div>
     <% } %>
 
@@ -98,7 +90,7 @@
                 <% } %>
               </div>
               <div class="flex items-center gap-3">
-                <a class="text-primary text-xs font-bold uppercase tracking-widest hover:underline" href="<%= _basePath %>">Effacer</a>
+                <a class="text-primary text-xs font-bold uppercase tracking-widest hover:underline" href="<%= _basePath %>?vehicleClear=1">Effacer</a>
                 <button class="lg:hidden h-9 px-3 rounded-xl border border-gray-200 text-gray-700 font-bold text-xs" data-filters-close type="button">Fermer</button>
               </div>
             </div>
@@ -142,6 +134,17 @@
                       <option value="" <%= selectedVehicleMake && !selectedVehicleModel ? 'selected' : '' %>><%= selectedVehicleMake ? 'Tous' : 'Choisissez une marque' %></option>
                       <% (modelsForSelectedMake || []).forEach((md) => { %>
                         <option value="<%= md %>" <%= selectedVehicleModel === md ? 'selected' : '' %>><%= md %></option>
+                      <% }) %>
+                    </select>
+                  </div>
+                  <div>
+                    <div class="text-xs font-semibold text-gray-500 mb-2">Motorisation</div>
+                    <% const _engKey = (selectedVehicleMake && selectedVehicleModel) ? (selectedVehicleMake + '|||' + selectedVehicleModel) : ''; %>
+                    <% const enginesForSel = (_engKey && vehicleEnginesByMakeModel && vehicleEnginesByMakeModel[_engKey]) ? vehicleEnginesByMakeModel[_engKey] : []; %>
+                    <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="vehicleEngine" data-vehicle-engine <%= selectedVehicleModel ? '' : 'disabled' %>>
+                      <option value="" <%= (selectedVehicleModel && !selectedVehicleEngine) ? 'selected' : '' %>><%= selectedVehicleModel ? 'Toutes' : 'Choisissez un modèle' %></option>
+                      <% (enginesForSel || []).forEach((en) => { %>
+                        <option value="<%= en %>" <%= selectedVehicleEngine === en ? 'selected' : '' %>><%= en %></option>
                       <% }) %>
                     </select>
                   </div>
@@ -206,7 +209,7 @@
 
             <div class="mt-6 grid grid-cols-1 gap-3">
               <button class="bg-primary hover:bg-red-700 text-white font-bold py-3 px-6 rounded-xl" type="submit">Appliquer</button>
-              <a class="text-center bg-gray-100 text-gray-700 font-bold py-3 px-6 rounded-xl hover:bg-gray-200" href="<%= _basePath %>">Réinitialiser</a>
+              <a class="text-center bg-gray-100 text-gray-700 font-bold py-3 px-6 rounded-xl hover:bg-gray-200" href="<%= _basePath %>?vehicleClear=1">Réinitialiser</a>
             </div>
           </form>
           </div>
@@ -274,6 +277,7 @@
             <% if (!_vehicleContext) { %>
               <input name="vehicleMake" type="hidden" value="<%= typeof selectedVehicleMake !== 'undefined' ? selectedVehicleMake : '' %>" />
               <input name="vehicleModel" type="hidden" value="<%= typeof selectedVehicleModel !== 'undefined' ? selectedVehicleModel : '' %>" />
+              <input name="vehicleEngine" type="hidden" value="<%= typeof selectedVehicleEngine !== 'undefined' ? selectedVehicleEngine : '' %>" />
             <% } %>
             <% /* mainCategory absent du form sur les pages /categorie/<slug> :
                   la catégorie est déjà encodée dans l'URL, l'inclure
@@ -531,6 +535,7 @@
 <%- include('../partials/footer') %>
 
 <script id="vehicleModelsByMakeJson" type="application/json"><%- JSON.stringify(vehicleModelsByMake || {}) %></script>
+<script id="vehicleEnginesByMakeModelJson" type="application/json"><%- JSON.stringify(vehicleEnginesByMakeModel || {}) %></script>
 
 <script>
   (function () {
@@ -548,6 +553,16 @@
       }
     } catch (e) {
       vehicleModelsByMake = {};
+    }
+
+    var vehicleEnginesByMakeModel = {};
+    try {
+      var engJsonEl = document.getElementById('vehicleEnginesByMakeModelJson');
+      if (engJsonEl && engJsonEl.textContent) {
+        vehicleEnginesByMakeModel = JSON.parse(engJsonEl.textContent);
+      }
+    } catch (e) {
+      vehicleEnginesByMakeModel = {};
     }
 
     function lockScroll() {
@@ -599,6 +614,7 @@
 
     var makeSelect = drawer ? drawer.querySelector('[data-vehicle-make]') : null;
     var modelSelect = drawer ? drawer.querySelector('[data-vehicle-model]') : null;
+    var engineSelect = drawer ? drawer.querySelector('[data-vehicle-engine]') : null;
 
     function setModelOptions(make, selectedModel) {
       if (!modelSelect) return;
@@ -627,12 +643,44 @@
       });
     }
 
+    function setEngineOptions(make, model, selectedEngine) {
+      if (!engineSelect) return;
+      var engines = (make && model && vehicleEnginesByMakeModel) ? (vehicleEnginesByMakeModel[make + '|||' + model] || []) : [];
+      engineSelect.innerHTML = '';
+
+      var first = document.createElement('option');
+      first.value = '';
+      if (!model || !engines.length) {
+        first.textContent = model ? 'Toutes' : 'Choisissez un modèle';
+        engineSelect.appendChild(first);
+        engineSelect.disabled = !engines.length;
+        return;
+      }
+
+      first.textContent = 'Toutes';
+      engineSelect.appendChild(first);
+      engineSelect.disabled = false;
+
+      engines.forEach(function (en) {
+        var opt = document.createElement('option');
+        opt.value = en;
+        opt.textContent = en;
+        if (selectedEngine && String(selectedEngine) === String(en)) opt.selected = true;
+        engineSelect.appendChild(opt);
+      });
+    }
+
     if (makeSelect && modelSelect) {
       makeSelect.addEventListener('change', function () {
         setModelOptions(makeSelect.value, '');
+        setEngineOptions(makeSelect.value, '', '');
+      });
+      modelSelect.addEventListener('change', function () {
+        setEngineOptions(makeSelect.value, modelSelect.value, '');
       });
 
       setModelOptions(makeSelect.value, modelSelect.value);
+      setEngineOptions(makeSelect.value, modelSelect.value, engineSelect ? engineSelect.value : '');
     }
   })();
 </script>
