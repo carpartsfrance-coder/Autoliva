@@ -230,7 +230,8 @@ const backOfficeSecurityHeaders = (req, res, next) => {
       "media-src 'self' blob: https:",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "script-src 'self' 'unsafe-inline'",
+      // jsdelivr : nécessaire pour Chart.js (graphiques du tableau de bord admin).
+      "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
       "connect-src 'self'",
       "frame-ancestors 'none'",
       "base-uri 'self'",
