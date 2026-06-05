@@ -18,6 +18,8 @@ router.get('/', homeController.getHome);
 router.get('/shop', legacyRedirectController.redirectLegacyShop);
 router.get('/product', (req, res) => res.redirect(301, '/produits'));
 router.get('/product/:slug', productController.getProductBySlug);
+// Arbre véhicule (marques→modèles→motorisations) pour le sélecteur de véhicule.
+router.get('/api/vehicules', productController.getVehicleTreeApi);
 
 router.get('/contact', contactController.getContactPage);
 router.post('/contact', contactController.postContact);

@@ -62,6 +62,7 @@ async function prepareProductListingData(req, options = {}) {
   const searchQuery = typeof req.query.q === 'string' ? req.query.q.trim() : '';
   let selectedVehicleMake = typeof req.query.vehicleMake === 'string' ? req.query.vehicleMake.trim() : '';
   let selectedVehicleModel = typeof req.query.vehicleModel === 'string' ? req.query.vehicleModel.trim() : '';
+  let selectedVehicleEngine = typeof req.query.vehicleEngine === 'string' ? req.query.vehicleEngine.trim() : '';
   const legacySelectedCategory = typeof req.query.category === 'string' ? req.query.category.trim() : '';
   let selectedMainCategory = typeof req.query.mainCategory === 'string' ? req.query.mainCategory.trim() : '';
   let selectedSubCategory = typeof req.query.subCategory === 'string' ? req.query.subCategory.trim() : '';
@@ -82,6 +83,19 @@ async function prepareProductListingData(req, options = {}) {
   if (!selectedVehicleModel && options.presetVehicleModel) {
     selectedVehicleModel = String(options.presetVehicleModel).trim();
   }
+  if (!selectedVehicleEngine && options.presetVehicleEngine) {
+    selectedVehicleEngine = String(options.presetVehicleEngine).trim();
+  }
+  // Véhicule mémorisé en session (sélecteur persistant) : s'applique en dernier
+  // recours, quand rien n'est fourni par l'URL ni par un preset de page.
+  const _sessionVehicle = (req.session && req.session.vehicle && typeof req.session.vehicle === 'object') ? req.session.vehicle : null;
+  if (!selectedVehicleMake && _sessionVehicle && _sessionVehicle.make) {
+    selectedVehicleMake = String(_sessionVehicle.make).trim();
+    if (!selectedVehicleModel && _sessionVehicle.model) selectedVehicleModel = String(_sessionVehicle.model).trim();
+    if (!selectedVehicleEngine && _sessionVehicle.engine) selectedVehicleEngine = String(_sessionVehicle.engine).trim();
+  }
+  // La motorisation seule n'a pas de sens sans modèle/marque.
+  if (selectedVehicleEngine && !selectedVehicleModel) selectedVehicleEngine = '';
 
   if (!selectedMainCategory && legacySelectedCategory) {
     const parts = legacySelectedCategory
@@ -245,13 +259,16 @@ async function prepareProductListingData(req, options = {}) {
   // à true par défaut → aucun impact sur le catalogue actuel.
   filter.isPublished = { $ne: false };
 
-  if (selectedVehicleMake || selectedVehicleModel) {
+  if (selectedVehicleMake || selectedVehicleModel || selectedVehicleEngine) {
     const elem = {};
     if (selectedVehicleMake) {
       elem.make = { $regex: escapeRegex(selectedVehicleMake), $options: 'i' };
     }
     if (selectedVehicleModel) {
       elem.model = { $regex: escapeRegex(selectedVehicleModel), $options: 'i' };
+    }
+    if (selectedVehicleEngine) {
+      elem.engine = { $regex: escapeRegex(selectedVehicleEngine), $options: 'i' };
     }
     filter.compatibility = { $elemMatch: elem };
   }
@@ -283,6 +300,8 @@ async function prepareProductListingData(req, options = {}) {
   // 5) Facettes : marques + modèles véhicules disponibles
   let vehicleMakes = [];
   let vehicleModelsByMake = {};
+  // Motorisations par "marque|||modèle" pour le 3e niveau du sélecteur.
+  let vehicleEnginesByMakeModel = {};
   if (dbConnected) {
     const rows = await Product.aggregate([
       { $unwind: '$compatibility' },
@@ -295,6 +314,7 @@ async function prepareProductListingData(req, options = {}) {
         $project: {
           make: { $trim: { input: '$compatibility.make' } },
           model: { $trim: { input: '$compatibility.model' } },
+          engine: { $trim: { input: { $ifNull: ['$compatibility.engine', ''] } } },
         },
       },
       {
@@ -302,18 +322,26 @@ async function prepareProductListingData(req, options = {}) {
           _id: {
             make: '$make',
             model: '$model',
+            engine: '$engine',
           },
         },
       },
     ]);
 
     const map = new Map();
+    const engMap = new Map();
     for (const r of rows) {
       const make = r && r._id && typeof r._id.make === 'string' ? r._id.make.trim() : '';
       const model = r && r._id && typeof r._id.model === 'string' ? r._id.model.trim() : '';
+      const engine = r && r._id && typeof r._id.engine === 'string' ? r._id.engine.trim() : '';
       if (!make) continue;
       if (!map.has(make)) map.set(make, new Set());
       if (model) map.get(make).add(model);
+      if (model && engine) {
+        const k = make + '|||' + model;
+        if (!engMap.has(k)) engMap.set(k, new Set());
+        engMap.get(k).add(engine);
+      }
     }
 
     vehicleMakes = Array.from(map.keys()).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
@@ -321,6 +349,10 @@ async function prepareProductListingData(req, options = {}) {
     for (const mk of vehicleMakes) {
       const set = map.get(mk);
       vehicleModelsByMake[mk] = set ? Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })) : [];
+    }
+    vehicleEnginesByMakeModel = {};
+    for (const [k, set] of engMap.entries()) {
+      vehicleEnginesByMakeModel[k] = Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
     }
   } else {
     const map = new Map();
@@ -531,8 +563,10 @@ async function prepareProductListingData(req, options = {}) {
     searchQuery,
     selectedVehicleMake,
     selectedVehicleModel,
+    selectedVehicleEngine,
     vehicleMakes,
     vehicleModelsByMake,
+    vehicleEnginesByMakeModel,
     selectedMainCategory,
     selectedSubCategory,
     selectedCategoryLabel,
@@ -575,7 +609,67 @@ function countActiveFilters(s) {
   return count;
 }
 
+/**
+ * Arbre véhicule (marques → modèles → motorisations) calculé depuis la
+ * compatibilité des produits. Utilisé par l'endpoint /api/vehicules pour
+ * alimenter le sélecteur de véhicule où qu'il soit (home, header, listing).
+ */
+async function getVehicleTree(dbConnected) {
+  const makesSet = new Map(); // make -> Set(models)
+  const engMap = new Map(); // "make|||model" -> Set(engines)
+
+  const ingest = (make, model, engine) => {
+    const mk = typeof make === 'string' ? make.trim() : '';
+    const md = typeof model === 'string' ? model.trim() : '';
+    const en = typeof engine === 'string' ? engine.trim() : '';
+    if (!mk) return;
+    if (!makesSet.has(mk)) makesSet.set(mk, new Set());
+    if (md) makesSet.get(mk).add(md);
+    if (md && en) {
+      const k = mk + '|||' + md;
+      if (!engMap.has(k)) engMap.set(k, new Set());
+      engMap.get(k).add(en);
+    }
+  };
+
+  if (dbConnected) {
+    const rows = await Product.aggregate([
+      { $unwind: '$compatibility' },
+      { $match: { 'compatibility.make': { $type: 'string', $ne: '' }, isPublished: { $ne: false } } },
+      {
+        $group: {
+          _id: {
+            make: { $trim: { input: '$compatibility.make' } },
+            model: { $trim: { input: { $ifNull: ['$compatibility.model', ''] } } },
+            engine: { $trim: { input: { $ifNull: ['$compatibility.engine', ''] } } },
+          },
+        },
+      },
+    ]);
+    for (const r of rows) {
+      const id = r && r._id ? r._id : {};
+      ingest(id.make, id.model, id.engine);
+    }
+  } else {
+    for (const p of Array.isArray(demoProducts) ? demoProducts : []) {
+      for (const c of (Array.isArray(p.compatibility) ? p.compatibility : [])) {
+        ingest(c && c.make, c && c.model, c && c.engine);
+      }
+    }
+  }
+
+  const cmp = (a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' });
+  const makes = Array.from(makesSet.keys()).sort(cmp);
+  const modelsByMake = {};
+  for (const mk of makes) modelsByMake[mk] = Array.from(makesSet.get(mk)).sort(cmp);
+  const enginesByMakeModel = {};
+  for (const [k, set] of engMap.entries()) enginesByMakeModel[k] = Array.from(set).sort(cmp);
+
+  return { makes, modelsByMake, enginesByMakeModel };
+}
+
 module.exports = {
   prepareProductListingData,
+  getVehicleTree,
   PER_PAGE,
 };

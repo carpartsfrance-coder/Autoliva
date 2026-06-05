@@ -1,0 +1,74 @@
+<%# Sélecteur de véhicule réutilisable (home, listing, header).
+    Locals optionnels : vsMake, vsModel, vsEngine (sélection courante),
+    vsCompact (bool), vsButtonLabel. Charge /api/vehicules à la volée. %>
+<% var _vsMake = (typeof vsMake !== 'undefined' && vsMake) ? vsMake : ''; %>
+<% var _vsModel = (typeof vsModel !== 'undefined' && vsModel) ? vsModel : ''; %>
+<% var _vsEngine = (typeof vsEngine !== 'undefined' && vsEngine) ? vsEngine : ''; %>
+<% var _vsBtn = (typeof vsButtonLabel !== 'undefined' && vsButtonLabel) ? vsButtonLabel : 'Voir les pièces'; %>
+<form action="/produits" method="GET" class="vehicle-selector flex flex-col sm:flex-row gap-2 w-full" data-vehicle-selector data-vs-make-sel="<%= _vsMake %>" data-vs-model-sel="<%= _vsModel %>" data-vs-engine-sel="<%= _vsEngine %>">
+  <select name="vehicleMake" data-vs-make required aria-label="Marque" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 focus:ring-primary focus:border-primary">
+    <option value="">Marque…</option>
+  </select>
+  <select name="vehicleModel" data-vs-model disabled aria-label="Modèle" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 focus:ring-primary focus:border-primary disabled:opacity-50">
+    <option value="">Modèle…</option>
+  </select>
+  <select name="vehicleEngine" data-vs-engine disabled aria-label="Motorisation" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 focus:ring-primary focus:border-primary disabled:opacity-50">
+    <option value="">Motorisation (facultatif)…</option>
+  </select>
+  <button type="submit" class="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white hover:bg-primary/90 transition">
+    <span class="material-symbols-outlined text-lg">search</span>
+    <%= _vsBtn %>
+  </button>
+</form>
+<script>
+  (function () {
+    if (!window.__vehicleTreePromise) {
+      window.__vehicleTreePromise = fetch('/api/vehicules', { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : { makes: [], modelsByMake: {}, enginesByMakeModel: {} }; })
+        .catch(function () { return { makes: [], modelsByMake: {}, enginesByMakeModel: {} }; });
+    }
+    window.__vehicleTreePromise.then(function (tree) {
+      var makes = (tree && tree.makes) || [];
+      var modelsByMake = (tree && tree.modelsByMake) || {};
+      var enginesByMakeModel = (tree && tree.enginesByMakeModel) || {};
+      var opt = function (v, label, sel) { var o = document.createElement('option'); o.value = v; o.textContent = label; if (sel) o.selected = true; return o; };
+
+      Array.prototype.forEach.call(document.querySelectorAll('[data-vehicle-selector]'), function (form) {
+        if (form.dataset.vsReady) return; form.dataset.vsReady = '1';
+        var makeSel = form.querySelector('[data-vs-make]');
+        var modelSel = form.querySelector('[data-vs-model]');
+        var engSel = form.querySelector('[data-vs-engine]');
+        var curMake = form.getAttribute('data-vs-make-sel') || '';
+        var curModel = form.getAttribute('data-vs-model-sel') || '';
+        var curEngine = form.getAttribute('data-vs-engine-sel') || '';
+
+        makes.forEach(function (mk) { makeSel.appendChild(opt(mk, mk, mk === curMake)); });
+
+        function fillModels(mk, selModel) {
+          modelSel.innerHTML = '';
+          modelSel.appendChild(opt('', 'Modèle…', false));
+          var models = modelsByMake[mk] || [];
+          models.forEach(function (md) { modelSel.appendChild(opt(md, md, md === selModel)); });
+          modelSel.disabled = !models.length;
+        }
+        function fillEngines(mk, md, selEngine) {
+          engSel.innerHTML = '';
+          engSel.appendChild(opt('', 'Motorisation (facultatif)…', false));
+          var engines = (mk && md) ? (enginesByMakeModel[mk + '|||' + md] || []) : [];
+          engines.forEach(function (en) { engSel.appendChild(opt(en, en, en === selEngine)); });
+          engSel.disabled = !engines.length;
+        }
+
+        if (curMake) { fillModels(curMake, curModel); if (curModel) fillEngines(curMake, curModel, curEngine); }
+
+        makeSel.addEventListener('change', function () {
+          fillModels(makeSel.value, '');
+          fillEngines(makeSel.value, '', '');
+        });
+        modelSel.addEventListener('change', function () {
+          fillEngines(makeSel.value, modelSel.value, '');
+        });
+      });
+    });
+  })();
+</script>

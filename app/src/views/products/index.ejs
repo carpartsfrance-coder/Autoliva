@@ -53,6 +53,38 @@
 
 <main class="products-listing flex-1 bg-gray-50">
   <div class="max-w-7xl mx-auto px-4 lg:px-8 py-6 sm:py-8">
+    <%# ── Sélecteur de véhicule persistant ─────────────────────────────── %>
+    <% var _vMake = (typeof selectedVehicleMake !== 'undefined' && selectedVehicleMake) ? selectedVehicleMake : ''; %>
+    <% var _vModel = (typeof selectedVehicleModel !== 'undefined' && selectedVehicleModel) ? selectedVehicleModel : ''; %>
+    <% var _vEngine = (typeof selectedVehicleEngine !== 'undefined' && selectedVehicleEngine) ? selectedVehicleEngine : ''; %>
+    <% if (_vMake) { %>
+      <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-primary/20 bg-primary/5 px-5 py-4">
+        <div class="flex items-center gap-3 min-w-0">
+          <span class="material-symbols-outlined text-primary">directions_car</span>
+          <div class="min-w-0">
+            <div class="text-[11px] font-bold uppercase tracking-widest text-primary">Pièces compatibles avec votre véhicule</div>
+            <div class="font-bold text-slate-900 truncate"><%= _vMake %><%= _vModel ? ' ' + _vModel : '' %><%= _vEngine ? ' · ' + _vEngine : '' %></div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button type="button" class="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" data-vs-toggle>Changer</button>
+          <a href="/produits?vehicleClear=1" class="rounded-xl px-4 py-2 text-sm font-bold text-slate-500 hover:text-primary">Effacer</a>
+        </div>
+      </div>
+      <div class="mb-6 hidden" data-vs-panel>
+        <%- include('../partials/vehicle-selector', { vsMake: _vMake, vsModel: _vModel, vsEngine: _vEngine, vsButtonLabel: 'Appliquer' }) %>
+      </div>
+      <script>(function(){var t=document.querySelector('[data-vs-toggle]');var p=document.querySelector('[data-vs-panel]');if(t&&p)t.addEventListener('click',function(){p.classList.toggle('hidden');});})();</script>
+    <% } else { %>
+      <div class="mb-6 rounded-2xl border border-slate-200 bg-white px-5 py-5 sm:px-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="material-symbols-outlined text-primary">directions_car</span>
+          <div class="font-bold text-slate-900">Trouvez les pièces pour votre véhicule</div>
+        </div>
+        <%- include('../partials/vehicle-selector', {}) %>
+      </div>
+    <% } %>
+
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
       <aside aria-hidden="true" class="lg:col-span-3 hidden fixed inset-0 z-50 lg:static lg:z-auto lg:block" data-filters-drawer id="filtersDrawer" role="dialog">
         <div class="absolute inset-0 bg-black/40 lg:hidden" data-filters-close></div>

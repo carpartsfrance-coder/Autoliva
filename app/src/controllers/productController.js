@@ -533,6 +533,20 @@ async function listProducts(req, res, next) {
     // éviter le cycle (le service utilise lui-même les helpers de ce fichier).
     const { prepareProductListingData } = require('../services/productListingService');
 
+    // Véhicule persistant : mémorise / efface le véhicule choisi en session,
+    // afin que tout le site filtre automatiquement sur ce qui rentre.
+    if (req.session) {
+      if (req.query.vehicleClear === '1' || req.query.vehicleClear === 'true') {
+        delete req.session.vehicle;
+      } else if (typeof req.query.vehicleMake === 'string' && req.query.vehicleMake.trim()) {
+        req.session.vehicle = {
+          make: req.query.vehicleMake.trim(),
+          model: typeof req.query.vehicleModel === 'string' ? req.query.vehicleModel.trim() : '',
+          engine: typeof req.query.vehicleEngine === 'string' ? req.query.vehicleEngine.trim() : '',
+        };
+      }
+    }
+
     const data = await prepareProductListingData(req, {});
 
     return res.render('products/index', {
@@ -541,6 +555,25 @@ async function listProducts(req, res, next) {
     });
   } catch (err) {
     return next(err);
+  }
+}
+
+// Endpoint léger pour le sélecteur de véhicule (marques → modèles → motorisations).
+let _vehicleTreeCache = null;
+let _vehicleTreeCacheAt = 0;
+async function getVehicleTreeApi(req, res) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const { getVehicleTree } = require('../services/productListingService');
+    const fresh = !_vehicleTreeCache || (Date.now() - _vehicleTreeCacheAt) > 5 * 60 * 1000;
+    if (fresh) {
+      _vehicleTreeCache = await getVehicleTree(dbConnected);
+      _vehicleTreeCacheAt = Date.now();
+    }
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    return res.json(_vehicleTreeCache);
+  } catch (err) {
+    return res.status(500).json({ makes: [], modelsByMake: {}, enginesByMakeModel: {} });
   }
 }
 
@@ -1133,6 +1166,7 @@ async function getProduct(req, res, next) {
 
 module.exports = {
   listProducts,
+  getVehicleTreeApi,
   getProduct,
   getProductBySlug,
   // Helpers exposés pour réutilisation (ex: productListingService)
