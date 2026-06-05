@@ -250,7 +250,7 @@ async function getTrackPdf(req, res) {
     await cart.save();
 
     // Redirige vers le PDF (URL relative /sav-files/:id ou absolue)
-    const dest = String(sq.pdfUrl || '');
+    const dest = String(sq.pdfUrl || (sq.pdfId ? '/sav-files/' + sq.pdfId : ''));
     if (dest.startsWith('/') || /^https?:\/\//i.test(dest)) return res.redirect(302, dest);
     return res.redirect(302, fallback);
   } catch (err) {
@@ -283,7 +283,7 @@ async function getShortDevisLink(req, res) {
     if (!sq.pdfViewedAt) sq.pdfViewedAt = new Date();
     await cart.save();
 
-    const dest = String(sq.pdfUrl || '');
+    const dest = String(sq.pdfUrl || (sq.pdfId ? '/sav-files/' + sq.pdfId : ''));
     if (dest.startsWith('/') || /^https?:\/\//i.test(dest)) return res.redirect(302, dest);
     return res.redirect(302, fallback);
   } catch (err) {

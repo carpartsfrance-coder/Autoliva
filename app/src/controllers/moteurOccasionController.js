@@ -19,7 +19,7 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 
 const emailService = require('../services/emailService');
-const { sendSms } = require('../services/smsService');
+const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
 const { captureContactLead } = require('../services/leadCapture');
 const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
@@ -435,7 +435,10 @@ async function postDevis(req, res, next) {
 
     // Validation : plaque/châssis/code moteur + téléphone obligatoires
     const cleanEmail = normalizeEmail(form.email);
-    const cleanPhone = normalizePhone(form.phone);
+    // Stocke le numéro au format canonique E.164 (+33…) dès la capture : garantit
+    // que TOUS les SMS ultérieurs (accusé + devis) partent (Brevo exige E.164).
+    // Si le numéro n'est pas normalisable, on garde la saisie nettoyée (lead non perdu).
+    const cleanPhone = normalizePhoneFR(form.phone) || normalizePhone(form.phone);
 
     if (!form.plate) {
       return renderPage(res, req, {
@@ -559,7 +562,10 @@ async function postDevis(req, res, next) {
     if (cleanPhone) {
       try {
         const { enabled: smsOn, text: smsText } = await resolveSms('moteur_ack', { quoteRef, phoneMoteur: brand.PHONE_MOTEUR });
-        if (smsOn && smsText) await sendSms({ to: cleanPhone, text: smsText });
+        if (smsOn && smsText) {
+          const r = await sendSms({ to: cleanPhone, text: smsText });
+          if (r && r.ok === false) console.warn('[moteur-ack] SMS non envoyé à', cleanPhone, '→', r.reason, r.message || '');
+        }
       } catch (err) {
         console.error('[moteur-occasion] ack SMS failed:', err && err.message);
       }

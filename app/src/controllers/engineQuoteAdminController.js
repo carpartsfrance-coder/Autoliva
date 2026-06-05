@@ -1047,7 +1047,10 @@ async function postSendQuote(req, res, next) {
     //    doit pouvoir embarquer le bouton de paiement cliquable, donc le lien
     //    Mollie + le lien tracké doivent exister avant de générer le PDF.
     const sentQuoteObjectId = new mongoose.Types.ObjectId();
-    const publicBase = (process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
+    let publicBase = String(process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').trim().replace(/\/+$/, '');
+    // Garde-fou : un lien SMS sans protocole (ex. « autoliva.com/d/X ») n'est pas
+    // cliquable / non reconnu comme URL → on force https:// si absent.
+    if (!/^https?:\/\//i.test(publicBase)) publicBase = 'https://' + publicBase;
     const trackBase = publicBase + '/api/devis-moteurs';
     const trackSuffix = '/' + String(cart._id) + '/' + String(sentQuoteObjectId);
     const trackPixelUrl = trackBase + '/track-open' + trackSuffix;
@@ -1202,7 +1205,10 @@ async function postSendQuote(req, res, next) {
           pdfUrl: pdfShortUrl,
           phoneMoteur: brand.PHONE_MOTEUR,
         });
-        if (smsOn && smsBody) await sendSms({ to: cart.phone, text: smsBody });
+        if (smsOn && smsBody) {
+          const r = await sendSms({ to: cart.phone, text: smsBody });
+          if (r && r.ok === false) console.warn('[engine-quote] devis SMS non envoyé à', cart.phone, '→', r.reason, r.message || '');
+        }
       } catch (err) {
         console.warn('[engine-quote] devis SMS failed:', err && err.message);
       }
