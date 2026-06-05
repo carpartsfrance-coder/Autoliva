@@ -83,6 +83,17 @@
       </div>
     </div>
 
+    <%# ── Sélecteur de véhicule (fitment finder) ──────────────────────── %>
+    <div class="-mt-2 mb-10 sm:mb-16">
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-dark p-5 sm:p-6 shadow-sm">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="material-symbols-rounded text-primary text-2xl">directions_car</span>
+          <h2 class="text-lg sm:text-xl home-display font-bold">Trouvez la pièce pour votre véhicule</h2>
+        </div>
+        <%- include('partials/vehicle-selector', { vsButtonLabel: 'Voir les pièces compatibles' }) %>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 mb-10 sm:mb-16">
       <div class="bg-white dark:bg-surface-dark p-4 sm:p-6 rounded-2xl flex items-center gap-4 sm:gap-5 shadow-sm border border-slate-100 dark:border-slate-800">
         <div class="w-12 h-12 sm:w-16 sm:h-16 bg-red-50 dark:bg-red-950/30 rounded-2xl flex items-center justify-center flex-shrink-0">
