@@ -545,6 +545,11 @@ app.use('/api/devis-moteurs', require('./routes/api/engineQuote'));
 // Lien court de marque pour le SMS de devis : /d/<shortCode> → vue trackée + PDF
 app.get('/d/:code', require('./controllers/engineQuotePublicController').getShortDevisLink);
 
+// Page de retour après paiement Mollie de l'acompte devis moteur (redirectUrl).
+// Mollie y renvoie le client pour TOUS les cas (payé/annulé/expiré) → doit
+// exister, sinon 404 d'Autoliva après chaque clic sur le lien de paiement.
+app.get('/devis/merci', require('./controllers/engineQuotePublicController').getDevisMerci);
+
 // SAV — fichiers stockés en MongoDB (GridFS), avec auth contextuelle
 app.use('/sav-files', require('./routes/savFiles'));
 
