@@ -4,7 +4,9 @@
 <main class="cart-page flex-1 container mx-auto px-4 lg:px-8 py-6 sm:py-10">
   <% const formatMoney = (cents) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.round((Number(cents) || 0)) / 100); %>
   <% const itemsCount = typeof cartItemCount !== 'undefined' ? cartItemCount : (items || []).reduce((sum, it) => sum + (it.quantity || 0), 0); %>
-  <% const vatCents = Math.max(0, Math.round((Number(totalCents) || 0) - (Number(totalCents) || 0) / 1.2)); %>
+  <% const consigneCents = (typeof consigneChargeCents !== 'undefined' && Number.isFinite(consigneChargeCents)) ? consigneChargeCents : 0; %>
+  <% const vatBaseCents = Math.max(0, (Number(totalCents) || 0) - consigneCents); %>
+  <% const vatCents = Math.max(0, Math.round(vatBaseCents - vatBaseCents / 1.2)); %>
   <% const shippingCost = Number.isFinite(shippingCostCents) ? shippingCostCents : 0; %>
   <% const shippingLabel = estimatedShippingMethod && estimatedShippingMethod.title ? estimatedShippingMethod.title : 'Livraison à domicile'; %>
 
@@ -194,6 +196,16 @@
             </div>
             <span class="font-semibold text-slate-900 dark:text-white shrink-0"><%= shippingCost > 0 ? (formatMoney(shippingCost) + ' €') : 'Voir étape suivante' %></span>
           </div>
+
+          <% if (consigneCents > 0) { %>
+            <div class="flex justify-between items-start text-slate-600 dark:text-slate-400 pt-2 border-t border-dashed border-slate-200">
+              <div>
+                <span>Consigne <span class="text-slate-400">(caution, hors TVA)</span></span>
+                <div class="text-[11px] text-emerald-600 font-medium mt-0.5">Restituée dès le retour de votre ancienne pièce</div>
+              </div>
+              <span class="font-semibold text-slate-900 dark:text-white shrink-0"><%= formatMoney(consigneCents) %> €</span>
+            </div>
+          <% } %>
         </div>
 
         <!-- Promo code — collapsible -->
