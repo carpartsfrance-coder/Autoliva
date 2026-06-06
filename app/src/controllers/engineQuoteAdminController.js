@@ -1235,6 +1235,7 @@ async function postSendQuote(req, res, next) {
           'engineQuote.sentQuotes': {
             _id: sentQuoteObjectId,
             sentAt: new Date(),
+            version: (Array.isArray(eq.sentQuotes) ? eq.sentQuotes.length : 0) + 1,
             pdfId: pdfSaved.id,
             pdfUrl: pdfSaved.url,
             shortCode,

@@ -212,12 +212,16 @@ async function getTrackPay(req, res) {
     const sq = cart.engineQuote.sentQuotes.id(sentQuoteId);
     if (!sq) return res.redirect(302, fallback);
 
-    sq.payClickCount = (sq.payClickCount || 0) + 1;
-    if (!sq.payClickedAt) sq.payClickedAt = new Date();
+    // Devis évolutif : paiement de la DERNIÈRE version qui a un lien Mollie
+    // (montant à jour), sinon celui du devis cliqué.
+    const latest = cart.engineQuote.sentQuotes.slice().sort((a, b) => new Date(b.sentAt || 0) - new Date(a.sentAt || 0))[0];
+    const payTarget = (latest && latest.mollieUrl) ? latest : sq;
+    payTarget.payClickCount = (payTarget.payClickCount || 0) + 1;
+    if (!payTarget.payClickedAt) payTarget.payClickedAt = new Date();
     await cart.save();
 
     // Redirige vers le vrai lien Mollie (validé http(s))
-    const dest = String(sq.mollieUrl || '');
+    const dest = String(payTarget.mollieUrl || '');
     if (/^https?:\/\//i.test(dest)) return res.redirect(302, dest);
     return res.redirect(302, fallback);
   } catch (err) {
@@ -279,11 +283,14 @@ async function getShortDevisLink(req, res) {
     const sq = cart.engineQuote.sentQuotes.find((s) => s && s.shortCode === code);
     if (!sq) return res.redirect(302, fallback);
 
-    sq.pdfViewCount = (sq.pdfViewCount || 0) + 1;
-    if (!sq.pdfViewedAt) sq.pdfViewedAt = new Date();
+    // Devis évolutif : tout lien (même ancien) montre la DERNIÈRE version envoyée
+    // → le client voit toujours le devis à jour après une modification.
+    const target = cart.engineQuote.sentQuotes.slice().sort((a, b) => new Date(b.sentAt || 0) - new Date(a.sentAt || 0))[0] || sq;
+    target.pdfViewCount = (target.pdfViewCount || 0) + 1;
+    if (!target.pdfViewedAt) target.pdfViewedAt = new Date();
     await cart.save();
 
-    const dest = String(sq.pdfUrl || (sq.pdfId ? '/sav-files/' + sq.pdfId : ''));
+    const dest = String(target.pdfUrl || (target.pdfId ? '/sav-files/' + target.pdfId : '') || sq.pdfUrl || '');
     if (dest.startsWith('/') || /^https?:\/\//i.test(dest)) return res.redirect(302, dest);
     return res.redirect(302, fallback);
   } catch (err) {
