@@ -159,6 +159,12 @@
             <p class="text-3xl sm:text-4xl font-display font-black"><%= formatMoney(totalCents) %> €</p>
             <p class="text-xs text-slate-400">dont <%= formatMoney(vatCents) %> € TVA</p>
           </div>
+          <% if (consigneCents > 0) { %>
+            <div class="mt-3 pt-3 border-t border-white/10 flex items-start gap-2 text-[11px] leading-snug text-emerald-300">
+              <span class="material-symbols-outlined text-[15px] shrink-0">savings</span>
+              <span>Dont <strong><%= formatMoney(consigneCents) %> €</strong> de consigne, <strong>intégralement remboursée</strong> au retour de votre ancienne pièce.</span>
+            </div>
+          <% } %>
         </div>
 
         <!-- Price breakdown -->
