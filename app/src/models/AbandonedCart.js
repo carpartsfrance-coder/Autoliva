@@ -59,6 +59,7 @@ const smsResultSchema = new mongoose.Schema(
 const engineQuoteSentSchema = new mongoose.Schema(
   {
     sentAt: { type: Date, default: Date.now },
+    version: { type: Number, default: 1 }, // n° de révision (1, 2, 3…)
     sms: { type: smsResultSchema, default: null }, // résultat SMS du devis envoyé
     pdfId: { type: String, default: '' },
     pdfUrl: { type: String, default: '' },
