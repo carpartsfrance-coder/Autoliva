@@ -339,6 +339,8 @@ const engineQuotePhotoUpload = multer({
 });
 router.get('/devis-moteurs', requireAdminAuth, engineQuoteAdminController.getEngineQuotesList);
 router.get('/devis-moteurs/conversion', requireAdminAuth, engineQuoteAdminController.getEngineQuoteFunnel);
+router.get('/devis-moteurs/nouveau', requireAdminAuth, engineQuoteAdminController.getEngineQuoteNew);
+router.post('/devis-moteurs/nouveau', requireAdminAuth, engineQuoteAdminController.postCreateEngineQuote);
 router.get('/devis-moteurs/:id', requireAdminAuth, engineQuoteAdminController.getEngineQuoteDetail);
 router.post('/devis-moteurs/:id/status', requireAdminAuth, engineQuoteAdminController.postChangeStatus);
 router.post('/devis-moteurs/:id/engine', requireAdminAuth, engineQuoteAdminController.postUpdateEngine);
