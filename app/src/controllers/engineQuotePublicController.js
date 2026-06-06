@@ -299,4 +299,49 @@ async function getShortDevisLink(req, res) {
   }
 }
 
-module.exports = { postMollieWebhook, getTrackOpen, getTrackPay, getTrackPdf, getShortDevisLink };
+/**
+ * GET /devis/merci?ref=<quoteRef>
+ * Page de RETOUR après le paiement Mollie de l'acompte (c'est le `redirectUrl`
+ * du paiement). Mollie y renvoie le client pour TOUS les cas — payé, annulé,
+ * expiré — et la redirection ne porte AUCUN statut. Avant, cette route
+ * n'existait pas → le client tombait sur le 404 d'Autoliva (« redirigé vers
+ * autoliva avec une erreur »). On lit donc le statut côté base (posé par le
+ * webhook) et on affiche une page TOUJOURS rassurante, jamais une erreur.
+ */
+async function getDevisMerci(req, res) {
+  const ref = String((req.query && req.query.ref) || '').trim().slice(0, 40);
+  let paid = false;
+  try {
+    if (ref && mongoose.connection.readyState === 1) {
+      const cart = await AbandonedCart
+        .findOne({ 'requested.ref': ref })
+        .select('engineQuote.status engineQuote.payment.status')
+        .lean();
+      if (cart && cart.engineQuote) {
+        const pst = cart.engineQuote.payment && cart.engineQuote.payment.status;
+        if (pst === 'paid' || cart.engineQuote.status === 'acompte_recu') paid = true;
+      }
+    }
+  } catch (err) {
+    console.error('[devis-merci]', err && err.message);
+  }
+
+  // Pas (encore) payé : le webhook Mollie peut arriver juste APRÈS la
+  // redirection. On rafraîchit UNE seule fois (8 s) pour basculer en « payé »
+  // sans action du client ; le garde `r=1` empêche toute boucle.
+  const refreshUrl = (!paid && ref && !(req.query && req.query.r))
+    ? '/devis/merci?ref=' + encodeURIComponent(ref) + '&r=1'
+    : '';
+
+  return res.status(200).render('devis/merci', {
+    title: paid ? `Acompte reçu — ${brand.NAME}` : `Merci — ${brand.NAME}`,
+    metaRobots: 'noindex, nofollow',
+    ref,
+    paid,
+    refreshUrl,
+    brandPhone: brand.PHONE_MOTEUR || '',
+    brandPhoneIntl: brand.PHONE_MOTEUR_INTL || '',
+  });
+}
+
+module.exports = { postMollieWebhook, getTrackOpen, getTrackPay, getTrackPdf, getShortDevisLink, getDevisMerci };
