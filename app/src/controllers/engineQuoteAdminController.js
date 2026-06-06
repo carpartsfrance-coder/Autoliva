@@ -350,6 +350,7 @@ async function getEngineQuoteDetail(req, res, next) {
         marginColor: getMarginColor(margin.marginPct),
         updatedAt: eq.updatedAt,
         updatedByName: eq.updatedByName,
+        ackSms: eq.ackSms || null,
         sentQuotes: (eq.sentQuotes || []).slice().sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt)),
         remindersSent: eq.remindersSent || [],
         payment: eq.payment || null,
@@ -1194,6 +1195,7 @@ async function postSendQuote(req, res, next) {
     // devis (~98% d'ouverture) même si l'email passe en spam. Le lien court
     // amène droit au devis ET enregistre "PDF vu" → ce qui déclenche l'alerte
     // "lead chaud" → le commercial rappelle au bon moment.
+    let devisSmsResult = null;
     if (cart.phone) {
       try {
         // Format GSM-7 (évite l'espace insécable de toLocaleString qui forcerait
@@ -1207,9 +1209,13 @@ async function postSendQuote(req, res, next) {
         });
         if (smsOn && smsBody) {
           const r = await sendSms({ to: cart.phone, text: smsBody });
+          devisSmsResult = { status: r && r.ok ? 'sent' : 'failed', reason: (r && r.reason) || '', message: (r && r.message) || '', at: new Date(), phone: cart.phone };
           if (r && r.ok === false) console.warn('[engine-quote] devis SMS non envoyé à', cart.phone, '→', r.reason, r.message || '');
+        } else {
+          devisSmsResult = { status: 'disabled', reason: 'disabled', message: 'Template SMS « devis envoyé » désactivé.', at: new Date(), phone: cart.phone };
         }
       } catch (err) {
+        devisSmsResult = { status: 'failed', reason: 'exception', message: (err && err.message) || 'Erreur', at: new Date(), phone: cart.phone };
         console.warn('[engine-quote] devis SMS failed:', err && err.message);
       }
     }
@@ -1239,6 +1245,7 @@ async function postSendQuote(req, res, next) {
             mollieId,
             customMessage,
             sentByName: admin.name,
+            sms: devisSmsResult,
             attachedPhotos: photoSnapshot,
           },
         },

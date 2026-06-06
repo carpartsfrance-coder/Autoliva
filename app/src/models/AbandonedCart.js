@@ -44,9 +44,22 @@ const engineQuotePhotoSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Résultat d'un envoi SMS (visible dans l'admin pour diagnostiquer « pas reçu »).
+const smsResultSchema = new mongoose.Schema(
+  {
+    status: { type: String, default: '' },  // 'sent' | 'failed' | 'disabled'
+    reason: { type: String, default: '' },   // ex: 'invalid_phone', 'brevo_error', 'disabled'
+    message: { type: String, default: '' },  // message clair (crédits épuisés…)
+    at: { type: Date, default: null },
+    phone: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
 const engineQuoteSentSchema = new mongoose.Schema(
   {
     sentAt: { type: Date, default: Date.now },
+    sms: { type: smsResultSchema, default: null }, // résultat SMS du devis envoyé
     pdfId: { type: String, default: '' },
     pdfUrl: { type: String, default: '' },
     sellPriceHt: { type: Number, default: 0 },
@@ -122,6 +135,9 @@ const engineQuoteSchema = new mongoose.Schema(
     },
     updatedAt: { type: Date, default: null },
     updatedByName: { type: String, default: '', trim: true },
+
+    /** Résultat du SMS d'accusé de réception envoyé à la soumission du formulaire */
+    ackSms: { type: smsResultSchema, default: null },
 
     /** Historique des envois de devis au client */
     sentQuotes: { type: [engineQuoteSentSchema], default: [] },
