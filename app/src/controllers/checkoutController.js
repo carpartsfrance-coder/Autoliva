@@ -1570,6 +1570,7 @@ async function getPayment(req, res, next) {
       promoDiscountCents: computed.promoDiscountCents,
       itemsTotalAfterDiscountCents: computed.itemsTotalAfterDiscountCents,
       shippingCostCents: computed.shippingCostCents,
+      consigneChargeCents: computed.consigneChargeCents,
       totalCents: computed.totalCents,
     });
   } catch (err) {

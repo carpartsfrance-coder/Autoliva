@@ -163,6 +163,25 @@ function normalizeProduct(product) {
   };
 }
 
+/**
+ * Somme des consignes ENCAISSÉES dès la commande (produits avec
+ * consigne.enabled && consigne.chargeUpfront), en centimes. Même logique que le
+ * checkout : la caution s'ajoute au total mais reste intégralement remboursable
+ * au retour de l'ancienne pièce. On l'affiche dès le panier pour que le total
+ * estimé soit cohérent avec celui du paiement (pas de saut surprise).
+ */
+function computeUpfrontConsigneCents(viewItems) {
+  let total = 0;
+  for (const it of viewItems) {
+    const p = it && it.product;
+    if (p && p.consigne && p.consigne.enabled && p.consigne.chargeUpfront
+      && Number.isFinite(p.consigne.amountCents) && p.consigne.amountCents > 0) {
+      total += Math.floor(p.consigne.amountCents) * (Number(it.quantity) || 1);
+    }
+  }
+  return total;
+}
+
 async function showCart(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -280,11 +299,14 @@ async function showCart(req, res, next) {
       ? estimatedShippingMethod.priceCents
       : 0;
 
+    const consigneChargeCents = computeUpfrontConsigneCents(viewItems);
+
     const computed = pricing.computePricing({
       itemsSubtotalCents,
       shippingCostCents,
       clientDiscountPercent,
       promo,
+      consigneChargeCents,
     });
 
     const totalCents = computed.totalCents;
@@ -317,6 +339,7 @@ async function showCart(req, res, next) {
       promoDiscountCents: computed.promoDiscountCents,
       itemsTotalAfterDiscountCents: computed.itemsTotalAfterDiscountCents,
       shippingCostCents: computed.shippingCostCents,
+      consigneChargeCents: computed.consigneChargeCents,
       estimatedShippingMethod,
       errorMessage,
       suggestedProducts,
