@@ -55,6 +55,44 @@ function getStartDateForPeriod(period) {
   return start;
 }
 
+function pad2(n) { return String(n).padStart(2, '0'); }
+function fmtYmd(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+
+// Parse une date 'YYYY-MM-DD' en Date locale (minuit), en rejetant les dates
+// invalides type 2026-02-31 (Date les « roule » sinon).
+function parseYmd(s) {
+  if (typeof s !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s.trim());
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  const dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return dt;
+}
+
+// Résout la plage de dates effective. Une période PERSONNALISÉE (from+to valides,
+// from <= to) prend la priorité sur le preset. Sinon on retombe sur le preset
+// (ou le défaut). Retourne aussi from/to formatés pour ré-afficher les champs.
+function resolveDateRange({ period, from, to } = {}) {
+  const fromDt = parseYmd(from);
+  const toDt = parseYmd(to);
+  if (fromDt && toDt && fromDt.getTime() <= toDt.getTime()) {
+    const start = new Date(fromDt); start.setHours(0, 0, 0, 0);
+    const end = new Date(toDt); end.setHours(23, 59, 59, 999);
+    return { period: 'custom', startDate: start, endDate: end, from: fmtYmd(start), to: fmtYmd(toDt) };
+  }
+  const safePeriod = ALLOWED_PERIODS.has(period) ? period : DEFAULT_PERIOD;
+  return { period: safePeriod, startDate: getStartDateForPeriod(safePeriod), endDate: null, from: '', to: '' };
+}
+
+// Construit le filtre Mongo sur createdAt (borne basse et/ou haute incluse).
+function createdAtFilter(startDate, endDate) {
+  const f = {};
+  if (startDate) f.$gte = startDate;
+  if (endDate) f.$lte = endDate;
+  return Object.keys(f).length ? f : null;
+}
+
 function buildKey(campaign, source, medium) {
   return [campaign || '', source || '', medium || ''].join('||');
 }
@@ -74,9 +112,10 @@ function emptyRow(key, campaign, source, medium, bucket) {
 
 // Pipeline visites : groupe par UTM + flags "auto-tag" booléens, compte
 // les sessions distinctes.
-async function aggregateVisits(startDate) {
+async function aggregateVisits(startDate, endDate) {
   const match = {};
-  if (startDate) match.createdAt = { $gte: startDate };
+  const ca = createdAtFilter(startDate, endDate);
+  if (ca) match.createdAt = ca;
 
   const pipeline = [
     { $match: match },
@@ -122,14 +161,15 @@ async function aggregateVisits(startDate) {
   return AttributionTouch.aggregate(pipeline);
 }
 
-async function aggregateOrders(startDate, model) {
+async function aggregateOrders(startDate, endDate, model) {
   const touchField = model === 'first' ? 'attribution.firstTouch' : 'attribution.lastTouch';
   const match = {
     paymentStatus: 'paid',
     status: { $in: PAID_ORDER_STATUSES },
     deletedAt: null,
   };
-  if (startDate) match.createdAt = { $gte: startDate };
+  const ca = createdAtFilter(startDate, endDate);
+  if (ca) match.createdAt = ca;
 
   const pipeline = [
     { $match: match },
@@ -290,14 +330,13 @@ function getDisplayProps(row) {
   };
 }
 
-async function getMarketingDashboardData({ period = DEFAULT_PERIOD, model = DEFAULT_MODEL, sortField, sortDir } = {}) {
-  const safePeriod = ALLOWED_PERIODS.has(period) ? period : DEFAULT_PERIOD;
+async function getMarketingDashboardData({ period = DEFAULT_PERIOD, model = DEFAULT_MODEL, sortField, sortDir, from, to } = {}) {
+  const range = resolveDateRange({ period, from, to });
   const safeModel = ALLOWED_MODELS.has(model) ? model : DEFAULT_MODEL;
-  const startDate = getStartDateForPeriod(safePeriod);
 
   const [visitsRaw, ordersRaw] = await Promise.all([
-    aggregateVisits(startDate),
-    aggregateOrders(startDate, safeModel),
+    aggregateVisits(range.startDate, range.endDate),
+    aggregateOrders(range.startDate, range.endDate, safeModel),
   ]);
 
   const rowsByKey = new Map();
@@ -341,11 +380,14 @@ async function getMarketingDashboardData({ period = DEFAULT_PERIOD, model = DEFA
   totals.conversionRate = totals.visits > 0 ? totals.orders / totals.visits : 0;
 
   return {
-    period: safePeriod,
+    period: range.period,
+    from: range.from,
+    to: range.to,
     model: safeModel,
     sortField: ALLOWED_SORT_FIELDS.has(sortField) ? sortField : DEFAULT_SORT_FIELD,
     sortDir: sortDir === 'asc' ? 'asc' : 'desc',
-    startDate,
+    startDate: range.startDate,
+    endDate: range.endDate,
     rows,
     totals,
   };

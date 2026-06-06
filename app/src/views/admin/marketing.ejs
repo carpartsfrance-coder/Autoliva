@@ -33,6 +33,10 @@
         var qs = 'sort=' + encodeURIComponent(field) + '&order=' + encodeURIComponent(nextDir)
           + '&period=' + encodeURIComponent(filters.period)
           + '&model=' + encodeURIComponent(filters.model);
+        // Conserve la plage personnalisée lors d'un tri.
+        if (filters.period === 'custom' && filters.from && filters.to) {
+          qs += '&from=' + encodeURIComponent(filters.from) + '&to=' + encodeURIComponent(filters.to);
+        }
         return '/admin/marketing?' + qs;
       }
       function sortIcon(field) {
@@ -46,13 +50,23 @@
       <div class="flex flex-col md:flex-row md:items-end gap-4">
         <div>
           <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Période</label>
-          <select class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900" name="period">
+          <select id="mkt-period" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900" name="period">
             <option value="7d" <%= filters.period === '7d' ? 'selected' : '' %>>7 derniers jours</option>
             <option value="30d" <%= filters.period === '30d' ? 'selected' : '' %>>30 derniers jours</option>
             <option value="90d" <%= filters.period === '90d' ? 'selected' : '' %>>90 derniers jours</option>
             <option value="365d" <%= filters.period === '365d' ? 'selected' : '' %>>12 derniers mois</option>
             <option value="all" <%= filters.period === 'all' ? 'selected' : '' %>>Tout l'historique</option>
+            <option value="custom" <%= filters.period === 'custom' ? 'selected' : '' %>>Personnalisé…</option>
           </select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Du</label>
+          <input id="mkt-from" type="date" name="from" value="<%= filters.from || '' %>" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-900">
+        </div>
+        <div>
+          <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Au</label>
+          <input id="mkt-to" type="date" name="to" value="<%= filters.to || '' %>" class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-bold text-slate-900">
         </div>
 
         <div>
@@ -73,6 +87,23 @@
         </div>
       </div>
     </form>
+
+    <script>
+      (function () {
+        var sel = document.getElementById('mkt-period');
+        var from = document.getElementById('mkt-from');
+        var to = document.getElementById('mkt-to');
+        if (!sel || !from || !to) return;
+        // Choisir un preset efface la plage perso (le preset l'emporte).
+        sel.addEventListener('change', function () {
+          if (sel.value !== 'custom') { from.value = ''; to.value = ''; }
+        });
+        // Saisir une date bascule automatiquement sur « Personnalisé ».
+        function toCustom() { sel.value = 'custom'; }
+        from.addEventListener('change', toCustom);
+        to.addEventListener('change', toCustom);
+      })();
+    </script>
 
     <%/* ── KPIs globaux ──────────────────────────────────────────────── */%>
     <div class="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -123,7 +154,9 @@
                var drillVisitorsUrl = '';
                var drillOrdersUrl = '';
                if (r.isCampaign) {
-                 var qsO = []; if (r.campaign) qsO.push('utmCampaign=' + encodeURIComponent(r.campaign)); if (r.source) qsO.push('utmSource=' + encodeURIComponent(r.source)); if (filters.period && filters.period !== 'all') qsO.push('period=' + encodeURIComponent(filters.period));
+                 var qsO = []; if (r.campaign) qsO.push('utmCampaign=' + encodeURIComponent(r.campaign)); if (r.source) qsO.push('utmSource=' + encodeURIComponent(r.source));
+                 if (filters.period === 'custom' && filters.from && filters.to) { qsO.push('from=' + encodeURIComponent(filters.from)); qsO.push('to=' + encodeURIComponent(filters.to)); }
+                 else if (filters.period && filters.period !== 'all') { qsO.push('period=' + encodeURIComponent(filters.period)); }
                  drillOrdersUrl = '/admin/commandes' + (qsO.length ? '?' + qsO.join('&') : '');
                  var qsV = []; if (r.campaign) qsV.push('campaign=' + encodeURIComponent(r.campaign)); if (r.source) qsV.push('source=' + encodeURIComponent(r.source));
                  var vp = (filters.period === '7d' || filters.period === '30d') ? filters.period : '7d';
