@@ -10513,6 +10513,8 @@ async function getAdminMarketingPage(req, res, next) {
     const model = typeof req.query.model === 'string' ? req.query.model.trim() : '';
     const sortField = typeof req.query.sort === 'string' ? req.query.sort.trim() : '';
     const sortDir = typeof req.query.order === 'string' ? req.query.order.trim() : '';
+    const from = typeof req.query.from === 'string' ? req.query.from.trim() : '';
+    const to = typeof req.query.to === 'string' ? req.query.to.trim() : '';
 
     if (!dbConnected) {
       return res.render('admin/marketing', {
@@ -10520,19 +10522,19 @@ async function getAdminMarketingPage(req, res, next) {
         dbConnected,
         rows: [],
         totals: { visits: 0, orders: 0, revenueCents: 0, aovCents: 0, conversionRate: 0 },
-        filters: { period: period || '30d', model: model || 'last', sort: sortField || 'revenue', order: sortDir || 'desc' },
+        filters: { period: period || '30d', model: model || 'last', sort: sortField || 'revenue', order: sortDir || 'desc', from: '', to: '' },
         formatEuro,
       });
     }
 
-    const data = await getMarketingDashboardData({ period, model, sortField, sortDir });
+    const data = await getMarketingDashboardData({ period, model, sortField, sortDir, from, to });
 
     return res.render('admin/marketing', {
       title: `Admin - Marketing - ${brand.NAME}`,
       dbConnected,
       rows: data.rows,
       totals: data.totals,
-      filters: { period: data.period, model: data.model, sort: data.sortField, order: data.sortDir },
+      filters: { period: data.period, model: data.model, sort: data.sortField, order: data.sortDir, from: data.from || '', to: data.to || '' },
       formatEuro,
     });
   } catch (err) {
