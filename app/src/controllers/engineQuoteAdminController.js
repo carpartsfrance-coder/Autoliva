@@ -416,6 +416,11 @@ async function postCreateEngineQuote(req, res, next) {
       return renderForm(400, 'Adresse email invalide.', b);
     }
 
+    // Case « Prévenir le client » (cochée par défaut). Les cases non cochées ne
+    // sont pas envoyées par le navigateur → on regarde simplement la présence.
+    const notify =
+      b.notifyClient === 'on' || b.notifyClient === 'true' || b.notifyClient === '1' || b.notifyClient === true;
+
     const ref = generateManualQuoteRef();
     const now = new Date();
     const created = await AbandonedCart.create({
@@ -430,6 +435,68 @@ async function postCreateEngineQuote(req, res, next) {
       requested: { ref, plate, vehicle, message },
       engineQuote: { status: 'new' },
     });
+
+    // Optionnel : accusé immédiat « votre dossier est bien reçu, on revient vers
+    // vous ». Best-effort — un échec d'envoi ne doit JAMAIS bloquer la création
+    // du dossier ni la redirection (chaque envoi est isolé dans son try/catch).
+    if (notify) {
+      const baseUrl = String(process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com')
+        .trim().replace(/\/+$/, '');
+
+      // a) Email d'accusé — réutilise le template brandé du formulaire public.
+      if (email) {
+        try {
+          const { buildAckEmailHtml } = require('./moteurOccasionController');
+          const ackHtml = buildAckEmailHtml({
+            firstName, quoteRef: ref, plate, engineTypeLabel: '', baseUrl, brandObj: brand,
+          });
+          const ackText = [
+            `Votre dossier Autoliva est bien enregistré.`,
+            ``,
+            `N° de dossier : ${ref}`,
+            plate ? `Véhicule : ${plate}` : '',
+            vehicle ? `Moteur : ${vehicle}` : '',
+            ``,
+            `Notre équipe revient vers vous rapidement avec votre devis.`,
+            ``,
+            `Besoin urgent ? ${brand.PHONE_MOTEUR}`,
+            ``,
+            `L'équipe Autoliva`,
+          ].filter(Boolean).join('\n');
+          await emailService.sendEmail({
+            toEmail: email,
+            subject: `Votre dossier ${ref} bien reçu — Autoliva`,
+            html: ackHtml,
+            text: ackText,
+          });
+        } catch (err) {
+          console.error('[devis-manuel] ack email failed:', err && err.message);
+        }
+      }
+
+      // b) SMS d'accusé — même template « moteur_ack » que le formulaire public.
+      // On persiste le résultat dans engineQuote.ackSms → le badge SMS s'affiche
+      // dans la fiche détail, comme pour un lead venu du formulaire.
+      if (phone) {
+        let ackSmsResult;
+        try {
+          const { enabled: smsOn, text: smsText } = await resolveSms('moteur_ack', { quoteRef: ref, phoneMoteur: brand.PHONE_MOTEUR });
+          if (smsOn && smsText) {
+            const r = await sendSms({ to: phone, text: smsText });
+            ackSmsResult = { status: r && r.ok ? 'sent' : 'failed', reason: (r && r.reason) || '', message: (r && r.message) || '', at: new Date(), phone };
+            if (r && r.ok === false) console.warn('[devis-manuel] ack SMS non envoyé à', phone, '→', r.reason, r.message || '');
+          } else {
+            ackSmsResult = { status: 'disabled', reason: 'disabled', message: 'Template SMS « accusé de réception » désactivé.', at: new Date(), phone };
+          }
+        } catch (err) {
+          ackSmsResult = { status: 'failed', reason: 'exception', message: (err && err.message) || 'Erreur', at: new Date(), phone };
+          console.error('[devis-manuel] ack SMS failed:', err && err.message);
+        }
+        try {
+          await AbandonedCart.updateOne({ _id: created._id }, { $set: { 'engineQuote.ackSms': ackSmsResult } });
+        } catch (e) { /* persistance non bloquante */ }
+      }
+    }
 
     return res.redirect('/admin/devis-moteurs/' + created._id);
   } catch (err) {

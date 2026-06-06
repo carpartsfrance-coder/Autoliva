@@ -14,6 +14,7 @@
 
     <% var f = (typeof form !== 'undefined' && form) ? form : {}; %>
     <form action="/admin/devis-moteurs/nouveau" method="POST" class="mt-6 bg-white rounded-2xl border border-slate-200 p-6 space-y-6">
+      <input type="hidden" name="_submitted" value="1" />
 
       <div>
         <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Client</div>
@@ -54,6 +55,20 @@
           <label class="block text-xs font-semibold text-slate-500 mb-1" for="message">Message / besoin</label>
           <textarea id="message" name="message" rows="3" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Ce que demande le client, contexte de l'appel…"><%= f.message || '' %></textarea>
         </div>
+      </div>
+
+      <div>
+        <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Notification client</div>
+        <% var notifyChecked = f._submitted ? !!f.notifyClient : true; %>
+        <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 cursor-pointer hover:bg-slate-100">
+          <input type="checkbox" name="notifyClient" value="on" <%= notifyChecked ? 'checked' : '' %> class="mt-0.5 h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500" />
+          <span class="text-sm text-slate-700">
+            <span class="font-semibold text-slate-900">Prévenir le client</span> — envoyer tout de suite un accusé
+            <strong>email</strong> (si email renseigné) et <strong>SMS</strong> (si téléphone renseigné) :
+            « Votre dossier est bien reçu, on revient vers vous. »
+            <span class="block mt-1 text-xs text-slate-400">Décoche si tu es déjà au téléphone avec le client et que tu ne veux rien lui envoyer maintenant. Le devis chiffré, lui, s'envoie plus tard depuis la fiche.</span>
+          </span>
+        </label>
       </div>
 
       <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
