@@ -15,6 +15,15 @@ const emailService = require('../services/emailService');
 const { buildAcompteConfirmationHtml } = require('../services/engineQuoteEmail');
 const brand = require('../config/brand');
 
+const MOLLIE_ENABLED = String(process.env.ENGINE_QUOTE_MOLLIE_ENABLED || '').toLowerCase() === 'true';
+
+/** Base publique normalisée (https, sans slash final) pour construire les URLs. */
+function getPublicBase() {
+  let b = String(process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(b)) b = 'https://' + b;
+  return b;
+}
+
 // GIF transparent 1x1 (43 bytes) — servi au pixel de tracking
 const TRANSPARENT_GIF = Buffer.from(
   'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
@@ -199,34 +208,89 @@ async function getTrackOpen(req, res) {
  * (signal chaud : le client veut payer) puis on redirige vers le vrai lien Mollie.
  */
 async function getTrackPay(req, res) {
-  const fallback = (brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
+  const base = getPublicBase();
+  const merci = (ref) => base + '/devis/merci' + (ref ? '?ref=' + encodeURIComponent(ref) : '');
   try {
     const { cartId, sentQuoteId } = req.params;
-    if (mongoose.connection.readyState !== 1) return res.redirect(302, fallback);
-    if (!mongoose.Types.ObjectId.isValid(cartId)) return res.redirect(302, fallback);
+    if (mongoose.connection.readyState !== 1) return res.redirect(302, base);
+    if (!mongoose.Types.ObjectId.isValid(cartId)) return res.redirect(302, base);
 
     const cart = await AbandonedCart.findById(cartId);
     if (!cart || !cart.engineQuote || !Array.isArray(cart.engineQuote.sentQuotes)) {
-      return res.redirect(302, fallback);
+      return res.redirect(302, base);
     }
     const sq = cart.engineQuote.sentQuotes.id(sentQuoteId);
-    if (!sq) return res.redirect(302, fallback);
+    if (!sq) return res.redirect(302, base);
 
-    // Devis évolutif : paiement de la DERNIÈRE version qui a un lien Mollie
-    // (montant à jour), sinon celui du devis cliqué.
-    const latest = cart.engineQuote.sentQuotes.slice().sort((a, b) => new Date(b.sentAt || 0) - new Date(a.sentAt || 0))[0];
-    const payTarget = (latest && latest.mollieUrl) ? latest : sq;
-    payTarget.payClickCount = (payTarget.payClickCount || 0) + 1;
-    if (!payTarget.payClickedAt) payTarget.payClickedAt = new Date();
+    const ref = (cart.requested && cart.requested.ref) || '';
+
+    // Acompte déjà réglé → surtout PAS de nouveau paiement : on confirme.
+    const alreadyPaid =
+      (cart.engineQuote.payment && cart.engineQuote.payment.status === 'paid') ||
+      cart.engineQuote.status === 'acompte_recu';
+    if (alreadyPaid) return res.redirect(302, merci(ref));
+
+    // Devis évolutif : on paie la DERNIÈRE version (montant à jour).
+    const latest = cart.engineQuote.sentQuotes
+      .slice()
+      .sort((a, b) => new Date(b.sentAt || 0) - new Date(a.sentAt || 0))[0] || sq;
+
+    // Tracking clic (signal chaud : le client veut payer).
+    latest.payClickCount = (latest.payClickCount || 0) + 1;
+    if (!latest.payClickedAt) latest.payClickedAt = new Date();
+
+    const storedUrl = String(latest.mollieUrl || '');
+    let dest = '';
+
+    // 1) Le paiement Mollie stocké est-il ENCORE payable ? (le lien d'un
+    //    paiement unique meurt une fois expiré/annulé/payé). On vérifie en direct.
+    if (latest.mollieId) {
+      try {
+        const p = await mollie.getPayment(latest.mollieId);
+        if (p && p.status === 'paid') { await cart.save(); return res.redirect(302, merci(ref)); }
+        if (p && p.status === 'open' && p._links && p._links.checkout && p._links.checkout.href) {
+          dest = p._links.checkout.href; // toujours valide → on réutilise
+        }
+      } catch (e) {
+        // Mollie indisponible : on tentera une régénération, puis le lien stocké.
+      }
+    }
+
+    // 2) Plus payable (expiré/annulé/échoué) ou jamais créé → on RÉGÉNÈRE un
+    //    paiement frais pour le même acompte. C'est ce qui rend le lien de
+    //    l'email/SMS/PDF *permanent* : il pointe vers /track-pay, qui produit
+    //    toujours un checkout Mollie valide tant que l'acompte n'est pas payé.
+    if (!/^https?:\/\//i.test(dest)) {
+      const depositCents = Number(latest.depositCents) || Number(sq.depositCents) || 0;
+      if (depositCents > 0 && MOLLIE_ENABLED) {
+        try {
+          const payment = await mollie.createPayment({
+            amountCents: depositCents,
+            description: `Acompte devis ${ref || cart._id} — Autoliva`,
+            redirectUrl: base + '/devis/merci?ref=' + encodeURIComponent(ref || ''),
+            webhookUrl: base + '/api/devis-moteurs/mollie-webhook',
+            metadata: { kind: 'engine_quote_deposit', quoteRef: ref, engineQuoteId: String(cart._id) },
+          });
+          if (payment && payment._links && payment._links.checkout) {
+            dest = payment._links.checkout.href;
+            latest.mollieUrl = dest; // on mémorise le nouveau lien
+            latest.mollieId = payment.id;
+          }
+        } catch (e) {
+          console.error('[engine-quote-track-pay] régénération Mollie échouée:', e && e.message);
+        }
+      }
+    }
+
     await cart.save();
 
-    // Redirige vers le vrai lien Mollie (validé http(s))
-    const dest = String(payTarget.mollieUrl || '');
     if (/^https?:\/\//i.test(dest)) return res.redirect(302, dest);
-    return res.redirect(302, fallback);
+    // Derniers recours : l'ancien lien stocké, sinon la page merci (rassurante).
+    if (/^https?:\/\//i.test(storedUrl)) return res.redirect(302, storedUrl);
+    return res.redirect(302, merci(ref));
   } catch (err) {
     console.error('[engine-quote-track-pay]', err && err.message);
-    return res.redirect(302, fallback);
+    return res.redirect(302, base);
   }
 }
 

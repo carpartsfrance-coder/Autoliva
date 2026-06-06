@@ -1096,7 +1096,9 @@ async function getPreviewMail(req, res, next) {
       html = buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel: (cart.requested && cart.requested.vehicle) || '', baseUrl: base, brandObj: brand });
     } else if (['j3', 'j7', 'j14', 'winback'].includes(type)) {
       const pdfUrl = lastSent ? `${base}/api/devis-moteurs/track-pdf/${cart._id}/${lastSent._id}` : '';
-      const mollieUrl = (type === 'winback' || !lastSent) ? '' : (lastSent.mollieUrl || '');
+      // Lien de paiement STABLE (/track-pay) — régénère un checkout Mollie frais
+      // si l'ancien a expiré. Jamais l'URL Mollie brute.
+      const mollieUrl = (!lastSent || !lastSent.mollieUrl) ? '' : `${base}/api/devis-moteurs/track-pay/${cart._id}/${lastSent._id}`;
       html = buildReminderEmailHtml({ type, quoteRef, firstName, plate, sellTtc: (lastSent && lastSent.sellPriceTtc) || sellTtc, pdfUrl, mollieUrl, ...phoneOpts });
     } else if (type === 'acompte') {
       const amountEur = (eq.payment && eq.payment.amountCents) ? eq.payment.amountCents / 100
