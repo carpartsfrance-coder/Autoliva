@@ -559,14 +559,19 @@ async function postDevis(req, res, next) {
 
     // 2b) SMS de confirmation immédiat (best-effort) — le client vient de donner
     // son numéro, un SMS instantané rassure fortement et réduit l'anxiété d'attente.
+    let ackSmsResult = null;
     if (cleanPhone) {
       try {
         const { enabled: smsOn, text: smsText } = await resolveSms('moteur_ack', { quoteRef, phoneMoteur: brand.PHONE_MOTEUR });
         if (smsOn && smsText) {
           const r = await sendSms({ to: cleanPhone, text: smsText });
+          ackSmsResult = { status: r && r.ok ? 'sent' : 'failed', reason: (r && r.reason) || '', message: (r && r.message) || '', at: new Date(), phone: cleanPhone };
           if (r && r.ok === false) console.warn('[moteur-ack] SMS non envoyé à', cleanPhone, '→', r.reason, r.message || '');
+        } else {
+          ackSmsResult = { status: 'disabled', reason: 'disabled', message: 'Template SMS « accusé de réception » désactivé.', at: new Date(), phone: cleanPhone };
         }
       } catch (err) {
+        ackSmsResult = { status: 'failed', reason: 'exception', message: (err && err.message) || 'Erreur', at: new Date(), phone: cleanPhone };
         console.error('[moteur-occasion] ack SMS failed:', err && err.message);
       }
     }
@@ -598,10 +603,17 @@ async function postDevis(req, res, next) {
       // captureContactLead met 'devis' par défaut ; on bump si on a un leadId.
       if (result && result.leadId && mongoose.connection.readyState === 1) {
         const AbandonedCart = require('../models/AbandonedCart');
+        // engineQuote a `default: null` → on l'initialise AVANT d'y écrire ackSms
+        // (sinon « Cannot create field 'ackSms' in element {engineQuote:null} »,
+        // ce qui ferait aussi échouer le captureSource — flux cassé).
         return AbandonedCart.updateOne(
-          { _id: result.leadId },
-          { $set: { captureSource: CAPTURE_SOURCE } },
-        ).catch(() => {});
+          { _id: result.leadId, engineQuote: null },
+          { $set: { engineQuote: {} } },
+        ).catch(() => {}).then(() => {
+          const _set = { captureSource: CAPTURE_SOURCE };
+          if (ackSmsResult) _set['engineQuote.ackSms'] = ackSmsResult;
+          return AbandonedCart.updateOne({ _id: result.leadId }, { $set: _set });
+        }).catch(() => {});
       }
     }).catch(() => {});
 

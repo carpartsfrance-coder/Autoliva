@@ -578,6 +578,19 @@ function dt(v) {
                     <div class="flex items-center gap-2 mb-1 flex-wrap">
                       <span class="text-sm font-semibold text-slate-900">Devis envoyé</span>
                       <span class="text-xs text-slate-400">par <%= sq.sentByName || 'Admin' %></span>
+                      <% if (sq.sms && sq.sms.status === 'sent') { %>
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full" title="SMS du devis envoyé au <%= sq.sms.phone || '' %>">
+                          <span class="material-symbols-outlined" style="font-size:13px">sms</span> SMS envoyé
+                        </span>
+                      <% } else if (sq.sms && sq.sms.status === 'failed') { %>
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded-full" title="<%= sq.sms.message || sq.sms.reason || '' %>">
+                          <span class="material-symbols-outlined" style="font-size:13px">sms_failed</span> SMS échec<%= sq.sms.message ? ' — ' + sq.sms.message : (sq.sms.reason ? ' (' + sq.sms.reason + ')' : '') %>
+                        </span>
+                      <% } else if (sq.sms && sq.sms.status === 'disabled') { %>
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full" title="Le template SMS « devis » est désactivé">
+                          <span class="material-symbols-outlined" style="font-size:13px">sms</span> SMS désactivé
+                        </span>
+                      <% } %>
                       <% if (sq.openedAt) { %>
                         <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full" title="Email ouvert <%= sq.openCount || 1 %> fois">
                           <span class="material-symbols-outlined" style="font-size:13px">visibility</span>
@@ -690,6 +703,18 @@ function dt(v) {
               <div>
                 <div class="text-xs text-slate-400">Téléphone</div>
                 <a href="tel:<%= cart.phone %>" class="font-medium text-red-600 hover:underline"><%= cart.phone %></a>
+              </div>
+            <% } %>
+            <% if (engineQuote.ackSms && engineQuote.ackSms.status) { %>
+              <div>
+                <div class="text-xs text-slate-400">Accusé SMS (à la demande)</div>
+                <% if (engineQuote.ackSms.status === 'sent') { %>
+                  <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full"><span class="material-symbols-outlined" style="font-size:13px">sms</span> Envoyé</span>
+                <% } else if (engineQuote.ackSms.status === 'failed') { %>
+                  <span class="inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded-full" title="<%= engineQuote.ackSms.message || engineQuote.ackSms.reason || '' %>"><span class="material-symbols-outlined" style="font-size:13px">sms_failed</span> Échec<%= engineQuote.ackSms.message ? ' — ' + engineQuote.ackSms.message : (engineQuote.ackSms.reason ? ' (' + engineQuote.ackSms.reason + ')' : '') %></span>
+                <% } else { %>
+                  <span class="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full"><span class="material-symbols-outlined" style="font-size:13px">sms</span> Désactivé</span>
+                <% } %>
               </div>
             <% } %>
             <% if (cart.email) { %>
