@@ -303,6 +303,13 @@
             <div class="text-primary font-black text-2xl"><%= (totalCents / 100).toFixed(2).replace('.', ',') %> €</div>
           </div>
 
+          <% if (typeof consigneChargeCents !== 'undefined' && consigneChargeCents > 0) { %>
+            <div class="mt-2 flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[12px] leading-snug text-emerald-700">
+              <span class="material-symbols-outlined text-[16px] shrink-0">savings</span>
+              <span>Dont <strong><%= (consigneChargeCents / 100).toFixed(2).replace('.', ',') %> €</strong> de consigne — <strong>intégralement remboursée</strong> dès le retour de votre ancienne pièce. Ce n'est pas un surcoût.</span>
+            </div>
+          <% } %>
+
           <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 space-y-2">
             <div class="flex items-center gap-2 text-xs font-black text-slate-700">
               <span class="material-symbols-outlined text-base text-slate-400">verified</span>

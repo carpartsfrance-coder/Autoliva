@@ -342,6 +342,13 @@
             <span class="text-primary font-black text-xl"><%= (totalCents / 100).toFixed(2).replace('.', ',') %> €</span>
           </div>
 
+          <% if (typeof consigneChargeCents !== 'undefined' && consigneChargeCents > 0) { %>
+            <div class="mt-2 flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[12px] leading-snug text-emerald-700">
+              <span class="material-symbols-outlined text-[16px] shrink-0">savings</span>
+              <span>Dont <strong><%= (consigneChargeCents / 100).toFixed(2).replace('.', ',') %> €</strong> de consigne — <strong>intégralement remboursée</strong> dès le retour de votre ancienne pièce.</span>
+            </div>
+          <% } %>
+
           <div class="mt-4 flex items-center gap-2 text-xs text-slate-400">
             <span class="material-symbols-outlined text-[14px]">lock</span>
             Paiement 100% sécurisé
