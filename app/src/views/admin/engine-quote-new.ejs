@@ -1,0 +1,70 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'engine-quotes' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8 max-w-3xl">
+    <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Devis moteurs', url: '/admin/devis-moteurs'}, {label: 'Nouveau devis'}] }) %>
+    <div class="text-2xl md:text-3xl font-semibold text-slate-900">Nouveau devis moteur</div>
+    <div class="mt-1 text-sm text-slate-500">Crée un dossier de zéro (lead reçu par téléphone ou email). Tu pourras ensuite chiffrer et envoyer le devis depuis la fiche.</div>
+
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900 font-semibold"><%= errorMessage %></div>
+    <% } %>
+
+    <% var f = (typeof form !== 'undefined' && form) ? form : {}; %>
+    <form action="/admin/devis-moteurs/nouveau" method="POST" class="mt-6 bg-white rounded-2xl border border-slate-200 p-6 space-y-6">
+
+      <div>
+        <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Client</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1" for="firstName">Prénom</label>
+            <input id="firstName" name="firstName" type="text" value="<%= f.firstName || '' %>" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Ex : Jean" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1" for="lastName">Nom</label>
+            <input id="lastName" name="lastName" type="text" value="<%= f.lastName || '' %>" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Ex : Dupont" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1" for="email">Email <span class="text-slate-400 font-normal">(requis pour envoyer le devis)</span></label>
+            <input id="email" name="email" type="email" value="<%= f.email || '' %>" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="client@email.fr" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1" for="phone">Téléphone</label>
+            <input id="phone" name="phone" type="tel" value="<%= f.phone || '' %>" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="06 12 34 56 78" />
+          </div>
+        </div>
+        <p class="mt-2 text-xs text-slate-400">Au moins un email <strong>ou</strong> un téléphone est requis. Le téléphone est enregistré au format international (+33…) pour les SMS.</p>
+      </div>
+
+      <div>
+        <div class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Véhicule / demande</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1" for="plate">Plaque / immatriculation</label>
+            <input id="plate" name="plate" type="text" value="<%= f.plate || '' %>" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm uppercase" placeholder="AB-123-CD" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-500 mb-1" for="vehicle">Véhicule (libellé)</label>
+            <input id="vehicle" name="vehicle" type="text" value="<%= f.vehicle || '' %>" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Ex : Golf 7 2.0 TDI" />
+          </div>
+        </div>
+        <div class="mt-4">
+          <label class="block text-xs font-semibold text-slate-500 mb-1" for="message">Message / besoin</label>
+          <textarea id="message" name="message" rows="3" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm" placeholder="Ce que demande le client, contexte de l'appel…"><%= f.message || '' %></textarea>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+        <a href="/admin/devis-moteurs" class="px-5 py-2.5 text-sm font-semibold text-slate-600 hover:text-slate-900">Annuler</a>
+        <button type="submit" class="inline-flex items-center gap-2 rounded-xl bg-red-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-red-700">
+          <span class="material-symbols-outlined" style="font-size:18px">add</span>
+          Créer le dossier
+        </button>
+      </div>
+    </form>
+  </div>
+</main>
+
+<%- include('./partials/footer') %>

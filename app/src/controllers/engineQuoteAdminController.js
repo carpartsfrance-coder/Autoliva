@@ -20,7 +20,7 @@ const storage = require('../services/savFileStorage');
 const emailService = require('../services/emailService');
 const { buildQuotePdf } = require('../services/engineQuotePdf');
 const { buildQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
-const { sendSms } = require('../services/smsService');
+const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
 const { compressImage } = require('../services/imageCompress');
 const mollie = require('../services/mollie');
@@ -362,6 +362,76 @@ async function getEngineQuoteDetail(req, res, next) {
       conditionLabels: CONDITION_LABELS,
       fmt,
     });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/* ─── CRÉATION MANUELLE D'UN DEVIS ───────────────────────────────────────
+ * Permet au commercial de créer un dossier devis moteur de zéro (lead reçu
+ * par téléphone/email), sans passer par le formulaire public. */
+
+function generateManualQuoteRef() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const suffix = crypto.randomBytes(4).toString('hex').toUpperCase().slice(0, 6);
+  return `AUT-${year}-${month}-${suffix}`;
+}
+
+async function getEngineQuoteNew(req, res) {
+  return res.render('admin/engine-quote-new', {
+    title: 'Nouveau devis · Admin',
+    activeKey: 'engine-quotes',
+    form: {},
+    errorMessage: null,
+  });
+}
+
+async function postCreateEngineQuote(req, res, next) {
+  try {
+    const renderForm = (status, errorMessage, form) =>
+      res.status(status).render('admin/engine-quote-new', {
+        title: 'Nouveau devis · Admin', activeKey: 'engine-quotes', form: form || {}, errorMessage,
+      });
+
+    if (mongoose.connection.readyState !== 1) {
+      return renderForm(503, 'Base de données indisponible.', req.body);
+    }
+
+    const b = req.body || {};
+    const trim = (v, n = 200) => (typeof v === 'string' ? v.trim().slice(0, n) : '');
+    const firstName = trim(b.firstName, 80);
+    const lastName = trim(b.lastName, 80);
+    const email = trim(b.email, 160).toLowerCase();
+    const phone = normalizePhoneFR(b.phone) || trim(b.phone, 24);
+    const plate = trim(b.plate, 16).toUpperCase();
+    const vehicle = trim(b.vehicle, 120);
+    const message = trim(b.message, 2000);
+
+    if (!email && !phone) {
+      return renderForm(400, 'Indique au moins un email OU un téléphone pour pouvoir recontacter le client.', b);
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return renderForm(400, 'Adresse email invalide.', b);
+    }
+
+    const ref = generateManualQuoteRef();
+    const now = new Date();
+    const created = await AbandonedCart.create({
+      sessionId: 'manual-' + crypto.randomBytes(8).toString('hex'),
+      abandonedAt: now,
+      lastActivityAt: now,
+      captureSource: 'landing_moteurs',
+      email,
+      firstName,
+      lastName,
+      phone,
+      requested: { ref, plate, vehicle, message },
+      engineQuote: { status: 'new' },
+    });
+
+    return res.redirect('/admin/devis-moteurs/' + created._id);
   } catch (err) {
     return next(err);
   }
@@ -1394,6 +1464,8 @@ async function getEngineQuoteFunnel(req, res, next) {
 module.exports = {
   getEngineQuotesList,
   getEngineQuoteFunnel,
+  getEngineQuoteNew,
+  postCreateEngineQuote,
   getEngineQuoteDetail,
   postChangeStatus,
   postUpdateEngine,
