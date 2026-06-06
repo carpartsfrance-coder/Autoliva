@@ -128,10 +128,15 @@ async function sendReminder(cart, type) {
   const daysSince = Math.floor((Date.now() - new Date(lastSent.sentAt).getTime()) / MS_DAY);
 
   // CTA tracké : "Revoir mon devis" passe par /track-pdf (enregistre la vue
-  // puis redirige vers le PDF). "Réserver" → lien Mollie si dispo.
+  // puis redirige vers le PDF). "Réserver" → lien de paiement STABLE
+  // (/track-pay) qui régénère un checkout Mollie frais si l'ancien a expiré.
   const pdfUrl = publicBase() + '/api/devis-moteurs/track-pdf/' + cart._id + '/' + lastSent._id;
-  // En win-back, l'ancien lien Mollie a sûrement expiré → pas de bouton Réserver.
-  const mollieUrl = type === 'winback' ? '' : (lastSent.mollieUrl || '');
+  // Bouton "Réserver" affiché seulement si un acompte Mollie a été créé. On
+  // pointe vers /track-pay (jamais l'URL Mollie brute qui expire) → le lien
+  // reste valable même en relance tardive / win-back.
+  const mollieUrl = lastSent.mollieUrl
+    ? (publicBase() + '/api/devis-moteurs/track-pay/' + cart._id + '/' + lastSent._id)
+    : '';
 
   const html = buildReminderEmailHtml({
     type,
