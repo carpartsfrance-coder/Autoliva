@@ -10,17 +10,17 @@
         <span class="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs">
           <span class="material-symbols-outlined text-[16px]">check</span>
         </span>
-        <span class="hidden sm:inline text-slate-500">Panier</span>
+        <span class="hidden sm:inline text-slate-500"><%= t('checkout.stepCart') %></span>
       </a>
       <div class="h-px w-6 sm:w-10 bg-slate-300"></div>
       <div class="flex items-center gap-2 sm:gap-3">
         <span class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs">2</span>
-        <span class="text-primary">Livraison</span>
+        <span class="text-primary"><%= t('checkout.stepShipping') %></span>
       </div>
       <div class="h-px w-6 sm:w-10 bg-slate-200"></div>
       <div class="flex items-center gap-2 sm:gap-3">
         <span class="w-7 h-7 rounded-full bg-slate-200 text-slate-400 flex items-center justify-center text-xs">3</span>
-        <span class="hidden sm:inline">Paiement</span>
+        <span class="hidden sm:inline"><%= t('checkout.stepPayment') %></span>
       </div>
     </nav>
 
@@ -28,7 +28,7 @@
       <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900 flex items-start gap-3">
         <span class="material-symbols-outlined text-red-500 mt-0.5">error</span>
         <div>
-          <div class="font-bold text-sm">Une erreur est survenue</div>
+          <div class="font-bold text-sm"><%= t('checkout.errorOccurred') %></div>
           <div class="mt-1 text-sm"><%= errorMessage %></div>
         </div>
       </div>
@@ -46,8 +46,8 @@
               <span class="material-symbols-outlined text-primary text-[18px]">local_shipping</span>
             </span>
             <div>
-              <h2 class="text-base font-black text-slate-900">Mode de livraison</h2>
-              <p class="text-sm text-slate-500">Sélectionnez une option pour continuer</p>
+              <h2 class="text-base font-black text-slate-900"><%= t('checkout.shippingMethod') %></h2>
+              <p class="text-sm text-slate-500"><%= t('checkout.selectOption') %></p>
             </div>
           </div>
 
@@ -70,7 +70,7 @@
                     <div class="text-sm text-slate-500"><%= m.description %></div>
                   </div>
                   <div class="font-black text-sm whitespace-nowrap <%= m.priceCents === 0 ? 'text-green-600' : 'text-slate-900' %>">
-                    <%= m.priceCents === 0 ? 'Gratuit' : (m.priceCents / 100).toFixed(2).replace('.', ',') + ' €' %>
+                    <%= m.priceCents === 0 ? t('checkout.free') : (m.priceCents / 100).toFixed(2).replace('.', ',') + ' €' %>
                   </div>
                 </div>
               </label>
@@ -84,61 +84,61 @@
                     <span class="material-symbols-outlined text-slate-500 text-[18px]">person</span>
                   </span>
                   <div>
-                    <h2 class="text-base font-black text-slate-900">Vos informations</h2>
-                    <p class="text-sm text-slate-500">Un compte sera créé automatiquement après votre commande</p>
+                    <h2 class="text-base font-black text-slate-900"><%= t('checkout.yourInfo') %></h2>
+                    <p class="text-sm text-slate-500"><%= t('checkout.accountAutoCreated') %></p>
                   </div>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div class="sm:col-span-2">
-                    <label class="block text-sm font-semibold text-slate-700" for="email">Adresse email *</label>
+                    <label class="block text-sm font-semibold text-slate-700" for="email"><%= t('checkout.email') %></label>
                     <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="email" name="email" required type="email" placeholder="votre@email.com" value="<%= guestForm ? guestForm.email : '' %>" />
                   </div>
 
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700" for="firstName">Prénom *</label>
+                    <label class="block text-sm font-semibold text-slate-700" for="firstName"><%= t('checkout.firstName') %></label>
                     <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="firstName" name="firstName" required type="text" placeholder="Jean" value="<%= guestForm ? guestForm.firstName : '' %>" />
                   </div>
 
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700" for="lastName">Nom *</label>
+                    <label class="block text-sm font-semibold text-slate-700" for="lastName"><%= t('checkout.lastName') %></label>
                     <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="lastName" name="lastName" required type="text" placeholder="Dupont" value="<%= guestForm ? guestForm.lastName : '' %>" />
                   </div>
 
                   <div class="sm:col-span-2">
-                    <label class="block text-sm font-semibold text-slate-700" for="line1">Adresse *</label>
+                    <label class="block text-sm font-semibold text-slate-700" for="line1"><%= t('checkout.address') %></label>
                     <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="line1" name="line1" required type="text" placeholder="12 rue de la Paix" value="<%= guestForm ? guestForm.line1 : '' %>" />
                   </div>
 
                   <div class="sm:col-span-2">
-                    <label class="block text-sm font-semibold text-slate-700" for="line2">Complément d'adresse</label>
+                    <label class="block text-sm font-semibold text-slate-700" for="line2"><%= t('checkout.addressLine2') %></label>
                     <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="line2" name="line2" type="text" placeholder="Bâtiment, étage, code..." value="<%= guestForm ? guestForm.line2 : '' %>" />
                   </div>
 
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700" for="postalCode">Code postal *</label>
+                    <label class="block text-sm font-semibold text-slate-700" for="postalCode"><%= t('checkout.postalCode') %></label>
                     <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="postalCode" name="postalCode" required type="text" placeholder="75001" maxlength="5" value="<%= guestForm ? guestForm.postalCode : '' %>" data-autocomplete-postal />
                   </div>
 
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700" for="city">Ville *</label>
+                    <label class="block text-sm font-semibold text-slate-700" for="city"><%= t('checkout.city') %></label>
                     <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="city" name="city" required type="text" placeholder="Paris" value="<%= guestForm ? guestForm.city : '' %>" data-autocomplete-city />
                   </div>
 
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700" for="phone">Téléphone *</label>
+                    <label class="block text-sm font-semibold text-slate-700" for="phone"><%= t('checkout.phone') %></label>
                     <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="phone" name="phone" required type="tel" placeholder="06 12 34 56 78" value="<%= guestForm ? guestForm.phone : '' %>" />
                   </div>
 
                   <div>
-                    <label class="block text-sm font-semibold text-slate-700" for="country">Pays</label>
+                    <label class="block text-sm font-semibold text-slate-700" for="country"><%= t('checkout.country') %></label>
                     <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="country" name="country" type="text" value="<%= guestForm ? guestForm.country : 'France' %>" />
                   </div>
                 </div>
 
                 <div class="mt-5 rounded-lg bg-slate-50 border border-slate-100 p-3 text-sm text-slate-500 flex items-center gap-2">
                   <span class="material-symbols-outlined text-[16px]">info</span>
-                  La facturation utilisera la même adresse que la livraison.
+                  <%= t('checkout.billingUsesShipping') %>
                 </div>
               </div>
             <% } else { %>
@@ -150,21 +150,21 @@
                       <span class="material-symbols-outlined text-primary text-[18px]">home</span>
                     </span>
                     <div>
-                      <h2 class="text-base font-black text-slate-900">Adresse de livraison</h2>
-                      <p class="text-sm text-slate-500">Choisissez ou ajoutez une adresse</p>
+                      <h2 class="text-base font-black text-slate-900"><%= t('checkout.shippingAddress') %></h2>
+                      <p class="text-sm text-slate-500"><%= t('checkout.chooseAddress') %></p>
                     </div>
                   </div>
                   <button class="inline-flex items-center gap-1.5 rounded-lg bg-primary text-white px-4 py-2 text-xs font-bold hover:bg-red-700 transition" id="open-add-address" type="button">
                     <span class="material-symbols-outlined text-[16px]">add</span>
-                    Nouvelle adresse
+                    <%= t('checkout.newAddress') %>
                   </button>
                 </div>
 
                 <% if (!addresses || addresses.length === 0) { %>
                   <div class="mt-4 rounded-xl border-2 border-dashed border-slate-200 p-6 text-center">
                     <span class="material-symbols-outlined text-slate-300 text-[32px]">location_on</span>
-                    <div class="mt-2 font-bold text-slate-700">Aucune adresse enregistrée</div>
-                    <div class="mt-1 text-sm text-slate-500">Ajoutez votre première adresse de livraison</div>
+                    <div class="mt-2 font-bold text-slate-700"><%= t('checkout.noAddress') %></div>
+                    <div class="mt-1 text-sm text-slate-500"><%= t('checkout.addFirstAddress') %></div>
                   </div>
                 <% } else { %>
                   <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -179,9 +179,9 @@
                           </div>
                           <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">
-                              <span class="font-bold text-sm text-slate-900 truncate"><%= a.label || 'Adresse' %></span>
+                              <span class="font-bold text-sm text-slate-900 truncate"><%= a.label || t('checkout.addressLabel') %></span>
                               <% if (a.isDefault) { %>
-                                <span class="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider flex-shrink-0">Défaut</span>
+                                <span class="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider flex-shrink-0"><%= t('checkout.default') %></span>
                               <% } %>
                             </div>
                             <% if (a.fullName) { %><div class="mt-1 text-sm text-slate-700"><%= a.fullName %></div><% } %>
@@ -206,17 +206,17 @@
                   <span class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
                     <span class="material-symbols-outlined text-slate-500 text-[18px]">receipt_long</span>
                   </span>
-                  <h2 class="text-base font-black text-slate-900">Adresse de facturation</h2>
+                  <h2 class="text-base font-black text-slate-900"><%= t('checkout.billingAddress') %></h2>
                 </div>
 
                 <label class="flex items-center gap-3 cursor-pointer select-none p-3 rounded-lg bg-slate-50 border border-slate-100" for="billingSameAsShipping">
                   <input class="rounded border-slate-300 text-primary focus:ring-primary w-4 h-4" id="billingSameAsShipping" name="billingSameAsShipping" type="checkbox" <%= billingSameAsShipping ? 'checked' : '' %> />
-                  <span class="text-sm font-semibold text-slate-700">Identique à l'adresse de livraison</span>
+                  <span class="text-sm font-semibold text-slate-700"><%= t('checkout.sameAsShipping') %></span>
                 </label>
 
                 <div class="mt-3 text-sm text-slate-500 flex items-center gap-2" id="billing-same-hint" <%= billingSameAsShipping ? '' : 'style="display:none"' %>>
                   <span class="material-symbols-outlined text-[16px] text-green-500">check_circle</span>
-                  La facture sera envoyée à votre adresse de livraison.
+                  <%= t('checkout.invoiceToShipping') %>
                 </div>
 
                 <% if (addresses && addresses.length) { %>
@@ -232,9 +232,9 @@
                           </div>
                           <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">
-                              <span class="font-bold text-sm text-slate-900 truncate"><%= a.label || 'Adresse' %></span>
+                              <span class="font-bold text-sm text-slate-900 truncate"><%= a.label || t('checkout.addressLabel') %></span>
                               <% if (a.isDefault) { %>
-                                <span class="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider flex-shrink-0">Défaut</span>
+                                <span class="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider flex-shrink-0"><%= t('checkout.default') %></span>
                               <% } %>
                             </div>
                             <% if (a.fullName) { %><div class="mt-1 text-sm text-slate-700"><%= a.fullName %></div><% } %>
@@ -247,7 +247,7 @@
                     <% }) %>
                   </div>
                 <% } else { %>
-                  <div class="mt-3 text-sm text-slate-500" id="billing-address-grid" <%= billingSameAsShipping ? 'style="display:none"' : '' %>>Aucune adresse disponible.</div>
+                  <div class="mt-3 text-sm text-slate-500" id="billing-address-grid" <%= billingSameAsShipping ? 'style="display:none"' : '' %>><%= t('checkout.noAddressAvailable') %></div>
                 <% } %>
               </div>
             <% } %>
@@ -256,10 +256,10 @@
             <div class="mt-8 pt-6 border-t border-slate-100 hidden md:flex items-center justify-between">
               <a class="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-700 transition" href="/panier">
                 <span class="material-symbols-outlined text-[18px]">arrow_back</span>
-                Retour au panier
+                <%= t('checkout.backToCart') %>
               </a>
               <button class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary text-white px-8 py-3.5 font-black text-sm hover:bg-red-700 transition shadow-lg shadow-primary/20" type="submit">
-                Continuer vers le paiement
+                <%= t('checkout.continueToPayment') %>
                 <span class="font-normal opacity-80">(<%= (totalCents / 100).toFixed(2).replace('.', ',') %> €)</span>
                 <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
               </button>
@@ -272,8 +272,8 @@
       <aside class="lg:col-span-4">
         <div class="bg-white rounded-2xl border border-slate-200 p-5 md:p-6 sticky top-24 shadow-sm">
           <div class="flex items-center justify-between">
-            <h3 class="font-black text-slate-900">Votre commande</h3>
-            <span class="text-xs font-semibold text-slate-400"><%= items.reduce((s, i) => s + i.quantity, 0) %> article<%= items.reduce((s, i) => s + i.quantity, 0) > 1 ? 's' : '' %></span>
+            <h3 class="font-black text-slate-900"><%= t('checkout.yourOrder') %></h3>
+            <span class="text-xs font-semibold text-slate-400"><%= items.reduce((s, i) => s + i.quantity, 0) %> <%= items.reduce((s, i) => s + i.quantity, 0) > 1 ? t('cart.articlePlural') : t('cart.articleSingular') %></span>
           </div>
 
           <div class="mt-4 space-y-3 max-h-64 overflow-y-auto pr-1">
@@ -300,58 +300,58 @@
 
           <div class="mt-4 pt-4 border-t border-slate-100 space-y-2 text-sm">
             <div class="flex items-center justify-between">
-              <span class="text-slate-500">Sous-total</span>
+              <span class="text-slate-500"><%= t('cart.subtotal') %></span>
               <span class="font-semibold text-slate-700"><%= ((typeof itemsSubtotalCents !== 'undefined' ? itemsSubtotalCents : itemsTotalCents) / 100).toFixed(2).replace('.', ',') %> €</span>
             </div>
 
             <% if (typeof clientDiscountCents !== 'undefined' && clientDiscountCents > 0) { %>
               <div class="flex items-center justify-between text-green-600">
-                <span>Remise client (<%= typeof clientDiscountPercent !== 'undefined' ? String(clientDiscountPercent).replace('.', ',') : '' %>%)</span>
+                <span><%= t('cart.accountDiscount', { pct: (typeof clientDiscountPercent !== 'undefined' ? String(clientDiscountPercent).replace('.', ',') : '') }) %></span>
                 <span class="font-semibold">- <%= (clientDiscountCents / 100).toFixed(2).replace('.', ',') %> €</span>
               </div>
             <% } %>
 
             <% if (typeof promoDiscountCents !== 'undefined' && promoDiscountCents > 0) { %>
               <div class="flex items-center justify-between text-green-600">
-                <span>Code promo<% if (typeof promoCode !== 'undefined' && promoCode) { %> (<%= promoCode %>)<% } %></span>
+                <span><%= t('cart.promoCodeLabel') %><% if (typeof promoCode !== 'undefined' && promoCode) { %> (<%= promoCode %>)<% } %></span>
                 <span class="font-semibold">- <%= (promoDiscountCents / 100).toFixed(2).replace('.', ',') %> €</span>
               </div>
             <% } %>
 
             <% if ((typeof clientDiscountCents !== 'undefined' && clientDiscountCents > 0) || (typeof promoDiscountCents !== 'undefined' && promoDiscountCents > 0)) { %>
               <div class="flex items-center justify-between">
-                <span class="text-slate-500">Sous-total après remise</span>
+                <span class="text-slate-500"><%= t('cart.subtotalAfter') %></span>
                 <span class="font-semibold text-slate-700"><%= ((typeof itemsTotalAfterDiscountCents !== 'undefined' ? itemsTotalAfterDiscountCents : itemsTotalCents) / 100).toFixed(2).replace('.', ',') %> €</span>
               </div>
             <% } %>
 
             <div class="flex items-center justify-between">
-              <span class="text-slate-500">Livraison</span>
-              <span class="font-semibold <%= shippingCostCents === 0 ? 'text-green-600' : 'text-slate-700' %>"><%= shippingCostCents === 0 ? 'Gratuit' : (shippingCostCents / 100).toFixed(2).replace('.', ',') + ' €' %></span>
+              <span class="text-slate-500"><%= t('product.shipping') %></span>
+              <span class="font-semibold <%= shippingCostCents === 0 ? 'text-green-600' : 'text-slate-700' %>"><%= shippingCostCents === 0 ? t('checkout.free') : (shippingCostCents / 100).toFixed(2).replace('.', ',') + ' €' %></span>
             </div>
             <% if (typeof consigneChargeCents !== 'undefined' && consigneChargeCents > 0) { %>
               <div class="flex items-start justify-between gap-3">
-                <span class="text-slate-500">Consigne <span class="text-slate-400">(caution, hors TVA)</span> <span class="block text-[11px] text-emerald-600">Restituée dès le retour de votre ancienne pièce</span></span>
+                <span class="text-slate-500"><%= t('cart.consigne') %> <span class="text-slate-400"><%= t('cart.consigneTax') %></span> <span class="block text-[11px] text-emerald-600"><%= t('cart.consigneRefund') %></span></span>
                 <span class="font-semibold text-slate-700"><%= (consigneChargeCents / 100).toFixed(2).replace('.', ',') %> €</span>
               </div>
             <% } %>
           </div>
 
           <div class="mt-4 pt-4 border-t-2 border-slate-200 flex items-center justify-between">
-            <span class="font-black text-slate-900">Total TTC</span>
+            <span class="font-black text-slate-900"><%= t('checkout.totalTTC') %></span>
             <span class="text-primary font-black text-xl"><%= (totalCents / 100).toFixed(2).replace('.', ',') %> €</span>
           </div>
 
           <% if (typeof consigneChargeCents !== 'undefined' && consigneChargeCents > 0) { %>
             <div class="mt-2 flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[12px] leading-snug text-emerald-700">
               <span class="material-symbols-outlined text-[16px] shrink-0">savings</span>
-              <span>Dont <strong><%= (consigneChargeCents / 100).toFixed(2).replace('.', ',') %> €</strong> de consigne — <strong>intégralement remboursée</strong> dès le retour de votre ancienne pièce.</span>
+              <span><%- t('cart.consigneNoteTop', { amount: (consigneChargeCents / 100).toFixed(2).replace('.', ',') }) %></span>
             </div>
           <% } %>
 
           <div class="mt-4 flex items-center gap-2 text-xs text-slate-400">
             <span class="material-symbols-outlined text-[14px]">lock</span>
-            Paiement 100% sécurisé
+            <%= t('product.securePay') %>
           </div>
         </div>
       </aside>
@@ -362,11 +362,11 @@
 <%/* ── Sticky Mobile CTA (above mobile bottom nav ~70px) ──── */%>
 <div class="md:hidden fixed bottom-[70px] inset-x-0 bg-white border-t border-slate-200 px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] z-40">
   <div class="flex items-center justify-between mb-2">
-    <span class="text-sm font-semibold text-slate-600">Total TTC</span>
+    <span class="text-sm font-semibold text-slate-600"><%= t('checkout.totalTTC') %></span>
     <span class="text-lg font-black text-primary"><%= (totalCents / 100).toFixed(2).replace('.', ',') %> €</span>
   </div>
   <button form="shipping-form" class="w-full rounded-xl bg-primary text-white py-3 font-black text-sm hover:bg-red-700 transition flex items-center justify-center gap-2" type="submit">
-    Continuer vers le paiement
+    <%= t('checkout.continueToPayment') %>
     <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
   </button>
 </div>
@@ -378,7 +378,7 @@
   <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" id="modal-backdrop"></div>
   <div class="absolute inset-y-0 right-0 w-full max-w-lg bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-out flex flex-col" id="modal-panel">
     <div class="flex items-center justify-between p-5 border-b border-slate-100">
-      <h3 class="text-lg font-black text-slate-900">Nouvelle adresse</h3>
+      <h3 class="text-lg font-black text-slate-900"><%= t('checkout.newAddress') %></h3>
       <button type="button" id="close-modal" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition">
         <span class="material-symbols-outlined text-slate-500 text-[20px]">close</span>
       </button>
@@ -387,50 +387,50 @@
     <form action="/commande/livraison/adresse" class="flex-1 overflow-y-auto p-5" method="POST" id="add-address-form">
       <div class="space-y-4">
         <div>
-          <label class="block text-sm font-semibold text-slate-700" for="modal-label">Nom de l'adresse</label>
+          <label class="block text-sm font-semibold text-slate-700" for="modal-label"><%= t('checkout.addressName') %></label>
           <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-label" name="label" type="text" placeholder="Ex : Maison, Bureau, Atelier..." value="<%= form ? form.label : '' %>" />
         </div>
 
         <div>
-          <label class="block text-sm font-semibold text-slate-700" for="modal-fullName">Nom complet</label>
+          <label class="block text-sm font-semibold text-slate-700" for="modal-fullName"><%= t('checkout.fullName') %></label>
           <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-fullName" name="fullName" type="text" placeholder="Jean Dupont" value="<%= form ? form.fullName : '' %>" />
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-semibold text-slate-700" for="modal-phone">Téléphone</label>
+            <label class="block text-sm font-semibold text-slate-700" for="modal-phone"><%= t('checkout.phoneOpt') %></label>
             <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-phone" name="phone" type="tel" placeholder="06 12 34 56 78" value="<%= form ? form.phone : '' %>" />
           </div>
           <div>
-            <label class="block text-sm font-semibold text-slate-700" for="modal-country">Pays</label>
+            <label class="block text-sm font-semibold text-slate-700" for="modal-country"><%= t('checkout.country') %></label>
             <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-country" name="country" type="text" value="<%= form ? form.country : 'France' %>" />
           </div>
         </div>
 
         <div>
-          <label class="block text-sm font-semibold text-slate-700" for="modal-line1">Adresse *</label>
+          <label class="block text-sm font-semibold text-slate-700" for="modal-line1"><%= t('checkout.address') %></label>
           <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-line1" name="line1" required type="text" placeholder="12 rue de la Paix" value="<%= form ? form.line1 : '' %>" />
         </div>
 
         <div>
-          <label class="block text-sm font-semibold text-slate-700" for="modal-line2">Complément d'adresse</label>
+          <label class="block text-sm font-semibold text-slate-700" for="modal-line2"><%= t('checkout.addressLine2') %></label>
           <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-line2" name="line2" type="text" placeholder="Bâtiment, étage, code..." value="<%= form ? form.line2 : '' %>" />
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-semibold text-slate-700" for="modal-postalCode">Code postal *</label>
+            <label class="block text-sm font-semibold text-slate-700" for="modal-postalCode"><%= t('checkout.postalCode') %></label>
             <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-postalCode" name="postalCode" required type="text" placeholder="75001" maxlength="5" value="<%= form ? form.postalCode : '' %>" data-autocomplete-postal />
           </div>
           <div>
-            <label class="block text-sm font-semibold text-slate-700" for="modal-city">Ville *</label>
+            <label class="block text-sm font-semibold text-slate-700" for="modal-city"><%= t('checkout.city') %></label>
             <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-city" name="city" required type="text" placeholder="Paris" value="<%= form ? form.city : '' %>" data-autocomplete-city />
           </div>
         </div>
 
         <label class="flex items-center gap-2 cursor-pointer select-none">
           <input class="rounded border-slate-300 text-primary focus:ring-primary w-4 h-4" id="modal-isDefault" name="isDefault" type="checkbox" <%= form && form.isDefault ? 'checked' : '' %> />
-          <span class="text-sm font-semibold text-slate-700">Définir comme adresse par défaut</span>
+          <span class="text-sm font-semibold text-slate-700"><%= t('checkout.setDefault') %></span>
         </label>
       </div>
 
@@ -443,7 +443,7 @@
 
       <button class="mt-6 w-full rounded-xl bg-primary text-white py-3 font-black text-sm hover:bg-red-700 transition flex items-center justify-center gap-2" type="submit">
         <span class="material-symbols-outlined text-[18px]">add</span>
-        Ajouter l'adresse
+        <%= t('checkout.addAddressBtn') %>
       </button>
     </form>
   </div>
