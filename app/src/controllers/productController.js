@@ -557,9 +557,22 @@ async function listProducts(req, res, next) {
 
     const data = await prepareProductListingData(req, {});
 
+    // Listing allemand : on localise chaque CARTE (nom DE) et on pointe vers
+    // l'URL allemande de la fiche. Les libellés d'UI sont traduits via t()
+    // dans la vue (lang-aware). basePath en /de pour garder filtres/pagination
+    // dans la langue.
+    const isDe = req.lang === 'de' && productI18n.isSupportedLang('de');
+    if (isDe) {
+      data.products = (data.products || []).map((p) => {
+        const lp = productI18n.localizeProduct(p, 'de');
+        lp.publicPath = '/de/produits/' + encodeURIComponent(productI18n.localizedSlug(p, 'de')) + '-' + p._id;
+        return lp;
+      });
+    }
+
     return res.render('products/index', {
       ...data,
-      basePath: '/produits', // pour buildUrl côté template
+      basePath: isDe ? '/de/produits' : '/produits', // pour buildUrl côté template
     });
   } catch (err) {
     return next(err);
