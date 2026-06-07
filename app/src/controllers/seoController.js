@@ -311,6 +311,45 @@ async function buildBlogUrlsDe(baseUrl, dbConnected) {
   return urls;
 }
 
+/* Sitemap DE produits : ne liste QUE les fiches avec une traduction allemande
+ * publiée (localizations.de.translatedAt non null) → Google n'indexe jamais une
+ * fiche DE en cours de traduction (qui ferait un 301 vers le FR). URL alignée
+ * sur la canonique servie par getProduct : /de/produits/<slug-de>-<id>. */
+async function buildProductUrlsDe(req, baseUrl, dbConnected) {
+  if (!dbConnected) return [];
+  const products = await Product.find({
+    isPublished: { $ne: false },
+    'localizations.de.translatedAt': { $ne: null },
+  })
+    .select('_id slug name updatedAt imageUrl galleryUrls localizations.de.translatedAt localizations.de.slug localizations.de.name')
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  const urls = [];
+  for (const p of products) {
+    if (!p || !p._id) continue;
+    const deLoc = p.localizations && p.localizations.de;
+    if (!deLoc || !deLoc.translatedAt) continue;
+    const deSlug = (deLoc.slug && String(deLoc.slug).trim()) || p.slug || String(p._id);
+    const path = `/de/produits/${encodeURIComponent(deSlug)}-${p._id}`;
+    const loc = baseUrl ? `${baseUrl}${path}` : path;
+    // lastmod = max(translatedAt, updatedAt) → signale les retraductions à Google
+    const last = (deLoc.translatedAt && p.updatedAt && new Date(deLoc.translatedAt) > new Date(p.updatedAt))
+      ? deLoc.translatedAt
+      : (p.updatedAt || deLoc.translatedAt || null);
+    const imgTitle = deLoc.name || p.name;
+    const images = [];
+    if (p.imageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(p.imageUrl, imgTitle)));
+    if (Array.isArray(p.galleryUrls)) {
+      for (const u of p.galleryUrls) {
+        if (typeof u === 'string' && u.trim()) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(u.trim(), imgTitle)));
+      }
+    }
+    urls.push({ loc, lastmod: toIsoDate(last), images, imageTitle: imgTitle || '' });
+  }
+  return urls;
+}
+
 /* ─── Routes ─────────────────────────────────────────────────────────── */
 
 /* /sitemap.xml — sitemap index pointant vers les sous-sitemaps.
@@ -340,6 +379,7 @@ async function getSitemapXml(req, res, next) {
       { loc: resolveUrl('/sitemap-pages.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-categories.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-products.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-products-de.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-references.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-blog.xml'), lastmod: now },
@@ -443,6 +483,17 @@ async function getSitemapBlogDe(req, res, next) {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildBlogUrlsDe(baseUrl, dbConnected);
+    return sendXml(res, renderUrlset(urls, { withImages: true }));
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function getSitemapProductsDe(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const urls = await buildProductUrlsDe(req, baseUrl, dbConnected);
     return sendXml(res, renderUrlset(urls, { withImages: true }));
   } catch (err) {
     return next(err);
@@ -554,6 +605,7 @@ function getRobotsTxt(req, res) {
     `Sitemap: ${abs('/sitemap-pages.xml')}`,
     `Sitemap: ${abs('/sitemap-categories.xml')}`,
     `Sitemap: ${abs('/sitemap-products.xml')}`,
+    `Sitemap: ${abs('/sitemap-products-de.xml')}`,
     `Sitemap: ${abs('/sitemap-vehicles.xml')}`,
     `Sitemap: ${abs('/sitemap-references.xml')}`,
     `Sitemap: ${abs('/sitemap-blog.xml')}`,
@@ -572,6 +624,7 @@ module.exports = {
   getSitemapPages,
   getSitemapCategories,
   getSitemapProducts,
+  getSitemapProductsDe,
   getSitemapVehicles,
   getSitemapReferences,
   getSitemapBlog,
