@@ -61,8 +61,15 @@
 <% const _curPathNoLang = typeof currentPathWithoutLang !== 'undefined' ? currentPathWithoutLang : '/'; %>
 <% const _curPathClean = (_curPathNoLang || '/').split('?')[0].split('#')[0]; %>
 <% const _isDe = typeof lang !== 'undefined' && lang === 'de'; %>
-<% const _frHref = _curPathClean === '/' ? '/' : _curPathClean; %>
-<% const _deHref = '/de' + (_curPathClean === '/' ? '' : _curPathClean); %>
+<%/* Le sélecteur utilise la VRAIE URL de l'autre langue (issue du hreflang de
+     la page) quand elle existe — car la structure d'URL diffère (FR
+     /product/<slug>/ vs DE /de/produits/<slug-de>-<id>). Sinon, repli sur le
+     simple préfixe /de (pages pas encore traduites → 301 vers le FR). */%>
+<% var _htSw = (typeof hreflangTags !== 'undefined' && Array.isArray(hreflangTags)) ? hreflangTags : []; %>
+<% var _frTag = null, _deTag = null; %>
+<% for (var _s = 0; _s < _htSw.length; _s++) { if (_htSw[_s] && _htSw[_s].lang === 'fr') _frTag = _htSw[_s]; if (_htSw[_s] && _htSw[_s].lang === 'de') _deTag = _htSw[_s]; } %>
+<% const _frHref = (_frTag && _frTag.href) ? _frTag.href : (_curPathClean === '/' ? '/' : _curPathClean); %>
+<% const _deHref = (_deTag && _deTag.href) ? _deTag.href : ('/de' + (_curPathClean === '/' ? '' : _curPathClean)); %>
 <div class="hidden sm:flex items-center rounded-lg border border-slate-200 overflow-hidden h-9" role="navigation" aria-label="Sprache / Langue">
 <a class="flex items-center justify-center px-2.5 h-full text-xs font-black uppercase tracking-wider transition-colors <%= _isDe ? 'text-slate-400 hover:text-primary hover:bg-slate-50' : 'bg-primary text-white' %>" href="<%= _frHref %>" hreflang="fr" <%= _isDe ? '' : 'aria-current="true"' %>>FR</a>
 <a class="flex items-center justify-center px-2.5 h-full text-xs font-black uppercase tracking-wider transition-colors <%= _isDe ? 'bg-primary text-white' : 'text-slate-400 hover:text-primary hover:bg-slate-50' %>" href="<%= _deHref %>" hreflang="de" <%= _isDe ? 'aria-current="true"' : '' %>>DE</a>
