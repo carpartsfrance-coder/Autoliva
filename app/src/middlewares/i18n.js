@@ -2,6 +2,16 @@
 
 const { t, DEFAULT_LANG } = require('../services/i18n');
 
+/** Langue préférée du navigateur (1er tag d'Accept-Language). Ex.
+ *  "de-DE,de;q=0.9,en;q=0.8" → "de". Sert UNIQUEMENT à proposer (jamais à
+ *  rediriger) — Accept-Language reflète le réglage de langue de l'utilisateur,
+ *  bien plus pertinent que l'IP pour une question de langue. */
+function primaryAcceptLanguage(header) {
+  if (!header || typeof header !== 'string') return '';
+  const first = header.split(',')[0].trim().toLowerCase();
+  return first.split(/[-;]/)[0];
+}
+
 /**
  * i18n middleware — detects language from URL prefix.
  *
@@ -46,6 +56,12 @@ function i18nMiddleware(req, res, next) {
 
   // Bound translation function for EJS templates
   res.locals.t = (key, params) => t(req.lang, key, params);
+
+  // Bannière de suggestion de langue (douce, jamais de redirection) :
+  //   browserLangPref  — langue préférée du navigateur (pour proposer)
+  //   langSuggestHidden — l'utilisateur a déjà fermé/choisi (cookie) → on se tait
+  res.locals.browserLangPref = primaryAcceptLanguage(req.headers['accept-language']);
+  res.locals.langSuggestHidden = /(?:^|;\s*)hideLangSuggest=1(?:;|$)/.test(req.headers.cookie || '');
 
   next();
 }
