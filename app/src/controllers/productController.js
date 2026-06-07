@@ -18,6 +18,7 @@ const {
   getPublicBaseUrlFromReq,
 } = require('../services/productPublic');
 const { buildHreflangSet } = require('../services/i18n');
+const productI18n = require('../services/productI18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const { sanitizeBrandLeak } = require('../services/brandSanitizer');
 
@@ -642,19 +643,36 @@ async function getProduct(req, res, next) {
       ? await loadInfoBlocksByPosition(product)
       : INFO_BLOCK_EMPTY_GROUPS;
 
+    // ─── Localisation (DE) : l'allemand est un CALQUE sur la fiche FR ─────────
+    // req.lang est posé par le middleware i18n d'après le préfixe /de/. Tant
+    // qu'une fiche n'a pas de traduction publiée (translatedAt), on 301 vers la
+    // fiche FR → jamais de page à moitié traduite indexée (leçon du /en).
+    const pageLang = (req.lang === 'de' && productI18n.isSupportedLang('de')) ? 'de' : 'fr';
+    const isLocalized = pageLang !== 'fr';
+    if (pageLang === 'de') {
+      if (!productI18n.isTranslated(product, 'de')) {
+        if (req.session) delete req.session.cartError;
+        return res.redirect(301, buildProductPublicPath(product)); // → fiche FR
+      }
+      product = productI18n.localizeProduct(product, 'de'); // calque DE non destructif
+      // Pas de fuite de contenu FR : les blocs info ne sont pas (encore) traduits.
+      product.infoBlocksByPosition = INFO_BLOCK_EMPTY_GROUPS;
+    }
+
     // On ne redirige vers l'URL canonique /product/<slug>/ QUE si le produit a
-    // un vrai slug. Sans slug, cette canonique retomberait sur un slug qui ne
-    // résout pas (basé sur le nom ou l'id) → on rend la fiche en place sur
-    // /produits/<id> plutôt que d'envoyer l'utilisateur vers la recherche
-    // (ex. bouton « Voir en ligne » de l'admin sur une fiche sans slug).
+    // un vrai slug ET qu'on est en FR. Sans slug, cette canonique retomberait
+    // sur un slug qui ne résout pas → on rend la fiche en place. En DE, l'URL
+    // canonique est /de/produits/... (posée juste après), donc pas de redirect.
     const hasRealSlug = !!(product && typeof product.slug === 'string' && product.slug.trim());
     const canonicalPath = buildProductPublicPath(product);
     const requestedPath = `${req.baseUrl || ''}${req.path || ''}`;
-    if (hasRealSlug && canonicalPath && requestedPath && canonicalPath !== requestedPath) {
+    if (!isLocalized && hasRealSlug && canonicalPath && requestedPath && canonicalPath !== requestedPath) {
       return res.redirect(301, canonicalPath);
     }
 
-    const canonicalUrl = buildProductPublicUrl(product, { req });
+    const canonicalUrl = isLocalized
+      ? `${getPublicBaseUrlFromReq(req)}/de/produits/${encodeURIComponent(product._localizedSlug || product.slug || id)}-${id}`
+      : buildProductPublicUrl(product, { req });
     const brandText = typeof product.brand === 'string' ? product.brand.trim() : '';
     const skuText = typeof product.sku === 'string' ? product.sku.trim() : '';
     const compatibleReferences = Array.isArray(product.compatibleReferences)
@@ -1120,10 +1138,27 @@ async function getProduct(req, res, next) {
       displayOptions: productOptions.getProductPageOptions(product.options),
     };
 
-    const hreflangTags = [
-      { lang: 'fr', href: canonicalUrl },
-      { lang: 'x-default', href: canonicalUrl },
-    ];
+    // hreflang FR↔DE : dès qu'une traduction DE publiée existe, on relie les
+    // deux versions (émis sur la page FR ET la page DE → Google les apparie).
+    // Sinon, comportement FR mono-langue inchangé (fr + x-default).
+    const _deLoc = product.localizations && product.localizations.de;
+    const _hasDeTranslation = isLocalized || !!(_deLoc && _deLoc.translatedAt);
+    let hreflangTags;
+    if (_hasDeTranslation) {
+      const _frHref = `${baseUrl}${buildProductPublicPath(product)}`;
+      const _deSlug = (isLocalized ? product._localizedSlug : productI18n.localizedSlug(product, 'de')) || product.slug || id;
+      const _deHref = `${baseUrl}/de/produits/${encodeURIComponent(_deSlug)}-${id}`;
+      hreflangTags = [
+        { lang: 'fr', href: _frHref },
+        { lang: 'de', href: _deHref },
+        { lang: 'x-default', href: _frHref },
+      ];
+    } else {
+      hreflangTags = [
+        { lang: 'fr', href: canonicalUrl },
+        { lang: 'x-default', href: canonicalUrl },
+      ];
+    }
 
     /* Maillage interne : on récupère parent vehicle landings + parent category
        depuis le service. La logique relatedProducts / relatedBlogPosts existante
