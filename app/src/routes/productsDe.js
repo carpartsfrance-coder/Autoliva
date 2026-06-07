@@ -12,6 +12,10 @@ const router = express.Router();
  *
  * Le listing /de/produits (racine) n'est pas encore traduit : il ne matche pas
  * /:id, retombe donc sur le catchall app.use('/de', …) → 301 vers le FR. */
+// Listing catalogue en allemand (/de/produits) — même contrôleur que le FR,
+// req.lang='de' → cartes localisées + liens vers les fiches DE.
+router.get('/', productController.listProducts);
+
 router.get('/:id', productController.getProduct);
 
 module.exports = router;
