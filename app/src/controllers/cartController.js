@@ -10,6 +10,8 @@ const promoCodes = require('../services/promoCodes');
 const pricing = require('../services/pricing');
 const productOptions = require('../services/productOptions');
 const { getShippingMethods } = require('../services/shippingPricing');
+const { applyCheckoutLocale } = require('../services/i18n');
+const productI18n = require('../services/productI18n');
 const { logCartEvent } = require('../services/cartEventLogger');
 const { track } = require('../services/eventTracker');
 const brand = require('../config/brand');
@@ -326,8 +328,18 @@ async function showCart(req, res, next) {
         .map(normalizeProduct);
     }
 
+    // Langue du tunnel : si l'utilisateur naviguait en allemand, le panier
+    // s'affiche en allemand (libellés via t() + noms d'articles localisés),
+    // même si l'URL reste /panier.
+    const checkoutLang = applyCheckoutLocale(req, res);
+    if (checkoutLang === 'de') {
+      for (const it of viewItems) {
+        if (it && it.product) it.product = productI18n.localizeProduct(it.product, 'de');
+      }
+    }
+
     return res.render('cart/index', {
-      title: `Panier - ${brand.NAME}`,
+      title: checkoutLang === 'de' ? `Warenkorb - ${brand.NAME}` : `Panier - ${brand.NAME}`,
       dbConnected,
       cartItemCount,
       items: viewItems,

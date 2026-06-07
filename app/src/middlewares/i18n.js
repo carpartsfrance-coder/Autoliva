@@ -54,6 +54,15 @@ function i18nMiddleware(req, res, next) {
     res.locals.currentPathWithoutLang = rawPath;
   }
 
+  // Mémorise la langue de navigation pour le TUNNEL d'achat : le panier et le
+  // checkout restent sur des URLs FR (/panier, /commande/…) mais doivent
+  // s'afficher dans la langue où l'utilisateur navigue. On ne pose que 'de'
+  // (depuis une page /de/…) ; on ne réinitialise jamais en FR ici pour ne pas
+  // écraser le choix lors du POST add-to-cart (URL FR).
+  if (isGerman && req.session && req.session.preferredLang !== 'de') {
+    req.session.preferredLang = 'de';
+  }
+
   // Bound translation function for EJS templates
   res.locals.t = (key, params) => t(req.lang, key, params);
 
