@@ -617,6 +617,9 @@ app.use('/de/blog', require('./routes/blogDe'));
  * Déclaré AVANT le catchall /de pour avoir la priorité. */
 app.use('/de/produits', require('./routes/productsDe'));
 
+/* Pages catégorie en allemand (détail) — calque sur getCategory. */
+app.use('/de/categorie', require('./routes/categoriesDe'));
+
 /* Catchall /de pour tout ce qui n'est pas encore traduit → redirect FR.
  * Comportement temporaire jusqu'à ce qu'on traduise produits/catégories. */
 app.use('/de', (req, res) => {

@@ -12,6 +12,7 @@ const {
 const { buildHreflangSet } = require('../services/i18n');
 const { formatCategoryDisplayName } = require('../services/brandSanitizer');
 const internalLinking = require('../services/internalLinking');
+const productI18n = require('../services/productI18n');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -163,7 +164,7 @@ async function getCategory(req, res, next) {
     let category = null;
     if (dbConnected) {
       category = await Category.findOne({ slug, isActive: { $ne: false } })
-        .select('_id name slug updatedAt seoText')
+        .select('_id name slug updatedAt seoText localizations')
         .lean();
     } else {
       const all = new Map();
@@ -185,8 +186,28 @@ async function getCategory(req, res, next) {
      * en pré-filtrant la catégorie. L'utilisateur reste libre d'appliquer d'autres
      * filtres (marque véhicule, prix, stock, tri…) qui se cumuleront avec la
      * catégorie pré-sélectionnée. */
+    // ─── Localisation (DE) : la page catégorie est un calque sur le FR ───
+    // Tant que la catégorie n'a pas de traduction publiée (translatedAt), on 301
+    // vers le FR (jamais de page à moitié traduite). Le filtrage produits reste
+    // basé sur le nom FR (presetCategoryName) ; seul l'AFFICHAGE est traduit.
+    const isDe = req.lang === 'de' && productI18n.isSupportedLang('de');
+    const deLoc = category.localizations && category.localizations.de;
+    if (isDe && !(deLoc && deLoc.translatedAt)) {
+      return res.redirect(301, '/categorie/' + encodeURIComponent(category.slug));
+    }
+    const deCatSlug = (isDe && deLoc && deLoc.slug && deLoc.slug.trim()) ? deLoc.slug.trim() : category.slug;
+
     const { prepareProductListingData } = require('../services/productListingService');
     const data = await prepareProductListingData(req, { presetCategoryName: category.name });
+
+    // Cartes en allemand + liens vers les fiches DE.
+    if (isDe) {
+      data.products = (data.products || []).map((p) => {
+        const lp = productI18n.localizeProduct(p, 'de');
+        lp.publicPath = '/de/produits/' + encodeURIComponent(productI18n.localizedSlug(p, 'de')) + '-' + p._id;
+        return lp;
+      });
+    }
 
     /* Override SEO spécifique à la page catégorie (canonical /categorie/:slug,
      * title incluant le nom catégorie, JSON-LD CollectionPage + breadcrumb).
@@ -195,7 +216,7 @@ async function getCategory(req, res, next) {
      * polluerait le H1 et le <title>. On affiche le segment terminal seul
      * (« Bloc moteur » plutôt que « Moteur > Bloc moteur ») — le breadcrumb
      * au-dessus du H1 rappelle déjà la hiérarchie. */
-    const rawName = getTrimmedString(category.name);
+    const rawName = getTrimmedString((isDe && deLoc && deLoc.name) ? deLoc.name : category.name);
     const name = formatCategoryDisplayName(rawName);
     /* Title clampé à 60 char + override DB éventuel.
      * Si DB a un metaTitle custom, on respecte mais on clamp toujours. */
@@ -204,15 +225,28 @@ async function getCategory(req, res, next) {
     const title = clampSeoTitle(dbMetaTitle || `${name} - Pièces auto | ${brand.NAME}`);
     const metaDescription = buildCategoryMetaDescription(name, data.totalCount);
 
-    const canonicalBase = buildCategoryPublicUrl(category, { req });
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const canonicalBase = isDe
+      ? `${baseUrl}/de/categorie/${encodeURIComponent(deCatSlug)}`
+      : buildCategoryPublicUrl(category, { req });
     const canonicalUrl = data.page > 1
       ? `${canonicalBase}?page=${encodeURIComponent(String(data.page))}`
       : canonicalBase;
 
-    const baseUrl = getPublicBaseUrlFromReq(req);
     const langPrefix = req.lang === 'en' ? '/en' : '';
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
+    // hreflang FR↔DE dès qu'une traduction DE de la catégorie existe.
+    let hreflangTags;
+    if (isDe || (deLoc && deLoc.translatedAt)) {
+      const _frHref = `${baseUrl}/categorie/${encodeURIComponent(category.slug)}`;
+      const _deHref = `${baseUrl}/de/categorie/${encodeURIComponent(deCatSlug)}`;
+      hreflangTags = [
+        { lang: 'fr', href: _frHref },
+        { lang: 'de', href: _deHref },
+        { lang: 'x-default', href: _frHref },
+      ];
+    }
 
     /* Robots : on indexe la page catégorie nue (pas de filtres au-delà de la
      * catégorie présélectionnée). Dès qu'un filtre additionnel est actif, qu'on
@@ -285,6 +319,7 @@ async function getCategory(req, res, next) {
       metaDescription,
       canonicalUrl,
       ...hreflang,
+      hreflangTags,
       ogTitle: title,
       ogDescription: metaDescription,
       ogUrl: canonicalUrl,
@@ -293,12 +328,12 @@ async function getCategory(req, res, next) {
       metaRobots,
       jsonLd,
       // Contexte page catégorie (pour breadcrumb, H1, bloc SEO en bas et basePath dynamique)
-      basePath: `/categorie/${category.slug}`,
+      basePath: isDe ? `/de/categorie/${encodeURIComponent(deCatSlug)}` : `/categorie/${category.slug}`,
       categoryContext: {
         name,
         slug: category.slug,
-        publicPath: buildCategoryPublicPath(category),
-        seoText: typeof category.seoText === 'string' ? category.seoText : '',
+        publicPath: isDe ? `/de/categorie/${encodeURIComponent(deCatSlug)}` : buildCategoryPublicPath(category),
+        seoText: isDe ? ((deLoc && deLoc.seoText) || '') : (typeof category.seoText === 'string' ? category.seoText : ''),
         linking: linkingData,
       },
     });

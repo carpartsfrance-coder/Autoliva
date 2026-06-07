@@ -476,7 +476,7 @@
   <% } else if (_categoryContext && _categoryContext.seoText) { %>
     <section class="seo-text-section" style="background:#f8f9fa;border-top:1px solid #e9ecef;">
       <div class="max-w-7xl mx-auto px-6 py-16">
-        <h2 class="text-2xl font-bold tracking-tight text-slate-800 mb-6">Tout savoir sur nos <%= _categoryContext.name.toLowerCase() %></h2>
+        <h2 class="text-2xl font-bold tracking-tight text-slate-800 mb-6"><%= t('category.seoTitle', { name: _categoryContext.name.toLowerCase() }) %></h2>
         <div class="seo-text-content prose prose-slate max-w-none text-slate-600 leading-relaxed" style="font-size:0.95rem;line-height:1.8;">
           <%- _categoryContext.seoText %>
         </div>
