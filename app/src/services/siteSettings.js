@@ -192,7 +192,60 @@ function sanitizeHeroSlidesArray(slides) {
  * Retourne les hero slides à afficher (DB si présent et non vide, sinon defaults).
  * Filtre les slides inactives.
  */
-async function getHeroSlidesForDisplay() {
+/**
+ * Slides hero par défaut en ALLEMAND (mêmes visuels que la version FR, texte
+ * DE). Servies sur la home allemande tant qu'aucune slide DE custom n'est
+ * gérée en admin — un visiteur allemand voit un hero soigné et cohérent.
+ */
+function getDefaultHeroSlidesDe() {
+  return [
+    {
+      imageUrl: '/images/hero-home.png',
+      imageAlt: brand.NAME,
+      badge: 'Premium-Service',
+      title: 'Aufbereitete, gebrauchte und geprüfte Autoteile',
+      description: `${brand.NAME} unterstützt Privat- und Geschäftskunden mit zuverlässigen Teilen, schnellem Angebot und Expressversand in 48/72 Std.`,
+      ctaPrimaryText: 'Kostenloses Angebot anfordern',
+      ctaPrimaryUrl: '/devis',
+      ctaSecondaryText: 'Katalog durchsuchen',
+      ctaSecondaryUrl: '/de/produits',
+      sortOrder: 0,
+      isActive: true,
+    },
+    {
+      imageUrl: '/images/hero-boite-transfert.jpeg',
+      imageAlt: 'Aufbereitete Verteilergetriebe und Differenziale',
+      badge: 'Antrieb',
+      title: 'Aufbereitete Verteilergetriebe & Differenziale',
+      description: 'Unser aufbereitetes Sortiment ist geprüft und 2 Jahre garantiert — für maximale Zuverlässigkeit.',
+      ctaPrimaryText: 'Kostenloses Angebot anfordern',
+      ctaPrimaryUrl: '/devis',
+      ctaSecondaryText: 'Katalog durchsuchen',
+      ctaSecondaryUrl: '/de/produits',
+      sortOrder: 1,
+      isActive: true,
+    },
+    {
+      imageUrl: '/images/hero-moteur-reconditionne.jpeg',
+      imageAlt: 'Austauschmotoren',
+      badge: 'Motor',
+      title: 'Austauschmotoren: Leistung & Sicherheit',
+      description: 'Porsche, Range Rover, BMW… mit höchstem Anspruch geprüfte und aufbereitete Motoren, schnell verfügbar.',
+      ctaPrimaryText: 'Kostenloses Angebot anfordern',
+      ctaPrimaryUrl: '/devis',
+      ctaSecondaryText: 'Katalog durchsuchen',
+      ctaSecondaryUrl: '/de/produits',
+      sortOrder: 2,
+      isActive: true,
+    },
+  ];
+}
+
+async function getHeroSlidesForDisplay(lang) {
+  // DE : pas de slides DB localisées pour l'instant → defaults allemands
+  // (mêmes visuels, texte DE). L'admin pourra fournir des slides DE custom
+  // plus tard sans changer l'appelant.
+  if (lang === 'de') return getDefaultHeroSlidesDe();
   try {
     const saved = await getSiteSettings();
     const dbSlides = saved && Array.isArray(saved.heroSlides) ? saved.heroSlides : [];

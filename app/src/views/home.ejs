@@ -12,7 +12,7 @@
       <div class="lg:col-span-3 hidden lg:block">
         <div class="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
           <div class="bg-primary text-white px-6 py-4 flex items-center justify-between font-bold">
-            <span>Catégories</span>
+            <span><%= t('breadcrumb.categories') %></span>
             <span class="material-symbols-rounded">menu</span>
           </div>
           <nav class="p-2">
@@ -28,7 +28,7 @@
             <div class="border-t border-slate-100 dark:border-slate-800 my-2"></div>
             <a class="flex items-center gap-3 p-3 text-primary font-bold text-sm" href="/categorie">
               <span class="material-symbols-rounded">grid_view</span>
-              Toutes les catégories
+              <%= t('home.allCategories') %>
             </a>
           </nav>
         </div>
@@ -88,9 +88,9 @@
       <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-surface-dark p-5 sm:p-6 shadow-sm">
         <div class="flex items-center gap-2 mb-4">
           <span class="material-symbols-rounded text-primary text-2xl">directions_car</span>
-          <h2 class="text-lg sm:text-xl home-display font-bold">Trouvez la pièce pour votre véhicule</h2>
+          <h2 class="text-lg sm:text-xl home-display font-bold"><%= t('home.findPart') %></h2>
         </div>
-        <%- include('partials/vehicle-selector', { vsButtonLabel: 'Voir les pièces compatibles' }) %>
+        <%- include('partials/vehicle-selector', { vsButtonLabel: t('home.viewCompatible') }) %>
       </div>
     </div>
 
@@ -100,8 +100,8 @@
           <span class="material-symbols-rounded text-primary text-3xl">verified</span>
         </div>
         <div>
-          <h3 class="font-bold text-base sm:text-lg home-display">Garantie Qualité</h3>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Toutes nos pièces sont rigoureusement testées et garanties jusqu'à 24 mois.</p>
+          <h3 class="font-bold text-base sm:text-lg home-display"><%= t('home.qualityTitle') %></h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1"><%= t('home.qualityDesc') %></p>
         </div>
       </div>
       <div class="bg-white dark:bg-surface-dark p-4 sm:p-6 rounded-2xl flex items-center gap-4 sm:gap-5 shadow-sm border border-slate-100 dark:border-slate-800">
@@ -109,8 +109,8 @@
           <span class="material-symbols-rounded text-primary text-3xl">payments</span>
         </div>
         <div>
-          <h3 class="font-bold text-base sm:text-lg home-display">Paiement Flexible</h3>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Payez sereinement en 3 ou 4 fois. Solution de financement immédiate et 100% sécurisée.</p>
+          <h3 class="font-bold text-base sm:text-lg home-display"><%= t('home.flexPayTitle') %></h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1"><%= t('home.flexPayDesc') %></p>
         </div>
       </div>
       <div class="bg-white dark:bg-surface-dark p-4 sm:p-6 rounded-2xl flex items-center gap-4 sm:gap-5 shadow-sm border border-slate-100 dark:border-slate-800">
@@ -118,14 +118,14 @@
           <span class="material-symbols-rounded text-primary text-3xl">local_shipping</span>
         </div>
         <div>
-          <h3 class="font-bold text-base sm:text-lg home-display">Expédition Express</h3>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Logistique optimisée : expédition le jour même et suivi précis de votre colis en temps réel.</p>
+          <h3 class="font-bold text-base sm:text-lg home-display"><%= t('home.expressTitle') %></h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1"><%= t('home.expressDesc') %></p>
         </div>
       </div>
     </div>
 
     <div class="mb-10 sm:mb-16">
-      <h2 class="text-xl sm:text-2xl home-display font-bold mb-4 sm:mb-8">Acheter par Marque</h2>
+      <h2 class="text-xl sm:text-2xl home-display font-bold mb-4 sm:mb-8"><%= t('home.shopByBrand') %></h2>
       <div class="flex gap-4 overflow-x-auto no-scrollbar -mx-4 px-4 sm:flex-wrap sm:justify-center sm:gap-6 sm:mx-0 sm:px-0">
         <% /* Liste des marques affichées en page d'accueil. Seules celles dont
               le slug existe dans la DB sont listées — pour éviter les liens
@@ -169,11 +169,11 @@
     <div class="mb-10 sm:mb-16">
       <div class="flex items-center justify-between mb-4 sm:mb-8">
         <div>
-          <h2 class="text-xl sm:text-3xl home-display font-bold">Découvrez Nos Pièces</h2>
-          <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">Sélection de pièces d'exception prêtes à être expédiées.</p>
+          <h2 class="text-xl sm:text-3xl home-display font-bold"><%= t('home.discoverTitle') %></h2>
+          <p class="text-slate-500 dark:text-slate-400 text-sm mt-1"><%= t('home.discoverDesc') %></p>
         </div>
-        <a class="text-primary font-bold flex items-center gap-2 hover:gap-3 transition-all" href="/produits">
-          Voir tout <span class="material-symbols-rounded text-lg">arrow_forward</span>
+        <a class="text-primary font-bold flex items-center gap-2 hover:gap-3 transition-all" href="<%= langPrefix %>/produits">
+          <%= t('home.viewAll') %> <span class="material-symbols-rounded text-lg">arrow_forward</span>
         </a>
       </div>
 
@@ -202,7 +202,7 @@
               </a>
               <div class="flex items-end justify-between">
                 <div>
-                  <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Prix TTC</p>
+                  <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider"><%= t('product.priceTTC') %></p>
                   <p class="text-base sm:text-2xl home-display font-bold text-slate-900 dark:text-white"><%= formatMoney(p.priceCents) %> €</p>
                 </div>
                 <% const _pBrand = ((p.brand && String(p.brand).trim()) || (Array.isArray(p.compatibility) && p.compatibility[0] && p.compatibility[0].make) || ''); %>
@@ -229,11 +229,11 @@
     <div class="mb-10 sm:mb-16">
       <div class="flex items-center justify-between mb-4 sm:mb-8">
         <div>
-          <h2 class="text-xl sm:text-3xl home-display font-bold">Blog &amp; Conseils Experts</h2>
-          <p class="text-slate-500 dark:text-slate-400 text-sm mt-1">L'actualité automobile et nos guides d'entretien.</p>
+          <h2 class="text-xl sm:text-3xl home-display font-bold"><%= t('home.blogTitle') %></h2>
+          <p class="text-slate-500 dark:text-slate-400 text-sm mt-1"><%= t('home.blogDesc') %></p>
         </div>
         <a class="flex items-center gap-2 border border-slate-200 dark:border-slate-800 px-6 py-2 rounded-full font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all" href="/blog">
-          Explorer le blog <span class="material-symbols-rounded text-lg">trending_up</span>
+          <%= t('home.exploreBlog') %> <span class="material-symbols-rounded text-lg">trending_up</span>
         </a>
       </div>
       <div class="flex gap-4 overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0 md:grid md:grid-cols-3 md:gap-8">
@@ -268,8 +268,8 @@
         <span class="material-symbols-rounded text-[240px]">help_outline</span>
       </div>
       <div class="relative z-10 max-w-2xl">
-        <h2 class="text-2xl sm:text-4xl home-display font-bold mb-3 sm:mb-4">Besoin d'aide pour choisir votre pièce ?</h2>
-        <p class="text-slate-200 sm:text-slate-400 text-sm sm:text-lg mb-5 sm:mb-8">Nos experts sont disponibles par téléphone ou email pour vous conseiller la référence exacte compatible avec votre véhicule.</p>
+        <h2 class="text-2xl sm:text-4xl home-display font-bold mb-3 sm:mb-4"><%= t('home.needHelp') %></h2>
+        <p class="text-slate-200 sm:text-slate-400 text-sm sm:text-lg mb-5 sm:mb-8"><%= t('home.needHelpDesc') %></p>
         <div class="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-6">
           <a class="justify-center bg-white text-slate-900 px-5 sm:px-8 py-3 sm:py-4 rounded-2xl font-bold flex items-center gap-3 hover:scale-105 transition-all" href="tel:<%= brand.PHONE_INTL %>">
             <span class="material-symbols-rounded text-primary">call</span>

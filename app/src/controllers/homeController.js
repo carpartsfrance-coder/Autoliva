@@ -8,6 +8,7 @@ const demoProducts = require('../demoProducts');
 const { buildProductPublicPath, slugify, getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildCategoryPublicPath } = require('../services/categoryPublic');
 const { buildHreflangSet } = require('../services/i18n');
+const productI18n = require('../services/productI18n');
 const siteSettingsService = require('../services/siteSettings');
 const brand = require('../config/brand');
 
@@ -85,18 +86,24 @@ function formatCategoryLabel(name) {
   return getTrimmedString(name).replace(/\s*>\s*/g, ' • ');
 }
 
-function buildHomeCategoriesFromDocs(rows) {
+function buildHomeCategoriesFromDocs(rows, lang) {
+  const isDe = lang === 'de';
   return (Array.isArray(rows) ? rows : [])
     .filter(Boolean)
     .map((row) => {
-      const name = getTrimmedString(row && row.name);
+      const deLoc = isDe && row && row.localizations && row.localizations.de;
+      const useDe = Boolean(deLoc && deLoc.translatedAt);
+      const name = getTrimmedString(useDe && deLoc.name ? deLoc.name : (row && row.name));
       const slug = getTrimmedString(row && row.slug);
       if (!name) return null;
 
+      const deSlug = (useDe && deLoc.slug && deLoc.slug.trim()) ? deLoc.slug.trim() : slug;
       return {
         label: formatCategoryLabel(name),
         initials: getInitials(name),
-        publicPath: buildCategoryPublicPath({ slug: slug || slugify(name) }),
+        publicPath: useDe
+          ? `/de/categorie/${encodeURIComponent(deSlug)}`
+          : buildCategoryPublicPath({ slug: slug || slugify(name) }),
       };
     })
     .filter(Boolean)
@@ -162,7 +169,7 @@ async function getHome(req, res, next) {
           .lean(),
         Category.find({ isActive: true, isHomeFeatured: true })
           .sort({ sortOrder: 1, name: 1 })
-          .select('_id name slug')
+          .select('_id name slug localizations')
           .limit(6)
           .lean(),
         VehicleMake.find({})
@@ -175,17 +182,17 @@ async function getHome(req, res, next) {
       featuredProducts = Array.isArray(featuredFromSettings) && featuredFromSettings.length
         ? featuredFromSettings
         : recentProducts;
-      homeCategories = buildHomeCategoriesFromDocs(featuredCategoryDocs);
+      homeCategories = buildHomeCategoriesFromDocs(featuredCategoryDocs, req.lang);
       homeVehicleMakes = buildHomeVehicleMakesFromNames((vehicleMakeDocs || []).map((row) => row && row.name));
 
       if (!homeCategories.length) {
         const fallbackCategoryDocs = await Category.find({ isActive: true })
           .sort({ sortOrder: 1, name: 1 })
-          .select('_id name slug')
+          .select('_id name slug localizations')
           .limit(6)
           .lean();
 
-        homeCategories = buildHomeCategoriesFromDocs(fallbackCategoryDocs);
+        homeCategories = buildHomeCategoriesFromDocs(fallbackCategoryDocs, req.lang);
       }
 
       if (!homeCategories.length) {
@@ -222,10 +229,15 @@ async function getHome(req, res, next) {
       homeVehicleMakes = buildHomeVehicleMakesFromProducts(featuredProducts);
     }
 
-    const featuredProductsView = (featuredProducts || []).map((p) => ({
-      ...p,
-      publicPath: buildProductPublicPath(p),
-    }));
+    const isDeHome = req.lang === 'de' && productI18n.isSupportedLang('de');
+    const featuredProductsView = (featuredProducts || []).map((p) => {
+      if (isDeHome) {
+        const lp = productI18n.localizeProduct(p, 'de');
+        lp.publicPath = `/de/produits/${encodeURIComponent(productI18n.localizedSlug(p, 'de'))}-${p._id}`;
+        return lp;
+      }
+      return { ...p, publicPath: buildProductPublicPath(p) };
+    });
 
     let homeBlogPosts = [];
     if (dbConnected) {
@@ -278,17 +290,22 @@ async function getHome(req, res, next) {
     }
 
     const siteSettings = res && res.locals && res.locals.siteSettings ? res.locals.siteSettings : null;
-    const langPrefix = req.lang === 'en' ? '/en' : '';
+    const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/` : `${langPrefix}/`;
-    const title = `Pièces auto reconditionnées, d’occasion et testées | ${brand.NAME}`;
+    const title = req.lang === 'de'
+      ? `Aufbereitete, gebrauchte und geprüfte Autoteile | ${brand.NAME}`
+      : `Pièces auto reconditionnées, d’occasion et testées | ${brand.NAME}`;
     const { sanitizeBrandLeak } = require('../services/brandSanitizer');
     const aboutText = sanitizeBrandLeak(getTrimmedString(siteSettings && siteSettings.aboutText));
+    // aboutText (DB) est en français → on l'ignore en DE pour ne pas polluer la
+    // meta description allemande.
+    const metaFallback = req.lang === 'de'
+      ? `${brand.NAME} bietet aufbereitete, gebrauchte und geprüfte Autoteile – mit schnellem Angebot, Expressversand und fachkundiger Beratung.`
+      : `${brand.NAME} propose des pièces auto reconditionnées, d'occasion et testées, avec devis rapide, livraison express et accompagnement expert.`;
     const metaDescription = truncateText(
-      normalizeMetaText(
-        aboutText || `${brand.NAME} propose des pièces auto reconditionnées, d'occasion et testées, avec devis rapide, livraison express et accompagnement expert.`
-      ),
+      normalizeMetaText(req.lang === 'de' ? metaFallback : (aboutText || metaFallback)),
       160
     );
     const ogTitle = title;
@@ -336,7 +353,7 @@ async function getHome(req, res, next) {
       .replace(/&/g, '\\u0026');
 
     // Hero slides : DB d'abord, fallback sur les defaults brand-aware
-    const heroSlides = await siteSettingsService.getHeroSlidesForDisplay();
+    const heroSlides = await siteSettingsService.getHeroSlidesForDisplay(req.lang);
 
     return res.render('home', {
       title,
