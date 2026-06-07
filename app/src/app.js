@@ -620,6 +620,11 @@ app.use('/de/produits', require('./routes/productsDe'));
 /* Pages catégorie en allemand (détail) — calque sur getCategory. */
 app.use('/de/categorie', require('./routes/categoriesDe'));
 
+/* Accueil allemand (/de) — MÊME contrôleur que la home FR, lang-aware
+ * (hero DE, produits vedette + catégories localisés, libellés via t()).
+ * Déclaré AVANT le catchall /de. */
+app.get(['/de', '/de/'], require('./controllers/homeController').getHome);
+
 /* Catchall /de pour tout ce qui n'est pas encore traduit → redirect FR.
  * Comportement temporaire jusqu'à ce qu'on traduise produits/catégories. */
 app.use('/de', (req, res) => {
