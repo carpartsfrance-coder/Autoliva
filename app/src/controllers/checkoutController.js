@@ -14,6 +14,8 @@ const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const productOptions = require('../services/productOptions');
 const { getShippingMethods } = require('../services/shippingPricing');
+const { applyCheckoutLocale } = require('../services/i18n');
+const productI18n = require('../services/productI18n');
 const { getLegalPageBySlug } = require('../services/legalPages');
 const { ensureInvoiceIssuedForPaidOrder } = require('../services/orderInvoices');
 const { syncMollieRefundsForOrder } = require('../services/refundService');
@@ -978,8 +980,13 @@ async function getShipping(req, res, next) {
       consigneChargeCents,
     });
 
+    // Langue du tunnel (mémorisée en session) : rendu DE sur l'URL FR + noms
+    // d'articles localisés. Aucune redirection touchée.
+    const _coLang = applyCheckoutLocale(req, res);
+    if (_coLang === 'de') { for (const it of viewItems) { if (it && it.product) it.product = productI18n.localizeProduct(it.product, 'de'); } }
+
     return res.render('checkout/shipping', {
-      title: `Livraison - ${brand.NAME}`,
+      title: _coLang === 'de' ? `Lieferung - ${brand.NAME}` : `Livraison - ${brand.NAME}`,
       dbConnected,
       cartItemCount,
       errorMessage,
@@ -1548,8 +1555,11 @@ async function getPayment(req, res, next) {
       consigneChargeCents,
     });
 
+    const _coLang = applyCheckoutLocale(req, res);
+    if (_coLang === 'de') { for (const it of viewItems) { if (it && it.product) it.product = productI18n.localizeProduct(it.product, 'de'); } }
+
     return res.render('checkout/payment', {
-      title: `Paiement - ${brand.NAME}`,
+      title: _coLang === 'de' ? `Zahlung - ${brand.NAME}` : `Paiement - ${brand.NAME}`,
       dbConnected,
       cartItemCount,
       errorMessage,
