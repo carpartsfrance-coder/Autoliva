@@ -315,6 +315,7 @@ app.get('/sitemap.xml', seoController.getSitemapXml);
 app.get('/sitemap-pages.xml', seoController.getSitemapPages);
 app.get('/sitemap-categories.xml', seoController.getSitemapCategories);
 app.get('/sitemap-products.xml', seoController.getSitemapProducts);
+app.get('/sitemap-products-de.xml', seoController.getSitemapProductsDe);
 app.get('/sitemap-vehicles.xml', seoController.getSitemapVehicles);
 app.get('/sitemap-references.xml', seoController.getSitemapReferences);
 app.get('/sitemap-blog.xml', seoController.getSitemapBlog);
