@@ -1,5 +1,47 @@
 const mongoose = require('mongoose');
 
+/* Traduction d'une fiche produit dans une langue (DE d'abord, puis ES/IT…).
+ * Stockée dans Product.localizations.<lang>. Tant que `translatedAt` est null,
+ * la version traduite n'est PAS servie : la route /<lang>/produits/... fait un
+ * 301 vers la fiche FR → jamais de page à moitié traduite indexée (leçon SEO).
+ * On ne traduit que le contenu RÉDACTIONNEL : les codes/références/compatibilités
+ * (codes moteur, OEM, make/model, puissances) ne se traduisent pas. */
+const localizedProductSchema = new mongoose.Schema(
+  {
+    name: { type: String, default: '', trim: true },
+    shortDescription: { type: String, default: '', trim: true },
+    description: { type: String, default: '', trim: true },
+    keyPoints: { type: [String], default: [] },
+    inclusions: { type: [String], default: [] },
+    exclusions: { type: [String], default: [] },
+    specs: {
+      type: [{ label: { type: String, default: '', trim: true }, value: { type: String, default: '', trim: true } }],
+      default: [],
+    },
+    reconditioningSteps: {
+      type: [{ title: { type: String, default: '', trim: true }, description: { type: String, default: '', trim: true } }],
+      default: [],
+    },
+    faqs: {
+      type: [{ question: { type: String, default: '', trim: true }, answer: { type: String, default: '', trim: true } }],
+      default: [],
+    },
+    seo: {
+      metaTitle: { type: String, default: '', trim: true },
+      metaDescription: { type: String, default: '', trim: true },
+    },
+    /* Slug localisé (URL riche en mots-clés du pays). Optionnel : si vide, la
+     * route réutilise le slug FR sous le préfixe de langue. */
+    slug: { type: String, default: '', trim: true },
+    /* Gouvernance de traduction : qui/quand + relecture humaine. */
+    translatedAt: { type: Date, default: null },
+    translatedBy: { type: String, default: '', trim: true }, // ex: 'openai:gpt-4o-mini'
+    reviewedAt: { type: Date, default: null },
+    reviewedBy: { type: String, default: '', trim: true },
+  },
+  { _id: false }
+);
+
 const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
@@ -207,10 +249,21 @@ const productSchema = new mongoose.Schema(
       showSupportBox: { type: Boolean, default: true },
       showRelatedProducts: { type: Boolean, default: true },
     },
+
+    /* Traductions par langue (DE d'abord). Voir localizedProductSchema.
+     * `default: undefined` → les fiches non traduites n'ont AUCUN sous-doc vide
+     * (purement additif, zéro impact sur les 549 fiches existantes). */
+    localizations: {
+      de: { type: localizedProductSchema, default: undefined },
+    },
   },
   {
     timestamps: true,
   }
 );
+
+/* Servir + lister les fiches traduites (route /de/produits + sitemap DE). */
+productSchema.index({ 'localizations.de.translatedAt': 1 });
+productSchema.index({ 'localizations.de.slug': 1 }, { sparse: true });
 
 module.exports = mongoose.model('Product', productSchema);
