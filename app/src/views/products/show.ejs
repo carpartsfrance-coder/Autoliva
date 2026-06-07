@@ -220,9 +220,9 @@
       <% if (technicalSpecs.length < 6) pushTechnicalSpec('Expédition', shippingDelayText || 'Sous 24/48h'); %>
 
       <nav class="flex items-center gap-1.5 sm:gap-2 mb-6 text-xs sm:text-sm overflow-x-auto no-scrollbar whitespace-nowrap pb-1" aria-label="Fil d'Ariane">
-        <a class="text-slate-500 hover:text-primary transition-colors shrink-0" href="/">Accueil</a>
+        <a class="text-slate-500 hover:text-primary transition-colors shrink-0" href="/"><%= t('breadcrumb.home') %></a>
         <span class="text-slate-300 shrink-0">/</span>
-        <a class="text-slate-500 hover:text-primary transition-colors shrink-0" href="/produits">Catalogue</a>
+        <a class="text-slate-500 hover:text-primary transition-colors shrink-0" href="/produits"><%= t('breadcrumb.catalog') %></a>
         <% if (typeof categoryUrl !== 'undefined' && categoryUrl && typeof categoryName !== 'undefined' && categoryName) { %>
           <% const catParts = categoryName.split(/\s*>\s*/); %>
           <% catParts.forEach((part, i) => { %>
@@ -343,7 +343,7 @@
           <div class="p-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-700 border-l-4 border-l-primary refined-shadow">
             <div class="flex flex-col md:flex-row md:justify-between md:items-end gap-1 md:gap-4 mb-1">
               <div class="hidden md:block">
-                <span class="text-slate-500 text-sm font-medium">Prix public</span>
+                <span class="text-slate-500 text-sm font-medium"><%= t('product.publicPrice') %></span>
                 <% if (compareAt && compareAt > product.priceCents) { %>
                   <div class="mt-1 text-sm text-slate-400 line-through"><%= formatMoney(compareAt) %> €</div>
                 <% } %>
@@ -482,26 +482,26 @@
                           <div class="flex items-start gap-3">
                             <span class="material-symbols-outlined text-primary">inventory_2</span>
                             <div>
-                              <div class="text-xs font-black uppercase tracking-widest text-slate-900">Étape 1</div>
-                              <div class="mt-1 text-sm text-slate-600">Vous recevez la pièce reconditionnée et testée.</div>
+                              <div class="text-xs font-black uppercase tracking-widest text-slate-900"><%= t('product.step') %> 1</div>
+                              <div class="mt-1 text-sm text-slate-600"><%= t('product.exchangeStep1') %></div>
                             </div>
                           </div>
                           <div class="flex items-start gap-3">
                             <span class="material-symbols-outlined text-primary">build</span>
                             <div>
-                              <div class="text-xs font-black uppercase tracking-widest text-slate-900">Étape 2</div>
-                              <div class="mt-1 text-sm text-slate-600">Vous montez la pièce, vous ou votre garagiste.</div>
+                              <div class="text-xs font-black uppercase tracking-widest text-slate-900"><%= t('product.step') %> 2</div>
+                              <div class="mt-1 text-sm text-slate-600"><%= t('product.exchangeStep2') %></div>
                             </div>
                           </div>
                           <div class="flex items-start gap-3">
                             <span class="material-symbols-outlined text-primary">local_shipping</span>
                             <div>
-                              <div class="text-xs font-black uppercase tracking-widest text-slate-900">Étape 3</div>
-                              <div class="mt-1 text-sm text-slate-600">Contactez-nous pour organiser le retour de l’ancienne pièce, par chauffeur ou point relais, sous 30 jours.</div>
+                              <div class="text-xs font-black uppercase tracking-widest text-slate-900"><%= t('product.step') %> 3</div>
+                              <div class="mt-1 text-sm text-slate-600"><%= t('product.exchangeStep3') %></div>
                             </div>
                           </div>
                         </div>
-                        <div class="mt-4 text-xs text-slate-500"><% if (consigneUpfront) { %>Consigne de <%= consigneAmountEuro %> € <span class="text-slate-400">(caution hors TVA)</span> encaissée à la commande, <strong class="text-emerald-600">intégralement remboursée</strong> au retour de votre ancien organe sous <%= consigneDelayDays %> jours.<% } else { %>Aucune caution n'est demandée à la commande. En cas de non-retour après <%= consigneDelayDays %> jours, la consigne sera facturée.<% } %></div>
+                        <div class="mt-4 text-xs text-slate-500"><% if (consigneUpfront) { %><%- t('product.consigneUpfront', { amount: consigneAmountEuro, days: consigneDelayDays }) %><% } else { %><%- t('product.consigneOnReturn', { days: consigneDelayDays }) %><% } %></div>
                       </div>
                     <% } %>
                   </div>
@@ -518,13 +518,13 @@
                 </div>
                 <button class="flex-1 lg:flex-none lg:min-w-[320px] lg:max-w-[420px] bg-primary hover:bg-primary/90 text-white py-3.5 px-4 rounded-xl font-black uppercase tracking-wide text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20 disabled:opacity-60" data-add-to-cart-submit <%= product.inStock ? '' : 'disabled' %> type="submit">
                   <span class="material-symbols-outlined text-xl" data-add-to-cart-icon>add_shopping_cart</span>
-                  <span data-add-to-cart-label>Ajouter au panier</span>
+                  <span data-add-to-cart-label><%= t('product.addToCart') %></span>
                 </button>
               </div>
               <div class="flex items-center justify-center gap-6 text-xs text-slate-500 font-medium">
-                <div class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">lock</span> Paiement sécurisé</div>
-                <div class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">local_shipping</span> <%= shippingDelayText || 'Livraison 24/48h' %></div>
-                <a class="flex items-center gap-1 transition hover:text-primary" href="<%= compatibilityContactUrl %>"><span class="material-symbols-outlined text-sm">search</span> Vérifier la compatibilité</a>
+                <div class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">lock</span> <%= t('product.securePay') %></div>
+                <div class="flex items-center gap-1"><span class="material-symbols-outlined text-sm">local_shipping</span> <%= shippingDelayText || t('product.fastDelivery') %></div>
+                <a class="flex items-center gap-1 transition hover:text-primary" href="<%= compatibilityContactUrl %>"><span class="material-symbols-outlined text-sm">search</span> <%= t('product.checkCompat') %></a>
               </div>
 
               <!-- Bouton secondaire : devis par email (capture lead) -->
@@ -636,12 +636,12 @@
         <input class="hidden" id="tab-faq" name="product-tabs" type="radio" />
 
         <div class="tabs-nav flex border-b-2 border-slate-200 dark:border-slate-800 overflow-x-auto whitespace-nowrap no-scrollbar">
-          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-description">Description</label>
-          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-tech">Fiche technique</label>
-          <% if (vehicleCount > 0) { %><label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-vehicles">Véhicules compatibles (<%= vehicleCount %>)</label><% } %>
-          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-process">Processus qualité</label>
-          <% if (_ib.dedicated_tab && _ib.dedicated_tab.length) { %><label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-info">Bon à savoir</label><% } %>
-          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-faq">FAQ (<%= faqCount %>)</label>
+          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-description"><%= t('product.description') %></label>
+          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-tech"><%= t('product.techSheet') %></label>
+          <% if (vehicleCount > 0) { %><label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-vehicles"><%= t('product.compatibleVehicles') %> (<%= vehicleCount %>)</label><% } %>
+          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-process"><%= t('product.qualityProcess') %></label>
+          <% if (_ib.dedicated_tab && _ib.dedicated_tab.length) { %><label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-info"><%= t('product.goodToKnow') %></label><% } %>
+          <label class="px-8 py-4 border-b-4 border-transparent text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-bold uppercase text-sm transition-all -mb-[2px] cursor-pointer" for="tab-faq"><%= t('product.faq') %> (<%= faqCount %>)</label>
         </div>
 
         <div class="tab-content-container">
@@ -702,7 +702,7 @@
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <% if (inclusionsList.length) { %>
                       <div>
-                        <p class="text-xs font-bold uppercase tracking-wider text-emerald-600 mb-3">Inclus</p>
+                        <p class="text-xs font-bold uppercase tracking-wider text-emerald-600 mb-3"><%= t('product.included') %></p>
                         <ul class="space-y-2">
                           <% inclusionsList.forEach((it) => { %>
                             <li class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200"><span class="material-symbols-outlined text-emerald-600 text-base leading-5">check_circle</span><span><%= it %></span></li>
@@ -712,7 +712,7 @@
                     <% } %>
                     <% if (exclusionsList.length) { %>
                       <div>
-                        <p class="text-xs font-bold uppercase tracking-wider text-rose-600 mb-3">Non inclus</p>
+                        <p class="text-xs font-bold uppercase tracking-wider text-rose-600 mb-3"><%= t('product.notIncluded') %></p>
                         <ul class="space-y-2">
                           <% exclusionsList.forEach((it) => { %>
                             <li class="flex items-start gap-2 text-sm text-slate-500"><span class="material-symbols-outlined text-rose-500 text-base leading-5">cancel</span><span><%= it %></span></li>
@@ -812,15 +812,15 @@
                   </div>
                   <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 refined-shadow">
                     <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70">
-                      <h2 class="text-lg font-bold uppercase text-slate-900 dark:text-white">Compatibilité véhicules</h2>
-                      <p class="mt-1 text-sm text-slate-500">Comparez toujours la référence de votre pièce et votre VIN avant validation finale.</p>
+                      <h2 class="text-lg font-bold uppercase text-slate-900 dark:text-white"><%= t('product.compatibleVehicles') %></h2>
+                      <p class="mt-1 text-sm text-slate-500"><%= t('product.compatWarning') %></p>
                     </div>
                     <table class="w-full text-left border-collapse compatibility-table">
                       <thead class="bg-white dark:bg-slate-950 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                         <tr>
-                          <th class="px-5 sm:px-6 py-4">Marque</th>
-                          <th class="px-5 sm:px-6 py-4">Modèles</th>
-                          <th class="px-5 sm:px-6 py-4">Motorisations</th>
+                          <th class="px-5 sm:px-6 py-4"><%= t('product.make') %></th>
+                          <th class="px-5 sm:px-6 py-4"><%= t('product.models') %></th>
+                          <th class="px-5 sm:px-6 py-4"><%= t('product.engines') %></th>
                         </tr>
                       </thead>
                       <tbody class="text-[13px]">
@@ -843,7 +843,7 @@
                     </table>
                   </div>
                 <% } else { %>
-                  <div class="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center text-sm text-slate-500 refined-shadow">Aucune compatibilité renseignée pour ce produit.</div>
+                  <div class="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 text-center text-sm text-slate-500 refined-shadow"><%= t('product.noCompat') %></div>
                 <% } %>
               </div>
             </div>
@@ -869,7 +869,7 @@
             <div class="overflow-hidden rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 refined-shadow">
               <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 flex items-center justify-between gap-4">
                 <div>
-                  <h2 class="text-lg font-bold uppercase text-slate-900 dark:text-white">Véhicules compatibles</h2>
+                  <h2 class="text-lg font-bold uppercase text-slate-900 dark:text-white"><%= t('product.compatibleVehicles') %></h2>
                   <p class="mt-1 text-sm text-slate-500">Vérifiez toujours votre VIN ou le code moteur avant validation — <%= vehicleCount %> véhicule<%= vehicleCount > 1 ? 's' : '' %> référencé<%= vehicleCount > 1 ? 's' : '' %>.</p>
                 </div>
                 <span class="shrink-0 inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-bold"><%= vehicleCount %></span>
@@ -878,11 +878,11 @@
                 <table class="w-full text-left border-collapse">
                   <thead class="bg-white dark:bg-slate-950 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                     <tr>
-                      <th class="px-5 sm:px-6 py-4">Marque</th>
-                      <th class="px-5 sm:px-6 py-4">Modèle</th>
-                      <th class="px-5 sm:px-6 py-4">Années</th>
-                      <th class="px-5 sm:px-6 py-4">Motorisation</th>
-                      <th class="px-5 sm:px-6 py-4">Puissance</th>
+                      <th class="px-5 sm:px-6 py-4"><%= t('product.make') %></th>
+                      <th class="px-5 sm:px-6 py-4"><%= t('product.model') %></th>
+                      <th class="px-5 sm:px-6 py-4"><%= t('product.years') %></th>
+                      <th class="px-5 sm:px-6 py-4"><%= t('product.engine') %></th>
+                      <th class="px-5 sm:px-6 py-4"><%= t('product.power') %></th>
                     </tr>
                   </thead>
                   <tbody class="text-[13px]">
@@ -920,7 +920,7 @@
                 </div>
               </div>
             <% } else { %>
-              <div class="py-10 text-center text-slate-500 text-sm">Aucune information de reconditionnement pour ce produit.</div>
+              <div class="py-10 text-center text-slate-500 text-sm"><%= t('product.noReconditioning') %></div>
             <% } %>
           </div>
 
@@ -940,7 +940,7 @@
                 <% }) %>
               </div>
             <% } else { %>
-              <div class="py-10 text-center text-slate-500 text-sm">Aucune FAQ pour ce produit.</div>
+              <div class="py-10 text-center text-slate-500 text-sm"><%= t('product.noFaq') %></div>
             <% } %>
           </div>
         </div>
@@ -948,7 +948,7 @@
 
       <% if (product.sections && product.sections.showRelatedProducts && Array.isArray(relatedProducts) && relatedProducts.length) { %>
         <section class="mt-16">
-          <h2 class="text-xl font-black uppercase mb-8 tracking-wider text-slate-900 dark:text-white border-b-2 border-slate-200 dark:border-slate-800 pb-4">Souvent achetés ensemble</h3>
+          <h2 class="text-xl font-black uppercase mb-8 tracking-wider text-slate-900 dark:text-white border-b-2 border-slate-200 dark:border-slate-800 pb-4"><%= t('product.boughtTogether') %></h3>
           <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             <% relatedProducts.slice(0, 3).forEach((p) => { %>
               <% const productUrl = (p && p.publicPath) ? p.publicPath : ('/produits/' + p._id); %>
@@ -1038,8 +1038,8 @@
       <% if (Array.isArray(relatedBlogPosts) && relatedBlogPosts.length) { %>
         <section class="mt-24 border-t-2 border-slate-200 dark:border-slate-800 pt-16">
           <div class="flex items-center justify-between mb-8 gap-4">
-            <h2 class="text-xl font-black uppercase tracking-wider text-slate-900 dark:text-white">Articles de blog</h3>
-            <a class="text-xs font-black uppercase text-primary hover:underline flex items-center gap-1" href="/blog">Voir tous les articles <span class="material-symbols-outlined text-sm">chevron_right</span></a>
+            <h2 class="text-xl font-black uppercase tracking-wider text-slate-900 dark:text-white"><%= t('product.blogArticles') %></h3>
+            <a class="text-xs font-black uppercase text-primary hover:underline flex items-center gap-1" href="/blog"><%= t('product.viewAllArticles') %> <span class="material-symbols-outlined text-sm">chevron_right</span></a>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             <% relatedBlogPosts.slice(0, 4).forEach((a) => { %>
@@ -1083,7 +1083,7 @@
           var addToCartPending = false;
           var addToCartResetTimer = null;
           var originalSubmitIcon = addToCartIcon ? addToCartIcon.textContent : 'add_shopping_cart';
-          var originalSubmitLabel = addToCartLabel ? addToCartLabel.textContent : 'Ajouter au panier';
+          var originalSubmitLabel = addToCartLabel ? addToCartLabel.textContent : '<%= t('product.addToCart') %>';
           var originalSubmitDisabled = !!(addToCartSubmit && addToCartSubmit.disabled);
 
           var priceEl = document.querySelector('[data-price-display]');
@@ -1555,7 +1555,7 @@
         <!-- CTA -->
         <button class="shrink-0 bg-primary hover:bg-primary/90 active:bg-primary/95 text-white px-6 py-3 rounded-xl font-black text-sm uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-primary/30 transition-all hover:shadow-xl hover:shadow-primary/40 hover:scale-[1.02]" data-sticky-atc-desktop-btn type="button">
           <span class="material-symbols-outlined text-lg">add_shopping_cart</span>
-          Ajouter au panier
+          <%= t('product.addToCart') %>
         </button>
       </div>
     </div>
