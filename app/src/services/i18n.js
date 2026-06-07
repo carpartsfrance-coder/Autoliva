@@ -50,4 +50,17 @@ function buildHreflangSet(baseUrl, pathWithoutLang) {
   };
 }
 
-module.exports = { t, buildHreflangSet, SUPPORTED_LANGS, DEFAULT_LANG };
+/**
+ * Bascule la locale de rendu pour le TUNNEL d'achat (panier/checkout), qui vit
+ * sur des URLs FR mais doit s'afficher dans la langue de navigation mémorisée
+ * (req.session.preferredLang). Rebinde res.locals.lang + res.locals.t et
+ * renvoie la langue effective ('de' ou 'fr').
+ */
+function applyCheckoutLocale(req, res) {
+  const lang = (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
+  res.locals.lang = lang;
+  res.locals.t = (key, params) => t(lang, key, params);
+  return lang;
+}
+
+module.exports = { t, buildHreflangSet, SUPPORTED_LANGS, DEFAULT_LANG, applyCheckoutLocale };
