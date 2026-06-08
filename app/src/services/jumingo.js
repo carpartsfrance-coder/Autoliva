@@ -105,6 +105,30 @@ async function apiGet(path) {
   return { ok: res.ok, httpStatus: res.status, body, rawText: text };
 }
 
+async function apiSend(method, path, payload) {
+  const res = await fetch(BASE_URL + path, {
+    method,
+    headers: { 'X-AUTH-TOKEN': getApiKey(), Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  });
+  const text = await res.text();
+  let body = null;
+  try { body = text ? JSON.parse(text) : null; } catch (_) { body = null; }
+  return { ok: res.ok, httpStatus: res.status, body, rawText: text };
+}
+
+/* Message d'erreur lisible extrait d'une réponse Jumingo. */
+function apiError(r) {
+  const b = r && r.body;
+  if (b && typeof b === 'object') {
+    if (b.message) return String(b.message);
+    if (b.error) return String(b.error);
+    if (b.errors) { try { return JSON.stringify(b.errors).slice(0, 300); } catch (_) { /* noop */ } }
+    if (b.warnings && b.warnings.messages) { try { return JSON.stringify(b.warnings.messages).slice(0, 300); } catch (_) { /* noop */ } }
+  }
+  return 'HTTP ' + (r && r.httpStatus) + ' ' + ((r && r.rawText) || '').slice(0, 200);
+}
+
 /**
  * Statut de suivi d'un numéro de tracking.
  * @returns {Promise<{ok, found, rawStatus, status, trackingPage, httpStatus, raw?}>}
@@ -147,11 +171,174 @@ async function getTrackingStatus(trackingNumber) {
   };
 }
 
+// ───────────────────────────────────────────────────────────────────────────
+// CRÉATION D'ÉTIQUETTE (flux en 2 temps : brouillon+tarifs GRATUITS, achat payant)
+// ───────────────────────────────────────────────────────────────────────────
+
+/* La création d'étiquette est gardée derrière un flag SÉPARÉ du suivi : tant
+ * que JUMINGO_LABELS_ENABLED !== 'true', les routes refusent (sécurité argent). */
+function labelsEnabled() {
+  return isEnabled() && String(process.env.JUMINGO_LABELS_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
+/* Adresse expéditeur (CPF) — surchargée par env, défauts = valeurs réelles vues
+ * dans l'API Jumingo. */
+function getSenderAddress() {
+  const e = process.env;
+  return {
+    company: e.JUMINGO_SENDER_COMPANY || 'Car parts france',
+    name: e.JUMINGO_SENDER_NAME || 'Car parts france',
+    street: e.JUMINGO_SENDER_STREET || '515 Av. Lavoisier',
+    street2: e.JUMINGO_SENDER_STREET2 || '',
+    zip: e.JUMINGO_SENDER_ZIP || '13340',
+    city: e.JUMINGO_SENDER_CITY || 'Rognac',
+    country: e.JUMINGO_SENDER_COUNTRY || 'FR',
+    phone: e.JUMINGO_SENDER_PHONE || '+33756850126',
+    email: e.JUMINGO_SENDER_EMAIL || 'contact@carpartsfrance.fr',
+  };
+}
+
+/* Map un nom de pays FR → code ISO alpha-2 (Jumingo exige le code). */
+function toCountryCode(c) {
+  const v = String(c || '').trim();
+  if (/^[A-Za-z]{2}$/.test(v)) return v.toUpperCase();
+  const map = { france: 'FR', allemagne: 'DE', germany: 'DE', belgique: 'BE', belgium: 'BE',
+    espagne: 'ES', spain: 'ES', italie: 'IT', italy: 'IT', luxembourg: 'LU', suisse: 'CH',
+    'pays-bas': 'NL', netherlands: 'NL', portugal: 'PT', autriche: 'AT', austria: 'AT' };
+  return map[v.toLowerCase()] || 'FR';
+}
+
+/* Construit l'objet adresse Jumingo depuis un snapshot d'adresse de commande. */
+function buildToAddress(shippingAddress, email) {
+  const a = shippingAddress || {};
+  return {
+    company: '',
+    name: String(a.fullName || '').slice(0, 35) || 'Client',
+    street: String(a.line1 || '').slice(0, 35),
+    street2: String(a.line2 || '').slice(0, 35),
+    zip: String(a.postalCode || '').trim().slice(0, 10),
+    city: String(a.city || '').slice(0, 30),
+    country: toCountryCode(a.country),
+    phone: String(a.phone || '').slice(0, 35),
+    settings: email ? { email: String(email) } : {},
+  };
+}
+
+/* 1) Crée un brouillon d'envoi (GRATUIT, non payé). → { ok, shipmentId } */
+async function createDraftShipment({ toAddress, email, weightKg, length, width, height, contentDescription, valueAmount, reference }) {
+  if (!labelsEnabled()) return { ok: false, error: 'JUMINGO_LABELS_ENABLED != true' };
+  const payload = {
+    from_address: getSenderAddress(),
+    to_address: toAddress,
+    details: {
+      content_description: String(contentDescription || 'Pièce auto').slice(0, 35),
+      value_amount: Math.max(1, Math.min(9999999, Math.round(Number(valueAmount) || 1))),
+      value_currency: 'EUR',
+      reference_number: String(reference || '').slice(0, 35),
+      email: String(email || getSenderAddress().email),
+      packaging_type: 'parcel',
+    },
+    packages: [{
+      weight: Math.max(0.1, Number(weightKg) || 1),
+      length: Math.max(1, Math.round(Number(length) || 1)),
+      width: Math.max(1, Math.round(Number(width) || 1)),
+      height: Math.max(1, Math.round(Number(height) || 1)),
+    }],
+  };
+  const r = await apiSend('POST', '/shipments', payload);
+  if (!r.ok) return { ok: false, error: apiError(r), httpStatus: r.httpStatus };
+  const shipmentId = (r.body && (r.body.shipment_id || r.body.id)) || '';
+  if (!shipmentId) return { ok: false, error: 'Réponse sans shipment_id', raw: r.body };
+  return { ok: true, shipmentId, warnings: r.body && r.body.warnings };
+}
+
+/* 2) Récupère les tarifs disponibles pour un brouillon (GRATUIT).
+ *    → { ok, rates: [{ tariffId, carrier, service, priceTotal, currency, transit, shippingType }] } */
+async function getShipmentRates({ shipmentId, pickupDate, deliveryDate }) {
+  if (!labelsEnabled()) return { ok: false, error: 'JUMINGO_LABELS_ENABLED != true' };
+  const payload = {
+    shipmentId,
+    pickupDate: pickupDate,
+    deliveryDate: deliveryDate,
+    settings: { mode: 'm' },
+  };
+  const r = await apiSend('POST', '/shipment-rates', payload);
+  if (!r.ok) return { ok: false, error: apiError(r), httpStatus: r.httpStatus };
+  const list = extractList(r.body);
+  const rates = list.map((t) => {
+    const carrier = (t.carrier && (t.carrier.shipper_group_name || t.carrier.name)) || (t.rate && t.rate.carrier && t.rate.carrier.shipper_group_name) || '';
+    const service = (t.service && t.service.name) || (t.rate && t.rate.service && t.rate.service.name) || '';
+    const priceTotal = t.price_total != null ? t.price_total : (t.rate && t.rate.price_total);
+    return {
+      tariffId: String(t.shipper_tariff_full_id || t.shipper_tariff_id || (t.carrier && t.carrier.shipper_tariff_full_id) || ''),
+      carrier, service,
+      priceTotal: priceTotal != null ? Number(priceTotal) : null,
+      currency: t.price_total_currency || 'EUR',
+      transit: t.transit_time_range_days || (t.rate && t.rate.transit_time_range_days) || '',
+      shippingType: t.shipping_type || 'shop',
+    };
+  }).filter((x) => x.tariffId);
+  return { ok: true, rates, raw: r.body };
+}
+
+/* 3) Attache le tarif choisi au brouillon (GRATUIT). */
+async function attachRate(shipmentId, { tariffId, shippingType, pickupDate, pickupMinTime, pickupMaxTime }) {
+  if (!labelsEnabled()) return { ok: false, error: 'JUMINGO_LABELS_ENABLED != true' };
+  const rate = { shipper_tariff_id: String(tariffId), shipping_type: shippingType || 'shop' };
+  if (pickupDate) rate.pickup_date = pickupDate;
+  if (pickupMinTime) rate.pickup_min_time = pickupMinTime;
+  if (pickupMaxTime) rate.pickup_max_time = pickupMaxTime;
+  const r = await apiSend('PUT', '/shipments/' + encodeURIComponent(shipmentId), { rate });
+  if (!r.ok) return { ok: false, error: apiError(r), httpStatus: r.httpStatus };
+  return { ok: true };
+}
+
+/* 4) ⚠️ ACHÈTE l'étiquette (DÉBIT). À n'appeler que sur confirmation explicite. */
+async function purchaseLabel({ shipmentIds, method }) {
+  if (!labelsEnabled()) return { ok: false, error: 'JUMINGO_LABELS_ENABLED != true' };
+  const payload = { shipmentIds: Array.isArray(shipmentIds) ? shipmentIds : [shipmentIds] };
+  const m = method || process.env.JUMINGO_PAYMENT_METHOD;
+  if (m) payload.method = m;
+  const r = await apiSend('POST', '/orders', payload);
+  if (!r.ok) return { ok: false, error: apiError(r), httpStatus: r.httpStatus };
+  const orderNumber = (r.body && (r.body.orderNumber || r.body.number)) || '';
+  const success = r.body && (r.body.success === true || !!orderNumber);
+  if (!success || !orderNumber) return { ok: false, error: 'Achat sans orderNumber/échec', raw: r.body };
+  return { ok: true, orderNumber, token: r.body && r.body.token };
+}
+
+/* 5) Récupère le PDF de l'étiquette (base64) après achat. */
+async function getLabelPdf(orderNumber) {
+  const r = await apiGet('/orders/' + encodeURIComponent(orderNumber) + '/documents');
+  if (!r.ok) return { ok: false, error: apiError(r) };
+  const labels = (r.body && Array.isArray(r.body.labels)) ? r.body.labels : [];
+  const label = labels.find((l) => l && l.file) || labels[0];
+  return { ok: true, base64: (label && label.file) || '', name: (label && label.name) || 'etiquette.pdf' };
+}
+
+/* 6) Détail d'un envoi (pour récupérer le numéro de suivi après achat). */
+async function getShipmentDetail(shipmentId) {
+  const r = await apiGet('/shipments/' + encodeURIComponent(shipmentId));
+  if (!r.ok) return { ok: false, error: apiError(r) };
+  const sh = (r.body && r.body.data) ? r.body.data : r.body;
+  return { ok: true, trackingNumber: extractTrackingNumber(sh), carrier: (sh && sh.rate && sh.rate.carrier && (sh.rate.carrier.shipper_group_name)) || '', raw: sh };
+}
+
 module.exports = {
   BASE_URL,
   isEnabled,
+  labelsEnabled,
   mapJumingoStatus,
   getTrackingStatus,
+  getSenderAddress,
+  toCountryCode,
+  buildToAddress,
+  createDraftShipment,
+  getShipmentRates,
+  attachRate,
+  purchaseLabel,
+  getLabelPdf,
+  getShipmentDetail,
   // exportés pour le probe / les tests
-  _internal: { extractList, extractRawStatus, extractTrackingNumber, extractId, apiGet },
+  _internal: { extractList, extractRawStatus, extractTrackingNumber, extractId, apiGet, apiSend, apiError },
 };

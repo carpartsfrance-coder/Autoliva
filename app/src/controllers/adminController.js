@@ -11737,9 +11737,124 @@ async function getAdminJumingoDebug(req, res) {
   }
 }
 
+/* ÉTAPE 1 (GRATUITE) — prépare un brouillon d'envoi Jumingo + renvoie les tarifs.
+ * Aucun débit. L'admin choisit ensuite un tarif et confirme l'achat. */
+async function postAdminPrepareJumingoLabel(req, res) {
+  try {
+    const jumingo = require('../services/jumingo');
+    if (!jumingo.labelsEnabled()) return res.status(400).json({ ok: false, error: "Création d'étiquette désactivée (définir JUMINGO_API_KEY + JUMINGO_LABELS_ENABLED=true sur Render)." });
+    const orderId = req.params.orderId;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ ok: false, error: 'Commande invalide.' });
+    const order = await Order.findById(orderId).select('number shippingAddress userId totalCents').lean();
+    if (!order) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+
+    const weightKg = Number(req.body && req.body.weight);
+    const length = Number(req.body && req.body.length);
+    const width = Number(req.body && req.body.width);
+    const height = Number(req.body && req.body.height);
+    if (!(weightKg > 0) || !(length > 0) || !(width > 0) || !(height > 0)) {
+      return res.status(400).json({ ok: false, error: 'Poids (kg) et dimensions L×l×H (cm) requis et positifs.' });
+    }
+
+    const user = order.userId ? await User.findById(order.userId).select('email').lean() : null;
+    const email = (user && user.email) || '';
+    const toAddress = jumingo.buildToAddress(order.shippingAddress, email);
+    if (!toAddress.street || !toAddress.zip || !toAddress.city) {
+      return res.status(400).json({ ok: false, error: 'Adresse de livraison incomplète (rue / code postal / ville).' });
+    }
+
+    const draft = await jumingo.createDraftShipment({
+      toAddress, email, weightKg, length, width, height,
+      contentDescription: 'Pièce auto', valueAmount: Math.round((order.totalCents || 10000) / 100), reference: order.number,
+    });
+    if (!draft.ok) return res.status(502).json({ ok: false, error: 'Jumingo (brouillon) : ' + draft.error });
+
+    const now = new Date();
+    const iso = (d) => d.toISOString().slice(0, 19) + 'Z';
+    const pickup = iso(new Date(now.getTime() + 24 * 3600 * 1000));
+    const delivery = iso(new Date(now.getTime() + 14 * 24 * 3600 * 1000));
+    const rates = await jumingo.getShipmentRates({ shipmentId: draft.shipmentId, pickupDate: pickup, deliveryDate: delivery });
+    if (!rates.ok) return res.status(502).json({ ok: false, error: 'Jumingo (tarifs) : ' + rates.error });
+
+    return res.json({ ok: true, shipmentId: draft.shipmentId, pickupDate: pickup, rates: rates.rates });
+  } catch (err) {
+    console.error('[admin] prepareJumingoLabel:', err && err.message);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur pendant la préparation.' });
+  }
+}
+
+/* ÉTAPE 2 (⚠️ DÉBIT) — achète l'étiquette pour le tarif choisi, attache le PDF +
+ * le suivi à la commande, passe en « Étiquette créée ». Idempotent. */
+async function postAdminBuyJumingoLabel(req, res) {
+  try {
+    const jumingo = require('../services/jumingo');
+    if (!jumingo.labelsEnabled()) return res.status(400).json({ ok: false, error: "Création d'étiquette désactivée." });
+    const orderId = req.params.orderId;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ ok: false, error: 'Commande invalide.' });
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+
+    const shipmentId = String((req.body && req.body.shipmentId) || '').trim();
+    const tariffId = String((req.body && req.body.tariffId) || '').trim();
+    const shippingType = String((req.body && req.body.shippingType) || 'shop').trim();
+    const carrier = String((req.body && req.body.carrier) || '').trim();
+    const pickupDate = String((req.body && req.body.pickupDate) || '').trim();
+    if (!shipmentId || !tariffId) return res.status(400).json({ ok: false, error: 'Envoi/tarif manquant.' });
+
+    // Idempotence : empêche un 2ᵉ achat pour le même brouillon.
+    if ((order.shipments || []).some((s) => s && s.jumingoShipmentId && s.jumingoShipmentId === shipmentId)) {
+      return res.status(409).json({ ok: false, error: 'Une étiquette a déjà été achetée pour cet envoi.' });
+    }
+
+    const attach = await jumingo.attachRate(shipmentId, { tariffId, shippingType, pickupDate });
+    if (!attach.ok) return res.status(502).json({ ok: false, error: 'Jumingo (sélection tarif) : ' + attach.error });
+
+    // ⚠️ DÉBIT — uniquement ici, après confirmation explicite de l'admin.
+    const buy = await jumingo.purchaseLabel({ shipmentIds: [shipmentId] });
+    if (!buy.ok) return res.status(502).json({ ok: false, error: "Jumingo (achat) : " + buy.error });
+
+    // Achat OK → on récupère PDF + suivi (best-effort) et on enregistre.
+    const pdf = await jumingo.getLabelPdf(buy.orderNumber);
+    const detail = await jumingo.getShipmentDetail(shipmentId);
+    const trackingNumber = (detail.ok && detail.trackingNumber) || buy.orderNumber;
+
+    const shipment = {
+      label: 'Envoi',
+      carrier: carrier || (detail.ok && detail.carrier) || 'Jumingo',
+      trackingNumber,
+      jumingoShipmentId: shipmentId,
+      note: `Étiquette créée via Jumingo (commande ${buy.orderNumber})`,
+      createdAt: new Date(),
+      createdBy: (req.session && req.session.admin && req.session.admin.email) || '',
+    };
+    if (pdf.ok && pdf.base64) {
+      const buf = Buffer.from(pdf.base64, 'base64');
+      shipment.document = {
+        originalName: pdf.name || `etiquette-${order.number}.pdf`,
+        mimeType: 'application/pdf', sizeBytes: buf.length, fileData: buf, uploadedAt: new Date(),
+      };
+    }
+    order.shipments.push(shipment);
+    if (['paid', 'processing'].includes(order.status)) {
+      order.status = 'label_created';
+      order._statusChangedBy = 'jumingo-label';
+      order._statusChangeNote = 'Étiquette Jumingo créée — en attente de remise au transporteur';
+    }
+    await order.save();
+
+    req.session.adminOrderSuccess = `Étiquette Jumingo achetée ✓ (suivi ${trackingNumber}). La commande est en « Étiquette créée ».`;
+    return res.json({ ok: true, trackingNumber, orderNumber: buy.orderNumber, hasPdf: !!(pdf.ok && pdf.base64) });
+  } catch (err) {
+    console.error('[admin] buyJumingoLabel:', err && err.message);
+    return res.status(500).json({ ok: false, error: "Erreur serveur pendant l'achat de l'étiquette." });
+  }
+}
+
 module.exports = {
   postAdminSyncShipmentTracking,
   getAdminJumingoDebug,
+  postAdminPrepareJumingoLabel,
+  postAdminBuyJumingoLabel,
   getAdminHeroSettingsPage,
   postAdminHeroSettings,
   postAdminHeroUploadImage,
