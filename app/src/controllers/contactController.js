@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const emailService = require('../services/emailService');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
-const { buildHreflangSet } = require('../services/i18n');
+const { buildHreflangSet, t } = require('../services/i18n');
 const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
 const { captureContactLead } = require('../services/leadCapture');
 const brand = require('../config/brand');
@@ -104,7 +104,7 @@ async function getContactPage(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
-    const langPrefix = req.lang === 'en' ? '/en' : '';
+    const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
 
@@ -115,13 +115,9 @@ async function getContactPage(req, res, next) {
       req.session.contactFormTs = Date.now();
     }
 
-    const title = mode === 'devis'
-      ? `Demande de devis - ${brand.NAME}`
-      : `Contact - ${brand.NAME}`;
+    const title = `${t(req.lang, mode === 'devis' ? 'contact.titleDevis' : 'contact.titleContact')} - ${brand.NAME}`;
 
-    const metaDescription = mode === 'devis'
-      ? 'Demande de devis : envoyez votre référence, votre VIN et vos besoins. Réponse rapide par email ou téléphone.'
-      : `Contactez ${brand.NAME} : question, assistance, compatibilité. Réponse rapide par email ou téléphone.`;
+    const metaDescription = t(req.lang, mode === 'devis' ? 'contact.metaDevis' : 'contact.metaContact', { brand: brand.NAME });
 
     const canonicalPath = mode === 'devis' ? '/devis' : '/contact';
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}${canonicalPath}` : `${langPrefix}${canonicalPath}`;
@@ -151,7 +147,7 @@ async function postContact(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
-    const langPrefix = req.lang === 'en' ? '/en' : '';
+    const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
 
@@ -172,13 +168,9 @@ async function postContact(req, res, next) {
       website: getTrimmedString(req.body && req.body.website),
     };
 
-    const title = mode === 'devis'
-      ? `Demande de devis - ${brand.NAME}`
-      : `Contact - ${brand.NAME}`;
+    const title = `${t(req.lang, mode === 'devis' ? 'contact.titleDevis' : 'contact.titleContact')} - ${brand.NAME}`;
 
-    const metaDescription = mode === 'devis'
-      ? 'Demande de devis : envoyez votre référence, votre VIN et vos besoins. Réponse rapide par email ou téléphone.'
-      : `Contactez ${brand.NAME} : question, assistance, compatibilité. Réponse rapide par email ou téléphone.`;
+    const metaDescription = t(req.lang, mode === 'devis' ? 'contact.metaDevis' : 'contact.metaContact', { brand: brand.NAME });
 
     const canonicalPath = mode === 'devis' ? '/devis' : '/contact';
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}${canonicalPath}` : `${langPrefix}${canonicalPath}`;
@@ -197,7 +189,7 @@ async function postContact(req, res, next) {
         dbConnected,
         mode,
         errorMessage: null,
-        successMessage: 'Merci ! Votre message a bien été envoyé. Nous revenons vers vous rapidement.',
+        successMessage: t(req.lang, 'contact.msgSent'),
         form: buildInitialForm({ req: { query: {} }, mode }),
       });
     }
@@ -215,7 +207,7 @@ async function postContact(req, res, next) {
         jsonLd: buildContactJsonLd({ baseUrl, mode }),
         dbConnected,
         mode,
-        errorMessage: 'Trop de tentatives. Merci de réessayer dans quelques minutes.',
+        errorMessage: t(req.lang, 'contact.msgTooMany'),
         successMessage: null,
         form,
       });
@@ -235,7 +227,7 @@ async function postContact(req, res, next) {
         jsonLd: buildContactJsonLd({ baseUrl, mode }),
         dbConnected,
         mode,
-        errorMessage: 'Merci de patienter une seconde puis de renvoyer le formulaire.',
+        errorMessage: t(req.lang, 'contact.msgWaitSecond'),
         successMessage: null,
         form,
       });
@@ -255,7 +247,7 @@ async function postContact(req, res, next) {
         jsonLd: buildContactJsonLd({ baseUrl, mode }),
         dbConnected,
         mode,
-        errorMessage: 'Merci de renseigner un email valide.',
+        errorMessage: t(req.lang, 'contact.msgInvalidEmail'),
         successMessage: null,
         form,
       });
@@ -274,7 +266,7 @@ async function postContact(req, res, next) {
         jsonLd: buildContactJsonLd({ baseUrl, mode }),
         dbConnected,
         mode,
-        errorMessage: 'Votre message est trop court. Merci de préciser un peu plus votre demande.',
+        errorMessage: t(req.lang, 'contact.msgTooShort'),
         successMessage: null,
         form,
       });
@@ -342,7 +334,7 @@ async function postContact(req, res, next) {
     if (!sendResult || !sendResult.ok) {
       const isProd = process.env.NODE_ENV === 'production';
       const message = isProd
-        ? "Votre message n'a pas pu être envoyé. Réessayez plus tard ou contactez-nous par téléphone."
+        ? t(req.lang, 'contact.msgSendFailed')
         : "Votre message n'a pas pu être envoyé (email pas configuré). Configurez MAILERSEND_API_KEY et MAIL_FROM_EMAIL dans Render.";
 
       return res.status(503).render('contact/index', {
@@ -416,7 +408,7 @@ async function postContact(req, res, next) {
       dbConnected,
       mode,
       errorMessage: null,
-      successMessage: 'Merci ! Votre message a bien été envoyé. Nous revenons vers vous rapidement.',
+      successMessage: t(req.lang, 'contact.msgSent'),
       form: buildInitialForm({ req: { query: {} }, mode }),
     });
   } catch (err) {

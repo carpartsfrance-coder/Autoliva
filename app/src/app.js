@@ -625,6 +625,20 @@ app.use('/de/categorie', require('./routes/categoriesDe'));
  * Déclaré AVANT le catchall /de. */
 app.get(['/de', '/de/'], require('./controllers/homeController').getHome);
 
+/* Contact + devis en allemand — MÊME contrôleur (lang-aware via req.lang).
+ * Les formulaires postent vers /de/contact|/de/devis pour rester en DE. */
+const deContactController = require('./controllers/contactController');
+app.get('/de/contact', deContactController.getContactPage);
+app.post('/de/contact', deContactController.postContact);
+app.get('/de/devis', (req, res, next) => {
+  req.query = { ...(req.query || {}), type: 'devis' };
+  return deContactController.getContactPage(req, res, next);
+});
+app.post('/de/devis', (req, res, next) => {
+  req.body = { ...(req.body || {}), mode: 'devis', subject: 'devis' };
+  return deContactController.postContact(req, res, next);
+});
+
 /* Catchall /de pour tout ce qui n'est pas encore traduit → redirect FR.
  * Comportement temporaire jusqu'à ce qu'on traduise produits/catégories. */
 app.use('/de', (req, res) => {
