@@ -11821,8 +11821,65 @@ async function postAdminPrepareJumingoLabel(req, res) {
   }
 }
 
-/* ÉTAPE 2 (⚠️ DÉBIT) — achète l'étiquette pour le tarif choisi, attache le PDF +
- * le suivi à la commande, passe en « Étiquette créée ». Idempotent. */
+/* Crée le suivi (PDF + n° de suivi) sur la commande à partir d'une commande
+ * Jumingo PAYÉE. Réutilisé par l'achat direct (SEPA) ET la finalisation après
+ * paiement externe (PayPal/CB). Si PDF/suivi pas encore dispo → paiement non
+ * confirmé (needsRetry, aucune modif). */
+async function finalizeJumingoShipment(req, res, order, { orderNumber, shipmentId, direction, carrier }) {
+  const jumingo = require('../services/jumingo');
+  const isCollecte = direction === 'collecte';
+
+  const pdf = await jumingo.getLabelPdf(orderNumber);
+  const detail = await jumingo.getShipmentDetail(shipmentId);
+  if ((!pdf.ok || !pdf.base64) && (!detail.ok || !detail.trackingNumber)) {
+    return res.json({ ok: false, needsRetry: true, error: "Paiement pas encore confirmé chez Jumingo. Termine le paiement dans l'onglet ouvert, puis réessaie." });
+  }
+
+  // Idempotence : déjà enregistré → on nettoie le pending et on sort.
+  if ((order.shipments || []).some((s) => s && s.jumingoShipmentId === shipmentId)) {
+    order.pendingJumingoLabel = undefined;
+    await order.save();
+    return res.json({ ok: true, alreadyDone: true });
+  }
+
+  const trackingNumber = (detail.ok && detail.trackingNumber) || orderNumber;
+  const shipment = {
+    label: isCollecte ? 'Collecte' : 'Envoi',
+    carrier: carrier || (detail.ok && detail.carrier) || 'Jumingo',
+    trackingNumber,
+    jumingoShipmentId: shipmentId,
+    note: isCollecte
+      ? `Collecte chez le client via Jumingo (commande ${orderNumber})`
+      : `Étiquette créée via Jumingo (commande ${orderNumber})`,
+    createdAt: new Date(),
+    createdBy: (req.session && req.session.admin && req.session.admin.email) || '',
+  };
+  if (pdf.ok && pdf.base64) {
+    const buf = Buffer.from(pdf.base64, 'base64');
+    shipment.document = {
+      originalName: pdf.name || `${isCollecte ? 'collecte' : 'etiquette'}-${order.number}.pdf`,
+      mimeType: 'application/pdf', sizeBytes: buf.length, fileData: buf, uploadedAt: new Date(),
+    };
+  }
+  order.shipments.push(shipment);
+  if (!isCollecte && ['paid', 'processing'].includes(order.status)) {
+    order.status = 'label_created';
+    order._statusChangedBy = 'jumingo-label';
+    order._statusChangeNote = 'Étiquette Jumingo créée — en attente de remise au transporteur';
+  }
+  order.pendingJumingoLabel = undefined;
+  await order.save();
+
+  req.session.adminOrderSuccess = isCollecte
+    ? `Étiquette de collecte Jumingo récupérée ✓ (suivi ${trackingNumber}).`
+    : `Étiquette Jumingo récupérée ✓ (suivi ${trackingNumber}). La commande est en « Étiquette créée ».`;
+  return res.json({ ok: true, done: true, trackingNumber, hasPdf: !!(pdf.ok && pdf.base64) });
+}
+
+/* ÉTAPE 2 — sélectionne le tarif + crée la COMMANDE Jumingo. Paiement par
+ * PayPal/CB : l'API renvoie une URL de paiement → on la renvoie au front
+ * (AUCUN débit tant que l'admin n'a pas payé). Si paiement direct (SEPA, pas
+ * d'URL), on finalise tout de suite. */
 async function postAdminBuyJumingoLabel(req, res) {
   try {
     const jumingo = require('../services/jumingo');
@@ -11840,59 +11897,44 @@ async function postAdminBuyJumingoLabel(req, res) {
     const direction = (req.body && req.body.direction === 'collecte') ? 'collecte' : 'envoi';
     if (!shipmentId || !tariffId) return res.status(400).json({ ok: false, error: 'Envoi/tarif manquant.' });
 
-    // Idempotence : empêche un 2ᵉ achat pour le même brouillon.
-    if ((order.shipments || []).some((s) => s && s.jumingoShipmentId && s.jumingoShipmentId === shipmentId)) {
-      return res.status(409).json({ ok: false, error: 'Une étiquette a déjà été achetée pour cet envoi.' });
-    }
+    const dup = (order.shipments || []).some((s) => s && s.jumingoShipmentId === shipmentId)
+      || (order.pendingJumingoLabel && order.pendingJumingoLabel.shipmentId === shipmentId);
+    if (dup) return res.status(409).json({ ok: false, error: 'Une étiquette est déjà en cours / achetée pour cet envoi.' });
 
     const attach = await jumingo.attachRate(shipmentId, { tariffId, shippingType, pickupDate });
     if (!attach.ok) return res.status(502).json({ ok: false, error: 'Jumingo (sélection tarif) : ' + attach.error });
 
-    // ⚠️ DÉBIT — uniquement ici, après confirmation explicite de l'admin.
-    const buy = await jumingo.purchaseLabel({ shipmentIds: [shipmentId] });
-    if (!buy.ok) return res.status(502).json({ ok: false, error: "Jumingo (achat) : " + buy.error });
+    const method = String(process.env.JUMINGO_PAYMENT_METHOD || 'paypal').trim();
+    const buy = await jumingo.purchaseLabel({ shipmentIds: [shipmentId], method });
+    if (!buy.ok) return res.status(502).json({ ok: false, error: 'Jumingo (commande) : ' + buy.error });
 
-    // Achat OK → on récupère PDF + suivi (best-effort) et on enregistre.
-    const pdf = await jumingo.getLabelPdf(buy.orderNumber);
-    const detail = await jumingo.getShipmentDetail(shipmentId);
-    const trackingNumber = (detail.ok && detail.trackingNumber) || buy.orderNumber;
-
-    const isCollecte = direction === 'collecte';
-    const shipment = {
-      label: isCollecte ? 'Collecte' : 'Envoi',
-      carrier: carrier || (detail.ok && detail.carrier) || 'Jumingo',
-      trackingNumber,
-      jumingoShipmentId: shipmentId,
-      note: isCollecte
-        ? `Collecte chez le client via Jumingo (commande ${buy.orderNumber})`
-        : `Étiquette créée via Jumingo (commande ${buy.orderNumber})`,
-      createdAt: new Date(),
-      createdBy: (req.session && req.session.admin && req.session.admin.email) || '',
-    };
-    if (pdf.ok && pdf.base64) {
-      const buf = Buffer.from(pdf.base64, 'base64');
-      shipment.document = {
-        originalName: pdf.name || `${isCollecte ? 'collecte' : 'etiquette'}-${order.number}.pdf`,
-        mimeType: 'application/pdf', sizeBytes: buf.length, fileData: buf, uploadedAt: new Date(),
-      };
+    if (buy.returnUrl) {
+      order.pendingJumingoLabel = { orderNumber: buy.orderNumber, shipmentId, direction, carrier, createdAt: new Date() };
+      await order.save();
+      return res.json({ ok: true, needsPayment: true, returnUrl: buy.returnUrl, orderNumber: buy.orderNumber });
     }
-    order.shipments.push(shipment);
-    // Une COLLECTE (client → CPF) ne change PAS le statut de la commande
-    // (elle vient vers nous). Seul un ENVOI passe en « Étiquette créée ».
-    if (!isCollecte && ['paid', 'processing'].includes(order.status)) {
-      order.status = 'label_created';
-      order._statusChangedBy = 'jumingo-label';
-      order._statusChangeNote = 'Étiquette Jumingo créée — en attente de remise au transporteur';
-    }
-    await order.save();
-
-    req.session.adminOrderSuccess = isCollecte
-      ? `Étiquette de collecte Jumingo achetée ✓ (suivi ${trackingNumber}). Le statut de la commande est inchangé.`
-      : `Étiquette Jumingo achetée ✓ (suivi ${trackingNumber}). La commande est en « Étiquette créée ».`;
-    return res.json({ ok: true, trackingNumber, orderNumber: buy.orderNumber, hasPdf: !!(pdf.ok && pdf.base64) });
+    return finalizeJumingoShipment(req, res, order, { orderNumber: buy.orderNumber, shipmentId, direction, carrier });
   } catch (err) {
     console.error('[admin] buyJumingoLabel:', err && err.message);
-    return res.status(500).json({ ok: false, error: "Erreur serveur pendant l'achat de l'étiquette." });
+    return res.status(500).json({ ok: false, error: "Erreur serveur pendant la commande de l'étiquette." });
+  }
+}
+
+/* ÉTAPE 3 — après le paiement externe : récupère le PDF + le suivi et finalise. */
+async function postAdminFinalizeJumingoLabel(req, res) {
+  try {
+    const jumingo = require('../services/jumingo');
+    if (!jumingo.labelsEnabled()) return res.status(400).json({ ok: false, error: "Création d'étiquette désactivée." });
+    const orderId = req.params.orderId;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ ok: false, error: 'Commande invalide.' });
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+    const p = order.pendingJumingoLabel;
+    if (!p || !p.orderNumber || !p.shipmentId) return res.status(400).json({ ok: false, error: 'Aucune étiquette en attente de paiement.' });
+    return finalizeJumingoShipment(req, res, order, { orderNumber: p.orderNumber, shipmentId: p.shipmentId, direction: p.direction, carrier: p.carrier });
+  } catch (err) {
+    console.error('[admin] finalizeJumingoLabel:', err && err.message);
+    return res.status(500).json({ ok: false, error: "Erreur serveur pendant la récupération de l'étiquette." });
   }
 }
 
@@ -11901,6 +11943,7 @@ module.exports = {
   getAdminJumingoDebug,
   postAdminPrepareJumingoLabel,
   postAdminBuyJumingoLabel,
+  postAdminFinalizeJumingoLabel,
   getAdminHeroSettingsPage,
   postAdminHeroSettings,
   postAdminHeroUploadImage,
