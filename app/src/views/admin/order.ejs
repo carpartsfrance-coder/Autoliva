@@ -1173,7 +1173,7 @@
                       div.innerHTML='<div class="text-sm min-w-0"><div class="font-bold text-slate-900 truncate">'+(rt.carrier||'?')+' <span class="font-normal text-slate-500">'+(rt.service||'')+'</span></div><div class="text-xs text-slate-500">'+(rt.transit?rt.transit+' j • ':'')+money(rt.priceTotal)+'</div></div>';
                       var buy=document.createElement('button'); buy.type='button'; buy.className='shrink-0 rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold hover:bg-emerald-700'; buy.textContent='Acheter '+money(rt.priceTotal);
                       buy.addEventListener('click', function(){
-                        if(!confirm('Créer cette étiquette '+(rt.carrier||'')+' pour '+money(rt.priceTotal)+' ?\\n\\nUne page de paiement Jumingo va s\\'ouvrir (PayPal / carte). Aucun débit tant que tu n\\'as pas payé.')) return;
+                        if(!confirm('Créer cette étiquette '+(rt.carrier||'')+' pour '+money(rt.priceTotal)+' ?\n\nUne page de paiement Jumingo va s\'ouvrir (PayPal / carte). Aucun débit tant que tu n\'as pas payé.')) return;
                         buy.disabled=true; buy.textContent='Création…'; showErr('');
                         fetch('/admin/commandes/'+orderId+'/jumingo/acheter', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({shipmentId:state.shipmentId, tariffId:rt.tariffId, shippingType:rt.shippingType, carrier:rt.carrier, pickupDate:state.pickupDate, direction:state.direction})})
                           .then(function(r){return r.json();}).then(function(d2){
