@@ -1108,6 +1108,13 @@
               </button>
               <div class="hidden mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3" data-jumingo-panel>
                 <div data-jumingo-step="form">
+                  <div class="mb-3">
+                    <label class="text-xs font-semibold text-slate-600 block mb-1">Sens de l'étiquette</label>
+                    <select class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900" data-j="direction">
+                      <option value="envoi">📤 Envoi au client (toi → client)</option>
+                      <option value="collecte">📥 Collecte chez le client (client → toi · clonage / consigne)</option>
+                    </select>
+                  </div>
                   <div class="grid grid-cols-2 gap-2">
                     <label class="text-xs font-semibold text-slate-600">Poids (kg)<input type="number" step="0.1" min="0.1" value="10" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" data-j="weight" /></label>
                     <label class="text-xs font-semibold text-slate-600">Longueur (cm)<input type="number" min="1" value="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" data-j="length" /></label>
@@ -1133,7 +1140,7 @@
               var stepRates = root.querySelector('[data-jumingo-step="rates"]');
               var list = root.querySelector('[data-jumingo-rate-list]');
               var errBox = root.querySelector('[data-jumingo-error]');
-              var state = { shipmentId:'', pickupDate:'' };
+              var state = { shipmentId:'', pickupDate:'', direction:'envoi' };
               function showErr(m){ errBox.textContent = m||''; errBox.classList.toggle('hidden', !m); }
               function val(k){ var el = root.querySelector('[data-j="'+k+'"]'); return el ? el.value : ''; }
               var money = function(p){ return (p!=null) ? (Number(p).toFixed(2)+' €') : ''; };
@@ -1141,11 +1148,11 @@
               root.querySelector('[data-jumingo-back]').addEventListener('click', function(){ stepRates.classList.add('hidden'); stepForm.classList.remove('hidden'); });
               root.querySelector('[data-jumingo-rates]').addEventListener('click', function(){
                 var b = this; showErr(''); b.disabled=true; b.textContent='Recherche des tarifs…';
-                fetch('/admin/commandes/'+orderId+'/jumingo/preparer', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({weight:val('weight'),length:val('length'),width:val('width'),height:val('height')})})
+                fetch('/admin/commandes/'+orderId+'/jumingo/preparer', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({direction:val('direction'),weight:val('weight'),length:val('length'),width:val('width'),height:val('height')})})
                   .then(function(r){return r.json();}).then(function(d){
                     b.disabled=false; b.textContent='Voir les tarifs (gratuit)';
                     if(!d.ok){ showErr(d.error||'Erreur'); return; }
-                    state.shipmentId=d.shipmentId; state.pickupDate=d.pickupDate; list.innerHTML='';
+                    state.shipmentId=d.shipmentId; state.pickupDate=d.pickupDate; state.direction=d.direction||'envoi'; list.innerHTML='';
                     (d.rates||[]).forEach(function(rt){
                       var div=document.createElement('div');
                       div.className='flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2';
@@ -1154,7 +1161,7 @@
                       buy.addEventListener('click', function(){
                         if(!confirm('Acheter cette étiquette '+(rt.carrier||'')+' pour '+money(rt.priceTotal)+' ?\\n\\n⚠️ Ceci débite ton compte Jumingo.')) return;
                         buy.disabled=true; buy.textContent='Achat en cours…'; showErr('');
-                        fetch('/admin/commandes/'+orderId+'/jumingo/acheter', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({shipmentId:state.shipmentId, tariffId:rt.tariffId, shippingType:rt.shippingType, carrier:rt.carrier, pickupDate:state.pickupDate})})
+                        fetch('/admin/commandes/'+orderId+'/jumingo/acheter', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({shipmentId:state.shipmentId, tariffId:rt.tariffId, shippingType:rt.shippingType, carrier:rt.carrier, pickupDate:state.pickupDate, direction:state.direction})})
                           .then(function(r){return r.json();}).then(function(d2){
                             if(!d2.ok){ buy.disabled=false; buy.textContent='Réessayer'; showErr(d2.error||'Erreur'); return; }
                             location.reload();

@@ -11756,16 +11756,22 @@ async function postAdminPrepareJumingoLabel(req, res) {
       return res.status(400).json({ ok: false, error: 'Poids (kg) et dimensions L×l×H (cm) requis et positifs.' });
     }
 
+    // Sens : 'envoi' (CPF → client, défaut) ou 'collecte' (client → CPF, pour
+    // clonage / consigne — on inverse expéditeur et destinataire).
+    const direction = (req.body && req.body.direction === 'collecte') ? 'collecte' : 'envoi';
     const user = order.userId ? await User.findById(order.userId).select('email').lean() : null;
     const email = (user && user.email) || '';
-    const toAddress = jumingo.buildToAddress(order.shippingAddress, email);
-    if (!toAddress.street || !toAddress.zip || !toAddress.city) {
-      return res.status(400).json({ ok: false, error: 'Adresse de livraison incomplète (rue / code postal / ville).' });
+    const clientAddr = jumingo.buildToAddress(order.shippingAddress, email);
+    if (!clientAddr.street || !clientAddr.zip || !clientAddr.city) {
+      return res.status(400).json({ ok: false, error: 'Adresse client incomplète (rue / code postal / ville).' });
     }
+    const fromAddress = direction === 'collecte' ? clientAddr : jumingo.senderJumingoAddress();
+    const toAddress = direction === 'collecte' ? jumingo.senderJumingoAddress() : clientAddr;
 
     const draft = await jumingo.createDraftShipment({
-      toAddress, email, weightKg, length, width, height,
-      contentDescription: 'Pièce auto', valueAmount: Math.round((order.totalCents || 10000) / 100), reference: order.number,
+      fromAddress, toAddress, email, weightKg, length, width, height,
+      contentDescription: direction === 'collecte' ? 'Retour pièce auto' : 'Pièce auto',
+      valueAmount: Math.round((order.totalCents || 10000) / 100), reference: order.number,
     });
     if (!draft.ok) return res.status(502).json({ ok: false, error: 'Jumingo (brouillon) : ' + draft.error });
 
@@ -11776,7 +11782,7 @@ async function postAdminPrepareJumingoLabel(req, res) {
     const rates = await jumingo.getShipmentRates({ shipmentId: draft.shipmentId, pickupDate: pickup, deliveryDate: delivery });
     if (!rates.ok) return res.status(502).json({ ok: false, error: 'Jumingo (tarifs) : ' + rates.error });
 
-    return res.json({ ok: true, shipmentId: draft.shipmentId, pickupDate: pickup, rates: rates.rates });
+    return res.json({ ok: true, shipmentId: draft.shipmentId, pickupDate: pickup, direction, rates: rates.rates });
   } catch (err) {
     console.error('[admin] prepareJumingoLabel:', err && err.message);
     return res.status(500).json({ ok: false, error: 'Erreur serveur pendant la préparation.' });
@@ -11799,6 +11805,7 @@ async function postAdminBuyJumingoLabel(req, res) {
     const shippingType = String((req.body && req.body.shippingType) || 'shop').trim();
     const carrier = String((req.body && req.body.carrier) || '').trim();
     const pickupDate = String((req.body && req.body.pickupDate) || '').trim();
+    const direction = (req.body && req.body.direction === 'collecte') ? 'collecte' : 'envoi';
     if (!shipmentId || !tariffId) return res.status(400).json({ ok: false, error: 'Envoi/tarif manquant.' });
 
     // Idempotence : empêche un 2ᵉ achat pour le même brouillon.
@@ -11818,31 +11825,38 @@ async function postAdminBuyJumingoLabel(req, res) {
     const detail = await jumingo.getShipmentDetail(shipmentId);
     const trackingNumber = (detail.ok && detail.trackingNumber) || buy.orderNumber;
 
+    const isCollecte = direction === 'collecte';
     const shipment = {
-      label: 'Envoi',
+      label: isCollecte ? 'Collecte' : 'Envoi',
       carrier: carrier || (detail.ok && detail.carrier) || 'Jumingo',
       trackingNumber,
       jumingoShipmentId: shipmentId,
-      note: `Étiquette créée via Jumingo (commande ${buy.orderNumber})`,
+      note: isCollecte
+        ? `Collecte chez le client via Jumingo (commande ${buy.orderNumber})`
+        : `Étiquette créée via Jumingo (commande ${buy.orderNumber})`,
       createdAt: new Date(),
       createdBy: (req.session && req.session.admin && req.session.admin.email) || '',
     };
     if (pdf.ok && pdf.base64) {
       const buf = Buffer.from(pdf.base64, 'base64');
       shipment.document = {
-        originalName: pdf.name || `etiquette-${order.number}.pdf`,
+        originalName: pdf.name || `${isCollecte ? 'collecte' : 'etiquette'}-${order.number}.pdf`,
         mimeType: 'application/pdf', sizeBytes: buf.length, fileData: buf, uploadedAt: new Date(),
       };
     }
     order.shipments.push(shipment);
-    if (['paid', 'processing'].includes(order.status)) {
+    // Une COLLECTE (client → CPF) ne change PAS le statut de la commande
+    // (elle vient vers nous). Seul un ENVOI passe en « Étiquette créée ».
+    if (!isCollecte && ['paid', 'processing'].includes(order.status)) {
       order.status = 'label_created';
       order._statusChangedBy = 'jumingo-label';
       order._statusChangeNote = 'Étiquette Jumingo créée — en attente de remise au transporteur';
     }
     await order.save();
 
-    req.session.adminOrderSuccess = `Étiquette Jumingo achetée ✓ (suivi ${trackingNumber}). La commande est en « Étiquette créée ».`;
+    req.session.adminOrderSuccess = isCollecte
+      ? `Étiquette de collecte Jumingo achetée ✓ (suivi ${trackingNumber}). Le statut de la commande est inchangé.`
+      : `Étiquette Jumingo achetée ✓ (suivi ${trackingNumber}). La commande est en « Étiquette créée ».`;
     return res.json({ ok: true, trackingNumber, orderNumber: buy.orderNumber, hasPdf: !!(pdf.ok && pdf.base64) });
   } catch (err) {
     console.error('[admin] buyJumingoLabel:', err && err.message);
