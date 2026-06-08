@@ -65,18 +65,24 @@ function extractList(body) {
   return [];
 }
 
-/* Extrait le statut brut de suivi d'un objet envoi, en testant plusieurs chemins. */
+/* Extrait le VRAI statut de suivi d'un objet envoi.
+ * ⚠️ Piège (confirmé sur la réponse réelle) : `tracking.status` vaut "success"
+ * = statut de l'APPEL API, PAS du colis. Le statut du colis est dans
+ * `tracking.data.status` (ex. "new", "transit", "delivered"). On le lit en
+ * priorité, puis on retombe sur des signaux de progression fiables. */
 function extractRawStatus(shipment) {
   if (!shipment || typeof shipment !== 'object') return '';
   const t = shipment.tracking || {};
-  return (
-    t.status
-    || (t.data && t.data.status)
-    || (t.data && t.data.status_code)
-    || shipment.tracking_status
-    || shipment.status
-    || ''
-  );
+  if (t.data && t.data.status) return String(t.data.status);
+
+  // Fallbacks robustes (si data.status manque) :
+  const pts = (t.progress && t.progress.points) || {};
+  if (pts.completed) return 'delivered';
+  if (pts.in_delivery || pts.in_transit) return 'transit';
+  if (pts.undelivered) return 'undelivered';
+  if (shipment.picked_up === true) return 'pickup';
+  if (pts.in_system) return 'new';
+  return '';
 }
 function extractTrackingNumber(shipment) {
   if (!shipment || typeof shipment !== 'object') return '';
