@@ -1100,6 +1100,75 @@
               <div class="mt-4 text-sm text-slate-500">Aucun suivi pour le moment.</div>
             <% } %>
 
+            <!-- Créer l'étiquette via Jumingo (brouillon + tarifs GRATUITS, achat sur confirmation) -->
+            <div class="mt-6 pt-6 border-t border-slate-200" data-jumingo-block>
+              <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Créer l'étiquette via Jumingo</div>
+              <button type="button" class="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-3 text-sm font-bold hover:bg-slate-800 transition" data-jumingo-open>
+                <span class="material-symbols-outlined" style="font-size:18px">local_shipping</span> Créer l'étiquette Jumingo
+              </button>
+              <div class="hidden mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3" data-jumingo-panel>
+                <div data-jumingo-step="form">
+                  <div class="grid grid-cols-2 gap-2">
+                    <label class="text-xs font-semibold text-slate-600">Poids (kg)<input type="number" step="0.1" min="0.1" value="10" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" data-j="weight" /></label>
+                    <label class="text-xs font-semibold text-slate-600">Longueur (cm)<input type="number" min="1" value="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" data-j="length" /></label>
+                    <label class="text-xs font-semibold text-slate-600">Largeur (cm)<input type="number" min="1" value="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" data-j="width" /></label>
+                    <label class="text-xs font-semibold text-slate-600">Hauteur (cm)<input type="number" min="1" value="30" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" data-j="height" /></label>
+                  </div>
+                  <button type="button" class="mt-3 w-full rounded-lg bg-blue-600 text-white px-4 py-2.5 text-sm font-bold hover:bg-blue-700 transition" data-jumingo-rates>Voir les tarifs (gratuit)</button>
+                </div>
+                <div class="hidden" data-jumingo-step="rates">
+                  <div class="text-xs text-slate-500 mb-2">Choisis un transporteur, puis confirme l'achat (débit à la confirmation) :</div>
+                  <div data-jumingo-rate-list class="space-y-2"></div>
+                  <button type="button" class="mt-2 text-xs text-slate-500 underline" data-jumingo-back>← changer le poids / les dimensions</button>
+                </div>
+                <div class="text-xs text-rose-600 hidden" data-jumingo-error></div>
+              </div>
+            </div>
+            <script>
+            (function(){
+              var root = document.querySelector('[data-jumingo-block]'); if(!root) return;
+              var orderId = '<%= order.id %>';
+              var panel = root.querySelector('[data-jumingo-panel]');
+              var stepForm = root.querySelector('[data-jumingo-step="form"]');
+              var stepRates = root.querySelector('[data-jumingo-step="rates"]');
+              var list = root.querySelector('[data-jumingo-rate-list]');
+              var errBox = root.querySelector('[data-jumingo-error]');
+              var state = { shipmentId:'', pickupDate:'' };
+              function showErr(m){ errBox.textContent = m||''; errBox.classList.toggle('hidden', !m); }
+              function val(k){ var el = root.querySelector('[data-j="'+k+'"]'); return el ? el.value : ''; }
+              var money = function(p){ return (p!=null) ? (Number(p).toFixed(2)+' €') : ''; };
+              root.querySelector('[data-jumingo-open]').addEventListener('click', function(){ panel.classList.toggle('hidden'); });
+              root.querySelector('[data-jumingo-back]').addEventListener('click', function(){ stepRates.classList.add('hidden'); stepForm.classList.remove('hidden'); });
+              root.querySelector('[data-jumingo-rates]').addEventListener('click', function(){
+                var b = this; showErr(''); b.disabled=true; b.textContent='Recherche des tarifs…';
+                fetch('/admin/commandes/'+orderId+'/jumingo/preparer', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({weight:val('weight'),length:val('length'),width:val('width'),height:val('height')})})
+                  .then(function(r){return r.json();}).then(function(d){
+                    b.disabled=false; b.textContent='Voir les tarifs (gratuit)';
+                    if(!d.ok){ showErr(d.error||'Erreur'); return; }
+                    state.shipmentId=d.shipmentId; state.pickupDate=d.pickupDate; list.innerHTML='';
+                    (d.rates||[]).forEach(function(rt){
+                      var div=document.createElement('div');
+                      div.className='flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2';
+                      div.innerHTML='<div class="text-sm min-w-0"><div class="font-bold text-slate-900 truncate">'+(rt.carrier||'?')+' <span class="font-normal text-slate-500">'+(rt.service||'')+'</span></div><div class="text-xs text-slate-500">'+(rt.transit?rt.transit+' j • ':'')+money(rt.priceTotal)+'</div></div>';
+                      var buy=document.createElement('button'); buy.type='button'; buy.className='shrink-0 rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold hover:bg-emerald-700'; buy.textContent='Acheter '+money(rt.priceTotal);
+                      buy.addEventListener('click', function(){
+                        if(!confirm('Acheter cette étiquette '+(rt.carrier||'')+' pour '+money(rt.priceTotal)+' ?\\n\\n⚠️ Ceci débite ton compte Jumingo.')) return;
+                        buy.disabled=true; buy.textContent='Achat en cours…'; showErr('');
+                        fetch('/admin/commandes/'+orderId+'/jumingo/acheter', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({shipmentId:state.shipmentId, tariffId:rt.tariffId, shippingType:rt.shippingType, carrier:rt.carrier, pickupDate:state.pickupDate})})
+                          .then(function(r){return r.json();}).then(function(d2){
+                            if(!d2.ok){ buy.disabled=false; buy.textContent='Réessayer'; showErr(d2.error||'Erreur'); return; }
+                            location.reload();
+                          }).catch(function(){ buy.disabled=false; buy.textContent='Réessayer'; showErr('Erreur réseau'); });
+                      });
+                      div.appendChild(buy); list.appendChild(div);
+                    });
+                    if(!(d.rates||[]).length){ list.innerHTML='<div class="text-sm text-slate-500">Aucun tarif disponible pour ce colis.</div>'; }
+                    stepForm.classList.add('hidden'); stepRates.classList.remove('hidden');
+                  }).catch(function(){ b.disabled=false; b.textContent='Voir les tarifs (gratuit)'; showErr('Erreur réseau'); });
+              });
+            })();
+            </script>
+
             <div class="mt-6 pt-6 border-t border-slate-200">
               <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Ajouter un suivi</div>
 

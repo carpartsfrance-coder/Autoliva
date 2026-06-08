@@ -208,6 +208,8 @@ router.post('/commandes/:orderId/consigne/recu', requireAdminAuth, adminControll
 router.post('/commandes/:orderId/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundOrder);
 router.post('/commandes/:orderId/consigne/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundConsigne);
 router.get('/commandes/:orderId/avoir/:creditNoteNumber/pdf', requireAdminAuth, requireAbility('orders.refund'), adminController.getAdminOrderCreditNotePdf);
+router.post('/commandes/:orderId/jumingo/preparer', requireAdminAuth, adminController.postAdminPrepareJumingoLabel);
+router.post('/commandes/:orderId/jumingo/acheter', requireAdminAuth, adminController.postAdminBuyJumingoLabel);
 router.post('/commandes/:orderId/suivi', requireAdminAuth, handleShippingDocUpload, adminController.postAdminAddOrderShipment);
 router.get('/commandes/:orderId/suivi/:shipmentId/document', requireAdminAuth, adminController.getAdminShipmentDocument);
 router.post('/commandes/:orderId/suivi/:shipmentId/supprimer', requireAdminAuth, adminController.postAdminDeleteOrderShipment);

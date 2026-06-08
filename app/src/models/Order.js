@@ -40,6 +40,7 @@ const shipmentSchema = new mongoose.Schema(
     trackingNumber: { type: String, required: true, trim: true },
     note: { type: String, default: '', trim: true },
     document: { type: shipmentDocumentSchema, default: null },
+    jumingoShipmentId: { type: String, default: '', trim: true }, // si étiquette créée via l'API Jumingo
     createdAt: { type: Date, required: true },
     createdBy: { type: String, default: '', trim: true },
   },
