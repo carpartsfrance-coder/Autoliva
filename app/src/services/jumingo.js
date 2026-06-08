@@ -276,20 +276,26 @@ async function getShipmentRates({ shipmentId, pickupDate, deliveryDate }) {
   };
   const r = await apiSend('POST', '/shipment-rates', payload);
   if (!r.ok) return { ok: false, error: apiError(r), httpStatus: r.httpStatus };
-  const list = extractList(r.body);
-  const rates = list.map((t) => {
-    const carrier = (t.carrier && (t.carrier.shipper_group_name || t.carrier.name)) || (t.rate && t.rate.carrier && t.rate.carrier.shipper_group_name) || '';
-    const service = (t.service && t.service.name) || (t.rate && t.rate.service && t.rate.service.name) || '';
-    const priceTotal = t.price_total != null ? t.price_total : (t.rate && t.rate.price_total);
+  // Les tarifs réels sont dans body.tariffs (pas un tableau racine).
+  const tariffs = (r.body && Array.isArray(r.body.tariffs)) ? r.body.tariffs : [];
+  const rates = tariffs.map((t) => {
+    const transit = (t.dates && t.dates.transit_time_range && t.dates.transit_time_range.days != null)
+      ? String(t.dates.transit_time_range.days)
+      : ((t.transit_time_min && t.transit_time_max) ? (t.transit_time_min + '-' + t.transit_time_max) : '');
     return {
-      tariffId: String(t.shipper_tariff_full_id || t.shipper_tariff_id || (t.carrier && t.carrier.shipper_tariff_full_id) || ''),
-      carrier, service,
-      priceTotal: priceTotal != null ? Number(priceTotal) : null,
-      currency: t.price_total_currency || 'EUR',
-      transit: t.transit_time_range_days || (t.rate && t.rate.transit_time_range_days) || '',
-      shippingType: t.shipping_type || 'shop',
+      tariffId: String(t.id),
+      carrier: (t.shipper && t.shipper.ShipperGroupName) || t.ShipperGroupName || '',
+      service: t.name || '',
+      // price_brutto = prix TTC (ce qu'on paie). Fallback price_total.
+      priceTotal: (t.price_brutto != null) ? Number(t.price_brutto) : (t.price_total != null ? Number(t.price_total) : null),
+      currency: t.currency || 'EUR',
+      transit,
+      // shippingType 2 = dépôt point relais (shop) ; 1 = enlèvement à domicile (pickup).
+      shippingType: (Number(t.shippingType) === 1) ? 'pickup' : 'shop',
     };
-  }).filter((x) => x.tariffId);
+  })
+    .filter((x) => x.tariffId && x.tariffId !== 'undefined' && x.priceTotal != null && x.shippingType === 'shop')
+    .sort((a, b) => a.priceTotal - b.priceTotal);
   return { ok: true, rates, raw: r.body };
 }
 
