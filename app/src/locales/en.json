@@ -445,5 +445,9 @@
   "product.installmentPrefix": "or 3 ×",
   "product.installmentSuffix": "interest-free",
   "product.productBadge": "Product",
-  "product.dsgChrono": "DSG & S-tronic — within 24h"
+  "product.dsgChrono": "DSG & S-tronic — within 24h",
+  "product.monthsWord": "months",
+  "product.jsonldCompatRef": "Compatible reference",
+  "product.jsonldQualityTest": "Quality test",
+  "product.yearsWord": "years"
 }

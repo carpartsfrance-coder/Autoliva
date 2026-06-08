@@ -57,6 +57,15 @@ function localizeProduct(product, lang) {
   if (nonEmptyArr(loc.specs)) out.specs = loc.specs;
   if (nonEmptyArr(loc.reconditioningSteps)) out.reconditioningSteps = loc.reconditioningSteps;
   if (nonEmptyArr(loc.faqs)) out.faqs = loc.faqs;
+  if (nonEmptyStr(loc.shippingDelayText)) out.shippingDelayText = loc.shippingDelayText;
+  if (loc.badges && (nonEmptyStr(loc.badges.topLeft) || nonEmptyStr(loc.badges.condition) || nonEmptyArr(loc.badges.cards))) {
+    out.badges = {
+      ...(out.badges || {}),
+      topLeft: nonEmptyStr(loc.badges.topLeft) ? loc.badges.topLeft : ((out.badges && out.badges.topLeft) || ''),
+      condition: nonEmptyStr(loc.badges.condition) ? loc.badges.condition : ((out.badges && out.badges.condition) || ''),
+      cards: nonEmptyArr(loc.badges.cards) ? loc.badges.cards : ((out.badges && out.badges.cards) || undefined),
+    };
+  }
   if (loc.seo && (nonEmptyStr(loc.seo.metaTitle) || nonEmptyStr(loc.seo.metaDescription))) {
     out.seo = {
       ...(out.seo || {}),

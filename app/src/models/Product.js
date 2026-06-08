@@ -14,6 +14,14 @@ const localizedProductSchema = new mongoose.Schema(
     keyPoints: { type: [String], default: [] },
     inclusions: { type: [String], default: [] },
     exclusions: { type: [String], default: [] },
+    /* Délai d'expédition rédactionnel (ex. « Expédition sous 2 semaines »). */
+    shippingDelayText: { type: String, default: '', trim: true },
+    /* Badges texte libres saisis en admin (badge coin + condition + cartes). */
+    badges: {
+      topLeft: { type: String, default: '', trim: true },
+      condition: { type: String, default: '', trim: true },
+      cards: { type: [String], default: undefined },
+    },
     specs: {
       type: [{ label: { type: String, default: '', trim: true }, value: { type: String, default: '', trim: true } }],
       default: [],

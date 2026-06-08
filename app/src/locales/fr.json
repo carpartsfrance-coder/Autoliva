@@ -445,5 +445,9 @@
   "product.installmentPrefix": "ou 3 ×",
   "product.installmentSuffix": "sans frais",
   "product.productBadge": "Produit",
-  "product.dsgChrono": "DSG & S-tronic — 24h chrono"
+  "product.dsgChrono": "DSG & S-tronic — 24h chrono",
+  "product.monthsWord": "mois",
+  "product.jsonldCompatRef": "Référence compatible",
+  "product.jsonldQualityTest": "Test qualité",
+  "product.yearsWord": "ans"
 }
