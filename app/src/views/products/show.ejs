@@ -136,26 +136,26 @@
       <% const consigneUpfront = hasConsigne && product.consigne.chargeUpfront === true; %>
       <% const consigneAmountEuro = hasConsigne ? (product.consigne.amountCents / 100).toFixed(2).replace('.', ',') : ''; %>
       <% const consigneDelayDays = hasConsigne ? (product.consigne.delayDays || 30) : 30; %>
-      <% const stockLabel = product.inStock ? 'En stock' : 'Sur commande'; %>
+      <% const stockLabel = product.inStock ? t('product.stockIn') : t('product.stockOrder'); %>
       <%# Code moteur (ex: CLHA) — info n°1 recherchée par le client. %>
       <% const engineCodeVal = (product.engineCode && String(product.engineCode).trim()) ? String(product.engineCode).trim() : ''; %>
       <% let productSubtitle; %>
       <% if (engineCodeVal) {
            // Sous-titre prioritaire : code moteur + référence (les marques sont déjà dans le titre H1).
-           const _st = ['Code moteur : ' + engineCodeVal];
-           if (ref) _st.push('Réf. ' + ref);
+           const _st = [t('product.codeMoteur') + ' : ' + engineCodeVal];
+           if (ref) _st.push(t('product.refPrefix') + ' ' + ref);
            productSubtitle = _st.join(' · ');
          } else {
            const subtitleParts = [];
-           if (makes.length) { subtitleParts.push('Pour ' + makes.slice(0, 4).join(', ')); }
-           else if (product.brand) { subtitleParts.push('Pour ' + String(product.brand).trim()); }
-           if (ref) subtitleParts.push('Série ' + ref);
+           if (makes.length) { subtitleParts.push(t('product.forVehicles') + ' ' + makes.slice(0, 4).join(', ')); }
+           else if (product.brand) { subtitleParts.push(t('product.forVehicles') + ' ' + String(product.brand).trim()); }
+           if (ref) subtitleParts.push(t('product.seriesPrefix') + ' ' + ref);
            productSubtitle = subtitleParts.join(' - ');
          } %>
       <% const isService = product && product.serviceType === 'standalone_cloning'; %>
       <% const heroBadge = isService
-        ? (topLeftBadge || 'Service à distance')
-        : (keyEtat || conditionBadge || topLeftBadge || 'Reconditionnement Professionnel'); %>
+        ? (topLeftBadge || t('product.serviceRemote'))
+        : (keyEtat || conditionBadge || topLeftBadge || t('product.reconditioningPro')); %>
       <% const visibleThumbImages = thumbImages.slice(0, 4); %>
       <% const hiddenThumbImages = thumbImages.slice(4); %>
       <% const visibleThumbItems = thumbMediaItems.slice(0, 4); %>
@@ -177,16 +177,16 @@
         : []; %>
       <% const autoHighlights = isService
         ? [
-            { icon: 'euro', label: '199€ Prix fixe' },
-            { icon: 'bolt', label: 'Clonage en 24h' },
-            { icon: 'local_shipping', label: 'Aller + retour inclus' },
-            { icon: 'verified', label: 'Garantie 30 jours' },
+            { icon: 'euro', label: t('product.svcFixedPrice') },
+            { icon: 'bolt', label: t('product.svcCloning24') },
+            { icon: 'local_shipping', label: t('product.svcRoundTrip') },
+            { icon: 'verified', label: t('product.svcWarranty30') },
           ]
         : [
-            { icon: 'verified', label: keyGarantie || 'Garantie 24 Mois' },
-            { icon: 'terminal', label: keyProgrammation || 'Programmation Incluse' },
-            { icon: 'analytics', label: 'Testé sur banc' },
-            consigneUpfront ? { icon: 'verified_user', label: 'Consigne remboursable' } : { icon: 'lock_open', label: 'Sans caution' },
+            { icon: 'verified', label: keyGarantie || t('product.warranty24') },
+            { icon: 'terminal', label: keyProgrammation || t('product.progIncluded') },
+            { icon: 'analytics', label: t('product.benchTested') },
+            consigneUpfront ? { icon: 'verified_user', label: t('product.consigneRefundable') } : { icon: 'lock_open', label: t('product.noDeposit') },
           ]; %>
       <% const qualityHighlights = manualBadgeCards.length
         ? manualBadgeCards.map((label) => ({ icon: 'check_circle', label, manual: true }))
@@ -210,14 +210,14 @@
       }); %>
       <% if (technicalSpecs.length < 6 && engineCodeVal) {
            var _compatCodes = Array.isArray(product.compatibleReferences) ? product.compatibleReferences.filter(Boolean).slice(0, 2) : [];
-           pushTechnicalSpec('Code moteur', engineCodeVal + (_compatCodes.length ? ' (compatible ' + _compatCodes.join(', ') + ')' : ''));
+           pushTechnicalSpec(t('product.codeMoteur'), engineCodeVal + (_compatCodes.length ? ' (compatible ' + _compatCodes.join(', ') + ')' : ''));
          } %>
-      <% if (technicalSpecs.length < 6) pushTechnicalSpec('Référence', ref); %>
-      <% if (technicalSpecs.length < 6) pushTechnicalSpec('Type', keyType); %>
-      <% if (technicalSpecs.length < 6) pushTechnicalSpec('État', keyEtat); %>
-      <% if (technicalSpecs.length < 6 && keyProgrammation) pushTechnicalSpec('Programmation', keyProgrammation); %>
-      <% if (technicalSpecs.length < 6) pushTechnicalSpec('Garantie', keyGarantie || 'Incluse'); %>
-      <% if (technicalSpecs.length < 6) pushTechnicalSpec('Expédition', shippingDelayText || 'Sous 24/48h'); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.specRef'), ref); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.specType'), keyType); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.specState'), keyEtat); %>
+      <% if (technicalSpecs.length < 6 && keyProgrammation) pushTechnicalSpec(t('product.specProg'), keyProgrammation); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.guarantee'), keyGarantie || t('product.specIncluded')); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.shippingLabel'), shippingDelayText || t('product.specShipping2448')); %>
 
       <nav class="flex items-center gap-1.5 sm:gap-2 mb-6 text-xs sm:text-sm overflow-x-auto no-scrollbar whitespace-nowrap pb-1" aria-label="Fil d'Ariane">
         <a class="text-slate-500 hover:text-primary transition-colors shrink-0" href="/"><%= t('breadcrumb.home') %></a>
@@ -258,7 +258,7 @@
                       <img alt="<%= product.name %> — vue <%= idx + 1 %>" class="w-full h-full object-cover" decoding="async" loading="lazy" width="200" height="200" src="<%= item.url %>" />
                     <% } %>
                     <% if (idx === 3 && remainingItems > 0) { %>
-                      <span class="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white text-xs font-bold uppercase tracking-wider">+<%= remainingItems %> de plus</span>
+                      <span class="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white text-xs font-bold uppercase tracking-wider"><%= t('product.moreImages', { count: remainingItems }) %></span>
                     <% } %>
                   </button>
                 <% }) %>
@@ -273,8 +273,8 @@
               <% } else if (isService) { %>
                 <div class="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
                   <span class="material-symbols-outlined text-7xl text-primary/70">memory</span>
-                  <span class="text-xs font-bold uppercase tracking-widest text-slate-500">Service à distance</span>
-                  <span class="text-sm font-bold text-slate-700 dark:text-slate-300 text-center px-4 max-w-md">Clonage logiciel TCU mécatronique<br/>DSG &amp; S-tronic — 24h chrono</span>
+                  <span class="text-xs font-bold uppercase tracking-widest text-slate-500"><%= t('product.serviceRemote') %></span>
+                  <span class="text-sm font-bold text-slate-700 dark:text-slate-300 text-center px-4 max-w-md"><%= t('product.cloningService') %><br/><%= t('product.dsgChrono') %></span>
                 </div>
               <% } else { %>
                 <div class="w-full h-full flex items-center justify-center text-slate-400">
@@ -327,7 +327,7 @@
             <div class="flex justify-start">
               <a class="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold hover:border-primary hover:text-primary transition-colors" href="<%= product.media.videoUrl %>" rel="noreferrer" target="_blank">
                 <span class="material-symbols-outlined">play_circle</span>
-                Voir la vidéo du produit
+                <%= t('product.watchVideo') %>
               </a>
             </div>
           <% } %>
@@ -354,23 +354,23 @@
               <div class="text-left md:text-right">
                 <% if (product.vatRecoverable) { %>
                   <%# Clientèle pro : prix HT mis en avant, TTC en rappel discret %>
-                  <span class="text-4xl font-black text-primary"><span data-price-display-ht><%= formatMoney(Math.round(product.priceCents / 1.2)) %></span> € HT</span>
+                  <span class="text-4xl font-black text-primary"><span data-price-display-ht><%= formatMoney(Math.round(product.priceCents / 1.2)) %></span> € <%= t('product.ht') %></span>
                   <div class="mt-1 flex flex-wrap items-center md:justify-end gap-2">
-                    <span class="text-sm font-medium text-slate-500 dark:text-slate-400"><span data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="<%= installmentCount %>" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(product.priceCents) %> €</span> TTC</span>
-                    <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">TVA 20% récupérable</span>
+                    <span class="text-sm font-medium text-slate-500 dark:text-slate-400"><span data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="<%= installmentCount %>" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(product.priceCents) %> €</span> <%= t('product.ttc') %></span>
+                    <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"><%= t('product.vatRecoverable') %></span>
                   </div>
                 <% } else { %>
                   <%# Régime de la marge / particuliers : prix net (TTC) affiché seul %>
                   <span class="text-4xl font-black text-primary" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="<%= installmentCount %>" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(product.priceCents) %> €</span>
-                  <div class="text-[11px] uppercase tracking-wide text-slate-400">TTC</div>
+                  <div class="text-[11px] uppercase tracking-wide text-slate-400"><%= t('product.ttc') %></div>
                 <% } %>
                 <div class="mt-1 flex items-center md:justify-end gap-1 text-xs text-slate-500 <%= installmentEligible ? '' : 'hidden' %>" data-installment-wrapper>
                   <span class="material-symbols-outlined text-sm text-slate-400">credit_card</span>
-                  <span>ou 3 × <span data-installment-amount><%= formatMoney(installmentAmountCents) %> €</span> sans frais</span>
+                  <span><%= t('product.installmentPrefix') %> <span data-installment-amount><%= formatMoney(installmentAmountCents) %> €</span> <%= t('product.installmentSuffix') %></span>
                 </div>
               </div>
             </div>
-            <p class="text-left md:text-right text-xs italic <%= hasConsigne ? 'text-emerald-600 font-semibold' : 'text-slate-400' %>"><%= hasConsigne ? (consigneUpfront ? ('Consigne ' + consigneAmountEuro + ' € (hors TVA) remboursée au retour sous ' + consigneDelayDays + ' jours') : ('Échange standard sans caution • Retour ancien organe sous ' + consigneDelayDays + ' jours')) : (shippingDelayText || (product.inStock ? 'Livraison rapide en France' : 'Disponible sur commande')) %></p>
+            <p class="text-left md:text-right text-xs italic <%= hasConsigne ? 'text-emerald-600 font-semibold' : 'text-slate-400' %>"><%= hasConsigne ? (consigneUpfront ? (t('product.consigneRefundShort', { amount: consigneAmountEuro, days: consigneDelayDays })) : (t('product.exchangeNoDeposit', { days: consigneDelayDays }))) : (shippingDelayText || (product.inStock ? t('product.fastDeliveryFr') : t('product.onOrderAvailable'))) %></p>
           </div>
 
           <form action="/panier/ajouter/<%= product._id %>" class="flex flex-col gap-4 lg:flex-1" data-add-to-cart-form data-product-id="<%= product._id %>" data-product-sku="<%= product.sku || product._id %>" data-product-image="<%= mainImage %>" data-product-name="<%= product.name %>" data-product-category="<%= product.category || '' %>" data-product-brand="<%= _ga4Brand %>" data-product-price-cents="<%= basePriceCents %>" method="POST">
@@ -393,11 +393,11 @@
                         <span class="material-symbols-outlined text-primary text-lg">tune</span>
                         <div class="flex flex-col">
                           <span class="text-slate-900 dark:text-white font-bold text-sm uppercase tracking-tight"><%= groupLabel %></span>
-                          <span class="text-slate-500 text-[11px] uppercase tracking-wider font-semibold mt-0.5"><%= g && g.helpText ? g.helpText : (g && g.required ? 'Sélectionnez une option' : 'Option produit') %></span>
+                          <span class="text-slate-500 text-[11px] uppercase tracking-wider font-semibold mt-0.5"><%= g && g.helpText ? g.helpText : (g && g.required ? t('product.selectOption') : t('product.productOption')) %></span>
                         </div>
                       </div>
                       <% if (g && g.required) { %>
-                        <span class="text-[10px] font-black uppercase tracking-widest text-white bg-primary px-2 py-1 rounded-md">Requis</span>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-white bg-primary px-2 py-1 rounded-md"><%= t('product.required') %></span>
                       <% } %>
                     </div>
 
@@ -530,7 +530,7 @@
               <!-- Bouton secondaire : devis par email (capture lead) -->
               <button type="button" id="quote-by-email-btn" class="mt-2 flex items-center justify-center gap-2 w-full text-sm font-medium text-slate-600 hover:text-primary border-t border-slate-100 pt-4 transition">
                 <span class="material-symbols-outlined text-base">mail</span>
-                Pas sûr ? Recevez un devis par email
+                <%= t('product.quoteByEmail') %>
               </button>
             </div>
           </form>
@@ -542,8 +542,8 @@
         <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl">
           <div class="flex items-start justify-between mb-3">
             <div>
-              <div class="font-bold text-slate-900 text-lg">Recevez un devis par email</div>
-              <div class="text-sm text-slate-500 mt-0.5">Notre équipe vous répond sous 24h ouvrées.</div>
+              <div class="font-bold text-slate-900 text-lg"><%= t('product.receiveQuote') %></div>
+              <div class="text-sm text-slate-500 mt-0.5"><%= t('product.teamReplies') %></div>
             </div>
             <button type="button" id="quote-modal-close" class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center -mr-2">
               <span class="material-symbols-outlined">close</span>
@@ -560,19 +560,19 @@
           <form id="quote-form" class="space-y-3">
             <input type="hidden" name="productId" value="<%= product._id %>" />
             <div class="grid grid-cols-2 gap-2">
-              <input type="text" name="firstName" placeholder="Prénom (optionnel)" maxlength="80" class="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
-              <input type="tel" name="phone" placeholder="Téléphone (optionnel)" maxlength="24" class="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              <input type="text" name="firstName" placeholder="<%= t('product.phFirstNameOpt') %>" maxlength="80" class="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              <input type="tel" name="phone" placeholder="<%= t('product.phPhoneOpt') %>" maxlength="24" class="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
             </div>
-            <input type="email" name="email" required placeholder="Votre email *" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
+            <input type="email" name="email" required placeholder="<%= t('product.phEmailReq') %>" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
             <div class="grid grid-cols-2 gap-2">
-              <input type="text" name="vin" placeholder="VIN (optionnel)" maxlength="32" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary/20" />
-              <input type="text" name="plate" placeholder="Immatriculation (optionnel)" maxlength="16" class="rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              <input type="text" name="vin" placeholder="<%= t('product.phVinOpt') %>" maxlength="32" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary/20" />
+              <input type="text" name="plate" placeholder="<%= t('product.phPlateOpt') %>" maxlength="16" class="rounded-lg border border-slate-200 px-3 py-2 text-sm uppercase focus:outline-none focus:ring-2 focus:ring-primary/20" />
             </div>
-            <textarea name="message" rows="2" maxlength="500" placeholder="Question, précision sur votre véhicule…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"></textarea>
+            <textarea name="message" rows="2" maxlength="500" placeholder="<%= t('product.phQuestion') %>" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"></textarea>
             <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white py-2.5 rounded-lg font-bold text-sm transition">
-              Demander mon devis
+              <%= t('product.requestMyQuote') %>
             </button>
-            <p class="text-[11px] text-slate-400 text-center">En soumettant, vous acceptez d'être recontacté(e) par email ou téléphone.</p>
+            <p class="text-[11px] text-slate-400 text-center"><%= t('product.consentRecontact') %></p>
           </form>
           <div id="quote-result" class="mt-3 text-sm text-center"></div>
         </div>
@@ -605,7 +605,7 @@
           e.preventDefault();
           var data = {};
           new FormData(form).forEach(function (v, k) { data[k] = v; });
-          result.innerHTML = '<span class="text-slate-500">Envoi…</span>';
+          result.innerHTML = '<span class="text-slate-500">' + <%- JSON.stringify(t('product.sending')) %> + '</span>';
           fetch('/api/lead/product-quote', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -614,15 +614,15 @@
             .then(function (r) { return r.json(); })
             .then(function (d) {
               if (d && d.ok) {
-                result.innerHTML = '<span class="text-green-700 font-semibold">✓ Demande envoyée. Vérifiez votre boîte mail pour la confirmation.</span>';
+                result.innerHTML = '<span class="text-green-700 font-semibold">' + <%- JSON.stringify(t('product.quoteSent')) %> + '</span>';
                 form.reset();
                 if (window.dataLayer) window.dataLayer.push({ event: 'lead_product_quote', product_id: data.productId, email: data.email });
                 setTimeout(close, 2500);
               } else {
-                result.innerHTML = '<span class="text-red-700">Erreur. Vérifiez votre email ou réessayez.</span>';
+                result.innerHTML = '<span class="text-red-700">' + <%- JSON.stringify(t('product.quoteError')) %> + '</span>';
               }
             })
-            .catch(function () { result.innerHTML = '<span class="text-red-700">Erreur réseau.</span>'; });
+            .catch(function () { result.innerHTML = '<span class="text-red-700">' + <%- JSON.stringify(t('product.networkError')) %> + '</span>'; });
         });
       })();
       </script>
@@ -671,7 +671,7 @@
                   </div>
                   <div class="desc-collapse-fade hidden" data-desc-fade>
                     <button class="w-full pt-10 pb-2 text-center text-sm font-bold text-primary flex items-center justify-center gap-1" data-desc-toggle type="button">
-                      <span data-desc-toggle-label>Lire la suite</span>
+                      <span data-desc-toggle-label><%= t('product.readMore') %></span>
                       <span class="material-symbols-outlined text-base transition-transform" data-desc-toggle-icon>expand_more</span>
                     </button>
                   </div>
@@ -681,7 +681,7 @@
               <div class="bg-slate-50 dark:bg-slate-900 rounded-2xl p-8 border border-slate-300 dark:border-slate-700 refined-shadow">
                 <h4 class="text-lg font-bold uppercase text-slate-900 dark:text-white mb-6 flex items-center gap-2">
                   <span class="material-symbols-outlined text-primary">build</span>
-                  Points techniques
+                  <%= t('product.technicalPoints') %>
                 </h4>
                 <div class="space-y-4">
                   <% technicalSpecs.slice(0, 6).forEach((entry) => { %>
@@ -697,7 +697,7 @@
                 <div class="mt-6 bg-slate-50 dark:bg-slate-900 rounded-2xl p-8 border border-slate-300 dark:border-slate-700 refined-shadow">
                   <h4 class="text-lg font-bold uppercase text-slate-900 dark:text-white mb-6 flex items-center gap-2">
                     <span class="material-symbols-outlined text-primary">checklist</span>
-                    Contenu de l'offre
+                    <%= t('product.offerContent') %>
                   </h4>
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <% if (inclusionsList.length) { %>
@@ -741,7 +741,7 @@
             <div class="py-10 grid grid-cols-1 xl:grid-cols-[minmax(0,0.92fr)_minmax(340px,1.08fr)] gap-10">
               <div class="space-y-8">
                 <div class="bg-slate-50 dark:bg-slate-900 rounded-2xl p-8 border border-slate-300 dark:border-slate-700 refined-shadow">
-                  <h4 class="text-lg font-bold uppercase text-slate-900 dark:text-white mb-6">Fiche produit</h4>
+                  <h4 class="text-lg font-bold uppercase text-slate-900 dark:text-white mb-6"><%= t('product.productSheet') %></h4>
                   <div class="space-y-4">
                     <% technicalSpecs.forEach((entry) => { %>
                       <div class="flex justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
@@ -754,7 +754,7 @@
 
                 <% if (compatibleReferences.length) { %>
                   <div>
-                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-400 mb-4">Références OEM compatibles</h2>
+                    <h2 class="text-sm font-black uppercase tracking-widest text-slate-400 mb-4"><%= t('product.oemRefs') %></h2>
                     <div class="flex flex-wrap gap-2">
                       <% compatibleReferences.forEach((r) => { %>
                         <span class="px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-700 dark:text-slate-200"><%= r %></span>
@@ -770,11 +770,11 @@
                         <span class="material-symbols-outlined">support_agent</span>
                       </div>
                       <div>
-                        <h4 class="text-base font-bold text-slate-900 dark:text-white">Besoin d'une validation avant achat ?</h4>
-                        <p class="mt-2 text-sm text-slate-500">Nos techniciens peuvent confirmer la bonne référence avec votre VIN ou les informations de votre pièce d'origine.</p>
+                        <h4 class="text-base font-bold text-slate-900 dark:text-white"><%= t('product.needValidation') %></h4>
+                        <p class="mt-2 text-sm text-slate-500"><%= t('product.techCanConfirm') %></p>
                         <div class="mt-4 flex flex-wrap gap-3">
-                          <a class="inline-flex items-center justify-center rounded-lg bg-primary text-white px-4 py-2 text-xs font-black uppercase tracking-wider hover:bg-primary/90 transition-colors" href="/devis">Contacter un technicien</a>
-                          <a class="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-black uppercase tracking-wider hover:border-primary hover:text-primary transition-colors" href="/compte">Demander une vérification</a>
+                          <a class="inline-flex items-center justify-center rounded-lg bg-primary text-white px-4 py-2 text-xs font-black uppercase tracking-wider hover:bg-primary/90 transition-colors" href="/devis"><%= t('product.contactTech') %></a>
+                          <a class="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-black uppercase tracking-wider hover:border-primary hover:text-primary transition-colors" href="/compte"><%= t('product.requestVerif') %></a>
                         </div>
                       </div>
                     </div>
@@ -790,13 +790,13 @@
                        linking SEO entre fiches produits et pages véhicule, et améliore
                        l'expérience client (parcours rapide vers d'autres pièces compatibles). */%>
                   <div class="mb-6 rounded-2xl border border-primary/20 bg-primary/5 p-5">
-                    <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3">Voir aussi nos pièces compatibles</div>
+                    <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3"><%= t('product.seeAlsoCompat') %></div>
                     <div class="flex flex-wrap gap-2">
                       <% compMakes.slice(0, 4).forEach((mk) => { %>
                         <% const mkSlug = slugifyVeh(mk); %>
                         <a class="inline-flex items-center gap-1 bg-white border border-slate-200 hover:border-primary hover:text-primary text-xs font-bold text-slate-700 px-3 py-1.5 rounded-full transition-colors" href="/pieces-auto/<%= mkSlug %>">
                           <span class="material-symbols-outlined text-[14px]">directions_car</span>
-                          Toutes les pièces <%= mk %>
+                          <%= t('product.allPartsFor', { make: mk }) %>
                         </a>
                         <% const row = compGrouped[mk]; %>
                         <% const modelsArr = row ? Array.from(row.models).slice(0, 2) : []; %>
@@ -850,17 +850,16 @@
 
             <div class="mt-10 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-8 refined-shadow">
               <h2 class="text-lg font-bold uppercase text-slate-900 dark:text-white mb-4">
-                Montage et garantie
+                <%= t('product.mountingWarranty') %>
               </h2>
               <p class="text-slate-700 dark:text-slate-300 leading-relaxed mb-4">
-                Toutes nos pièces sont reconditionnées en atelier spécialisé, testées sur banc d'essai et expédiées avec une <strong>garantie de <%= typeof keyGarantie !== 'undefined' && keyGarantie ? keyGarantie : '24 mois' %></strong>.
-                Nous recommandons un montage par un professionnel qualifié pour garantir un fonctionnement optimal.
+                <%- t('product.mountingPara', { warranty: (typeof keyGarantie !== 'undefined' && keyGarantie ? keyGarantie : t('product.warrantyOf')) }) %>
               </p>
               <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400">
-                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> Vérifier la référence OEM avant montage</li>
-                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> Effectuer un réglage de base / adaptation après installation (si applicable)</li>
-                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> Vidanger et remplacer l'huile selon les préconisations constructeur</li>
-                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> Conserver la facture pour faire valoir la garantie</li>
+                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> <%= t('product.mount1') %></li>
+                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> <%= t('product.mount2') %></li>
+                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> <%= t('product.mount3') %></li>
+                <li class="flex items-start gap-2"><span class="material-symbols-outlined text-primary text-base mt-0.5">check</span> <%= t('product.mount4') %></li>
               </ul>
             </div>
           </div>
@@ -870,7 +869,7 @@
               <div class="px-6 py-5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/70 flex items-center justify-between gap-4">
                 <div>
                   <h2 class="text-lg font-bold uppercase text-slate-900 dark:text-white"><%= t('product.compatibleVehicles') %></h2>
-                  <p class="mt-1 text-sm text-slate-500">Vérifiez toujours votre VIN ou le code moteur avant validation — <%= vehicleCount %> véhicule<%= vehicleCount > 1 ? 's' : '' %> référencé<%= vehicleCount > 1 ? 's' : '' %>.</p>
+                  <p class="mt-1 text-sm text-slate-500"><%= t('product.checkVinModel', { count: vehicleCount }) %></p>
                 </div>
                 <span class="shrink-0 inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 px-3 py-1.5 text-xs font-bold"><%= vehicleCount %></span>
               </div>
@@ -899,15 +898,15 @@
                 </table>
               </div>
             </div>
-            <p class="mt-4 text-xs text-slate-400">Liste indicative. En cas de doute, vérifiez avec votre plaque ou votre VIN — notre équipe valide la compatibilité avant expédition.</p>
+            <p class="mt-4 text-xs text-slate-400"><%= t('product.indicativeList') %></p>
           </div>
 
           <div class="tab-content" id="content-process">
             <% if (product.sections && product.sections.showReconditioning && Array.isArray(product.reconditioningSteps) && product.reconditioningSteps.length) { %>
               <div class="py-10">
                 <div class="mb-8">
-                  <h2 class="text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white"><%= isService ? 'Comment ça marche' : 'Notre processus qualité' %></h3>
-                  <p class="mt-2 text-sm text-slate-500"><%= isService ? 'De votre commande à la réception de vos pièces clonées, 4 étapes simples.' : 'Chaque étape vise à garantir une pièce contrôlée, durable et prête à être montée.' %></p>
+                  <h2 class="text-2xl font-black uppercase tracking-tight text-slate-900 dark:text-white"><%= isService ? t('product.howItWorks') : t('product.qualityProcessTitle') %></h3>
+                  <p class="mt-2 text-sm text-slate-500"><%= isService ? t('product.howItWorksDesc') : t('product.qualityProcessDesc') %></p>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                   <% product.reconditioningSteps.slice(0, 4).forEach((st, idx) => { %>
@@ -989,9 +988,9 @@
         <section class="mt-20">
           <div class="flex flex-col md:flex-row md:items-end justify-between mb-8 border-b-2 border-slate-200 dark:border-slate-800 pb-4 gap-4">
             <div class="flex items-center gap-4">
-              <h2 class="text-xl font-black uppercase tracking-wider text-slate-900 dark:text-white">Questions fréquentes</h3>
+              <h2 class="text-xl font-black uppercase tracking-wider text-slate-900 dark:text-white"><%= t('product.freqQuestions') %></h3>
               <div class="flex items-center gap-1.5 bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20">
-                <span class="font-black text-[10px] text-primary tracking-tighter uppercase italic">Produit</span>
+                <span class="font-black text-[10px] text-primary tracking-tighter uppercase italic"><%= t('product.productBadge') %></span>
                 <div class="w-4 h-4 bg-primary rounded-full flex items-center justify-center">
                   <span class="text-[8px] font-black text-white">FAQ</span>
                 </div>
@@ -1004,7 +1003,7 @@
                 <span class="material-symbols-outlined fill-1">check_circle</span>
               </div>
               <span class="text-lg font-black text-slate-900 dark:text-white"><%= faqPreviewCards.length %></span>
-              <span class="text-slate-400 text-sm font-medium">réponses utiles</span>
+              <span class="text-slate-400 text-sm font-medium"><%= t('product.usefulAnswers') %></span>
             </div>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -1022,7 +1021,7 @@
                   <div>
                     <p class="text-xs font-bold text-slate-900 dark:text-white uppercase"><%= f.question %></p>
                     <div class="flex items-center gap-1.5">
-                      <p class="text-[10px] text-slate-400 uppercase">Information utile</p>
+                      <p class="text-[10px] text-slate-400 uppercase"><%= t('product.usefulInfo') %></p>
                       <div class="flex items-center gap-1 bg-primary/10 border border-primary/20 px-1 rounded-sm">
                         <span class="text-[8px] font-bold text-primary uppercase"><%= brand.NAME_SHORT %></span>
                       </div>
@@ -1511,7 +1510,7 @@
       </div>
       <button class="shrink-0 bg-primary hover:bg-primary/90 text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-primary/20 transition-all" data-sticky-atc-btn type="button">
         <span class="material-symbols-outlined text-lg">add_shopping_cart</span>
-        Ajouter
+        <%= t('product.addShort') %>
       </button>
     </div>
   </div>
@@ -1537,14 +1536,14 @@
         <div class="hidden xl:flex items-center gap-5 text-xs font-semibold text-slate-600 shrink-0 mr-2">
           <span class="flex items-center gap-1.5">
             <span class="material-symbols-outlined text-base text-emerald-600">local_shipping</span>
-            <%= (product && product.shippingDelayText && String(product.shippingDelayText).trim()) ? String(product.shippingDelayText).trim() : 'Livraison rapide' %>
+            <%= (product && product.shippingDelayText && String(product.shippingDelayText).trim()) ? String(product.shippingDelayText).trim() : t('product.fastDeliveryShort') %>
           </span>
           <span class="flex items-center gap-1.5">
             <span class="material-symbols-outlined text-base text-emerald-600">verified</span>
             <%# Calculé inline depuis product.warranty (local de rendu accessible ici,
                 contrairement à keyGarantie qui est hors portée dans cette barre). %>
             <% var _stickyWm = (product.warranty && Number(product.warranty.months) > 0) ? Number(product.warranty.months) : 0; %>
-            <%= _stickyWm ? ('Garantie ' + _stickyWm + ' mois') : 'Garantie incluse' %>
+            <%= _stickyWm ? t('product.warrantyMonths', { months: _stickyWm }) : t('product.warrantyIncl') %>
           </span>
           <span class="flex items-center gap-1.5">
             <span class="material-symbols-outlined text-base text-emerald-600">payments</span>
@@ -1801,9 +1800,9 @@
         <% if (Array.isArray(productLinking.parentVehicleLandings) && productLinking.parentVehicleLandings.length > 0) { %>
           <div>
             <div class="mb-4 sm:mb-6">
-              <h2 class="text-xl sm:text-3xl home-display font-bold">Voir toutes les pièces compatibles</h2>
+              <h2 class="text-xl sm:text-3xl home-display font-bold"><%= t('product.seeAllCompat') %></h2>
               <% var _vlWm = (product.warranty && Number(product.warranty.months) > 0) ? Number(product.warranty.months) : 0; %>
-              <p class="text-slate-500 text-sm mt-1">Pièces reconditionnées spécifiques à votre véhicule<%= _vlWm ? (', garantie ' + _vlWm + ' mois') : '' %></p>
+              <p class="text-slate-500 text-sm mt-1"><%= t('product.specificParts') %><%= _vlWm ? t('product.specificPartsWarranty', { months: _vlWm }) : '' %></p>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               <% for (const v of productLinking.parentVehicleLandings) { %>
@@ -1817,7 +1816,7 @@
                       <span class="text-base font-black text-primary truncate">
                         <%= v.makeName %><% if (v.modelName) { %> <%= v.modelName %><% } %>
                       </span>
-                      <span class="text-xs text-slate-500">Catalogue complet →</span>
+                      <span class="text-xs text-slate-500"><%= t('product.fullCatalog') %></span>
                     </div>
                   </div>
                   <span class="shrink-0 material-symbols-rounded text-primary group-hover:translate-x-1 transition-transform">arrow_forward</span>
@@ -1830,8 +1829,8 @@
         <% if (productLinking.parentCategory) { %>
           <div>
             <div class="mb-4 sm:mb-6">
-              <h2 class="text-xl sm:text-3xl home-display font-bold">Explorer la catégorie</h2>
-              <p class="text-slate-500 text-sm mt-1">Toutes les pièces de cette catégorie</p>
+              <h2 class="text-xl sm:text-3xl home-display font-bold"><%= t('product.exploreCategory') %></h2>
+              <p class="text-slate-500 text-sm mt-1"><%= t('product.allCategoryParts') %></p>
             </div>
             <a href="<%= productLinking.parentCategory.url %>"
                class="group inline-flex items-center gap-3 px-5 py-4 bg-white rounded-2xl border border-slate-200/80 hover:border-primary hover:shadow-md hover:shadow-red-500/10 transition-all">
