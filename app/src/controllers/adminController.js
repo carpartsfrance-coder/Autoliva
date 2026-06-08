@@ -11721,9 +11721,41 @@ async function postAdminSyncShipmentTracking(req, res) {
 async function getAdminJumingoDebug(req, res) {
   try {
     const jumingo = require('../services/jumingo');
-    const tn = String((req.query && req.query.tracking) || '').trim();
     if (!jumingo.isEnabled()) return res.json({ error: 'JUMINGO_API_KEY absente côté serveur (Render).' });
-    if (!tn) return res.json({ error: 'Ajoute ?tracking=<numéro de suivi> à l’URL.' });
+
+    // ── DEBUG TARIFS : ?ratesOrderId=<id commande> → crée un brouillon + dumpe la
+    // réponse brute des tarifs + le détail du brouillon (pour comprendre « aucun tarif »). ──
+    const ratesOrderId = String((req.query && req.query.ratesOrderId) || '').trim();
+    if (ratesOrderId) {
+      if (!jumingo.labelsEnabled()) return res.json({ error: 'JUMINGO_LABELS_ENABLED != true' });
+      if (!mongoose.Types.ObjectId.isValid(ratesOrderId)) return res.json({ error: 'orderId invalide' });
+      const order = await Order.findById(ratesOrderId).select('number shippingAddress userId totalCents').lean();
+      if (!order) return res.json({ error: 'commande introuvable' });
+      const user = order.userId ? await User.findById(order.userId).select('email').lean() : null;
+      const toAddress = jumingo.buildToAddress(order.shippingAddress, (user && user.email) || '');
+      const draft = await jumingo.createDraftShipment({
+        fromAddress: jumingo.senderJumingoAddress(), toAddress, email: (user && user.email) || '',
+        weightKg: Number(req.query.w) || 10, length: Number(req.query.l) || 30, width: Number(req.query.la) || 30, height: Number(req.query.h) || 30,
+        contentDescription: 'Pièce auto', valueAmount: Math.round((order.totalCents || 10000) / 100), reference: order.number,
+      });
+      if (!draft.ok) return res.json({ step: 'createDraft', error: draft.error });
+      const now = new Date(); const iso = (d) => d.toISOString().slice(0, 19) + 'Z';
+      const detail = await jumingo._internal.apiGet('/shipments/' + encodeURIComponent(draft.shipmentId));
+      const ratesRaw = await jumingo._internal.apiSend('POST', '/shipment-rates', {
+        shipmentId: draft.shipmentId, pickupDate: iso(new Date(now.getTime() + 86400000)), deliveryDate: iso(new Date(now.getTime() + 14 * 86400000)), settings: { mode: 'm' },
+      });
+      return res.json({
+        shipmentId: draft.shipmentId,
+        sentToAddress: toAddress,
+        draftStatus: (detail.body && (detail.body.status || (detail.body.data && detail.body.data.status))) || '(?)',
+        draftMissing: (detail.body && (detail.body.import_messages || detail.body.warnings)) || null,
+        ratesHttpStatus: ratesRaw.httpStatus,
+        rawRates: ratesRaw.body != null ? ratesRaw.body : (ratesRaw.rawText || '').slice(0, 8000),
+      });
+    }
+
+    const tn = String((req.query && req.query.tracking) || '').trim();
+    if (!tn) return res.json({ error: 'Ajoute ?tracking=<numéro de suivi> ou ?ratesOrderId=<id commande> à l’URL.' });
     const list = await jumingo._internal.apiGet('/shipments?search=' + encodeURIComponent(tn));
     const parsed = await jumingo.getTrackingStatus(tn);
     return res.json({
