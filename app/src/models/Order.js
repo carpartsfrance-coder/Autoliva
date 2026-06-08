@@ -149,7 +149,7 @@ const statusHistorySchema = new mongoose.Schema(
   {
     status: {
       type: String,
-      enum: ['draft', 'pending_payment', 'paid', 'processing', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded'],
+      enum: ['draft', 'pending_payment', 'paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded'],
       required: true,
     },
     cloningStatus: { type: String, default: null, trim: true },
@@ -234,7 +234,7 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['draft', 'pending_payment', 'paid', 'processing', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded'],
+      enum: ['draft', 'pending_payment', 'paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded'],
       default: 'pending_payment',
       required: true,
     },

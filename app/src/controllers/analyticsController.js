@@ -438,7 +438,7 @@ async function getTotalsForRange(from, to) {
 async function getCommercialKpis(since, until) {
   // Count paid/validated orders in the period
   const paidStatuses = ['paid', 'completed', 'captured'];
-  const validOrderStatuses = ['paid', 'processing', 'shipped', 'delivered', 'completed'];
+  const validOrderStatuses = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
 
   const dateFilter = until ? { $gte: since, $lt: until } : { $gte: since };
 

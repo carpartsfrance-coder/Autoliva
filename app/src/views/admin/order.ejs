@@ -499,6 +499,26 @@
                   </div>
                 </div>
 
+                <!-- Étiquette créée → confirmer le départ réel (transporteur passé) -->
+                <% if (order.statusKey === 'label_created') { %>
+                  <div class="mt-4 p-4 rounded-xl border-2 border-amber-300 bg-amber-50">
+                    <div class="flex items-start gap-2 mb-3">
+                      <span class="material-symbols-outlined text-amber-600" style="font-size:20px">label</span>
+                      <div class="text-sm text-amber-900 leading-snug">
+                        <strong>Étiquette créée</strong> — le bordereau est imprimé mais le colis n'est <strong>pas encore parti</strong>. Le client n'a pas été notifié.
+                        <div class="mt-1 text-xs text-amber-800">Clique ci-dessous <strong>quand le transporteur a récupéré le colis</strong> : passage en « Expédiée », notification client + démarrage du délai de retour 30 j.</div>
+                      </div>
+                    </div>
+                    <form action="/admin/commandes/<%= order.id %>/statut" method="POST" data-ajax="true">
+                      <input type="hidden" name="status" value="shipped" />
+                      <button class="w-full rounded-xl bg-emerald-600 text-white px-4 py-3 text-sm font-bold uppercase tracking-wider hover:bg-emerald-700 transition flex items-center justify-center gap-2" type="submit">
+                        <span class="material-symbols-outlined" style="font-size:18px">local_shipping</span>
+                        Marquer comme expédié (transporteur passé)
+                      </button>
+                    </form>
+                  </div>
+                <% } %>
+
                 <!-- Changement manuel (avancé) -->
                 <div class="mt-6">
                   <button type="button" id="toggle-manual-status-btn" class="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition cursor-pointer" style="position:relative;z-index:5;">
