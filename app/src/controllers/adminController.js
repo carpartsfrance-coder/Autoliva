@@ -11870,8 +11870,10 @@ async function finalizeJumingoShipment(req, res, order, { orderNumber, shipmentI
 
   const pdf = await jumingo.getLabelPdf(orderNumber);
   const detail = await jumingo.getShipmentDetail(shipmentId);
-  if ((!pdf.ok || !pdf.base64) && (!detail.ok || !detail.trackingNumber)) {
-    return res.json({ ok: false, needsRetry: true, error: "Paiement pas encore confirmé chez Jumingo. Termine le paiement dans l'onglet ouvert, puis réessaie." });
+  // Le PDF de l'étiquette est l'artefact qui compte (généré de façon asynchrone
+  // après la commande / le paiement). Tant qu'il n'est pas prêt → on réessaie.
+  if (!pdf.ok || !pdf.base64) {
+    return res.json({ ok: false, needsRetry: true, error: 'Étiquette en cours de génération chez Jumingo. Patiente quelques secondes puis clique à nouveau sur « Récupérer l\'étiquette ».' });
   }
 
   // Idempotence : déjà enregistré → on nettoie le pending et on sort.
@@ -11943,15 +11945,20 @@ async function postAdminBuyJumingoLabel(req, res) {
     const attach = await jumingo.attachRate(shipmentId, { tariffId, shippingType, pickupDate });
     if (!attach.ok) return res.status(502).json({ ok: false, error: 'Jumingo (sélection tarif) : ' + attach.error });
 
-    const method = String(process.env.JUMINGO_PAYMENT_METHOD || 'paypal').trim();
+    const method = String(process.env.JUMINGO_PAYMENT_METHOD || 'rechnung').trim();
     const buy = await jumingo.purchaseLabel({ shipmentIds: [shipmentId], method });
     if (!buy.ok) return res.status(502).json({ ok: false, error: 'Jumingo (commande) : ' + buy.error });
 
+    // Mémorise la commande Jumingo (pour récupérer l'étiquette / réessayer).
+    order.pendingJumingoLabel = { orderNumber: buy.orderNumber, shipmentId, direction, carrier, createdAt: new Date() };
+    await order.save();
+
+    // PayPal/CB (returnUrl) : paiement externe à faire avant de récupérer.
     if (buy.returnUrl) {
-      order.pendingJumingoLabel = { orderNumber: buy.orderNumber, shipmentId, direction, carrier, createdAt: new Date() };
-      await order.save();
       return res.json({ ok: true, needsPayment: true, returnUrl: buy.returnUrl, orderNumber: buy.orderNumber });
     }
+    // rechnung/lastschrift : commande déjà passée → on récupère l'étiquette
+    // (génération parfois asynchrone → finalize peut renvoyer needsRetry).
     return finalizeJumingoShipment(req, res, order, { orderNumber: buy.orderNumber, shipmentId, direction, carrier });
   } catch (err) {
     console.error('[admin] buyJumingoLabel:', err && err.message);

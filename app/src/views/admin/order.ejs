@@ -1129,9 +1129,9 @@
                   <button type="button" class="mt-2 text-xs text-slate-500 underline" data-jumingo-back>← changer le poids / les dimensions</button>
                 </div>
                 <div class="hidden" data-jumingo-step="pay">
-                  <div class="text-sm text-slate-700 mb-3 rounded-lg bg-amber-50 border border-amber-200 p-3">Une page de paiement Jumingo s'est ouverte dans un nouvel onglet. <strong>Paie ton étiquette</strong> là-bas (PayPal / carte), puis reviens ici.</div>
-                  <button type="button" class="w-full rounded-lg bg-emerald-600 text-white px-4 py-3 text-sm font-bold hover:bg-emerald-700 transition" data-jumingo-finalize>✅ J'ai payé — récupérer l'étiquette</button>
-                  <a class="mt-2 inline-block text-xs text-blue-600 underline" data-jumingo-payurl href="#" target="_blank" rel="noopener">↗ Rouvrir la page de paiement</a>
+                  <div class="text-sm text-slate-700 mb-3 rounded-lg bg-amber-50 border border-amber-200 p-3" data-jumingo-paymsg></div>
+                  <button type="button" class="w-full rounded-lg bg-emerald-600 text-white px-4 py-3 text-sm font-bold hover:bg-emerald-700 transition" data-jumingo-finalize>✅ Récupérer l'étiquette</button>
+                  <a class="mt-2 hidden text-xs text-blue-600 underline" data-jumingo-payurl href="#" target="_blank" rel="noopener">↗ Rouvrir la page de paiement</a>
                 </div>
                 <div class="text-xs text-rose-600 hidden" data-jumingo-error></div>
               </div>
@@ -1173,18 +1173,24 @@
                       div.innerHTML='<div class="text-sm min-w-0"><div class="font-bold text-slate-900 truncate">'+(rt.carrier||'?')+' <span class="font-normal text-slate-500">'+(rt.service||'')+'</span></div><div class="text-xs text-slate-500">'+(rt.transit?rt.transit+' j • ':'')+money(rt.priceTotal)+'</div></div>';
                       var buy=document.createElement('button'); buy.type='button'; buy.className='shrink-0 rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold hover:bg-emerald-700'; buy.textContent='Acheter '+money(rt.priceTotal);
                       buy.addEventListener('click', function(){
-                        if(!confirm('Créer cette étiquette '+(rt.carrier||'')+' pour '+money(rt.priceTotal)+' ?\n\nUne page de paiement Jumingo va s\'ouvrir (PayPal / carte). Aucun débit tant que tu n\'as pas payé.')) return;
-                        buy.disabled=true; buy.textContent='Création…'; showErr('');
+                        if(!confirm('Commander cette étiquette '+(rt.carrier||'')+' pour '+money(rt.priceTotal)+' ?\n\n⚠️ Jumingo te facturera ce montant.')) return;
+                        buy.disabled=true; buy.textContent='Commande…'; showErr('');
                         fetch('/admin/commandes/'+orderId+'/jumingo/acheter', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({shipmentId:state.shipmentId, tariffId:rt.tariffId, shippingType:rt.shippingType, carrier:rt.carrier, pickupDate:state.pickupDate, direction:state.direction})})
                           .then(function(r){return r.json();}).then(function(d2){
-                            if(!d2.ok){ buy.disabled=false; buy.textContent='Réessayer'; showErr(d2.error||'Erreur'); return; }
+                            var msg=root.querySelector('[data-jumingo-paymsg]'); var link=root.querySelector('[data-jumingo-payurl]');
                             if(d2.needsPayment && d2.returnUrl){
-                              var link=root.querySelector('[data-jumingo-payurl]'); if(link) link.href=d2.returnUrl;
+                              if(link){ link.href=d2.returnUrl; link.classList.remove('hidden'); }
+                              if(msg) msg.innerHTML='Une page de paiement Jumingo s\'est ouverte. <strong>Paie ton étiquette</strong>, puis reviens et récupère-la.';
                               window.open(d2.returnUrl, '_blank', 'noopener');
-                              stepRates.classList.add('hidden'); stepPay.classList.remove('hidden');
-                              return;
+                              stepRates.classList.add('hidden'); stepPay.classList.remove('hidden'); return;
                             }
-                            location.reload();
+                            if(d2.needsRetry){
+                              if(link) link.classList.add('hidden');
+                              if(msg) msg.innerHTML='Commande passée (facturée par Jumingo). L\'étiquette se génère — clique pour la récupérer.';
+                              stepRates.classList.add('hidden'); stepPay.classList.remove('hidden'); return;
+                            }
+                            if(d2.ok){ location.reload(); return; }
+                            buy.disabled=false; buy.textContent='Réessayer'; showErr(d2.error||'Erreur');
                           }).catch(function(){ buy.disabled=false; buy.textContent='Réessayer'; showErr('Erreur réseau'); });
                       });
                       div.appendChild(buy); list.appendChild(div);
