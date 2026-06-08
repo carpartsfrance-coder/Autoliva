@@ -17,7 +17,7 @@ const {
   buildProductPublicUrl,
   getPublicBaseUrlFromReq,
 } = require('../services/productPublic');
-const { buildHreflangSet } = require('../services/i18n');
+const { buildHreflangSet, t } = require('../services/i18n');
 const productI18n = require('../services/productI18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const { sanitizeBrandLeak } = require('../services/brandSanitizer');
@@ -835,18 +835,18 @@ async function getProduct(req, res, next) {
     }
     if (compatibleReferences.length) {
       compatibleReferences.forEach((r) => {
-        enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: 'Référence compatible', value: r });
+        enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.jsonldCompatRef'), value: r });
       });
     }
     if (warrantyYears) {
-      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: 'Garantie', value: `${warrantyYears} ans` });
+      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.guarantee'), value: `${warrantyYears} ${t(pageLang, 'product.yearsWord')}` });
     }
     if (product.shippingDelayText) {
-      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: 'Expédition', value: String(product.shippingDelayText).trim() });
+      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.shippingLabel'), value: String(product.shippingDelayText).trim() });
     }
     /* Test qualité, Programmation, État : tirés des specs si dispo, sinon
      * fallback constants pour signaler le positionnement reconditionné. */
-    enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: 'Test qualité', value: "Testé sur banc d'essai" });
+    enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.jsonldQualityTest'), value: t(pageLang, 'product.benchTested') });
     if (Array.isArray(product.specs)) {
       product.specs.forEach((s) => {
         if (s && typeof s === 'object') {
