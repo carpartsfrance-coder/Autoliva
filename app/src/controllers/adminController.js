@@ -11723,6 +11723,33 @@ async function getAdminJumingoDebug(req, res) {
     const jumingo = require('../services/jumingo');
     if (!jumingo.isEnabled()) return res.json({ error: 'JUMINGO_API_KEY absente côté serveur (Render).' });
 
+    // ── DEBUG ACHAT : ?buyOrderId=<id> → rejoue brouillon + tarifs + attach du
+    // moins cher + POST /orders, et dumpe les réponses BRUTES de attach et orders
+    // (crée une commande Jumingo EN ATTENTE de paiement — aucun débit). ──
+    const buyOrderId = String((req.query && req.query.buyOrderId) || '').trim();
+    if (buyOrderId) {
+      if (!jumingo.labelsEnabled()) return res.json({ error: 'JUMINGO_LABELS_ENABLED != true' });
+      if (!mongoose.Types.ObjectId.isValid(buyOrderId)) return res.json({ error: 'orderId invalide' });
+      const order = await Order.findById(buyOrderId).select('number shippingAddress userId totalCents').lean();
+      if (!order) return res.json({ error: 'commande introuvable' });
+      const user = order.userId ? await User.findById(order.userId).select('email').lean() : null;
+      const toAddress = jumingo.buildToAddress(order.shippingAddress, (user && user.email) || '');
+      const draft = await jumingo.createDraftShipment({ fromAddress: jumingo.senderJumingoAddress(), toAddress, email: (user && user.email) || '', weightKg: 10, length: 30, width: 30, height: 30, contentDescription: 'Pièce auto', valueAmount: Math.round((order.totalCents || 10000) / 100), reference: order.number });
+      if (!draft.ok) return res.json({ step: 'createDraft', error: draft.error });
+      const rates = await jumingo.getShipmentRates({ shipmentId: draft.shipmentId, pickupDate: new Date(Date.now() + 86400000).toISOString().slice(0, 19) + 'Z', deliveryDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 19) + 'Z' });
+      if (!rates.ok || !rates.rates.length) return res.json({ step: 'rates', error: rates.error || 'aucun tarif', rates: rates.rates });
+      const chosen = rates.rates[0];
+      const attachRaw = await jumingo._internal.apiSend('PUT', '/shipments/' + encodeURIComponent(draft.shipmentId), { rate: { shipper_tariff_id: String(chosen.tariffId), shipping_type: chosen.shippingType } });
+      const method = String(process.env.JUMINGO_PAYMENT_METHOD || 'paypal').trim();
+      const orderRaw = await jumingo._internal.apiSend('POST', '/orders', { shipmentIds: [draft.shipmentId], method });
+      return res.json({
+        chosenTariff: chosen,
+        method,
+        attach: { httpStatus: attachRaw.httpStatus, body: attachRaw.body != null ? attachRaw.body : (attachRaw.rawText || '').slice(0, 3000) },
+        order: { httpStatus: orderRaw.httpStatus, body: orderRaw.body != null ? orderRaw.body : (orderRaw.rawText || '').slice(0, 3000) },
+      });
+    }
+
     // ── DEBUG TARIFS : ?ratesOrderId=<id commande> → crée un brouillon + dumpe la
     // réponse brute des tarifs + le détail du brouillon (pour comprendre « aucun tarif »). ──
     const ratesOrderId = String((req.query && req.query.ratesOrderId) || '').trim();
