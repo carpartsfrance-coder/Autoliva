@@ -11739,14 +11739,26 @@ async function getAdminJumingoDebug(req, res) {
       const rates = await jumingo.getShipmentRates({ shipmentId: draft.shipmentId, pickupDate: new Date(Date.now() + 86400000).toISOString().slice(0, 19) + 'Z', deliveryDate: new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 19) + 'Z' });
       if (!rates.ok || !rates.rates.length) return res.json({ step: 'rates', error: rates.error || 'aucun tarif', rates: rates.rates });
       const chosen = rates.rates[0];
-      const attachRaw = await jumingo._internal.apiSend('PUT', '/shipments/' + encodeURIComponent(draft.shipmentId), { rate: { shipper_tariff_id: String(chosen.tariffId), shipping_type: chosen.shippingType } });
-      const method = String(process.env.JUMINGO_PAYMENT_METHOD || 'paypal').trim();
-      const orderRaw = await jumingo._internal.apiSend('POST', '/orders', { shipmentIds: [draft.shipmentId], method });
+      // Essai PATCH (partiel) pour attacher le tarif sans écraser le brouillon.
+      const attachRaw = await jumingo._internal.apiSend('PATCH', '/shipments/' + encodeURIComponent(draft.shipmentId), { rate: { shipper_tariff_id: String(chosen.tariffId), shipping_type: chosen.shippingType } });
+      const after = await jumingo._internal.apiGet('/shipments/' + encodeURIComponent(draft.shipmentId));
+      const ab = after.body || {};
+      // Probe des codes de paiement : on rapporte le statut/violation de chacun.
+      const methodsToTry = ['', 'paypal', 'creditcard', 'kreditkarte', 'sofort', 'vorkasse', 'guthaben', 'lastschrift', 'rechnung', 'bill', 'invoice'];
+      const methodResults = [];
+      for (const m of methodsToTry) {
+        const payload = { shipmentIds: [draft.shipmentId] };
+        if (m) payload.method = m;
+        const r2 = await jumingo._internal.apiSend('POST', '/orders', payload);
+        const viol = r2.body && r2.body.violations ? r2.body.violations.map((v) => v.propertyPath + ': ' + v.message).join(' | ') : '';
+        methodResults.push({ method: m || '(omis)', status: r2.httpStatus, ok: r2.ok, returnUrl: (r2.body && (r2.body.returnUrl || r2.body.url)) || '', orderNumber: (r2.body && r2.body.orderNumber) || '', error: viol || (r2.body && r2.body.detail) || '' });
+        if (r2.ok && r2.body && (r2.body.returnUrl || r2.body.orderNumber)) break; // 1ʳᵉ qui marche → on arrête
+      }
       return res.json({
         chosenTariff: chosen,
-        method,
-        attach: { httpStatus: attachRaw.httpStatus, body: attachRaw.body != null ? attachRaw.body : (attachRaw.rawText || '').slice(0, 3000) },
-        order: { httpStatus: orderRaw.httpStatus, body: orderRaw.body != null ? orderRaw.body : (orderRaw.rawText || '').slice(0, 3000) },
+        attach_PATCH: { httpStatus: attachRaw.httpStatus, body: attachRaw.body != null ? attachRaw.body : (attachRaw.rawText || '').slice(0, 1500) },
+        shipmentAfterAttach: { status: ab.status, rate: ab.rate ? 'OK' : null, email: ab.details && ab.details.email, packages: (ab.packages || []).length, importMessages: ab.import_messages_text || ab.import_messages },
+        paymentMethods: methodResults,
       });
     }
 
