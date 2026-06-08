@@ -199,6 +199,7 @@ router.get('/visiteurs/:sessionId/events', requireAdminAuth, adminController.get
 router.get('/commandes', requireAdminAuth, adminController.getAdminOrdersPage);
 router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteOrders);
 router.post('/commandes/sync-suivi', requireAdminAuth, adminController.postAdminSyncShipmentTracking);
+router.get('/commandes/jumingo-debug', requireAdminAuth, adminController.getAdminJumingoDebug);
 router.get('/commandes/nouvelle', requireAdminAuth, adminController.getAdminNewOrderPage);
 router.get('/commandes/:orderId', requireAdminAuth, adminController.getAdminOrderDetailPage);
 router.post('/commandes/:orderId/statut', requireAdminAuth, adminController.postAdminUpdateOrderStatus);

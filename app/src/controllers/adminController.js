@@ -11715,8 +11715,31 @@ async function postAdminSyncShipmentTracking(req, res) {
   return res.redirect('/admin/commandes' + (req.body && req.body.returnTo ? '' : ''));
 }
 
+/* DEBUG (admin) : affiche la réponse BRUTE de Jumingo pour un n° de suivi, afin
+ * de valider/corriger le parsing. Usage : /admin/commandes/jumingo-debug?tracking=XXXX
+ * Ne révèle JAMAIS la clé API (juste la réponse de l'API). */
+async function getAdminJumingoDebug(req, res) {
+  try {
+    const jumingo = require('../services/jumingo');
+    const tn = String((req.query && req.query.tracking) || '').trim();
+    if (!jumingo.isEnabled()) return res.json({ error: 'JUMINGO_API_KEY absente côté serveur (Render).' });
+    if (!tn) return res.json({ error: 'Ajoute ?tracking=<numéro de suivi> à l’URL.' });
+    const list = await jumingo._internal.apiGet('/shipments?search=' + encodeURIComponent(tn));
+    const parsed = await jumingo.getTrackingStatus(tn);
+    return res.json({
+      trackingNumber: tn,
+      httpStatus: list.httpStatus,
+      interpretation: parsed,
+      rawResponse: list.body != null ? list.body : (list.rawText || '').slice(0, 6000),
+    });
+  } catch (err) {
+    return res.json({ error: String(err && err.message ? err.message : err) });
+  }
+}
+
 module.exports = {
   postAdminSyncShipmentTracking,
+  getAdminJumingoDebug,
   getAdminHeroSettingsPage,
   postAdminHeroSettings,
   postAdminHeroUploadImage,
