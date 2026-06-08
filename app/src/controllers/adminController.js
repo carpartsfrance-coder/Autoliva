@@ -11695,7 +11695,28 @@ async function postAdminBulkUpdateProducts(req, res) {
   }
 }
 
+/* Synchronise MAINTENANT les statuts d'expédition depuis Jumingo (manuel).
+ * Pratique pour nettoyer le backlog tout de suite ou tester, sans attendre le
+ * cron. Force l'exécution (bypass JUMINGO_SYNC_ENABLED) mais exige la clé API. */
+async function postAdminSyncShipmentTracking(req, res) {
+  try {
+    const { syncShipmentTracking } = require('../jobs/syncShipmentTracking');
+    const r = await syncShipmentTracking({ force: true, limit: 200 });
+    if (r && r.skipped) {
+      req.session.adminOrderError = "Synchro Jumingo impossible : clé API absente (définir JUMINGO_API_KEY sur Render).";
+    } else {
+      req.session.adminOrderSuccess = `Suivis Jumingo synchronisés : ${r.toShipped} marquée(s) expédiée(s), ${r.toDelivered} livrée(s), ${r.revertedToLabel} remise(s) en « Étiquette créée » (${r.scanned} scannées).`;
+    }
+  } catch (err) {
+    console.error('[admin] postAdminSyncShipmentTracking failed:', err && err.message);
+    req.session.adminOrderError = "Erreur pendant la synchro des suivis Jumingo.";
+  }
+  if (wantsJsonResponse(req)) return res.json({ ok: true });
+  return res.redirect('/admin/commandes' + (req.body && req.body.returnTo ? '' : ''));
+}
+
 module.exports = {
+  postAdminSyncShipmentTracking,
   getAdminHeroSettingsPage,
   postAdminHeroSettings,
   postAdminHeroUploadImage,
