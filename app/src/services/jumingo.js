@@ -302,21 +302,40 @@ async function getShipmentRates({ shipmentId, pickupDate, deliveryDate }) {
 /* 3) Attache le tarif choisi au brouillon (GRATUIT). */
 async function attachRate(shipmentId, { tariffId, shippingType, pickupDate, pickupMinTime, pickupMaxTime }) {
   if (!labelsEnabled()) return { ok: false, error: 'JUMINGO_LABELS_ENABLED != true' };
-  const rate = { shipper_tariff_id: String(tariffId), shipping_type: shippingType || 'shop' };
-  if (pickupDate) rate.pickup_date = pickupDate;
-  if (pickupMinTime) rate.pickup_min_time = pickupMinTime;
-  if (pickupMaxTime) rate.pickup_max_time = pickupMaxTime;
-  const r = await apiSend('PUT', '/shipments/' + encodeURIComponent(shipmentId), { rate });
+  const stype = shippingType || 'shop';
+  const isShop = stype === 'shop';
+  // Le conteneur "rate" exige TOUS ces champs (guide d'intégration p.8) :
+  // shipper_tariff_id (id "s-…" pour un relais), shipping_type, pickup_date
+  // (future), pickup_min/max_time (= '00:00:00' pour un dépôt en point relais).
+  // PATCH = mise à jour partielle (PUT remplace tout et écrase email/colis).
+  const rate = {
+    shipper_tariff_id: String(tariffId),
+    shipping_type: stype,
+    pickup_date: pickupDate,
+    pickup_min_time: isShop ? '00:00:00' : (pickupMinTime || '09:00:00'),
+    pickup_max_time: isShop ? '00:00:00' : (pickupMaxTime || '18:00:00'),
+  };
+  const r = await apiSend('PATCH', '/shipments/' + encodeURIComponent(shipmentId), { rate });
   if (!r.ok) return { ok: false, error: apiError(r), httpStatus: r.httpStatus };
-  return { ok: true };
+  // Vérifie que le brouillon est passé en "ready" (tarif accepté).
+  const check = await apiGet('/shipments/' + encodeURIComponent(shipmentId));
+  const status = (check.body && (check.body.import_status || check.body.status)) || '';
+  if (status !== 'ready') {
+    let why = '';
+    try { why = JSON.stringify((check.body && (check.body.import_messages_text || check.body.import_messages)) || {}).slice(0, 300); } catch (_) { /* noop */ }
+    return { ok: false, error: 'Tarif non accepté (statut ' + (status || '?') + ') ' + why, status };
+  }
+  return { ok: true, ready: true, status };
 }
 
 /* 4) ⚠️ ACHÈTE l'étiquette (DÉBIT). À n'appeler que sur confirmation explicite. */
 async function purchaseLabel({ shipmentIds, method }) {
   if (!labelsEnabled()) return { ok: false, error: 'JUMINGO_LABELS_ENABLED != true' };
   const payload = { shipmentIds: Array.isArray(shipmentIds) ? shipmentIds : [shipmentIds] };
-  const m = method || process.env.JUMINGO_PAYMENT_METHOD;
-  if (m) payload.method = m;
+  // Modes valides (guide p.14) : lastschrift, rechnung, sammelrechnung.
+  // 'rechnung' (facture) par défaut = aucune donnée bancaire, Jumingo facture.
+  const m = method || process.env.JUMINGO_PAYMENT_METHOD || 'rechnung';
+  payload.method = m;
   const r = await apiSend('POST', '/orders', payload);
   if (!r.ok) return { ok: false, error: apiError(r), httpStatus: r.httpStatus };
   const orderNumber = (r.body && (r.body.orderNumber || r.body.number)) || '';
