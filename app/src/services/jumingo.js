@@ -208,6 +208,16 @@ function toCountryCode(c) {
   return map[v.toLowerCase()] || 'FR';
 }
 
+/* Adresse expéditeur CPF au format adresse Jumingo (email dans settings). */
+function senderJumingoAddress() {
+  const s = getSenderAddress();
+  return {
+    company: s.company, name: s.name, street: s.street, street2: s.street2,
+    zip: s.zip, city: s.city, country: s.country, phone: s.phone,
+    settings: s.email ? { email: s.email } : {},
+  };
+}
+
 /* Construit l'objet adresse Jumingo depuis un snapshot d'adresse de commande. */
 function buildToAddress(shippingAddress, email) {
   const a = shippingAddress || {};
@@ -224,11 +234,13 @@ function buildToAddress(shippingAddress, email) {
   };
 }
 
-/* 1) Crée un brouillon d'envoi (GRATUIT, non payé). → { ok, shipmentId } */
-async function createDraftShipment({ toAddress, email, weightKg, length, width, height, contentDescription, valueAmount, reference }) {
+/* 1) Crée un brouillon d'envoi (GRATUIT, non payé). → { ok, shipmentId }
+ * fromAddress / toAddress au format adresse Jumingo. Pour un ENVOI : from=CPF,
+ * to=client. Pour une COLLECTE : from=client, to=CPF (inversion). */
+async function createDraftShipment({ fromAddress, toAddress, email, weightKg, length, width, height, contentDescription, valueAmount, reference }) {
   if (!labelsEnabled()) return { ok: false, error: 'JUMINGO_LABELS_ENABLED != true' };
   const payload = {
-    from_address: getSenderAddress(),
+    from_address: fromAddress || senderJumingoAddress(),
     to_address: toAddress,
     details: {
       content_description: String(contentDescription || 'Pièce auto').slice(0, 35),
@@ -331,6 +343,7 @@ module.exports = {
   mapJumingoStatus,
   getTrackingStatus,
   getSenderAddress,
+  senderJumingoAddress,
   toCountryCode,
   buildToAddress,
   createDraftShipment,

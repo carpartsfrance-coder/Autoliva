@@ -31,7 +31,7 @@ function latestTrackingNumber(order) {
   const shipments = Array.isArray(order.shipments) ? order.shipments : [];
   const withTn = shipments
     .filter((s) => s && s.trackingNumber && String(s.trackingNumber).trim()
-      && s.label !== 'Récupération clonage')
+      && s.label !== 'Récupération clonage' && s.label !== 'Collecte') // inbound → ne pilote pas le statut d'envoi
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   return withTn.length ? String(withTn[0].trackingNumber).trim() : '';
 }
