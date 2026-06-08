@@ -642,7 +642,7 @@ async function getOrderDetailPage(req, res, next) {
        Update atomique : seule la requête qui fait passer le flag à `true`
        voit `firePurchase = true`. Évite les doubles comptages au reload. */
     let firePurchase = false;
-    const isPaidOrFulfilled = ['paid', 'processing', 'shipped', 'delivered', 'completed']
+    const isPaidOrFulfilled = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed']
       .includes(getTrimmedString(order.status).toLowerCase());
 
     if (isPaidOrFulfilled && !order.analyticsTracked) {
@@ -908,6 +908,10 @@ function getTrackingUiForStatus(status) {
       };
     case 'paid':
     case 'processing':
+    case 'label_created':
+      // « Étiquette créée » est une distinction INTERNE (bordereau imprimé mais
+      // colis pas encore remis au transporteur) : côté client, on reste sur
+      // « En préparation » tant que le départ réel n'est pas confirmé.
       return {
         statusLabel: 'En préparation',
         statusBadgeClass: 'bg-amber-50 text-amber-800',
@@ -957,6 +961,7 @@ function getTimelineTitleForStatus(status) {
       return 'Commande expédiée';
     case 'paid':
       return 'Paiement accepté';
+    case 'label_created':
     case 'processing':
       return 'Commande en préparation';
     case 'cancelled':
@@ -1630,6 +1635,7 @@ function getStatusBadge(status) {
       return { label: 'Remboursée', className: 'bg-slate-100 text-slate-700' };
     case 'paid':
       return { label: 'Payée', className: 'bg-emerald-50 text-emerald-700' };
+    case 'label_created':
     case 'processing':
       return { label: 'En préparation', className: 'bg-amber-50 text-amber-800' };
     case 'pending_payment':
@@ -1723,6 +1729,7 @@ function getOrderStatusBanner(order) {
   switch (status) {
     case 'shipped':
       return { title: "Votre commande est en cours d'expédition", subtitle: 'Livraison prévue sous 2-3 jours ouvrés.', icon: 'local_shipping', bgClass: 'bg-blue-600' };
+    case 'label_created':
     case 'paid':
     case 'processing':
       return { title: 'Votre commande est validée', subtitle: 'Nous préparons votre colis.', icon: 'inventory_2', bgClass: 'bg-blue-600' };
@@ -1746,6 +1753,7 @@ function formatOrderStatus(status) {
       return 'Paiement en attente';
     case 'paid':
       return 'Payée';
+    case 'label_created':
     case 'processing':
       return 'En préparation';
     case 'shipped':
@@ -1797,7 +1805,7 @@ async function getAccount(req, res, next) {
 
       req.session.accountType = user.accountType;
 
-      const inProgressStatuses = ['pending_payment', 'paid', 'processing', 'shipped'];
+      const inProgressStatuses = ['pending_payment', 'paid', 'processing', 'label_created', 'shipped'];
       inProgressOrderCount = await Order.countDocuments({
         userId: user._id,
         status: { $in: inProgressStatuses },

@@ -20,7 +20,7 @@ exports.getSavHome = async (req, res) => {
       const orders = await Order.find({
         userId: sessionUser._id,
         createdAt: { $gte: cutoff },
-        status: { $in: ['paid', 'processing', 'shipped', 'delivered', 'completed'] },
+        status: { $in: ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'] },
       })
         .sort({ createdAt: -1 })
         .limit(30)
@@ -143,7 +143,7 @@ exports.getSimpleForm = async (req, res) => {
       const orders = await Order.find({
         userId: sessionUser._id,
         createdAt: { $gte: cutoff },
-        status: { $in: ['paid', 'processing', 'shipped', 'delivered', 'completed'] },
+        status: { $in: ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'] },
       }).sort({ createdAt: -1 }).limit(30).select('number createdAt items totalCents status').lean();
       eligibleOrders = orders.map((o) => {
         const items = Array.isArray(o.items) ? o.items : [];

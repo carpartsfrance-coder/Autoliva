@@ -4707,6 +4707,14 @@ aside nav a {
   color: #2563EB;
 }
 
+/* Étiquette créée : bordereau imprimé mais transporteur pas encore passé.
+   Ambre = « prêt à partir, en attente » (distinct du bleu préparation et du
+   vert expédié). */
+.status-etiquette {
+  background: #FFFBEB;
+  color: #B45309;
+}
+
 .status-expediee {
   background: #F0FDF4;
   color: #15803D;

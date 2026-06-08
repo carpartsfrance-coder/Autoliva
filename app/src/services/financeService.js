@@ -26,7 +26,7 @@ const expenseService = require('./expenseService');
 
 const TVA_RATE = 0.20;
 
-const SOLD_STATUSES = ['paid', 'processing', 'shipped', 'delivered', 'completed', 'partially_refunded'];
+const SOLD_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed', 'partially_refunded'];
 
 function getMonthRange(year, month) {
   const y = Number(year);

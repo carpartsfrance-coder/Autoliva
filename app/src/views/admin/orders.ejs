@@ -69,6 +69,7 @@
             <option value="pending_payment" <%= filters && filters.status === 'pending_payment' ? 'selected' : '' %>>En attente paiement</option>
             <option value="paid" <%= filters && filters.status === 'paid' ? 'selected' : '' %>>Payée</option>
             <option value="processing" <%= filters && filters.status === 'processing' ? 'selected' : '' %>>En préparation</option>
+            <option value="label_created" <%= filters && filters.status === 'label_created' ? 'selected' : '' %>>Étiquette créée (pas encore partie)</option>
             <option value="shipped" <%= filters && filters.status === 'shipped' ? 'selected' : '' %>>Expédiée</option>
             <option value="delivered" <%= filters && filters.status === 'delivered' ? 'selected' : '' %>>Livrée</option>
             <option value="completed" <%= filters && filters.status === 'completed' ? 'selected' : '' %>>Terminée</option>

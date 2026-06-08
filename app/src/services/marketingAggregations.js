@@ -15,7 +15,7 @@
 const Order = require('../models/Order');
 const AttributionTouch = require('../models/AttributionTouch');
 
-const PAID_ORDER_STATUSES = ['paid', 'processing', 'shipped', 'delivered', 'completed'];
+const PAID_ORDER_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
 
 const ALLOWED_PERIODS = new Set(['7d', '30d', '90d', '365d', 'all']);
 const DEFAULT_PERIOD = '30d';

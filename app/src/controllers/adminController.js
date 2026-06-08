@@ -1619,6 +1619,8 @@ function getOrderStatusBadge(status) {
       return { label: 'Payée', className: 'status-chip status-paid' };
     case 'processing':
       return { label: 'En préparation', className: 'status-chip status-en-preparation' };
+    case 'label_created':
+      return { label: 'Étiquette créée', className: 'status-chip status-etiquette' };
     case 'shipped':
       return { label: 'Expédiée', className: 'status-chip status-expediee' };
     case 'delivered':
@@ -1683,6 +1685,7 @@ function getOrderStatusOptions() {
     { key: 'pending_payment', label: 'En attente paiement' },
     { key: 'paid', label: 'Payée' },
     { key: 'processing', label: 'En préparation' },
+    { key: 'label_created', label: 'Étiquette créée' },
     { key: 'shipped', label: 'Expédiée' },
     { key: 'delivered', label: 'Livrée' },
     { key: 'completed', label: 'Terminée' },
@@ -2144,7 +2147,7 @@ async function getAdminDashboard(req, res, next) {
       status: { $nin: ['draft', 'pending_payment', 'pending', 'cancelled', 'canceled', 'refunded'] },
       $or: [
         { paymentStatus: { $in: ['paid', 'captured', 'completed'] } },
-        { status: { $in: ['paid', 'processing', 'shipped', 'delivered', 'completed'] } },
+        { status: { $in: ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'] } },
       ],
     };
 
@@ -3725,6 +3728,7 @@ async function postAdminAddOrderShipment(req, res, next) {
     // - Pour les commandes clonage : uniquement si label "Envoi"/"Envoi partiel" + cloningStatus='cloning_done'
     // - Pour les commandes standard : tout ajout de suivi (sauf "Récupération clonage") déclenche le passage à 'shipped'
     let autoShipped = false;
+    let labelCreatedOnly = false;
     const isEnvoiLabel = label === 'Envoi' || label === 'Envoi partiel';
     if (!isRecupClonage) {
       try {
@@ -3740,13 +3744,21 @@ async function postAdminAddOrderShipment(req, res, next) {
           const standardReady = !isClonage && (orderForShip.status === 'paid' || orderForShip.status === 'processing');
 
           if (clonageReady || standardReady) {
-            orderForShip.status = 'shipped';
-            if (clonageReady) {
+            if (standardReady) {
+              // Étiquette créée ≠ colis parti. On NE passe PAS en « expédié » :
+              // le bordereau existe mais le transporteur n'est pas encore passé.
+              // L'admin confirmera l'expédition réelle via « Marquer expédié »
+              // (c'est CE moment qui déclenche l'email client + le délai retour 30j).
+              orderForShip.status = 'label_created';
+              orderForShip._statusChangeNote = 'Étiquette créée — en attente de remise au transporteur';
+              labelCreatedOnly = true;
+            } else {
+              orderForShip.status = 'shipped';
               if (!orderForShip.cloningDates) orderForShip.cloningDates = {};
               orderForShip.cloningDates.shippedToClientAt = new Date();
+              orderForShip._statusChangeNote = 'Expédition ajoutée — statut mis à jour automatiquement';
             }
             orderForShip._statusChangedBy = adminEmail;
-            orderForShip._statusChangeNote = 'Expédition ajoutée — statut mis à jour automatiquement';
             await orderForShip.save();
             autoShipped = true;
           }
@@ -3758,7 +3770,9 @@ async function postAdminAddOrderShipment(req, res, next) {
 
     const successMsg = cloningEmailSent
       ? 'Suivi ajouté. Étiquette envoyée au client par email. Statut clonage mis à jour.'
-      : autoShipped
+      : labelCreatedOnly
+        ? 'Étiquette créée ✓ — la commande passera en « Expédiée » quand tu cliqueras sur « Marquer expédié » (transporteur passé). Le client n\'est PAS encore notifié.'
+        : autoShipped
         ? 'Suivi ajouté. Commande marquée comme expédiée automatiquement.'
         : isRecupClonage
           ? (documentData ? 'Suivi ajouté avec document. Statut clonage mis à jour.' : 'Suivi ajouté. Statut clonage mis à jour.')
@@ -8348,7 +8362,7 @@ async function getAdminClientDetailPage(req, res, next) {
 
     const filteredOrderQuery = { ...baseOrderQuery };
 
-    if (['pending_payment', 'paid', 'processing', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded'].includes(orderStatus)) {
+    if (['pending_payment', 'paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded'].includes(orderStatus)) {
       filteredOrderQuery.status = orderStatus;
     }
 
@@ -8455,7 +8469,7 @@ async function getAdminClientDetailPage(req, res, next) {
 
     const orderFilters = {
       q: orderQ,
-      status: ['pending_payment', 'paid', 'processing', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded'].includes(orderStatus) ? orderStatus : '',
+      status: ['pending_payment', 'paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed', 'cancelled', 'refunded'].includes(orderStatus) ? orderStatus : '',
       period: ['7d', '30d', '90d', '365d'].includes(orderPeriod) ? orderPeriod : '',
     };
 
@@ -9946,7 +9960,7 @@ function buildTimelineSteps(order) {
   const rd = order.returnDates || {};
   const ct = order.cloningTracking || {};
 
-  const paidStatuses = new Set(['paid', 'processing', 'shipped', 'delivered', 'completed']);
+  const paidStatuses = new Set(['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed']);
   const isPaid = paidStatuses.has(st);
 
   if (ot === 'exchange_cloning') {
@@ -9996,7 +10010,7 @@ function buildTimelineSteps(order) {
     steps.push({ key: 'order_placed', label: 'Commande passée', date: formatDateTimeFR(order.createdAt), state: 'done', icon: 'shopping_cart' });
     steps.push({ key: 'payment_received', label: isPaid ? 'Paiement reçu' : 'Paiement en attente', date: isPaid ? (order.molliePaidAt ? formatDateTimeFR(order.molliePaidAt) : formatDateTimeFR(order.createdAt)) : null, state: isPaid ? 'done' : 'current', icon: 'payments' });
 
-    const processingOrBeyond = new Set(['processing', 'shipped', 'delivered', 'completed']);
+    const processingOrBeyond = new Set(['processing', 'label_created', 'shipped', 'delivered', 'completed']);
     steps.push({ key: 'processing', label: 'En préparation', date: null, state: processingOrBeyond.has(st) ? 'done' : (st === 'paid' ? 'current' : 'future'), icon: 'inventory' });
 
     const shippedOrBeyond = new Set(['shipped', 'delivered', 'completed']);
@@ -10025,7 +10039,7 @@ function buildTimelineSteps(order) {
     steps.push({ key: 'order_placed', label: 'Commande passée', date: formatDateTimeFR(order.createdAt), state: 'done', icon: 'shopping_cart' });
     steps.push({ key: 'payment_received', label: isPaid ? 'Paiement reçu' : 'Paiement en attente', date: isPaid ? (order.molliePaidAt ? formatDateTimeFR(order.molliePaidAt) : null) : null, state: isPaid ? 'done' : 'current', icon: 'payments' });
 
-    const processingOrBeyond = new Set(['processing', 'shipped', 'delivered', 'completed']);
+    const processingOrBeyond = new Set(['processing', 'label_created', 'shipped', 'delivered', 'completed']);
     steps.push({ key: 'processing', label: 'En préparation', date: null, state: processingOrBeyond.has(st) ? 'done' : (st === 'paid' ? 'current' : 'future'), icon: 'inventory' });
 
     const shippedOrBeyond = new Set(['shipped', 'delivered', 'completed']);

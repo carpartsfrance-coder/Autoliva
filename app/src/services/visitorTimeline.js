@@ -10,7 +10,7 @@
 const mongoose = require('mongoose');
 const AnalyticsEvent = require('../models/AnalyticsEvent');
 
-const PAID_ORDER_STATUSES = ['paid', 'processing', 'shipped', 'delivered', 'completed'];
+const PAID_ORDER_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
 
 const ALLOWED_PERIODS = new Set(['1h', '24h', '7d', '30d']);
 const DEFAULT_PERIOD = '24h';
