@@ -40,11 +40,14 @@ async function syncShipmentTracking({ limit = 80, force = false } = {}) {
   if (!jumingo.isEnabled()) return { skipped: true, reason: 'JUMINGO_API_KEY absente' };
   if (!force && !isSyncEnabled()) return { skipped: true, reason: 'JUMINGO_SYNC_ENABLED != true' };
 
-  const recentCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // backlog : 30 derniers jours
+  // Garde-fou backlog : on se base sur la date de l'ÉTIQUETTE (dernier suivi),
+  // PAS sur la date de commande — une vieille commande peut être étiquetée
+  // aujourd'hui (étiquette récente = candidate légitime).
+  const recentCutoff = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000); // 60 j sur la date d'étiquette
   const candidates = await Order.find({
     $or: [
       { status: 'label_created' },
-      { status: 'shipped', createdAt: { $gte: recentCutoff } },
+      { status: 'shipped', 'shipments.createdAt': { $gte: recentCutoff } },
     ],
     'shipments.0': { $exists: true },
     orderType: { $ne: 'exchange_cloning' }, // le clonage garde son flux propre
