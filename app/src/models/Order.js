@@ -357,6 +357,15 @@ const orderSchema = new mongoose.Schema(
       refundInProgressAt: { type: Date, default: null },
     },
     shipments: { type: [shipmentSchema], default: [] },
+    /* Étiquette Jumingo achetée mais en attente de paiement externe (PayPal/CB).
+     * Renseignée à l'achat, vidée une fois le PDF + suivi récupérés. */
+    pendingJumingoLabel: {
+      orderNumber: { type: String, default: '', trim: true },
+      shipmentId: { type: String, default: '', trim: true },
+      direction: { type: String, default: 'envoi', trim: true },
+      carrier: { type: String, default: '', trim: true },
+      createdAt: { type: Date, default: null },
+    },
     refunds: { type: [refundSchema], default: [] },
     creditNotes: { type: [creditNoteSchema], default: [] },
     totalCents: { type: Number, required: true, min: 0 },

@@ -320,9 +320,11 @@ async function purchaseLabel({ shipmentIds, method }) {
   const r = await apiSend('POST', '/orders', payload);
   if (!r.ok) return { ok: false, error: apiError(r), httpStatus: r.httpStatus };
   const orderNumber = (r.body && (r.body.orderNumber || r.body.number)) || '';
-  const success = r.body && (r.body.success === true || !!orderNumber);
-  if (!success || !orderNumber) return { ok: false, error: 'Achat sans orderNumber/échec', raw: r.body };
-  return { ok: true, orderNumber, token: r.body && r.body.token };
+  // returnUrl = page de paiement externe (PayPal/CB). Si présent → paiement à
+  // finaliser par l'admin ; sinon paiement direct (SEPA) déjà passé.
+  const returnUrl = (r.body && (r.body.returnUrl || r.body.return_url || r.body.url)) || '';
+  if (!orderNumber) return { ok: false, error: 'Commande Jumingo sans numéro', raw: r.body };
+  return { ok: true, orderNumber, returnUrl, token: (r.body && r.body.token) || '' };
 }
 
 /* 5) Récupère le PDF de l'étiquette (base64) après achat. */
