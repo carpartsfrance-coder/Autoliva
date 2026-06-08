@@ -13,15 +13,13 @@
             <div>
               <div class="text-xs font-black uppercase tracking-widest text-slate-400"><%= brand.NAME %></div>
               <h1 class="text-2xl sm:text-3xl font-black tracking-tight">
-                <%= mode === 'devis' ? 'Demande de devis' : 'Contact' %>
+                <%= mode === 'devis' ? t('contact.titleDevis') : t('contact.titleContact') %>
               </h1>
             </div>
           </div>
 
           <p class="mt-4 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-            <%= mode === 'devis'
-              ? "Indiquez-nous ce qu’il vous faut (référence, VIN, véhicule) et nous vous répondons rapidement avec la bonne pièce et le bon prix."
-              : "Une question ? Besoin d’aide pour une référence ou une compatibilité ? Écrivez-nous, nous vous répondons rapidement." %>
+            <%= mode === 'devis' ? t('contact.introDevis') : t('contact.introContact') %>
           </p>
 
           <div class="mt-6 flex flex-col sm:flex-row flex-wrap gap-3">
@@ -36,18 +34,18 @@
           </div>
 
           <div class="mt-8 rounded-3xl border border-slate-200/70 dark:border-slate-700 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-900/40 p-6">
-            <div class="text-xs font-black uppercase tracking-widest text-slate-400">Choisir</div>
+            <div class="text-xs font-black uppercase tracking-widest text-slate-400"><%= t('contact.choose') %></div>
             <div class="mt-3 grid grid-cols-2 gap-3">
-              <a class="rounded-2xl border px-4 py-3 text-sm font-black transition-colors <%= mode === 'contact' ? 'border-primary/40 bg-primary/10 text-primary' : 'border-slate-200 dark:border-slate-700 hover:bg-white/70 dark:hover:bg-slate-800' %>" href="/contact">
-                Contact
+              <a class="rounded-2xl border px-4 py-3 text-sm font-black transition-colors <%= mode === 'contact' ? 'border-primary/40 bg-primary/10 text-primary' : 'border-slate-200 dark:border-slate-700 hover:bg-white/70 dark:hover:bg-slate-800' %>" href="<%= langPrefix %>/contact">
+                <%= t('contact.titleContact') %>
               </a>
-              <a class="rounded-2xl border px-4 py-3 text-sm font-black transition-colors <%= mode === 'devis' ? 'border-primary/40 bg-primary/10 text-primary' : 'border-slate-200 dark:border-slate-700 hover:bg-white/70 dark:hover:bg-slate-800' %>" href="/devis">
-                Devis
+              <a class="rounded-2xl border px-4 py-3 text-sm font-black transition-colors <%= mode === 'devis' ? 'border-primary/40 bg-primary/10 text-primary' : 'border-slate-200 dark:border-slate-700 hover:bg-white/70 dark:hover:bg-slate-800' %>" href="<%= langPrefix %>/devis">
+                <%= t('contact.tabDevis') %>
               </a>
             </div>
 
             <div class="mt-4 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-              Astuce : pour une compatibilité parfaite, indique si possible le VIN (17 caractères) ou l’immatriculation, et/ou la référence (OEM) de la pièce.
+              <%= t('contact.tip') %>
             </div>
           </div>
         </div>
@@ -57,7 +55,7 @@
         <div class="rounded-3xl bg-white dark:bg-surface-dark border border-slate-100 dark:border-slate-800 p-6 sm:p-10 shadow-premium">
           <% if (errorMessage) { %>
             <div class="mb-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900">
-              <div class="font-bold">Erreur</div>
+              <div class="font-bold"><%= t('checkout.errorShort') %></div>
               <div class="mt-1 text-sm"><%= errorMessage %></div>
             </div>
           <% } %>
@@ -69,29 +67,29 @@
             </div>
           <% } %>
 
-          <form action="<%= mode === 'devis' ? '/devis' : '/contact' %>" class="space-y-5" method="POST">
+          <form action="<%= langPrefix %><%= mode === 'devis' ? '/devis' : '/contact' %>" class="space-y-5" method="POST">
             <input name="mode" type="hidden" value="<%= mode %>" />
             <input name="website" type="text" value="<%= form && form.website ? form.website : '' %>" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden;" />
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="firstName">Prénom</label>
-                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="firstName" name="firstName" placeholder="Votre prénom" type="text" value="<%= form && form.firstName ? form.firstName : '' %>" />
+                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="firstName"><%= t('contact.firstName') %></label>
+                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="firstName" name="firstName" placeholder="<%= t('contact.phFirstName') %>" type="text" value="<%= form && form.firstName ? form.firstName : '' %>" />
               </div>
               <div>
-                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="lastName">Nom</label>
-                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="lastName" name="lastName" placeholder="Votre nom" type="text" value="<%= form && form.lastName ? form.lastName : '' %>" />
+                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="lastName"><%= t('contact.lastName') %></label>
+                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="lastName" name="lastName" placeholder="<%= t('contact.phLastName') %>" type="text" value="<%= form && form.lastName ? form.lastName : '' %>" />
               </div>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="email">Email</label>
-                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="email" name="email" placeholder="votre@email.fr" required type="email" value="<%= form && form.email ? form.email : '' %>" />
+                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="email"><%= t('contact.email') %></label>
+                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="email" name="email" placeholder="<%= t('contact.phEmail') %>" required type="email" value="<%= form && form.email ? form.email : '' %>" />
               </div>
               <div>
-                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="phone">Téléphone (optionnel)</label>
-                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="phone" name="phone" placeholder="Ex : 06 12 34 56 78" type="tel" value="<%= form && form.phone ? form.phone : '' %>" />
+                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="phone"><%= t('contact.phoneOpt') %></label>
+                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="phone" name="phone" placeholder="<%= t('contact.phPhone') %>" type="tel" value="<%= form && form.phone ? form.phone : '' %>" />
               </div>
             </div>
 
@@ -102,25 +100,25 @@
             <% if (showCompatibilityFields) { %>
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="vin">VIN (optionnel)</label>
-                  <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="vin" name="vin" placeholder="17 caractères" type="text" value="<%= form && form.vin ? form.vin : '' %>" />
-                  <div class="mt-1 text-[11px] text-slate-500">Vous le trouverez sur la carte grise (case E) ou sur le véhicule.</div>
+                  <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="vin"><%= t('contact.vin') %></label>
+                  <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="vin" name="vin" placeholder="<%= t('contact.vin') %>" type="text" value="<%= form && form.vin ? form.vin : '' %>" />
+                  <div class="mt-1 text-[11px] text-slate-500"><%= t('contact.vinHint') %></div>
                 </div>
                 <div>
-                  <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="plate">Plaque d’immatriculation (optionnel)</label>
-                  <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="plate" name="plate" placeholder="Ex : AB-123-CD" type="text" value="<%= form && form.plate ? form.plate : '' %>" />
-                  <div class="mt-1 text-[11px] text-slate-500">Si vous n’avez pas le VIN, l’immatriculation peut aider.</div>
+                  <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="plate"><%= t('contact.plate') %></label>
+                  <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="plate" name="plate" placeholder="<%= t('contact.phPlate') %>" type="text" value="<%= form && form.plate ? form.plate : '' %>" />
+                  <div class="mt-1 text-[11px] text-slate-500"><%= t('contact.plateHint') %></div>
                 </div>
               </div>
 
               <div>
-                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="partRef">Référence (OEM / pièce) (optionnel)</label>
-                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="partRef" name="partRef" placeholder="Ex : 0AM325065S (si vous l’avez)" type="text" value="<%= form && form.partRef ? form.partRef : '' %>" />
+                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="partRef"><%= t('contact.partRef') %></label>
+                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="partRef" name="partRef" placeholder="<%= t('contact.phPartRef') %>" type="text" value="<%= form && form.partRef ? form.partRef : '' %>" />
               </div>
 
               <div>
-                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="vehicle">Véhicule (optionnel)</label>
-                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="vehicle" name="vehicle" placeholder="Ex : Golf 7 1.6 TDI 2015" type="text" value="<%= form && form.vehicle ? form.vehicle : '' %>" />
+                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="vehicle"><%= t('contact.vehicle') %></label>
+                <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="vehicle" name="vehicle" placeholder="<%= t('contact.phVehicle') %>" type="text" value="<%= form && form.vehicle ? form.vehicle : '' %>" />
               </div>
 
               <% if (showQuoteFields) { %>
@@ -130,29 +128,29 @@
 
             <% if (!showQuoteFields) { %>
               <div>
-                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="subject">Sujet</label>
+                <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="subject"><%= t('contact.subject') %></label>
                 <select id="subject" name="subject" class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium">
-                  <option value="question" <%= (form && form.subject === 'question') ? 'selected' : '' %>>Question</option>
-                  <option value="compatibilite" <%= (form && form.subject === 'compatibilite') ? 'selected' : '' %>>Compatibilité / Référence</option>
-                  <option value="commande" <%= (form && form.subject === 'commande') ? 'selected' : '' %>>Commande / Livraison</option>
-                  <option value="autre" <%= (form && form.subject === 'autre') ? 'selected' : '' %>>Autre</option>
+                  <option value="question" <%= (form && form.subject === 'question') ? 'selected' : '' %>><%= t('contact.subjQuestion') %></option>
+                  <option value="compatibilite" <%= (form && form.subject === 'compatibilite') ? 'selected' : '' %>><%= t('contact.subjCompat') %></option>
+                  <option value="commande" <%= (form && form.subject === 'commande') ? 'selected' : '' %>><%= t('contact.subjOrder') %></option>
+                  <option value="autre" <%= (form && form.subject === 'autre') ? 'selected' : '' %>><%= t('contact.subjOther') %></option>
                 </select>
               </div>
             <% } %>
 
             <div>
-              <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="message">Message</label>
-              <textarea class="w-full min-h-[160px] px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="message" name="message" placeholder="Décrivez votre besoin : véhicule, référence, symptôme, numéro OEM…" required><%= form && form.message ? form.message : '' %></textarea>
-              <div class="mt-2 text-[11px] text-slate-500">Nous ne partageons jamais votre email. Réponse sous 24h ouvrées en général.</div>
+              <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="message"><%= t('contact.message') %></label>
+              <textarea class="w-full min-h-[160px] px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="message" name="message" placeholder="<%= t('contact.phMessage') %>" required><%= form && form.message ? form.message : '' %></textarea>
+              <div class="mt-2 text-[11px] text-slate-500"><%= t('contact.privacyNote') %></div>
             </div>
 
             <div class="flex flex-col sm:flex-row gap-3 sm:gap-4">
               <button class="inline-flex items-center justify-center rounded-2xl bg-primary hover:bg-primary/90 text-white py-3 px-6 font-black text-sm shadow-xl shadow-red-500/20 transition-all" type="submit">
-                Envoyer
+                <%= t('contact.send') %>
                 <span class="material-symbols-outlined ml-2">send</span>
               </button>
-              <a class="inline-flex items-center justify-center rounded-2xl bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 py-3 px-6 font-black text-sm transition-colors" href="/produits">
-                Voir le catalogue
+              <a class="inline-flex items-center justify-center rounded-2xl bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 py-3 px-6 font-black text-sm transition-colors" href="<%= langPrefix %>/produits">
+                <%= t('contact.viewCatalog') %>
                 <span class="material-symbols-outlined ml-2">arrow_forward</span>
               </a>
             </div>
