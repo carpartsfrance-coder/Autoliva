@@ -8,6 +8,7 @@ const { checkOrderAlerts } = require('./checkOrderAlerts');
 const { sendConsigneReminders } = require('./sendConsigneReminders');
 const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations } = require('./savCronJobs');
 const { reconcileScalapayOrders } = require('./reconcileScalapayOrders');
+const { syncShipmentTracking } = require('./syncShipmentTracking');
 const { runEngineQuoteReminders } = require('./sendEngineQuoteReminders');
 
 function startScheduler() {
@@ -109,6 +110,17 @@ function startScheduler() {
       await reconcileScalapayOrders();
     } catch (err) {
       console.error('[scheduler] Erreur réconciliation Scalapay:', err.message || err);
+    }
+  });
+
+  // Sync des suivis JUMiNGO toutes les 20 min : « Étiquette créée » → « Expédiée »
+  // au scan transporteur (départ réel). No-op tant que JUMINGO_API_KEY +
+  // JUMINGO_SYNC_ENABLED=true ne sont pas définis.
+  cron.schedule('8,28,48 * * * *', async () => {
+    try {
+      await syncShipmentTracking();
+    } catch (err) {
+      console.error('[scheduler] Erreur sync suivis Jumingo:', err.message || err);
     }
   });
 
