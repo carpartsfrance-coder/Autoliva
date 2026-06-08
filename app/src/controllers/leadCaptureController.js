@@ -134,7 +134,7 @@ async function sendVisitorAck({ req, kind, email, firstName, productName, recove
       cta = '';
     } else if (kind === 'exit_intent') {
       subject = `Votre code promo ${brand.NAME}`;
-      intro = `Merci pour votre confiance ! Voici votre code promo de bienvenue : <strong>BIENVENUE5</strong> (-5 % sur votre prochaine commande, valable 30 jours).`;
+      intro = `Merci pour votre confiance ! Voici votre code promo de bienvenue : <strong>BIENVENUE3</strong> , à utiliser sur votre prochaine commande (valable 30 jours).`;
       cta = 'Reprendre ma visite';
     } else {
       return;
@@ -442,7 +442,7 @@ async function postExitIntent(req, res) {
       email,
       captureSource: 'cart_activity',
       productItem,
-      message: 'Email saisi via popup d\'intention de sortie (BIENVENUE5)',
+      message: 'Email saisi via popup d\'intention de sortie (BIENVENUE3)',
     });
 
     if (!result) return res.status(500).json({ ok: false, error: 'create_failed' });
@@ -457,7 +457,7 @@ async function postExitIntent(req, res) {
       recoveryToken: result.recoveryToken,
     }).catch(() => {});
 
-    return res.json({ ok: true, leadId: result.leadId, code: 'BIENVENUE5' });
+    return res.json({ ok: true, leadId: result.leadId, code: 'BIENVENUE3' });
   } catch (err) {
     console.error('[leadCaptureController] exit-intent error:', err && err.message ? err.message : err);
     return res.status(500).json({ ok: false, error: 'server_error' });
