@@ -366,6 +366,17 @@ const orderSchema = new mongoose.Schema(
       carrier: { type: String, default: '', trim: true },
       createdAt: { type: Date, default: null },
     },
+    /* Préparation/expédition du jour : état posé manuellement par l'admin pendant
+     * son check physique à l'atelier (cockpit /admin/preparation).
+     *  - todo    : à préparer (défaut)
+     *  - ready   : pièce trouvée, prête à étiqueter/expédier
+     *  - blocked : rupture / pièce manquante, ne peut pas partir */
+    preparation: {
+      state: { type: String, enum: ['todo', 'ready', 'blocked'], default: 'todo' },
+      note: { type: String, default: '', trim: true },
+      updatedAt: { type: Date, default: null },
+      updatedBy: { type: String, default: '', trim: true },
+    },
     refunds: { type: [refundSchema], default: [] },
     creditNotes: { type: [creditNoteSchema], default: [] },
     totalCents: { type: Number, required: true, min: 0 },

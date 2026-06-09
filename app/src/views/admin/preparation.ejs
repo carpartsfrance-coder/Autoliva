@@ -1,0 +1,139 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'preparation' }) %>
+
+<main class="flex-1 relative">
+  <div class="px-4 lg:px-10 py-6 lg:py-8 max-w-5xl mx-auto">
+
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Expédition du jour'}] }) %>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Expédition du jour</div>
+        <div class="mt-1 text-sm text-slate-500">Ce que tu peux préparer et expédier — les plus anciennes d'abord.</div>
+      </div>
+      <a href="/admin/preparation" class="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition">
+        <span class="material-symbols-outlined text-lg">refresh</span> Rafraîchir
+      </a>
+    </div>
+
+    <div class="mt-4 grid grid-cols-3 gap-2 lg:gap-3">
+      <div class="rounded-2xl border border-slate-200 bg-white p-3 text-center">
+        <div class="text-2xl font-bold text-slate-900" data-count="todo"><%= counts.todo %></div>
+        <div class="text-xs text-slate-500">À préparer</div>
+      </div>
+      <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-center">
+        <div class="text-2xl font-bold text-emerald-700" data-count="ready"><%= counts.ready %></div>
+        <div class="text-xs text-emerald-600">Prêtes</div>
+      </div>
+      <div class="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-center">
+        <div class="text-2xl font-bold text-rose-700" data-count="blocked"><%= counts.blocked %></div>
+        <div class="text-xs text-rose-600">Bloquées</div>
+      </div>
+    </div>
+
+    <% if (counts.total === 0) { %>
+      <div class="mt-12 text-center py-16">
+        <div class="text-5xl mb-3">🎉</div>
+        <div class="text-lg font-bold text-slate-900">Rien à expédier pour le moment</div>
+        <div class="text-sm text-slate-500 mt-1">Toutes les commandes payées sont traitées.</div>
+      </div>
+    <% } else { %>
+
+      <% if (picking.length) { %>
+        <details class="mt-4 rounded-2xl border border-slate-200 bg-white overflow-hidden" open>
+          <summary class="cursor-pointer select-none px-4 py-3 font-bold text-slate-900 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">checklist</span>
+            Liste de picking — à sortir de l'atelier
+            <span class="ml-auto text-xs font-bold text-slate-400"><%= picking.length %> pièce(s)</span>
+          </summary>
+          <div class="px-4 pb-4 space-y-2">
+            <% picking.forEach(function(p){ %>
+              <div class="flex items-center gap-3 border-t border-slate-100 pt-2">
+                <% if (p.image) { %>
+                  <img src="<%= p.image %>" alt="" loading="lazy" class="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
+                <% } else { %>
+                  <div class="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-slate-400 text-base">build</span></div>
+                <% } %>
+                <div class="min-w-0 flex-1">
+                  <div class="text-sm font-semibold text-slate-900 truncate"><%= p.label %></div>
+                  <div class="text-xs text-slate-500"><% if (p.ref) { %>Réf. <span class="font-mono"><%= p.ref %></span> · <% } %><%= p.orders.length %> commande(s)</div>
+                </div>
+                <span class="shrink-0 text-base font-bold text-slate-900">×<%= p.qty %></span>
+              </div>
+            <% }) %>
+          </div>
+        </details>
+      <% } %>
+
+      <%
+        var sections = [
+          { key: 'todo', title: 'À préparer', icon: 'pending', list: todo },
+          { key: 'ready', title: 'Prêtes à expédier', icon: 'check_circle', list: ready },
+          { key: 'blocked', title: 'Bloquées (rupture)', icon: 'block', list: blocked }
+        ];
+      %>
+      <% sections.forEach(function(sec){ %>
+        <section class="mt-6" data-section="<%= sec.key %>">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-slate-400"><%= sec.icon %></span>
+            <h2 class="font-bold text-slate-900"><%= sec.title %></h2>
+            <span class="text-xs font-bold text-slate-400" data-section-count><%= sec.list.length %></span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3" data-cards>
+            <% sec.list.forEach(function(o){ %><%- include('./partials/prep-card', { o: o }) %><% }) %>
+          </div>
+          <div class="text-sm text-slate-400 py-6 text-center" data-empty<%= sec.list.length ? ' style="display:none"' : '' %>>Aucune commande ici.</div>
+        </section>
+      <% }) %>
+
+    <% } %>
+  </div>
+</main>
+
+<style>
+  .prep-state-btn { border-color:#e2e8f0; color:#64748b; background:#fff; transition:all .12s; }
+  .prep-state-btn.is-active { background:#0f172a; border-color:#0f172a; color:#fff; }
+  .prep-ready.is-active { background:#059669; border-color:#059669; }
+  .prep-blocked.is-active { background:#e11d48; border-color:#e11d48; }
+  .prep-card[data-state="blocked"] { opacity:.85; }
+  #prep-toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px); opacity:0; transition:all .2s; background:#0f172a; color:#fff; padding:10px 18px; border-radius:12px; font-weight:700; font-size:14px; z-index:60; pointer-events:none; box-shadow:0 8px 24px rgba(0,0,0,.25); }
+  #prep-toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+</style>
+<div id="prep-toast"></div>
+<script>
+(function(){
+  var toastEl = document.getElementById('prep-toast'), toastT;
+  window.prepToast = function(msg, ok){
+    toastEl.textContent = msg; toastEl.style.background = ok === false ? '#e11d48' : '#0f172a';
+    toastEl.classList.add('show'); clearTimeout(toastT);
+    toastT = setTimeout(function(){ toastEl.classList.remove('show'); }, 1800);
+  };
+  function recount(){
+    ['todo','ready','blocked'].forEach(function(k){
+      var sec = document.querySelector('[data-section="'+k+'"]'); if(!sec) return;
+      var n = sec.querySelectorAll('.prep-card').length;
+      var c = document.querySelector('[data-count="'+k+'"]'); if(c) c.textContent = n;
+      var sc = sec.querySelector('[data-section-count]'); if(sc) sc.textContent = n;
+      var empty = sec.querySelector('[data-empty]'); if(empty) empty.style.display = n ? 'none' : '';
+    });
+  }
+  window.prepSetState = function(orderId, state){
+    fetch('/admin/commandes/'+orderId+'/preparation', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ state: state })})
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(!d || !d.ok){ window.prepToast((d && d.error) || 'Erreur', false); return; }
+        var card = document.querySelector('.prep-card[data-order="'+orderId+'"]');
+        if(!card) return;
+        card.setAttribute('data-state', state);
+        card.querySelectorAll('[data-state-btn]').forEach(function(b){ b.classList.toggle('is-active', b.getAttribute('data-state-btn') === state); });
+        var target = document.querySelector('[data-section="'+state+'"] [data-cards]');
+        if(target){ target.appendChild(card); }
+        recount();
+        window.prepToast(state === 'ready' ? 'Prête ✓' : (state === 'blocked' ? 'Marquée en rupture' : 'Remise à préparer'), true);
+      })
+      .catch(function(){ window.prepToast('Erreur réseau', false); });
+  };
+})();
+</script>
+
+<%- include('./partials/footer') %>

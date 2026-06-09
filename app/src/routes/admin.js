@@ -134,18 +134,21 @@ router.post('/reinitialiser', adminController.postAdminResetPassword);
 router.use(async (req, res, next) => {
   if (req.session && req.session.admin) {
     try {
-      const [pendingOrders, pendingReturns, savActionNeeded] = await Promise.all([
+      const [pendingOrders, pendingReturns, savActionNeeded, prepOrders] = await Promise.all([
         Order.countDocuments({ status: 'pending_payment' }),
         ReturnRequest.countDocuments({ status: 'en_attente' }),
         SavTicket.countDocuments({ statut: { $nin: ['clos', 'refuse', 'resolu_garantie', 'resolu_facture', 'clos_sans_reponse'] } }),
+        Order.countDocuments({ status: { $in: ['paid', 'processing'] }, orderType: { $in: ['standard', 'exchange'] }, archived: { $ne: true }, deletedAt: null }),
       ]);
       res.locals.sidebarPendingCount = pendingOrders;
       res.locals.sidebarReturnsCount = pendingReturns;
       res.locals.sidebarSavCount = savActionNeeded;
+      res.locals.sidebarPrepCount = prepOrders;
     } catch (e) {
       res.locals.sidebarPendingCount = 0;
       res.locals.sidebarReturnsCount = 0;
       res.locals.sidebarSavCount = 0;
+      res.locals.sidebarPrepCount = 0;
     }
   }
   next();
@@ -196,6 +199,7 @@ router.get('/visiteurs', requireAdminAuth, adminController.getAdminVisitorsListP
 router.get('/visiteurs/:sessionId', requireAdminAuth, adminController.getAdminVisitorDetailPage);
 router.get('/visiteurs/:sessionId/events', requireAdminAuth, adminController.getAdminVisitorEventsApi);
 
+router.get('/preparation', requireAdminAuth, adminController.getAdminPreparation);
 router.get('/commandes', requireAdminAuth, adminController.getAdminOrdersPage);
 router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteOrders);
 router.post('/commandes/sync-suivi', requireAdminAuth, adminController.postAdminSyncShipmentTracking);
@@ -208,6 +212,7 @@ router.post('/commandes/:orderId/consigne/recu', requireAdminAuth, adminControll
 router.post('/commandes/:orderId/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundOrder);
 router.post('/commandes/:orderId/consigne/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundConsigne);
 router.get('/commandes/:orderId/avoir/:creditNoteNumber/pdf', requireAdminAuth, requireAbility('orders.refund'), adminController.getAdminOrderCreditNotePdf);
+router.post('/commandes/:orderId/preparation', requireAdminAuth, adminController.postAdminPreparationState);
 router.post('/commandes/:orderId/jumingo/preparer', requireAdminAuth, adminController.postAdminPrepareJumingoLabel);
 router.post('/commandes/:orderId/jumingo/acheter', requireAdminAuth, adminController.postAdminBuyJumingoLabel);
 router.post('/commandes/:orderId/jumingo/finaliser', requireAdminAuth, adminController.postAdminFinalizeJumingoLabel);

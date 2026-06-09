@@ -40,6 +40,13 @@
           <span class="sidebar-badge"><%= pendingCount %></span>
         <% } %>
       </a>
+      <a class="sidebar-link <%= activeKey === 'preparation' ? 'sidebar-link--active' : '' %>" href="/admin/preparation" title="Expédition du jour">
+        <span class="material-symbols-outlined">inventory_2</span>
+        <span class="sidebar-link-text flex-1">Expédition du jour</span>
+        <% if (typeof sidebarPrepCount !== 'undefined' && sidebarPrepCount > 0) { %>
+          <span class="sidebar-badge"><%= sidebarPrepCount %></span>
+        <% } %>
+      </a>
       <a class="sidebar-link <%= activeKey === 'analytics' ? 'sidebar-link--active' : '' %>" href="/admin/analytics" title="Analytics">
         <span class="material-symbols-outlined">analytics</span>
         <span class="sidebar-link-text">Analytics</span>
