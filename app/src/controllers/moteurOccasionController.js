@@ -369,6 +369,7 @@ function renderPage(res, req, opts) {
     form: opts.form,
     errorMessage: opts.errorMessage || null,
     successMessage: opts.successMessage || null,
+    conversion: opts.conversion || null, // données pour le tag de conversion Google Ads (lead)
     dbConnected: mongoose.connection.readyState === 1,
   });
 }
@@ -624,6 +625,9 @@ async function postDevis(req, res, next) {
     return renderPage(res, req, {
       form: buildInitialForm({ query: {} }),
       successMessage: `Merci ${firstName || ''} ! Votre demande est bien reçue. Un technicien ${brand.NAME} vous recontacte sous 24h.`,
+      // Conversion Google Ads (lead) — déclenchée sur la page de succès. ref = dédoublonnage,
+      // email/phone (E.164) = suivi avancé des conversions (matching sans cookie).
+      conversion: { ref: quoteRef, email: cleanEmail || '', phone: cleanPhone || '', value: 1 },
     });
   } catch (err) {
     return next(err);
