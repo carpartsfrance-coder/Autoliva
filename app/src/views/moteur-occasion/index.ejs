@@ -847,17 +847,35 @@ Demander mon devis gratuit
 
 <!-- Footer du site (même que la home) -->
 
-<!-- GTM dataLayer pour confirmation lead -->
+<!-- Confirmation lead : dataLayer (GTM) + conversion Google Ads (gtag, avec suivi avancé) -->
 <% if (successMessage) { %>
 <script>
 (function () {
+  var c = <%- JSON.stringify(typeof conversion !== 'undefined' && conversion ? conversion : null).replace(/</g, '\\u003c') %>;
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({
     event: 'lead_submitted',
     lead_source: 'moteur-occasion',
     lead_category: 'moteur',
+    lead_ref: (c && c.ref) || '',
     page_path: window.location.pathname
   });
+  // Conversion Google Ads "Envoi form" — UNIQUEMENT pour un vrai lead (c.ref présent),
+  // jamais pour le honeypot (faux succès bot). Suivi avancé : email + téléphone (E.164).
+  if (c && c.ref && typeof gtag === 'function') {
+    if (c.email || c.phone) {
+      gtag('set', 'user_data', {
+        email: c.email || undefined,
+        phone_number: c.phone || undefined
+      });
+    }
+    gtag('event', 'conversion', {
+      send_to: 'AW-16778404215/kK_sCIiYu70bEPfCyMA-',
+      value: c.value || 1.0,
+      currency: 'EUR',
+      transaction_id: c.ref
+    });
+  }
 })();
 </script>
 <% } %>
