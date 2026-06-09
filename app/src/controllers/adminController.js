@@ -2376,6 +2376,8 @@ async function getAdminOrdersPage(req, res, next) {
     const orderTypeFilter = typeof req.query.orderType === 'string' ? req.query.orderType.trim() : '';
     const cloningStatusFilter = typeof req.query.cloningStatus === 'string' ? req.query.cloningStatus.trim() : '';
     const returnFilter = typeof req.query.returnFilter === 'string' ? req.query.returnFilter.trim() : '';
+    const productFilter = typeof req.query.product === 'string' ? req.query.product.trim() : '';
+    const categoryFilter = typeof req.query.category === 'string' ? req.query.category.trim() : '';
     const sortFieldRaw = typeof req.query.sort === 'string' ? req.query.sort.trim() : '';
     const sortOrderRaw = typeof req.query.order === 'string' ? req.query.order.trim() : '';
     const allowedOrderSortFields = new Set(['date', 'total', 'status', 'urgency']);
@@ -2409,7 +2411,8 @@ async function getAdminOrdersPage(req, res, next) {
         archivedCount: 0,
         trashCount: 0,
         view,
-        filters: { q, status, type, period, source: sourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter },
+        productCategories: [],
+        filters: { q, status, type, period, source: sourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, product: productFilter, category: categoryFilter },
         pagination: { page: 1, perPage, totalItems: 0, totalPages: 1, from: 0, to: 0, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1 },
       });
     }
@@ -2501,6 +2504,22 @@ async function getAdminOrdersPage(req, res, next) {
       if (userIds.length) {
         query.$or.push({ userId: { $in: userIds } });
       }
+    }
+
+    // Filtres produit : nom de produit (items.name) + catégorie (via items.productId).
+    // Ajoutés en $and pour ne pas écraser le $or de la recherche `q`.
+    const productAndClauses = [];
+    if (productFilter) {
+      productAndClauses.push({ 'items.name': new RegExp(escapeRegExp(productFilter), 'i') });
+    }
+    if (categoryFilter) {
+      const ProductModel = require('../models/Product');
+      const catProductIds = await ProductModel.find({ category: categoryFilter }).distinct('_id');
+      // Aucun produit dans la catégorie → match impossible (0 résultat propre).
+      productAndClauses.push({ 'items.productId': { $in: catProductIds.length ? catProductIds : [new mongoose.Types.ObjectId()] } });
+    }
+    if (productAndClauses.length) {
+      query.$and = (query.$and || []).concat(productAndClauses);
     }
 
     // Filtres marketing : utmCampaign / utmSource — match firstTouch OU lastTouch.
@@ -2687,6 +2706,10 @@ async function getAdminOrdersPage(req, res, next) {
       nextPage: Math.min(totalPages, page + 1),
     };
 
+    const productCategories = (await require('../models/Product').distinct('category'))
+      .filter(Boolean)
+      .sort((a, b) => String(a).localeCompare(String(b), 'fr'));
+
     return res.render('admin/orders', {
       title: 'Admin - Commandes',
       dbConnected,
@@ -2696,7 +2719,8 @@ async function getAdminOrdersPage(req, res, next) {
       trashCount,
       view,
       orderAlerts,
-      filters: { q, status, type, period, source: sourceFilter, utmCampaign: utmCampaignFilter, utmSource: utmSourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, sort: activeSortField, order: activeSortDir === 1 ? 'asc' : 'desc', limit: perPage },
+      productCategories,
+      filters: { q, status, type, period, source: sourceFilter, utmCampaign: utmCampaignFilter, utmSource: utmSourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, product: productFilter, category: categoryFilter, sort: activeSortField, order: activeSortDir === 1 ? 'asc' : 'desc', limit: perPage },
       pagination,
     });
   } catch (err) {
