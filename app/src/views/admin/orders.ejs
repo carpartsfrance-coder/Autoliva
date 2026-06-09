@@ -27,7 +27,7 @@
 
     <%
       // Compteur de filtres actifs (hors recherche & pagination)
-      const _activeFilterKeys = ['status','orderType','cloningStatus','returnFilter','type','source','period','utmCampaign','utmSource'];
+      const _activeFilterKeys = ['status','orderType','cloningStatus','returnFilter','type','source','period','utmCampaign','utmSource','product','category'];
       let _activeFiltersCount = 0;
       _activeFilterKeys.forEach(function(k){ if (filters && filters[k]) _activeFiltersCount++; });
       const _hasAdvancedActive = !!(filters && (filters.type || filters.source || filters.utmCampaign || filters.utmSource || filters.returnFilter));
@@ -69,6 +69,24 @@
 
       <%/* Ligne 2 : filtres rapides (toujours visibles) */%>
       <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
+        <%/* Recherche par nom de produit */%>
+        <label class="orders-filter relative block <%= filters && filters.product ? 'is-active' : '' %>">
+          <span class="material-symbols-outlined orders-filter-icon">inventory_2</span>
+          <input class="orders-filter-input" name="product" type="text" placeholder="Nom de produit…" value="<%= filters && filters.product ? filters.product : '' %>" aria-label="Rechercher par nom de produit" />
+        </label>
+
+        <%/* Catégorie de produit */%>
+        <label class="orders-filter relative block <%= filters && filters.category ? 'is-active' : '' %>">
+          <span class="material-symbols-outlined orders-filter-icon">category</span>
+          <select class="orders-filter-select" name="category" aria-label="Filtrer par catégorie de produit">
+            <option value="">Toutes les catégories</option>
+            <% (typeof productCategories !== 'undefined' ? productCategories : []).forEach(function(c){ %>
+              <option value="<%= c %>" <%= filters && filters.category === c ? 'selected' : '' %>><%= c %></option>
+            <% }) %>
+          </select>
+          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+        </label>
+
         <%/* Statut */%>
         <label class="orders-filter relative block <%= filters && filters.status ? 'is-active' : '' %>">
           <span class="material-symbols-outlined orders-filter-icon">flag</span>
