@@ -11984,7 +11984,111 @@ async function postAdminFinalizeJumingoLabel(req, res) {
   }
 }
 
+/* COCKPIT « Expédition du jour » : commandes pièces (standard/échange) à préparer
+ * et expédier. File priorisée (plus anciennes d'abord), liste de picking agrégée
+ * (ce qu'il faut sortir de l'atelier en un passage), et état de prépa posé à la
+ * main (todo/ready/blocked). PAS de gestion de stock — juste une aide au check. */
+async function getAdminPreparation(req, res, next) {
+  try {
+    const Product = require('../models/Product');
+    const orders = await Order.find({
+      status: { $in: ['paid', 'processing', 'label_created'] },
+      orderType: { $in: ['standard', 'exchange'] },
+      archived: { $ne: true },
+      deletedAt: null,
+    }).sort({ createdAt: 1 }).limit(300).lean();
+
+    const ids = [];
+    orders.forEach((o) => (o.items || []).forEach((it) => { if (it.productId) ids.push(it.productId); }));
+    const products = ids.length
+      ? await Product.find({ _id: { $in: ids } }).select('name sku engineCode imageUrl galleryUrls slug category inStock').lean()
+      : [];
+    const byId = {};
+    products.forEach((p) => { byId[String(p._id)] = p; });
+
+    const now = Date.now();
+    const DAY = 86400000;
+    const enriched = orders.map((o) => {
+      const items = (o.items || []).map((it) => {
+        const p = it.productId ? byId[String(it.productId)] : null;
+        return {
+          name: it.name,
+          ref: it.sku || (p && (p.engineCode || p.sku)) || '',
+          quantity: it.quantity,
+          image: (p && (p.imageUrl || (Array.isArray(p.galleryUrls) && p.galleryUrls[0]))) || '',
+          slug: (p && p.slug) || '',
+          category: (p && p.category) || '',
+          inStock: p ? p.inStock : null,
+        };
+      });
+      return {
+        id: String(o._id),
+        number: o.number,
+        createdAt: o.createdAt,
+        ageDays: Math.floor((now - new Date(o.createdAt).getTime()) / DAY),
+        status: o.status,
+        isExchange: o.orderType === 'exchange',
+        customerName: (o.shippingAddress && o.shippingAddress.fullName) || '',
+        city: (o.shippingAddress && o.shippingAddress.city) || '',
+        itemCount: items.reduce((s, i) => s + i.quantity, 0),
+        items,
+        prepState: (o.preparation && o.preparation.state) || 'todo',
+        prepNote: (o.preparation && o.preparation.note) || '',
+        hasLabel: o.status === 'label_created' || (Array.isArray(o.shipments) && o.shipments.some((s) => s && s.trackingNumber && s.label !== 'Collecte')),
+      };
+    });
+
+    const todo = enriched.filter((o) => o.prepState === 'todo');
+    const ready = enriched.filter((o) => o.prepState === 'ready');
+    const blocked = enriched.filter((o) => o.prepState === 'blocked');
+
+    // Picking agrégé : ce qu'il faut sortir de l'atelier (todo + ready), groupé par pièce.
+    const pick = {};
+    enriched.filter((o) => o.prepState !== 'blocked').forEach((o) => {
+      o.items.forEach((it) => {
+        const key = (it.ref || it.name).toLowerCase().trim();
+        if (!pick[key]) pick[key] = { label: it.name, ref: it.ref, image: it.image, qty: 0, orders: [] };
+        pick[key].qty += it.quantity;
+        if (pick[key].orders.indexOf(o.number) === -1) pick[key].orders.push(o.number);
+      });
+    });
+    const picking = Object.keys(pick).map((k) => pick[k]).sort((a, b) => b.qty - a.qty);
+
+    return res.render('admin/preparation', {
+      active: 'preparation',
+      todo, ready, blocked, picking,
+      counts: { total: enriched.length, todo: todo.length, ready: ready.length, blocked: blocked.length },
+    });
+  } catch (err) { return next(err); }
+}
+
+/* Met à jour l'état de prépa d'une commande (todo/ready/blocked) + note. AJAX. */
+async function postAdminPreparationState(req, res) {
+  try {
+    const orderId = req.params.orderId;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(400).json({ ok: false, error: 'Commande invalide.' });
+    const state = (req.body && ['todo', 'ready', 'blocked'].includes(req.body.state)) ? req.body.state : null;
+    if (!state) return res.status(400).json({ ok: false, error: 'État invalide.' });
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+    const note = (req.body && req.body.note != null) ? String(req.body.note) : ((order.preparation && order.preparation.note) || '');
+    order.preparation = {
+      state,
+      note: note.slice(0, 300),
+      updatedAt: new Date(),
+      updatedBy: (req.session && req.session.admin && req.session.admin.email) || '',
+    };
+    await order.save();
+    return res.json({ ok: true, state });
+  } catch (err) {
+    console.error('[admin] preparationState:', err && err.message);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur.' });
+  }
+}
+
 module.exports = {
+  getAdminPreparation,
+  postAdminPreparationState,
   postAdminSyncShipmentTracking,
   getAdminJumingoDebug,
   postAdminPrepareJumingoLabel,
