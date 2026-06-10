@@ -12114,6 +12114,71 @@ async function getAdminPreparation(req, res, next) {
   } catch (err) { return next(err); }
 }
 
+/* Cockpit « Consignes en attente » — tous les échanges dont le core (la
+ * consigne) n'est pas encore revenu : qui, contact, montant, ancienneté,
+ * retard. Lecture seule : sert à piloter les relances au cas par cas (le
+ * détail commande permet déjà de relancer / marquer reçu). */
+async function getAdminConsignes(req, res, next) {
+  try {
+    const User = require('../models/User');
+    const NOT_BACK = ['pending', 'label_sent', 'in_transit', 'overdue'];
+    const orders = await Order.find({
+      orderType: { $in: ['exchange', 'exchange_cloning'] },
+      returnStatus: { $in: NOT_BACK },
+      archived: { $ne: true },
+      deletedAt: null,
+      status: { $nin: ['cancelled', 'failed', 'pending_payment', 'draft'] },
+    })
+      .select('number createdAt status returnStatus returnDates consigne.chargedTotalCents shippingAddress userId email items.name')
+      .sort({ createdAt: 1 })
+      .limit(500)
+      .lean();
+
+    const userIds = orders.map((o) => o.userId).filter(Boolean);
+    const users = userIds.length
+      ? await User.find({ _id: { $in: userIds } }).select('email firstName lastName').lean()
+      : [];
+    const userById = {};
+    users.forEach((u) => { userById[String(u._id)] = u; });
+
+    const now = Date.now();
+    const DAY = 86400000;
+    const rows = orders.map((o) => {
+      const dueRaw = o.returnDates && o.returnDates.returnDueDate ? new Date(o.returnDates.returnDueDate).getTime() : null;
+      const overdueDays = dueRaw ? Math.floor((now - dueRaw) / DAY) : null; // >0 retard, <=0 reste, null = pas d'échéance
+      const consigneCents = (o.consigne && o.consigne.chargedTotalCents) || 0;
+      const u = o.userId ? userById[String(o.userId)] : null;
+      return {
+        id: String(o._id),
+        number: o.number,
+        ageDays: Math.floor((now - new Date(o.createdAt).getTime()) / DAY),
+        returnStatus: o.returnStatus,
+        customerName: (o.shippingAddress && o.shippingAddress.fullName) || '',
+        phone: (o.shippingAddress && o.shippingAddress.phone) || '',
+        email: o.email || (u && u.email) || '',
+        consigneCents,
+        hasDeposit: consigneCents > 0,
+        dueDate: dueRaw ? new Date(dueRaw) : null,
+        overdueDays,
+        itemName: (o.items && o.items[0] && o.items[0].name) || '',
+      };
+    });
+
+    const overdue = rows.filter((r) => r.overdueDays !== null && r.overdueDays > 0).sort((a, b) => b.overdueDays - a.overdueDays);
+    const noDeadline = rows.filter((r) => r.overdueDays === null).sort((a, b) => b.ageDays - a.ageDays);
+    const upcoming = rows.filter((r) => r.overdueDays !== null && r.overdueDays <= 0).sort((a, b) => b.overdueDays - a.overdueDays);
+
+    const totalDepositCents = rows.reduce((s, r) => s + r.consigneCents, 0);
+
+    return res.render('admin/consignes', {
+      active: 'consignes',
+      overdue, noDeadline, upcoming,
+      counts: { total: rows.length, overdue: overdue.length, noDeadline: noDeadline.length, upcoming: upcoming.length },
+      totalDepositCents,
+    });
+  } catch (err) { return next(err); }
+}
+
 /* Met à jour l'état de prépa d'une commande (todo/ready/blocked) + note. AJAX. */
 async function postAdminPreparationState(req, res) {
   try {
@@ -12140,6 +12205,7 @@ async function postAdminPreparationState(req, res) {
 
 module.exports = {
   getAdminPreparation,
+  getAdminConsignes,
   postAdminPreparationState,
   postAdminSyncShipmentTracking,
   getAdminJumingoDebug,

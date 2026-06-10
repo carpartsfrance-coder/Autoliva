@@ -134,21 +134,24 @@ router.post('/reinitialiser', adminController.postAdminResetPassword);
 router.use(async (req, res, next) => {
   if (req.session && req.session.admin) {
     try {
-      const [pendingOrders, pendingReturns, savActionNeeded, prepOrders] = await Promise.all([
+      const [pendingOrders, pendingReturns, savActionNeeded, prepOrders, overdueConsignes] = await Promise.all([
         Order.countDocuments({ status: 'pending_payment' }),
         ReturnRequest.countDocuments({ status: 'en_attente' }),
         SavTicket.countDocuments({ statut: { $nin: ['clos', 'refuse', 'resolu_garantie', 'resolu_facture', 'clos_sans_reponse'] } }),
         Order.countDocuments({ status: { $in: ['paid', 'processing'] }, orderType: { $in: ['standard', 'exchange'] }, archived: { $ne: true }, deletedAt: null }),
+        Order.countDocuments({ orderType: { $in: ['exchange', 'exchange_cloning'] }, returnStatus: 'overdue', archived: { $ne: true }, deletedAt: null }),
       ]);
       res.locals.sidebarPendingCount = pendingOrders;
       res.locals.sidebarReturnsCount = pendingReturns;
       res.locals.sidebarSavCount = savActionNeeded;
       res.locals.sidebarPrepCount = prepOrders;
+      res.locals.sidebarConsigneCount = overdueConsignes;
     } catch (e) {
       res.locals.sidebarPendingCount = 0;
       res.locals.sidebarReturnsCount = 0;
       res.locals.sidebarSavCount = 0;
       res.locals.sidebarPrepCount = 0;
+      res.locals.sidebarConsigneCount = 0;
     }
   }
   next();
@@ -200,6 +203,7 @@ router.get('/visiteurs/:sessionId', requireAdminAuth, adminController.getAdminVi
 router.get('/visiteurs/:sessionId/events', requireAdminAuth, adminController.getAdminVisitorEventsApi);
 
 router.get('/preparation', requireAdminAuth, adminController.getAdminPreparation);
+router.get('/consignes', requireAdminAuth, adminController.getAdminConsignes);
 router.get('/commandes', requireAdminAuth, adminController.getAdminOrdersPage);
 router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteOrders);
 router.post('/commandes/sync-suivi', requireAdminAuth, adminController.postAdminSyncShipmentTracking);
