@@ -2941,7 +2941,7 @@ async function getAdminOrderDetailPage(req, res, next) {
 
     const refundDefaultMethod = orderDoc.molliePaymentId && orderDoc.molliePaymentStatus === 'paid'
       ? 'mollie'
-      : (orderDoc.scalapayOrderToken && orderDoc.scalapayStatus === 'captured' ? 'scalapay' : 'manual');
+      : (orderDoc.scalapayOrderToken && (orderDoc.scalapayStatus === 'charged' || orderDoc.scalapayStatus === 'captured') ? 'scalapay' : 'manual');
 
     const consigneLines = orderDoc && orderDoc.consigne && Array.isArray(orderDoc.consigne.lines)
       ? orderDoc.consigne.lines

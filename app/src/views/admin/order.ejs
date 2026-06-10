@@ -1413,7 +1413,7 @@
                       <% if (order.molliePaymentId && order.molliePaymentStatus === 'paid') { %>
                         <option value="mollie" <%= order.refundDefaultMethod === 'mollie' ? 'selected' : '' %>>Mollie — remboursement automatique</option>
                       <% } %>
-                      <% if (order.scalapayOrderToken && order.scalapayStatus === 'captured') { %>
+                      <% if (order.scalapayOrderToken && (order.scalapayStatus === 'charged' || order.scalapayStatus === 'captured')) { %>
                         <option value="scalapay" <%= order.refundDefaultMethod === 'scalapay' ? 'selected' : '' %>>Scalapay — remboursement automatique</option>
                       <% } %>
                       <option value="bank_transfer">Virement bancaire (manuel)</option>
