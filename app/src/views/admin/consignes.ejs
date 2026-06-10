@@ -1,0 +1,132 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'consignes' }) %>
+
+<%
+  function eur(c) { return (Number(c || 0) / 100).toFixed(0) + ' €'; }
+  function frDate(d) { return d ? new Date(d).toLocaleDateString('fr-FR') : '—'; }
+  var sections = [
+    { key: 'overdue', title: 'En retard', icon: '🔴', tone: 'red', rows: overdue, hint: 'Le délai de retour est dépassé — à relancer en priorité.' },
+    { key: 'noDeadline', title: 'Sans échéance', icon: '⚠️', tone: 'amber', rows: noDeadline, hint: 'Anciennes commandes sans date limite (bug corrigé depuis). Aucune relance auto n\'a pu partir — contacte le client manuellement.' },
+    { key: 'upcoming', title: 'À venir', icon: '🟡', tone: 'slate', rows: upcoming, hint: 'Délai encore en cours.' },
+  ];
+%>
+
+<main class="flex-1 relative">
+  <div class="px-4 lg:px-10 py-6 lg:py-8 max-w-6xl mx-auto">
+
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Consignes en attente'}] }) %>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Consignes en attente</div>
+        <div class="mt-1 text-sm text-slate-500">Les échanges dont le core (la consigne) n'est pas encore revenu. Relance au cas par cas.</div>
+      </div>
+    </div>
+
+    <!-- Cartes de synthèse -->
+    <div class="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400">Total en attente</div>
+        <div class="mt-1 text-2xl font-bold text-slate-900"><%= counts.total %></div>
+      </div>
+      <div class="rounded-2xl border border-red-200 bg-red-50 p-4">
+        <div class="text-[11px] font-bold uppercase tracking-widest text-red-500">En retard</div>
+        <div class="mt-1 text-2xl font-bold text-red-700"><%= counts.overdue %></div>
+      </div>
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+        <div class="text-[11px] font-bold uppercase tracking-widest text-amber-600">Sans échéance</div>
+        <div class="mt-1 text-2xl font-bold text-amber-700"><%= counts.noDeadline %></div>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-4">
+        <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400">Caution encaissée en jeu</div>
+        <div class="mt-1 text-2xl font-bold text-slate-900"><%= eur(totalDepositCents) %></div>
+      </div>
+    </div>
+
+    <!-- Note explicative -->
+    <div class="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+      <div class="font-bold">ℹ️ Comment ça marche</div>
+      <ul class="mt-1.5 list-disc pl-5 space-y-1">
+        <li>Les <strong>relances email automatiques</strong> ne partent que pour les commandes avec <strong>consigne encaissée</strong> (nouveau système). Pour les autres, contacte le client toi-même (email / tél cliquables ci-dessous).</li>
+        <li>Quand un core revient, ouvre la commande et marque-le <strong>reçu</strong> : il disparaît de cette liste.</li>
+        <li>Une consigne à <strong>0 € (non encaissée)</strong> = aucun argent retenu → tu peux seulement réclamer le retour ou facturer (si tes CGV le prévoient).</li>
+      </ul>
+    </div>
+
+    <!-- Sections -->
+    <% sections.forEach(function (sec) { %>
+      <% if (sec.rows && sec.rows.length) { %>
+        <div class="mt-7">
+          <div class="flex items-center gap-2">
+            <span class="text-lg"><%= sec.icon %></span>
+            <h2 class="text-lg font-bold text-slate-900"><%= sec.title %></h2>
+            <span class="inline-flex items-center justify-center min-w-[22px] h-[22px] px-1.5 rounded-full bg-slate-900 text-white text-xs font-bold"><%= sec.rows.length %></span>
+          </div>
+          <div class="mt-1 text-xs text-slate-500"><%= sec.hint %></div>
+
+          <div class="mt-3 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-[11px] font-bold uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                  <th class="px-3 py-2.5">Commande</th>
+                  <th class="px-3 py-2.5">Client</th>
+                  <th class="px-3 py-2.5">Contact</th>
+                  <th class="px-3 py-2.5">Pièce</th>
+                  <th class="px-3 py-2.5 text-right">Consigne</th>
+                  <th class="px-3 py-2.5 whitespace-nowrap"><%= sec.key === 'overdue' ? 'Retard' : (sec.key === 'noDeadline' ? 'Âge' : 'Échéance') %></th>
+                  <th class="px-3 py-2.5"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <% sec.rows.forEach(function (r) { %>
+                  <tr class="border-b border-slate-50 hover:bg-slate-50/60">
+                    <td class="px-3 py-2.5 font-semibold text-slate-900 whitespace-nowrap"><%= r.number %></td>
+                    <td class="px-3 py-2.5 text-slate-700"><%= r.customerName || '—' %></td>
+                    <td class="px-3 py-2.5">
+                      <div class="flex flex-col gap-0.5">
+                        <% if (r.email) { %><a class="text-primary hover:underline" href="mailto:<%= r.email %>"><%= r.email %></a><% } %>
+                        <% if (r.phone) { %><a class="text-slate-500 hover:underline" href="tel:<%= r.phone.replace(/\s+/g, '') %>"><%= r.phone %></a><% } %>
+                        <% if (!r.email && !r.phone) { %><span class="text-slate-400">—</span><% } %>
+                      </div>
+                    </td>
+                    <td class="px-3 py-2.5 text-slate-600 max-w-[220px] truncate" title="<%= r.itemName %>"><%= r.itemName || '—' %></td>
+                    <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                      <% if (r.hasDeposit) { %>
+                        <span class="font-bold text-slate-900"><%= eur(r.consigneCents) %></span>
+                      <% } else { %>
+                        <span class="text-xs text-slate-400">non encaissée</span>
+                      <% } %>
+                    </td>
+                    <td class="px-3 py-2.5 whitespace-nowrap">
+                      <% if (sec.key === 'overdue') { %>
+                        <span class="inline-flex items-center rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs font-bold"><%= r.overdueDays %> j</span>
+                      <% } else if (sec.key === 'noDeadline') { %>
+                        <span class="text-slate-500"><%= r.ageDays %> j</span>
+                      <% } else { %>
+                        <span class="text-slate-600"><%= frDate(r.dueDate) %><% if (r.overdueDays !== null) { %> <span class="text-slate-400">(<%= r.overdueDays === 0 ? "auj." : ("J" + r.overdueDays) %>)</span><% } %></span>
+                      <% } %>
+                    </td>
+                    <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                      <a href="/admin/commandes/<%= r.id %>" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
+                        Ouvrir
+                      </a>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% } %>
+    <% }) %>
+
+    <% if (!counts.total) { %>
+      <div class="mt-10 rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
+        <div class="text-3xl">✅</div>
+        <div class="mt-2 text-lg font-bold text-emerald-800">Aucune consigne en attente</div>
+        <div class="mt-1 text-sm text-emerald-700">Tous les cores sont revenus. Beau travail.</div>
+      </div>
+    <% } %>
+
+  </div>
+</main>

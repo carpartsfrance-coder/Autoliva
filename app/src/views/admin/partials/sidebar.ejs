@@ -47,6 +47,13 @@
           <span class="sidebar-badge"><%= sidebarPrepCount %></span>
         <% } %>
       </a>
+      <a class="sidebar-link <%= activeKey === 'consignes' ? 'sidebar-link--active' : '' %>" href="/admin/consignes" title="Consignes en attente">
+        <span class="material-symbols-outlined">assignment_return</span>
+        <span class="sidebar-link-text flex-1">Consignes en attente</span>
+        <% if (typeof sidebarConsigneCount !== 'undefined' && sidebarConsigneCount > 0) { %>
+          <span class="sidebar-badge"><%= sidebarConsigneCount %></span>
+        <% } %>
+      </a>
       <a class="sidebar-link <%= activeKey === 'analytics' ? 'sidebar-link--active' : '' %>" href="/admin/analytics" title="Analytics">
         <span class="material-symbols-outlined">analytics</span>
         <span class="sidebar-link-text">Analytics</span>
