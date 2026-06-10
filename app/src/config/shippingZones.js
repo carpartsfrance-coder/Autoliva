@@ -54,6 +54,53 @@ const COUNTRY_NAME_TO_CODE = {
   grece: 'GR', 'grèce': 'GR', malte: 'MT', chypre: 'CY',
 };
 
+// Territoires français reconnus par leur NOM (si le client choisit « La Réunion »
+// plutôt que « France » dans le menu) → zone DOM-TOM directement.
+const DOMTOM_NAME_KEYS = new Set([
+  'guadeloupe', 'martinique', 'guyane', 'guyane francaise', 'la reunion', 'reunion',
+  'mayotte', 'saint-pierre-et-miquelon', 'saint pierre et miquelon', 'saint-barthelemy',
+  'saint barthelemy', 'saint-martin', 'saint martin', 'wallis-et-futuna', 'wallis et futuna',
+  'nouvelle-caledonie', 'nouvelle caledonie', 'polynesie francaise', 'polynesie',
+]);
+
+/** Normalise un libellé pour comparaison : sans accents, minuscules, espaces compactés. */
+function normName(s) {
+  return String(s == null ? '' : s)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Options du menu déroulant « Pays » au checkout (valeurs propres → zones fiables). */
+const COUNTRY_OPTIONS = [
+  { group: 'France & Outre-mer', items: [
+    { value: 'France', label: 'France métropolitaine' },
+    { value: 'Corse', label: 'Corse' },
+    { value: 'Guadeloupe', label: 'Guadeloupe' },
+    { value: 'Martinique', label: 'Martinique' },
+    { value: 'Guyane', label: 'Guyane' },
+    { value: 'La Réunion', label: 'La Réunion' },
+    { value: 'Mayotte', label: 'Mayotte' },
+  ] },
+  { group: 'Europe', items: [
+    { value: 'Espagne', label: 'Espagne' },
+    { value: 'Belgique', label: 'Belgique' },
+    { value: 'Allemagne', label: 'Allemagne' },
+    { value: 'Italie', label: 'Italie' },
+    { value: 'Portugal', label: 'Portugal' },
+    { value: 'Pays-Bas', label: 'Pays-Bas' },
+    { value: 'Luxembourg', label: 'Luxembourg' },
+    { value: 'Suisse', label: 'Suisse' },
+    { value: 'Autriche', label: 'Autriche' },
+    { value: 'Irlande', label: 'Irlande' },
+  ] },
+  { group: 'International', items: [
+    { value: 'Autre', label: 'Autre pays (international)' },
+  ] },
+];
+
 /** Normalise un pays (code ou libellé libre) → code ISO alpha-2. Défaut : FR. */
 function normalizeCountryCode(country) {
   const v = String(country == null ? '' : country).trim();
@@ -75,6 +122,12 @@ function normalizeCountryCode(country) {
  * @returns {string} un id de zone (toujours valide)
  */
 function resolveZone(country, postalCode) {
+  // 1) Territoire reconnu par son NOM (le client a choisi « La Réunion », « Corse »…).
+  const nk = normName(country);
+  if (DOMTOM_NAME_KEYS.has(nk)) return 'domtom';
+  if (nk === 'corse') return 'corse';
+
+  // 2) Sinon : code pays + code postal.
   const cc = normalizeCountryCode(country);
   const pc = String(postalCode == null ? '' : postalCode).replace(/\s+/g, '');
 
@@ -92,6 +145,7 @@ module.exports = {
   ZONE_IDS,
   ZONE_LABEL,
   EUROPE_COUNTRY_CODES,
+  COUNTRY_OPTIONS,
   normalizeCountryCode,
   resolveZone,
 };

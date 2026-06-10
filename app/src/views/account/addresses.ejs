@@ -92,7 +92,7 @@
 
               <div>
                 <label class="block text-sm font-bold text-slate-700" for="country">Pays</label>
-                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary" id="country" name="country" type="text" value="<%= form ? form.country : 'France' %>" />
+                <%- include('../partials/country-select', { currentCountry: (form ? form.country : 'France'), selectId: 'country', selectClass: 'mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold focus:ring-primary' }) %>
               </div>
 
               <div class="md:col-span-2">

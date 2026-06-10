@@ -1,0 +1,21 @@
+<%
+  // Partial : menu déroulant « Pays » mappé aux zones de livraison.
+  // Variables attendues : currentCountry (valeur sélectionnée), selectId, selectClass.
+  var _cc = (typeof currentCountry !== 'undefined' && currentCountry) ? String(currentCountry) : 'France';
+  var _opts = (typeof shippingCountryOptions !== 'undefined' && shippingCountryOptions) ? shippingCountryOptions : [];
+  var _values = [];
+  _opts.forEach(function (g) { (g.items || []).forEach(function (it) { _values.push(it.value); }); });
+  var _known = _values.indexOf(_cc) !== -1;
+  var _cls = (typeof selectClass !== 'undefined' && selectClass) ? selectClass : '';
+  var _id = (typeof selectId !== 'undefined' && selectId) ? selectId : 'country';
+%>
+<select class="<%= _cls %>" id="<%= _id %>" name="country">
+  <% if (!_known && _cc) { %><option value="<%= _cc %>" selected><%= _cc %></option><% } %>
+  <% _opts.forEach(function (g) { %>
+    <optgroup label="<%= g.group %>">
+      <% (g.items || []).forEach(function (it) { %>
+        <option value="<%= it.value %>" <%= it.value === _cc ? 'selected' : '' %>><%= it.label %></option>
+      <% }) %>
+    </optgroup>
+  <% }) %>
+</select>
