@@ -140,7 +140,7 @@ async function captureContactLead({ req, mode, email, firstName, lastName, phone
     const requested = {
       vehicle: trim(hints.Vehicule || hints.vehicle).slice(0, 200),
       vin: trim(hints.VIN || hints.vin).toUpperCase().slice(0, 32),
-      plate: trim(hints.Immat || hints.plate).toUpperCase().slice(0, 16),
+      plate: trim(hints.Immat || hints.plate).toUpperCase().slice(0, 32), // 32 : ce champ reçoit aussi des VIN (17) via le formulaire moteur
       ref: trim(hints.Reference || hints.ref).slice(0, 200),
       message: cleanMessage.slice(0, 2000),
     };
