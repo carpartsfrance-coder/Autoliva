@@ -2,6 +2,30 @@ const mongoose = require('mongoose');
 
 const Category = require('../models/Category');
 const ShippingClass = require('../models/ShippingClass');
+const { resolveZone, ZONE_IDS } = require('../config/shippingZones');
+
+/** Prix (centimes) d'une classe d'expédition pour une zone donnée.
+ *  zonePricesCents[zone] si défini, sinon prix métropole, sinon domicilePriceCents (legacy). */
+function priceForZone(cls, zone) {
+  if (!cls) return 0;
+  const z = cls.zonePricesCents || {};
+  const specific = z[zone];
+  if (typeof specific === 'number' && Number.isFinite(specific)) return specific;
+  const metro = z.metropole;
+  if (typeof metro === 'number' && Number.isFinite(metro)) return metro;
+  return Number.isFinite(cls.domicilePriceCents) ? cls.domicilePriceCents : 0;
+}
+
+/** Normalise l'argument zone/adresse en un id de zone valide (défaut métropole). */
+function toZone(zoneOrAddress) {
+  if (!zoneOrAddress) return 'metropole';
+  if (typeof zoneOrAddress === 'string') return ZONE_IDS.includes(zoneOrAddress) ? zoneOrAddress : 'metropole';
+  if (zoneOrAddress.zone && ZONE_IDS.includes(zoneOrAddress.zone)) return zoneOrAddress.zone;
+  if (zoneOrAddress.country != null || zoneOrAddress.postalCode != null) {
+    return resolveZone(zoneOrAddress.country, zoneOrAddress.postalCode);
+  }
+  return 'metropole';
+}
 
 function normalizeCategoryKey(value) {
   if (typeof value !== 'string') return '';
@@ -18,8 +42,9 @@ function normalizeCategoryKey(value) {
     .toLowerCase();
 }
 
-async function computeShippingPricesCents(dbConnected, products) {
+async function computeShippingPricesCents(dbConnected, products, zoneOrAddress) {
   const fallback = { domicile: 1290 };
+  const zone = toZone(zoneOrAddress);
 
   if (!dbConnected) return fallback;
 
@@ -128,12 +153,12 @@ async function computeShippingPricesCents(dbConnected, products) {
   );
 
   const defaultClass = await ShippingClass.findOne({ isDefault: true })
-    .select('_id domicilePriceCents')
+    .select('_id domicilePriceCents zonePricesCents')
     .lean();
 
   const classDocs = classIds.length
     ? await ShippingClass.find({ _id: { $in: classIds } })
-        .select('_id domicilePriceCents')
+        .select('_id domicilePriceCents zonePricesCents')
         .lean()
     : [];
 
@@ -151,9 +176,9 @@ async function computeShippingPricesCents(dbConnected, products) {
     const clsProduct = productClassId ? (classById.get(productClassId) || null) : null;
     const clsCategory = categoryClassId ? (classById.get(categoryClassId) || null) : null;
 
-    const dDefault = clsDefault && Number.isFinite(clsDefault.domicilePriceCents) ? clsDefault.domicilePriceCents : 0;
-    const dProduct = clsProduct && Number.isFinite(clsProduct.domicilePriceCents) ? clsProduct.domicilePriceCents : 0;
-    const dCategory = clsCategory && Number.isFinite(clsCategory.domicilePriceCents) ? clsCategory.domicilePriceCents : 0;
+    const dDefault = priceForZone(clsDefault, zone);
+    const dProduct = priceForZone(clsProduct, zone);
+    const dCategory = priceForZone(clsCategory, zone);
 
     const d = Math.max(dDefault, dProduct, dCategory);
     domicile = Math.max(domicile, d);
@@ -162,7 +187,7 @@ async function computeShippingPricesCents(dbConnected, products) {
   return { domicile };
 }
 
-async function getShippingMethods(dbConnected, products) {
+async function getShippingMethods(dbConnected, products, zoneOrAddress) {
   const list = Array.isArray(products) ? products : [];
   const onlyStandaloneCloning = list.length > 0 && list.every((p) => p && p.serviceType === 'standalone_cloning');
 
@@ -177,7 +202,7 @@ async function getShippingMethods(dbConnected, products) {
     ];
   }
 
-  const prices = await computeShippingPricesCents(dbConnected, products);
+  const prices = await computeShippingPricesCents(dbConnected, products, zoneOrAddress);
 
   return [
     {
@@ -185,6 +210,7 @@ async function getShippingMethods(dbConnected, products) {
       title: 'Livraison à domicile',
       description: 'Livré chez vous en 2-3 jours ouvrés',
       priceCents: prices.domicile,
+      zone: toZone(zoneOrAddress),
     },
     {
       id: 'retrait',
@@ -198,4 +224,6 @@ async function getShippingMethods(dbConnected, products) {
 module.exports = {
   computeShippingPricesCents,
   getShippingMethods,
+  priceForZone,
+  toZone,
 };

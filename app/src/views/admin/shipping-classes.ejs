@@ -43,8 +43,30 @@
             </div>
 
             <div>
-              <label class="block text-sm font-medium text-slate-500" for="domicilePrice">Domicile (€)</label>
+              <label class="block text-sm font-medium text-slate-500" for="domicilePrice">🇫🇷 France métropole (€)</label>
               <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="domicilePrice" name="domicilePrice" placeholder="0,00" type="text" value="<%= form && form.domicilePrice ? form.domicilePrice : '' %>" />
+            </div>
+
+            <div>
+              <div class="text-xs text-slate-400 mb-2">Tarifs par destination (vide = même prix que la métropole) :</div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500" for="zoneCorse">Corse (€)</label>
+                  <input class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold focus:ring-primary" id="zoneCorse" name="zoneCorse" placeholder="= métropole" type="text" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500" for="zoneDomtom">DOM-TOM (€)</label>
+                  <input class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold focus:ring-primary" id="zoneDomtom" name="zoneDomtom" placeholder="= métropole" type="text" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500" for="zoneEurope">Europe (€)</label>
+                  <input class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold focus:ring-primary" id="zoneEurope" name="zoneEurope" placeholder="= métropole" type="text" />
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-500" for="zoneInternational">International (€)</label>
+                  <input class="mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-semibold focus:ring-primary" id="zoneInternational" name="zoneInternational" placeholder="= métropole" type="text" />
+                </div>
+              </div>
             </div>
 
             <div class="flex flex-col gap-3">
@@ -110,8 +132,26 @@
                     </div>
 
                     <div class="md:col-span-6">
-                      <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="dom-<%= c.id %>">Domicile (€)</label>
+                      <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="dom-<%= c.id %>">🇫🇷 France métropole (€)</label>
                       <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="dom-<%= c.id %>" name="domicilePrice" type="text" value="<%= c.domicilePriceInput %>" />
+                    </div>
+
+                    <div class="md:col-span-12 -mb-1 text-xs text-slate-400">Tarifs par destination (laisser vide = même prix que la métropole) :</div>
+                    <div class="md:col-span-3">
+                      <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="zc-<%= c.id %>">Corse (€)</label>
+                      <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="zc-<%= c.id %>" name="zoneCorse" type="text" placeholder="= métropole" value="<%= c.zonePriceInputs.corse %>" />
+                    </div>
+                    <div class="md:col-span-3">
+                      <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="zd-<%= c.id %>">DOM-TOM (€)</label>
+                      <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="zd-<%= c.id %>" name="zoneDomtom" type="text" placeholder="= métropole" value="<%= c.zonePriceInputs.domtom %>" />
+                    </div>
+                    <div class="md:col-span-3">
+                      <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="ze-<%= c.id %>">Europe (€)</label>
+                      <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="ze-<%= c.id %>" name="zoneEurope" type="text" placeholder="= métropole" value="<%= c.zonePriceInputs.europe %>" />
+                    </div>
+                    <div class="md:col-span-3">
+                      <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="zi-<%= c.id %>">International (€)</label>
+                      <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="zi-<%= c.id %>" name="zoneInternational" type="text" placeholder="= métropole" value="<%= c.zonePriceInputs.international %>" />
                     </div>
 
                     <div class="md:col-span-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">

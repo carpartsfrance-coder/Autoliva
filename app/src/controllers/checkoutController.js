@@ -940,9 +940,21 @@ async function getShipping(req, res, next) {
       return res.redirect('/panier');
     }
 
+    // Zone de livraison depuis l'adresse connue (sélectionnée pour un compte,
+    // saisie pour un invité) → frais de port adaptés ; sinon défaut métropole.
+    let shipZoneAddr = null;
+    if (!guestCheckout) {
+      const selAddr = addresses.find((a) => String(a._id) === selectedAddressId);
+      if (selAddr) shipZoneAddr = { country: selAddr.country, postalCode: selAddr.postalCode };
+    } else {
+      const g = getGuestCheckoutData(checkout);
+      if (g && (g.country || g.postalCode)) shipZoneAddr = { country: g.country, postalCode: g.postalCode };
+    }
+
     const shippingMethods = await getShippingMethods(
       dbConnected,
-      viewItems.map((it) => it.product)
+      viewItems.map((it) => it.product),
+      shipZoneAddr
     );
 
     const selectedMethod =
@@ -1454,7 +1466,7 @@ async function getPayment(req, res, next) {
     const localMolliePaymentSimulation = shouldSimulateMolliePayment();
     const localScalapayPaymentSimulation = shouldSimulateScalapayPayment();
 
-    const selectedMethod = shippingMethods.find((m) => m.id === shippingMethodKey) || null;
+    let selectedMethod = shippingMethods.find((m) => m.id === shippingMethodKey) || null;
     if (!selectedMethod) {
       req.session.checkoutError = 'Merci de choisir une livraison et une adresse.';
       return res.redirect('/commande/livraison');
@@ -1523,6 +1535,18 @@ async function getPayment(req, res, next) {
       }
 
       clientDiscountPercent = user && Number.isFinite(user.discountPercent) ? user.discountPercent : 0;
+    }
+
+    // Recalcule les frais de port selon la ZONE de l'adresse de livraison résolue,
+    // pour que le montant affiché sur la page paiement = le montant débité.
+    if (address) {
+      const zonedMethods = await getShippingMethods(
+        dbConnected,
+        viewItems.map((it) => it.product),
+        { country: address.country, postalCode: address.postalCode }
+      );
+      const zonedSelected = zonedMethods.find((m) => m.id === shippingMethodKey);
+      if (zonedSelected) selectedMethod = zonedSelected;
     }
 
     const promoCodeFromSession = typeof req.session.promoCode === 'string' ? req.session.promoCode : '';
@@ -1934,7 +1958,11 @@ async function postPayment(req, res, next) {
       country: selectedBillingAddress.country || 'France',
     };
 
-    const shippingMethods = await getShippingMethods(dbConnected, shippingProducts);
+    // Frais de port FINAUX selon la zone de l'adresse de livraison réelle (le débit).
+    const shippingMethods = await getShippingMethods(dbConnected, shippingProducts, {
+      country: addressSnapshot.country,
+      postalCode: addressSnapshot.postalCode,
+    });
     const selectedMethod = shippingMethods.find((m) => m.id === shippingMethodKey) || null;
     if (!selectedMethod) {
       req.session.checkoutError = 'Merci de choisir un mode de livraison.';
