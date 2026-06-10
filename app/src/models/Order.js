@@ -457,8 +457,14 @@ orderSchema.pre('save', function (next) {
     }
   }
 
-  // ─── 2. Si status → 'shipped' → calculer returnDueDate selon orderType ───
-  if (order.isModified('status') && order.status === 'shipped') {
+  // ─── 2. Quand la pièce PART (étiquette créée / expédiée / livrée) → calculer
+  //         returnDueDate. On déclenche au PREMIER de ces statuts ; le garde
+  //         `if (!returnDueDate)` évite de réécrire la date ensuite.
+  //         Avant on ne se basait QUE sur 'shipped', or le flux réel passe
+  //         label_created → delivered (quasi jamais 'shipped') → la date
+  //         n'était jamais posée → le robot de relance ne voyait pas la
+  //         commande → aucun rappel envoyé. ───────────────────────────────────
+  if (order.isModified('status') && ['label_created', 'shipped', 'delivered'].includes(order.status)) {
     if (!order.returnDates) order.returnDates = {};
 
     if (order.orderType === 'exchange') {
