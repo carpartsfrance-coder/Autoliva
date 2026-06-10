@@ -416,6 +416,7 @@ const ASSET_VERSIONS = {
 app.use((req, res, next) => {
   res.locals.brand = brand;
   res.locals.assetVersions = ASSET_VERSIONS;
+  res.locals.shippingCountryOptions = require('./config/shippingZones').COUNTRY_OPTIONS;
   next();
 });
 

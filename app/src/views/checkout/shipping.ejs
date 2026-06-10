@@ -132,7 +132,7 @@
 
                   <div>
                     <label class="block text-sm font-semibold text-slate-700" for="country"><%= t('checkout.country') %></label>
-                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="country" name="country" type="text" value="<%= guestForm ? guestForm.country : 'France' %>" />
+                    <%- include('../partials/country-select', { currentCountry: (guestForm ? guestForm.country : 'France'), selectId: 'country', selectClass: 'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition' }) %>
                   </div>
                 </div>
 
@@ -403,7 +403,7 @@
           </div>
           <div>
             <label class="block text-sm font-semibold text-slate-700" for="modal-country"><%= t('checkout.country') %></label>
-            <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-country" name="country" type="text" value="<%= form ? form.country : 'France' %>" />
+            <%- include('../partials/country-select', { currentCountry: (form ? form.country : 'France'), selectId: 'modal-country', selectClass: 'mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition' }) %>
           </div>
         </div>
 
