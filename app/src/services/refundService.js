@@ -39,7 +39,9 @@ function deriveDefaultMethod(order) {
   if (!order) return 'manual';
   /* Mollie capturé → remboursable via API */
   if (order.molliePaymentId && order.molliePaymentStatus === 'paid') return 'mollie';
-  if (order.scalapayOrderToken && order.scalapayStatus === 'captured') return 'scalapay';
+  // Scalapay encaissé → remboursable via API. Le statut « capturé » côté Scalapay
+  // est 'charged' (parfois 'captured') — cf. checkoutController ligne ~346.
+  if (order.scalapayOrderToken && (order.scalapayStatus === 'charged' || order.scalapayStatus === 'captured')) return 'scalapay';
   return 'manual';
 }
 
