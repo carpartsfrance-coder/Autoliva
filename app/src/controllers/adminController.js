@@ -6387,6 +6387,31 @@ async function postAdminBulkDeleteProducts(req, res, next) {
   }
 }
 
+/* Lit les 4 prix de zone (Corse / DOM-TOM / Europe / International) depuis le
+ * formulaire. Vide ou invalide → null = retombe sur le prix métropole. La
+ * métropole reste portée par domicilePriceCents (zonePricesCents.metropole = null). */
+function parseShippingZonePrices(body) {
+  const one = (raw) => {
+    const v = typeof raw === 'string' ? raw.trim() : '';
+    if (!v) return null;
+    const c = parsePriceToCents(v);
+    return (typeof c === 'number' && c >= 0) ? c : null;
+  };
+  return {
+    metropole: null,
+    corse: one(body && body.zoneCorse),
+    domtom: one(body && body.zoneDomtom),
+    europe: one(body && body.zoneEurope),
+    international: one(body && body.zoneInternational),
+  };
+}
+
+function formatShippingZoneInputs(zonePricesCents) {
+  const z = zonePricesCents || {};
+  const fmt = (v) => (typeof v === 'number' && Number.isFinite(v)) ? formatPriceForInput(v) : '';
+  return { corse: fmt(z.corse), domtom: fmt(z.domtom), europe: fmt(z.europe), international: fmt(z.international) };
+}
+
 async function getAdminShippingClassesPage(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -6441,6 +6466,7 @@ async function getAdminShippingClassesPage(req, res, next) {
         isDefault,
         domicilePrice: formatEuro(c.domicilePriceCents),
         domicilePriceInput: formatPriceForInput(c.domicilePriceCents),
+        zonePriceInputs: formatShippingZoneInputs(c.zonePricesCents),
         usedCount,
         canDelete,
       };
@@ -6503,6 +6529,7 @@ async function postAdminCreateShippingClass(req, res, next) {
       isActive,
       isDefault,
       domicilePriceCents,
+      zonePricesCents: parseShippingZonePrices(req.body),
     });
 
     delete req.session.adminShippingClassForm;
@@ -6571,6 +6598,7 @@ async function postAdminUpdateShippingClass(req, res, next) {
         isActive,
         isDefault,
         domicilePriceCents,
+        zonePricesCents: parseShippingZonePrices(req.body),
       },
     });
 
