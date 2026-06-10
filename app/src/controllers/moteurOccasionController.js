@@ -267,7 +267,9 @@ function normalizePhone(value) {
 }
 
 function normalizePlate(value) {
-  return trim(value).toUpperCase().replace(/\s+/g, '').slice(0, 16);
+  // Le champ accepte plaque (~9), code moteur (~10) OU VIN/n° de châssis (17 car.).
+  // L'ancienne limite à 16 tronquait le 17ᵉ caractère des VIN → on élargit à 32.
+  return trim(value).toUpperCase().replace(/\s+/g, '').slice(0, 32);
 }
 
 function escapeHtml(value) {
