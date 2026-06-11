@@ -83,6 +83,16 @@
 <span class="material-symbols-outlined">search</span>
 </a>
 
+<%/* Téléphone entreprise — desktop : numéro complet ; mobile : icône d'appel.
+     Tap-to-call (tel:), tracké automatiquement via le listener tel: du footer. */%>
+<a class="hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg text-slate-700 font-bold text-sm hover:bg-slate-50 hover:text-primary transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %> au <%= brand.PHONE %>" title="Appelez-nous">
+<span class="material-symbols-outlined text-xl text-primary">call</span>
+<span><%= brand.PHONE %></span>
+</a>
+<a class="flex lg:hidden items-center justify-center rounded-lg h-9 w-9 text-primary hover:bg-slate-100 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %>" title="Appelez-nous">
+<span class="material-symbols-outlined">call</span>
+</a>
+
 <a class="relative flex items-center justify-center rounded-lg h-9 w-9 text-slate-700 hover:bg-slate-100 transition-colors" data-cart-link href="<%= _lp %>/panier">
 <span class="material-symbols-outlined" data-cart-icon>shopping_cart</span>
 <span class="absolute -top-1 -right-1 flex h-4 min-w-4 px-1 items-center justify-center rounded-full bg-primary text-[10px] text-white font-semibold" data-cart-count><%= typeof cartItemCount !== 'undefined' ? cartItemCount : 0 %></span>
@@ -106,6 +116,10 @@
       </div>
 
       <div class="mt-4 grid gap-2">
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %> au <%= brand.PHONE %>">
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">call</span>Appelez-nous · <%= brand.PHONE %></span>
+          <span class="material-symbols-outlined">call</span>
+        </a>
         <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">home</span><%= t('nav.home') %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
