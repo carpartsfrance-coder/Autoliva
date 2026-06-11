@@ -398,6 +398,19 @@ async function postAdminManualReminder(req, res, next) {
       return res.status(400).json({ ok: false, error: 'Ce lead ne peut plus être relancé.' });
     }
 
+    // Garde-fou : ne PAS envoyer la relance PANIER (« votre commande en cours »)
+    // à un lead qui n'en est pas un — devis moteur (landing_moteurs), formulaire
+    // contact/devis — ni à un panier vide. Sinon le client reçoit un mail absurde
+    // alors qu'il n'a jamais rien commandé. Même exclusion que le cron
+    // (sendAbandonedCartReminders).
+    const NON_CART_SOURCES = ['landing_moteurs', 'contact', 'devis'];
+    if (NON_CART_SOURCES.includes(cart.captureSource) || !(cart.items && cart.items.length)) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Ce lead n’est pas un panier (demande de devis / panier vide) : la relance « commande en cours » n’est pas adaptée.',
+      });
+    }
+
     let reminderNumber, nextStatus;
     if (cart.status === 'abandoned') { reminderNumber = 1; nextStatus = 'reminded_1'; }
     else if (cart.status === 'reminded_1') { reminderNumber = 2; nextStatus = 'reminded_2'; }

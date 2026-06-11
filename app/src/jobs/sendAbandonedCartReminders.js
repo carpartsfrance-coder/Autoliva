@@ -36,6 +36,14 @@ async function sendAbandonedCartReminders() {
   const now = new Date();
   const report = { sent: 0, expired: 0, errors: 0 };
 
+  // Interrupteur d'urgence : ABANDONED_CART_REMINDERS_ENABLED=false coupe le cron
+  // instantanément via une variable d'environnement (Render), sans redéploiement —
+  // utile pour stopper un envoi en masse erroné le temps de corriger.
+  if (String(process.env.ABANDONED_CART_REMINDERS_ENABLED || 'true').toLowerCase() === 'false') {
+    console.log('[cart-reminders] Désactivé via ABANDONED_CART_REMINDERS_ENABLED=false — aucun envoi.');
+    return report;
+  }
+
   const promoCode = typeof process.env.ABANDONED_CART_PROMO_CODE === 'string'
     ? process.env.ABANDONED_CART_PROMO_CODE.trim()
     : '';
