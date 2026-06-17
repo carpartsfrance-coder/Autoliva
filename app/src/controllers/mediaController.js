@@ -83,7 +83,13 @@ async function serveMedia(id, res, next) {
 
     const filename = typeof file.filename === 'string' ? file.filename.trim() : '';
     if (filename) {
-      res.set('Content-Disposition', `inline; filename="${filename.replace(/\"/g, '')}"`);
+      // Un en-tête HTTP n'accepte que de l'ASCII (latin1). Un nom de fichier
+      // avec un accent décomposé (« a » + accent combinant, ex. images
+      // « ChatGPT Image … à … ») contient des caractères hors-ASCII qui font
+      // planter res.set (ERR_INVALID_CHAR → 502). On nettoie : on retire les
+      // caractères non imprimables/non-ASCII et les guillemets.
+      const safeName = filename.replace(/[^\x20-\x7E]/g, '').replace(/"/g, '').trim();
+      if (safeName) res.set('Content-Disposition', `inline; filename="${safeName}"`);
     }
 
     const stream = mediaStorage.openDownloadStream(id);
