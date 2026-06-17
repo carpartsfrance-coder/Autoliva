@@ -56,7 +56,10 @@ async function getMediaBySeoUrl(req, res, next) {
 function servePlaceholder(res) {
   if (placeholderBuf) {
     res.set('Content-Type', 'image/svg+xml');
-    res.set('Cache-Control', 'public, max-age=3600');
+    // Image absente temporairement → NE PAS la cacher comme un vrai 200 (sinon
+    // elle resterait « manquante » 1h dans le navigateur/CDN même après le
+    // ré-upload du fichier).
+    res.set('Cache-Control', 'no-store');
     return res.status(200).send(placeholderBuf);
   }
   return res.status(404).end();
@@ -75,6 +78,8 @@ async function serveMedia(id, res, next) {
 
     res.set('Content-Type', contentType);
     res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    // Taille connue (doc GridFS déjà chargé) → progression navigateur + meilleur cache.
+    if (Number.isFinite(file.length)) res.set('Content-Length', String(file.length));
 
     const filename = typeof file.filename === 'string' ? file.filename.trim() : '';
     if (filename) {

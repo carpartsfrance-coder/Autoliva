@@ -38,7 +38,7 @@
         <% (typeof heroSlides !== 'undefined' && Array.isArray(heroSlides) ? heroSlides : []).forEach(function(slide, idx) { %>
           <div class="absolute inset-0 transition-opacity duration-700 <%= idx === 0 ? 'opacity-100' : 'opacity-0 pointer-events-none' %>" data-home-hero-slide="<%= idx %>" <%= idx === 0 ? '' : 'aria-hidden="true"' %>>
             <% if (slide.imageUrl) { %>
-              <img alt="<%= slide.imageAlt || slide.title || brand.NAME %>" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 brightness-75" src="<%= slide.imageUrl %>" />
+              <img alt="<%= slide.imageAlt || slide.title || brand.NAME %>" class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 brightness-75" src="<%= slide.imageUrl %>" width="1200" height="450" decoding="async" <%= idx === 0 ? 'fetchpriority="high"' : 'loading="lazy"' %> />
             <% } %>
             <div class="absolute inset-0 hero-gradient hidden sm:block"></div>
             <div class="absolute inset-0 sm:hidden bg-gradient-to-t from-black/80 via-black/45 to-transparent"></div>
@@ -185,7 +185,7 @@
             <a class="block" href="<%= p.publicPath || ('/produits/' + encodeURIComponent(String(p._id || ''))) %>">
               <div class="relative aspect-video overflow-hidden">
                 <% if (imgUrl) { %>
-                  <img alt="<%= p.name %>" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="<%= imgUrl %>"/>
+                  <img alt="<%= p.name %>" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" src="<%= imgUrl %>" width="400" height="225" loading="lazy" decoding="async"/>
                 <% } else { %>
                   <div class="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
                     <span class="material-symbols-rounded text-5xl">inventory_2</span>
@@ -243,7 +243,7 @@
             <a href="<%= a.url %>" class="block">
               <div class="rounded-2xl overflow-hidden mb-4 relative aspect-[16/10]">
                 <% if (a.imageUrl) { %>
-                  <img alt="<%= a.title %>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="<%= a.imageUrl %>" loading="lazy" />
+                  <img alt="<%= a.title %>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" src="<%= a.imageUrl %>" width="400" height="250" loading="lazy" decoding="async" />
                 <% } else { %>
                   <div class="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
                     <span class="material-symbols-rounded text-5xl">article</span>
