@@ -292,6 +292,14 @@ try {
   MongoStore = null;
 }
 
+/* Images média (/media/:id, GridFS) montées AVANT compression + session :
+ *  - pas de gzip inutile sur des images déjà compressées (CPU + latence) ;
+ *  - pas de Set-Cookie de session sur les images → Cloudflare peut enfin les
+ *    cacher à l'edge (sinon cf-cache-status=DYNAMIC : chaque image refrappe
+ *    l'origine Render à ~0,22 s).
+ * Le streaming GridFS n'a besoin d'aucun middleware applicatif. */
+app.use('/media', mediaRouter);
+
 if (compression) {
   app.use(compression());
 }
@@ -502,10 +510,8 @@ app.use(async (req, res, next) => {
   next();
 });
 
-/* Routes SEO publiques (sitemap.xml, sitemap-*.xml, robots.txt) déclarées
-   plus haut, avant le middleware session. */
-
-app.use('/media', mediaRouter);
+/* Routes SEO publiques (sitemap.xml, sitemap-*.xml, robots.txt) et /media
+   déclarées plus haut, avant compression + le middleware session. */
 
 const staticOptions = isProd
   ? { maxAge: '7d', etag: true }
