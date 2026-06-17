@@ -54,6 +54,62 @@ const PER_PAGE = 24;
  *   choix, c'est un override.
  * @returns {Promise<Object>} payload pour res.render
  */
+/* Recherche full-text via MongoDB Atlas Search (index « product_search ») :
+ * récupère DIRECTEMENT la page de résultats classés par pertinence Atlas
+ * (fuzzy, pondération nom/codes, autocomplétion) en quelques dizaines de ms,
+ * quel que soit le volume du catalogue. Filtres (stock/catégorie/véhicule/prix)
+ * appliqués APRÈS le $search ; renvoie aussi le total.
+ * Retourne null si Atlas Search est indisponible (env local / index absent) →
+ * le caller bascule alors sur le moteur de classement JS (repli sûr). */
+const ATLAS_SEARCH_INDEX = 'product_search';
+
+async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, perPage }) {
+  const q = String(searchQuery || '').trim();
+  if (!q) return null;
+
+  const searchStage = {
+    $search: {
+      index: ATLAS_SEARCH_INDEX,
+      compound: {
+        should: [
+          { text: { query: q, path: 'name', score: { boost: { value: 10 } }, fuzzy: { maxEdits: 1, prefixLength: 1 } } },
+          { autocomplete: { query: q, path: 'name', score: { boost: { value: 6 } } } },
+          { text: { query: q, path: ['sku', 'engineCode', 'reference', 'oemRef'], score: { boost: { value: 9 } } } },
+          { text: { query: q, path: ['brand', 'category', 'compatibility.make', 'compatibility.model', 'compatibility.engine'], score: { boost: { value: 4 } }, fuzzy: { maxEdits: 1 } } },
+          { text: { query: q, path: 'description', score: { boost: { value: 1 } }, fuzzy: { maxEdits: 1 } } },
+        ],
+        minimumShouldMatch: 1,
+      },
+    },
+  };
+
+  const pipeline = [searchStage];
+  if (baseFilter && Object.keys(baseFilter).length) pipeline.push({ $match: baseFilter });
+
+  // Tri explicite (prix / nouveauté) ; sinon on garde l'ordre de pertinence Atlas.
+  if (sort === 'price_asc') pipeline.push({ $sort: { priceCents: 1 } });
+  else if (sort === 'price_desc') pipeline.push({ $sort: { priceCents: -1 } });
+  else if (sort === 'newest') pipeline.push({ $sort: { createdAt: -1 } });
+
+  pipeline.push({
+    $facet: {
+      results: [{ $skip: Math.max(0, (page - 1) * perPage) }, { $limit: perPage }],
+      total: [{ $count: 'n' }],
+    },
+  });
+
+  try {
+    const out = await Product.aggregate(pipeline);
+    const facet = (out && out[0]) || {};
+    const products = Array.isArray(facet.results) ? facet.results : [];
+    const totalCount = (facet.total && facet.total[0] && facet.total[0].n) || 0;
+    return { products, totalCount };
+  } catch (err) {
+    console.warn('[search] Atlas Search indisponible, repli moteur JS :', err && err.message);
+    return null;
+  }
+}
+
 async function prepareProductListingData(req, options = {}) {
   const { escapeRegex, toNumberOrNull, normalizeProduct } = getProductHelpers();
   const dbConnected = mongoose.connection.readyState === 1;
@@ -396,17 +452,32 @@ async function prepareProductListingData(req, options = {}) {
   // 7) Récupération produits + pagination
   if (dbConnected) {
     if (searchQuery) {
-      const matchedProducts = await Product.find(filter).lean();
-      const rankedProducts = sortRankedProducts(rankProducts(matchedProducts, searchQuery), sort);
-
-      totalCount = rankedProducts.length;
-      const totalPagesRaw = Math.max(1, Math.ceil(totalCount / perPage));
-      if (page > totalPagesRaw) page = totalPagesRaw;
-
-      products = rankedProducts
-        .slice((page - 1) * perPage, page * perPage)
-        .map((entry) => entry.product)
-        .map(normalizeProduct);
+      // 1) Atlas Search : page classée par pertinence, en ~dizaines de ms,
+      //    quel que soit le volume du catalogue (voie normale).
+      const atlas = await searchProductsViaAtlas({ baseFilter: filter, searchQuery, sort, page, perPage });
+      if (atlas) {
+        totalCount = atlas.totalCount;
+        const totalPagesRaw = Math.max(1, Math.ceil(totalCount / perPage));
+        if (totalCount > 0 && page > totalPagesRaw) {
+          // Page hors limite → on relit la dernière page valide.
+          page = totalPagesRaw;
+          const reread = await searchProductsViaAtlas({ baseFilter: filter, searchQuery, sort, page, perPage });
+          products = ((reread && reread.products) || []).map(normalizeProduct);
+        } else {
+          products = atlas.products.map(normalizeProduct);
+        }
+      } else {
+        // 2) Repli (Atlas indisponible) : moteur de classement JS sur scan complet.
+        const matchedProducts = await Product.find(filter).lean();
+        const rankedProducts = sortRankedProducts(rankProducts(matchedProducts, searchQuery), sort);
+        totalCount = rankedProducts.length;
+        const totalPagesRaw = Math.max(1, Math.ceil(totalCount / perPage));
+        if (page > totalPagesRaw) page = totalPagesRaw;
+        products = rankedProducts
+          .slice((page - 1) * perPage, page * perPage)
+          .map((entry) => entry.product)
+          .map(normalizeProduct);
+      }
     } else {
       totalCount = await Product.countDocuments(filter);
       const totalPagesRaw = Math.max(1, Math.ceil(totalCount / perPage));
