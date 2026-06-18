@@ -23,6 +23,11 @@
  *                                         pendant la transition douce)
  *   - /api/sav/*                         (webhooks SAV externes)
  *   - /commande/paiement/webhook*        (webhooks Mollie + Scalapay en vol)
+ *   - assets statiques (/js, /css, /images, /media, /uploads… + extensions
+ *                                         .js/.css/.png/.woff2…) : servis sur le
+ *                                         même domaine que la page qui les charge.
+ *                                         Sinon l'admin rendu sur carpartsfrance.fr
+ *                                         charge son JS cross-origin → page cassée.
  *
  * Logging :
  *   - Toujours loggé en dev
@@ -54,6 +59,15 @@ const EXCEPTION_PATTERNS = [
   /^\/admin(\/|$)/i,
   /^\/api\/sav(\/|$)/i,
   /^\/commande\/paiement\/webhook(\/|\?|$)/i,
+  // Assets statiques : DOIVENT être servis sur le même domaine que la page qui
+  // les référence. Les pages publiques sont redirigées AVANT de charger leurs
+  // assets, mais les pages exceptées (l'admin) se rendent sur carpartsfrance.fr
+  // et chargent ensuite /js, /css, /media… : sans cette exception ces assets
+  // partent en 301 cross-origin vers autoliva.com et NE S'EXÉCUTENT PAS
+  // (scripts bloqués → admin SAV cassé : compteurs « — », liste « Chargement… »).
+  // Aucun impact SEO : ces fichiers ne sont pas des pages indexables.
+  /^\/(js|css|images|img|fonts|media|uploads|assets)(\/|$)/i,
+  /\.(js|mjs|css|map|png|jpe?g|gif|svg|webp|avif|ico|woff2?|ttf|eot)$/i,
 ];
 
 function getTargetUrl() {
