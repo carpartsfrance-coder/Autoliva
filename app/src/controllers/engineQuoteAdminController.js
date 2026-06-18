@@ -186,6 +186,19 @@ function deriveCondition(vehicle) {
   return '';
 }
 
+/* Clé de condition par défaut déduite de la source du lead, quand le commercial
+ * n'a PAS explicitement choisi l'état. Garantit qu'un lead « reconditionné »
+ * (page /moteurs-reconditionnes) produit un devis reconditionné (badge rouge,
+ * garantie 1 an, « pièces d'usure remplacées ») et un lead « occasion » un devis
+ * occasion — au lieu du fallback occasion générique. Le commercial peut toujours
+ * forcer l'état en 1 clic dans le dossier. */
+function defaultConditionFromLead(cart) {
+  const d = deriveCondition(cart && cart.requested && cart.requested.vehicle);
+  if (d === 'reconditionne') return 'reconditionne_complet';
+  if (d === 'occasion') return 'occasion';
+  return '';
+}
+
 async function getEngineQuotesList(req, res, next) {
   try {
     const statusFilter = typeof req.query.status === 'string' ? req.query.status.trim() : '';
@@ -362,7 +375,14 @@ async function getEngineQuoteDetail(req, res, next) {
       engineQuote: {
         status,
         statusBadge: STATUS_LABELS[status] || STATUS_LABELS.new,
-        identifiedEngine: eq.identifiedEngine || {},
+        // Pré-sélectionne l'état déduit de la source du lead quand le commercial
+        // ne l'a pas encore choisi (recond → reconditionne_complet, occasion →
+        // occasion) : le radio + l'aperçu du message du devis partent du bon état.
+        identifiedEngine: (() => {
+          const ie = Object.assign({}, eq.identifiedEngine || {});
+          if (!ie.condition) ie.condition = defaultConditionFromLead(cart);
+          return ie;
+        })(),
         stock: eq.stock || {},
         pricing: eq.pricing || { purchasePrice: 0, additionalFees: 0, sellPrice: 0, vatRate: 20 },
         photos: eq.photos || { engine: [], kmReading: [] },
@@ -964,7 +984,7 @@ async function prepareQuoteData(req, opts) {
   const stockLabelClient = STOCK_CLIENT_LABELS[stockLocation] || '';
   const delay = (eq.stock && eq.stock.estimatedDelay) || '';
 
-  const conditionKey = (eq.identifiedEngine && eq.identifiedEngine.condition) || '';
+  const conditionKey = (eq.identifiedEngine && eq.identifiedEngine.condition) || defaultConditionFromLead(cart);
   const conditionInfo = CONDITION_LABELS[conditionKey] || CONDITION_LABELS[''];
 
   const allPhotos = [
@@ -1175,8 +1195,10 @@ async function postSendQuote(req, res, next) {
     const stockLabelClient = STOCK_CLIENT_LABELS[stockLocation] || '';
     const delay = (eq.stock && eq.stock.estimatedDelay) || '';
 
-    // État du moteur (occasion vs reconditionné) → libellés client-facing
-    const conditionKey = (eq.identifiedEngine && eq.identifiedEngine.condition) || '';
+    // État du moteur (occasion vs reconditionné) → libellés client-facing.
+    // Fallback déduit de la source du lead si le commercial n'a pas choisi
+    // l'état : garantit recond → devis recond, occasion → devis occasion.
+    const conditionKey = (eq.identifiedEngine && eq.identifiedEngine.condition) || defaultConditionFromLead(cart);
     const conditionInfo = CONDITION_LABELS[conditionKey] || CONDITION_LABELS[''];
 
     // 0) Lit les buffers photos depuis GridFS (réutilisés pour PDF + pièces jointes)
