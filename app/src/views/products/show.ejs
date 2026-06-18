@@ -38,6 +38,15 @@
         seenMediaUrls.add(m.url);
         return true;
       }); %>
+      <%# Vidéo YouTube/Vimeo (product.media.videoUrl) ajoutée comme DERNIER élément
+          de la galerie : vignette cliquable → lecteur intégré dans le visualiseur
+          principal. La vidéo reste hébergée chez YouTube/Vimeo (rien en base). %>
+      <% const _galleryVideoEmbed = (product.sections && product.sections.showVideo && product.media && product.media.videoUrl && typeof parseVideoEmbed === 'function')
+           ? parseVideoEmbed(product.media.videoUrl) : null; %>
+      <% if (_galleryVideoEmbed && !seenMediaUrls.has(product.media.videoUrl)) {
+           seenMediaUrls.add(product.media.videoUrl);
+           mediaItems.push({ url: product.media.videoUrl, type: 'embed', embedUrl: _galleryVideoEmbed.embedUrl, poster: _galleryVideoEmbed.poster, provider: _galleryVideoEmbed.provider });
+         } %>
       <% const images = mediaItems.map((m) => m.url); %>
       <% const mainImage = images[0] || ''; %>
       <% const mainMediaItem = mediaItems[0] || null; %>
@@ -246,8 +255,18 @@
                 <% visibleThumbItems.forEach((item, idx) => { %>
                   <% const remainingItems = thumbMediaItems.length - 4; %>
                   <% const _isThumbVideo = item.type === 'video'; %>
-                  <button aria-label="Voir <%= _isThumbVideo ? 'la vidéo' : 'l\'image' %> <%= idx + 1 %>" class="relative aspect-square rounded-lg overflow-hidden cursor-pointer border bg-white dark:bg-slate-900 refined-shadow transition-all <%= idx === 0 ? 'border-primary/20 ring-2 ring-primary' : 'border-slate-200 dark:border-slate-700 hover:border-primary' %>" data-thumb data-index="<%= idx %>" data-src="<%= item.url %>" data-type="<%= item.type %>" type="button">
-                    <% if (_isThumbVideo) { %>
+                  <% const _isThumbEmbed = item.type === 'embed'; %>
+                  <button aria-label="Voir <%= (_isThumbVideo || _isThumbEmbed) ? 'la vidéo' : 'l\'image' %> <%= idx + 1 %>" class="relative aspect-square rounded-lg overflow-hidden cursor-pointer border bg-white dark:bg-slate-900 refined-shadow transition-all <%= idx === 0 ? 'border-primary/20 ring-2 ring-primary' : 'border-slate-200 dark:border-slate-700 hover:border-primary' %>" data-thumb data-index="<%= idx %>" data-src="<%= item.url %>" data-type="<%= item.type %>"<% if (_isThumbEmbed) { %> data-embed-src="<%= item.embedUrl %>"<% } %> type="button">
+                    <% if (_isThumbEmbed) { %>
+                      <% if (item.poster) { %>
+                        <img alt="<%= product.name %> — vidéo" class="w-full h-full object-cover" decoding="async" loading="lazy" width="200" height="200" src="<%= item.poster %>" />
+                      <% } else { %>
+                        <span class="w-full h-full flex items-center justify-center bg-slate-900"><span class="material-symbols-outlined text-white/80 text-2xl leading-none">smart_display</span></span>
+                      <% } %>
+                      <span class="absolute inset-0 flex items-center justify-center">
+                        <span class="bg-black/60 text-white rounded-full p-1.5 flex items-center justify-center"><span class="material-symbols-outlined text-base leading-none">play_arrow</span></span>
+                      </span>
+                    <% } else if (_isThumbVideo) { %>
                       <video class="w-full h-full object-cover" muted playsinline preload="metadata">
                         <source src="<%= item.url %>" />
                       </video>
@@ -268,8 +287,10 @@
             <div class="relative w-full aspect-video lg:aspect-square lg:w-auto lg:flex-1 order-1 lg:order-2 rounded-xl bg-slate-100 dark:bg-slate-900 overflow-hidden border border-slate-200 dark:border-slate-800 refined-shadow">
               <% if (mainMediaItem) { %>
                 <% const _isMainVideo = mainMediaItem.type === 'video'; %>
-                <img alt="<%= product.name %> — photo principale" class="w-full h-full object-cover cursor-zoom-in<%= _isMainVideo ? ' hidden' : '' %>" data-main-image decoding="async" loading="eager" fetchpriority="high" width="800" height="450" <% if (!_isMainVideo) { %>src="<%= mainImage %>"<% } %> />
+                <% const _isMainEmbed = mainMediaItem.type === 'embed'; %>
+                <img alt="<%= product.name %> — photo principale" class="w-full h-full object-cover cursor-zoom-in<%= (_isMainVideo || _isMainEmbed) ? ' hidden' : '' %>" data-main-image decoding="async" loading="eager" fetchpriority="high" width="800" height="450" <% if (!_isMainVideo && !_isMainEmbed) { %>src="<%= mainImage %>"<% } %> />
                 <video class="w-full h-full object-cover<%= _isMainVideo ? '' : ' hidden' %>" data-main-video controls preload="metadata" playsinline<% if (_isMainVideo) { %> src="<%= mainImage %>"<% } %>></video>
+                <iframe class="absolute inset-0 w-full h-full<%= _isMainEmbed ? '' : ' hidden' %>" data-main-embed title="<%= product.name %> — vidéo" loading="lazy" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen<% if (_isMainEmbed) { %> src="<%= mainMediaItem.embedUrl %>"<% } %>></iframe>
               <% } else if (isService) { %>
                 <div class="w-full h-full flex flex-col items-center justify-center gap-3 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
                   <span class="material-symbols-outlined text-7xl text-primary/70">memory</span>
@@ -309,7 +330,7 @@
           </div>
 
           <% hiddenThumbItems.forEach((item, idx) => { %>
-            <button class="hidden" data-thumb data-index="<%= idx + 4 %>" data-src="<%= item.url %>" data-type="<%= item.type %>" type="button"></button>
+            <button class="hidden" data-thumb data-index="<%= idx + 4 %>" data-src="<%= item.url %>" data-type="<%= item.type %>"<% if (item.type === 'embed') { %> data-embed-src="<%= item.embedUrl %>"<% } %> type="button"></button>
           <% }) %>
 
           <% if (qualityHighlights.length) { %>
@@ -323,24 +344,16 @@
           </div>
           <% } %>
 
-          <% if (hasVideo) { %>
-            <% const _videoEmbed = (typeof parseVideoEmbed === 'function') ? parseVideoEmbed(product.media.videoUrl) : null; %>
-            <% if (_videoEmbed) { %>
-              <%# Lecteur vidéo intégré (YouTube/Vimeo) — la vidéo reste hébergée
-                   chez le fournisseur (streaming CDN), on n'embarque que l'iframe. %>
-              <figure class="mt-1">
-                <div class="relative w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 refined-shadow bg-black" style="aspect-ratio:16/9;">
-                  <iframe class="absolute inset-0 h-full w-full" src="<%= _videoEmbed.embedUrl %>" title="<%= product.name %> — vidéo" loading="lazy" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-                </div>
-              </figure>
-            <% } else { %>
-              <div class="flex justify-start">
-                <a class="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold hover:border-primary hover:text-primary transition-colors" href="<%= product.media.videoUrl %>" rel="noreferrer" target="_blank">
-                  <span class="material-symbols-outlined">play_circle</span>
-                  <%= t('product.watchVideo') %>
-                </a>
-              </div>
-            <% } %>
+          <%# Vidéo YouTube/Vimeo : intégrée dans la galerie ci-dessus (dernière
+              vignette). Ici on ne garde qu'un lien de secours si l'URL vidéo n'est
+              PAS embarquable (ni YouTube ni Vimeo). %>
+          <% if (hasVideo && !_galleryVideoEmbed) { %>
+            <div class="flex justify-start">
+              <a class="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold hover:border-primary hover:text-primary transition-colors" href="<%= product.media.videoUrl %>" rel="noreferrer" target="_blank">
+                <span class="material-symbols-outlined">play_circle</span>
+                <%= t('product.watchVideo') %>
+              </a>
+            </div>
           <% } %>
         </div>
 
@@ -1077,6 +1090,7 @@
         (function () {
           var mainImg = document.querySelector('[data-main-image]');
           var mainVid = document.querySelector('[data-main-video]');
+          var mainEmbed = document.querySelector('[data-main-embed]'); // iframe YouTube/Vimeo
           var thumbs = Array.prototype.slice.call(document.querySelectorAll('[data-thumb]') || []);
           var prevBtn = document.querySelector('[data-gallery-prev]');
           var nextBtn = document.querySelector('[data-gallery-next]');
@@ -1257,7 +1271,18 @@
             var type = btn.getAttribute('data-type') || 'image';
             if (!src) return;
 
-            if (type === 'video') {
+            if (type === 'embed') {
+              // Vidéo YouTube/Vimeo : on affiche l'iframe (autoplay au clic) et on
+              // masque image + vidéo fichier.
+              if (mainImg) { mainImg.classList.add('hidden'); mainImg.removeAttribute('src'); }
+              if (mainVid) { try { mainVid.pause(); } catch (e) {} mainVid.classList.add('hidden'); mainVid.removeAttribute('src'); }
+              if (mainEmbed) {
+                var embedSrc = btn.getAttribute('data-embed-src') || src;
+                mainEmbed.classList.remove('hidden');
+                mainEmbed.setAttribute('src', embedSrc + (embedSrc.indexOf('?') === -1 ? '?' : '&') + 'autoplay=1');
+              }
+            } else if (type === 'video') {
+              if (mainEmbed) { mainEmbed.classList.add('hidden'); mainEmbed.removeAttribute('src'); }
               if (mainImg) {
                 mainImg.classList.add('hidden');
                 mainImg.removeAttribute('src');
@@ -1269,6 +1294,7 @@
                 try { mainVid.load(); } catch (e) {}
               }
             } else {
+              if (mainEmbed) { mainEmbed.classList.add('hidden'); mainEmbed.removeAttribute('src'); }
               if (mainVid) {
                 try { mainVid.pause(); } catch (e) {}
                 mainVid.classList.add('hidden');
@@ -1323,7 +1349,8 @@
 
             /* Indices des images (vidéos exclues) pour la nav lightbox */
             var imageThumbIndices = thumbs.reduce(function (acc, t, i) {
-              if ((t.getAttribute('data-type') || 'image') !== 'video') acc.push(i);
+              var _ty = t.getAttribute('data-type') || 'image';
+              if (_ty !== 'video' && _ty !== 'embed') acc.push(i);
               return acc;
             }, []);
             var lightboxImageIdx = 0; // position dans imageThumbIndices
