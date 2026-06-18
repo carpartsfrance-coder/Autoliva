@@ -22,12 +22,15 @@
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/devis') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/devis" <%= _navActive('/devis') ? 'aria-current="page"' : '' %>><%= t('nav.quote') %></a>
 </nav>
 
-<div class="hidden md:flex flex-1 max-w-2xl">
+<div class="hidden md:flex flex-1 max-w-3xl">
 <form action="<%= _lp %>/produits" class="relative w-full" method="GET" data-search-autocomplete data-search-autocomplete-view="compact">
 <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
 <span class="material-symbols-outlined text-xl">search</span>
  </div>
-<input class="block w-full px-3 py-2.5 pl-10 text-sm text-slate-900 border border-slate-200 rounded-lg bg-slate-50 focus:ring-primary focus:border-primary" name="q" placeholder="<%= t('header.searchPlaceholder') %>" type="text" value="<%= typeof searchQuery !== 'undefined' ? searchQuery : '' %>" autocomplete="off" data-search-autocomplete-input />
+<input class="block w-full px-3 py-2.5 pl-10 pr-14 text-sm text-slate-900 border border-slate-200 rounded-lg bg-slate-50 focus:ring-primary focus:border-primary" name="q" placeholder="<%= t('header.searchPlaceholder') %>" type="text" value="<%= typeof searchQuery !== 'undefined' ? searchQuery : '' %>" autocomplete="off" data-search-autocomplete-input />
+<button type="submit" aria-label="<%= t('nav.search') %>" title="<%= t('nav.search') %>" class="absolute inset-y-0 right-0 my-1 mr-1 flex items-center justify-center w-11 rounded-md bg-primary text-white hover:bg-red-700 transition-colors">
+<span class="material-symbols-outlined text-xl">search</span>
+</button>
 
 <div class="absolute left-0 right-0 top-full mt-2 hidden" data-search-autocomplete-panel>
   <div class="rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden" style="font-family: Arial, sans-serif;">
