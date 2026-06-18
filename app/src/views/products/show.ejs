@@ -324,12 +324,23 @@
           <% } %>
 
           <% if (hasVideo) { %>
-            <div class="flex justify-start">
-              <a class="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold hover:border-primary hover:text-primary transition-colors" href="<%= product.media.videoUrl %>" rel="noreferrer" target="_blank">
-                <span class="material-symbols-outlined">play_circle</span>
-                <%= t('product.watchVideo') %>
-              </a>
-            </div>
+            <% const _videoEmbed = (typeof parseVideoEmbed === 'function') ? parseVideoEmbed(product.media.videoUrl) : null; %>
+            <% if (_videoEmbed) { %>
+              <%# Lecteur vidéo intégré (YouTube/Vimeo) — la vidéo reste hébergée
+                   chez le fournisseur (streaming CDN), on n'embarque que l'iframe. %>
+              <figure class="mt-1">
+                <div class="relative w-full overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800 refined-shadow bg-black" style="aspect-ratio:16/9;">
+                  <iframe class="absolute inset-0 h-full w-full" src="<%= _videoEmbed.embedUrl %>" title="<%= product.name %> — vidéo" loading="lazy" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                </div>
+              </figure>
+            <% } else { %>
+              <div class="flex justify-start">
+                <a class="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3 text-sm font-semibold hover:border-primary hover:text-primary transition-colors" href="<%= product.media.videoUrl %>" rel="noreferrer" target="_blank">
+                  <span class="material-symbols-outlined">play_circle</span>
+                  <%= t('product.watchVideo') %>
+                </a>
+              </div>
+            <% } %>
           <% } %>
         </div>
 

@@ -187,6 +187,7 @@ app.use(helmet({
       frameSrc: [
         "'self'",
         "https://www.youtube-nocookie.com",
+        "https://player.vimeo.com",
         "https://js.mollie.com",
         "https://www.googletagmanager.com",
         "https://td.doubleclick.net",
@@ -424,6 +425,10 @@ const ASSET_VERSIONS = {
 app.use((req, res, next) => {
   res.locals.brand = brand;
   res.locals.assetVersions = ASSET_VERSIONS;
+  // Helper d'embed vidéo (YouTube/Vimeo) dispo dans toutes les vues — voir
+  // services/videoEmbed.js. Permet d'afficher un lecteur intégré dans la galerie
+  // produit sans stocker la vidéo en base.
+  res.locals.parseVideoEmbed = require('./services/videoEmbed').parseVideoEmbed;
   res.locals.shippingCountryOptions = require('./config/shippingZones').COUNTRY_OPTIONS;
   next();
 });
