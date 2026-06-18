@@ -44,6 +44,11 @@ router.get('/notre-histoire', aboutController.getAboutPage);
 router.get('/moteurs', moteurOccasionController.getLanding);
 router.post('/moteurs/devis', moteurOccasionController.postDevis);
 
+// Landing « Moteur reconditionné » : même tunnel, message match (garantie 2 ans)
+// pour les annonces Google Ads ciblant l'intention « reconditionné ».
+router.get('/moteurs-reconditionnes', moteurOccasionController.getLanding);
+router.post('/moteurs-reconditionnes/devis', moteurOccasionController.postDevis);
+
 // Entrée principale : sélection du motif SAV
 router.get('/sav', savController.getMotifSelect);
 // Ancien wizard (pièce défectueuse 6 étapes) — accessible via motif=piece_defectueuse
