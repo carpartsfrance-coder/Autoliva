@@ -1,9 +1,3 @@
-<header class="sticky top-0 z-50 w-full border-b border-slate-200 bg-white px-4 md:px-10 py-3">
-<div class="mx-auto flex max-w-[1440px] items-center gap-6">
-<a class="flex items-center gap-2 text-primary shrink-0" href="<%= typeof langPrefix !== 'undefined' ? langPrefix : '' %>/">
-<img src="<%= brand.LOGO_URL %>" alt="<%= brand.NAME %>" class="h-10 md:h-11 w-auto" loading="eager" />
-</a>
-
 <% const _lp = typeof langPrefix !== 'undefined' ? langPrefix : ''; %>
 <% const _hp = typeof currentPathWithoutLang !== 'undefined' ? currentPathWithoutLang : (typeof currentPath === 'string' ? currentPath : ''); %>
 <% const _hpPathOnly = _hp.split('?')[0].split('#')[0]; %>
@@ -12,6 +6,37 @@
   if (href === '/') return _hpPathOnly === '/';
   return _hpPathOnly === href || _hpPathOnly.startsWith(href + '/');
 }; %>
+<%/* Calculs langue (FR/DE) — remontés ici car utilisés par la barre utilitaire
+     ET par le menu mobile. */%>
+<% const _curPathClean = (_hp || '/').split('?')[0].split('#')[0]; %>
+<% const _isDe = typeof lang !== 'undefined' && lang === 'de'; %>
+<% var _htSw = (typeof hreflangTags !== 'undefined' && Array.isArray(hreflangTags)) ? hreflangTags : []; %>
+<% var _frTag = null, _deTag = null; %>
+<% for (var _s = 0; _s < _htSw.length; _s++) { if (_htSw[_s] && _htSw[_s].lang === 'fr') _frTag = _htSw[_s]; if (_htSw[_s] && _htSw[_s].lang === 'de') _deTag = _htSw[_s]; } %>
+<% const _frHref = (_frTag && _frTag.href) ? _frTag.href : (_curPathClean === '/' ? '/' : _curPathClean); %>
+<% const _deHref = (_deTag && _deTag.href) ? _deTag.href : ('/de' + (_curPathClean === '/' ? '' : _curPathClean)); %>
+
+<header class="sticky top-0 z-50 w-full border-b border-slate-200 bg-white">
+
+<%/* Barre utilitaire (desktop md+) : téléphone + langue. Sortis de la rangée
+     principale pour laisser toute la largeur à la recherche. */%>
+<div class="hidden md:block bg-slate-50 border-b border-slate-100">
+<div class="mx-auto max-w-[1440px] px-4 md:px-10 flex items-center justify-end gap-5 h-9">
+<a class="flex items-center gap-1.5 text-sm font-bold text-slate-700 hover:text-primary transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %> au <%= brand.PHONE %>">
+<span class="material-symbols-outlined text-base text-primary">call</span><%= brand.PHONE %>
+</a>
+<div class="flex items-center rounded-md border border-slate-200 overflow-hidden h-6" role="navigation" aria-label="Sprache / Langue">
+<a class="flex items-center justify-center px-2 h-full text-[11px] font-black uppercase tracking-wider transition-colors <%= _isDe ? 'text-slate-400 hover:text-primary hover:bg-white' : 'bg-primary text-white' %>" href="<%= _frHref %>" hreflang="fr" <%= _isDe ? '' : 'aria-current="true"' %>>FR</a>
+<a class="flex items-center justify-center px-2 h-full text-[11px] font-black uppercase tracking-wider transition-colors <%= _isDe ? 'bg-primary text-white' : 'text-slate-400 hover:text-primary hover:bg-white' %>" href="<%= _deHref %>" hreflang="de" <%= _isDe ? 'aria-current="true"' : '' %>>DE</a>
+</div>
+</div>
+</div>
+
+<%/* Rangée principale */%>
+<div class="mx-auto flex max-w-[1440px] items-center gap-6 px-4 md:px-10 py-3">
+<a class="flex items-center gap-2 text-primary shrink-0" href="<%= _lp %>/">
+<img src="<%= brand.LOGO_URL %>" alt="<%= brand.NAME %>" class="h-10 md:h-11 w-auto" loading="eager" />
+</a>
 
 <nav class="hidden lg:flex items-center gap-6 text-sm font-semibold text-slate-600">
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/" <%= _navActive('/') ? 'aria-current="page"' : '' %>><%= t('nav.home') %></a>
@@ -61,23 +86,6 @@
 </div>
 <% } %>
 
-<% const _curPathNoLang = typeof currentPathWithoutLang !== 'undefined' ? currentPathWithoutLang : '/'; %>
-<% const _curPathClean = (_curPathNoLang || '/').split('?')[0].split('#')[0]; %>
-<% const _isDe = typeof lang !== 'undefined' && lang === 'de'; %>
-<%/* Le sélecteur utilise la VRAIE URL de l'autre langue (issue du hreflang de
-     la page) quand elle existe — car la structure d'URL diffère (FR
-     /product/<slug>/ vs DE /de/produits/<slug-de>-<id>). Sinon, repli sur le
-     simple préfixe /de (pages pas encore traduites → 301 vers le FR). */%>
-<% var _htSw = (typeof hreflangTags !== 'undefined' && Array.isArray(hreflangTags)) ? hreflangTags : []; %>
-<% var _frTag = null, _deTag = null; %>
-<% for (var _s = 0; _s < _htSw.length; _s++) { if (_htSw[_s] && _htSw[_s].lang === 'fr') _frTag = _htSw[_s]; if (_htSw[_s] && _htSw[_s].lang === 'de') _deTag = _htSw[_s]; } %>
-<% const _frHref = (_frTag && _frTag.href) ? _frTag.href : (_curPathClean === '/' ? '/' : _curPathClean); %>
-<% const _deHref = (_deTag && _deTag.href) ? _deTag.href : ('/de' + (_curPathClean === '/' ? '' : _curPathClean)); %>
-<div class="hidden sm:flex items-center rounded-lg border border-slate-200 overflow-hidden h-9" role="navigation" aria-label="Sprache / Langue">
-<a class="flex items-center justify-center px-2.5 h-full text-xs font-black uppercase tracking-wider transition-colors <%= _isDe ? 'text-slate-400 hover:text-primary hover:bg-slate-50' : 'bg-primary text-white' %>" href="<%= _frHref %>" hreflang="fr" <%= _isDe ? '' : 'aria-current="true"' %>>FR</a>
-<a class="flex items-center justify-center px-2.5 h-full text-xs font-black uppercase tracking-wider transition-colors <%= _isDe ? 'bg-primary text-white' : 'text-slate-400 hover:text-primary hover:bg-slate-50' %>" href="<%= _deHref %>" hreflang="de" <%= _isDe ? 'aria-current="true"' : '' %>>DE</a>
-</div>
-
 <button aria-controls="mobileNavDrawer" aria-expanded="false" aria-label="<%= t('header.menu') %>" class="flex lg:hidden items-center justify-center rounded-lg h-9 w-9 text-slate-700 hover:bg-slate-100 transition-colors" data-mobile-nav-open type="button">
 <span class="material-symbols-outlined">menu</span>
 </button>
@@ -86,13 +94,9 @@
 <span class="material-symbols-outlined">search</span>
 </a>
 
-<%/* Téléphone entreprise — desktop : numéro complet ; mobile : icône d'appel.
-     Tap-to-call (tel:), tracké automatiquement via le listener tel: du footer. */%>
-<a class="hidden lg:flex items-center gap-2 px-3 py-2 rounded-lg text-slate-700 font-bold text-sm hover:bg-slate-50 hover:text-primary transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %> au <%= brand.PHONE %>" title="Appelez-nous">
-<span class="material-symbols-outlined text-xl text-primary">call</span>
-<span><%= brand.PHONE %></span>
-</a>
-<a class="flex lg:hidden items-center justify-center rounded-lg h-9 w-9 text-primary hover:bg-slate-100 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %>" title="Appelez-nous">
+<%/* Téléphone : sur md+ il est dans la barre utilitaire en haut. Sous md, icône
+     d'appel ici (tap-to-call, tracké via le listener tel: du footer). */%>
+<a class="flex md:hidden items-center justify-center rounded-lg h-9 w-9 text-primary hover:bg-slate-100 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %>" title="Appelez-nous">
 <span class="material-symbols-outlined">call</span>
 </a>
 
