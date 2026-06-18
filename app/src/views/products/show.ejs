@@ -167,8 +167,17 @@
         : (keyEtat || conditionBadge || topLeftBadge || t('product.reconditioningPro')); %>
       <% const visibleThumbImages = thumbImages.slice(0, 4); %>
       <% const hiddenThumbImages = thumbImages.slice(4); %>
-      <% const visibleThumbItems = thumbMediaItems.slice(0, 4); %>
-      <% const hiddenThumbItems = thumbMediaItems.slice(4); %>
+      <%# La vignette vidéo (embed) est épinglée parmi les vignettes VISIBLES, même
+          s'il y a déjà 4 images ou plus : sinon, en 5e position, elle serait
+          masquée (invisible sur mobile). On réserve donc la dernière tuile à la
+          vidéo (jusqu'à 3 images + la vidéo) ; les images en trop passent en « +N ». %>
+      <% const _embedThumb = thumbMediaItems.find((m) => m.type === 'embed') || null; %>
+      <% const _imgThumbs = _embedThumb ? thumbMediaItems.filter((m) => m !== _embedThumb) : thumbMediaItems; %>
+      <% const _maxImgThumbs = _embedThumb ? 3 : 4; %>
+      <% const visibleThumbItems = _imgThumbs.slice(0, _maxImgThumbs).concat(_embedThumb ? [_embedThumb] : []); %>
+      <% const hiddenThumbItems = _imgThumbs.slice(_maxImgThumbs); %>
+      <% const _hiddenThumbCount = hiddenThumbItems.length; %>
+      <% const _lastImageThumbIdx = visibleThumbItems.length - 1 - (_embedThumb ? 1 : 0); %>
       <% const compatibilityPrefillMessage = [
         'Bonjour,',
         '',
@@ -253,7 +262,6 @@
             <% if (visibleThumbItems.length) { %>
               <div class="grid grid-cols-4 gap-4 order-2 lg:order-1 lg:grid-cols-1 lg:gap-3 lg:w-20 xl:w-24 lg:flex-shrink-0">
                 <% visibleThumbItems.forEach((item, idx) => { %>
-                  <% const remainingItems = thumbMediaItems.length - 4; %>
                   <% const _isThumbVideo = item.type === 'video'; %>
                   <% const _isThumbEmbed = item.type === 'embed'; %>
                   <button aria-label="Voir <%= (_isThumbVideo || _isThumbEmbed) ? 'la vidéo' : 'l\'image' %> <%= idx + 1 %>" class="relative aspect-square rounded-lg overflow-hidden cursor-pointer border bg-white dark:bg-slate-900 refined-shadow transition-all <%= idx === 0 ? 'border-primary/20 ring-2 ring-primary' : 'border-slate-200 dark:border-slate-700 hover:border-primary' %>" data-thumb data-index="<%= idx %>" data-src="<%= item.url %>" data-type="<%= item.type %>"<% if (_isThumbEmbed) { %> data-embed-src="<%= item.embedUrl %>"<% } %> type="button">
@@ -276,8 +284,8 @@
                     <% } else { %>
                       <img alt="<%= product.name %> — vue <%= idx + 1 %>" class="w-full h-full object-cover" decoding="async" loading="lazy" width="200" height="200" src="<%= item.url %>" />
                     <% } %>
-                    <% if (idx === 3 && remainingItems > 0) { %>
-                      <span class="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white text-xs font-bold uppercase tracking-wider"><%= t('product.moreImages', { count: remainingItems }) %></span>
+                    <% if (!_isThumbEmbed && idx === _lastImageThumbIdx && _hiddenThumbCount > 0) { %>
+                      <span class="absolute inset-0 bg-slate-900/60 flex items-center justify-center text-white text-xs font-bold uppercase tracking-wider"><%= t('product.moreImages', { count: _hiddenThumbCount }) %></span>
                     <% } %>
                   </button>
                 <% }) %>
