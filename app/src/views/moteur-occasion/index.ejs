@@ -28,9 +28,9 @@
 
 <!-- ACCROCHE : visible en haut sur mobile (order-1) comme sur desktop (colonne gauche, ligne 1) -->
 <div class="order-1 lg:col-span-7 lg:col-start-1 lg:row-start-1">
-<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-3">Moteurs d'occasion premium</p>
-<h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-4 lg:mb-6">Des moteurs testés,<br>garantis,<br><span class="text-brand-red">prêts à performer.</span></h1>
-<p class="text-brand-textgray text-base lg:text-lg max-w-xl">Tous nos moteurs sont testés sur banc, certifiés et prêts à être expédiés rapidement partout en Europe.</p>
+<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-3"><%= copy.eyebrow %></p>
+<h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-4 lg:mb-6"><%- copy.h1Html %></h1>
+<p class="text-brand-textgray text-base lg:text-lg max-w-xl"><%= copy.sub %></p>
 </div>
 
 <!-- PREUVES : sous le formulaire sur mobile (order-3), sous l'accroche sur desktop (colonne gauche, ligne 2) -->
@@ -54,7 +54,7 @@
 <div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
 <svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
-<h3 class="font-bold text-sm mb-0.5 md:mb-1">Garantie jusqu'à 12 mois</h3>
+<h3 class="font-bold text-sm mb-0.5 md:mb-1"><%= copy.warrantyLabel %></h3>
 <p class="text-xs text-brand-textgray">Sans franchise kilométrique</p>
 </div>
 </div>
@@ -99,7 +99,7 @@
 </div>
 <% } %>
 
-<form id="quote-multistep" class="space-y-6" action="/moteurs/devis" method="post" novalidate>
+<form id="quote-multistep" class="space-y-6" action="<%= copy.formAction %>" method="post" novalidate>
 <input type="text" name="website" value="" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
 
 <!-- ─────── ÉTAPE 1 : VÉHICULE + TYPE DE MOTEUR ─────── -->
@@ -228,7 +228,7 @@ Envoyer ma demande
   // ── Tracking funnel (GTM dataLayer) ──
   window.dataLayer = window.dataLayer || [];
   function track(ev, extra) {
-    try { window.dataLayer.push(Object.assign({ event: ev, funnel: 'moteur-occasion' }, extra || {})); } catch (e) {}
+    try { window.dataLayer.push(Object.assign({ event: ev, funnel: '<%= copy.funnelName %>' }, extra || {})); } catch (e) {}
   }
   // form_start : 1er focus sur un champ du formulaire (une seule fois)
   var _formStarted = false;
@@ -414,7 +414,7 @@ Envoyer ma demande
 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </div>
 <div>
-<h4 class="font-bold mb-1">Garantie jusqu'à 12 mois</h4>
+<h4 class="font-bold mb-1"><%= copy.warrantyLabel %></h4>
 <p class="text-xs text-gray-400">Moteur complet (hors accéssoires).</p>
 </div>
 </div>
@@ -554,7 +554,7 @@ const popularEngines = [
 <ul class="space-y-2 mb-6 text-xs text-gray-600">
 <li class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> <%= eng.years %></li>
 <li class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> <%= eng.state %></li>
-<li class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> Garantie jusqu'à 12 mois</li>
+<li class="flex items-center gap-2"><svg class="w-3.5 h-3.5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg> <%= copy.warrantyLabel %></li>
 </ul>
 <div class="flex items-center gap-2 mb-4 text-sm font-semibold text-slate-700">
 <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path></svg>
@@ -712,7 +712,7 @@ Demander mon devis gratuit
 <span class="text-sm font-semibold text-gray-700">La garantie est-elle incluse ?</span>
 <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </summary>
-<p class="text-xs text-gray-500 mt-3">Garantie jusqu'à 12 mois incluse — sans franchise kilométrique et transférable à la revente.</p>
+<p class="text-xs text-gray-500 mt-3"><%= copy.warrantyLabel %> incluse — sans franchise kilométrique et transférable à la revente.</p>
 </details>
 <details class="border-b border-gray-100 pb-4 group">
 <summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
@@ -836,7 +836,7 @@ Demander mon devis gratuit
     try {
       window.dataLayer.push({
         event: 'cta_click',
-        funnel: 'moteur-occasion',
+        funnel: '<%= copy.funnelName %>',
         cta_location: a.getAttribute('data-cta') || 'unknown'
       });
     } catch (err) {}
@@ -855,7 +855,7 @@ Demander mon devis gratuit
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({
     event: 'lead_submitted',
-    lead_source: 'moteur-occasion',
+    lead_source: '<%= copy.funnelName %>',
     lead_category: 'moteur',
     lead_ref: (c && c.ref) || '',
     page_path: window.location.pathname

@@ -28,7 +28,59 @@ const { buildHreflangSet } = require('../services/i18n');
 const brand = require('../config/brand');
 
 const LANDING_PATH = '/moteurs';
+const RECOND_PATH = '/moteurs-reconditionnes';
 const CAPTURE_SOURCE = 'landing_moteurs';
+
+/* Deux landing pages partagent la MÊME vue + le MÊME tunnel de devis, avec une
+ * "copy" (message) adaptée à l'intention de recherche (message match Google Ads) :
+ *  - /moteurs                → occasion (garantie 12 mois)
+ *  - /moteurs-reconditionnes → reconditionné (garantie 2 ans)
+ * La variante est déduite de l'URL → tous les renderPage existants s'adaptent. */
+function getVariant(req) {
+  const p = String((req && (req.path || req.originalUrl)) || '');
+  return p.indexOf('reconditionne') !== -1 ? 'reconditionne' : 'occasion';
+}
+
+const VARIANTS = {
+  occasion: {
+    path: LANDING_PATH,
+    view: 'moteur-occasion/index',
+    conditionLabel: "Moteur d'occasion",
+    title: `Moteur d'occasion testé, certifié, garanti jusqu'à 12 mois — ${brand.NAME}`,
+    metaDescription:
+      "Moteurs d'occasion essence et diesel : banc d'essai obligatoire (compression, étanchéité, endoscopie), kilométrage certifié, garantie jusqu'à 12 mois sans franchise kilométrique, transférable. Devis en 24h.",
+    jsonLdServiceType: "Vente de moteurs d'occasion testés et garantis",
+    jsonLdDescription:
+      "Moteurs d'occasion essence et diesel testés sur banc d'essai (compression, étanchéité, endoscopie), kilométrage certifié, garantie jusqu'à 12 mois sans franchise kilométrique transférable à la revente.",
+    copy: {
+      formAction: '/moteurs/devis',
+      funnelName: 'moteur-occasion',
+      eyebrow: "Moteurs d'occasion premium",
+      h1Html: 'Des moteurs testés,<br>garantis,<br><span class="text-brand-red">prêts à performer.</span>',
+      sub: 'Tous nos moteurs sont testés sur banc, certifiés et prêts à être expédiés rapidement partout en Europe.',
+      warrantyLabel: "Garantie jusqu'à 12 mois",
+    },
+  },
+  reconditionne: {
+    path: RECOND_PATH,
+    view: 'moteur-occasion/index',
+    conditionLabel: 'Moteur reconditionné',
+    title: `Moteur reconditionné, comme neuf, garantie 2 ans — ${brand.NAME}`,
+    metaDescription:
+      "Moteurs reconditionnés essence et diesel : pièces d'usure remplacées, contrôles compression & endoscopie, garantie 2 ans. Devis personnalisé sous 24h, livraison partout en Europe.",
+    jsonLdServiceType: 'Vente de moteurs reconditionnés garantis 2 ans',
+    jsonLdDescription:
+      "Moteurs reconditionnés essence et diesel : remise à neuf (pièces d'usure remplacées), contrôles compression et endoscopie, garantie 2 ans. Devis personnalisé sous 24h.",
+    copy: {
+      formAction: '/moteurs-reconditionnes/devis',
+      funnelName: 'moteur-reconditionne',
+      eyebrow: 'Moteurs reconditionnés premium',
+      h1Html: 'Des moteurs reconditionnés,<br>comme neufs,<br><span class="text-brand-red">garantis 2 ans.</span>',
+      sub: "Pièces d'usure remplacées, contrôlés et testés, prêts à rouler — expédiés rapidement partout en Europe.",
+      warrantyLabel: 'Garantie 2 ans',
+    },
+  },
+};
 
 /* Génère un numéro de devis unique au format AUT-2026-05-A1B2C3
  * (6 hex chars random → collision proba ≈ 0 pour <1000 leads/mois). */
@@ -305,13 +357,13 @@ function getInternalToEmail() {
   return fromEnv || brand.EMAIL_CONTACT;
 }
 
-function buildServiceJsonLd({ baseUrl }) {
+function buildServiceJsonLd({ baseUrl, v }) {
   const safeBase = trim(baseUrl).replace(/\/$/, '');
-  const url = safeBase ? `${safeBase}${LANDING_PATH}` : LANDING_PATH;
+  const url = safeBase ? `${safeBase}${v.path}` : v.path;
   return JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'Service',
-    serviceType: "Vente de moteurs d'occasion testés et garantis",
+    serviceType: v.jsonLdServiceType,
     provider: {
       '@type': 'Organization',
       name: brand.NAME,
@@ -321,8 +373,7 @@ function buildServiceJsonLd({ baseUrl }) {
     },
     areaServed: { '@type': 'Country', name: 'France' },
     url,
-    description:
-      "Moteurs d'occasion essence et diesel testés sur banc d'essai (compression, étanchéité, endoscopie), kilométrage certifié, garantie jusqu'à 12 mois sans franchise kilométrique transférable à la revente.",
+    description: v.jsonLdDescription,
     offers: {
       '@type': 'Offer',
       url,
@@ -347,17 +398,18 @@ function buildInitialForm(req) {
 }
 
 function renderPage(res, req, opts) {
+  const variant = opts.variant || getVariant(req);
+  const v = VARIANTS[variant] || VARIANTS.occasion;
   const baseUrl = getPublicBaseUrlFromReq(req);
   const langPrefix = req.lang === 'en' ? '/en' : '';
   const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
   const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
 
-  const title = `Moteur d'occasion testé, certifié, garanti jusqu'à 12 mois — ${brand.NAME}`;
-  const metaDescription =
-    "Moteurs d'occasion essence et diesel : banc d'essai obligatoire (compression, étanchéité, endoscopie), kilométrage certifié, garantie jusqu'à 12 mois sans franchise kilométrique, transférable. Devis en 24h.";
-  const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}${LANDING_PATH}` : `${langPrefix}${LANDING_PATH}`;
+  const title = v.title;
+  const metaDescription = v.metaDescription;
+  const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}${v.path}` : `${langPrefix}${v.path}`;
 
-  return res.status(opts.statusCode || 200).render('moteur-occasion/index', {
+  return res.status(opts.statusCode || 200).render(v.view, {
     title,
     metaDescription,
     canonicalUrl,
@@ -366,8 +418,9 @@ function renderPage(res, req, opts) {
     ogDescription: metaDescription,
     ogUrl: canonicalUrl,
     ogType: 'website',
-    jsonLd: buildServiceJsonLd({ baseUrl }),
+    jsonLd: buildServiceJsonLd({ baseUrl, v }),
     landing: LANDING_DATA,
+    copy: v.copy,
     form: opts.form,
     errorMessage: opts.errorMessage || null,
     successMessage: opts.successMessage || null,
@@ -391,6 +444,8 @@ async function getLanding(req, res, next) {
 
 async function postDevis(req, res, next) {
   try {
+    const variant = getVariant(req);
+    const conditionLabel = (VARIANTS[variant] || VARIANTS.occasion).conditionLabel;
     const body = (req.body && typeof req.body === 'object') ? req.body : {};
 
     const engineTypeRaw = trim(body.engineType).toLowerCase();
@@ -599,7 +654,7 @@ async function postDevis(req, res, next) {
         // requested.ref = numéro de devis unique (visible en back office)
         Reference: quoteRef,
         // requested.vehicle = libellé moteur (occasion + type complet/nu)
-        Vehicule: `Moteur d'occasion${engineTypeLabel ? ' · ' + engineTypeLabel : ''}`,
+        Vehicule: `${conditionLabel}${engineTypeLabel ? ' · ' + engineTypeLabel : ''}`,
       },
     }).then((result) => {
       // Override captureSource → 'landing_moteurs' pour la segmentation admin.
