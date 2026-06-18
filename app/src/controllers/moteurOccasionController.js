@@ -34,7 +34,7 @@ const CAPTURE_SOURCE = 'landing_moteurs';
 /* Deux landing pages partagent la MÊME vue + le MÊME tunnel de devis, avec une
  * "copy" (message) adaptée à l'intention de recherche (message match Google Ads) :
  *  - /moteurs                → occasion (garantie 12 mois)
- *  - /moteurs-reconditionnes → reconditionné (garantie 2 ans)
+ *  - /moteurs-reconditionnes → reconditionné (garantie 1 an)
  * La variante est déduite de l'URL → tous les renderPage existants s'adaptent. */
 function getVariant(req) {
   const p = String((req && (req.path || req.originalUrl)) || '');
@@ -59,25 +59,45 @@ const VARIANTS = {
       h1Html: 'Des moteurs testés,<br>garantis,<br><span class="text-brand-red">prêts à performer.</span>',
       sub: 'Tous nos moteurs sont testés sur banc, certifiés et prêts à être expédiés rapidement partout en Europe.',
       warrantyLabel: "Garantie jusqu'à 12 mois",
+      qualitySubtitle: 'Un protocole en 7 étapes, pour une fiabilité maximale.',
+      steps: [
+        { n: '01', icon: 'doc', title: 'Identification', desc: 'Vérification de la référence et compatibilité' },
+        { n: '02', icon: 'wrench', title: 'Démontage partiel', desc: 'Dépose réalisée avec soin par nos experts' },
+        { n: '03', icon: 'clean', title: 'Nettoyage', desc: 'Nettoyage complet et dégraissage' },
+        { n: '04', icon: 'gear', title: 'Tests & Contrôles', desc: 'Endoscopie, compression, étanchéité…', highlight: true },
+        { n: '05', icon: 'cog', title: 'Remontage', desc: 'Remontage des éléments (cas échéant)' },
+        { n: '06', icon: 'shield', title: 'Édition du rapport', desc: 'Rapport de test + attestation de conformité' },
+        { n: '07', icon: 'truck', title: 'Expédition', desc: 'Emballage sécurisé et expédition rapide' },
+      ],
     },
   },
   reconditionne: {
     path: RECOND_PATH,
     view: 'moteur-occasion/index',
     conditionLabel: 'Moteur reconditionné',
-    title: `Moteur reconditionné, comme neuf, garantie 2 ans — ${brand.NAME}`,
+    title: `Moteur reconditionné, comme neuf, garantie 1 an — ${brand.NAME}`,
     metaDescription:
-      "Moteurs reconditionnés essence et diesel : pièces d'usure remplacées, contrôles compression & endoscopie, garantie 2 ans. Devis personnalisé sous 24h, livraison partout en Europe.",
-    jsonLdServiceType: 'Vente de moteurs reconditionnés garantis 2 ans',
+      "Moteurs reconditionnés essence et diesel : pièces d'usure remplacées, contrôles compression & endoscopie, garantie 1 an. Devis personnalisé sous 24h, livraison partout en Europe.",
+    jsonLdServiceType: 'Vente de moteurs reconditionnés garantis 1 an',
     jsonLdDescription:
-      "Moteurs reconditionnés essence et diesel : remise à neuf (pièces d'usure remplacées), contrôles compression et endoscopie, garantie 2 ans. Devis personnalisé sous 24h.",
+      "Moteurs reconditionnés essence et diesel : remise à neuf (pièces d'usure remplacées), contrôles compression et endoscopie, garantie 1 an. Devis personnalisé sous 24h.",
     copy: {
       formAction: '/moteurs-reconditionnes/devis',
       funnelName: 'moteur-reconditionne',
       eyebrow: 'Moteurs reconditionnés premium',
-      h1Html: 'Des moteurs reconditionnés,<br>comme neufs,<br><span class="text-brand-red">garantis 2 ans.</span>',
+      h1Html: 'Des moteurs reconditionnés,<br>comme neufs,<br><span class="text-brand-red">garantis 1 an.</span>',
       sub: "Pièces d'usure remplacées, contrôlés et testés, prêts à rouler — expédiés rapidement partout en Europe.",
-      warrantyLabel: 'Garantie 2 ans',
+      warrantyLabel: 'Garantie 1 an',
+      qualitySubtitle: 'Une remise à neuf en 7 étapes, pour une fiabilité maximale.',
+      steps: [
+        { n: '01', icon: 'doc', title: 'Identification', desc: 'Vérification de la référence et compatibilité' },
+        { n: '02', icon: 'wrench', title: 'Démontage complet', desc: 'Dépose intégrale du moteur par nos experts' },
+        { n: '03', icon: 'clean', title: 'Nettoyage & contrôle', desc: 'Dégraissage et métrologie des pièces' },
+        { n: '04', icon: 'gear', title: 'Remise à neuf', desc: "Rectification + remplacement des pièces d'usure", highlight: true },
+        { n: '05', icon: 'cog', title: 'Remontage', desc: 'Remontage aux couples constructeur' },
+        { n: '06', icon: 'shield', title: 'Tests & rapport', desc: 'Compression, endoscopie + attestation de conformité' },
+        { n: '07', icon: 'truck', title: 'Expédition', desc: 'Emballage sécurisé et expédition rapide' },
+      ],
     },
   },
 };
