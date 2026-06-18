@@ -82,8 +82,13 @@ function fmt(n) {
   return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
 }
 
-/* Régime de TVA : true = TVA sur marge (défaut), false = régime normal. */
-function isMarginScheme(pricing) {
+/* Régime de TVA effectif (true = TVA sur marge, false = régime normal 20%).
+ * Reconditionné : régime normal IMPÉRATIF — un moteur remis à neuf n'est pas
+ * éligible à la TVA sur marge (art. 297 A CGI réservé à l'occasion). On ignore
+ * donc le défaut schéma 'margin'. Occasion : TVA sur marge par défaut, sauf
+ * choix « normal » explicite du commercial. */
+function isMarginScheme(pricing, isReconditionne) {
+  if (isReconditionne) return false;
   return !pricing || pricing.vatScheme !== 'normal';
 }
 
@@ -91,21 +96,21 @@ function isMarginScheme(pricing) {
  * - marge : (vente − achat) × taux/(100+taux), uniquement si marge positive
  * - normal : sur la marge aussi côté trésorerie, mais ici on ne calcule que ce
  *   qui grève la marge nette du vendeur → en normal la TVA se neutralise (HT). */
-function vatOnMargin(pricing) {
+function vatOnMargin(pricing, isReconditionne) {
   const sell = Number(pricing && pricing.sellPrice) || 0;
   const purchase = Number(pricing && pricing.purchasePrice) || 0;
   const vatRate = Number(pricing && pricing.vatRate) || 20;
-  if (!isMarginScheme(pricing)) return 0;
+  if (!isMarginScheme(pricing, isReconditionne)) return 0;
   return sell > purchase ? (sell - purchase) * vatRate / (100 + vatRate) : 0;
 }
 
 /* Prix payé par le client + TVA, selon le régime. Source unique pour le devis,
  * l'email et le paiement. */
-function computeQuoteTotals(pricing) {
+function computeQuoteTotals(pricing, isReconditionne) {
   const sell = Number(pricing && pricing.sellPrice) || 0;
   const purchase = Number(pricing && pricing.purchasePrice) || 0;
   const vatRate = Number(pricing && pricing.vatRate) || 20;
-  const margin = isMarginScheme(pricing);
+  const margin = isMarginScheme(pricing, isReconditionne);
   let clientTotal;
   let vatAmount;
   if (margin) {
@@ -118,16 +123,18 @@ function computeQuoteTotals(pricing) {
   return { sell, purchase, vatRate, isMargin: margin, vatAmount, clientTotal };
 }
 
-function calcMargin(p) {
+function calcMargin(p, isReconditionne) {
   if (!p) return { marginEur: 0, marginPct: 0 };
   const purchase = Number(p.purchasePrice) || 0;
   const fees = Number(p.additionalFees) || 0;
   const sell = Number(p.sellPrice) || 0;
-  // Coûts de contrôle (port test + MO) TOUJOURS inclus dès qu'un moteur est
-  // chiffré → la marge affichée partout (liste, funnel, détail) est la VRAIE marge.
-  const control = purchase > 0 ? CONTROL_COST_TOTAL : 0;
-  // En régime de la marge, la TVA sur marge grève directement la marge nette.
-  const tvaMarge = vatOnMargin(p);
+  // Coûts de contrôle (port test + MO de banc) inclus pour l'OCCASION dès qu'un
+  // moteur est chiffré → la marge affichée (liste/funnel/détail) est la VRAIE
+  // marge. Reconditionné : pas de banc d'essai → aucun coût de contrôle.
+  const control = (purchase > 0 && !isReconditionne) ? CONTROL_COST_TOTAL : 0;
+  // En régime de la marge, la TVA sur marge grève directement la marge nette
+  // (reconditionné = régime normal → TVA neutre, tvaMarge = 0).
+  const tvaMarge = vatOnMargin(p, isReconditionne);
   const cost = purchase + fees + control + tvaMarge;
   const marginEur = sell - cost;
   const marginPct = sell > 0 ? (marginEur / sell) * 100 : 0;
@@ -199,6 +206,14 @@ function defaultConditionFromLead(cart) {
   return '';
 }
 
+/* État effectif reconditionné ? — choix commercial s'il existe, sinon déduction
+ * de la source du lead. Pilote toute la cohérence du devis reconditionné :
+ * TVA normale 20 %, pas de coûts de banc d'essai, marge cible 25 %, garantie 1 an. */
+function leadIsReconditionne(eq, cart) {
+  const k = (eq && eq.identifiedEngine && eq.identifiedEngine.condition) || defaultConditionFromLead(cart);
+  return String(k).startsWith('reconditionne');
+}
+
 async function getEngineQuotesList(req, res, next) {
   try {
     const statusFilter = typeof req.query.status === 'string' ? req.query.status.trim() : '';
@@ -242,7 +257,7 @@ async function getEngineQuotesList(req, res, next) {
 
     const items = carts.map(c => {
       const eq = c.engineQuote || {};
-      const margin = calcMargin(eq.pricing);
+      const margin = calcMargin(eq.pricing, leadIsReconditionne(eq, c));
       const status = eq.status || 'new';
       const stock = (eq.stock && eq.stock.location) || '';
       const displayName = (c.firstName + ' ' + c.lastName).trim() || c.email || c.phone || '—';
@@ -345,7 +360,8 @@ async function getEngineQuoteDetail(req, res, next) {
     if (!cart || cart.captureSource !== 'landing_moteurs') return res.status(404).render('errors/404');
 
     const eq = cart.engineQuote || {};
-    const margin = calcMargin(eq.pricing);
+    const isReconditionneLead = leadIsReconditionne(eq, cart);
+    const margin = calcMargin(eq.pricing, isReconditionneLead);
     const status = eq.status || 'new';
 
     const displayName = (cart.firstName + ' ' + cart.lastName).trim() || cart.email || cart.phone || '—';
@@ -353,7 +369,10 @@ async function getEngineQuoteDetail(req, res, next) {
     return res.render('admin/engine-quote-detail', {
       title: `Devis ${cart.requested && cart.requested.ref || ''} · Admin`,
       activeKey: 'engine-quotes',
-      controlCostDefaults: CONTROL_COST_DEFAULTS,
+      // Reconditionné : régime normal (TVA 20%), pas de coûts de banc d'essai,
+      // marge cible 25%. La vue pré-règle le formulaire en conséquence.
+      isReconditionne: isReconditionneLead,
+      controlCostDefaults: isReconditionneLead ? { portTest: 0, hourlyRate: 0, testHours: 0 } : CONTROL_COST_DEFAULTS,
       cart: {
         id: String(cart._id),
         displayName,
@@ -967,9 +986,11 @@ async function prepareQuoteData(req, opts) {
   const sellHt = Number(pricing.sellPrice) || 0;
   if (sellHt <= 0) return { error: { code: 400, msg: 'Renseigne d\'abord le prix de vente HT' } };
 
-  const totals = computeQuoteTotals(pricing);
+  // Reconditionné → régime normal (TVA 20%) par défaut ; occasion → TVA sur marge.
+  const isReconditionneLead = leadIsReconditionne(eq, cart);
+  const totals = computeQuoteTotals(pricing, isReconditionneLead);
   const vatRate = totals.vatRate;
-  const sellTtc = totals.clientTotal; // régime marge : = prix tout compris (pas de +20%)
+  const sellTtc = totals.clientTotal; // marge : prix tout compris · normal : HT + TVA
   const vatScheme = totals.isMargin ? 'margin' : 'normal';
 
   const b = req.body || {};
@@ -1123,7 +1144,7 @@ async function getPreviewMail(req, res, next) {
     const plate = (cart.requested && cart.requested.plate) || '';
     const firstName = (cart.firstName && cart.lastName) ? cart.firstName : '';
     const pricing = eq.pricing || {};
-    const sellTtc = computeQuoteTotals(pricing).clientTotal;
+    const sellTtc = computeQuoteTotals(pricing, leadIsReconditionne(eq, cart)).clientTotal;
     const lastSent = (eq.sentQuotes || []).slice().sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))[0] || null;
     const phoneOpts = { brandPhone: brand.PHONE_MOTEUR, brandPhoneIntl: brand.PHONE_MOTEUR_INTL };
     const base = (process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
@@ -1176,9 +1197,11 @@ async function postSendQuote(req, res, next) {
     const sellHt = Number(pricing.sellPrice) || 0;
     if (sellHt <= 0) return res.status(400).send('Renseigne d\'abord le prix de vente');
 
-    const _totals = computeQuoteTotals(pricing);
+    // Reconditionné → régime normal (TVA 20%) par défaut ; occasion → TVA sur marge.
+    const isReconditionneLead = leadIsReconditionne(eq, cart);
+    const _totals = computeQuoteTotals(pricing, isReconditionneLead);
     const vatRate = _totals.vatRate;
-    const sellTtc = _totals.clientTotal; // régime marge : prix tout compris
+    const sellTtc = _totals.clientTotal; // marge : prix tout compris · normal : HT + TVA
     const vatScheme = _totals.isMargin ? 'margin' : 'normal';
 
     const b = req.body || {};

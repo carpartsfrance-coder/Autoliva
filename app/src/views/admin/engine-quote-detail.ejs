@@ -251,9 +251,19 @@ function dt(v) {
           </div>
 
           <%
-            var _scheme = (engineQuote.pricing && engineQuote.pricing.vatScheme === 'normal') ? 'normal' : 'margin';
+            // Reconditionné : régime normal IMPÉRATIF (TVA 20%). Occasion : régime
+            // enregistré ('normal' explicite) sinon TVA sur marge par défaut.
+            var _stored = engineQuote.pricing && engineQuote.pricing.vatScheme;
+            var _scheme = isReconditionne ? 'normal' : (_stored === 'normal' ? 'normal' : 'margin');
           %>
           <input type="hidden" name="vatScheme" value="<%= _scheme %>" data-vat-scheme data-margin-input>
+          <% if (isReconditionne) { %>
+          <div class="mb-5 flex flex-wrap items-center gap-2">
+            <span class="text-xs font-semibold text-slate-500">Régime TVA :</span>
+            <span class="inline-flex items-center rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-semibold">Régime normal · TVA 20 %</span>
+            <span class="text-[11px] text-slate-400">Moteur reconditionné — non éligible à la TVA sur marge. Prix saisi en HT, TVA 20 % ajoutée.</span>
+          </div>
+          <% } else { %>
           <div class="mb-5 flex flex-wrap items-center gap-2">
             <span class="text-xs font-semibold text-slate-500">Régime TVA :</span>
             <div class="inline-flex rounded-xl bg-slate-100 p-1 text-xs">
@@ -262,6 +272,7 @@ function dt(v) {
             </div>
             <span data-scheme-hint class="text-[11px] text-slate-400"></span>
           </div>
+          <% } %>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <div>
@@ -278,6 +289,16 @@ function dt(v) {
             </div>
           </div>
 
+          <% if (isReconditionne) { %>
+          <!-- Reconditionné : pas de banc d'essai → aucun coût de contrôle déduit.
+               Inputs cachés à 0 pour que le calcul de marge live reste cohérent. -->
+          <input type="hidden" data-ctrl-port value="0">
+          <input type="hidden" data-ctrl-rate value="0">
+          <input type="hidden" data-ctrl-hours value="0">
+          <div class="mb-4 p-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/60">
+            <p class="text-[11px] text-slate-500"><strong>Moteur reconditionné</strong> — aucun coût de banc d'essai déduit de la marge (la remise à neuf est intégrée au prix d'achat). Régime <strong>TVA normale 20 %</strong> (HT + TVA), marge cible <strong>25 %</strong>.</p>
+          </div>
+          <% } else { %>
           <!-- Coûts de contrôle (port de test + MO de test) — TOUJOURS inclus dans la marge -->
           <div class="flex flex-wrap items-end gap-3 mb-4 p-3 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/40">
             <div>
@@ -298,13 +319,14 @@ function dt(v) {
             </div>
             <p class="basis-full text-[11px] text-slate-400"><strong>Toujours déduits de ta marge</strong> (port fournisseur→atelier + ta main-d'œuvre de test) → la marge affichée est ta <strong>vraie</strong> marge, sans rien cliquer. Modifiable ici pour un moteur particulier. La livraison client (refacturée) n'est pas comptée.</p>
           </div>
+          <% } %>
 
           <!-- Aide au calcul du prix de vente depuis une marge cible -->
           <div class="flex flex-wrap items-end gap-3 mb-4 p-3 rounded-xl border border-dashed border-slate-300 bg-slate-50/60">
             <div>
               <label class="block text-xs font-semibold text-slate-500 mb-1">Calcul auto · marge cible</label>
               <div class="flex items-center gap-1">
-                <input type="number" step="1" min="0" max="95" value="30" data-target-margin class="w-20 rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                <input type="number" step="1" min="0" max="95" value="<%= isReconditionne ? 25 : 30 %>" data-target-margin class="w-20 rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
                 <span class="text-sm font-semibold text-slate-500">%</span>
               </div>
             </div>
@@ -445,6 +467,7 @@ function dt(v) {
                 ? new Intl.NumberFormat('fr-FR').format(engineQuote.identifiedEngine.mileage) + ' km certifiés au compteur'
                 : '';
               const tplCondition = engineQuote.identifiedEngine.condition;
+              const tplIsRecond = tplCondition === 'reconditionne_complet' || tplCondition === 'reconditionne_chemise_fonte';
               const tplConditionLine = tplCondition === 'reconditionne_chemise_fonte'
                 ? 'Il s\'agit d\'un moteur reconditionné avec chemisage fonte — la solution premium pour fiabiliser durablement votre bloc moteur.'
                 : tplCondition === 'reconditionne_complet'
@@ -455,16 +478,22 @@ function dt(v) {
               // Garantie selon l'état (cohérent avec le devis PDF/email) : reconditionné 12 mois, occasion 6 mois
               const tplWarranty = (tplCondition === 'reconditionne_chemise_fonte' || tplCondition === 'reconditionne_complet') ? 12 : 6;
               const tplStock = engineQuote.stock.location === 'atelier'
-                ? 'Le moteur est actuellement dans notre atelier, déjà passé sur banc d\'essai.'
+                ? (tplIsRecond
+                    ? 'Le moteur est reconditionné dans notre atelier (rectification + remplacement des pièces d\'usure).'
+                    : 'Le moteur est actuellement dans notre atelier, déjà passé sur banc d\'essai.')
                 : engineQuote.stock.location === 'sourcing'
-                  ? 'Le moteur est sur commande sur notre réseau professionnel. Il passera obligatoirement sur banc d\'essai à l\'atelier avant expédition.'
+                  ? (tplIsRecond
+                      ? 'Le moteur est reconditionné à la commande dans notre atelier (rectification + remplacement des pièces d\'usure), puis contrôlé avant expédition.'
+                      : 'Le moteur est sur commande sur notre réseau professionnel. Il passera obligatoirement sur banc d\'essai à l\'atelier avant expédition.')
                   : '';
               const tplDelay = engineQuote.stock.estimatedDelay ? ' Délai estimé : ' + engineQuote.stock.estimatedDelay + '.' : '';
               // Bullet "expédition" adapté au scénario stock (pas de 48-72h si c'est sur commande)
               const tplShippingBullet = engineQuote.stock.location === 'atelier'
                 ? '• Expédition Europe en 48-72h après accord'
                 : engineQuote.stock.location === 'sourcing'
-                  ? '• Expédition Europe sous 48-72h une fois le moteur validé sur notre banc d\'essai'
+                  ? (tplIsRecond
+                      ? '• Expédition Europe sous 48-72h une fois le moteur reconditionné et contrôlé'
+                      : '• Expédition Europe sous 48-72h une fois le moteur validé sur notre banc d\'essai')
                   : '• Expédition sécurisée Europe (palette, scellés, attestation)';
               const defaultMessage = [
                 tplFirstName ? `Bonjour ${tplFirstName},` : 'Bonjour,',
@@ -477,8 +506,8 @@ function dt(v) {
                 `Vous trouverez en pièces jointes le devis détaillé au format PDF et les photos du moteur.`,
                 ``,
                 `Pour rappel, nos engagements :`,
-                `• Banc d'essai obligatoire (compression, étanchéité, endoscopie)`,
-                `• Kilométrage certifié et photo du compteur transmise`,
+                tplIsRecond ? `• Reconditionnement complet en atelier (pièces d'usure remplacées)` : `• Banc d'essai obligatoire (compression, étanchéité, endoscopie)`,
+                tplIsRecond ? `• Banc d'essai (compression, étanchéité, endoscopie)` : `• Kilométrage certifié et photo du compteur transmise`,
                 `• Garantie ${tplWarranty} mois sans franchise kilométrique`,
                 tplShippingBullet,
                 ``,
