@@ -118,23 +118,6 @@
 <p class="text-xs text-gray-400 mt-2">Ex: AB-123-CD ou VF1XXXXXXXXXXXXX ou M48.50</p>
 </div>
 
-<!-- Type de moteur -->
-<div>
-<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Sélectionnez le type de moteur</p>
-<div class="grid grid-cols-2 gap-3">
-<label class="border border-gray-300 rounded-xl p-4 cursor-pointer hover:border-brand-red has-[:checked]:border-brand-red has-[:checked]:bg-red-50/50 has-[:checked]:ring-1 has-[:checked]:ring-brand-red/40 transition block">
-<input type="radio" name="engineType" value="complet" class="sr-only" <%= form.engineType === 'complet' ? 'checked' : '' %>>
-<span class="font-bold text-sm leading-tight block">Moteur complet</span>
-<span class="text-xs text-gray-500 block mt-1">avec accessoires</span>
-</label>
-<label class="border border-gray-300 rounded-xl p-4 cursor-pointer hover:border-brand-red has-[:checked]:border-brand-red has-[:checked]:bg-red-50/50 has-[:checked]:ring-1 has-[:checked]:ring-brand-red/40 transition block">
-<input type="radio" name="engineType" value="nu" class="sr-only" <%= form.engineType === 'nu' ? 'checked' : '' %>>
-<span class="font-bold text-sm leading-tight block">Moteur nu</span>
-<span class="text-xs text-gray-500 block mt-1">sans accessoires</span>
-</label>
-</div>
-</div>
-
 <!-- CTA étape 1 -->
 <button type="button" data-step1-next class="w-full bg-brand-red hover:bg-brand-redhover text-white font-bold py-3.5 rounded-lg flex justify-center items-center gap-2 transition">
 Suivant
@@ -255,10 +238,7 @@ Envoyer ma demande
       track('funnel_step2_view');
       // Récap pour rappel + bouton modifier
       var plate = plateInput ? plateInput.value.trim() : '';
-      var engineTypeChecked = form.querySelector('input[name="engineType"]:checked');
-      var engineLabel = engineTypeChecked ? (engineTypeChecked.value === 'complet' ? 'Moteur complet' : 'Moteur nu') : '';
-      var parts = [plate, engineLabel].filter(Boolean);
-      if (recap) recap.textContent = parts.join(' · ') || 'Véhicule renseigné';
+      if (recap) recap.textContent = plate || 'Véhicule renseigné';
       setTimeout(function(){ phoneInput && phoneInput.focus(); }, 50);
     }
   }
