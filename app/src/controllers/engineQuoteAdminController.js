@@ -173,10 +173,24 @@ function getAdminInfo(req) {
 
 /* ─── PAGE LISTE ──────────────────────────────────────────────────────── */
 
+/* Condition (intention captée depuis la landing), déduite du libellé véhicule :
+ * « Moteur reconditionné » → reconditionne ; « Moteur d'occasion » → occasion. */
+const CONDITION_BADGES = {
+  reconditionne: { label: 'Reconditionné', className: 'bg-red-100 text-red-700' },
+  occasion: { label: 'Occasion', className: 'bg-emerald-100 text-emerald-700' },
+};
+function deriveCondition(vehicle) {
+  const v = String(vehicle || '').toLowerCase();
+  if (v.indexOf('recondition') !== -1) return 'reconditionne';
+  if (v.indexOf('occasion') !== -1) return 'occasion';
+  return '';
+}
+
 async function getEngineQuotesList(req, res, next) {
   try {
     const statusFilter = typeof req.query.status === 'string' ? req.query.status.trim() : '';
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    const conditionFilter = (req.query.condition === 'reconditionne' || req.query.condition === 'occasion') ? req.query.condition : '';
     // Vue active (défaut) ou archivés. Les archivés sont sortis de la liste
     // active pour la désencombrer, mais restent consultables via le toggle.
     const view = req.query.view === 'archived' ? 'archived' : 'active';
@@ -185,6 +199,10 @@ async function getEngineQuotesList(req, res, next) {
     query.archived = view === 'archived' ? true : { $ne: true };
     if (statusFilter && STATUS_LABELS[statusFilter]) {
       query['engineQuote.status'] = statusFilter;
+    }
+    if (conditionFilter) {
+      // Couvre les leads récents (libellé exact) ET anciens (« …occasion · complet »).
+      query['requested.vehicle'] = conditionFilter === 'reconditionne' ? /recondition/i : /occasion/i;
     }
     if (q) {
       const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -195,6 +213,7 @@ async function getEngineQuotesList(req, res, next) {
         { phone: rx },
         { 'requested.plate': rx },
         { 'requested.ref': rx },
+        { 'requested.vehicle': rx },
         { 'engineQuote.identifiedEngine.code': rx },
         { 'engineQuote.identifiedEngine.model': rx },
       ];
@@ -233,6 +252,7 @@ async function getEngineQuotesList(req, res, next) {
         ref: (c.requested && c.requested.ref) || '',
         plate: (c.requested && c.requested.plate) || '',
         vehicle: (c.requested && c.requested.vehicle) || '',
+        conditionBadge: CONDITION_BADGES[deriveCondition(c.requested && c.requested.vehicle)] || null,
         displayName,
         email: c.email,
         phone: c.phone,
@@ -290,7 +310,7 @@ async function getEngineQuotesList(req, res, next) {
       activeKey: 'engine-quotes',
       items,
       stats,
-      filters: { status: statusFilter, q },
+      filters: { status: statusFilter, q, condition: conditionFilter },
       view,
       archivedCount,
       statusLabels: STATUS_LABELS,

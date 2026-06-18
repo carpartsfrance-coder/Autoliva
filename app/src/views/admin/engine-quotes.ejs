@@ -7,7 +7,7 @@
     <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
       <div>
         <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Devis moteurs'}] }) %>
-        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Devis moteurs d'occasion</div>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Devis moteurs</div>
         <div class="mt-1 text-sm text-slate-500">Workflow commercial dédié — identification, sourcing, tarification, photos.</div>
       </div>
       <div class="flex flex-wrap items-center gap-3 shrink-0">
@@ -75,8 +75,13 @@
           <option value="<%= s %>" <%= filters.status === s ? 'selected' : '' %>><%= statusLabels[s].label %></option>
         <% }) %>
       </select>
+      <select name="condition" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+        <option value="">Toutes conditions</option>
+        <option value="reconditionne" <%= filters.condition === 'reconditionne' ? 'selected' : '' %>>Reconditionné</option>
+        <option value="occasion" <%= filters.condition === 'occasion' ? 'selected' : '' %>>Occasion</option>
+      </select>
       <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-5 py-2.5 rounded-xl text-sm">Filtrer</button>
-      <% if (filters.q || filters.status) { %>
+      <% if (filters.q || filters.status || filters.condition) { %>
         <a href="/admin/devis-moteurs<%= view === 'archived' ? '?view=archived' : '' %>" class="px-5 py-2.5 text-sm text-slate-600 hover:text-slate-900">Réinitialiser</a>
       <% } %>
     </form>
@@ -138,6 +143,9 @@
                   </td>
                   <td class="px-4 py-3 align-top">
                     <div class="font-mono text-xs text-slate-700"><%= it.plate || '—' %></div>
+                    <% if (it.conditionBadge) { %>
+                      <span class="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold <%= it.conditionBadge.className %>"><%= it.conditionBadge.label %></span>
+                    <% } %>
                     <% if (it.identifiedEngineModel || it.identifiedEngineCode) { %>
                       <div class="text-xs text-slate-500 mt-0.5">
                         <%= it.identifiedEngineModel %>
