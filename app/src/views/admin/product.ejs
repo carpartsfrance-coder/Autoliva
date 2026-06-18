@@ -492,7 +492,6 @@
         </div>
       </section>
 
-      <input id="videoUrl" name="videoUrl" type="hidden" value="<%= form && form.videoUrl ? form.videoUrl : '' %>" />
       <textarea id="specs" name="specs" class="hidden"><%= form && form.specs ? form.specs : '' %></textarea>
 
       <section id="section-media" class="order-3 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark shadow-sm">
@@ -557,6 +556,15 @@
           </div>
 
           <div class="mt-4 text-xs text-slate-500">Glissez-déposez vos fichiers (images ou vidéos) sur la grille, ou cliquez sur « Ajouter ». Vous pouvez réordonner par glisser-déposer ou avec les flèches. Vidéos : MP4 / WEBM / MOV (50 Mo max). Images : 5 Mo max.</div>
+
+          <div class="mt-5 pt-5 border-t border-border-light dark:border-border-dark">
+            <label for="videoUrl" class="text-sm font-bold mb-1 flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400 text-lg">smart_display</span>
+              Lien vidéo (YouTube / Vimeo)
+            </label>
+            <input id="videoUrl" name="videoUrl" type="url" inputmode="url" placeholder="https://youtu.be/…  ou  https://vimeo.com/…" value="<%= form && form.videoUrl ? form.videoUrl : '' %>" class="w-full rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary" />
+            <p class="mt-1.5 text-xs text-slate-500">Colle un lien <strong>YouTube ou Vimeo</strong> (non listé accepté) — la vidéo s'affiche en lecteur intégré dans la galerie de la fiche. <strong>Recommandé pour les vidéos lourdes</strong> (moteur sur banc d'essai…) : aucune limite de taille, hébergées et streamées par YouTube/Vimeo. Évite d'uploader un gros fichier dans la grille ci-dessus (50 Mo max, alourdit la base et le chargement).</p>
+          </div>
 
           <input id="image" name="image" accept="image/*,video/mp4,video/webm,video/quicktime" type="file" multiple class="hidden" />
           <input id="imageUrl" name="imageUrl" type="hidden" value="<%= form && form.imageUrl ? form.imageUrl : '' %>" />
