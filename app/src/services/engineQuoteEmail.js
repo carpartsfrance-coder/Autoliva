@@ -85,8 +85,10 @@ function buildQuoteEmailHtml(opts) {
   if (opts.customMessage && opts.customMessage.trim()) {
     commercialMessage = escapeHtml(opts.customMessage.trim()).replace(/\r?\n/g, '<br>');
   } else {
-    const lines = [greeting, '', 'Moteur intégralement contrôlé sur banc d\'essai avant expédition.'];
-    if (mileage) lines.push('Kilométrage : ' + mileage + ' certifiés au compteur.');
+    const lines = [greeting, '', opts.isReconditionne
+      ? 'Moteur entièrement reconditionné en atelier (pièces d\'usure remplacées), contrôlé avant expédition.'
+      : 'Moteur intégralement contrôlé sur banc d\'essai avant expédition.'];
+    if (!opts.isReconditionne && mileage) lines.push('Kilométrage : ' + mileage + ' certifiés au compteur.');
     if (opts.stockLabel) lines.push((opts.stockLabel) + (opts.delay ? ' · délai estimé ' + escapeHtml(opts.delay) : '') + '.');
     lines.push('', 'À votre disposition pour toute question.');
     commercialMessage = lines.join('\n').replace(/\n/g, '<br>');
