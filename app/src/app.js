@@ -186,6 +186,7 @@ app.use(helmet({
       ],
       frameSrc: [
         "'self'",
+        "https://www.youtube.com",
         "https://www.youtube-nocookie.com",
         "https://player.vimeo.com",
         "https://js.mollie.com",

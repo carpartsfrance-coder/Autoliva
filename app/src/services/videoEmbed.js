@@ -10,8 +10,11 @@
  * YouTube/Vimeo (non listé) — qui ré-encodent + servent en streaming CDN — et on
  * ne garde que l'URL dans `product.media.videoUrl`.
  *
- * YouTube : embed via youtube-nocookie.com (déjà autorisé par la CSP frameSrc,
- * et plus respectueux RGPD — pas de cookies tant que l'utilisateur ne lance pas).
+ * YouTube : embed via youtube.com/embed standard + playsinline=1. On N'utilise
+ * PAS youtube-nocookie.com : son mode strict provoque l'erreur 153 (« erreur de
+ * configuration du lecteur ») sur mobile, où le stockage tiers est plus
+ * restreint. youtube.com/embed est l'intégration la plus compatible.
+ * playsinline=1 = lecture en ligne sur iOS (sinon plein écran forcé / échec).
  *
  * @param {string} rawUrl
  * @returns {{provider:'youtube'|'vimeo', id:string, embedUrl:string, poster:string}|null}
@@ -30,7 +33,7 @@ function parseVideoEmbed(rawUrl) {
     return {
       provider: 'youtube',
       id,
-      embedUrl: 'https://www.youtube-nocookie.com/embed/' + id + '?rel=0&modestbranding=1',
+      embedUrl: 'https://www.youtube.com/embed/' + id + '?rel=0&modestbranding=1&playsinline=1',
       poster: 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg',
     };
   }
