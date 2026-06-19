@@ -55,6 +55,10 @@ const VARIANTS = {
     copy: {
       formAction: '/moteurs/devis',
       funnelName: 'moteur-occasion',
+      // Affiche le champ « État » (recond / occasion / je ne sais pas) — la
+      // landing /moteurs est généraliste. Sur /moteurs-reconditionnes l'état est
+      // implicite (reconditionné) → champ masqué.
+      showStateField: true,
       eyebrow: "Moteurs d'occasion premium",
       h1Html: 'Des moteurs testés,<br>garantis,<br><span class="text-brand-red">prêts à performer.</span>',
       sub: 'Tous nos moteurs sont testés sur banc, certifiés et prêts à être expédiés rapidement partout en Europe.',
@@ -84,6 +88,7 @@ const VARIANTS = {
     copy: {
       formAction: '/moteurs-reconditionnes/devis',
       funnelName: 'moteur-reconditionne',
+      showStateField: false,
       eyebrow: 'Moteurs reconditionnés premium',
       h1Html: 'Des moteurs reconditionnés,<br>comme neufs,<br><span class="text-brand-red">garantis 1 an.</span>',
       sub: "Pièces d'usure remplacées, contrôlés et testés, prêts à rouler — expédiés rapidement partout en Europe.",
@@ -465,11 +470,27 @@ async function getLanding(req, res, next) {
 async function postDevis(req, res, next) {
   try {
     const variant = getVariant(req);
-    const conditionLabel = (VARIANTS[variant] || VARIANTS.occasion).conditionLabel;
+    const isReconVariant = variant === 'reconditionne';
     const body = (req.body && typeof req.body === 'object') ? req.body : {};
 
+    // État choisi par le client (champ « État » sur /moteurs). Sur la landing
+    // /moteurs-reconditionnes, l'état est implicite → forcé à reconditionné.
+    const etatRaw = trim(body.etat).toLowerCase();
+    let etat;
+    if (isReconVariant) etat = 'reconditionne';
+    else if (etatRaw === 'reconditionne' || etatRaw === 'occasion' || etatRaw === 'je_sais_pas') etat = etatRaw;
+    else etat = '';
+    // Libellé condition → requested.vehicle → deriveCondition côté back-office
+    // (reconditionné / occasion / « à préciser » = à vérifier par le commercial).
+    const conditionLabel = etat === 'reconditionne' ? 'Moteur reconditionné'
+      : etat === 'occasion' ? "Moteur d'occasion"
+      : etat === 'je_sais_pas' ? 'Moteur (état à préciser)'
+      : (VARIANTS[variant] || VARIANTS.occasion).conditionLabel;
+
+    // Complet / Nu : sans objet pour un moteur reconditionné (toujours complet) →
+    // ignoré dans ce cas, même si le champ est transmis.
     const engineTypeRaw = trim(body.engineType).toLowerCase();
-    const engineType = engineTypeRaw === 'complet' || engineTypeRaw === 'nu' ? engineTypeRaw : '';
+    const engineType = (etat !== 'reconditionne' && (engineTypeRaw === 'complet' || engineTypeRaw === 'nu')) ? engineTypeRaw : '';
     const engineTypeLabel = engineType === 'complet'
       ? 'Moteur complet (avec accessoires)'
       : engineType === 'nu' ? 'Moteur nu (sans accessoires)' : '';
@@ -482,6 +503,7 @@ async function postDevis(req, res, next) {
       phone: trim(body.phone).slice(0, 24),
       message: composedMessage,
       engineType,
+      etat,
       website: trim(body.website), // honeypot
     };
 
