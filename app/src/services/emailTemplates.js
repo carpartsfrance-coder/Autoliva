@@ -163,7 +163,7 @@ function renderPrimaryButton({ href, label } = {}) {
 </table>`;
 }
 
-function buildOrderConfirmationEmail({ order, user, baseUrl, meta } = {}) {
+function buildOrderConfirmationEmail({ order, user, baseUrl, meta, technicalDocs } = {}) {
   const number = order && order.number ? String(order.number) : '';
   const orderId = order && order._id ? String(order._id) : '';
   const items = order && Array.isArray(order.items) ? order.items : [];
@@ -305,6 +305,18 @@ ${order && order.orderType === 'exchange_cloning' ? `
     <tr><td style="padding:4px 8px 4px 0;font-weight:bold;vertical-align:top;color:#7c3aed;">③</td><td>Votre <strong>pièce programmée est expédiée</strong> chez vous</td></tr>
   </table>
   <div style="margin-top:10px;font-size:12px;color:#64748b;">Vous serez notifié par email à chaque étape.</div>
+</div>` : ''}
+
+${Array.isArray(technicalDocs) && technicalDocs.length ? `
+<div style="margin-top:18px;padding:16px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:14px;">
+  <div style="font-weight:900;color:#0f172a;font-size:14px;margin-bottom:6px;">📄 Documents techniques fournis</div>
+  <div style="font-size:13px;line-height:1.7;color:#334155;margin-bottom:10px;">À consulter <strong>avant le montage</strong> (manuel, prérequis, conditions) :</div>
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+    ${technicalDocs.map((d) => `<tr><td style="padding:5px 0;">
+      <a href="${escapeHtml(d.url)}" style="color:#ec1313;text-decoration:none;font-weight:700;font-size:13px;">▸ ${escapeHtml(d.title)}</a>${d.productName ? `<span style="color:#94a3b8;font-size:12px;"> — ${escapeHtml(d.productName)}</span>` : ''}
+    </td></tr>`).join('')}
+  </table>
+  <div style="margin-top:8px;font-size:11px;color:#94a3b8;">Liens personnels liés à votre commande — merci de ne pas les partager.</div>
 </div>` : ''}
 
 ${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}

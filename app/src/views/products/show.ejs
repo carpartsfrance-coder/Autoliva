@@ -755,6 +755,27 @@
                   </div>
                 </div>
               <% } %>
+
+              <%# Documents techniques fournis — titres seuls (réassurance). Le
+                   téléchargement est réservé à l'acheteur (email + page commande). %>
+              <% var _techDocs = Array.isArray(product.technicalDocs) ? product.technicalDocs : []; %>
+              <% if (_techDocs.length) { %>
+                <div class="mt-6 bg-slate-50 dark:bg-slate-900 rounded-2xl p-8 border border-slate-300 dark:border-slate-700 refined-shadow">
+                  <h4 class="text-lg font-bold uppercase text-slate-900 dark:text-white mb-2 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">description</span>
+                    Documents techniques fournis
+                  </h4>
+                  <p class="text-xs text-slate-500 mb-5">Transmis <strong>avec votre commande</strong> (manuel de montage, prérequis, conditions). Accès dans l'email de confirmation et l'espace de votre commande.</p>
+                  <ul class="space-y-2">
+                    <% _techDocs.forEach((doc) => { %>
+                      <li class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                        <span class="material-symbols-outlined text-red-600 text-base leading-5">picture_as_pdf</span>
+                        <span><%= (doc.title && String(doc.title).trim()) ? doc.title : (doc.filename || 'Document technique') %></span>
+                      </li>
+                    <% }) %>
+                  </ul>
+                </div>
+              <% } %>
             </div>
             <%# Blocs d'information : fin de description, puis après inclus/non-inclus %>
             <%- include('./partials/info-blocks', { blocks: _ib.description_end }) %>

@@ -242,6 +242,26 @@ const productSchema = new mongoose.Schema(
       videoUrl: { type: String, default: '', trim: true },
     },
 
+    /* Documents techniques (PDF) fournis avec le produit : manuel de montage,
+     * à faire avant montage, conditions, etc. Affichés par TITRE sur la fiche
+     * (sans téléchargement public) ; le téléchargement est réservé à l'acheteur
+     * (lien dans l'email de confirmation + page de sa commande), via la route
+     * gated /compte/commandes/:orderId/documents/:docId. Fichiers stockés dans
+     * le bucket GridFS 'product_docs' (NON exposé par /media). */
+    technicalDocs: {
+      type: [
+        new mongoose.Schema({
+          title: { type: String, default: '', trim: true },
+          fileId: { type: String, default: '', trim: true }, // ObjectId GridFS (bucket product_docs)
+          filename: { type: String, default: '', trim: true },
+          mime: { type: String, default: 'application/pdf', trim: true },
+          sizeBytes: { type: Number, default: 0 },
+          uploadedAt: { type: Date, default: Date.now },
+        }),
+      ],
+      default: [],
+    },
+
     seo: {
       metaTitle: { type: String, default: '', trim: true },
       metaDescription: { type: String, default: '', trim: true },

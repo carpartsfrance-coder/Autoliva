@@ -295,10 +295,38 @@ async function sendOrderConfirmationEmail({ order, user } = {}) {
     hasCgv = true;
   }
 
+  // Documents techniques des produits commandés : liens de téléchargement signés
+  // (magic-link), valables même sans connexion (commandes invité).
+  let technicalDocLinks = [];
+  try {
+    const Product = require('../models/Product');
+    const productDocAccess = require('./productDocAccess');
+    const items = Array.isArray(orderWithImages.items) ? orderWithImages.items : [];
+    const productIds = items.map((it) => it.productId).filter(Boolean);
+    if (productIds.length) {
+      const products = await Product.find({ _id: { $in: productIds } }).select('name technicalDocs').lean();
+      const oid = String(orderWithImages._id);
+      const subject = String(orderWithImages.userId || (fullUser && fullUser._id) || '');
+      for (const p of products) {
+        for (const d of (Array.isArray(p.technicalDocs) ? p.technicalDocs : [])) {
+          if (!d || !d.fileId) continue;
+          technicalDocLinks.push({
+            title: (d.title && String(d.title).trim()) || d.filename || 'Document technique',
+            productName: p.name || '',
+            url: productDocAccess.buildDownloadUrl(baseUrl, oid, d._id, subject),
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[order-email] technicalDocs:', err && err.message);
+  }
+
   const built = buildOrderConfirmationEmail({
     order: orderWithImages,
     user: fullUser,
     baseUrl,
+    technicalDocs: technicalDocLinks,
     meta: { hasInvoice, hasCgv },
   });
   return sendEmail({

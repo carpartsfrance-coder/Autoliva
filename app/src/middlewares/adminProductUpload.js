@@ -11,6 +11,7 @@ const ALLOWED_VIDEO_MIMES = new Set([
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;   // 5 Mo par image
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;  // 50 Mo par vidéo
+const MAX_DOC_BYTES = 20 * 1024 * 1024;    // 20 Mo par document technique (PDF)
 
 const upload = multer({
   storage,
@@ -21,6 +22,12 @@ const upload = multer({
   fileFilter(req, file, cb) {
     if (!file || !file.mimetype) return cb(null, false);
     const mt = file.mimetype.toLowerCase();
+    // Champ "technicalDoc" : PDF uniquement (documents techniques produit).
+    if (file.fieldname === 'technicalDoc') {
+      if (mt === 'application/pdf') return cb(null, true);
+      return cb(new Error('Document technique : PDF uniquement.'));
+    }
+    // Champ "image" (galerie) : images + vidéos courtes.
     if (mt.startsWith('image/')) return cb(null, true);
     if (ALLOWED_VIDEO_MIMES.has(mt)) return cb(null, true);
     return cb(new Error("Fichier non supporté. Merci d'envoyer une image (PNG, JPG, WEBP) ou une vidéo (MP4, WEBM, MOV)."));
@@ -28,7 +35,11 @@ const upload = multer({
 });
 
 function handleProductImageUpload(req, res, next) {
-  const multi = upload.array('image', 10);
+  // .fields : galerie (image) + documents techniques (technicalDoc) en un seul POST.
+  const multi = upload.fields([
+    { name: 'image', maxCount: 10 },
+    { name: 'technicalDoc', maxCount: 10 },
+  ]);
 
   multi(req, res, (err) => {
     if (err) {
@@ -36,21 +47,32 @@ function handleProductImageUpload(req, res, next) {
       return next();
     }
 
-    // Validation post-upload : reject les images > 5 Mo (la limite multer est à 50 Mo
-    // pour autoriser les vidéos, mais on ne veut pas d'images énormes).
-    if (Array.isArray(req.files)) {
-      for (const f of req.files) {
-        if (f && f.mimetype && f.mimetype.startsWith('image/') && f.size > MAX_IMAGE_BYTES) {
-          req.uploadError = `Image trop volumineuse : ${f.originalname} (${Math.round(f.size / 1024 / 1024)} Mo). Limite : 5 Mo par image.`;
-          req.files = [];
-          return next();
-        }
+    // .fields renvoie un objet { image: [...], technicalDoc: [...] }. On renormalise
+    // req.files en TABLEAU d'images (le reste du contrôleur lit req.files ainsi,
+    // inchangé) et on expose les PDF via req.technicalDocFiles.
+    const grouped = (req.files && !Array.isArray(req.files)) ? req.files : {};
+    const images = grouped.image || [];
+    req.technicalDocFiles = grouped.technicalDoc || [];
+    req.files = images;
+
+    // Reject les images > 5 Mo (limite multer à 50 Mo pour autoriser les vidéos).
+    for (const f of images) {
+      if (f && f.mimetype && f.mimetype.startsWith('image/') && f.size > MAX_IMAGE_BYTES) {
+        req.uploadError = `Image trop volumineuse : ${f.originalname} (${Math.round(f.size / 1024 / 1024)} Mo). Limite : 5 Mo par image.`;
+        req.files = [];
+        return next();
+      }
+    }
+    // Reject les PDF > 20 Mo
+    for (const f of req.technicalDocFiles) {
+      if (f && f.size > MAX_DOC_BYTES) {
+        req.uploadError = `Document trop volumineux : ${f.originalname} (${Math.round(f.size / 1024 / 1024)} Mo). Limite : 20 Mo par PDF.`;
+        req.technicalDocFiles = [];
+        return next();
       }
     }
 
-    if (Array.isArray(req.files) && req.files.length > 0) {
-      req.file = req.files[0];
-    }
+    if (images.length > 0) req.file = images[0];
 
     return next();
   });
@@ -60,4 +82,5 @@ module.exports = {
   handleProductImageUpload,
   MAX_IMAGE_BYTES,
   MAX_VIDEO_BYTES,
+  MAX_DOC_BYTES,
 };
