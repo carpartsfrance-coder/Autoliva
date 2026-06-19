@@ -312,7 +312,12 @@ function scoreVariantAgainstField(variant, fieldText, fieldTokens, weight) {
   }
 
   if (term.length >= 4) {
-    const containsMatch = meaningfulTokens.some((token) => token.includes(term) || term.includes(token));
+    // token.includes(term) : le mot du produit contient la saisie (préfixe/sous-chaîne
+    // d'un mot plus long, ex. « meca » → « mecatronique ») → toujours pertinent.
+    // term.includes(token) : la SAISIE contient un mot du produit. À restreindre aux
+    // tokens ≥ 4 : sinon « dq250 » matche le « 250 » de « GLE 250 CDI » / « 250 ch »
+    // (numéros de puissance/cylindrée) → résultats sans rapport dans l'autocomplétion.
+    const containsMatch = meaningfulTokens.some((token) => token.includes(term) || (token.length >= 4 && term.includes(token)));
     if (containsMatch) return weight * 7;
   }
 
