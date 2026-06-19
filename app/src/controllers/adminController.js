@@ -24,6 +24,7 @@ const invoiceSettings = require('../services/invoiceSettings');
 const siteSettings = require('../services/siteSettings');
 const productOptions = require('../services/productOptions');
 const mediaStorage = require('../services/mediaStorage');
+const productDocStorage = require('../services/productDocStorage');
 const adminUsers = require('../services/adminUsers');
 const AdminUser = require('../models/AdminUser');
 const CartEvent = require('../models/CartEvent');
@@ -4862,6 +4863,68 @@ function getTrimmedString(value, fallback = '') {
   return value.trim();
 }
 
+/* ─── Documents techniques produit (PDF) ─────────────────────────────────
+ * Sauvegarde les PDF uploadés (champ `technicalDoc`) dans le bucket gated
+ * product_docs et renvoie les sous-documents { title, fileId, ... }. */
+async function saveUploadedTechnicalDocs(req, productId) {
+  const files = Array.isArray(req.technicalDocFiles) ? req.technicalDocFiles : [];
+  const out = [];
+  for (const f of files) {
+    if (!f || !f.buffer || !f.buffer.length) continue;
+    const original = String(f.originalname || 'document.pdf');
+    const title = original.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' ').trim().slice(0, 160) || 'Document';
+    const saved = await productDocStorage.saveBuffer({
+      buffer: f.buffer,
+      filename: original,
+      mime: f.mimetype || 'application/pdf',
+      metadata: { productId: productId ? String(productId) : '', title },
+    });
+    out.push({
+      title,
+      fileId: saved.id,
+      filename: original.slice(0, 200),
+      mime: f.mimetype || 'application/pdf',
+      sizeBytes: saved.size || f.size || 0,
+    });
+  }
+  return out;
+}
+
+/* Y a-t-il des changements de docs techniques à traiter dans cette requête ? */
+function hasTechnicalDocInputs(req) {
+  const b = req.body || {};
+  if (Array.isArray(req.technicalDocFiles) && req.technicalDocFiles.length) return true;
+  if (b.removeTechnicalDocs && String(b.removeTechnicalDocs).trim()) return true;
+  return Object.keys(b).some((k) => k.indexOf('docTitle_') === 0);
+}
+
+/* Fusionne les docs existants avec : suppressions (removeTechnicalDocs = ids
+ * séparés par des virgules/retours ligne), renommages (docTitle_<id>), et
+ * nouveaux PDF uploadés. Supprime du stockage les fichiers retirés. */
+async function applyTechnicalDocChanges(req, existingDocs, productId) {
+  const b = req.body || {};
+  const toRemove = new Set(
+    String(b.removeTechnicalDocs || '')
+      .split(/[\s,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+  );
+  const kept = [];
+  for (const d of (Array.isArray(existingDocs) ? existingDocs : [])) {
+    const id = String(d._id || '');
+    if (id && toRemove.has(id)) {
+      if (d.fileId) { try { await productDocStorage.deleteFile(d.fileId); } catch (_) {} }
+      continue;
+    }
+    const plain = (d.toObject ? d.toObject() : Object.assign({}, d));
+    const newTitle = b['docTitle_' + id];
+    if (typeof newTitle === 'string' && newTitle.trim()) plain.title = newTitle.trim().slice(0, 160);
+    kept.push(plain);
+  }
+  const added = await saveUploadedTechnicalDocs(req, productId);
+  return kept.concat(added);
+}
+
 function getRequiredProductContentError({ form, hasMainImage }) {
   const missing = [];
 
@@ -7331,6 +7394,8 @@ async function postAdminCreateProduct(req, res, next) {
           showRelatedProducts: true,
         };
 
+    createData.technicalDocs = await saveUploadedTechnicalDocs(req, null);
+
     await Product.create(createData);
 
     if (wantsJsonResponse(req)) return res.json({ ok: true, message: 'Produit créé.' });
@@ -7429,6 +7494,7 @@ async function getAdminEditProductPage(req, res, next) {
       dbConnected,
       mode: 'edit',
       errorMessage,
+      technicalDocs: Array.isArray(product.technicalDocs) ? product.technicalDocs : [],
       form: {
         name: product.name || '',
         slug: product.slug || '',
@@ -8023,6 +8089,10 @@ async function postAdminUpdateProduct(req, res, next) {
       };
     }
 
+    if (hasTechnicalDocInputs(req)) {
+      setPatch.technicalDocs = await applyTechnicalDocChanges(req, updated.technicalDocs || [], productId);
+    }
+
     if (Object.keys(setPatch).length) {
       await Product.updateOne({ _id: productId }, { $set: setPatch });
     }
@@ -8060,7 +8130,7 @@ async function postAdminDeleteProduct(req, res, next) {
       });
     }
 
-    const existing = await Product.findById(productId).select('_id imageUrl galleryUrls').lean();
+    const existing = await Product.findById(productId).select('_id imageUrl galleryUrls technicalDocs').lean();
     if (existing) {
       if (existing.imageUrl) {
         await mediaStorage.deleteFromUrl(existing.imageUrl);
@@ -8069,6 +8139,10 @@ async function postAdminDeleteProduct(req, res, next) {
       for (const url of galleries) {
         if (!url) continue;
         await mediaStorage.deleteFromUrl(url);
+      }
+      // Supprime aussi les documents techniques (bucket product_docs)
+      for (const d of (Array.isArray(existing.technicalDocs) ? existing.technicalDocs : [])) {
+        if (d && d.fileId) { try { await productDocStorage.deleteFile(d.fileId); } catch (_) {} }
       }
     }
 

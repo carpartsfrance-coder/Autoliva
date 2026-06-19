@@ -14,6 +14,8 @@ const emailService = require('../services/emailService');
 const { buildOrderInvoicePdfBuffer } = require('../services/invoicePdf');
 const { ensureInvoiceIssuedForPaidOrder } = require('../services/orderInvoices');
 const productOptions = require('../services/productOptions');
+const productDocStorage = require('../services/productDocStorage');
+const productDocAccess = require('../services/productDocAccess');
 const { logExistingCartItems } = require('../services/cartEventLogger');
 const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const { buildUserData } = require('../services/enhancedConversionData');
@@ -666,10 +668,32 @@ async function getOrderDetailPage(req, res, next) {
       address: order.shippingAddress || order.billingAddress || null,
     });
 
+    // Documents techniques des produits commandés (téléchargeables par le
+    // propriétaire connecté — la route gère l'auth). Liens relatifs.
+    let technicalDocs = [];
+    try {
+      const productIds = (order.items || []).map((it) => it.productId).filter(Boolean);
+      if (productIds.length) {
+        const docProducts = await Product.find({ _id: { $in: productIds } }).select('name technicalDocs').lean();
+        const oid = String(order._id);
+        for (const p of docProducts) {
+          for (const d of (Array.isArray(p.technicalDocs) ? p.technicalDocs : [])) {
+            if (!d || !d.fileId) continue;
+            technicalDocs.push({
+              title: (d.title && String(d.title).trim()) || d.filename || 'Document technique',
+              productName: p.name || '',
+              url: `/compte/commandes/${oid}/doc-technique/${d._id}`,
+            });
+          }
+        }
+      }
+    } catch (_) {}
+
     return res.render('account/order', {
       title: `Commande ${order.number} - ${brand.NAME}`,
       dbConnected,
       enhancedConversionUserData,
+      technicalDocs,
       order: {
         id: String(order._id),
         number: order.number,
@@ -2797,6 +2821,59 @@ async function postProfile(req, res, next) {
   }
 }
 
+/* Téléchargement d'un DOCUMENT TECHNIQUE produit (manuel de montage, etc.),
+ * réservé à l'acheteur. Accès : admin, OU client connecté propriétaire de la
+ * commande, OU magic-link signé (?tk=) — pour que le lien de l'email de
+ * confirmation marche aussi pour les commandes invité. Le docId doit appartenir
+ * à un produit de CETTE commande. Fichier servi depuis le bucket gated
+ * product_docs (jamais exposé par /media). */
+async function getProductTechnicalDoc(req, res, next) {
+  try {
+    const { orderId, docId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId) || !mongoose.Types.ObjectId.isValid(docId)) {
+      return res.status(404).send('Document introuvable.');
+    }
+    const order = await Order.findById(orderId).select('userId items').lean();
+    if (!order) return res.status(404).send('Commande introuvable.');
+
+    const sessionUser = req.session && req.session.user;
+    const isAdmin = !!(req.session && req.session.admin);
+    const isOwner = !!(sessionUser && String(sessionUser._id) === String(order.userId));
+    const tokenOk = !!(req.query.tk && productDocAccess.verifyToken(String(req.query.tk), orderId, String(order.userId)));
+    if (!isAdmin && !isOwner && !tokenOk) {
+      if (req.query.tk) return res.status(403).send('Lien invalide ou expiré.');
+      return res.redirect(`/compte/connexion?returnTo=${encodeURIComponent(req.originalUrl)}`);
+    }
+
+    // Le document doit appartenir à un produit de cette commande.
+    const productIds = (order.items || []).map((it) => it.productId).filter(Boolean);
+    if (!productIds.length) return res.status(404).send('Document introuvable.');
+    const products = await Product.find({ _id: { $in: productIds } }).select('technicalDocs').lean();
+    let doc = null;
+    for (const p of products) {
+      const found = (p.technicalDocs || []).find((d) => String(d._id) === String(docId));
+      if (found) { doc = found; break; }
+    }
+    if (!doc || !doc.fileId) return res.status(404).send('Document introuvable.');
+
+    let info = null;
+    try { info = await productDocStorage.findOne(doc.fileId); } catch (_) {}
+    res.setHeader('Content-Type', (info && info.contentType) || doc.mime || 'application/pdf');
+    if (info && info.length) res.setHeader('Content-Length', info.length);
+    // Nom de fichier ASCII-safe pour Content-Disposition (évite ERR_INVALID_CHAR).
+    const baseName = String(doc.filename || doc.title || 'document').replace(/\.pdf$/i, '');
+    const safeName = baseName.replace(/[^\x20-\x7E]/g, '_').replace(/["\\]/g, '').slice(0, 120) || 'document';
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}.pdf"`);
+    res.setHeader('Cache-Control', 'private, no-cache');
+
+    const stream = productDocStorage.openDownloadStream(doc.fileId);
+    stream.on('error', () => { if (!res.headersSent) res.status(404).end(); else res.end(); });
+    return stream.pipe(res);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function getOrderDocumentForClient(req, res, next) {
   try {
     const sessionUser = req.session.user;
@@ -2905,5 +2982,6 @@ module.exports = {
   getInvoicesPage,
   getGaragePage,
   getOrderDocumentForClient,
+  getProductTechnicalDoc,
   getOrderShipmentDocForClient,
 };

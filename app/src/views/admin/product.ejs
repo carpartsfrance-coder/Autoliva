@@ -566,6 +566,43 @@
             <p class="mt-1.5 text-xs text-slate-500">Colle un lien <strong>YouTube ou Vimeo</strong> (non listé accepté) — la vidéo s'affiche en lecteur intégré dans la galerie de la fiche. <strong>Recommandé pour les vidéos lourdes</strong> (moteur sur banc d'essai…) : aucune limite de taille, hébergées et streamées par YouTube/Vimeo. Évite d'uploader un gros fichier dans la grille ci-dessus (50 Mo max, alourdit la base et le chargement).</p>
           </div>
 
+          <div class="mt-5 pt-5 border-t border-border-light dark:border-border-dark">
+            <label class="text-sm font-bold mb-1 flex items-center gap-2">
+              <span class="material-symbols-outlined text-slate-400 text-lg">description</span>
+              Documents techniques (PDF) fournis avec le produit
+            </label>
+            <p class="text-xs text-slate-500 mb-3">Manuel de montage, à faire avant montage, conditions… Les <strong>titres</strong> s'affichent sur la fiche (réassurance) ; le <strong>téléchargement est réservé au client après commande</strong> (lien dans l'email de confirmation + page de sa commande).</p>
+            <% var _techDocs = (typeof technicalDocs !== 'undefined' && Array.isArray(technicalDocs)) ? technicalDocs : []; %>
+            <% if (_techDocs.length) { %>
+              <div class="space-y-2 mb-3">
+                <% _techDocs.forEach(function (doc) { var _id = String(doc._id); %>
+                  <div class="flex items-center gap-2 rounded-lg border border-border-light dark:border-border-dark p-2" data-techdoc-row="<%= _id %>">
+                    <span class="material-symbols-outlined text-red-600">picture_as_pdf</span>
+                    <input type="text" name="docTitle_<%= _id %>" value="<%= doc.title || doc.filename || '' %>" placeholder="Titre du document" class="flex-1 min-w-0 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm" />
+                    <span class="text-[11px] text-slate-400 whitespace-nowrap"><%= doc.filename || '' %><%= doc.sizeBytes ? ' · ' + Math.max(1, Math.round(doc.sizeBytes / 1024)) + ' Ko' : '' %></span>
+                    <button type="button" class="p-1 text-slate-400 hover:text-red-600 flex-shrink-0" data-remove-techdoc="<%= _id %>" title="Supprimer ce document"><span class="material-symbols-outlined text-base leading-none">delete</span></button>
+                  </div>
+                <% }) %>
+              </div>
+            <% } %>
+            <input id="technicalDoc" name="technicalDoc" type="file" accept="application/pdf,.pdf" multiple class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-white file:text-sm file:cursor-pointer" />
+            <p class="mt-1 text-[11px] text-slate-400">PDF uniquement, 20 Mo max par fichier. Titre par défaut = nom du fichier (modifiable ci-dessus). Tu peux en ajouter plusieurs.</p>
+            <input type="hidden" name="removeTechnicalDocs" data-remove-techdocs value="" />
+            <script>
+              (function () {
+                var hidden = document.querySelector('[data-remove-techdocs]');
+                document.querySelectorAll('[data-remove-techdoc]').forEach(function (btn) {
+                  btn.addEventListener('click', function () {
+                    var id = btn.getAttribute('data-remove-techdoc');
+                    if (hidden) hidden.value = (hidden.value ? hidden.value + ',' : '') + id;
+                    var row = document.querySelector('[data-techdoc-row="' + id + '"]');
+                    if (row) row.remove();
+                  });
+                });
+              })();
+            </script>
+          </div>
+
           <input id="image" name="image" accept="image/*,video/mp4,video/webm,video/quicktime" type="file" multiple class="hidden" />
           <input id="imageUrl" name="imageUrl" type="hidden" value="<%= form && form.imageUrl ? form.imageUrl : '' %>" />
           <input id="removeMainImage" name="removeMainImage" type="hidden" value="false" />

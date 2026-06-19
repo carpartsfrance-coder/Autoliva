@@ -481,6 +481,27 @@
             </div>
           </div>
 
+          <% if (typeof technicalDocs !== 'undefined' && Array.isArray(technicalDocs) && technicalDocs.length) { %>
+            <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+              <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">description</span>
+                <div class="font-black text-slate-900">Documents techniques</div>
+              </div>
+              <div class="p-6">
+                <p class="text-xs text-slate-500 mb-3">À consulter <strong>avant le montage</strong> (manuel, prérequis, conditions).</p>
+                <div class="space-y-2">
+                  <% technicalDocs.forEach((d) => { %>
+                    <a href="<%= d.url %>" target="_blank" rel="noopener" class="flex items-center gap-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-slate-50 transition px-4 py-3">
+                      <span class="material-symbols-outlined text-red-600">picture_as_pdf</span>
+                      <span class="flex-1 text-sm font-semibold text-slate-800"><%= d.title %><% if (d.productName) { %> <span class="text-xs font-normal text-slate-400">— <%= d.productName %></span><% } %></span>
+                      <span class="material-symbols-outlined text-slate-400">download</span>
+                    </a>
+                  <% }) %>
+                </div>
+              </div>
+            </div>
+          <% } %>
+
           <% if (!dbConnected) { %>
             <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
               <div class="font-bold">Mode démo</div>
