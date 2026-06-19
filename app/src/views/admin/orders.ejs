@@ -134,6 +134,20 @@
           <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
         </label>
 
+        <%/* Approvisionnement de la pièce */%>
+        <label class="orders-filter relative block <%= filters && filters.sourcing ? 'is-active' : '' %>">
+          <span class="material-symbols-outlined orders-filter-icon">inventory</span>
+          <select class="orders-filter-select" name="sourcing" aria-label="Filtrer par approvisionnement pièce">
+            <option value="">Appro pièce</option>
+            <option value="a_verifier" <%= filters && filters.sourcing === 'a_verifier' ? 'selected' : '' %>>À vérifier</option>
+            <option value="a_commander" <%= filters && filters.sourcing === 'a_commander' ? 'selected' : '' %>>À commander</option>
+            <option value="commandee" <%= filters && filters.sourcing === 'commandee' ? 'selected' : '' %>>Commandée (fournisseur)</option>
+            <option value="overdue" <%= filters && filters.sourcing === 'overdue' ? 'selected' : '' %>>Commandée — en retard</option>
+            <option value="en_stock" <%= filters && filters.sourcing === 'en_stock' ? 'selected' : '' %>>En stock / reçue</option>
+          </select>
+          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
+        </label>
+
         <%/* Période */%>
         <label class="orders-filter relative block <%= filters && filters.period ? 'is-active' : '' %>">
           <span class="material-symbols-outlined orders-filter-icon">calendar_month</span>
@@ -288,7 +302,8 @@
     <!-- Alert banner -->
     <%
       var _oa = typeof orderAlerts !== 'undefined' && orderAlerts ? orderAlerts : {};
-      var _hasAlerts = (_oa.overdueReturns > 0) || (_oa.failedClonings > 0) || (_oa.pieceWaiting > 0) || (_oa.cloningLong > 0) || (_oa.readyToShip > 0);
+      var _hasAlerts = (_oa.overdueReturns > 0) || (_oa.failedClonings > 0) || (_oa.pieceWaiting > 0) || (_oa.cloningLong > 0) || (_oa.readyToShip > 0)
+        || (_oa.sourcingOverdue > 0) || (_oa.sourcingToOrder > 0) || (_oa.sourcingToVerify > 0) || (_oa.sourcingOrdered > 0);
     %>
     <% if (_hasAlerts) { %>
       <div class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 flex flex-wrap gap-3">
@@ -320,6 +335,31 @@
           <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=cloning_done" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm font-semibold hover:bg-green-100 transition">
             <span class="material-symbols-outlined text-base">inventory_2</span>
             <%= _oa.readyToShip %> commande<%= _oa.readyToShip > 1 ? 's' : '' %> prête<%= _oa.readyToShip > 1 ? 's' : '' %> à expédier
+          </a>
+        <% } %>
+        <%/* ── Approvisionnement pièce ── */%>
+        <% if (_oa.sourcingOverdue > 0) { %>
+          <a href="/admin/commandes?sourcing=overdue" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold hover:bg-red-100 transition">
+            <span class="material-symbols-outlined text-base">local_shipping</span>
+            <%= _oa.sourcingOverdue %> pièce<%= _oa.sourcingOverdue > 1 ? 's' : '' %> fournisseur en retard
+          </a>
+        <% } %>
+        <% if (_oa.sourcingToOrder > 0) { %>
+          <a href="/admin/commandes?sourcing=a_commander" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-semibold hover:bg-rose-100 transition">
+            <span class="material-symbols-outlined text-base">shopping_cart</span>
+            <%= _oa.sourcingToOrder %> pièce<%= _oa.sourcingToOrder > 1 ? 's' : '' %> à commander
+          </a>
+        <% } %>
+        <% if (_oa.sourcingToVerify > 0) { %>
+          <a href="/admin/commandes?sourcing=a_verifier" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-100 transition">
+            <span class="material-symbols-outlined text-base">help</span>
+            <%= _oa.sourcingToVerify %> appro à vérifier
+          </a>
+        <% } %>
+        <% if (_oa.sourcingOrdered > 0) { %>
+          <a href="/admin/commandes?sourcing=commandee" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-sm font-semibold hover:bg-blue-100 transition">
+            <span class="material-symbols-outlined text-base">pending</span>
+            <%= _oa.sourcingOrdered %> pièce<%= _oa.sourcingOrdered > 1 ? 's' : '' %> commandée<%= _oa.sourcingOrdered > 1 ? 's' : '' %> (attente)
           </a>
         <% } %>
       </div>
@@ -553,6 +593,7 @@
                     Statut<span class="sort-icon material-symbols-outlined"><%= oSortIcon('status') %></span>
                   </a>
                 </th>
+                <th class="px-6 py-4">Appro pièce</th>
                 <th class="px-6 py-4 th-sortable <%= oSort === 'urgency' ? 'sort-active' : '' %>">
                   <a href="<%= oSortUrl('urgency') %>" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:2px;">
                     <span class="material-symbols-outlined" style="font-size:14px">priority_high</span>Urgence<span class="sort-icon material-symbols-outlined"><%= oSortIcon('urgency') %></span>
@@ -702,6 +743,22 @@
                         </div>
                       <% } %>
                     </div>
+                  </td>
+                  <td class="px-6 py-4">
+                    <% if (o.sourcing && o.sourcing.relevant) { %>
+                      <div class="flex flex-col gap-1 min-w-[8rem]" data-sourcing-cell data-order-id="<%= o.id %>">
+                        <select class="orders-filter-select text-xs py-1" data-sourcing-select aria-label="Approvisionnement de la pièce">
+                          <% (typeof sourcingOptions !== 'undefined' ? sourcingOptions : []).forEach(function (opt) { %>
+                            <option value="<%= opt.key %>" <%= o.sourcing.status === opt.key ? 'selected' : '' %>><%= opt.label %></option>
+                          <% }) %>
+                        </select>
+                        <span class="text-[10px] leading-tight <%= o.sourcing.overdue ? 'text-red-600 font-bold' : 'text-slate-400' %>" data-sourcing-hint>
+                          <% if (o.sourcing.status === 'commandee') { %><%= o.sourcing.overdue ? '⚠ Réception en retard' : (o.sourcing.dueDate ? 'Reçue avant le ' + o.sourcing.dueDate : '') %><% } %>
+                        </span>
+                      </div>
+                    <% } else { %>
+                      <span class="text-slate-300 text-xs">—</span>
+                    <% } %>
                   </td>
                   <td class="px-6 py-4 text-center">
                     <%
@@ -898,6 +955,38 @@
     });
 
     updateOrdersSelectionState();
+  })();
+</script>
+
+<script>
+  /* Édition inline du statut d'approvisionnement (colonne « Appro pièce »).
+     POST same-origin → pas de token CSRF requis (protection par origine). */
+  (function () {
+    document.querySelectorAll('[data-sourcing-select]').forEach(function (sel) {
+      sel.addEventListener('change', function () {
+        var cell = sel.closest('[data-sourcing-cell]');
+        var orderId = cell && cell.getAttribute('data-order-id');
+        if (!orderId) return;
+        sel.disabled = true;
+        fetch('/admin/commandes/' + encodeURIComponent(orderId) + '/sourcing', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ status: sel.value }),
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          sel.disabled = false;
+          if (!j || !j.ok || !j.sourcing) return;
+          var hint = cell.querySelector('[data-sourcing-hint]');
+          if (hint) {
+            if (j.sourcing.status === 'commandee') {
+              hint.textContent = j.sourcing.overdue ? '⚠ Réception en retard' : (j.sourcing.dueDate ? 'Reçue avant le ' + j.sourcing.dueDate : '');
+            } else {
+              hint.textContent = '';
+            }
+            hint.className = 'text-[10px] leading-tight ' + (j.sourcing.overdue ? 'text-red-600 font-bold' : 'text-slate-400');
+          }
+        }).catch(function () { sel.disabled = false; });
+      });
+    });
   })();
 </script>
 

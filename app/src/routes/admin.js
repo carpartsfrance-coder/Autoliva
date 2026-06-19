@@ -212,6 +212,8 @@ router.get('/commandes/nouvelle', requireAdminAuth, adminController.getAdminNewO
 router.get('/commandes/:orderId', requireAdminAuth, adminController.getAdminOrderDetailPage);
 router.post('/commandes/:orderId/statut', requireAdminAuth, adminController.postAdminUpdateOrderStatus);
 router.post('/commandes/:orderId/type', requireAdminAuth, adminController.postAdminUpdateOrderType);
+// Approvisionnement de la pièce (édition inline depuis la liste + form détail)
+router.post('/commandes/:orderId/sourcing', requireAdminAuth, adminController.postAdminUpdateOrderSourcing);
 router.post('/commandes/:orderId/consigne/recu', requireAdminAuth, adminController.postAdminMarkOrderConsigneReceived);
 router.post('/commandes/:orderId/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundOrder);
 router.post('/commandes/:orderId/consigne/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundConsigne);
