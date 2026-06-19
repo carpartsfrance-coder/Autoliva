@@ -122,11 +122,21 @@
 <!-- État du moteur souhaité -->
 <div>
 <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">État souhaité</p>
-<div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="État du moteur">
-<% [['reconditionne','Reconditionné'],['occasion','Occasion'],['je_sais_pas','Je ne sais pas']].forEach(function (opt) { %>
-<label class="cursor-pointer">
+<div class="space-y-2" role="radiogroup" aria-label="État du moteur">
+<%
+  var etatOptions = [
+    ['reconditionne', 'Reconditionné', 'Remis à neuf en atelier (pièces d\'usure remplacées), contrôlé. Garantie 1 an — le plus fiable.'],
+    ['occasion', 'Occasion', 'Moteur testé sur banc, kilométrage certifié. Garantie jusqu\'à 12 mois — le meilleur rapport qualité / prix.'],
+    ['je_sais_pas', 'Je ne sais pas', 'Aucun souci : un technicien vous conseille le moteur le plus adapté à votre véhicule et votre budget.'],
+  ];
+  etatOptions.forEach(function (opt) {
+%>
+<label class="block cursor-pointer">
 <input type="radio" name="etat" value="<%= opt[0] %>" class="peer sr-only" <%= form.etat === opt[0] ? 'checked' : '' %> data-etat-input>
-<span class="block text-center text-xs font-semibold border border-gray-300 rounded-lg py-2.5 px-1 text-gray-600 peer-checked:border-brand-red peer-checked:bg-brand-red/5 peer-checked:text-brand-red transition"><%= opt[1] %></span>
+<span class="block border border-gray-300 rounded-xl px-4 py-3 hover:border-gray-400 peer-checked:border-brand-red peer-checked:bg-brand-red/5 peer-checked:ring-1 peer-checked:ring-brand-red/30 transition">
+<span class="font-semibold text-sm text-gray-800"><%= opt[1] %></span>
+<span class="block text-xs text-gray-500 mt-0.5 leading-snug"><%= opt[2] %></span>
+</span>
 </label>
 <% }) %>
 </div>
