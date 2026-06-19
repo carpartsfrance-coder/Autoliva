@@ -33,7 +33,7 @@ const CAPTURE_SOURCE = 'landing_moteurs';
 
 /* Deux landing pages partagent la MÊME vue + le MÊME tunnel de devis, avec une
  * "copy" (message) adaptée à l'intention de recherche (message match Google Ads) :
- *  - /moteurs                → occasion (garantie 12 mois)
+ *  - /moteurs                → occasion (garantie 6 mois)
  *  - /moteurs-reconditionnes → reconditionné (garantie 1 an)
  * La variante est déduite de l'URL → tous les renderPage existants s'adaptent. */
 function getVariant(req) {
@@ -46,12 +46,12 @@ const VARIANTS = {
     path: LANDING_PATH,
     view: 'moteur-occasion/index',
     conditionLabel: "Moteur d'occasion",
-    title: `Moteur d'occasion testé, certifié, garanti jusqu'à 12 mois — ${brand.NAME}`,
+    title: `Moteur d'occasion testé, certifié, garanti 6 mois — ${brand.NAME}`,
     metaDescription:
-      "Moteurs d'occasion essence et diesel : banc d'essai obligatoire (compression, étanchéité, endoscopie), kilométrage certifié, garantie jusqu'à 12 mois sans franchise kilométrique, transférable. Devis en 24h.",
+      "Moteurs d'occasion essence et diesel : banc d'essai obligatoire (compression, étanchéité, endoscopie), kilométrage certifié, garantie 6 mois sans franchise kilométrique, transférable. Devis en 24h.",
     jsonLdServiceType: "Vente de moteurs d'occasion testés et garantis",
     jsonLdDescription:
-      "Moteurs d'occasion essence et diesel testés sur banc d'essai (compression, étanchéité, endoscopie), kilométrage certifié, garantie jusqu'à 12 mois sans franchise kilométrique transférable à la revente.",
+      "Moteurs d'occasion essence et diesel testés sur banc d'essai (compression, étanchéité, endoscopie), kilométrage certifié, garantie 6 mois sans franchise kilométrique transférable à la revente.",
     copy: {
       formAction: '/moteurs/devis',
       funnelName: 'moteur-occasion',
@@ -62,7 +62,7 @@ const VARIANTS = {
       eyebrow: "Moteurs d'occasion premium",
       h1Html: 'Des moteurs testés,<br>garantis,<br><span class="text-brand-red">prêts à performer.</span>',
       sub: 'Tous nos moteurs sont testés sur banc, certifiés et prêts à être expédiés rapidement partout en Europe.',
-      warrantyLabel: "Garantie jusqu'à 12 mois",
+      warrantyLabel: "Garantie 6 mois",
       qualitySubtitle: 'Un protocole en 7 étapes, pour une fiabilité maximale.',
       steps: [
         { n: '01', icon: 'doc', title: 'Identification', desc: 'Vérification de la référence et compatibilité' },
@@ -255,7 +255,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
       <!-- TRUST STRIP : une ligne discrète au lieu d'un gros bloc -->
       <tr><td style="padding:24px 32px 8px;">
         <p style="margin:0;padding:14px 18px;background:#fafbfc;border:1px solid #eef0f3;border-radius:8px;font-size:13px;color:#475569;text-align:center;line-height:1.5;">
-          Banc d'essai obligatoire · Kilométrage certifié · Garantie jusqu'à 12 mois sans franchise
+          Banc d'essai obligatoire · Kilométrage certifié · Garantie incluse sans franchise
         </p>
       </td></tr>
 
