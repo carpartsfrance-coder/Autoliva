@@ -122,24 +122,22 @@
 <!-- État du moteur souhaité -->
 <div>
 <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">État souhaité</p>
-<div class="space-y-2" role="radiogroup" aria-label="État du moteur">
+<div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="État du moteur">
 <%
   var etatOptions = [
-    ['reconditionne', 'Reconditionné', 'Remis à neuf en atelier (pièces d\'usure remplacées), contrôlé. Garantie 1 an — le plus fiable.'],
-    ['occasion', 'Occasion', 'Moteur testé sur banc, kilométrage certifié. Garantie jusqu\'à 12 mois — le meilleur rapport qualité / prix.'],
-    ['je_sais_pas', 'Je ne sais pas', 'Aucun souci : un technicien vous conseille le moteur le plus adapté à votre véhicule et votre budget.'],
+    ['reconditionne', 'Reconditionné', 'Remis à neuf (pièces d\'usure remplacées), garanti 1 an — le plus fiable.'],
+    ['occasion', 'Occasion', 'Testé sur banc, km certifié, garanti jusqu\'à 12 mois — meilleur rapport qualité/prix.'],
+    ['je_sais_pas', 'Je ne sais pas', 'Aucun souci : un technicien vous conseille selon votre véhicule et votre budget.'],
   ];
   etatOptions.forEach(function (opt) {
 %>
-<label class="block cursor-pointer">
-<input type="radio" name="etat" value="<%= opt[0] %>" class="peer sr-only" <%= form.etat === opt[0] ? 'checked' : '' %> data-etat-input>
-<span class="block border border-gray-300 rounded-xl px-4 py-3 hover:border-gray-400 peer-checked:border-brand-red peer-checked:bg-brand-red/5 peer-checked:ring-1 peer-checked:ring-brand-red/30 transition">
-<span class="font-semibold text-sm text-gray-800"><%= opt[1] %></span>
-<span class="block text-xs text-gray-500 mt-0.5 leading-snug"><%= opt[2] %></span>
-</span>
+<label class="cursor-pointer">
+<input type="radio" name="etat" value="<%= opt[0] %>" class="peer sr-only" <%= form.etat === opt[0] ? 'checked' : '' %> data-etat-input data-etat-desc="<%= opt[2] %>">
+<span class="block text-center text-xs font-semibold border border-gray-300 rounded-lg py-2.5 px-1 text-gray-600 peer-checked:border-brand-red peer-checked:bg-brand-red/5 peer-checked:text-brand-red transition"><%= opt[1] %></span>
 </label>
 <% }) %>
 </div>
+<p data-etat-hint class="text-xs text-gray-500 mt-2 leading-snug min-h-[2rem]">Touchez un état pour voir le détail — ou « Je ne sais pas », on vous guide.</p>
 </div>
 
 <!-- Type de moteur : masqué si reconditionné (toujours complet) -->
@@ -333,16 +331,32 @@ Envoyer ma demande
   (function () {
     var etatInputs = document.querySelectorAll('[data-etat-input]');
     var etBlock = document.querySelector('[data-enginetype-block]');
-    if (!etatInputs.length || !etBlock) return;
+    if (!etatInputs.length) return;
+    var hint = document.querySelector('[data-etat-hint]');
+    var defaultHint = hint ? hint.textContent : '';
+    function setHint(txt) { if (hint) hint.textContent = txt || defaultHint; }
+    function selectedDesc() {
+      var sel = document.querySelector('[data-etat-input]:checked');
+      return sel ? sel.getAttribute('data-etat-desc') : '';
+    }
     function sync() {
       var sel = document.querySelector('[data-etat-input]:checked');
       var isRecond = !!(sel && sel.value === 'reconditionne');
-      etBlock.classList.toggle('hidden', isRecond);
-      if (isRecond) {
-        document.querySelectorAll('[data-enginetype-input]').forEach(function (r) { r.checked = false; });
+      if (etBlock) {
+        etBlock.classList.toggle('hidden', isRecond);
+        if (isRecond) document.querySelectorAll('[data-enginetype-input]').forEach(function (r) { r.checked = false; });
       }
+      setHint(selectedDesc());
     }
-    etatInputs.forEach(function (r) { r.addEventListener('change', sync); });
+    etatInputs.forEach(function (r) {
+      r.addEventListener('change', sync);
+      var lbl = r.closest('label');
+      if (lbl) {
+        // Aperçu au survol (desktop) : on montre le détail sans avoir à cliquer.
+        lbl.addEventListener('mouseenter', function () { setHint(r.getAttribute('data-etat-desc')); });
+        lbl.addEventListener('mouseleave', function () { setHint(selectedDesc()); });
+      }
+    });
     sync();
   })();
 </script>
