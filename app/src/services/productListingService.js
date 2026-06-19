@@ -742,5 +742,6 @@ async function getVehicleTree(dbConnected) {
 module.exports = {
   prepareProductListingData,
   getVehicleTree,
+  searchProductsViaAtlas,
   PER_PAGE,
 };

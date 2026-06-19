@@ -4,6 +4,7 @@ const Product = require('../models/Product');
 const demoProducts = require('../demoProducts');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildSuggestPayload } = require('../services/search');
+const { searchProductsViaAtlas } = require('../services/productListingService');
 const { buildHreflangSet } = require('../services/i18n');
 const brand = require('../config/brand');
 
@@ -51,10 +52,30 @@ async function getSuggest(req, res, next) {
       return res.json({ results: [], sections: [], total: 0 });
     }
 
-    let products = [];
-
+    // Voie normale : MÊME moteur que le catalogue — MongoDB Atlas Search — pour
+    // que les suggestions (autocomplétion mobile + dropdown desktop) soient
+    // classées par pertinence EXACTEMENT comme la page de résultats /produits.
+    // On prend les ~10 premiers, en conservant l'ordre de pertinence Atlas.
     if (dbConnected) {
-      products = await Product.find({})
+      const atlas = await searchProductsViaAtlas({
+        baseFilter: { isPublished: { $ne: false } },
+        searchQuery: q,
+        page: 1,
+        perPage: 10,
+      });
+      if (atlas && Array.isArray(atlas.products)) {
+        const ranked = atlas.products.map((product) => ({ product }));
+        const payload = buildSuggestPayload([], q, { ranked, productLimit: 6, categoryLimit: 2, brandLimit: 2 });
+        if (Number.isFinite(atlas.totalCount)) payload.total = atlas.totalCount;
+        return res.json(payload);
+      }
+      // atlas === null → Atlas indisponible : repli sur le moteur JS ci-dessous.
+    }
+
+    // Repli moteur JS (Atlas indisponible OU base déconnectée / démo).
+    let products = [];
+    if (dbConnected) {
+      products = await Product.find({ isPublished: { $ne: false } })
         .select('_id name sku engineCode brand priceCents imageUrl galleryUrls slug category shortDescription description compatibleReferences compatibility specs keyPoints tags')
         .lean();
     } else {

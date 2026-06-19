@@ -557,7 +557,10 @@ function buildBrandSuggestions(rankedProducts, query, limit) {
 }
 
 function buildSuggestPayload(products, query, options = {}) {
-  const ranked = rankProducts(products, query);
+  // options.ranked : liste déjà classée (ex. par MongoDB Atlas Search) sous la
+  // forme [{ product }]. Si fournie, on NE re-classe PAS en JS (on garde l'ordre
+  // de pertinence Atlas) — l'autocomplétion devient cohérente avec le catalogue.
+  const ranked = Array.isArray(options.ranked) ? options.ranked : rankProducts(products, query);
   const productLimit = Number.isFinite(options.productLimit) ? options.productLimit : 4;
   const categoryLimit = Number.isFinite(options.categoryLimit) ? options.categoryLimit : 2;
   const brandLimit = Number.isFinite(options.brandLimit) ? options.brandLimit : 2;
