@@ -127,7 +127,7 @@
   var etatOptions = [
     ['reconditionne', 'Reconditionné', 'Remis à neuf (pièces d\'usure remplacées), garanti 1 an — le plus fiable.'],
     ['occasion', 'Occasion', 'Testé sur banc, km certifié, garanti jusqu\'à 12 mois — meilleur rapport qualité/prix.'],
-    ['je_sais_pas', 'Je ne sais pas', 'Aucun souci : un technicien vous conseille selon votre véhicule et votre budget.'],
+    ['je_sais_pas', 'Peu importe', 'Pas de préférence : on vous propose le meilleur moteur disponible pour votre véhicule.'],
   ];
   etatOptions.forEach(function (opt) {
 %>
@@ -137,7 +137,7 @@
 </label>
 <% }) %>
 </div>
-<p data-etat-hint class="text-xs text-gray-500 mt-2 leading-snug min-h-[2rem]">Touchez un état pour voir le détail — ou « Je ne sais pas », on vous guide.</p>
+<p data-etat-hint class="text-xs text-gray-500 mt-2 leading-snug min-h-[2rem]">Touchez un état pour voir le détail — ou « Peu importe », on vous propose le mieux.</p>
 </div>
 
 <!-- Type de moteur : masqué si reconditionné (toujours complet) -->
