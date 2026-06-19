@@ -542,6 +542,42 @@
                       </select>
                       <button class="rounded-xl bg-slate-800 text-white px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-slate-700 transition" type="submit">Mettre à jour</button>
                     </form>
+
+                    <%/* ── Approvisionnement de la pièce (manuel, indépendant du stock du site) ── */%>
+                    <div class="pt-3 mt-1 border-t border-slate-100">
+                      <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">inventory</span> Appro pièce
+                        <% if (order.sourcing && order.sourcing.overdue) { %><span class="ml-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold">Réception en retard</span><% } %>
+                      </div>
+                      <form action="/admin/commandes/<%= order.id %>/sourcing" method="POST" class="flex flex-col gap-2">
+                        <select name="status" class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900" data-sourcing-detail-status>
+                          <% (typeof sourcingOptions !== 'undefined' ? sourcingOptions : []).forEach((opt) => { %>
+                            <option value="<%= opt.key %>" <%= order.sourcing && order.sourcing.status === opt.key ? 'selected' : '' %>><%= opt.label %></option>
+                          <% }) %>
+                        </select>
+                        <div class="grid grid-cols-2 gap-2" data-sourcing-supplier <%= (order.sourcing && order.sourcing.status === 'commandee') ? '' : 'style="display:none"' %>>
+                          <label class="text-xs text-slate-500">Date commandée
+                            <input type="date" name="orderedAt" value="<%= order.sourcing ? order.sourcing.orderedAtInput : '' %>" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+                          </label>
+                          <label class="text-xs text-slate-500">Délai attendu (jours)
+                            <input type="number" name="expectedDays" min="1" max="3650" value="<%= order.sourcing ? order.sourcing.expectedDays : '' %>" placeholder="7" class="mt-1 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-sm" />
+                          </label>
+                        </div>
+                        <input type="text" name="note" value="<%= order.sourcing ? order.sourcing.note : '' %>" placeholder="Note fournisseur (réf, nom du fournisseur…)" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                        <% if (order.sourcing && order.sourcing.status === 'commandee' && order.sourcing.dueDate) { %>
+                          <div class="text-[11px] <%= order.sourcing.overdue ? 'text-red-600 font-bold' : 'text-slate-500' %>">Réception attendue avant le <%= order.sourcing.dueDate %><%= order.sourcing.overdue ? ' — en retard !' : '' %></div>
+                        <% } %>
+                        <button type="submit" class="self-start rounded-xl bg-slate-800 text-white px-4 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-slate-700 transition">Mettre à jour l'appro</button>
+                      </form>
+                      <p class="mt-1 text-[10px] text-slate-400">Indépendant du stock du site — as-tu la pièce, ou faut-il la commander au fournisseur ?</p>
+                    </div>
+                    <script>
+                      (function () {
+                        var sel = document.querySelector('[data-sourcing-detail-status]');
+                        var sup = document.querySelector('[data-sourcing-supplier]');
+                        if (sel && sup) sel.addEventListener('change', function () { sup.style.display = (sel.value === 'commandee') ? '' : 'none'; });
+                      })();
+                    </script>
                   </div>
                 </div>
               </div>

@@ -36,6 +36,7 @@ const { getMarketingDashboardData } = require('../services/marketingAggregations
 const { listRecentSessions, getSessionTimeline } = require('../services/visitorTimeline');
 const { hasAbility, getRoleLabel, isComptable, defaultLandingForRole, ROLES } = require('../permissions');
 const brand = require('../config/brand');
+const sourcingStatus = require('../config/sourcingStatus');
 
 const ADMIN_LOGIN_BUCKETS = new Map();
 const ADMIN_RESET_BUCKETS = new Map();
@@ -2379,6 +2380,7 @@ async function getAdminOrdersPage(req, res, next) {
     const returnFilter = typeof req.query.returnFilter === 'string' ? req.query.returnFilter.trim() : '';
     const productFilter = typeof req.query.product === 'string' ? req.query.product.trim() : '';
     const categoryFilter = typeof req.query.category === 'string' ? req.query.category.trim() : '';
+    const sourcingFilter = typeof req.query.sourcing === 'string' ? req.query.sourcing.trim() : '';
     const sortFieldRaw = typeof req.query.sort === 'string' ? req.query.sort.trim() : '';
     const sortOrderRaw = typeof req.query.order === 'string' ? req.query.order.trim() : '';
     const allowedOrderSortFields = new Set(['date', 'total', 'status', 'urgency']);
@@ -2486,6 +2488,27 @@ async function getAdminOrdersPage(req, res, next) {
       query.returnStatus = 'pending';
     } else if (returnFilter === 'overdue') {
       query.returnStatus = 'overdue';
+    }
+
+    /* ── Filtre approvisionnement pièce ── */
+    // Le sourcing ne concerne que l'avant-expédition → on restreint aux statuts
+    // pré-expédition (sauf si l'utilisateur a choisi un statut explicite), pour
+    // que le filtre corresponde EXACTEMENT aux compteurs cliquables.
+    if (['a_verifier', 'a_commander', 'commandee', 'en_stock', 'overdue'].includes(sourcingFilter) && !status) {
+      query.status = { $in: sourcingStatus.PRESHIP_STATUSES };
+    }
+    if (sourcingFilter === 'a_verifier') {
+      // « à vérifier » inclut les commandes antérieures sans champ sourcing.
+      query.$and = (query.$and || []).concat([
+        { $or: [{ 'sourcing.status': 'a_verifier' }, { 'sourcing.status': null }, { 'sourcing.status': { $exists: false } }] },
+      ]);
+    } else if (['a_commander', 'commandee', 'en_stock'].includes(sourcingFilter)) {
+      query['sourcing.status'] = sourcingFilter;
+    } else if (sourcingFilter === 'overdue') {
+      query['sourcing.status'] = 'commandee';
+      query['sourcing.orderedAt'] = { $ne: null };
+      query['sourcing.expectedDays'] = { $gt: 0 };
+      query.$expr = { $lt: [{ $add: ['$sourcing.orderedAt', { $multiply: ['$sourcing.expectedDays', 86400000] }] }, new Date()] };
     }
 
     if (q) {
@@ -2649,6 +2672,25 @@ async function getAdminOrdersPage(req, res, next) {
         cloningTrackingNumber,
         returnStatus: o.returnStatus || 'not_applicable',
         returnDaysLeft,
+        sourcing: (() => {
+          const s = o.sourcing || {};
+          const st = sourcingStatus.normalizeStatus(s.status);
+          const lbl = sourcingStatus.LABELS[st];
+          const due = sourcingStatus.dueDate(s);
+          return {
+            status: st,
+            label: lbl.label,
+            badge: lbl.badge,
+            dot: lbl.dot,
+            orderedAt: s.orderedAt ? formatDateTimeFR(s.orderedAt) : '',
+            expectedDays: Number.isFinite(s.expectedDays) ? s.expectedDays : null,
+            dueDate: due ? formatDateTimeFR(due) : '',
+            overdue: sourcingStatus.isOverdue(s),
+            note: s.note || '',
+            // Sourcing pertinent uniquement avant expédition.
+            relevant: sourcingStatus.PRESHIP_STATUSES.indexOf(o.status) !== -1,
+          };
+        })(),
         notesCount: noteInfo ? noteInfo.count : 0,
         hasImportantNote: noteInfo ? !!noteInfo.hasImportant : false,
         lastNotePreview: noteInfo && noteInfo.lastContent ? noteInfo.lastContent.substring(0, 100) : '',
@@ -2721,7 +2763,8 @@ async function getAdminOrdersPage(req, res, next) {
       view,
       orderAlerts,
       productCategories,
-      filters: { q, status, type, period, source: sourceFilter, utmCampaign: utmCampaignFilter, utmSource: utmSourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, product: productFilter, category: categoryFilter, sort: activeSortField, order: activeSortDir === 1 ? 'asc' : 'desc', limit: perPage },
+      sourcingOptions: sourcingStatus.options(),
+      filters: { q, status, type, period, source: sourceFilter, utmCampaign: utmCampaignFilter, utmSource: utmSourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, product: productFilter, category: categoryFilter, sourcing: sourcingFilter, sort: activeSortField, order: activeSortDir === 1 ? 'asc' : 'desc', limit: perPage },
       pagination,
     });
   } catch (err) {
@@ -3060,6 +3103,7 @@ async function getAdminOrderDetailPage(req, res, next) {
       statusOptions: orderDoc.status === 'draft' ? getOrderStatusOptionsWithDraft() : getOrderStatusOptions(),
       cloningStatusOptions: getCloningStatusOptions(),
       returnStatusOptions: getReturnStatusOptions(),
+      sourcingOptions: sourcingStatus.options(),
       timelineSteps,
       timelineRawDates: JSON.stringify({
         createdAt: orderDoc.createdAt || null,
@@ -3093,6 +3137,22 @@ async function getAdminOrderDetailPage(req, res, next) {
         cloningTracking: orderDoc.cloningTracking || {},
         cloningFailureNote: orderDoc.cloningFailureNote || '',
         returnDates: orderDoc.returnDates || {},
+        sourcing: (() => {
+          const s = orderDoc.sourcing || {};
+          const st = sourcingStatus.normalizeStatus(s.status);
+          const lbl = sourcingStatus.LABELS[st];
+          const due = sourcingStatus.dueDate(s);
+          return {
+            status: st, label: lbl.label, badge: lbl.badge, dot: lbl.dot,
+            orderedAt: s.orderedAt ? formatDateTimeFR(s.orderedAt) : '',
+            orderedAtInput: s.orderedAt ? new Date(s.orderedAt).toISOString().slice(0, 10) : '',
+            expectedDays: Number.isFinite(s.expectedDays) ? s.expectedDays : '',
+            dueDate: due ? formatDateTimeFR(due) : '',
+            overdue: sourcingStatus.isOverdue(s),
+            note: s.note || '',
+            relevant: sourcingStatus.PRESHIP_STATUSES.indexOf(orderDoc.status) !== -1,
+          };
+        })(),
         statusHistory,
         customer,
         customerEmail: user && user.email ? user.email : '',
@@ -3396,6 +3456,81 @@ async function postAdminUpdateOrderStatus(req, res, next) {
     return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
   } catch (err) {
     return next(err);
+  }
+}
+
+/* Approvisionnement de la pièce : édition inline (liste) + formulaire (détail).
+ * Met à jour order.sourcing.{status, orderedAt, expectedDays, note}. Quand on
+ * passe à « commandée », on horodate la commande fournisseur (date du body sinon
+ * maintenant) + un délai attendu (body sinon défaut) → alimente l'alerte retard. */
+async function postAdminUpdateOrderSourcing(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      if (wantsJsonResponse(req)) return res.status(503).json({ ok: false, error: 'Base indisponible.' });
+      return res.redirect('/admin/commandes');
+    }
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      if (wantsJsonResponse(req)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+      return res.redirect('/admin/commandes');
+    }
+    const b = req.body || {};
+    const status = sourcingStatus.STATUSES.indexOf(String(b.status || '').trim()) !== -1 ? String(b.status).trim() : null;
+    if (!status) {
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: 'Statut d\'approvisionnement invalide.' });
+      req.session.adminOrderError = 'Statut d\'approvisionnement invalide.';
+      return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+    }
+
+    const order = await Order.findById(orderId).select('sourcing').lean();
+    if (!order) {
+      if (wantsJsonResponse(req)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+      return res.redirect('/admin/commandes');
+    }
+    const prev = order.sourcing || {};
+    const adminName = (req.session && req.session.admin && (req.session.admin.displayName || req.session.admin.email)) || 'Admin';
+
+    const set = { 'sourcing.status': status, 'sourcing.updatedAt': new Date(), 'sourcing.updatedBy': adminName };
+
+    if (status === 'commandee') {
+      let orderedAt = prev.orderedAt ? new Date(prev.orderedAt) : null;
+      if (b.orderedAt) { const d = new Date(b.orderedAt); if (!Number.isNaN(d.getTime())) orderedAt = d; }
+      if (!orderedAt) orderedAt = new Date();
+      set['sourcing.orderedAt'] = orderedAt;
+      let days = Number.parseInt(b.expectedDays, 10);
+      if (!Number.isFinite(days) || days <= 0) {
+        days = (Number.isFinite(prev.expectedDays) && prev.expectedDays > 0) ? prev.expectedDays : sourcingStatus.DEFAULT_EXPECTED_DAYS;
+      }
+      set['sourcing.expectedDays'] = Math.min(3650, days);
+    }
+    if (typeof b.note === 'string') set['sourcing.note'] = b.note.trim().slice(0, 1000);
+
+    await Order.updateOne({ _id: orderId }, { $set: set });
+
+    const fresh = await Order.findById(orderId).select('sourcing').lean();
+    const s = fresh.sourcing || {};
+    const st = sourcingStatus.normalizeStatus(s.status);
+    const lbl = sourcingStatus.LABELS[st];
+    const due = sourcingStatus.dueDate(s);
+    const payload = {
+      ok: true,
+      sourcing: {
+        status: st, label: lbl.label, badge: lbl.badge, dot: lbl.dot,
+        orderedAt: s.orderedAt ? formatDateTimeFR(s.orderedAt) : '',
+        expectedDays: Number.isFinite(s.expectedDays) ? s.expectedDays : null,
+        dueDate: due ? formatDateTimeFR(due) : '',
+        overdue: sourcingStatus.isOverdue(s),
+        note: s.note || '',
+      },
+    };
+    if (wantsJsonResponse(req)) return res.json(payload);
+    req.session.adminOrderSuccess = 'Approvisionnement mis à jour.';
+    return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+  } catch (err) {
+    console.error('[admin] postAdminUpdateOrderSourcing failed:', err && err.message);
+    if (wantsJsonResponse(req)) return res.status(500).json({ ok: false, error: 'Erreur serveur.' });
+    req.session.adminOrderError = 'Erreur lors de la mise à jour de l\'approvisionnement.';
+    return res.redirect(`/admin/commandes/${encodeURIComponent(req.params.orderId || '')}`);
   }
 }
 
@@ -10016,8 +10151,10 @@ async function computeOrderAlerts() {
   twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
 
   const activeFilter = { status: { $nin: ['cancelled', 'refunded', 'draft'] }, archived: { $ne: true }, deletedAt: null };
+  // Sourcing pertinent uniquement avant expédition (payée → en prépa → étiquette).
+  const sourcingScope = { status: { $in: sourcingStatus.PRESHIP_STATUSES }, archived: { $ne: true }, deletedAt: null };
 
-  const [overdueReturns, failedClonings, pieceWaiting, cloningLong, readyToShip] = await Promise.all([
+  const [overdueReturns, failedClonings, pieceWaiting, cloningLong, readyToShip, sourcingToVerify, sourcingToOrder, sourcingOrdered, sourcingOverdue] = await Promise.all([
     // Retours en retard (exchange uniquement, PAS exchange_cloning)
     Order.countDocuments({ orderType: 'exchange', returnStatus: 'overdue', ...activeFilter }),
     // Clonages échoués non traités (> 2 jours)
@@ -10028,9 +10165,23 @@ async function computeOrderAlerts() {
     Order.countDocuments({ orderType: 'exchange_cloning', cloningStatus: 'cloning_in_progress', 'cloningDates.cloningStartedAt': { $lt: fiveDaysAgo }, ...activeFilter }),
     // Prêtes à expédier (clonage terminé, pas encore shipped)
     Order.countDocuments({ orderType: 'exchange_cloning', cloningStatus: 'cloning_done', status: { $nin: ['shipped', 'delivered', 'completed', 'cancelled', 'refunded', 'draft'] }, archived: { $ne: true }, deletedAt: null }),
+    // Appro pièce : à vérifier (inclut les commandes antérieures sans champ sourcing)
+    Order.countDocuments({ ...sourcingScope, $or: [{ 'sourcing.status': 'a_verifier' }, { 'sourcing.status': null }, { 'sourcing.status': { $exists: false } }] }),
+    // Appro pièce : à commander
+    Order.countDocuments({ ...sourcingScope, 'sourcing.status': 'a_commander' }),
+    // Appro pièce : commandée (en attente fournisseur)
+    Order.countDocuments({ ...sourcingScope, 'sourcing.status': 'commandee' }),
+    // Appro pièce : commandée EN RETARD (orderedAt + expectedDays dépassé)
+    Order.countDocuments({
+      ...sourcingScope,
+      'sourcing.status': 'commandee',
+      'sourcing.orderedAt': { $ne: null },
+      'sourcing.expectedDays': { $gt: 0 },
+      $expr: { $lt: [{ $add: ['$sourcing.orderedAt', { $multiply: ['$sourcing.expectedDays', 86400000] }] }, now] },
+    }),
   ]);
 
-  return { overdueReturns, failedClonings, pieceWaiting, cloningLong, readyToShip };
+  return { overdueReturns, failedClonings, pieceWaiting, cloningLong, readyToShip, sourcingToVerify, sourcingToOrder, sourcingOrdered, sourcingOverdue };
 }
 
 async function computePipelineCounts() {
@@ -12316,6 +12467,7 @@ module.exports = {
   getAdminOrdersPage,
   getAdminOrderDetailPage,
   postAdminUpdateOrderStatus,
+  postAdminUpdateOrderSourcing,
   postAdminUpdateOrderType,
   postAdminMarkOrderConsigneReceived,
   postAdminAddOrderShipment,

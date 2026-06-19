@@ -291,6 +291,27 @@ const orderSchema = new mongoose.Schema(
       returnReceivedAt: { type: Date, default: null },
       returnInspectedAt: { type: Date, default: null },
     },
+    /* Approvisionnement de la pièce — saisi MANUELLEMENT par le commercial,
+     * INDÉPENDANT du stock du site (qui n'est pas fiable pour le sourcing).
+     * Permet de savoir, par commande, s'il faut commander la pièce au fournisseur.
+     *   a_verifier  → nouvelle commande, pas encore triée (défaut)
+     *   a_commander → à sourcer chez un fournisseur
+     *   commandee   → commandée au fournisseur, en attente de réception
+     *   en_stock    → en stock / reçue à l'atelier, prête à préparer
+     * orderedAt + expectedDays : suivi de la commande fournisseur → alerte si la
+     * pièce n'est pas reçue dans le délai (commandee + orderedAt+expectedDays < now). */
+    sourcing: {
+      status: {
+        type: String,
+        enum: ['a_verifier', 'a_commander', 'commandee', 'en_stock'],
+        default: 'a_verifier',
+      },
+      orderedAt: { type: Date, default: null },
+      expectedDays: { type: Number, default: null, min: 0, max: 3650 },
+      note: { type: String, default: '', trim: true },
+      updatedAt: { type: Date, default: null },
+      updatedBy: { type: String, default: '', trim: true },
+    },
     statusHistory: { type: [statusHistorySchema], default: [] },
     // ── Archivage & corbeille (soft delete) ─────────────────────────────
     archived: { type: Boolean, default: false },
