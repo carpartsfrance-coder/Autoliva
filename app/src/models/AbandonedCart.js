@@ -239,6 +239,16 @@ const abandonedCartSchema = new mongoose.Schema(
       gclid: { type: String, default: '' },
     },
 
+    /**
+     * Idempotence de l'import de conversions hors-ligne vers Google Ads
+     * (services/googleAdsConversionSync.js). Date posée une fois la conversion
+     * remontée → empêche tout double-envoi.
+     */
+    googleAdsUpload: {
+      leadAt: { type: Date, default: null },   // conversion "Lead - Devis" remontée
+      saleAt: { type: Date, default: null },   // conversion "Vente moteur" remontée
+    },
+
     /** Compteurs d'actions manuelles depuis le dashboard admin */
     manualEmailsSent: { type: Number, default: 0 },
     manualSmsSent: { type: Number, default: 0 },
