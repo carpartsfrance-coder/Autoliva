@@ -214,6 +214,39 @@ function leadIsReconditionne(eq, cart) {
   return String(k).startsWith('reconditionne');
 }
 
+/**
+ * Source d'acquisition d'un lead, déduite de l'attribution captée
+ * (middleware captureAttribution.js → req.session.attribution → AbandonedCart.attribution).
+ * Le `gclid` est LE signal fiable Google Ads : l'auto-tagging Google ne pose
+ * PAS d'utm_source, donc on ne peut pas se baser sur `source` seul.
+ */
+function classifyLeadSource(attr) {
+  const a = attr || {};
+  const gclid = String(a.gclid || '').trim();
+  const src = String(a.source || '').trim();
+  const med = String(a.medium || '').trim().toLowerCase();
+  const ref = String(a.referrer || '').trim();
+  const campaign = String(a.campaign || '').trim();
+  if (gclid || med === 'cpc' || med === 'ppc' || med === 'paid' || src.toLowerCase() === 'google_ads') {
+    return { label: 'Google Ads', kind: 'ads', isAds: true, gclid, campaign };
+  }
+  if (src) {
+    const s = src.toLowerCase();
+    if (s.includes('google')) return { label: 'Google (SEO)', kind: 'seo', isAds: false, gclid: '', campaign };
+    if (s === 'fb' || s === 'meta' || s.includes('facebook') || s.includes('instagram')) {
+      return { label: src, kind: 'social', isAds: false, gclid: '', campaign };
+    }
+    return { label: src, kind: 'other', isAds: false, gclid: '', campaign };
+  }
+  if (ref) {
+    let host = ref;
+    try { host = new URL(/^https?:\/\//i.test(ref) ? ref : 'https://' + ref).hostname.replace(/^www\./, ''); } catch (_) { /* ref libre */ }
+    if (host.toLowerCase().includes('google')) return { label: 'Google (SEO)', kind: 'seo', isAds: false, gclid: '', campaign: '' };
+    return { label: host, kind: 'referral', isAds: false, gclid: '', campaign: '' };
+  }
+  return { label: 'Direct / SEO', kind: 'direct', isAds: false, gclid: '', campaign: '' };
+}
+
 async function getEngineQuotesList(req, res, next) {
   try {
     const statusFilter = typeof req.query.status === 'string' ? req.query.status.trim() : '';
@@ -277,6 +310,7 @@ async function getEngineQuotesList(req, res, next) {
 
       return {
         id: String(c._id),
+        source: classifyLeadSource(c.attribution),
         ref: (c.requested && c.requested.ref) || '',
         plate: (c.requested && c.requested.plate) || '',
         vehicle: (c.requested && c.requested.vehicle) || '',
@@ -323,6 +357,7 @@ async function getEngineQuotesList(req, res, next) {
       analyzing: items.filter(i => i.status === 'analyzing').length,
       quoteSent: items.filter(i => i.status === 'quote_sent').length,
       won: items.filter(i => i.status === 'won').length,
+      fromAds: items.filter(i => i.source && i.source.isAds).length,
       caExpected: items.filter(i => i.status === 'quote_sent').reduce((s, i) => s + i.sellPrice, 0),
       marginExpected: items.filter(i => i.status === 'quote_sent').reduce((s, i) => s + i.marginEur, 0),
     };

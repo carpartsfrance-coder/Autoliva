@@ -23,10 +23,14 @@
     </div>
 
     <!-- KPIs -->
-    <div class="mt-8 grid grid-cols-2 lg:grid-cols-6 gap-4">
+    <div class="mt-8 grid grid-cols-2 lg:grid-cols-7 gap-4">
       <div class="rounded-2xl border border-slate-200 bg-white p-4">
         <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Total</div>
         <div class="mt-1 text-2xl font-bold text-slate-900"><%= stats.total %></div>
+      </div>
+      <div class="rounded-2xl border border-green-100 bg-green-50/40 p-4" title="Leads avec un identifiant de clic Google Ads (gclid). Nécessite l'auto-tagging activé côté Google Ads.">
+        <div class="text-xs uppercase tracking-widest text-green-600 font-semibold">Via Google Ads</div>
+        <div class="mt-1 text-2xl font-bold text-green-700"><%= stats.fromAds %></div>
       </div>
       <div class="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
         <div class="text-xs uppercase tracking-widest text-blue-500 font-semibold">Nouveau</div>
@@ -140,6 +144,9 @@
                     <div class="font-medium text-slate-900"><%= it.displayName %></div>
                     <div class="text-xs text-slate-500 mt-0.5"><%= it.phone %></div>
                     <% if (it.email) { %><div class="text-xs text-slate-400"><%= it.email %></div><% } %>
+                    <% if (it.source) { %>
+                      <span class="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold <%= it.source.isAds ? 'bg-green-100 text-green-700' : (it.source.kind === 'seo' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500') %>"<% if (it.source.campaign) { %> title="Campagne : <%= it.source.campaign %>"<% } %>><%= it.source.label %></span>
+                    <% } %>
                   </td>
                   <td class="px-4 py-3 align-top">
                     <div class="font-mono text-xs text-slate-700"><%= it.plate || '—' %></div>
