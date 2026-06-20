@@ -10,6 +10,8 @@ const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations } = requi
 const { reconcileScalapayOrders } = require('./reconcileScalapayOrders');
 const { syncShipmentTracking } = require('./syncShipmentTracking');
 const { runEngineQuoteReminders } = require('./sendEngineQuoteReminders');
+const { syncConversions } = require('../services/googleAdsConversionSync');
+const { isConfigured: googleAdsConfigured } = require('../services/googleAdsConversions');
 
 function startScheduler() {
   // Detect abandoned carts every hour (at minute 0)
@@ -131,6 +133,20 @@ function startScheduler() {
       await runEngineQuoteReminders();
     } catch (err) {
       console.error('[scheduler] Erreur relances devis moteurs:', err.message || err);
+    }
+  });
+
+  // Import de conversions hors-ligne vers Google Ads : toutes les heures à :40.
+  // Remonte les VRAIES conversions du tunnel moteur (lead devis + vente gagnée)
+  // via le gclid déjà capté. No-op TOTAL tant que les variables GOOGLE_ADS_*
+  // ne sont pas définies (isConfigured() = false) → sûr à déployer avant l'onboarding API.
+  cron.schedule('40 * * * *', async () => {
+    if (!googleAdsConfigured()) return;
+    try {
+      const r = await syncConversions({ dryRun: false });
+      console.log('[scheduler] Google Ads conversions:', JSON.stringify({ leads: r.leads, sales: r.sales }));
+    } catch (err) {
+      console.error('[scheduler] Erreur sync conversions Google Ads:', err.message || err);
     }
   });
 
