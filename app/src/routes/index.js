@@ -9,6 +9,7 @@ const contactController = require('../controllers/contactController');
 const legacyRedirectController = require('../controllers/legacyRedirectController');
 const leadCaptureController = require('../controllers/leadCaptureController');
 const moteurOccasionController = require('../controllers/moteurOccasionController');
+const boiteOccasionController = require('../controllers/boiteOccasionController');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const brand = require('../config/brand');
 
@@ -48,6 +49,13 @@ router.post('/moteurs/devis', moteurOccasionController.postDevis);
 // pour les annonces Google Ads ciblant l'intention « reconditionné ».
 router.get('/moteurs-reconditionnes', moteurOccasionController.getLanding);
 router.post('/moteurs-reconditionnes/devis', moteurOccasionController.postDevis);
+
+// Landing « Boîte de vitesse d'occasion / reconditionnée » : même machine que
+// /moteurs (capture leads + gclid), captureSource = 'landing_boites'.
+router.get('/boites-vitesse', boiteOccasionController.getLanding);
+router.post('/boites-vitesse/devis', boiteOccasionController.postDevis);
+router.get('/boites-vitesse-reconditionnees', boiteOccasionController.getLanding);
+router.post('/boites-vitesse-reconditionnees/devis', boiteOccasionController.postDevis);
 
 // Entrée principale : sélection du motif SAV
 router.get('/sav', savController.getMotifSelect);

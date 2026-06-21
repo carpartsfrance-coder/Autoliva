@@ -150,6 +150,9 @@
                   </td>
                   <td class="px-4 py-3 align-top">
                     <div class="font-mono text-xs text-slate-700"><%= it.plate || '—' %></div>
+                    <% if (it.isBoite) { %>
+                      <span class="inline-flex items-center mt-1 mr-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">⚙️ Boîte</span>
+                    <% } %>
                     <% if (it.conditionBadge) { %>
                       <span class="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold <%= it.conditionBadge.className %>"><%= it.conditionBadge.label %></span>
                     <% } %>
