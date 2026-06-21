@@ -17,6 +17,7 @@ const PDFDocument = require('pdfkit');
 const path = require('path');
 const fs = require('fs');
 const brand = require('../config/brand');
+const { partLexicon } = require('./partLexicon');
 
 const C_NAVY        = '#0b2046';
 const C_RED         = '#d32f2f';
@@ -62,6 +63,7 @@ function truncate(s, max) {
 }
 
 function buildQuotePdf(input) {
+  const lex = partLexicon(input.category);
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'A4',
@@ -70,7 +72,7 @@ function buildQuotePdf(input) {
       info: {
         Title: `Devis ${input.quoteRef || ''} — Autoliva`,
         Author: 'Autoliva',
-        Subject: 'Devis moteur d\'occasion',
+        Subject: lex.devisSubject,
       },
     });
     const chunks = [];
@@ -163,7 +165,7 @@ function buildQuotePdf(input) {
         doc.fontSize(24).font('Helvetica-Bold').fillColor(C_NAVY).text(brand.NAME || 'Autoliva', M, 38, { lineGap: -4 });
       }
       doc.fontSize(20).font('Helvetica-Bold').fillColor(C_NAVY).text('DEVIS', M + W - 200, 40, { width: 200, align: 'right', characterSpacing: 1.5 });
-      doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text('Moteur occasion', M + W - 200, 64, { width: 200, align: 'right' });
+      doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text(lex.headerLabel, M + W - 200, 64, { width: 200, align: 'right' });
       doc.moveTo(M, 84).lineTo(M + W, 84).strokeColor(C_OUTLINE_LT).lineWidth(0.6).stroke();
     }
 
@@ -247,13 +249,13 @@ function buildQuotePdf(input) {
 
     // Description gauche (largeur limitée par les price cards)
     const descMaxW = pcStartX - M - 28;
-    const resumeTitle = input.conditionLabel || 'Moteur d\'occasion contrôlé et documenté';
+    const resumeTitle = input.conditionLabel || lex.defaultCondition;
     doc.fontSize(10.5).font('Helvetica-Bold').fillColor(C_TEXT).text(
       resumeTitle,
       M + 14, y + 36, { width: descMaxW, lineBreak: true, ellipsis: true, height: 26 }
     );
     doc.fontSize(8).font('Helvetica').fillColor(C_TEXT_MUTED).text(
-      `Compatible véhicule ${input.plate || '—'} · garantie ${warrantyMonths} mois sans limite km · devis valable 24h (le moteur peut être vendu entre-temps)`,
+      `Compatible véhicule ${input.plate || '—'} · garantie ${warrantyMonths} mois sans limite km · devis valable 24h (${lex.peutEtreVendu})`,
       M + 14, y + 66, { width: descMaxW, lineBreak: true, height: 30, ellipsis: true }
     );
 
@@ -294,7 +296,7 @@ function buildQuotePdf(input) {
     // Engine description sur 1-2 lignes max
     const engineTitle = (input.engine && input.engine.model)
       ? input.engine.model + (input.engine.code ? ' · ' + input.engine.code : '')
-      : (input.conditionLabel || 'Moteur d\'occasion contrôlé et documenté');
+      : (input.conditionLabel || lex.defaultCondition);
     const engineSubParts = [
       input.engine && input.engine.year ? input.engine.year : '',
       input.engine && input.engine.mileage > 0 ? fmtMileage(input.engine.mileage) + ' certifiés' : '',
@@ -347,7 +349,7 @@ function buildQuotePdf(input) {
     card(M, y, modW, bH, C_WHITE);
     doc.save().fillColor(C_BG_LIGHT).circle(M + 14, y + 14, 7).fill().restore();
     bullet(M + 14, y + 14, C_NAVY);
-    doc.fontSize(7.5).font('Helvetica-Bold').fillColor(C_NAVY).text('POUR RÉSERVER CE MOTEUR', M + 28, y + 10, { characterSpacing: 1, lineBreak: false });
+    doc.fontSize(7.5).font('Helvetica-Bold').fillColor(C_NAVY).text(lex.reserveTitle, M + 28, y + 10, { characterSpacing: 1, lineBreak: false });
 
     doc.fontSize(9).font('Helvetica').fillColor(C_TEXT).text(
       'Le versement de l\'acompte permet de bloquer la pièce, lancer la préparation et organiser l\'expédition.',
@@ -430,7 +432,7 @@ function buildQuotePdf(input) {
     checkmark(M + 22, y + 15, C_NAVY, 7);
     doc.fontSize(8).font('Helvetica-Bold').fillColor(C_NAVY).text('INCLUS', M + 42, y + 12, { characterSpacing: 1, lineBreak: false });
     doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text(
-      'contrôle moteur · photos · préparation palette · garantie ' + warrantyMonths + ' mois · assistance compatibilité',
+      lex.controlListItem + ' · photos · préparation palette · garantie ' + warrantyMonths + ' mois · assistance compatibilité',
       M + 90, y + 12, { width: W - 105, lineBreak: false, ellipsis: true }
     );
     y += inclH + 12;
@@ -447,7 +449,7 @@ function buildQuotePdf(input) {
       const engineN = photos.filter(p => p.category !== 'kmReading').length;
       const kmN = photos.filter(p => p.category === 'kmReading').length;
       const parts = [];
-      if (engineN) parts.push(engineN + ' photo' + (engineN > 1 ? 's' : '') + ' du moteur');
+      if (engineN) parts.push(engineN + ' photo' + (engineN > 1 ? 's' : '') + ' ' + lex.duNoun);
       if (kmN) parts.push(kmN + ' relevé' + (kmN > 1 ? 's' : '') + ' kilométrique' + (kmN > 1 ? 's' : ''));
       doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text(
         parts.join(' · ') + ' — voir pages suivantes',
@@ -525,15 +527,15 @@ function buildQuotePdf(input) {
     }
 
     checkList(M, y, cW2, cH2, 'Contrôles inclus avant expédition', [
-      'Contrôle compression moteur',
-      'Contrôle visuel par endoscopie',
+      lex.controlTitle,
+      lex.visualControl,
       'Vérification absence de défaut majeur',
-      'Photos du moteur avant expédition',
+      lex.photosPartExp,
       'Préparation sur palette sécurisée',
     ]);
     checkList(M + cW2 + 12, y, cW2, cH2, 'Documents transmis avec la commande', [
       'Facture d\'achat',
-      'Photos du moteur',
+      lex.photosPart,
       'Photos compteur donneur si disponible',
       'Rapport de contrôle interne',
       'Attestation de préparation',
@@ -571,7 +573,7 @@ function buildQuotePdf(input) {
     doc.fontSize(11).font('Helvetica-Bold').fillColor(C_NAVY).text('Livraison sécurisée', M + 14, y + 14, { lineBreak: false });
     doc.rect(M + 14, y + 31, 32, 2).fill(C_RED);
     doc.fontSize(9).font('Helvetica').fillColor(C_TEXT).text(
-      'Le moteur est préparé sur palette, protégé, filmé et expédié avec suivi transporteur. Des photos de préparation peuvent être transmises avant départ.',
+      lex.preparedSentence,
       M + 14, y + 42, { width: W - 28, height: 22, lineGap: 1, ellipsis: true }
     );
     doc.moveTo(M + 14, y + lH - 18).lineTo(M + W - 14, y + lH - 18).strokeColor(C_OUTLINE_LT).lineWidth(0.5).stroke();
@@ -593,7 +595,7 @@ function buildQuotePdf(input) {
     const tlLineY = y + 52;
     doc.moveTo(M + 60, tlLineY).lineTo(M + W - 60, tlLineY).strokeColor(C_OUTLINE).lineWidth(0.8).dash(2, { space: 2 }).stroke();
     doc.undash();
-    const steps = ['Paiement\nacompte', 'Blocage\nmoteur', 'Contrôles\n+ photos', 'Préparation\npalette', 'Expédition\nlivraison'];
+    const steps = ['Paiement\nacompte', lex.blocageStep, 'Contrôles\n+ photos', 'Préparation\npalette', 'Expédition\nlivraison'];
     const stW = (W - 60) / steps.length;
     steps.forEach((label, i) => {
       const cx = M + 30 + stW * i + stW / 2;
@@ -605,7 +607,7 @@ function buildQuotePdf(input) {
 
     // ─── CONDITIONS IMPORTANTES ────────────────────────────────────
     const condItems = [
-      'Le devis est valable 24h : le moteur restant disponible à la vente, il peut être cédé à un autre client entre-temps.',
+      lex.validitySentence,
       'Les prix sont exprimés en euros. TVA française au taux en vigueur.',
       'L\'acceptation du devis vaut commande après validation du paiement.',
       'Les délais de disponibilité et d\'expédition sont confirmés au moment de la réservation.',
@@ -695,7 +697,7 @@ function buildQuotePdf(input) {
 
     const enginePhotos = photos.filter(p => p.category !== 'kmReading');
     const kmPhotos = photos.filter(p => p.category === 'kmReading');
-    drawPhotoPages('Photos du moteur', 'Photos réelles du moteur proposé · dossier ' + (input.quoteRef || ''), enginePhotos);
+    drawPhotoPages(lex.photosPart, 'Photos réelles ' + lex.proposeNoun + ' · dossier ' + (input.quoteRef || ''), enginePhotos);
     drawPhotoPages('Relevé kilométrique', 'Photo du compteur du véhicule donneur · dossier ' + (input.quoteRef || ''), kmPhotos);
 
     // ─── Numérotation dynamique des pages (X / total) ──────────────

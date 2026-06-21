@@ -13,6 +13,7 @@ const AbandonedCart = require('../models/AbandonedCart');
 const mollie = require('../services/mollie');
 const emailService = require('../services/emailService');
 const { buildAcompteConfirmationHtml } = require('../services/engineQuoteEmail');
+const { partLexicon } = require('../services/partLexicon');
 const brand = require('../config/brand');
 
 const MOLLIE_ENABLED = String(process.env.ENGINE_QUOTE_MOLLIE_ENABLED || '').toLowerCase() === 'true';
@@ -108,14 +109,17 @@ async function postMollieWebhook(req, res) {
         }
         console.log(`[engine-quote-webhook] Acompte payé pour ${quoteRef || cart._id} : ${fmtEur(amountCents)}`);
 
-        // Confirmation AU CLIENT : son acompte est reçu, le moteur est réservé.
+        // Confirmation AU CLIENT : son acompte est reçu, la pièce est réservée.
         // (best-effort, ne bloque jamais le webhook qui doit répondre 200 à Mollie)
         if (cart.email) {
+          const cat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+          const lex = partLexicon(cat);
           const site = (brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
           const firstName = (cart.firstName || '').trim();
           const greeting = firstName ? `Bonjour ${firstName},` : 'Bonjour,';
-          const clientSubject = `Acompte reçu — votre moteur est réservé (${quoteRef})`;
+          const clientSubject = `Acompte reçu — ${lex.votreNoun} est ${lex.reserve} (${quoteRef})`;
           const clientHtml = buildAcompteConfirmationHtml({
+            category: cat,
             firstName,
             quoteRef,
             amountEur: amountCents / 100,
@@ -125,12 +129,12 @@ async function postMollieWebhook(req, res) {
           const clientText = [
             `${greeting}`,
             ``,
-            `Votre acompte de ${fmtEur(amountCents)} est bien reçu : votre moteur est officiellement réservé (dossier ${quoteRef}).`,
+            `Votre acompte de ${fmtEur(amountCents)} est bien reçu : ${lex.votreNoun} est officiellement ${lex.reserve} (dossier ${quoteRef}).`,
             ``,
             `Et maintenant ?`,
-            `- Préparation et passage sur banc d'essai.`,
+            `- Préparation et ${lex.prepTest}.`,
             `- Email d'expédition avec le suivi transporteur.`,
-            `- Solde à régler une fois le moteur testé et déclaré conforme.`,
+            `- Solde à régler une fois ${lex.leNoun} ${lex.controlledPast} et ${lex.declaredPast} conforme.`,
             ``,
             `Une question ? ${brand.PHONE_MOTEUR || '04 65 84 85 39'}`,
             ``,

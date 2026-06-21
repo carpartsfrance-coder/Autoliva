@@ -14,6 +14,7 @@ const RED = '#E1001A';
 const NAVY = '#0b2046';
 const PUBLIC_SITE = 'https://autoliva.com';
 const LOGO_URL = PUBLIC_SITE + '/images/logo-autoliva.png';
+const { partLexicon } = require('./partLexicon');
 
 function fmtEur(n) {
   return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0) + ' €';
@@ -31,13 +32,14 @@ function escapeHtml(s) {
  * @param {object} opts  (voir engineQuoteAdminController.postSendQuote)
  */
 function buildQuoteEmailHtml(opts) {
+  const lex = partLexicon(opts.category);
   const greeting = opts.firstName ? 'Bonjour ' + escapeHtml(opts.firstName) + ',' : 'Bonjour,';
-  const engineTitle = (opts.engine && opts.engine.model) ? escapeHtml(opts.engine.model) : 'Moteur d\'occasion';
+  const engineTitle = (opts.engine && opts.engine.model) ? escapeHtml(opts.engine.model) : lex.defaultTitle;
   const engineCode = (opts.engine && opts.engine.code) ? escapeHtml(opts.engine.code) : '';
   const mileage = opts.engine && opts.engine.mileage ? fmtMileage(opts.engine.mileage) : '';
   const badge = opts.conditionBadge || 'Occasion';
   const badgeColor = opts.isReconditionne ? RED : NAVY;
-  const conditionText = opts.conditionLabel || 'Moteur d\'occasion testé';
+  const conditionText = opts.conditionLabel || lex.defaultConditionText;
 
   const sellHt = Number(opts.sellHt) || 0;
   const sellTtc = Number(opts.sellTtc) || 0;
@@ -51,7 +53,7 @@ function buildQuoteEmailHtml(opts) {
   const warrantyMonths = opts.warrantyMonths != null ? Number(opts.warrantyMonths) : (opts.isReconditionne ? 12 : 6);
 
   const photoSentence = opts.photoCount > 0
-    ? ` Le détail complet est en pièce jointe (PDF), ainsi que <strong style="color:${NAVY};">${opts.photoCount} photo${opts.photoCount > 1 ? 's' : ''}</strong> du moteur.`
+    ? ` Le détail complet est en pièce jointe (PDF), ainsi que <strong style="color:${NAVY};">${opts.photoCount} photo${opts.photoCount > 1 ? 's' : ''}</strong> ${lex.duNoun}.`
     : ' Le détail complet est en pièce jointe (PDF).';
 
   // En stock atelier vs sur commande (sourcing) : conditionne le wording du solde.
@@ -62,8 +64,8 @@ function buildQuoteEmailHtml(opts) {
   if (depositTtc > 0) {
     const headLabel = isFull ? 'Paiement intégral' : 'Acompte de réservation';
     const soldeLine = isFull
-      ? 'Votre moteur est immédiatement réservé.'
-      : 'Solde de <strong>' + fmtEur(remaining) + '</strong> à régler une fois le moteur ' + (inStock ? '' : 'sourcé, ') + 'testé en atelier et déclaré conforme — rapport de test et attestation de conformité transmis.';
+      ? lex.reservedSentence
+      : 'Solde de <strong>' + fmtEur(remaining) + '</strong> à régler une fois ' + lex.leNoun + ' ' + (inStock ? '' : lex.sourced + ', ') + lex.controlledPast + ' en atelier et ' + lex.declaredPast + ' conforme — rapport de test et attestation de conformité transmis.';
     // Le bouton pointe vers l'URL trackée (clic paiement) si fournie, sinon Mollie direct.
     const payHref = opts.payTrackUrl || opts.mollieUrl;
     const action = payHref
@@ -86,8 +88,8 @@ function buildQuoteEmailHtml(opts) {
     commercialMessage = escapeHtml(opts.customMessage.trim()).replace(/\r?\n/g, '<br>');
   } else {
     const lines = [greeting, '', opts.isReconditionne
-      ? 'Moteur entièrement reconditionné en atelier (pièces d\'usure remplacées), contrôlé avant expédition.'
-      : 'Moteur intégralement contrôlé sur banc d\'essai avant expédition.'];
+      ? lex.recondDesc
+      : lex.occasionDesc];
     if (!opts.isReconditionne && mileage) lines.push('Kilométrage : ' + mileage + ' certifiés au compteur.');
     if (opts.stockLabel) lines.push((opts.stockLabel) + (opts.delay ? ' · délai estimé ' + escapeHtml(opts.delay) : '') + '.');
     lines.push('', 'À votre disposition pour toute question.');
@@ -98,9 +100,9 @@ function buildQuoteEmailHtml(opts) {
   const includedItems = [];
   if (opts.isReconditionne) {
     includedItems.push('Reconditionnement complet en atelier (pièces d\'usure remplacées)');
-    includedItems.push('Banc d\'essai (compression, étanchéité, endoscopie)');
+    includedItems.push(lex.benchTestRecond);
   } else {
-    includedItems.push('Banc d\'essai obligatoire (compression, étanchéité, endoscopie)');
+    includedItems.push(lex.benchTestOccasion);
     if (mileage) includedItems.push('Kilométrage certifié, photo du compteur transmise');
   }
   if (warrantyMonths > 0) {
@@ -157,13 +159,13 @@ function buildQuoteEmailHtml(opts) {
     ${opts.pdfTrackUrl ? `<p style="margin:12px 0 0;font-size:14px;line-height:1.5;"><a href="${escapeHtml(opts.pdfTrackUrl)}" style="color:#2563eb;text-decoration:none;font-weight:600;">📄 Voir le devis en ligne (PDF) →</a></p>` : ''}
   </td></tr>
 
-  <!-- ROW 2 COLONNES : moteur | récap+acompte -->
+  <!-- ROW 2 COLONNES : pièce | récap+acompte -->
   <tr><td class="pad-x" style="padding:0 30px 8px;">
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
 
       <td class="col-l" width="400" style="vertical-align:top;padding-right:14px;">
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #e5e7eb;border-radius:14px;height:100%;"><tr><td style="padding:22px;">
-          <p style="${lbl}">Moteur proposé</p>
+          <p style="${lbl}">${lex.proposedLabel}</p>
           <span style="display:inline-block;background:${badgeColor};color:#fff;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 9px;border-radius:4px;margin-bottom:12px;">${escapeHtml(badge)}</span>
           <h2 style="margin:0 0 ${engineCode ? '4px' : '12px'};font-size:16px;line-height:1.3;font-weight:700;color:${NAVY};text-transform:uppercase;">${engineTitle}</h2>
           ${engineCode ? `<p style="margin:0 0 14px;font-size:14px;color:#6b7280;font-weight:600;">${engineCode}</p>` : ''}
@@ -213,7 +215,7 @@ function buildQuoteEmailHtml(opts) {
       <p style="margin:0 0 4px;font-size:12px;color:#64748b;">Disponibles pour toute question,</p>
       <p style="margin:0 0 14px;font-size:14px;font-weight:700;color:${NAVY};">L'équipe technique Autoliva</p>
       <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
-        Devis valable 24h (le moteur peut être vendu entre-temps) · Référence : <strong style="color:#475569;">${escapeHtml(opts.quoteRef)}</strong><br>
+        Devis valable 24h (${lex.peutEtreVendu}) · Référence : <strong style="color:#475569;">${escapeHtml(opts.quoteRef)}</strong><br>
         <a href="mailto:contact@autoliva.com" style="color:#2563eb;text-decoration:none;">contact@autoliva.com</a> · <a href="tel:${escapeHtml(opts.brandPhoneIntl || '+33465848539')}" style="color:#64748b;text-decoration:none;">${escapeHtml(opts.brandPhone || '04 65 84 85 39')}</a> · <a href="${PUBLIC_SITE}" style="color:#2563eb;text-decoration:none;">autoliva.com</a>
       </p>
     </td></tr></table>
@@ -229,6 +231,7 @@ function buildQuoteEmailHtml(opts) {
  * Template HTML pour relance J+3 / J+7 (devis non répondu).
  */
 function buildReminderEmailHtml(opts) {
+  const lex = partLexicon(opts.category);
   const greeting = opts.firstName ? 'Bonjour ' + escapeHtml(opts.firstName) + ',' : 'Bonjour,';
   const type = opts.type || 'j3';
 
@@ -237,21 +240,21 @@ function buildReminderEmailHtml(opts) {
   // devis est "toujours actif" → elles proposent de RE-confirmer dispo + prix.
   let subject, heroLine, ctaLine;
   if (type === 'winback') {
-    subject = 'Toujours à la recherche de votre moteur ?';
-    heroLine = 'Il y a quelques semaines, vous cherchiez un moteur et je vous avais préparé un devis.';
+    subject = 'Toujours à la recherche de ' + lex.votreNoun + ' ?';
+    heroLine = 'Il y a quelques semaines, vous cherchiez ' + lex.article + ' et je vous avais préparé un devis.';
     ctaLine = 'Si votre projet est toujours d\'actualité, dites-le moi : les stocks et les prix bougent souvent, je vous refais un point disponibilité + tarif du jour, sans engagement.';
   } else if (type === 'j14') {
-    subject = 'Dernier rappel — votre devis moteur';
+    subject = 'Dernier rappel — votre devis ' + lex.noun;
     heroLine = 'Sans nouvelle de votre part, je vais bientôt clôturer votre dossier.';
-    ctaLine = 'Si votre projet est toujours d\'actualité, dites-le moi : je re-vérifie la disponibilité du moteur et je vous reconfirme le prix du jour.';
+    ctaLine = 'Si votre projet est toujours d\'actualité, dites-le moi : je re-vérifie la disponibilité ' + lex.duNoun + ' et je vous reconfirme le prix du jour.';
   } else if (type === 'j7') {
-    subject = 'Votre devis moteur — je peux reconfirmer la dispo';
+    subject = 'Votre devis ' + lex.noun + ' — je peux reconfirmer la dispo';
     heroLine = 'Je voulais m\'assurer que mon devis vous est bien parvenu il y a une semaine.';
-    ctaLine = 'Comme un devis n\'est garanti que 24h (le moteur peut partir et les prix bougent), dites-moi si vous êtes toujours intéressé : je reconfirme la disponibilité et le prix pour vous.';
+    ctaLine = 'Comme un devis n\'est garanti que 24h (' + lex.leNoun + ' peut partir et les prix bougent), dites-moi si vous êtes toujours intéressé : je reconfirme la disponibilité et le prix pour vous.';
   } else {
-    subject = 'On reste dispo pour votre devis moteur';
+    subject = 'On reste dispo pour votre devis ' + lex.noun;
     heroLine = 'Je voulais m\'assurer que mon devis vous est bien parvenu il y a quelques jours.';
-    ctaLine = 'Si vous avez la moindre question, n\'hésitez pas — je suis là pour ça. Et si vous voulez avancer, je reconfirme la disponibilité du moteur et le prix du jour.';
+    ctaLine = 'Si vous avez la moindre question, n\'hésitez pas — je suis là pour ça. Et si vous voulez avancer, je reconfirme la disponibilité ' + lex.duNoun + ' et le prix du jour.';
   }
 
   // CTA : "Revoir mon devis" (lien tracké → PDF) + "Réserver" si lien Mollie.
@@ -259,7 +262,7 @@ function buildReminderEmailHtml(opts) {
     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 22px;">
       <tr>
         ${opts.pdfUrl ? `<td style="border-radius:8px;background:${RED};"><a href="${escapeHtml(opts.pdfUrl)}" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;">Revoir mon devis</a></td>` : ''}
-        ${opts.mollieUrl ? `<td style="padding-left:10px;"><a href="${escapeHtml(opts.mollieUrl)}" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:700;color:${RED};text-decoration:none;border:2px solid ${RED};border-radius:8px;">Réserver le moteur</a></td>` : ''}
+        ${opts.mollieUrl ? `<td style="padding-left:10px;"><a href="${escapeHtml(opts.mollieUrl)}" style="display:inline-block;padding:12px 22px;font-size:14px;font-weight:700;color:${RED};text-decoration:none;border:2px solid ${RED};border-radius:8px;">Réserver ${lex.leNoun}</a></td>` : ''}
       </tr>
     </table>` : '';
 
@@ -300,6 +303,7 @@ function buildReminderEmailHtml(opts) {
  * Tient la promesse faite dans la confirmation d'acompte ("email à l'expédition").
  */
 function buildShipmentEmailHtml(opts) {
+  const lex = partLexicon(opts.category);
   const greeting = opts.firstName ? 'Bonjour ' + escapeHtml(opts.firstName) + ',' : 'Bonjour,';
   const carrier = escapeHtml(opts.carrier || 'notre transporteur');
   const tracking = escapeHtml(opts.trackingNumber || '');
@@ -311,7 +315,7 @@ function buildShipmentEmailHtml(opts) {
   return `<!DOCTYPE html>
 <html lang="fr"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Votre moteur est expédié</title>
+<title>Votre ${lex.noun} est ${lex.expedie}</title>
 </head>
 <body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#1f2937;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f4f5f7;padding:32px 12px;">
@@ -321,13 +325,13 @@ function buildShipmentEmailHtml(opts) {
   <tr><td style="padding:32px 32px 8px;">
     <p style="margin:0 0 6px;font-size:13px;color:#10b981;font-weight:600;">Bonne nouvelle</p>
     <h1 style="margin:0 0 16px;font-size:23px;line-height:1.3;font-weight:700;color:#0f172a;">${greeting}</h1>
-    <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">Votre moteur (dossier <strong>${escapeHtml(opts.quoteRef || '')}</strong>${opts.plate ? ` — ${escapeHtml(opts.plate)}` : ''}) vient d'être <strong>expédié</strong>.</p>
+    <p style="margin:0 0 16px;font-size:15px;color:#374151;line-height:1.6;">Votre ${lex.noun} (dossier <strong>${escapeHtml(opts.quoteRef || '')}</strong>${opts.plate ? ` — ${escapeHtml(opts.plate)}` : ''}) vient d'être <strong>${lex.expedie}</strong>.</p>
     <div style="background:#fafbfc;border:1px solid #eef0f3;border-radius:10px;padding:16px;margin-bottom:16px;">
       <p style="margin:0 0 6px;font-size:13px;color:#64748b;">Transporteur : <strong style="color:#0f172a;">${carrier}</strong></p>
       ${tracking ? `<p style="margin:0;font-size:13px;color:#64748b;">N° de suivi : <strong style="color:#0f172a;font-family:'SF Mono',monospace;">${tracking}</strong></p>` : ''}
     </div>
     ${trackBtn}
-    <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">Pour rappel, le <strong>solde</strong> est à régler une fois le moteur reçu, testé conforme et l'attestation transmise.</p>
+    <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6;">Pour rappel, le <strong>solde</strong> est à régler une fois ${lex.leNoun} ${lex.recu}, ${lex.controlledPast} conforme et l'attestation transmise.</p>
     <p style="margin:0 0 8px;font-size:14px;color:#1f2937;line-height:1.6;">À très vite,<br><strong>L'équipe technique Autoliva</strong></p>
   </td></tr>
   <tr><td style="padding:0 32px 24px;">
@@ -345,6 +349,7 @@ function buildShipmentEmailHtml(opts) {
  * @param {{firstName?:string, quoteRef?:string, amountEur?:number, brandPhone?:string, brandPhoneIntl?:string}} opts
  */
 function buildAcompteConfirmationHtml(opts) {
+  const lex = partLexicon(opts.category);
   const greeting = opts.firstName ? `Bonjour ${escapeHtml(opts.firstName)},` : 'Bonjour,';
   const ref = escapeHtml(opts.quoteRef || '');
   const amount = fmtEur(opts.amountEur != null ? opts.amountEur : 0);
@@ -358,12 +363,12 @@ function buildAcompteConfirmationHtml(opts) {
                 <p style="margin:0;font-size:28px;font-weight:800;color:#047857;">${amount}</p>
               </div>
               <p style="margin:0 0 14px;font-size:16px;">${greeting}</p>
-              <p style="margin:0 0 14px;font-size:15px;color:#374151;">Merci, votre acompte est confirmé : <strong>votre moteur est officiellement réservé</strong> (dossier <strong>${ref}</strong>).</p>
+              <p style="margin:0 0 14px;font-size:15px;color:#374151;">Merci, votre acompte est confirmé : <strong>${lex.votreNoun} est officiellement ${lex.reserve}</strong> (dossier <strong>${ref}</strong>).</p>
               <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#0f172a;">Et maintenant ?</p>
               <ul style="margin:0 0 18px;padding-left:18px;font-size:14px;color:#374151;">
-                <li style="margin-bottom:6px;">Nous lançons la préparation et le passage sur banc d'essai (si ce n'est pas déjà fait).</li>
+                <li style="margin-bottom:6px;">Nous lançons la préparation et ${lex.prepTest} (si ce n'est pas déjà fait).</li>
                 <li style="margin-bottom:6px;">Vous recevrez un email dès l'expédition, avec le suivi transporteur.</li>
-                <li>Le solde sera à régler une fois le moteur testé et déclaré conforme.</li>
+                <li>Le solde sera à régler une fois ${lex.leNoun} ${lex.controlledPast} et ${lex.declaredPast} conforme.</li>
               </ul>
               <p style="margin:0 0 6px;font-size:14px;color:#374151;">Une question ? Répondez à cet email ou appelez-nous au <a href="tel:${escapeHtml(opts.brandPhoneIntl || '+33465848539')}" style="color:#E1001A;font-weight:700;text-decoration:none;">${escapeHtml(opts.brandPhone || '04 65 84 85 39')}</a>.</p>
               <p style="margin:18px 0 0;font-size:14px;color:#1f2937;">À très vite,<br><strong>L'équipe technique Autoliva</strong></p>

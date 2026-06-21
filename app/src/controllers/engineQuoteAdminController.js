@@ -20,6 +20,7 @@ const storage = require('../services/savFileStorage');
 const emailService = require('../services/emailService');
 const { buildQuotePdf } = require('../services/engineQuotePdf');
 const { buildQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
+const { partLexicon } = require('../services/partLexicon');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
 const { compressImage } = require('../services/imageCompress');
@@ -864,17 +865,20 @@ async function postShipment(req, res, next) {
     const plate = (cart.requested && cart.requested.plate) || '';
 
     // Email client (best-effort)
+    const cat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+    const lex = partLexicon(cat);
     let emailSentAt = null;
     if (cart.email) {
       const html = buildShipmentEmailHtml({
+        category: cat,
         firstName: firstNameForEmail, quoteRef, carrier, trackingNumber, trackingUrl, plate,
         brandPhone: brand.PHONE_MOTEUR, brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
       });
-      const text = `Bonjour,\n\nVotre moteur (dossier ${quoteRef}) vient d'etre expedie.\nTransporteur : ${carrier}\n${trackingNumber ? 'N° de suivi : ' + trackingNumber + '\n' : ''}${trackingUrl ? 'Suivi : ' + trackingUrl + '\n' : ''}\nLe solde sera a regler une fois le moteur recu, teste conforme et l'attestation transmise.\n\nL'equipe Autoliva\n${brand.PHONE_MOTEUR}`;
+      const text = `Bonjour,\n\nVotre ${lex.noun} (dossier ${quoteRef}) vient d'etre ${lex.expedie}.\nTransporteur : ${carrier}\n${trackingNumber ? 'N° de suivi : ' + trackingNumber + '\n' : ''}${trackingUrl ? 'Suivi : ' + trackingUrl + '\n' : ''}\nLe solde sera a regler une fois ${lex.leNoun} ${lex.recu}, ${lex.controlledPast} conforme et l'attestation transmise.\n\nL'equipe Autoliva\n${brand.PHONE_MOTEUR}`;
       try {
         const r = await emailService.sendEmail({
           toEmail: cart.email,
-          subject: `Votre moteur ${quoteRef} est expédié — Autoliva`,
+          subject: `Votre ${lex.noun} ${quoteRef} est ${lex.expedie} — Autoliva`,
           html, text,
           replyTo: { email: brand.EMAIL_CONTACT, name: brand.NAME },
         });
@@ -1077,6 +1081,8 @@ async function prepareQuoteData(req, opts) {
     stockLocation, stockLabelClient, delay,
     conditionKey, conditionInfo,
     allPhotos, pdfPhotos, firstNameForEmail,
+    // Catégorie du lead (moteur/boîte) → vocabulaire du devis PDF/email
+    category: cart.captureSource === 'landing_boites' ? 'boite' : 'moteur',
   };
 }
 
@@ -1101,6 +1107,7 @@ async function postPreviewPdf(req, res, next) {
       mollieUrl: d.createMollie ? 'https://example.com/preview-mollie' : '',  // placeholder pour preview
       customMessage: d.customMessage,
       conditionLabel: d.conditionInfo.client,
+      category: d.category,
       conditionBadge: d.conditionInfo.short,
       isReconditionne: d.conditionKey.startsWith('reconditionne'),
       photos: d.pdfPhotos,
@@ -1138,6 +1145,7 @@ async function postPreviewEmail(req, res, next) {
       brandPhone: brand.PHONE_MOTEUR,
       brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
       conditionLabel: d.conditionInfo.client,
+      category: d.category,
       conditionBadge: d.conditionInfo.short,
       isReconditionne: d.conditionKey.startsWith('reconditionne'),
     });
@@ -1187,14 +1195,16 @@ async function getPreviewMail(req, res, next) {
     const pricing = eq.pricing || {};
     const sellTtc = computeQuoteTotals(pricing, leadIsReconditionne(eq, cart)).clientTotal;
     const lastSent = (eq.sentQuotes || []).slice().sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))[0] || null;
-    const phoneOpts = { brandPhone: brand.PHONE_MOTEUR, brandPhoneIntl: brand.PHONE_MOTEUR_INTL };
+    const cat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+    const phoneOpts = { category: cat, brandPhone: brand.PHONE_MOTEUR, brandPhoneIntl: brand.PHONE_MOTEUR_INTL };
     const base = (process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
 
     const { buildReminderEmailHtml, buildShipmentEmailHtml: buildShip, buildAcompteConfirmationHtml } = require('../services/engineQuoteEmail');
 
     let html;
     if (type === 'ack') {
-      const { buildAckEmailHtml } = require('./moteurOccasionController');
+      // L'accusé de réception a un wording propre à chaque tunnel (moteur / boîte).
+      const { buildAckEmailHtml } = require(cat === 'boite' ? './boiteOccasionController' : './moteurOccasionController');
       html = buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel: (cart.requested && cart.requested.vehicle) || '', baseUrl: base, brandObj: brand });
     } else if (['j3', 'j7', 'j14', 'winback'].includes(type)) {
       const pdfUrl = lastSent ? `${base}/api/devis-moteurs/track-pdf/${cart._id}/${lastSent._id}` : '';
@@ -1345,6 +1355,7 @@ async function postSendQuote(req, res, next) {
       mollieUrl: payTrackUrl || mollieUrl,
       customMessage,
       conditionLabel: conditionInfo.client,
+      category: cart.captureSource === 'landing_boites' ? 'boite' : 'moteur',
       conditionBadge: conditionInfo.short,
       isReconditionne: conditionKey.startsWith('reconditionne'),
       photos: pdfPhotos,
@@ -1389,19 +1400,21 @@ async function postSendQuote(req, res, next) {
       brandPhone: brand.PHONE_MOTEUR,
       brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
       conditionLabel: conditionInfo.client,
+      category: cart.captureSource === 'landing_boites' ? 'boite' : 'moteur',
       conditionBadge: conditionInfo.short,
       isReconditionne: conditionKey.startsWith('reconditionne'),
       trackPixelUrl,
       payTrackUrl,
       pdfTrackUrl,
     });
+    const textLex = partLexicon(cart.captureSource === 'landing_boites' ? 'boite' : 'moteur');
     const text = [
       `Bonjour,`,
       ``,
       `Votre devis Autoliva ${quoteRef} est prêt.`,
       ``,
       `Véhicule : ${(cart.requested && cart.requested.plate) || ''}`,
-      eq.identifiedEngine && eq.identifiedEngine.model ? `Moteur : ${eq.identifiedEngine.model}` : '',
+      eq.identifiedEngine && eq.identifiedEngine.model ? `${textLex.nounCap} : ${eq.identifiedEngine.model}` : '',
       `Prix HT : ${sellHt.toFixed(2)} €`,
       `Total TTC : ${sellTtc.toFixed(2)} €`,
       depositTtc > 0 ? `Acompte : ${depositTtc.toFixed(2)} €` : '',
