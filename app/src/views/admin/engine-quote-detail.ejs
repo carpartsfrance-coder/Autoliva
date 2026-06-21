@@ -13,7 +13,7 @@ function dt(v) {
   <div class="px-6 lg:px-10 py-8 max-w-7xl mx-auto">
 
     <!-- Breadcrumb + retour -->
-    <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Devis moteurs', url: '/admin/devis-moteurs'}, {label: cart.ref || cart.displayName}] }) %>
+    <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Devis moteurs & boîtes', url: '/admin/devis-moteurs'}, {label: cart.ref || cart.displayName}] }) %>
 
     <!-- Header -->
     <div class="mt-4 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
@@ -85,7 +85,7 @@ function dt(v) {
       <div class="mt-6 rounded-2xl bg-emerald-50 border-2 border-emerald-300 p-4 flex items-center gap-3">
         <span class="material-symbols-outlined text-emerald-600" style="font-size:28px">paid</span>
         <div>
-          <p class="font-bold text-emerald-900">Acompte payé — moteur réservé</p>
+          <p class="font-bold text-emerald-900">Acompte payé — <%= lex.noun %> <%= lex.reserve %></p>
           <p class="text-sm text-emerald-800">
             <%= fmt((engineQuote.payment.amountCents || 0) / 100) %> € reçu
             <% if (engineQuote.payment.paidAt) { %> le <%= new Date(engineQuote.payment.paidAt).toLocaleString('fr-FR', {day:'2-digit',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'}) %><% } %>
@@ -101,7 +101,7 @@ function dt(v) {
         <span class="material-symbols-outlined text-slate-500" style="font-size:20px">local_shipping</span>
         <h2 class="text-lg font-semibold text-slate-900">Expédition &amp; suivi</h2>
       </div>
-      <p class="text-xs text-slate-500 mb-4">Marque le moteur expédié et envoie au client l'email + SMS de suivi (tient la promesse de la confirmation d'acompte).</p>
+      <p class="text-xs text-slate-500 mb-4">Marque <%= lex.leNoun %> <%= lex.expedie %> et envoie au client l'email + SMS de suivi (tient la promesse de la confirmation d'acompte).</p>
 
       <% if (engineQuote.shipment) { %>
         <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-4">
@@ -166,12 +166,12 @@ function dt(v) {
       <!-- ─── COLONNE GAUCHE (2/3) ─── -->
       <div class="lg:col-span-2 space-y-6">
 
-        <!-- Bloc IDENTIFICATION MOTEUR -->
+        <!-- Bloc IDENTIFICATION de la pièce -->
         <form action="/admin/devis-moteurs/<%= cart.id %>/engine" method="POST" data-autosave class="bg-white rounded-2xl border border-slate-200 p-6">
           <div class="flex items-center justify-between mb-4">
             <div>
-              <h2 class="text-lg font-semibold text-slate-900">Identification moteur</h2>
-              <p class="text-xs text-slate-500 mt-0.5">Renseigne le moteur exact après analyse du dossier</p>
+              <h2 class="text-lg font-semibold text-slate-900">Identification <%= lex.noun %></h2>
+              <p class="text-xs text-slate-500 mt-0.5">Renseigne <%= lex.leNoun %> exact<%= cart.isBoite ? 'e' : '' %> après analyse du dossier</p>
             </div>
             <span data-save-indicator class="text-xs text-slate-400 transition-opacity opacity-0">Enregistré ✓</span>
           </div>
@@ -185,7 +185,7 @@ function dt(v) {
               <input name="year" value="<%= engineQuote.identifiedEngine.year || '' %>" placeholder="ex: 2002-2006" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
             </div>
             <div class="md:col-span-2">
-              <label class="block text-xs font-semibold text-slate-500 mb-1">Désignation moteur</label>
+              <label class="block text-xs font-semibold text-slate-500 mb-1">Désignation <%= lex.noun %></label>
               <input name="model" value="<%= engineQuote.identifiedEngine.model || '' %>" placeholder="ex: Porsche Cayenne Turbo 4.5 V8 — 955 Turbo" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
               <p class="text-xs text-slate-400 mt-1">Modèle complet + finition libre — affiché tel quel sur le devis</p>
             </div>
@@ -195,7 +195,7 @@ function dt(v) {
               <p class="text-xs text-slate-400 mt-1">Affiché sur le devis client</p>
             </div>
             <div class="md:col-span-2">
-              <label class="block text-xs font-semibold text-slate-500 mb-2">État du moteur (affiché sur le devis)</label>
+              <label class="block text-xs font-semibold text-slate-500 mb-2">État <%= lex.duNoun %> (affiché sur le devis)</label>
               <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                 <% Object.keys(conditionLabels).forEach(function(key) { if (!key) return; %>
                   <label class="cursor-pointer border-2 border-slate-200 hover:border-slate-300 has-[:checked]:border-red-500 has-[:checked]:bg-red-50 rounded-lg p-2.5 text-center transition block">
@@ -204,7 +204,7 @@ function dt(v) {
                   </label>
                 <% }) %>
               </div>
-              <p class="text-xs text-slate-400 mt-1.5">Reconditionné = badge premium visible sur le PDF et l'email</p>
+              <p class="text-xs text-slate-400 mt-1.5">Reconditionné<%= cart.isBoite ? 'e' : '' %> = badge premium visible sur le PDF et l'email</p>
             </div>
           </div>
         </form>
@@ -214,7 +214,7 @@ function dt(v) {
           <div class="flex items-center justify-between mb-4">
             <div>
               <h2 class="text-lg font-semibold text-slate-900">Stock & sourcing</h2>
-              <p class="text-xs text-slate-500 mt-0.5">Provenance du moteur et délai estimé</p>
+              <p class="text-xs text-slate-500 mt-0.5">Provenance <%= lex.duNoun %> et délai estimé</p>
             </div>
             <span data-save-indicator class="text-xs text-slate-400 transition-opacity opacity-0">Enregistré ✓</span>
           </div>
@@ -261,7 +261,7 @@ function dt(v) {
           <div class="mb-5 flex flex-wrap items-center gap-2">
             <span class="text-xs font-semibold text-slate-500">Régime TVA :</span>
             <span class="inline-flex items-center rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-semibold">Régime normal · TVA 20 %</span>
-            <span class="text-[11px] text-slate-400">Moteur reconditionné — non éligible à la TVA sur marge. Prix saisi en HT, TVA 20 % ajoutée.</span>
+            <span class="text-[11px] text-slate-400"><%= lex.nounCap %> reconditionné<%= cart.isBoite ? 'e' : '' %> — non éligible à la TVA sur marge. Prix saisi en HT, TVA 20 % ajoutée.</span>
           </div>
           <% } else { %>
           <div class="mb-5 flex flex-wrap items-center gap-2">
@@ -296,7 +296,7 @@ function dt(v) {
           <input type="hidden" data-ctrl-rate value="0">
           <input type="hidden" data-ctrl-hours value="0">
           <div class="mb-4 p-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/60">
-            <p class="text-[11px] text-slate-500"><strong>Moteur reconditionné</strong> — aucun coût de banc d'essai déduit de la marge (la remise à neuf est intégrée au prix d'achat). Régime <strong>TVA normale 20 %</strong> (HT + TVA), marge cible <strong>25 %</strong>.</p>
+            <p class="text-[11px] text-slate-500"><strong><%= lex.nounCap %> reconditionné<%= cart.isBoite ? 'e' : '' %></strong> — aucun coût de <%= cart.isBoite ? 'contrôle' : 'banc d\'essai' %> déduit de la marge (la remise à neuf est intégrée au prix d'achat). Régime <strong>TVA normale 20 %</strong> (HT + TVA), marge cible <strong>25 %</strong>.</p>
           </div>
           <% } else { %>
           <!-- Coûts de contrôle (port de test + MO de test) — TOUJOURS inclus dans la marge -->
@@ -317,7 +317,7 @@ function dt(v) {
               <div class="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Coûts de contrôle inclus</div>
               <div class="text-lg font-bold font-mono text-emerald-700"><span data-ctrl-total>—</span> €</div>
             </div>
-            <p class="basis-full text-[11px] text-slate-400"><strong>Toujours déduits de ta marge</strong> (port fournisseur→atelier + ta main-d'œuvre de test) → la marge affichée est ta <strong>vraie</strong> marge, sans rien cliquer. Modifiable ici pour un moteur particulier. La livraison client (refacturée) n'est pas comptée.</p>
+            <p class="basis-full text-[11px] text-slate-400"><strong>Toujours déduits de ta marge</strong> (port fournisseur→atelier + ta main-d'œuvre de test) → la marge affichée est ta <strong>vraie</strong> marge, sans rien cliquer. Modifiable ici pour un dossier particulier. La livraison client (refacturée) n'est pas comptée.</p>
           </div>
           <% } %>
 
@@ -374,7 +374,7 @@ function dt(v) {
           </div>
 
           <% const photoCategories = [
-            { key: 'engine',    label: 'Photos moteur',       hint: 'Bloc moteur, accessoires, étiquettes, banc d\'essai' },
+            { key: 'engine',    label: cart.isBoite ? 'Photos boîte' : 'Photos moteur', hint: cart.isBoite ? 'Carter, mécatronique, étiquettes, n° de série' : 'Bloc moteur, accessoires, étiquettes, banc d\'essai' },
             { key: 'kmReading', label: 'Relevé kilométrique', hint: 'Photo du compteur du véhicule donneur' },
           ]; %>
 
@@ -984,9 +984,9 @@ function dt(v) {
 
     // Warning champs essentiels
     const missing = [];
-    if (!code && !model) missing.push('identification moteur (code et modèle vides)');
+    if (!code && !model) missing.push('identification <%= lex.noun %> (code et modèle vides)');
     if (!mileage) missing.push('kilométrage');
-    if (!condition) missing.push('état du moteur (occasion / reconditionné)');
+    if (!condition) missing.push('état <%= lex.duNoun %> (occasion / reconditionné<%= cart.isBoite ? "e" : "" %>)');
     if (!stock) missing.push('stock (atelier / sourcing)');
 
     if (canSend && missing.length > 0) {
@@ -1030,7 +1030,7 @@ function dt(v) {
     if (pct >= 15) return 'text-amber-700';
     return 'text-rose-700';
   }
-  // Coûts de contrôle (port test + MO) — TOUJOURS inclus dès qu'un moteur est
+  // Coûts de contrôle (port test + MO) — TOUJOURS inclus dès qu'un dossier est
   // chiffré. Lit les champs via querySelector (pas de const → pas de souci
   // d'ordre d'initialisation).
   function controlCost(purchase) {

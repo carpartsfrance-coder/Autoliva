@@ -71,13 +71,31 @@ const STOCK_CLIENT_LABELS = {
   indisponible:  '',
 };
 
-// État du moteur — admin + client-facing
+// État — libellés admin (neutres) + badge court. Le libellé CLIENT (imprimé sur
+// le devis PDF/email) est accordé au genre par conditionClientLabel() ci-dessous.
 const CONDITION_LABELS = {
-  '':                              { admin: 'Non spécifié',                client: '',                                short: '' },
-  occasion:                        { admin: 'Occasion testé',              client: 'Moteur d\'occasion testé',         short: 'Occasion' },
-  reconditionne_chemise_fonte:     { admin: 'Reconditionné chemisé fonte', client: 'Moteur reconditionné chemisé fonte', short: 'Reconditionné' },
-  reconditionne_complet:           { admin: 'Reconditionné complet',       client: 'Moteur reconditionné complet',     short: 'Reconditionné' },
+  '':                              { admin: 'Non spécifié',                short: '' },
+  occasion:                        { admin: 'Occasion testé',              short: 'Occasion' },
+  reconditionne_chemise_fonte:     { admin: 'Reconditionné chemisé fonte', short: 'Reconditionné' },
+  reconditionne_complet:           { admin: 'Reconditionné complet',       short: 'Reconditionné' },
 };
+
+// Libellé client de l'état, accordé au genre (moteur masc. / boîte fém.). Rendu
+// sur le PDF + l'email du devis : ne doit JAMAIS imprimer « Moteur » pour une boîte.
+function conditionClientLabel(conditionKey, category) {
+  const b = category === 'boite';
+  switch (conditionKey) {
+    case 'occasion':
+      return b ? "Boîte d'occasion testée" : "Moteur d'occasion testé";
+    case 'reconditionne_complet':
+      return b ? 'Boîte reconditionnée complète' : 'Moteur reconditionné complet';
+    case 'reconditionne_chemise_fonte':
+      // « chemisé fonte » est propre au moteur → libellé boîte sans cette mention.
+      return b ? 'Boîte reconditionnée' : 'Moteur reconditionné chemisé fonte';
+    default:
+      return '';
+  }
+}
 
 function fmt(n) {
   return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n) || 0);
@@ -463,6 +481,8 @@ async function getEngineQuoteDetail(req, res, next) {
       statusLabels: STATUS_LABELS,
       stockLabels: STOCK_LABELS,
       conditionLabels: CONDITION_LABELS,
+      // Lexique genré → libellés de la fiche accordés (boîte fém. / moteur masc.)
+      lex: partLexicon(cart.captureSource === 'landing_boites' ? 'boite' : 'moteur'),
       fmt,
     });
   } catch (err) {
@@ -892,7 +912,9 @@ async function postShipment(req, res, next) {
     if (cart.phone) {
       try {
         const trackingPart = `${trackingNumber ? ' Suivi ' + carrier + ' : ' + trackingNumber : ''}${trackingUrl ? ' ' + trackingUrl : ''}`;
-        const { enabled: smsOn, text: smsBody } = await resolveSms('moteur_expedition', { quoteRef, trackingPart, phoneMoteur: brand.PHONE_MOTEUR });
+        // SMS d'expédition accordé au genre : template dédié pour les boîtes.
+        const expeditionKey = cat === 'boite' ? 'boite_expedition' : 'moteur_expedition';
+        const { enabled: smsOn, text: smsBody } = await resolveSms(expeditionKey, { quoteRef, trackingPart, phoneMoteur: brand.PHONE_MOTEUR });
         if (smsOn && smsBody) await sendSms({ to: cart.phone, text: smsBody.slice(0, 320) });
       } catch (err) { console.warn('[engine-quote] shipment SMS failed:', err && err.message); }
     }
@@ -910,7 +932,7 @@ async function postShipment(req, res, next) {
         },
         $push: {
           notes: {
-            text: `Moteur marqué expédié (${carrier}${trackingNumber ? ' · ' + trackingNumber : ''})${emailSentAt ? ' — email client envoyé' : ''}.`,
+            text: `${lex.nounCap} ${lex.marque} ${lex.expedie} (${carrier}${trackingNumber ? ' · ' + trackingNumber : ''})${emailSentAt ? ' — email client envoyé' : ''}.`,
             addedBy: admin.id, addedByName: admin.name, addedAt: new Date(),
           },
         },
@@ -1085,6 +1107,8 @@ async function prepareQuoteData(req, opts) {
     allPhotos, pdfPhotos, firstNameForEmail,
     // Catégorie du lead (moteur/boîte) → vocabulaire du devis PDF/email
     category: cart.captureSource === 'landing_boites' ? 'boite' : 'moteur',
+    // Libellé d'état accordé au genre, imprimé sur le devis (PDF + email)
+    conditionLabelClient: conditionClientLabel(conditionKey, cart.captureSource === 'landing_boites' ? 'boite' : 'moteur'),
   };
 }
 
@@ -1108,7 +1132,7 @@ async function postPreviewPdf(req, res, next) {
       depositCents: d.depositCents,
       mollieUrl: d.createMollie ? 'https://example.com/preview-mollie' : '',  // placeholder pour preview
       customMessage: d.customMessage,
-      conditionLabel: d.conditionInfo.client,
+      conditionLabel: d.conditionLabelClient,
       category: d.category,
       conditionBadge: d.conditionInfo.short,
       isReconditionne: d.conditionKey.startsWith('reconditionne'),
@@ -1146,7 +1170,7 @@ async function postPreviewEmail(req, res, next) {
       photoCount: d.allPhotos.length,
       brandPhone: brand.PHONE_MOTEUR,
       brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
-      conditionLabel: d.conditionInfo.client,
+      conditionLabel: d.conditionLabelClient,
       category: d.category,
       conditionBadge: d.conditionInfo.short,
       isReconditionne: d.conditionKey.startsWith('reconditionne'),
@@ -1276,6 +1300,8 @@ async function postSendQuote(req, res, next) {
     // l'état : garantit recond → devis recond, occasion → devis occasion.
     const conditionKey = (eq.identifiedEngine && eq.identifiedEngine.condition) || defaultConditionFromLead(cart);
     const conditionInfo = CONDITION_LABELS[conditionKey] || CONDITION_LABELS[''];
+    const sendCat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+    const conditionLabelClient = conditionClientLabel(conditionKey, sendCat);
 
     // 0) Lit les buffers photos depuis GridFS (réutilisés pour PDF + pièces jointes)
     const allPhotos = [
@@ -1356,8 +1382,8 @@ async function postSendQuote(req, res, next) {
       depositCents,
       mollieUrl: payTrackUrl || mollieUrl,
       customMessage,
-      conditionLabel: conditionInfo.client,
-      category: cart.captureSource === 'landing_boites' ? 'boite' : 'moteur',
+      conditionLabel: conditionLabelClient,
+      category: sendCat,
       conditionBadge: conditionInfo.short,
       isReconditionne: conditionKey.startsWith('reconditionne'),
       photos: pdfPhotos,
@@ -1373,7 +1399,7 @@ async function postSendQuote(req, res, next) {
 
     // 5) Prépare les photos à joindre à l'email (buffers compressés en JPEG)
     const photoAttachments = photosWithBuffers.map((p, i) => {
-      const catLabel = p.category === 'engine' ? 'moteur' : 'km';
+      const catLabel = p.category === 'engine' ? sendCat : 'km';
       return {
         filename: `${catLabel}-${i + 1}.jpg`,
         content: p.buffer.toString('base64'),
@@ -1401,8 +1427,8 @@ async function postSendQuote(req, res, next) {
       photoCount: photoAttachments.length,
       brandPhone: brand.PHONE_MOTEUR,
       brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
-      conditionLabel: conditionInfo.client,
-      category: cart.captureSource === 'landing_boites' ? 'boite' : 'moteur',
+      conditionLabel: conditionLabelClient,
+      category: sendCat,
       conditionBadge: conditionInfo.short,
       isReconditionne: conditionKey.startsWith('reconditionne'),
       trackPixelUrl,
@@ -1618,7 +1644,7 @@ async function getEngineQuoteFunnel(req, res, next) {
 
     // Conseil contextuel selon la fuite n°1
     const adviceByStage = {
-      quoted: 'Tu ne chiffres pas tous tes leads (ou pas assez vite). Sur le moteur, le premier qui chiffre gagne : vise un devis < 2 h. Regarde le « temps de réponse » ci-dessous.',
+      quoted: 'Tu ne chiffres pas tous tes leads (ou pas assez vite). Sur ce marché, le premier qui chiffre gagne : vise un devis < 2 h. Regarde le « temps de réponse » ci-dessous.',
       pdf: 'Tes devis partent mais le client ne les ouvre pas. Soit le canal ne passe pas (email en spam → le SMS lien court aide), soit l\'objet/le SMS ne donne pas envie de cliquer.',
       converted: 'Le client VOIT le devis mais ne paie pas. C\'est du prix, de la confiance (photos, garantie, avis) ou de la relance/closing. C\'est le levier le plus rentable à travailler.',
     };

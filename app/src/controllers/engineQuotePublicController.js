@@ -86,6 +86,8 @@ async function postMollieWebhook(req, res) {
 
       // Notification commerciale (best-effort, une seule fois)
       if (!alreadyPaid) {
+        const notifLex = partLexicon(cart.captureSource === 'landing_boites' ? 'boite' : 'moteur');
+        const reservedNotice = notifLex.nounCap + ' ' + notifLex.reserve + '.'; // « Boîte réservée. » / « Moteur réservé. »
         const quoteRef = (cart.requested && cart.requested.ref) || '';
         const clientName = ((cart.firstName || '') + ' ' + (cart.lastName || '')).trim() || cart.email || cart.phone || '—';
         const toEmail = brand.EMAIL_CONTACT;
@@ -98,10 +100,10 @@ async function postMollieWebhook(req, res) {
             <p style="margin:0 0 8px;"><strong>Montant :</strong> ${fmtEur(amountCents)}</p>
             ${cart.phone ? `<p style="margin:0 0 8px;"><strong>Téléphone :</strong> <a href="tel:${cart.phone}">${cart.phone}</a></p>` : ''}
             ${cart.email ? `<p style="margin:0 0 8px;"><strong>Email :</strong> <a href="mailto:${cart.email}">${cart.email}</a></p>` : ''}
-            <p style="margin:16px 0 8px;color:#6b7280;font-size:13px;">Le moteur est réservé. Lance la préparation et l'expédition.</p>
+            <p style="margin:16px 0 8px;color:#6b7280;font-size:13px;">${reservedNotice} Lance la préparation et l'expédition.</p>
             <p style="margin:0;"><a href="${(brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '')}/admin/devis-moteurs/${cart._id}" style="color:#E1001A;font-weight:bold;">Ouvrir le dossier →</a></p>
           </div>`;
-        const text = `Acompte payé !\nDossier: ${quoteRef}\nClient: ${clientName}\nMontant: ${fmtEur(amountCents)}\nTéléphone: ${cart.phone || '—'}\n\nLe moteur est réservé.`;
+        const text = `Acompte payé !\nDossier: ${quoteRef}\nClient: ${clientName}\nMontant: ${fmtEur(amountCents)}\nTéléphone: ${cart.phone || '—'}\n\n${reservedNotice}`;
         try {
           await emailService.sendEmail({ toEmail, subject, html, text });
         } catch (err) {

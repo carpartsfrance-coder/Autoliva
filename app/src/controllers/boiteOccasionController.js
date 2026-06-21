@@ -492,8 +492,8 @@ async function postDevis(req, res, next) {
     const engineTypeRaw = trim(body.engineType).toLowerCase();
     const engineType = (etat !== 'reconditionne' && (engineTypeRaw === 'complet' || engineTypeRaw === 'nu')) ? engineTypeRaw : '';
     const engineTypeLabel = engineType === 'complet'
-      ? 'Moteur complet (avec accessoires)'
-      : engineType === 'nu' ? 'Moteur nu (sans accessoires)' : '';
+      ? 'Boîte complète (avec périphériques)'
+      : engineType === 'nu' ? 'Boîte nue (carter seul)' : '';
     const composedMessage = engineTypeLabel ? `Type demandé : ${engineTypeLabel}` : '';
 
     const form = {

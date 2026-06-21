@@ -94,33 +94,43 @@ const CATALOG = [
 
   // ─────────── MOTEUR ───────────
   {
-    key: 'moteur_ack', category: 'Moteur', label: 'Accusé de réception (devis)',
+    key: 'moteur_ack', category: 'Devis', label: 'Accusé de réception (devis)',
     defaultTemplate: "Autoliva : demande de devis {quoteRef} bien enregistrée !\nUn technicien vous recontacte sous 24h ouvrées (email ou tel).\nUrgent ? {phoneMoteur}",
-    vars: [['quoteRef', 'N° de dossier devis'], ['phoneMoteur', 'Téléphone commercial moteurs']],
+    vars: [['quoteRef', 'N° de dossier devis'], ['phoneMoteur', 'Téléphone commercial']],
     example: { quoteRef: 'AUT-2026-06-7AB12', phoneMoteur: '04 65 84 85 39' },
   },
   {
-    key: 'moteur_devis', category: 'Moteur', label: 'Devis envoyé (notification + lien)',
+    key: 'moteur_devis', category: 'Devis', label: 'Devis envoyé (notification + lien)',
     defaultTemplate: "Autoliva : votre devis {quoteRef} est disponible ({totalTtc}) !\nLe voir : {pdfUrl}\nValable 24h, stock limité.\nQuestions ? {phoneMoteur}",
-    vars: [['quoteRef', 'N° de dossier devis'], ['totalTtc', 'Montant total TTC'], ['pdfUrl', 'Lien court pour voir le devis (tracké)'], ['phoneMoteur', 'Téléphone commercial moteurs']],
+    vars: [['quoteRef', 'N° de dossier devis'], ['totalTtc', 'Montant total TTC'], ['pdfUrl', 'Lien court pour voir le devis (tracké)'], ['phoneMoteur', 'Téléphone commercial']],
     example: { quoteRef: 'AUT-2026-06-7AB12', totalTtc: '1466,40 €', pdfUrl: 'https://autoliva.com/d/Xa7Qk2', phoneMoteur: '04 65 84 85 39' },
   },
   {
-    key: 'moteur_relance_j7', category: 'Moteur', label: 'Relance devis J+7',
-    defaultTemplate: "Autoliva : votre devis {quoteRef} (moteur) est toujours d'actualité.\nUne question ou réserver le moteur ? Appelez {phoneMoteur}",
-    vars: [['quoteRef', 'N° de dossier devis'], ['phoneMoteur', 'Téléphone commercial moteurs']],
+    key: 'moteur_relance_j7', category: 'Devis', label: 'Relance devis J+7',
+    defaultTemplate: "Autoliva : votre devis {quoteRef} est toujours d'actualité.\nUne question ou réserver ? Appelez {phoneMoteur}",
+    vars: [['quoteRef', 'N° de dossier devis'], ['phoneMoteur', 'Téléphone commercial']],
     example: { quoteRef: 'AUT-2026-06-7AB12', phoneMoteur: '04 65 84 85 39' },
   },
   {
-    key: 'moteur_relance_j14', category: 'Moteur', label: 'Relance devis J+14 (dernier rappel)',
+    key: 'moteur_relance_j14', category: 'Devis', label: 'Relance devis J+14 (dernier rappel)',
     defaultTemplate: "Autoliva : dernier rappel pour votre devis {quoteRef}.\nSans nouvelle on ferme le dossier.\nToujours intéressé ? Appelez {phoneMoteur}",
-    vars: [['quoteRef', 'N° de dossier devis'], ['phoneMoteur', 'Téléphone commercial moteurs']],
+    vars: [['quoteRef', 'N° de dossier devis'], ['phoneMoteur', 'Téléphone commercial']],
     example: { quoteRef: 'AUT-2026-06-7AB12', phoneMoteur: '04 65 84 85 39' },
   },
   {
-    key: 'moteur_expedition', category: 'Moteur', label: 'Expédition moteur',
+    key: 'moteur_expedition', category: 'Devis', label: 'Expédition moteur',
     defaultTemplate: "Autoliva : votre moteur ({quoteRef}) est expédié !{trackingPart}\nQuestion ? {phoneMoteur}",
-    vars: [['quoteRef', 'N° de dossier devis'], ['trackingPart', 'Suivi (transporteur + n° + lien)'], ['phoneMoteur', 'Téléphone commercial moteurs']],
+    vars: [['quoteRef', 'N° de dossier devis'], ['trackingPart', 'Suivi (transporteur + n° + lien)'], ['phoneMoteur', 'Téléphone commercial']],
+    example: { quoteRef: 'AUT-2026-06-7AB12', trackingPart: ' Suivi DPD : XYZ789', phoneMoteur: '04 65 84 85 39' },
+  },
+
+  // ─────────── BOÎTE ───────────
+  // Variante genrée du SMS d'expédition pour les leads boîte (féminin). Choisie
+  // au call-site via cart.isBoite (engineQuoteAdminController.postShipment).
+  {
+    key: 'boite_expedition', category: 'Devis', label: 'Expédition boîte',
+    defaultTemplate: "Autoliva : votre boîte ({quoteRef}) est expédiée !{trackingPart}\nQuestion ? {phoneMoteur}",
+    vars: [['quoteRef', 'N° de dossier devis'], ['trackingPart', 'Suivi (transporteur + n° + lien)'], ['phoneMoteur', 'Téléphone commercial']],
     example: { quoteRef: 'AUT-2026-06-7AB12', trackingPart: ' Suivi DPD : XYZ789', phoneMoteur: '04 65 84 85 39' },
   },
 ];
