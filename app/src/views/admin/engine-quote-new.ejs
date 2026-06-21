@@ -4,8 +4,8 @@
 
 <main class="flex-1">
   <div class="px-6 lg:px-10 py-8 max-w-3xl">
-    <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Devis moteurs', url: '/admin/devis-moteurs'}, {label: 'Nouveau devis'}] }) %>
-    <div class="text-2xl md:text-3xl font-semibold text-slate-900">Nouveau devis moteur</div>
+    <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Devis moteurs & boîtes', url: '/admin/devis-moteurs'}, {label: 'Nouveau devis'}] }) %>
+    <div class="text-2xl md:text-3xl font-semibold text-slate-900">Nouveau devis</div>
     <div class="mt-1 text-sm text-slate-500">Crée un dossier de zéro (lead reçu par téléphone ou email). Tu pourras ensuite chiffrer et envoyer le devis depuis la fiche.</div>
 
     <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>

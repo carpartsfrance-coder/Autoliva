@@ -62,6 +62,7 @@ function partLexicon(category) {
     expedie: b ? 'expédiée' : 'expédié',
     reserve: b ? 'réservée' : 'réservé',
     recu: b ? 'reçue' : 'reçu',
+    marque: b ? 'marquée' : 'marqué',
 
     // étape de préparation/contrôle (email acompte)
     prepTest: b ? 'le contrôle du passage des rapports' : "le passage sur banc d'essai",
