@@ -20,6 +20,7 @@ const emailService = require('../services/emailService');
 const { sendSms } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
 const { buildReminderEmailHtml } = require('../services/engineQuoteEmail');
+const { partLexicon } = require('../services/partLexicon');
 const brand = require('../config/brand');
 
 const MS_DAY = 24 * 60 * 60 * 1000;
@@ -138,7 +139,11 @@ async function sendReminder(cart, type) {
     ? (publicBase() + '/api/devis-moteurs/track-pay/' + cart._id + '/' + lastSent._id)
     : '';
 
+  const cat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+  const lex = partLexicon(cat);
+
   const html = buildReminderEmailHtml({
+    category: cat,
     type,
     quoteRef,
     firstName: firstNameForEmail,
@@ -152,14 +157,14 @@ async function sendReminder(cart, type) {
   });
 
   const subject = type === 'winback'
-    ? `Toujours à la recherche de votre moteur ?`
+    ? `Toujours à la recherche de ${lex.votreNoun} ?`
     : type === 'j14'
       ? `Dernier rappel — votre devis ${quoteRef}`
       : type === 'j7'
         ? `Votre devis ${quoteRef} — je peux reconfirmer la dispo`
         : `On reste dispo pour votre devis ${quoteRef}`;
 
-  const text = `Bonjour,\n\nJe reviens vers vous au sujet de mon devis ${quoteRef} (envoyé il y a ${daysSince} jour(s)). Un devis n'étant garanti que 24h (le moteur peut partir, les prix bougent), dites-moi si vous êtes toujours intéressé : je reconfirme la disponibilité et le prix du jour.\n\nL'équipe Autoliva\n${brand.PHONE_MOTEUR}`;
+  const text = `Bonjour,\n\nJe reviens vers vous au sujet de mon devis ${quoteRef} (envoyé il y a ${daysSince} jour(s)). Un devis n'étant garanti que 24h (${lex.leNoun} peut partir, les prix bougent), dites-moi si vous êtes toujours intéressé : je reconfirme la disponibilité et le prix du jour.\n\nL'équipe Autoliva\n${brand.PHONE_MOTEUR}`;
 
   const result = await emailService.sendEmail({
     toEmail: cart.email,
