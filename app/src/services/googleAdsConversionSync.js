@@ -48,7 +48,7 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
 
   // ── LEADS : devis moteur avec gclid, jamais remontés, dans la fenêtre ──
   const leadCandidates = await AbandonedCart.find({
-    captureSource: 'landing_moteurs',
+    captureSource: { $in: ['landing_moteurs', 'landing_boites'] },
     'attribution.gclid': { $nin: ['', null] },
     'googleAdsUpload.leadAt': { $in: [null, undefined] },
     createdAt: { $gte: since },
@@ -75,7 +75,7 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
 
   // ── VENTES : devis gagnés avec gclid, jamais remontés ──
   const saleCandidates = await AbandonedCart.find({
-    captureSource: 'landing_moteurs',
+    captureSource: { $in: ['landing_moteurs', 'landing_boites'] },
     'engineQuote.status': { $in: SALE_STATUSES },
     'attribution.gclid': { $nin: ['', null] },
     'googleAdsUpload.saleAt': { $in: [null, undefined] },

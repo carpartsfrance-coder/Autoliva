@@ -256,7 +256,7 @@ async function getEngineQuotesList(req, res, next) {
     // active pour la désencombrer, mais restent consultables via le toggle.
     const view = req.query.view === 'archived' ? 'archived' : 'active';
 
-    const query = { captureSource: 'landing_moteurs' };
+    const query = { captureSource: LEAD_SOURCE_FILTER };
     query.archived = view === 'archived' ? true : { $ne: true };
     if (statusFilter && STATUS_LABELS[statusFilter]) {
       query['engineQuote.status'] = statusFilter;
@@ -311,6 +311,8 @@ async function getEngineQuotesList(req, res, next) {
       return {
         id: String(c._id),
         source: classifyLeadSource(c.attribution),
+        category: leadCategoryLabel(c.captureSource),
+        isBoite: c.captureSource === 'landing_boites',
         ref: (c.requested && c.requested.ref) || '',
         plate: (c.requested && c.requested.plate) || '',
         vehicle: (c.requested && c.requested.vehicle) || '',
@@ -364,12 +366,12 @@ async function getEngineQuotesList(req, res, next) {
 
     // Compteur d'archivés (pour le badge du toggle), indépendant des filtres.
     const archivedCount = await AbandonedCart.countDocuments({
-      captureSource: 'landing_moteurs',
+      captureSource: LEAD_SOURCE_FILTER,
       archived: true,
     });
 
     return res.render('admin/engine-quotes', {
-      title: 'Devis moteurs · Admin',
+      title: 'Devis moteurs & boîtes · Admin',
       activeKey: 'engine-quotes',
       items,
       stats,
@@ -386,13 +388,17 @@ async function getEngineQuotesList(req, res, next) {
 
 /* ─── PAGE DÉTAIL ─────────────────────────────────────────────────────── */
 
+const LEAD_SOURCES = ['landing_moteurs', 'landing_boites'];
+const LEAD_SOURCE_FILTER = { $in: LEAD_SOURCES };
+function leadCategoryLabel(src) { return src === 'landing_boites' ? 'Boîte' : 'Moteur'; }
+
 async function getEngineQuoteDetail(req, res, next) {
   try {
     const id = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).render('errors/404');
 
     const cart = await AbandonedCart.findById(id).lean();
-    if (!cart || cart.captureSource !== 'landing_moteurs') return res.status(404).render('errors/404');
+    if (!cart || !LEAD_SOURCES.includes(cart.captureSource)) return res.status(404).render('errors/404');
 
     const eq = cart.engineQuote || {};
     const isReconditionneLead = leadIsReconditionne(eq, cart);
@@ -618,7 +624,7 @@ function buildUpdate(req) {
  */
 async function ensureEngineQuote(id) {
   await AbandonedCart.updateOne(
-    { _id: id, captureSource: 'landing_moteurs', engineQuote: null },
+    { _id: id, captureSource: LEAD_SOURCE_FILTER, engineQuote: null },
     { $set: { engineQuote: {} } }
   );
 }
@@ -641,7 +647,7 @@ async function postChangeStatus(req, res, next) {
 
     await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
-      { _id: id, captureSource: 'landing_moteurs' },
+      { _id: id, captureSource: LEAD_SOURCE_FILTER },
       {
         $set: {
           'engineQuote.status': newStatus,
@@ -664,7 +670,7 @@ async function postUpdateEngine(req, res, next) {
     const b = req.body || {};
     await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
-      { _id: id, captureSource: 'landing_moteurs' },
+      { _id: id, captureSource: LEAD_SOURCE_FILTER },
       {
         $set: {
           'engineQuote.identifiedEngine.code': String(b.code || '').trim().slice(0, 80),
@@ -694,7 +700,7 @@ async function postUpdateStock(req, res, next) {
     if (loc && !STOCK_LABELS[loc]) return res.status(400).send('Stock invalide');
     await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
-      { _id: id, captureSource: 'landing_moteurs' },
+      { _id: id, captureSource: LEAD_SOURCE_FILTER },
       {
         $set: {
           'engineQuote.stock.location': loc,
@@ -716,7 +722,7 @@ async function postUpdatePricing(req, res, next) {
     const b = req.body || {};
     await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
-      { _id: id, captureSource: 'landing_moteurs' },
+      { _id: id, captureSource: LEAD_SOURCE_FILTER },
       {
         $set: {
           'engineQuote.pricing.purchasePrice': safeNumber(b.purchasePrice),
@@ -744,7 +750,7 @@ async function postAddNote(req, res, next) {
     const admin = getAdminInfo(req);
     await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
-      { _id: id, captureSource: 'landing_moteurs' },
+      { _id: id, captureSource: LEAD_SOURCE_FILTER },
       {
         $push: {
           notes: {
@@ -786,7 +792,7 @@ async function postSetArchive(req, res, next) {
     const admin = getAdminInfo(req);
 
     await AbandonedCart.updateOne(
-      { _id: id, captureSource: 'landing_moteurs' },
+      { _id: id, captureSource: LEAD_SOURCE_FILTER },
       archive
         ? { $set: { archived: true, archivedAt: new Date(), archivedByName: admin.name } }
         : { $set: { archived: false, archivedAt: null, archivedByName: '' } }
@@ -809,7 +815,7 @@ async function postDelete(req, res, next) {
     const id = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
 
-    const cart = await AbandonedCart.findOne({ _id: id, captureSource: 'landing_moteurs' }).lean();
+    const cart = await AbandonedCart.findOne({ _id: id, captureSource: LEAD_SOURCE_FILTER }).lean();
     if (!cart) return res.status(404).send('Not found');
 
     // Collecte les fichiers GridFS rattachés (photos moteur/km + PDF envoyés)
@@ -822,7 +828,7 @@ async function postDelete(req, res, next) {
       try { await storage.deleteFile(fid); } catch (_) {}
     }
 
-    await AbandonedCart.deleteOne({ _id: id, captureSource: 'landing_moteurs' });
+    await AbandonedCart.deleteOne({ _id: id, captureSource: LEAD_SOURCE_FILTER });
 
     return res.redirect('/admin/devis-moteurs');
   } catch (err) {
@@ -840,7 +846,7 @@ async function postShipment(req, res, next) {
   try {
     const id = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
-    const cart = await AbandonedCart.findOne({ _id: id, captureSource: 'landing_moteurs' });
+    const cart = await AbandonedCart.findOne({ _id: id, captureSource: LEAD_SOURCE_FILTER });
     if (!cart) return res.status(404).send('Not found');
 
     const b = req.body || {};
@@ -887,7 +893,7 @@ async function postShipment(req, res, next) {
 
     await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
-      { _id: id, captureSource: 'landing_moteurs' },
+      { _id: id, captureSource: LEAD_SOURCE_FILTER },
       {
         $set: {
           'engineQuote.shipment': {
@@ -928,7 +934,7 @@ async function postUploadPhoto(req, res, next) {
       : (req.file ? [req.file] : []);
     if (!files.length) return res.redirect('/admin/devis-moteurs/' + id + '#photos');
 
-    const cart = await AbandonedCart.findOne({ _id: id, captureSource: 'landing_moteurs' });
+    const cart = await AbandonedCart.findOne({ _id: id, captureSource: LEAD_SOURCE_FILTER });
     if (!cart) return res.status(404).send('Not found');
 
     const admin = getAdminInfo(req);
@@ -982,7 +988,7 @@ async function postDeletePhoto(req, res, next) {
 
     await ensureEngineQuote(id);
     await AbandonedCart.updateOne(
-      { _id: id, captureSource: 'landing_moteurs' },
+      { _id: id, captureSource: LEAD_SOURCE_FILTER },
       {
         $pull: { [`engineQuote.photos.${category}`]: { id: photoId } },
         $set: buildUpdate(req),
@@ -1012,7 +1018,7 @@ async function prepareQuoteData(req, opts) {
   const id = req.params.id;
   if (!mongoose.Types.ObjectId.isValid(id)) return { error: { code: 404, msg: 'Not found' } };
 
-  const cart = await AbandonedCart.findOne({ _id: id, captureSource: 'landing_moteurs' });
+  const cart = await AbandonedCart.findOne({ _id: id, captureSource: LEAD_SOURCE_FILTER });
   if (!cart) return { error: { code: 404, msg: 'Not found' } };
   if (requireEmail && !cart.email) return { error: { code: 400, msg: 'Le client n\'a pas d\'email — impossible d\'envoyer le devis' } };
 
@@ -1171,7 +1177,7 @@ async function getPreviewMail(req, res, next) {
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).render('errors/404');
     if (!PREVIEW_LABELS[type]) return res.status(400).send('Type de mail inconnu');
 
-    const cart = await AbandonedCart.findOne({ _id: id, captureSource: 'landing_moteurs' }).lean();
+    const cart = await AbandonedCart.findOne({ _id: id, captureSource: LEAD_SOURCE_FILTER }).lean();
     if (!cart) return res.status(404).render('errors/404');
 
     const eq = cart.engineQuote || {};
@@ -1223,7 +1229,7 @@ async function postSendQuote(req, res, next) {
     const id = req.params.id;
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
 
-    const cart = await AbandonedCart.findOne({ _id: id, captureSource: 'landing_moteurs' });
+    const cart = await AbandonedCart.findOne({ _id: id, captureSource: LEAD_SOURCE_FILTER });
     if (!cart) return res.status(404).send('Not found');
     if (!cart.email) return res.status(400).send('Le client n\'a pas d\'email — impossible d\'envoyer le devis');
 
@@ -1537,7 +1543,7 @@ async function getEngineQuoteFunnel(req, res, next) {
     else if (period === '90d') since = new Date(now.getTime() - 90 * FUNNEL_MS_DAY);
     else if (period === '30d') since = new Date(now.getTime() - 30 * FUNNEL_MS_DAY);
 
-    const query = { captureSource: 'landing_moteurs' };
+    const query = { captureSource: LEAD_SOURCE_FILTER };
     if (since) query.createdAt = { $gte: since };
 
     const carts = await AbandonedCart.find(query)
