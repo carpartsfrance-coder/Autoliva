@@ -458,10 +458,12 @@ function dt(v) {
             <p class="text-xs text-orange-700 mt-2">L'envoi reste possible, mais le devis manquera de détails (zones vides sur le PDF).</p>
           </div>
           <% { %>
-            <% // Template commercial pré-rempli — le commercial peut éditer avant envoi
+            <% // Template commercial pré-rempli — le commercial peut éditer avant envoi.
+              // Accordé au genre selon la catégorie du lead (boîte fém. / moteur masc.).
+              const b = !!cart.isBoite;
               const tplFirstName = (cart.firstName && cart.lastName) ? cart.firstName : '';
               const tplPlate = cart.plate || 'votre véhicule';
-              const tplModel = engineQuote.identifiedEngine.model || 'le moteur demandé';
+              const tplModel = engineQuote.identifiedEngine.model || (b ? 'la boîte demandée' : 'le moteur demandé');
               const tplCode = engineQuote.identifiedEngine.code ? ' (' + engineQuote.identifiedEngine.code + ')' : '';
               const tplMileage = engineQuote.identifiedEngine.mileage > 0
                 ? new Intl.NumberFormat('fr-FR').format(engineQuote.identifiedEngine.mileage) + ' km certifiés au compteur'
@@ -469,22 +471,36 @@ function dt(v) {
               const tplCondition = engineQuote.identifiedEngine.condition;
               const tplIsRecond = tplCondition === 'reconditionne_complet' || tplCondition === 'reconditionne_chemise_fonte';
               const tplConditionLine = tplCondition === 'reconditionne_chemise_fonte'
-                ? 'Il s\'agit d\'un moteur reconditionné avec chemisage fonte — la solution premium pour fiabiliser durablement votre bloc moteur.'
+                ? (b
+                    ? 'Il s\'agit d\'une boîte reconditionnée haut de gamme dans notre atelier — la solution premium pour fiabiliser durablement votre transmission.'
+                    : 'Il s\'agit d\'un moteur reconditionné avec chemisage fonte — la solution premium pour fiabiliser durablement votre bloc moteur.')
                 : tplCondition === 'reconditionne_complet'
-                  ? 'Il s\'agit d\'un moteur entièrement reconditionné dans notre atelier.'
+                  ? (b
+                      ? 'Il s\'agit d\'une boîte entièrement reconditionnée dans notre atelier.'
+                      : 'Il s\'agit d\'un moteur entièrement reconditionné dans notre atelier.')
                   : tplCondition === 'occasion'
-                    ? 'Moteur d\'occasion intégralement testé sur banc d\'essai avant expédition.'
+                    ? (b
+                        ? 'Boîte de vitesse d\'occasion intégralement contrôlée à l\'atelier avant expédition.'
+                        : 'Moteur d\'occasion intégralement testé sur banc d\'essai avant expédition.')
                     : '';
               // Garantie selon l'état (cohérent avec le devis PDF/email) : reconditionné 12 mois, occasion 6 mois
               const tplWarranty = (tplCondition === 'reconditionne_chemise_fonte' || tplCondition === 'reconditionne_complet') ? 12 : 6;
               const tplStock = engineQuote.stock.location === 'atelier'
                 ? (tplIsRecond
-                    ? 'Le moteur est reconditionné dans notre atelier (rectification + remplacement des pièces d\'usure).'
-                    : 'Le moteur est actuellement dans notre atelier, déjà passé sur banc d\'essai.')
+                    ? (b
+                        ? 'La boîte est reconditionnée dans notre atelier (remplacement des pièces d\'usure, mécatronique contrôlée).'
+                        : 'Le moteur est reconditionné dans notre atelier (rectification + remplacement des pièces d\'usure).')
+                    : (b
+                        ? 'La boîte est actuellement dans notre atelier, déjà contrôlée.'
+                        : 'Le moteur est actuellement dans notre atelier, déjà passé sur banc d\'essai.'))
                 : engineQuote.stock.location === 'sourcing'
                   ? (tplIsRecond
-                      ? 'Le moteur est reconditionné à la commande dans notre atelier (rectification + remplacement des pièces d\'usure), puis contrôlé avant expédition.'
-                      : 'Le moteur est sur commande sur notre réseau professionnel. Il passera obligatoirement sur banc d\'essai à l\'atelier avant expédition.')
+                      ? (b
+                          ? 'La boîte est reconditionnée à la commande dans notre atelier (remplacement des pièces d\'usure, mécatronique contrôlée), puis contrôlée avant expédition.'
+                          : 'Le moteur est reconditionné à la commande dans notre atelier (rectification + remplacement des pièces d\'usure), puis contrôlé avant expédition.')
+                      : (b
+                          ? 'La boîte est sur commande sur notre réseau professionnel. Elle sera obligatoirement contrôlée à l\'atelier avant expédition.'
+                          : 'Le moteur est sur commande sur notre réseau professionnel. Il passera obligatoirement sur banc d\'essai à l\'atelier avant expédition.'))
                   : '';
               const tplDelay = engineQuote.stock.estimatedDelay ? ' Délai estimé : ' + engineQuote.stock.estimatedDelay + '.' : '';
               // Bullet "expédition" adapté au scénario stock (pas de 48-72h si c'est sur commande)
@@ -492,9 +508,21 @@ function dt(v) {
                 ? '• Expédition Europe en 48-72h après accord'
                 : engineQuote.stock.location === 'sourcing'
                   ? (tplIsRecond
-                      ? '• Expédition Europe sous 48-72h une fois le moteur reconditionné et contrôlé'
-                      : '• Expédition Europe sous 48-72h une fois le moteur validé sur notre banc d\'essai')
+                      ? (b
+                          ? '• Expédition Europe sous 48-72h une fois la boîte reconditionnée et contrôlée'
+                          : '• Expédition Europe sous 48-72h une fois le moteur reconditionné et contrôlé')
+                      : (b
+                          ? '• Expédition Europe sous 48-72h une fois la boîte validée à l\'atelier'
+                          : '• Expédition Europe sous 48-72h une fois le moteur validé sur notre banc d\'essai'))
                   : '• Expédition sécurisée Europe (palette, scellés, attestation)';
+              // Contrôle au banc — vocabulaire spécifique (compression/endoscopie pour
+              // un moteur ; passage des rapports/mécatronique pour une boîte).
+              const tplBenchObligatoire = b
+                ? '• Contrôle obligatoire (passage des rapports, étanchéité, mécatronique)'
+                : '• Banc d\'essai obligatoire (compression, étanchéité, endoscopie)';
+              const tplBenchRecond = b
+                ? '• Banc d\'essai (passage des rapports, étanchéité, mécatronique)'
+                : '• Banc d\'essai (compression, étanchéité, endoscopie)';
               const defaultMessage = [
                 tplFirstName ? `Bonjour ${tplFirstName},` : 'Bonjour,',
                 ``,
@@ -503,11 +531,11 @@ function dt(v) {
                 tplMileage ? `\nKilométrage : ${tplMileage}.` : '',
                 tplStock ? `\n${tplStock}${tplDelay}` : '',
                 ``,
-                `Vous trouverez en pièces jointes le devis détaillé au format PDF et les photos du moteur.`,
+                `Vous trouverez en pièces jointes le devis détaillé au format PDF et les photos ${b ? 'de la boîte' : 'du moteur'}.`,
                 ``,
                 `Pour rappel, nos engagements :`,
-                tplIsRecond ? `• Reconditionnement complet en atelier (pièces d'usure remplacées)` : `• Banc d'essai obligatoire (compression, étanchéité, endoscopie)`,
-                tplIsRecond ? `• Banc d'essai (compression, étanchéité, endoscopie)` : `• Kilométrage certifié et photo du compteur transmise`,
+                tplIsRecond ? `• Reconditionnement complet en atelier (pièces d'usure remplacées)` : tplBenchObligatoire,
+                tplIsRecond ? tplBenchRecond : `• Kilométrage certifié et photo du compteur transmise`,
                 `• Garantie ${tplWarranty} mois sans franchise kilométrique`,
                 tplShippingBullet,
                 ``,

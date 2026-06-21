@@ -418,6 +418,8 @@ async function getEngineQuoteDetail(req, res, next) {
       cart: {
         id: String(cart._id),
         displayName,
+        // Catégorie du lead → accorde le message commercial pré-rempli (boîte fém.)
+        isBoite: cart.captureSource === 'landing_boites',
         email: cart.email,
         phone: cart.phone,
         firstName: cart.firstName,
