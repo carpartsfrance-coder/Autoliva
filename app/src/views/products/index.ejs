@@ -374,48 +374,48 @@
               <% const _compat = (Array.isArray(p.compatibility) && p.compatibility[0]) ? p.compatibility[0] : null; %>
               <% const _pBrand = ((p.brand && String(p.brand).trim()) || (_compat && _compat.make) || ''); %>
               <article class="group bg-white rounded-xl border border-gray-200 hover:border-primary/50 hover:shadow-md transition overflow-hidden">
-                <div class="flex flex-col sm:flex-row sm:items-stretch">
+                <div class="flex flex-col sm:flex-row">
 
                   <%# 1 · IMAGE %>
-                  <a href="<%= productUrl %>" class="relative block shrink-0 bg-gray-50 overflow-hidden aspect-[4/3] sm:aspect-auto sm:w-44 lg:w-52">
+                  <a href="<%= productUrl %>" class="relative block shrink-0 bg-gray-50 overflow-hidden aspect-[4/3] sm:aspect-auto sm:w-40 lg:w-48">
                     <% if (imgUrl) { %>
                       <img src="<%= imgUrl %>" alt="<%= p.name %>" width="400" height="300" loading="lazy" decoding="async" class="w-full h-full object-contain sm:object-cover p-3 sm:p-0"/>
                     <% } %>
                     <% if (badge) { %><span class="absolute top-2 left-2 bg-primary text-[10px] text-white font-bold px-2 py-1 rounded-full"><%= badge %></span><% } %>
                   </a>
 
-                  <%# 2 · TITRE + RÉFÉRENCE/ÉTAT/TYPE %>
-                  <div class="flex-1 min-w-0 p-4 lg:p-5 flex flex-col gap-3 border-t sm:border-t-0 sm:border-l border-gray-100">
+                  <%# 2 · INFO (titre + réf/état/type + garanties + compatibilité) — prend toute la place restante %>
+                  <div class="flex-1 min-w-0 p-4 lg:p-5 flex flex-col gap-2.5 border-t sm:border-t-0 sm:border-l border-gray-100">
                     <a class="block font-bold text-gray-900 leading-snug hover:text-primary text-sm sm:text-base line-clamp-2" href="<%= productUrl %>"><%= p.name %></a>
-                    <div class="grid grid-cols-3 gap-3 max-w-md">
-                      <% [['Référence', _ref], ['État', _etat], ['Type', _type]].forEach((row) => { %>
-                        <div class="min-w-0">
-                          <p class="text-[10px] text-gray-400 uppercase tracking-wider"><%= row[0] %></p>
-                          <p class="text-xs sm:text-sm font-semibold text-gray-800 truncate" title="<%= row[1] %>"><%= row[1] || '—' %></p>
+
+                    <%# Réf / État / Type : flex-wrap → jamais de chevauchement, valeurs jamais coupées %>
+                    <div class="flex flex-wrap gap-x-7 gap-y-2">
+                      <% [['Référence', _ref], ['État', _etat], ['Type', _type]].forEach((row) => { if (!row[1]) return; %>
+                        <div>
+                          <p class="text-[10px] text-gray-400 uppercase tracking-wider leading-none mb-1"><%= row[0] %></p>
+                          <p class="text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap"><%= row[1] %></p>
                         </div>
                       <% }) %>
                     </div>
+
+                    <%# Garanties / confiance : ligne inline qui se replie proprement %>
+                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-500">
+                      <span class="inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-emerald-600 text-[16px]">verified_user</span><%= _wMonths > 0 ? ('Garantie ' + _wMonths + ' mois') : 'Garantie incluse' %></span>
+                      <span class="inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-emerald-600 text-[16px]">build</span>Contrôlé &amp; testé</span>
+                      <span class="inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-emerald-600 text-[16px]">workspace_premium</span>Qualité premium</span>
+                    </div>
+
+                    <%# Compatibilité : ligne compacte cohérente sur toutes les lignes %>
+                    <% if (_compat && (_compat.make || _compat.model)) { %>
+                    <p class="text-xs text-gray-500 truncate">
+                      <span class="text-gray-400">Compatible :</span>
+                      <span class="font-semibold text-gray-700"><%= [_compat.make, _compat.model].filter(Boolean).join(' ') %></span><% if (_compat.years) { %> · <%= _compat.years %><% } %>
+                      — <a href="<%= productUrl %>" class="font-semibold text-primary hover:underline">Voir détails</a>
+                    </p>
+                    <% } %>
                   </div>
 
-                  <%# 3 · GARANTIES / CONFIANCE %>
-                  <div class="hidden lg:flex flex-col justify-center gap-2.5 px-5 py-4 border-l border-gray-100 shrink-0">
-                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">verified_user</span><%= _wMonths > 0 ? ('Garantie ' + _wMonths + ' mois') : 'Garantie incluse' %></span>
-                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">build</span>Contrôlé &amp; testé</span>
-                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">workspace_premium</span>Qualité premium</span>
-                  </div>
-
-                  <%# 4 · COMPATIBILITÉ %>
-                  <% if (_compat && (_compat.make || _compat.model)) { %>
-                  <div class="hidden xl:flex flex-col justify-center gap-0.5 px-5 py-4 border-l border-gray-100 shrink-0 w-44">
-                    <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Compatible avec</p>
-                    <% if (_compat.make) { %><p class="text-sm font-bold text-gray-900 truncate" title="<%= _compat.make %>"><%= _compat.make %></p><% } %>
-                    <% if (_compat.model) { %><p class="text-xs text-gray-600 truncate" title="<%= _compat.model %>"><%= _compat.model %></p><% } %>
-                    <% if (_compat.years) { %><p class="text-xs text-gray-500"><%= _compat.years %></p><% } %>
-                    <a href="<%= productUrl %>" class="mt-1 text-xs font-semibold text-primary hover:underline">Voir détails</a>
-                  </div>
-                  <% } %>
-
-                  <%# 5 · PRIX + STOCK + AJOUTER AU PANIER %>
+                  <%# 3 · PRIX + STOCK + AJOUTER AU PANIER %>
                   <div class="px-4 lg:px-5 py-4 border-t sm:border-t-0 sm:border-l border-gray-100 shrink-0 flex flex-row sm:flex-col items-center sm:items-end justify-between gap-3 sm:w-52">
                     <div class="sm:text-right">
                       <p class="text-[10px] text-gray-400 uppercase tracking-wider"><%= t('product.priceTTC') %></p>
