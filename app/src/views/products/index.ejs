@@ -359,27 +359,72 @@
             <div class="mt-2 text-sm text-gray-500"><%= t('listing.noResultsDesc') %></div>
           </div>
         <% } else { %>
-          <div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <%# Listing en LIGNES horizontales (1 produit par ligne, scannable). %>
+          <div class="flex flex-col gap-4">
             <% products.forEach((p) => { %>
               <% const imgUrl = (p && typeof p.imageUrl === 'string' && p.imageUrl.trim()) ? p.imageUrl.trim() : (Array.isArray(p.galleryUrls) && p.galleryUrls[0] ? p.galleryUrls[0] : ''); %>
               <% const productUrl = (p && p.publicPath) ? p.publicPath : ('/produits/' + p._id); %>
-              <% const badge = (p && p.badges && p.badges.topLeft) ? p.badges.topLeft : 'GARANTIE'; %>
-              <div class="bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col">
-                <a href="<%= productUrl %>" class="block relative aspect-[4/3] overflow-hidden bg-gray-100">
-                  <% if (imgUrl) { %>
-                    <img src="<%= imgUrl %>" alt="<%= p.name %>" width="400" height="300" loading="lazy" decoding="async" class="w-full h-full object-cover"/>
-                  <% } %>
-                  <span class="absolute top-2 left-2 bg-primary text-[9px] text-white font-bold px-2 py-1 rounded-full"><%= badge %></span>
-                </a>
-                <div class="p-3 flex flex-col flex-grow">
-                  <a class="block font-semibold text-gray-800 leading-snug mb-3 hover:text-primary text-xs sm:text-sm line-clamp-2" href="<%= productUrl %>"><%= p.name %></a>
-                  <div class="mt-auto pt-3 border-t border-gray-100 flex items-center justify-between">
-                    <div>
-                      <p class="text-[10px] text-gray-400 uppercase tracking-wider"><%= t('product.priceTTC') %></p>
-                      <p class="text-base sm:text-lg font-bold text-gray-900"><%= formatMoney(p.priceCents) %> €</p>
+              <% const badge = (p && p.badges && p.badges.topLeft) ? String(p.badges.topLeft).trim() : ''; %>
+              <% const _specs = Array.isArray(p.specs) ? p.specs : []; %>
+              <% const _findSpec = (k) => { const s = _specs.find((x) => x && String(x.label || '').toLowerCase().includes(k)); return s ? String(s.value || '').trim() : ''; }; %>
+              <% const _ref = (p.sku && String(p.sku).trim()) || ''; %>
+              <% const _etat = _findSpec('état') || _findSpec('etat') || (p.badges && p.badges.condition ? String(p.badges.condition).trim() : ''); %>
+              <% const _type = _findSpec('type') || (p.category ? String(p.category).split('>')[0].trim() : ''); %>
+              <% const _wMonths = (p.warranty && p.warranty.months) ? p.warranty.months : 0; %>
+              <% const _compat = (Array.isArray(p.compatibility) && p.compatibility[0]) ? p.compatibility[0] : null; %>
+              <% const _pBrand = ((p.brand && String(p.brand).trim()) || (_compat && _compat.make) || ''); %>
+              <article class="group bg-white rounded-xl border border-gray-200 hover:border-primary/50 hover:shadow-md transition overflow-hidden">
+                <div class="flex flex-col sm:flex-row sm:items-stretch">
+
+                  <%# 1 · IMAGE %>
+                  <a href="<%= productUrl %>" class="relative block shrink-0 bg-gray-50 overflow-hidden aspect-[4/3] sm:aspect-auto sm:w-44 lg:w-52">
+                    <% if (imgUrl) { %>
+                      <img src="<%= imgUrl %>" alt="<%= p.name %>" width="400" height="300" loading="lazy" decoding="async" class="w-full h-full object-contain sm:object-cover p-3 sm:p-0"/>
+                    <% } %>
+                    <% if (badge) { %><span class="absolute top-2 left-2 bg-primary text-[10px] text-white font-bold px-2 py-1 rounded-full"><%= badge %></span><% } %>
+                  </a>
+
+                  <%# 2 · TITRE + RÉFÉRENCE/ÉTAT/TYPE %>
+                  <div class="flex-1 min-w-0 p-4 lg:p-5 flex flex-col gap-3 border-t sm:border-t-0 sm:border-l border-gray-100">
+                    <a class="block font-bold text-gray-900 leading-snug hover:text-primary text-sm sm:text-base line-clamp-2" href="<%= productUrl %>"><%= p.name %></a>
+                    <div class="grid grid-cols-3 gap-3 max-w-md">
+                      <% [['Référence', _ref], ['État', _etat], ['Type', _type]].forEach((row) => { %>
+                        <div class="min-w-0">
+                          <p class="text-[10px] text-gray-400 uppercase tracking-wider"><%= row[0] %></p>
+                          <p class="text-xs sm:text-sm font-semibold text-gray-800 truncate" title="<%= row[1] %>"><%= row[1] || '—' %></p>
+                        </div>
+                      <% }) %>
                     </div>
-                    <% const _pBrand = ((p.brand && String(p.brand).trim()) || (Array.isArray(p.compatibility) && p.compatibility[0] && p.compatibility[0].make) || ''); %>
-                    <form action="/panier/ajouter/<%= p._id %>" method="POST"
+                  </div>
+
+                  <%# 3 · GARANTIES / CONFIANCE %>
+                  <div class="hidden lg:flex flex-col justify-center gap-2.5 px-5 py-4 border-l border-gray-100 shrink-0">
+                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">verified_user</span><%= _wMonths > 0 ? ('Garantie ' + _wMonths + ' mois') : 'Garantie incluse' %></span>
+                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">build</span>Contrôlé &amp; testé</span>
+                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">workspace_premium</span>Qualité premium</span>
+                  </div>
+
+                  <%# 4 · COMPATIBILITÉ %>
+                  <% if (_compat && (_compat.make || _compat.model)) { %>
+                  <div class="hidden xl:flex flex-col justify-center gap-0.5 px-5 py-4 border-l border-gray-100 shrink-0 w-44">
+                    <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Compatible avec</p>
+                    <% if (_compat.make) { %><p class="text-sm font-bold text-gray-900 truncate" title="<%= _compat.make %>"><%= _compat.make %></p><% } %>
+                    <% if (_compat.model) { %><p class="text-xs text-gray-600 truncate" title="<%= _compat.model %>"><%= _compat.model %></p><% } %>
+                    <% if (_compat.years) { %><p class="text-xs text-gray-500"><%= _compat.years %></p><% } %>
+                    <a href="<%= productUrl %>" class="mt-1 text-xs font-semibold text-primary hover:underline">Voir détails</a>
+                  </div>
+                  <% } %>
+
+                  <%# 5 · PRIX + STOCK + AJOUTER AU PANIER %>
+                  <div class="px-4 lg:px-5 py-4 border-t sm:border-t-0 sm:border-l border-gray-100 shrink-0 flex flex-row sm:flex-col items-center sm:items-end justify-between gap-3 sm:w-52">
+                    <div class="sm:text-right">
+                      <p class="text-[10px] text-gray-400 uppercase tracking-wider"><%= t('product.priceTTC') %></p>
+                      <p class="text-xl lg:text-2xl font-extrabold text-gray-900 whitespace-nowrap"><%= formatMoney(p.priceCents) %> €</p>
+                      <p class="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold <%= p.inStock ? 'text-emerald-600' : 'text-amber-600' %>">
+                        <span class="w-1.5 h-1.5 rounded-full <%= p.inStock ? 'bg-emerald-500' : 'bg-amber-500' %>"></span><%= p.inStock ? t('product.stockIn') : t('product.stockOrder') %>
+                      </p>
+                    </div>
+                    <form action="/panier/ajouter/<%= p._id %>" method="POST" class="w-auto sm:w-full"
                       data-product-id="<%= p._id %>"
                       data-product-sku="<%= p.sku || p._id %>"
                       data-product-name="<%= p.name %>"
@@ -388,13 +433,15 @@
                       data-product-price-cents="<%= p.priceCents || 0 %>">
                       <input name="returnTo" type="hidden" value="<%= typeof returnTo !== 'undefined' ? returnTo : '/produits' %>" />
                       <input name="qty" type="hidden" value="1" />
-                      <button class="bg-gray-100 p-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-primary hover:border-primary hover:text-white transition-colors duration-150 disabled:opacity-60" <%= p.inStock ? '' : 'disabled' %> type="submit">
+                      <button class="inline-flex items-center justify-center gap-2 w-full bg-primary text-white text-sm font-bold px-4 py-2.5 rounded-xl hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed" <%= p.inStock ? '' : 'disabled' %> type="submit">
                         <span class="material-symbols-outlined text-lg">shopping_cart</span>
+                        <span class="whitespace-nowrap"><%= t('product.addToCart') %></span>
                       </button>
                     </form>
                   </div>
+
                 </div>
-              </div>
+              </article>
             <% }) %>
           </div>
 
