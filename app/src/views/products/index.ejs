@@ -376,12 +376,12 @@
               <article class="group bg-white rounded-xl border border-gray-200 hover:border-primary/50 hover:shadow-md transition overflow-hidden">
                 <div class="flex flex-col sm:flex-row">
 
-                  <%# 1 · IMAGE %>
-                  <a href="<%= productUrl %>" class="relative block shrink-0 bg-gray-50 overflow-hidden aspect-[4/3] sm:aspect-auto sm:w-40 lg:w-48">
+                  <%# 1 · IMAGE — object-contain pour montrer l'illustration entière (pas de recadrage) %>
+                  <a href="<%= productUrl %>" class="relative shrink-0 bg-gray-50 overflow-hidden aspect-[4/3] sm:aspect-auto sm:w-40 lg:w-48 flex items-center justify-center">
                     <% if (imgUrl) { %>
-                      <img src="<%= imgUrl %>" alt="<%= p.name %>" width="400" height="300" loading="lazy" decoding="async" class="w-full h-full object-contain sm:object-cover p-3 sm:p-0"/>
+                      <img src="<%= imgUrl %>" alt="<%= p.name %>" width="400" height="300" loading="lazy" decoding="async" class="max-w-full max-h-full w-auto h-auto object-contain p-2"/>
                     <% } %>
-                    <% if (badge) { %><span class="absolute top-2 left-2 bg-primary text-[10px] text-white font-bold px-2 py-1 rounded-full"><%= badge %></span><% } %>
+                    <% if (badge) { %><span class="absolute top-2 left-2 bg-primary text-[10px] text-white font-bold px-2 py-1 rounded-full z-10"><%= badge %></span><% } %>
                   </a>
 
                   <%# 2 · INFO (titre + réf/état/type + garanties + compatibilité) — prend toute la place restante %>
