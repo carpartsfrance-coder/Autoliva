@@ -436,7 +436,7 @@ function buildQuotePdf(input) {
       doc.fontSize(12).font('Helvetica-Bold').fillColor('#b45309')
         .text('+ ' + eur(consigneAmount), M + 14, y + 6, { width: W - 28, align: 'right', lineBreak: false });
       doc.fontSize(8).font('Helvetica').fillColor(C_TEXT).text(
-        'Caution remboursable (hors TVA) encaissée avec votre règlement et intégralement restituée au retour de '
+        'Caution remboursable (hors TVA) réglée avec le solde et intégralement restituée au retour de '
         + lex.oldNoun + ' sous ' + consigneDelay + ' jours. Ce n\'est pas un coût définitif : ce dépôt de garantie vous est rendu.',
         M + 14, y + 25, { width: W - 28, lineGap: 1 }
       );

@@ -130,7 +130,7 @@ function buildQuoteEmailHtml(opts) {
         <td style="vertical-align:top;"><p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#b45309;">Échange standard — consigne</p></td>
         <td align="right" style="vertical-align:top;white-space:nowrap;"><span style="font-size:18px;font-weight:800;color:#b45309;">+ ${fmtEur(consigneAmount)}</span></td>
       </tr></table>
-      <p style="margin:6px 0 0;font-size:13px;line-height:1.6;color:#78350f;">Caution <strong>remboursable</strong> (hors TVA) encaissée avec votre règlement et <strong>intégralement restituée</strong> au retour de ${lex.oldNoun} sous <strong>${consigneDelay} jours</strong>. Ce n'est pas un surcoût : c'est un dépôt de garantie qui vous revient.</p>
+      <p style="margin:6px 0 0;font-size:13px;line-height:1.6;color:#78350f;">Caution <strong>remboursable</strong> (hors TVA) réglée avec le solde et <strong>intégralement restituée</strong> au retour de ${lex.oldNoun} sous <strong>${consigneDelay} jours</strong>. Ce n'est pas un surcoût : c'est un dépôt de garantie qui vous revient.</p>
     </td></tr></table>
   </td></tr>` : '';
 
