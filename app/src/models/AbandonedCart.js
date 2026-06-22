@@ -130,6 +130,14 @@ const engineQuoteSchema = new mongoose.Schema(
       // achetés à des particuliers/casses), 'normal' = TVA 20% sur le prix total.
       vatScheme: { type: String, enum: ['normal', 'margin'], default: 'margin' },
     },
+    // Consigne / échange standard (surtout moteurs & boîtes reconditionnés) :
+    // caution hors-TVA encaissée avec le règlement, remboursée au retour de
+    // l'ancienne pièce sous `delayDays`. Saisie par devis ; amount=0 → aucun
+    // affichage (le bloc « Échange standard » n'apparaît que si > 0).
+    consigne: {
+      amount: { type: Number, default: 0, min: 0 },     // montant en € (hors TVA)
+      delayDays: { type: Number, default: 30, min: 0, max: 365 },
+    },
     photos: {
       engine: { type: [engineQuotePhotoSchema], default: [] },
       kmReading: { type: [engineQuotePhotoSchema], default: [] },

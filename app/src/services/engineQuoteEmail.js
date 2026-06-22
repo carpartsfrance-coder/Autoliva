@@ -120,6 +120,20 @@ function buildQuoteEmailHtml(opts) {
 
   const lbl = 'margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;';
 
+  // Bloc « Échange standard / consigne » — affiché seulement si une consigne est saisie.
+  const consigneAmount = Number(opts.consigne && opts.consigne.amount) || 0;
+  const consigneDelay = Number(opts.consigne && opts.consigne.delayDays) || 30;
+  const consigneBlock = consigneAmount > 0 ? `
+  <tr><td class="pad-x" style="padding:6px 30px 8px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fffbeb;border:1px solid #fde68a;border-radius:14px;"><tr><td style="padding:18px 22px;">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
+        <td style="vertical-align:top;"><p style="margin:0 0 4px;font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#b45309;">Échange standard — consigne</p></td>
+        <td align="right" style="vertical-align:top;white-space:nowrap;"><span style="font-size:18px;font-weight:800;color:#b45309;">+ ${fmtEur(consigneAmount)}</span></td>
+      </tr></table>
+      <p style="margin:6px 0 0;font-size:13px;line-height:1.6;color:#78350f;">Caution <strong>remboursable</strong> (hors TVA) encaissée avec votre règlement et <strong>intégralement restituée</strong> au retour de ${lex.oldNoun} sous <strong>${consigneDelay} jours</strong>. Ce n'est pas un surcoût : c'est un dépôt de garantie qui vous revient.</p>
+    </td></tr></table>
+  </td></tr>` : '';
+
   return `<!DOCTYPE html>
 <html lang="fr"><head>
 <meta charset="utf-8">
@@ -201,6 +215,7 @@ function buildQuoteEmailHtml(opts) {
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">${includedHtml}</table>
     </td></tr></table>
   </td></tr>
+  ${consigneBlock}
 
   <!-- MESSAGE DU COMMERCIAL -->
   <tr><td class="pad-x" style="padding:14px 30px 20px;">
