@@ -753,6 +753,9 @@ async function postUpdatePricing(req, res, next) {
           'engineQuote.pricing.sellPrice': safeNumber(b.sellPrice),
           'engineQuote.pricing.vatRate': safeNumber(b.vatRate, 20),
           'engineQuote.pricing.vatScheme': b.vatScheme === 'normal' ? 'normal' : 'margin',
+          // Consigne échange standard (caution remboursable hors-TVA, saisie par devis)
+          'engineQuote.consigne.amount': Math.max(0, safeNumber(b.consigneAmount)),
+          'engineQuote.consigne.delayDays': Math.min(365, Math.max(0, safeNumber(b.consigneDelayDays, 30))),
           ...buildUpdate(req),
         },
       }
@@ -1109,6 +1112,8 @@ async function prepareQuoteData(req, opts) {
     category: cart.captureSource === 'landing_boites' ? 'boite' : 'moteur',
     // Libellé d'état accordé au genre, imprimé sur le devis (PDF + email)
     conditionLabelClient: conditionClientLabel(conditionKey, cart.captureSource === 'landing_boites' ? 'boite' : 'moteur'),
+    // Consigne / échange standard (caution remboursable hors-TVA) — bloc affiché si > 0
+    consigne: { amount: (eq.consigne && eq.consigne.amount) || 0, delayDays: (eq.consigne && eq.consigne.delayDays) || 30 },
   };
 }
 
@@ -1134,6 +1139,7 @@ async function postPreviewPdf(req, res, next) {
       customMessage: d.customMessage,
       conditionLabel: d.conditionLabelClient,
       category: d.category,
+      consigne: d.consigne,
       conditionBadge: d.conditionInfo.short,
       isReconditionne: d.conditionKey.startsWith('reconditionne'),
       photos: d.pdfPhotos,
@@ -1172,6 +1178,7 @@ async function postPreviewEmail(req, res, next) {
       brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
       conditionLabel: d.conditionLabelClient,
       category: d.category,
+      consigne: d.consigne,
       conditionBadge: d.conditionInfo.short,
       isReconditionne: d.conditionKey.startsWith('reconditionne'),
     });
@@ -1302,6 +1309,7 @@ async function postSendQuote(req, res, next) {
     const conditionInfo = CONDITION_LABELS[conditionKey] || CONDITION_LABELS[''];
     const sendCat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
     const conditionLabelClient = conditionClientLabel(conditionKey, sendCat);
+    const sendConsigne = { amount: (eq.consigne && eq.consigne.amount) || 0, delayDays: (eq.consigne && eq.consigne.delayDays) || 30 };
 
     // 0) Lit les buffers photos depuis GridFS (réutilisés pour PDF + pièces jointes)
     const allPhotos = [
@@ -1384,6 +1392,7 @@ async function postSendQuote(req, res, next) {
       customMessage,
       conditionLabel: conditionLabelClient,
       category: sendCat,
+      consigne: sendConsigne,
       conditionBadge: conditionInfo.short,
       isReconditionne: conditionKey.startsWith('reconditionne'),
       photos: pdfPhotos,
@@ -1429,6 +1438,7 @@ async function postSendQuote(req, res, next) {
       brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
       conditionLabel: conditionLabelClient,
       category: sendCat,
+      consigne: sendConsigne,
       conditionBadge: conditionInfo.short,
       isReconditionne: conditionKey.startsWith('reconditionne'),
       trackPixelUrl,

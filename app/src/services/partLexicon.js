@@ -77,6 +77,10 @@ function partLexicon(category) {
 
     // contrôle visuel (PDF — liste « Contrôles inclus »)
     visualControl: b ? 'Contrôle visuel mécatronique et carter' : 'Contrôle visuel par endoscopie',
+
+    // échange standard / consigne
+    oldNoun: b ? 'votre ancienne boîte' : 'votre ancien moteur',
+    sentBack: b ? 'renvoyée' : 'renvoyé',
   };
 }
 

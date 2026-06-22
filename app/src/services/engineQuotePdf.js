@@ -424,6 +424,25 @@ function buildQuotePdf(input) {
 
     y += bH + 12;
 
+    // ─── ÉCHANGE STANDARD / CONSIGNE (affiché seulement si consigne > 0) ──
+    const consigneAmount = Number(input.consigne && input.consigne.amount) || 0;
+    const consigneDelay = Number(input.consigne && input.consigne.delayDays) || 30;
+    if (consigneAmount > 0) {
+      const csgH = 50;
+      card(M, y, W, csgH, '#fffbeb');
+      doc.save().strokeColor('#fcd34d').lineWidth(0.8).roundedRect(M, y, W, csgH, 8).stroke().restore();
+      doc.fontSize(7.5).font('Helvetica-Bold').fillColor('#b45309')
+        .text('ÉCHANGE STANDARD — CONSIGNE', M + 14, y + 9, { characterSpacing: 1, lineBreak: false });
+      doc.fontSize(12).font('Helvetica-Bold').fillColor('#b45309')
+        .text('+ ' + eur(consigneAmount), M + 14, y + 6, { width: W - 28, align: 'right', lineBreak: false });
+      doc.fontSize(8).font('Helvetica').fillColor(C_TEXT).text(
+        'Caution remboursable (hors TVA) réglée avec le solde et intégralement restituée au retour de '
+        + lex.oldNoun + ' sous ' + consigneDelay + ' jours. Ce n\'est pas un coût définitif : ce dépôt de garantie vous est rendu.',
+        M + 14, y + 25, { width: W - 28, lineGap: 1 }
+      );
+      y += csgH + 12;
+    }
+
     // ─── INCLUS (1 ligne) ──────────────────────────────────────────
     const inclH = 30;
     card(M, y, W, inclH, C_WHITE);
