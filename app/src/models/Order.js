@@ -15,6 +15,10 @@ const orderItemSchema = new mongoose.Schema(
       enum: ['standard', 'exchange', 'exchange_cloning', 'standalone_cloning', ''],
       default: '',
     },
+    // Snapshot du régime TVA du produit AU MOMENT de la commande : seules les
+    // lignes vatRecoverable=true sont éligibles à l'autoliquidation (HT). Figé
+    // ici pour qu'un changement ultérieur du produit ne réécrive pas la facture.
+    vatRecoverable: { type: Boolean, default: false },
   },
   { _id: false }
 );
@@ -401,6 +405,21 @@ const orderSchema = new mongoose.Schema(
     refunds: { type: [refundSchema], default: [] },
     creditNotes: { type: [creditNoteSchema], default: [] },
     totalCents: { type: Number, required: true, min: 0 },
+    // Autoliquidation TVA (reverse charge B2B UE). Rempli seulement si applicable ;
+    // sinon reverseCharge=false → vente TTC normale. htCents/vatAmountCents tracent
+    // la base HT et la TVA « autoliquidée » (0 € encaissé) pour la facture.
+    // NB : totalCents reste le MONTANT ENCAISSÉ (= HT en cas d'autoliquidation).
+    vat: {
+      reverseCharge: { type: Boolean, default: false },
+      vatNumber: { type: String, default: '', trim: true },
+      vatNumberValidated: { type: Boolean, default: false },
+      vatCountry: { type: String, default: '', trim: true },   // code ISO du pays UE
+      htCents: { type: Number, default: 0, min: 0 },           // base HT des lignes autoliquidées
+      vatAmountCents: { type: Number, default: 0, min: 0 },    // TVA autoliquidée (non encaissée)
+      rate: { type: Number, default: 0 },                       // 0 si autoliquidation
+      viesCheckedAt: { type: Date, default: null },
+      legalMention: { type: String, default: '', trim: true },
+    },
     items: { type: [orderItemSchema], required: true },
     shippingAddress: { type: addressSnapshotSchema, required: true },
     billingAddress: { type: addressSnapshotSchema, required: true },
