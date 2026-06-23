@@ -2,15 +2,14 @@
 /**
  * Décision d'autoliquidation TVA (reverse charge B2B UE) — garde-fous centralisés.
  *
- * Défauts retenus (À CONFIRMER PAR KEOBIZ) :
+ * Règles (validées Killian / Keobiz) :
  *  - pays décisionnel = FACTURATION (billing)
  *  - validation VIES POSITIVE obligatoire (un format correct ne suffit pas)
  *  - HT uniquement sur les lignes vatRecoverable=true (les produits en TVA sur
  *    marge restent TTC, jamais autoliquidés)
- *  - frais de port : laissés TTC dans cette première version
+ *  - frais de PORT en HT (suivent le régime du bien en B2B intracommunautaire)
  *
- * Aucune de ces fonctions n'encaisse ni ne modifie un montant : ce sont des
- * calculs purs, câblés en phase 2 dans pricing/checkout.
+ * Calculs purs, câblés dans checkout derrière le flag VAT_REVERSE_CHARGE_ENABLED.
  */
 
 const { isEuVatCountry } = require('../config/shippingZones');
@@ -48,4 +47,29 @@ function splitReverseChargeHt(items) {
   return { eligibleTtcCents, eligibleHtCents, vatAmountCents: eligibleTtcCents - eligibleHtCents };
 }
 
-module.exports = { reverseChargeApplicable, splitReverseChargeHt, VAT_RATE, LEGAL_MENTION };
+/**
+ * Décompose TVA d'une commande en autoliquidation. Opère sur les lignes FINALES
+ * (lineTotalCents déjà net de remises) + les frais de port (HT aussi). Les lignes
+ * en marge (vatRecoverable=false) restent TTC. La consigne (caution hors-TVA) est
+ * passée à part et n'est jamais affectée.
+ * @param {Array<{vatRecoverable:boolean, lineTotalCents:number}>} items
+ * @param {number} shippingCostCents  frais de port saisis (TTC)
+ * @returns {{eligibleTtcCents,eligibleHtCents,shippingTtcCents,shippingHtCents,
+ *   htBaseCents,vatAmountCents}}
+ *   - htBaseCents = base HT totale (produits éligibles + port) pour la facture
+ *   - vatAmountCents = TVA retirée (= montant à soustraire du total TTC pour obtenir le total encaissé HT)
+ */
+function computeOrderVat(items, shippingCostCents) {
+  const { eligibleTtcCents, eligibleHtCents } = splitReverseChargeHt(items);
+  const shippingTtcCents = Math.max(0, Number(shippingCostCents) || 0);
+  const shippingHtCents = Math.round(shippingTtcCents / (1 + VAT_RATE));
+  const vatAmountCents = (eligibleTtcCents - eligibleHtCents) + (shippingTtcCents - shippingHtCents);
+  return {
+    eligibleTtcCents, eligibleHtCents,
+    shippingTtcCents, shippingHtCents,
+    htBaseCents: eligibleHtCents + shippingHtCents,
+    vatAmountCents,
+  };
+}
+
+module.exports = { reverseChargeApplicable, splitReverseChargeHt, computeOrderVat, VAT_RATE, LEGAL_MENTION };
