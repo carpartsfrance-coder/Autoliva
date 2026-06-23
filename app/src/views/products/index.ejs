@@ -55,7 +55,7 @@
 ].reduce((sum, v) => sum + v, 0); %>
 
 <main class="products-listing flex-1 bg-gray-50">
-  <div class="max-w-7xl mx-auto px-4 lg:px-8 py-6 sm:py-8">
+  <div class="max-w-[1440px] mx-auto px-4 lg:px-8 py-6 sm:py-8">
     <%# Bandeau d'état : rappelle le véhicule actif (le choix se fait dans les
         filtres à gauche — pas de 2e sélecteur ici pour éviter le doublon). %>
     <% var _vMake = (typeof selectedVehicleMake !== 'undefined' && selectedVehicleMake) ? selectedVehicleMake : ''; %>
@@ -77,7 +77,7 @@
       </div>
     <% } %>
 
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
       <aside aria-hidden="true" class="lg:col-span-3 hidden fixed inset-0 z-50 lg:static lg:z-auto lg:block" data-filters-drawer id="filtersDrawer" role="dialog">
         <div class="absolute inset-0 bg-black/40 lg:hidden" data-filters-close></div>
         <div class="absolute inset-y-0 left-0 w-full max-w-sm overflow-y-auto bg-white p-4 lg:static lg:w-auto lg:max-w-none lg:overflow-visible lg:bg-transparent lg:p-0">
@@ -374,22 +374,21 @@
               <% const _compat = (Array.isArray(p.compatibility) && p.compatibility[0]) ? p.compatibility[0] : null; %>
               <% const _pBrand = ((p.brand && String(p.brand).trim()) || (_compat && _compat.make) || ''); %>
               <article class="group bg-white rounded-xl border border-gray-200 hover:border-primary/50 hover:shadow-md transition overflow-hidden">
-                <div class="flex flex-col sm:flex-row">
+                <div class="flex flex-col sm:flex-row sm:items-stretch">
 
-                  <%# 1 · IMAGE — object-contain pour montrer l'illustration entière (pas de recadrage) %>
-                  <a href="<%= productUrl %>" class="relative shrink-0 bg-gray-50 overflow-hidden aspect-[4/3] sm:aspect-auto sm:w-40 lg:w-48 flex items-center justify-center">
+                  <%# 1 · IMAGE %>
+                  <a href="<%= productUrl %>" class="relative shrink-0 bg-gray-50 overflow-hidden aspect-[4/3] sm:aspect-auto sm:w-40 lg:w-44 flex items-center justify-center">
                     <% if (imgUrl) { %>
                       <img src="<%= imgUrl %>" alt="<%= p.name %>" width="400" height="300" loading="lazy" decoding="async" class="max-w-full max-h-full w-auto h-auto object-contain p-2"/>
                     <% } %>
                     <% if (badge) { %><span class="absolute top-2 left-2 bg-primary text-[10px] text-white font-bold px-2 py-1 rounded-full z-10"><%= badge %></span><% } %>
                   </a>
 
-                  <%# 2 · INFO (titre + réf/état/type + garanties + compatibilité) — prend toute la place restante %>
-                  <div class="flex-1 min-w-0 p-4 lg:p-5 flex flex-col gap-2.5 border-t sm:border-t-0 sm:border-l border-gray-100">
-                    <a class="block font-bold text-gray-900 leading-snug hover:text-primary text-sm sm:text-base line-clamp-2" href="<%= productUrl %>"><%= p.name %></a>
-
-                    <%# Réf / État / Type : flex-wrap → jamais de chevauchement, valeurs jamais coupées %>
-                    <div class="flex flex-wrap gap-x-7 gap-y-2">
+                  <%# 2 · TITRE + RÉFÉRENCE/ÉTAT/TYPE %>
+                  <div class="flex-1 min-w-0 px-4 lg:px-5 py-4 flex flex-col justify-center gap-3 border-t sm:border-t-0 sm:border-l border-gray-100">
+                    <a class="block font-bold text-gray-900 leading-snug hover:text-primary text-sm sm:text-[15px] line-clamp-2" href="<%= productUrl %>"><%= p.name %></a>
+                    <%# flex-wrap → 3 colonnes côte à côte sur large écran, jamais de chevauchement %>
+                    <div class="flex flex-wrap gap-x-8 gap-y-2">
                       <% [['Référence', _ref], ['État', _etat], ['Type', _type]].forEach((row) => { if (!row[1]) return; %>
                         <div>
                           <p class="text-[10px] text-gray-400 uppercase tracking-wider leading-none mb-1"><%= row[0] %></p>
@@ -397,26 +396,30 @@
                         </div>
                       <% }) %>
                     </div>
-
-                    <%# Garanties / confiance : ligne inline qui se replie proprement %>
-                    <div class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-500">
-                      <span class="inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-emerald-600 text-[16px]">verified_user</span><%= _wMonths > 0 ? ('Garantie ' + _wMonths + ' mois') : 'Garantie incluse' %></span>
-                      <span class="inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-emerald-600 text-[16px]">build</span>Contrôlé &amp; testé</span>
-                      <span class="inline-flex items-center gap-1.5"><span class="material-symbols-outlined text-emerald-600 text-[16px]">workspace_premium</span>Qualité premium</span>
-                    </div>
-
-                    <%# Compatibilité : ligne compacte cohérente sur toutes les lignes %>
-                    <% if (_compat && (_compat.make || _compat.model)) { %>
-                    <p class="text-xs text-gray-500 truncate">
-                      <span class="text-gray-400">Compatible :</span>
-                      <span class="font-semibold text-gray-700"><%= [_compat.make, _compat.model].filter(Boolean).join(' ') %></span><% if (_compat.years) { %> · <%= _compat.years %><% } %>
-                      — <a href="<%= productUrl %>" class="font-semibold text-primary hover:underline">Voir détails</a>
-                    </p>
-                    <% } %>
                   </div>
 
-                  <%# 3 · PRIX + STOCK + AJOUTER AU PANIER %>
-                  <div class="px-4 lg:px-5 py-4 border-t sm:border-t-0 sm:border-l border-gray-100 shrink-0 flex flex-row sm:flex-col items-center sm:items-end justify-between gap-3 sm:w-52">
+                  <%# 3 · GARANTIES (colonne dès lg) %>
+                  <div class="hidden lg:flex flex-col justify-center gap-2 px-5 py-4 border-l border-gray-100 shrink-0">
+                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">verified_user</span><%= _wMonths > 0 ? ('Garantie ' + _wMonths + ' mois') : 'Garantie incluse' %></span>
+                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">build</span>Contrôlé &amp; testé</span>
+                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">workspace_premium</span>Qualité premium</span>
+                  </div>
+
+                  <%# 4 · COMPATIBILITÉ (colonne dès xl, toujours rendue pour des lignes cohérentes) %>
+                  <div class="hidden xl:flex flex-col justify-center gap-0.5 px-5 py-4 border-l border-gray-100 shrink-0 w-44">
+                    <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Compatible avec</p>
+                    <% if (_compat && (_compat.make || _compat.model)) { %>
+                      <% if (_compat.make) { %><p class="text-sm font-bold text-gray-900 truncate" title="<%= _compat.make %>"><%= _compat.make %></p><% } %>
+                      <% if (_compat.model) { %><p class="text-xs text-gray-600 truncate" title="<%= _compat.model %>"><%= _compat.model %></p><% } %>
+                      <% if (_compat.years) { %><p class="text-xs text-gray-500"><%= _compat.years %></p><% } %>
+                    <% } else { %>
+                      <p class="text-sm text-gray-500">Plusieurs véhicules</p>
+                    <% } %>
+                    <a href="<%= productUrl %>" class="mt-1 text-xs font-semibold text-primary hover:underline">Voir détails</a>
+                  </div>
+
+                  <%# 5 · PRIX + STOCK + PANIER + FAVORI %>
+                  <div class="px-4 lg:px-5 py-4 border-t sm:border-t-0 sm:border-l border-gray-100 shrink-0 flex flex-row sm:flex-col items-center sm:items-end justify-between gap-3 sm:w-60">
                     <div class="sm:text-right">
                       <p class="text-[10px] text-gray-400 uppercase tracking-wider"><%= t('product.priceTTC') %></p>
                       <p class="text-xl lg:text-2xl font-extrabold text-gray-900 whitespace-nowrap"><%= formatMoney(p.priceCents) %> €</p>
@@ -424,20 +427,25 @@
                         <span class="w-1.5 h-1.5 rounded-full <%= p.inStock ? 'bg-emerald-500' : 'bg-amber-500' %>"></span><%= p.inStock ? t('product.stockIn') : t('product.stockOrder') %>
                       </p>
                     </div>
-                    <form action="/panier/ajouter/<%= p._id %>" method="POST" class="w-auto sm:w-full"
-                      data-product-id="<%= p._id %>"
-                      data-product-sku="<%= p.sku || p._id %>"
-                      data-product-name="<%= p.name %>"
-                      data-product-category="<%= p.category || '' %>"
-                      data-product-brand="<%= _pBrand %>"
-                      data-product-price-cents="<%= p.priceCents || 0 %>">
-                      <input name="returnTo" type="hidden" value="<%= typeof returnTo !== 'undefined' ? returnTo : '/produits' %>" />
-                      <input name="qty" type="hidden" value="1" />
-                      <button class="inline-flex items-center justify-center gap-2 w-full bg-primary text-white text-sm font-bold px-4 py-2.5 rounded-xl hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed" <%= p.inStock ? '' : 'disabled' %> type="submit">
-                        <span class="material-symbols-outlined text-lg">shopping_cart</span>
-                        <span class="whitespace-nowrap"><%= t('product.addToCart') %></span>
+                    <div class="flex items-center gap-2 w-auto sm:w-full">
+                      <form action="/panier/ajouter/<%= p._id %>" method="POST" class="flex-1"
+                        data-product-id="<%= p._id %>"
+                        data-product-sku="<%= p.sku || p._id %>"
+                        data-product-name="<%= p.name %>"
+                        data-product-category="<%= p.category || '' %>"
+                        data-product-brand="<%= _pBrand %>"
+                        data-product-price-cents="<%= p.priceCents || 0 %>">
+                        <input name="returnTo" type="hidden" value="<%= typeof returnTo !== 'undefined' ? returnTo : '/produits' %>" />
+                        <input name="qty" type="hidden" value="1" />
+                        <button class="inline-flex items-center justify-center gap-2 w-full bg-primary text-white text-sm font-bold px-3 py-2.5 rounded-xl hover:bg-primary/90 transition disabled:opacity-50 disabled:cursor-not-allowed" <%= p.inStock ? '' : 'disabled' %> type="submit">
+                          <span class="material-symbols-outlined text-lg">shopping_cart</span>
+                          <span class="whitespace-nowrap"><%= t('product.addToCart') %></span>
+                        </button>
+                      </form>
+                      <button type="button" data-fav data-fav-id="<%= p._id %>" aria-label="Ajouter aux favoris" class="shrink-0 grid place-items-center w-11 h-11 rounded-xl border border-gray-200 text-gray-400 hover:text-primary hover:border-primary transition">
+                        <span class="material-symbols-outlined text-xl">favorite</span>
                       </button>
-                    </form>
+                    </div>
                   </div>
 
                 </div>
@@ -736,5 +744,29 @@
       setModelOptions(makeSelect.value, modelSelect.value);
       setEngineOptions(makeSelect.value, modelSelect.value, engineSelect ? engineSelect.value : '');
     }
+  })();
+
+  // Favoris (visuel + persistance locale par navigateur ; pas de compte requis).
+  (function () {
+    function setFav(btn, on) {
+      btn.classList.toggle('text-primary', on);
+      btn.classList.toggle('border-primary', on);
+      btn.classList.toggle('text-gray-400', !on);
+      var ic = btn.querySelector('.material-symbols-outlined');
+      if (ic) ic.style.fontVariationSettings = on ? "'FILL' 1" : '';
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    document.querySelectorAll('[data-fav]').forEach(function (btn) {
+      var key = 'fav_' + btn.getAttribute('data-fav-id');
+      var on = false;
+      try { on = localStorage.getItem(key) === '1'; } catch (e) {}
+      setFav(btn, on);
+      btn.addEventListener('click', function () {
+        var now;
+        try { now = localStorage.getItem(key) !== '1'; localStorage.setItem(key, now ? '1' : '0'); }
+        catch (e) { now = !btn.classList.contains('text-primary'); }
+        setFav(btn, now);
+      });
+    });
   })();
 </script>
