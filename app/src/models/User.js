@@ -30,6 +30,8 @@ const userSchema = new mongoose.Schema(
     passwordSalt: { type: String, required: true },
     companyName: { type: String, default: '', trim: true },
     siret: { type: String, default: '', trim: true },
+    // N° TVA intracommunautaire (pros UE) — sert à l'autoliquidation au checkout.
+    vatNumberEu: { type: String, default: '', trim: true },
     discountPercent: { type: Number, default: 0, min: 0, max: 100 },
     addresses: { type: [addressSchema], default: [] },
     smsOptIn: { type: Boolean, default: false },

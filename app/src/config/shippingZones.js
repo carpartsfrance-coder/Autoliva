@@ -25,12 +25,27 @@ const ZONES = [
 const ZONE_IDS = ZONES.map((z) => z.id);
 const ZONE_LABEL = ZONES.reduce((acc, z) => { acc[z.id] = z.label; return acc; }, {});
 
-// Europe = UE + AELE + voisins proches (codes ISO alpha-2).
+// Europe = UE + AELE + voisins proches (codes ISO alpha-2). Sert à la LIVRAISON.
 const EUROPE_COUNTRY_CODES = new Set([
   'ES', 'PT', 'IT', 'DE', 'BE', 'NL', 'LU', 'AT', 'IE', 'DK', 'SE', 'FI',
   'PL', 'CZ', 'SK', 'HU', 'RO', 'BG', 'HR', 'SI', 'EE', 'LV', 'LT', 'GR',
   'CY', 'MT', 'CH', 'NO', 'GB', 'MC', 'AD', 'LI', 'SM', 'IS',
 ]);
+
+// UE au sens TVA = les 27 États membres MOINS la France (vendeur FR). À NE PAS
+// confondre avec EUROPE_COUNTRY_CODES (livraison) qui inclut CH/NO/GB/MC/AD/LI/SM/IS
+// — ces pays ne sont PAS dans l'UE-TVA, donc PAS éligibles à l'autoliquidation.
+// (La Grèce a le code ISO 'GR' ; son préfixe TVA 'EL' est géré dans viesValidator.)
+const EU_VAT_COUNTRY_CODES = new Set([
+  'AT', 'BE', 'BG', 'HR', 'CY', 'CZ', 'DK', 'EE', 'FI', 'DE', 'GR', 'HU',
+  'IE', 'IT', 'LV', 'LT', 'LU', 'MT', 'NL', 'PL', 'PT', 'RO', 'SK', 'SI',
+  'ES', 'SE',
+]);
+
+/** true si le pays (code ou libellé) est un État membre UE AUTRE que la France. */
+function isEuVatCountry(country) {
+  return EU_VAT_COUNTRY_CODES.has(normalizeCountryCode(country));
+}
 
 // Libellés FR/EN/local fréquents → code ISO alpha-2.
 const COUNTRY_NAME_TO_CODE = {
@@ -145,6 +160,8 @@ module.exports = {
   ZONE_IDS,
   ZONE_LABEL,
   EUROPE_COUNTRY_CODES,
+  EU_VAT_COUNTRY_CODES,
+  isEuVatCountry,
   COUNTRY_OPTIONS,
   normalizeCountryCode,
   resolveZone,
