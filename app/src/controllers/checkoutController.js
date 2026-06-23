@@ -1904,6 +1904,9 @@ async function postPayment(req, res, next) {
         quantity: item.quantity,
         lineTotalCents,
         itemType: detectedItemType,
+        // Snapshot du régime TVA (pour l'autoliquidation : seules les lignes
+        // vatRecoverable=true passeront en HT en phase 2). Figé au moment de la commande.
+        vatRecoverable: product.vatRecoverable === true,
       });
 
       cloningCheckItems.push({ product, optionsSelection: item.optionsSelection });
