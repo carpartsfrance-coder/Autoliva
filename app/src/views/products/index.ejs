@@ -399,14 +399,14 @@
                   </div>
 
                   <%# 3 · GARANTIES (colonne dès lg) %>
-                  <div class="hidden lg:flex flex-col justify-center gap-2 px-5 py-4 border-l border-gray-100 shrink-0">
+                  <div class="hidden lg:flex flex-col justify-center gap-2 px-4 py-4 border-l border-gray-100 shrink-0">
                     <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">verified_user</span><%= _wMonths > 0 ? ('Garantie ' + _wMonths + ' mois') : 'Garantie incluse' %></span>
                     <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">build</span>Contrôlé &amp; testé</span>
                     <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">workspace_premium</span>Qualité premium</span>
                   </div>
 
                   <%# 4 · COMPATIBILITÉ (colonne dès xl, toujours rendue pour des lignes cohérentes) %>
-                  <div class="hidden xl:flex flex-col justify-center gap-0.5 px-5 py-4 border-l border-gray-100 shrink-0 w-44">
+                  <div class="hidden xl:flex flex-col justify-center gap-0.5 px-4 py-4 border-l border-gray-100 shrink-0 w-40">
                     <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Compatible avec</p>
                     <% if (_compat && (_compat.make || _compat.model)) { %>
                       <% if (_compat.make) { %><p class="text-sm font-bold text-gray-900 truncate" title="<%= _compat.make %>"><%= _compat.make %></p><% } %>
@@ -419,7 +419,7 @@
                   </div>
 
                   <%# 5 · PRIX + STOCK + PANIER + FAVORI %>
-                  <div class="px-4 lg:px-5 py-4 border-t sm:border-t-0 sm:border-l border-gray-100 shrink-0 flex flex-row sm:flex-col items-center sm:items-end justify-between gap-3 sm:w-60">
+                  <div class="px-4 lg:px-5 py-4 border-t sm:border-t-0 sm:border-l border-gray-100 shrink-0 flex flex-row sm:flex-col items-center sm:items-end justify-between gap-3 sm:w-72">
                     <div class="sm:text-right">
                       <p class="text-[10px] text-gray-400 uppercase tracking-wider"><%= t('product.priceTTC') %></p>
                       <p class="text-xl lg:text-2xl font-extrabold text-gray-900 whitespace-nowrap"><%= formatMoney(p.priceCents) %> €</p>
