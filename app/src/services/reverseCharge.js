@@ -16,7 +16,11 @@ const { isEuVatCountry } = require('../config/shippingZones');
 
 const VAT_RATE = 0.20; // TVA FR 20 % (produits en régime normal)
 
-const LEGAL_MENTION = 'Autoliquidation de la TVA par le preneur — art. 283-2 du CGI / art. 196 directive 2006/112/CE';
+// Mention pour une LIVRAISON INTRACOMMUNAUTAIRE DE BIENS (pièces auto = biens).
+// art. 262 ter I du CGI (≠ art. 283-2 qui vise les SERVICES) ; art. 138 directive
+// 2006/112/CE. Le client réalise une acquisition intracommunautaire (autoliquidation
+// chez lui). Le n° de TVA intracom. de l'acquéreur doit aussi figurer sur la facture.
+const LEGAL_MENTION = 'Exonération de TVA — livraison intracommunautaire, art. 262 ter I du CGI (art. 138 directive 2006/112/CE). Autoliquidation par l\'acquéreur.';
 
 /**
  * L'autoliquidation s'applique-t-elle à cette commande ?
