@@ -1677,9 +1677,9 @@
           var labels = (LBL && LBL.STATUT_LABELS) || {};
           function buildStatutMenu() {
             var cur = (document.querySelector('main.sav-module') || sb).getAttribute('data-current-statut') || '';
-            var html = '<div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Changer le statut</div>';
+            var html = '<div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Changer le statut · <span class="text-slate-500 normal-case font-semibold">actuel : ' + escapeHtml(labelStatut(cur)) + '</span></div>';
             Object.keys(labels).forEach(function (s) {
-              html += '<button type="button" data-set-statut="' + s + '" class="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-slate-50">' +
+              html += '<button type="button" data-set-statut="' + s + '" class="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-slate-50' + (s === cur ? ' bg-slate-100' : '') + '">' +
                 '<span class="px-2 py-0.5 rounded-full text-[11px] font-medium ' + classStatut(s) + '">' + escapeHtml(labels[s]) + '</span>' +
                 (s === cur ? '<span class="material-symbols-outlined text-primary ml-auto" style="font-size:16px;">check</span>' : '') +
                 '</button>';
@@ -1692,6 +1692,11 @@
             menu.style.top = (r.bottom + 6) + 'px';
             menu.style.left = Math.max(8, r.left) + 'px';
             menu.classList.remove('hidden');
+            // Positionne la liste sur le statut actuel (sinon il peut être hors écran
+            // tout en bas → on croit qu'il manque).
+            var curStatut = (document.querySelector('main.sav-module') || sb).getAttribute('data-current-statut') || '';
+            var curItem = menu.querySelector('[data-set-statut="' + curStatut + '"]');
+            if (curItem && curItem.scrollIntoView) curItem.scrollIntoView({ block: 'center' });
           }
           function closeStatutMenu() { menu.classList.add('hidden'); }
           sb.addEventListener('click', function (e) { e.stopPropagation(); if (menu.classList.contains('hidden')) openStatutMenu(); else closeStatutMenu(); });
