@@ -136,6 +136,21 @@
                   </div>
                 </div>
 
+                <%# N° TVA intracommunautaire — affiché si pays ≠ France (pros UE, autoliquidation). %>
+                <div class="mt-4" data-vat-field hidden>
+                  <label class="block text-sm font-semibold text-slate-700" for="vatNumberEu">N° TVA intracommunautaire <span class="font-normal text-slate-400">— pros UE, optionnel (paiement HT en autoliquidation)</span></label>
+                  <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm uppercase focus:border-primary focus:ring-1 focus:ring-primary transition" id="vatNumberEu" name="vatNumberEu" type="text" placeholder="Ex : DE123456789" value="" />
+                </div>
+                <script>
+                  (function () {
+                    var sel = document.getElementById('country');
+                    var box = document.querySelector('[data-vat-field]');
+                    if (!sel || !box) return;
+                    function sync() { box.hidden = (sel.value || 'France') === 'France'; }
+                    sel.addEventListener('change', sync); sync();
+                  })();
+                </script>
+
                 <div class="mt-5 rounded-lg bg-slate-50 border border-slate-100 p-3 text-sm text-slate-500 flex items-center gap-2">
                   <span class="material-symbols-outlined text-[16px]">info</span>
                   <%= t('checkout.billingUsesShipping') %>
