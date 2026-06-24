@@ -1661,8 +1661,56 @@
 
       var sb = document.getElementById('sav-statut-badge');
       if (sb) {
-        sb.textContent = labelStatut(t.statut);
-        sb.className = 'px-3 py-1 rounded-full text-xs font-semibold ' + classStatut(t.statut);
+        // Badge statut CLIQUABLE → menu de changement de statut (action principale,
+        // toujours accessible dans la barre sticky). PATCH /statut + refresh.
+        sb.innerHTML = escapeHtml(labelStatut(t.statut)) +
+          '<span class="material-symbols-outlined" style="font-size:14px;line-height:1;margin-left:1px;">expand_more</span>';
+        sb.className = 'inline-flex items-center gap-0.5 cursor-pointer select-none px-3 py-1 rounded-full text-xs font-semibold hover:ring-2 hover:ring-slate-300 transition ' + classStatut(t.statut);
+        sb.setAttribute('role', 'button');
+        sb.setAttribute('tabindex', '0');
+        sb.setAttribute('title', 'Changer le statut');
+        if (!sb._statutBound) {
+          sb._statutBound = true;
+          var menu = document.createElement('div');
+          menu.className = 'fixed z-[60] hidden w-64 max-h-[70vh] overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-lg py-1';
+          document.body.appendChild(menu);
+          var labels = (LBL && LBL.STATUT_LABELS) || {};
+          function buildStatutMenu() {
+            var cur = (document.querySelector('main.sav-module') || sb).getAttribute('data-current-statut') || '';
+            var html = '<div class="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Changer le statut</div>';
+            Object.keys(labels).forEach(function (s) {
+              html += '<button type="button" data-set-statut="' + s + '" class="w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-slate-50">' +
+                '<span class="px-2 py-0.5 rounded-full text-[11px] font-medium ' + classStatut(s) + '">' + escapeHtml(labels[s]) + '</span>' +
+                (s === cur ? '<span class="material-symbols-outlined text-primary ml-auto" style="font-size:16px;">check</span>' : '') +
+                '</button>';
+            });
+            menu.innerHTML = html;
+          }
+          function openStatutMenu() {
+            buildStatutMenu();
+            var r = sb.getBoundingClientRect();
+            menu.style.top = (r.bottom + 6) + 'px';
+            menu.style.left = Math.max(8, r.left) + 'px';
+            menu.classList.remove('hidden');
+          }
+          function closeStatutMenu() { menu.classList.add('hidden'); }
+          sb.addEventListener('click', function (e) { e.stopPropagation(); if (menu.classList.contains('hidden')) openStatutMenu(); else closeStatutMenu(); });
+          sb.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openStatutMenu(); } });
+          document.addEventListener('click', function (e) { if (!menu.contains(e.target) && !sb.contains(e.target)) closeStatutMenu(); });
+          menu.addEventListener('click', function (e) {
+            var b = e.target.closest ? e.target.closest('[data-set-statut]') : null;
+            if (!b) return;
+            var ns = b.getAttribute('data-set-statut');
+            closeStatutMenu();
+            var cur = (document.querySelector('main.sav-module') || sb).getAttribute('data-current-statut') || '';
+            if (ns === cur) return;
+            api('/tickets/' + encodeURIComponent(numero) + '/statut', { method: 'PATCH', body: JSON.stringify({ statut: ns, auteur: 'admin' }) })
+              .then(function (res) {
+                if (res.ok && res.j && res.j.success) { toast('Statut → ' + labelStatut(ns), 'success'); loadTicket(); }
+                else { toast((res.j && res.j.error) || 'Erreur changement de statut', 'error'); }
+              });
+          });
+        }
       }
 
       var main = document.querySelector('main.sav-module');
