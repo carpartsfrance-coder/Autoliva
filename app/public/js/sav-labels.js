@@ -7,6 +7,11 @@
   var STATUT_LABELS = {
     ouvert: 'Ouvert',
     pre_qualification: 'Pré-qualification',
+    enquete_transporteur: 'Enquête transporteur',
+    reserve_transporteur: 'Réserve transporteur',
+    retractation_recue: 'Rétractation reçue',
+    echange_en_cours: 'Échange en cours',
+    remboursement_initie: 'Remboursement initié',
     en_attente_documents: 'En attente de documents',
     relance_1: 'Relance 1',
     relance_2: 'Relance 2',
@@ -28,6 +33,11 @@
   var STATUT_CLASSES = {
     ouvert: 'bg-sky-100 text-sky-800',
     pre_qualification: 'bg-sky-100 text-sky-800',
+    enquete_transporteur: 'bg-cyan-100 text-cyan-800',
+    reserve_transporteur: 'bg-cyan-100 text-cyan-800',
+    retractation_recue: 'bg-indigo-100 text-indigo-800',
+    echange_en_cours: 'bg-teal-100 text-teal-800',
+    remboursement_initie: 'bg-teal-100 text-teal-800',
     en_attente_documents: 'bg-amber-100 text-amber-800',
     relance_1: 'bg-amber-100 text-amber-800',
     relance_2: 'bg-orange-100 text-orange-800',
