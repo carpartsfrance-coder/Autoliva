@@ -1,7 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: 'class',
-  content: ['./src/views/**/*.ejs'],
+  // Scanne aussi le JS public : certaines classes (ex. couleurs de badges de
+  // statut SAV) ne sont référencées que dans le JS et doivent être compilées.
+  content: ['./src/views/**/*.ejs', './public/js/**/*.js'],
   theme: {
     extend: {
       colors: {
