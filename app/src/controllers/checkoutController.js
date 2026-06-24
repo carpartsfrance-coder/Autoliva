@@ -1593,6 +1593,30 @@ async function getPayment(req, res, next) {
       consigneChargeCents,
     });
 
+    // Aperçu autoliquidation TVA (HT) pour l'AFFICHAGE — recalcule avec EXACTEMENT
+    // les mêmes fonctions que le débit (applyDiscount + applyReverseCharge) → le
+    // total affiché = le montant qui sera débité. Inerte si flag OFF / conditions KO.
+    let vatRC = null;
+    try {
+      const vatNumber = getTrimmedString((checkout && checkout.vatNumberEu) || '');
+      const billingCountry = (billingAddress && billingAddress.country) || (address && address.country) || '';
+      if (REVERSE_CHARGE_ENABLED && consigneChargeCents === 0 && vatNumber) {
+        const rcItems = viewItems.map((it) => ({
+          unitPriceCents: it.unitPriceCents, quantity: it.quantity, lineTotalCents: it.lineTotalCents,
+          vatRecoverable: it.product && it.product.vatRecoverable === true,
+        }));
+        if (reverseChargeSvc.reverseChargeApplicable({ isPro: true, billingCountry, vatStatus: 'valid', items: rcItems })) {
+          let vies = { status: 'unavailable' };
+          try { vies = await viesValidator.validateVat(vatNumber, billingCountry); } catch (e) { /* repli TTC */ }
+          if (reverseChargeSvc.reverseChargeApplicable({ isPro: true, billingCountry, vatStatus: vies.status, items: rcItems })) {
+            const discounted = applyDiscountToOrderItems(rcItems, computed.itemsTotalAfterDiscountCents);
+            const rc = reverseChargeSvc.applyReverseCharge(discounted, computed.shippingCostCents);
+            vatRC = { active: true, vatNumber, htBaseCents: rc.htBaseCents, vatAmountCents: rc.vatAmountCents, totalCents: rc.newTotalCents };
+          }
+        }
+      }
+    } catch (e) { vatRC = null; }
+
     const _coLang = applyCheckoutLocale(req, res);
     if (_coLang === 'de') { for (const it of viewItems) { if (it && it.product) it.product = productI18n.localizeProduct(it.product, 'de'); } }
 
@@ -1620,6 +1644,7 @@ async function getPayment(req, res, next) {
       shippingCostCents: computed.shippingCostCents,
       consigneChargeCents: computed.consigneChargeCents,
       totalCents: computed.totalCents,
+      vatRC, // aperçu autoliquidation HT (null si non applicable)
     });
   } catch (err) {
     return next(err);

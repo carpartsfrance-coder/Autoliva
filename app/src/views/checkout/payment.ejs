@@ -296,12 +296,25 @@
                 <div class="font-black text-slate-900"><%= (consigneChargeCents / 100).toFixed(2).replace('.', ',') %> €</div>
               </div>
             <% } %>
+            <% if (typeof vatRC !== 'undefined' && vatRC && vatRC.active) { %>
+              <div class="flex items-center justify-between text-indigo-700">
+                <div>TVA — autoliquidée <span class="text-slate-400 font-normal">(pro UE)</span></div>
+                <div class="font-black">− <%= (vatRC.vatAmountCents / 100).toFixed(2).replace('.', ',') %> €</div>
+              </div>
+            <% } %>
           </div>
 
+          <% var _rc = (typeof vatRC !== 'undefined' && vatRC && vatRC.active); %>
           <div class="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between">
-            <div class="text-slate-600 font-black"><%= t('checkout.total') %></div>
-            <div class="text-primary font-black text-2xl"><%= (totalCents / 100).toFixed(2).replace('.', ',') %> €</div>
+            <div class="text-slate-600 font-black"><%= _rc ? 'Total HT' : t('checkout.total') %></div>
+            <div class="text-primary font-black text-2xl"><%= ((_rc ? vatRC.totalCents : totalCents) / 100).toFixed(2).replace('.', ',') %> €</div>
           </div>
+          <% if (_rc) { %>
+            <div class="mt-2 flex items-start gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-[12px] leading-snug text-indigo-700">
+              <span class="material-symbols-outlined text-[16px] shrink-0">verified</span>
+              <span>Autoliquidation de la TVA — n° <strong><%= vatRC.vatNumber %></strong> validé. Montant facturé <strong>HT</strong> (livraison intracommunautaire, art. 262 ter I du CGI).</span>
+            </div>
+          <% } %>
 
           <% if (typeof consigneChargeCents !== 'undefined' && consigneChargeCents > 0) { %>
             <div class="mt-2 flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-[12px] leading-snug text-emerald-700">
