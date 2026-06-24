@@ -23,6 +23,11 @@ const { getNextOrderNumber } = require('../services/orderNumber');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const { buildOrderAttribution } = require('../middlewares/captureAttribution');
 const { track: trackEvent } = require('../services/eventTracker');
+const reverseChargeSvc = require('../services/reverseCharge');
+const viesValidator = require('../services/viesValidator');
+// Flag d'activation de l'autoliquidation TVA B2B UE (HT). OFF par défaut →
+// comportement 100% inchangé. On l'active après une commande de test.
+const REVERSE_CHARGE_ENABLED = String(process.env.VAT_REVERSE_CHARGE_ENABLED || '').toLowerCase() === 'true';
 
 const crypto = require('crypto');
 const brand = require('../config/brand');
@@ -410,6 +415,7 @@ function applyDiscountToOrderItems(orderItems, discountedItemsTotalCents) {
     const unitPriceCents = Number(it.unitPriceCents) || 0;
     const optionsSummary = typeof it.optionsSummary === 'string' ? it.optionsSummary : '';
     const optionsSelection = it && it.optionsSelection && typeof it.optionsSelection === 'object' ? it.optionsSelection : {};
+    const vatRecoverable = it.vatRecoverable === true; // préservé pour l'autoliquidation (lignes Scalapay HT)
     for (let i = 0; i < qty; i += 1) {
       const raw = unitPriceCents * ratio;
       const floored = Math.floor(raw);
@@ -419,6 +425,7 @@ function applyDiscountToOrderItems(orderItems, discountedItemsTotalCents) {
         sku: it.sku || '',
         optionsSummary,
         optionsSelection,
+        vatRecoverable,
         raw,
         unitPriceCents: floored,
         frac: raw - floored,
@@ -456,7 +463,8 @@ function applyDiscountToOrderItems(orderItems, discountedItemsTotalCents) {
     const name = u.name || '';
     const price = Number(u.unitPriceCents) || 0;
     const optionsSummary = u.optionsSummary || '';
-    const key = `${pid}__${sku}__${price}__${name}__${optionsSummary}`;
+    const vatRec = u.vatRecoverable === true;
+    const key = `${pid}__${sku}__${price}__${name}__${optionsSummary}__${vatRec ? 1 : 0}`;
     const existing = grouped.get(key);
     if (existing) {
       existing.quantity += 1;
@@ -471,6 +479,7 @@ function applyDiscountToOrderItems(orderItems, discountedItemsTotalCents) {
         unitPriceCents: price,
         quantity: 1,
         lineTotalCents: price,
+        vatRecoverable: vatRec,
       });
     }
   }
@@ -1289,6 +1298,11 @@ async function postShipping(req, res, next) {
       return res.redirect('/commande/livraison');
     }
 
+    // N° TVA intracommunautaire (autoliquidation B2B UE) — capturé pour les deux
+    // parcours (invité / connecté). Validé via VIES au moment du paiement.
+    req.session.checkout = req.session.checkout || {};
+    req.session.checkout.vatNumberEu = getTrimmedString(req.body.vatNumberEu || '');
+
     const checkout = getCheckoutState(req);
     const guestCheckout = isGuestCheckout(checkout);
 
@@ -2002,9 +2016,50 @@ async function postPayment(req, res, next) {
     });
 
     const shippingCostCents = computed.shippingCostCents;
-    const totalCents = computed.totalCents;
+    let totalCents = computed.totalCents;
 
     const discountedOrderItems = applyDiscountToOrderItems(orderItems, computed.itemsTotalAfterDiscountCents);
+
+    // ─── Autoliquidation TVA B2B UE (reverse charge) — derrière le flag, sinon inerte ───
+    // Règles : pro + pays de FACTURATION dans l'UE≠FR + n° TVA validé VIES + ≥1 ligne
+    // vatRecoverable. Garde-fou v1 : pas de consigne (évite l'interaction consigne/HT/Scalapay).
+    let orderVat;
+    let scalapayItemsSource = discountedOrderItems; // lignes Scalapay (HT si autoliquidation)
+    let scalapayShippingCents = shippingCostCents;
+    if (REVERSE_CHARGE_ENABLED && consigneChargeCents === 0) {
+      const checkoutState = getCheckoutState(req);
+      const vatNumber = getTrimmedString((checkoutState && checkoutState.vatNumberEu) || user.vatNumberEu || '');
+      // Un n° de TVA intracommunautaire (validé VIES juste après) suffit à prouver
+      // l'assujettissement → on accepte compte pro OU fourniture d'un n° TVA.
+      const isPro = user.accountType === 'pro' || !!vatNumber;
+      if (isPro && vatNumber && reverseChargeSvc.reverseChargeApplicable({
+        isPro, billingCountry: billingAddressSnapshot.country, vatStatus: 'valid', items: discountedOrderItems,
+      })) {
+        let vies = { status: 'unavailable', checkedAt: new Date(), countryCode: '' };
+        try { vies = await viesValidator.validateVat(vatNumber, billingAddressSnapshot.country); }
+        catch (e) { console.warn('[TVA] VIES erreur:', e && e.message); }
+        const applicable = reverseChargeSvc.reverseChargeApplicable({
+          isPro, billingCountry: billingAddressSnapshot.country, vatStatus: vies.status, items: discountedOrderItems,
+        });
+        if (applicable) {
+          const rc = reverseChargeSvc.applyReverseCharge(discountedOrderItems, shippingCostCents);
+          totalCents = rc.newTotalCents;              // Mollie + Order : montant HT débité
+          scalapayItemsSource = rc.transformedItems;  // lignes HT pour Scalapay
+          scalapayShippingCents = rc.shippingHtCents;
+          orderVat = {
+            reverseCharge: true,
+            vatNumber,
+            vatNumberValidated: true,
+            vatCountry: vies.countryCode || '',
+            htCents: rc.htBaseCents,
+            vatAmountCents: rc.vatAmountCents,
+            rate: 0,
+            viesCheckedAt: vies.checkedAt || new Date(),
+            legalMention: reverseChargeSvc.LEGAL_MENTION,
+          };
+        }
+      }
+    }
 
     let created = null;
 
@@ -2036,6 +2091,7 @@ async function postPayment(req, res, next) {
           paymentStatus: 'pending',
           mollieProfileId: paymentProvider === 'mollie' ? getMollieProfileId() : '',
           totalCents,
+          ...(orderVat ? { vat: orderVat } : {}),
           items: orderItems,
           consigne: { lines: consigneLines, chargedTotalCents: consigneChargeCents },
           shippingAddress: addressSnapshot,
@@ -2242,7 +2298,7 @@ async function postPayment(req, res, next) {
     const givenNames = nameParts.givenNames || 'Client';
     const surname = nameParts.surname || 'CarParts';
 
-    const scalapayItems = discountedOrderItems.map((it) => {
+    const scalapayItems = scalapayItemsSource.map((it) => {
       const sku = getTrimmedString(it.sku) || String(it.productId);
       return {
         sku,
@@ -2290,7 +2346,7 @@ async function postPayment(req, res, next) {
       },
       merchantReference: created.number,
       shippingAmount: {
-        amount: scalapay.formatAmountFromCents(shippingCostCents),
+        amount: scalapay.formatAmountFromCents(scalapayShippingCents),
         currency: 'EUR',
       },
       taxAmount: {

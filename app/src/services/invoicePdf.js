@@ -82,8 +82,11 @@ function computeTotals(order) {
     : 0;
   const taxableCents = Math.max(0, totalCents - consigneChargedCents);
 
-  const htCents = Math.round(taxableCents / 1.2);
-  const vatCents = taxableCents - htCents;
+  // Autoliquidation B2B UE : le total est DÉJÀ HT (TVA non facturée). Sinon, régime
+  // habituel (le prix TTC contient 20% de TVA → on décompose).
+  const reverseCharge = !!(order && order.vat && order.vat.reverseCharge);
+  const htCents = reverseCharge ? taxableCents : Math.round(taxableCents / 1.2);
+  const vatCents = reverseCharge ? 0 : (taxableCents - htCents);
 
   return {
     itemsSubtotalCents,
@@ -95,6 +98,9 @@ function computeTotals(order) {
     totalCents,
     htCents,
     vatCents,
+    reverseCharge,
+    vatLegalMention: reverseCharge ? ((order.vat && order.vat.legalMention) || '') : '',
+    vatNumberEu: reverseCharge ? ((order.vat && order.vat.vatNumber) || '') : '',
   };
 }
 
@@ -309,9 +315,15 @@ async function buildOrderInvoicePdfBuffer({ order, user } = {}) {
       if (totals.shippingCostCents === 0) summaryLines.push({ label: 'Frais de transport (offerts)', value: formatEuro(0) });
       if (totals.consigneChargedCents > 0) summaryLines.push({ label: 'Consigne (caution remboursable, hors TVA)', value: formatEuro(totals.consigneChargedCents) });
 
-      summaryLines.push({ label: 'Total TTC', value: formatEuro(totals.totalCents) });
-      summaryLines.push({ label: 'Total HT (hors consigne)', value: formatEuro(totals.htCents) });
-      summaryLines.push({ label: 'TVA (20%)', value: formatEuro(totals.vatCents) });
+      if (totals.reverseCharge) {
+        summaryLines.push({ label: 'Total HT (hors consigne)', value: formatEuro(totals.htCents) });
+        summaryLines.push({ label: 'TVA — autoliquidation par le preneur', value: formatEuro(0) });
+        summaryLines.push({ label: 'Net à payer', value: formatEuro(totals.totalCents) });
+      } else {
+        summaryLines.push({ label: 'Total TTC', value: formatEuro(totals.totalCents) });
+        summaryLines.push({ label: 'Total HT (hors consigne)', value: formatEuro(totals.htCents) });
+        summaryLines.push({ label: 'TVA (20%)', value: formatEuro(totals.vatCents) });
+      }
 
       const labelW = 250;
       const valueW = 150;
@@ -320,6 +332,14 @@ async function buildOrderInvoicePdfBuffer({ order, user } = {}) {
         doc.text(line.label, leftX, y, { width: labelW });
         doc.text(line.value, leftX + tableW - valueW, y, { width: valueW, align: 'right' });
         doc.moveDown(0.2);
+      }
+
+      // Autoliquidation : mention légale + n° TVA de l'acquéreur (obligatoire).
+      if (totals.reverseCharge) {
+        doc.moveDown(0.5);
+        doc.fontSize(9).fillColor('#111827');
+        if (totals.vatNumberEu) doc.text(`N° TVA intracommunautaire de l'acquéreur : ${totals.vatNumberEu}`);
+        if (totals.vatLegalMention) doc.fillColor('#6b7280').text(totals.vatLegalMention);
       }
 
       doc.moveDown(1);

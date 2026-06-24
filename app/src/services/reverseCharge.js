@@ -76,4 +76,45 @@ function computeOrderVat(items, shippingCostCents) {
   };
 }
 
-module.exports = { reverseChargeApplicable, splitReverseChargeHt, computeOrderVat, VAT_RATE, LEGAL_MENTION };
+/**
+ * Transforme une commande en autoliquidation pour le PAIEMENT. Arrondit le HT
+ * AU NIVEAU UNITAIRE (le prix de ligne = htUnit × qty) pour que la somme des
+ * lignes envoyées à Scalapay colle EXACTEMENT au nouveau total (sinon Scalapay
+ * rejette : il vérifie Σ(lignes) + port + taxe == total).
+ *
+ * Prérequis appelant : commande SANS consigne (consigneChargeCents===0) — garde-fou
+ * en place côté checkout pour éviter l'interaction consigne/HT/Scalapay en v1.
+ *
+ * @param {Array<{unitPriceCents:number, quantity:number, vatRecoverable:boolean}>} items lignes APRÈS remise
+ * @param {number} shippingCostCents frais de port (TTC)
+ * @returns {{transformedItems:Array, itemsTotalHtCents:number, shippingHtCents:number,
+ *   newTotalCents:number, htBaseCents:number, vatAmountCents:number}}
+ *   - transformedItems : mêmes lignes, unitPriceCents/lineTotalCents passés en HT pour les éligibles
+ *   - newTotalCents : Σ(lignes transformées) + port HT  → montant à débiter (Mollie + Scalapay)
+ *   - htBaseCents : base HT (produits éligibles + port) pour la facture
+ *   - vatAmountCents : TVA autoliquidée (non encaissée) = ancien total − newTotalCents
+ */
+function applyReverseCharge(items, shippingCostCents) {
+  const list = Array.isArray(items) ? items : [];
+  let eligibleTtcCents = 0;
+  let eligibleHtCents = 0;
+  const transformedItems = list.map((it) => {
+    const unit = Math.max(0, Number(it && it.unitPriceCents) || 0);
+    const qty = Math.max(1, Number(it && it.quantity) || 1);
+    const isElig = it && it.vatRecoverable === true;
+    const htUnit = isElig ? Math.round(unit / (1 + VAT_RATE)) : unit;
+    if (isElig) { eligibleTtcCents += unit * qty; eligibleHtCents += htUnit * qty; }
+    return { ...it, unitPriceCents: htUnit, lineTotalCents: htUnit * qty, ttcUnitPriceCents: unit };
+  });
+  const itemsTotalHtCents = transformedItems.reduce((s, it) => s + it.lineTotalCents, 0);
+  const shippingTtcCents = Math.max(0, Number(shippingCostCents) || 0);
+  const shippingHtCents = Math.round(shippingTtcCents / (1 + VAT_RATE));
+  const newTotalCents = itemsTotalHtCents + shippingHtCents;
+  const vatAmountCents = (eligibleTtcCents - eligibleHtCents) + (shippingTtcCents - shippingHtCents);
+  return {
+    transformedItems, itemsTotalHtCents, shippingHtCents, newTotalCents,
+    htBaseCents: eligibleHtCents + shippingHtCents, vatAmountCents,
+  };
+}
+
+module.exports = { reverseChargeApplicable, splitReverseChargeHt, computeOrderVat, applyReverseCharge, VAT_RATE, LEGAL_MENTION };
