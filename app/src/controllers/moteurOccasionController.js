@@ -561,11 +561,13 @@ async function postDevis(req, res, next) {
         errorMessage: 'Merci d’indiquer un numéro de téléphone pour qu’on puisse vous rappeler.',
       });
     }
-    if (form.email && !cleanEmail) {
+    if (!cleanEmail) {
       return renderPage(res, req, {
         form,
         statusCode: 400,
-        errorMessage: 'L’email ne semble pas valide.',
+        errorMessage: form.email
+          ? 'L’email ne semble pas valide.'
+          : 'Merci d’indiquer votre email pour recevoir votre devis.',
       });
     }
 

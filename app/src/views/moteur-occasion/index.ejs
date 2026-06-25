@@ -192,12 +192,13 @@ Suivant
 
 <!-- Email -->
 <fieldset class="border border-gray-300 rounded-xl px-4 pb-3 pt-1 focus-within:border-brand-red focus-within:ring-1 focus-within:ring-brand-red/30 transition">
-<legend class="px-1 text-xs text-gray-500">Email</legend>
+<legend class="px-1 text-xs text-gray-500">Email * (pour recevoir votre devis)</legend>
 <div class="flex items-center gap-3">
 <svg class="w-6 h-6 text-brand-red shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
-<input type="email" name="email" value="<%= form.email || '' %>" class="w-full border-0 p-0 text-sm focus:ring-0 placeholder-gray-300" placeholder="nom@exemple.fr">
+<input type="email" name="email" required value="<%= form.email || '' %>" class="w-full border-0 p-0 text-sm focus:ring-0 placeholder-gray-300" placeholder="nom@exemple.fr">
 </div>
 </fieldset>
+<p data-email-error class="text-xs text-red-600 mt-1 hidden">Merci d'indiquer un email valide pour recevoir votre devis.</p>
 
 <!-- Nom -->
 <fieldset class="border border-gray-300 rounded-xl px-4 pb-3 pt-1 focus-within:border-brand-red focus-within:ring-1 focus-within:ring-brand-red/30 transition">
@@ -405,6 +406,17 @@ Envoyer ma demande
       e.preventDefault();
       goStep(2);
       phoneInput.focus();
+      return;
+    }
+    var emailInput = form.querySelector('input[name="email"]');
+    var emailErr = form.querySelector('[data-email-error]');
+    var emailVal = emailInput ? emailInput.value.trim() : '';
+    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailVal)) {
+      e.preventDefault();
+      goStep(2);
+      if (emailErr) emailErr.classList.remove('hidden');
+      if (emailInput) emailInput.focus();
+      return;
     }
   });
 
