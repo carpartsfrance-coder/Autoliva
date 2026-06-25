@@ -168,6 +168,9 @@ Suivant
 <!-- ─────── ÉTAPE 2 : COORDONNÉES ─────── -->
 <div data-step="2" class="space-y-4 hidden">
 
+<!-- Devis instantané : rempli par JS si la plaque est reconnue (sinon masqué) -->
+<div data-instant-quote class="hidden"></div>
+
 <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Coordonnées</p>
 
 <!-- Téléphone -->
@@ -280,6 +283,67 @@ Envoyer ma demande
     }
   }
 
+  // ── Devis instantané : plaque reconnue → moteur identifié + offres dispo ──
+  // Enrichissement progressif : en cas d'échec API / non-plaque, le bloc se masque
+  // et le formulaire fonctionne comme avant.
+  var iqBox = form.querySelector('[data-instant-quote]');
+  var iqLast = '';
+  function iqEur(n) { return Number(n).toLocaleString('fr-FR') + ' €'; }
+  function iqEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  function iqLooksLikePlate(v) { return /^[A-Z]{2}-?\d{3}-?[A-Z]{2}$/i.test(String(v || '').trim()); }
+  function iqCard(title, price, prefix, sub, badge) {
+    return '<div class="rounded-xl border border-gray-200 p-3">'
+      + '<div class="flex items-center justify-between gap-2"><p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">' + title + '</p>'
+      + (badge ? '<span class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5 shrink-0">' + badge + '</span>' : '') + '</div>'
+      + '<p class="text-lg font-bold text-brand-red mt-1">' + (prefix ? '<span class="text-xs font-medium text-gray-400">' + prefix + '</span> ' : '') + price + '</p>'
+      + (sub ? '<p class="text-xs text-gray-500 mt-0.5">' + sub + '</p>' : '') + '</div>';
+  }
+  function iqRender(d) {
+    if (!iqBox) return;
+    if (!d || !d.ok || !d.vehicle) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; return; }
+    var v = d.vehicle, o = d.offers || {};
+    var label = (v.label && String(v.label).toUpperCase() !== 'INCONNU') ? v.label : '';
+    var energyMap = { GAZOLE: 'Diesel', ESSENCE: 'Essence' };
+    var en = (v.energie && String(v.energie).toUpperCase() !== 'INCONNU') ? (energyMap[String(v.energie).toUpperCase()] || v.energie) : '';
+    var name = [v.marque, v.modele].filter(Boolean).join(' ');
+    var desc = [label, en, (v.cylindree && String(v.cylindree) !== '0' ? v.cylindree + ' cm³' : ''), (v.puissance && String(v.puissance) !== '0' ? v.puissance + ' ch' : '')].filter(Boolean).join(' · ');
+    var head = '<div class="flex items-start gap-2 text-sm text-emerald-800 mb-3">'
+      + '<svg class="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path></svg>'
+      + '<span>Votre moteur : <strong>' + iqEsc(name) + '</strong>' + (desc ? '<span class="block text-xs font-normal text-emerald-700/80">' + iqEsc(desc) + '</span>' : '') + '</span></div>';
+    var cards = '';
+    if (o.occasion) {
+      var osub = (o.occasion.km ? Number(o.occasion.km).toLocaleString('fr-FR') + ' km · ' : '') + 'testé, garantie 6 mois';
+      cards += iqCard('Occasion testée', iqEur(o.occasion.prix), 'à partir de', osub, null);
+    }
+    if (o.reman) {
+      var rsub = 'échange standard' + (o.reman.dispo ? ' · ' + iqEsc(o.reman.dispo) : '') + (o.reman.consigne ? ' · consigne ' + iqEur(o.reman.consigne) : '');
+      cards += iqCard('Reconditionné', iqEur(o.reman.pvp), null, rsub, 'garantie 1 an');
+    }
+    var body;
+    if (cards) {
+      var grid = (o.occasion && o.reman) ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1';
+      body = head + '<div class="grid gap-2 ' + grid + '">' + cards + '</div>'
+        + '<p class="text-[11px] text-gray-400 mt-2">Prix indicatif TTC — devis ferme et disponibilité confirmés après votre demande.</p>';
+    } else {
+      body = head + '<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Nous vous préparons un <strong>devis personnalisé sous 1h</strong>. Laissez vos coordonnées juste en dessous.</div>';
+    }
+    iqBox.innerHTML = '<div class="rounded-2xl border border-gray-200 bg-white p-4">' + body + '</div>';
+    iqBox.classList.remove('hidden');
+  }
+  function loadInstantQuote(plate) {
+    if (!iqBox || !iqLooksLikePlate(plate)) { if (iqBox) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; } return; }
+    if (plate === iqLast) return;
+    iqLast = plate;
+    iqBox.classList.remove('hidden');
+    iqBox.innerHTML = '<div class="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-500 flex items-center gap-2">'
+      + '<svg class="w-4 h-4 animate-spin text-brand-red" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"></path></svg>'
+      + 'Identification de votre moteur…</div>';
+    fetch('/api/devis-instantane?plaque=' + encodeURIComponent(plate), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { iqRender(d); track('instant_quote', { hasOffer: !!(d && d.hasOffer) }); })
+      .catch(function () { if (iqBox) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; } iqLast = ''; });
+  }
+
   nextBtn.addEventListener('click', function () {
     if (!plateInput.value.trim()) {
       errMsg.classList.remove('hidden');
@@ -289,6 +353,7 @@ Envoyer ma demande
     errMsg.classList.add('hidden');
     track('funnel_step1_complete');
     goStep(2);
+    loadInstantQuote(plateInput.value.trim());
   });
 
   backBtns.forEach(function (btn) {
