@@ -712,7 +712,26 @@ async function postDevis(req, res, next) {
         ).catch(() => {}).then(() => {
           const _set = { captureSource: CAPTURE_SOURCE };
           if (ackSmsResult) _set['engineQuote.ackSms'] = ackSmsResult;
-          return AbandonedCart.updateOne({ _id: result.leadId }, { $set: _set });
+          // Enrichissement « devis instantané » : moteur détecté + offres (champs
+          // cachés remplis par le JS de la landing). Pré-remplit l'identification
+          // moteur pour le commercial + trace une note. Données client-fournies →
+          // on borne la taille.
+          // On ne garde la détection que si la plaque détectée == plaque envoyée
+          // (sinon détection périmée : le client a changé de plaque après coup).
+          const _normPlate = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const _detPlate = String(body.detectedPlate || '');
+          const _plateOk = _detPlate && _normPlate(_detPlate) === _normPlate(form.plate);
+          const detCode = _plateOk ? String(body.detectedEngineCode || '').trim().slice(0, 40) : '';
+          const detVeh = _plateOk ? String(body.detectedVehicle || '').trim().slice(0, 140) : '';
+          const detOff = _plateOk ? String(body.detectedOffers || '').trim().slice(0, 300) : '';
+          if (detCode) _set['engineQuote.identifiedEngine.code'] = detCode;
+          if (detVeh) _set['engineQuote.identifiedEngine.model'] = detVeh;
+          const _update = { $set: _set };
+          if (detCode || detVeh) {
+            const noteText = `Détection plaque automatique — ${detVeh}${detCode ? ' [' + detCode + ']' : ''}${detOff ? ' · ' + detOff : ''}`.trim();
+            _update.$push = { notes: { text: noteText, addedByName: 'Détection plaque', addedAt: new Date() } };
+          }
+          return AbandonedCart.updateOne({ _id: result.leadId }, _update);
         }).catch(() => {});
       }
     }).catch(() => {});

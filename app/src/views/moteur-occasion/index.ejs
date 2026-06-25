@@ -101,6 +101,11 @@
 
 <form id="quote-multistep" class="space-y-6" action="<%= copy.formAction %>" method="post" novalidate>
 <input type="text" name="website" value="" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
+<!-- Devis instantané : moteur détecté + offres, passés au back pour qualifier le lead (remplis par JS, sinon vides) -->
+<input type="hidden" name="detectedEngineCode" value="">
+<input type="hidden" name="detectedVehicle" value="">
+<input type="hidden" name="detectedOffers" value="">
+<input type="hidden" name="detectedPlate" value="">
 
 <!-- ─────── ÉTAPE 1 : VÉHICULE + TYPE DE MOTEUR ─────── -->
 <div data-step="1" class="space-y-6">
@@ -287,7 +292,35 @@ Envoyer ma demande
   // Enrichissement progressif : en cas d'échec API / non-plaque, le bloc se masque
   // et le formulaire fonctionne comme avant.
   var iqBox = form.querySelector('[data-instant-quote]');
+  var iqFCode = form.querySelector('input[name="detectedEngineCode"]');
+  var iqFVeh = form.querySelector('input[name="detectedVehicle"]');
+  var iqFOff = form.querySelector('input[name="detectedOffers"]');
+  var iqFPlate = form.querySelector('input[name="detectedPlate"]');
   var iqLast = '';
+  // Remplit les champs cachés (qualification du lead) depuis la réponse API.
+  function iqStoreFromResponse(d) {
+    var code = '', veh = '', off = '';
+    if (d && d.ok && d.vehicle) {
+      var v = d.vehicle, o = d.offers || {};
+      code = v.codeMoteur || '';
+      var lbl = (v.label && String(v.label).toUpperCase() !== 'INCONNU') ? v.label : '';
+      var en2 = (v.energie && String(v.energie).toUpperCase() !== 'INCONNU') ? v.energie : '';
+      var bits = [lbl, en2, (v.cylindree && String(v.cylindree) !== '0' ? v.cylindree + ' cm³' : ''), (v.puissance && String(v.puissance) !== '0' ? v.puissance + ' ch' : '')].filter(Boolean);
+      veh = [v.marque, v.modele].filter(Boolean).join(' ') + (bits.length ? ' · ' + bits.join(' · ') : '');
+      if (o.occasion || o.reman) {
+        var p = [];
+        if (o.occasion) p.push('Occasion dès ' + iqEur(o.occasion.prix) + (o.occasion.km ? ' (' + Number(o.occasion.km).toLocaleString('fr-FR') + ' km)' : ''));
+        if (o.reman) p.push('Reconditionné ' + iqEur(o.reman.pvp) + (o.reman.consigne ? ' +consigne ' + iqEur(o.reman.consigne) : '') + (o.reman.dispo ? ' (' + o.reman.dispo + ')' : ''));
+        off = p.join(' · ');
+      } else { off = 'Aucune offre auto → devis manuel'; }
+    }
+    if (iqFCode) iqFCode.value = code;
+    if (iqFVeh) iqFVeh.value = veh;
+    if (iqFOff) iqFOff.value = off;
+    // Plaque réellement détectée → le back ne garde l'enrichissement que si elle
+    // correspond à la plaque envoyée (évite une détection périmée).
+    if (iqFPlate) iqFPlate.value = code ? (plateInput ? plateInput.value.trim() : '') : '';
+  }
   function iqEur(n) { return Number(n).toLocaleString('fr-FR') + ' €'; }
   function iqEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
   function iqLooksLikePlate(v) { return /^[A-Z]{2}-?\d{3}-?[A-Z]{2}$/i.test(String(v || '').trim()); }
@@ -331,7 +364,7 @@ Envoyer ma demande
     iqBox.classList.remove('hidden');
   }
   function loadInstantQuote(plate) {
-    if (!iqBox || !iqLooksLikePlate(plate)) { if (iqBox) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; } return; }
+    if (!iqBox || !iqLooksLikePlate(plate)) { if (iqBox) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; } iqStoreFromResponse(null); return; }
     if (plate === iqLast) return;
     iqLast = plate;
     iqBox.classList.remove('hidden');
@@ -340,8 +373,8 @@ Envoyer ma demande
       + 'Identification de votre moteur…</div>';
     fetch('/api/devis-instantane?plaque=' + encodeURIComponent(plate), { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.json(); })
-      .then(function (d) { iqRender(d); track('instant_quote', { hasOffer: !!(d && d.hasOffer) }); })
-      .catch(function () { if (iqBox) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; } iqLast = ''; });
+      .then(function (d) { iqRender(d); iqStoreFromResponse(d); track('instant_quote', { hasOffer: !!(d && d.hasOffer) }); })
+      .catch(function () { if (iqBox) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; } iqStoreFromResponse(null); iqLast = ''; });
   }
 
   nextBtn.addEventListener('click', function () {
