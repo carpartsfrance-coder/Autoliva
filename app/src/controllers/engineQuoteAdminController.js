@@ -1614,11 +1614,13 @@ async function sendInstantDevis(cart, opts = {}) {
     }
     const payTrackUrl = mollieUrl ? (trackBase + '/track-pay/' + cart._id + '/' + sentQuoteObjectId) : '';
     const pdfTrackUrl = trackBase + '/track-pdf/' + cart._id + '/' + sentQuoteObjectId;
+    // Km du moteur donneur (occasion) → affiché sur le devis ; reman = pas de km.
+    const engineForOffer = (Number(o.mileage) > 0) ? Object.assign({}, eq.identifiedEngine || {}, { mileage: Number(o.mileage) }) : (eq.identifiedEngine || {});
 
     const pdfBuffer = await buildQuotePdf({
       quoteRef,
       customerName: ((cart.firstName || '') + ' ' + (cart.lastName || '')).trim() || cart.email,
-      customerEmail: cart.email, customerPhone: cart.phone, plate, engine: eq.identifiedEngine || {},
+      customerEmail: cart.email, customerPhone: cart.phone, plate, engine: engineForOffer,
       pricing: { sellPrice: sellHt, vatRate: 20, vatScheme, purchasePrice: 0, additionalFees: 0 },
       stockLabel: o.stockLabel || '', delay: o.delay || '', depositCents,
       mollieUrl: payTrackUrl || mollieUrl, customMessage: '',
@@ -1626,7 +1628,7 @@ async function sendInstantDevis(cart, opts = {}) {
       conditionBadge: conditionInfo.short, isReconditionne: isReman, photos: [],
     });
 
-    prepared.push({ kind: o.kind, isReman, sellHt, sellTtc, depositTtc, depositCents, vatScheme, mollieUrl, mollieId, payTrackUrl, pdfTrackUrl, pdfBuffer, sentQuoteObjectId, badge: conditionInfo.short, conditionLabel: conditionLabelClient, consigne, stockLabel: o.stockLabel || '', delay: o.delay || '' });
+    prepared.push({ kind: o.kind, isReman, engine: engineForOffer, sellHt, sellTtc, depositTtc, depositCents, vatScheme, mollieUrl, mollieId, payTrackUrl, pdfTrackUrl, pdfBuffer, sentQuoteObjectId, badge: conditionInfo.short, conditionLabel: conditionLabelClient, consigne, stockLabel: o.stockLabel || '', delay: o.delay || '' });
   }
 
   if (dryRun) {
@@ -1644,7 +1646,7 @@ async function sendInstantDevis(cart, opts = {}) {
     brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
     category: sendCat,
     offers: prepared.map((p) => ({
-      engine: eq.identifiedEngine || {},
+      engine: p.engine || eq.identifiedEngine || {},
       isReconditionne: p.isReman,
       conditionBadge: p.badge,
       conditionLabel: p.conditionLabel,

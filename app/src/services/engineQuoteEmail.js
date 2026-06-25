@@ -455,6 +455,7 @@ function buildBundleQuoteEmailHtml(opts) {
       + `<h2 style="margin:0 0 ${engineCode ? '4px' : '12px'};font-size:16px;line-height:1.3;font-weight:700;color:${NAVY};text-transform:uppercase;">${engineTitle}</h2>`
       + (engineCode ? `<p style="margin:0 0 14px;font-size:14px;color:#6b7280;font-weight:600;">${engineCode}</p>` : '')
       + `<p style="margin:0 0 8px;font-size:13px;color:#475569;">✓&nbsp;&nbsp;${escapeHtml(conditionText)}, garantie ${warrantyMonths} mois</p>`
+      + (mileage ? `<p style="margin:0 0 8px;font-size:13px;color:#475569;">◷&nbsp;&nbsp;Kilométrage certifié : ${mileage}</p>` : '')
       + (o.stockLabel ? `<p style="margin:0;font-size:13px;font-weight:700;color:${RED};">→&nbsp;&nbsp;${escapeHtml(o.stockLabel)}${o.delay ? ' · délai ' + escapeHtml(o.delay) : ''}</p>` : '')
       + `</td></tr></table></td>`
       + `<td class="col-r" width="276" style="vertical-align:top;">`

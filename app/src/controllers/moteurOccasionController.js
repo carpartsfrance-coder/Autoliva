@@ -752,7 +752,7 @@ async function postDevis(req, res, next) {
               if (!freshCart || !freshCart.email) return; // un devis par email exige une adresse
               const _dry = !AUTO_DEVIS_LIVE;
               const _offers = [];
-              if (offers.occasion) _offers.push({ kind: 'occasion', sellPrice: offers.occasion.prix, stockLabel: 'Sourcé à la commande', delay: 'Livraison sous 3-5 jours ouvrés', createMollie: true });
+              if (offers.occasion) _offers.push({ kind: 'occasion', sellPrice: offers.occasion.prix, mileage: offers.occasion.km, stockLabel: 'Sourcé à la commande', delay: 'Livraison sous 3-5 jours ouvrés', createMollie: true });
               if (offers.reman) _offers.push({ kind: 'reman', sellPrice: offers.reman.pvp, consigne: offers.reman.consigne, stockLabel: 'En stock', delay: offers.reman.dispo || 'Livraison sous 3-5 jours ouvrés' });
               if (_offers.length) {
                 // 1 SEUL email + 1 SEUL SMS, avec 1 ou 2 devis (PDF) selon les offres dispo.
