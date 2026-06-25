@@ -1632,30 +1632,37 @@ async function sendInstantDevis(cart, opts = {}) {
     return { ok: true, dryRun: true, devis: prepared.map((p) => ({ kind: p.kind, sellTtc: p.sellTtc, depositCents: p.depositCents })), pdfs: prepared.map((p) => p.pdfBuffer) };
   }
 
-  // ─── UN SEUL email avec tous les PDF en pièces jointes ───
-  const rows = prepared.map((p) => {
-    const cta = p.isReman
-      ? "Pour commander : répondez à cet email ou appelez-nous."
-      : (p.depositTtc > 0
-        ? (`Réservez en versant l'acompte de <strong>${eur(p.depositTtc)}</strong>` + (p.mollieUrl ? ` — <a href="${p.mollieUrl}" style="color:#E1001A;">payer en ligne</a>` : '.'))
-        : '');
-    return `<tr><td style="padding:14px 0;border-top:1px solid #eee;"><strong style="font-size:15px;">${p.isReman ? 'Reconditionné (échange standard)' : 'Occasion testée'}</strong> — <span style="color:#E1001A;font-weight:bold;font-size:15px;">${eur(p.sellTtc)} TTC</span><br><span style="font-size:13px;color:#666;">Garantie ${p.isReman ? 12 : 6} mois. ${cta}</span></td></tr>`;
-  }).join('');
+  // ─── UN SEUL email, style PERSONNEL/TRANSACTIONNEL ───
+  // Pour rester dans l'onglet « Principale » de Gmail : aucune mise en forme
+  // marketing (pas de tableau, pas de couleur, pas de bouton), ton « suite à
+  // votre demande », ratio texte élevé. Le détail (prix en gros + CTA paiement)
+  // est dans les PDF joints.
   const greeting = (cart.firstName && cart.lastName) ? ' ' + cart.firstName : '';
-  const intro = prepared.length > 1 ? 'vos <strong>2 options</strong>' : 'votre devis';
-  const attachInfo = prepared.length > 1 ? 'Les 2 devis détaillés sont en pièces jointes (PDF).' : 'Le devis détaillé est en pièce jointe (PDF).';
-  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#222;line-height:1.5;">`
+  const engineModel = (eq.identifiedEngine && eq.identifiedEngine.model) ? ' (' + eq.identifiedEngine.model + ')' : '';
+  const lineFor = (p) => {
+    const extra = p.isReman
+      ? 'garantie 12 mois, échange standard'
+      : ('garantie 6 mois' + (p.depositTtc > 0 ? ', acompte de ' + eur(p.depositTtc) + ' à la réservation' : ''));
+    return (p.isReman ? 'Moteur reconditionné' : "Moteur d'occasion testé") + ' : ' + eur(p.sellTtc) + ' TTC (' + extra + ')';
+  };
+  const lines = prepared.map(lineFor);
+  const attachInfo = prepared.length > 1 ? 'Vous trouverez les deux devis détaillés en pièce jointe.' : 'Vous trouverez le devis détaillé en pièce jointe.';
+  const phoneTxt = brand.PHONE_MOTEUR ? ' ou en nous appelant au ' + brand.PHONE_MOTEUR : '';
+  const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;">`
     + `<p>Bonjour${greeting},</p>`
-    + `<p>Voici ${intro} pour votre véhicule <strong>${plate}</strong>${eq.identifiedEngine && eq.identifiedEngine.model ? ' (' + eq.identifiedEngine.model + ')' : ''} :</p>`
-    + `<table style="width:100%;border-collapse:collapse;margin:8px 0 16px;">${rows}</table>`
-    + `<p style="font-size:13px;color:#666;">${attachInfo} Devis valables 7 jours, sous réserve de disponibilité confirmée à la commande.</p>`
-    + `<p>L'équipe Autoliva${brand.PHONE_MOTEUR ? ' — ' + brand.PHONE_MOTEUR : ''}</p></div>`;
-  const text = `Bonjour,\n\nVoici ${prepared.length > 1 ? 'vos 2 options' : 'votre devis'} pour ${plate} :\n`
-    + prepared.map((p) => `- ${p.isReman ? 'Reconditionné' : 'Occasion'} : ${p.sellTtc.toFixed(2)} EUR TTC`).join('\n')
-    + `\n\n${attachInfo.replace(/<[^>]+>/g, '')}\nL'équipe Autoliva`;
+    + `<p>Suite à votre demande pour le véhicule ${plate}${engineModel}, voici ${prepared.length > 1 ? 'vos options' : 'votre devis'} :</p>`
+    + `<p>${lines.join('<br>')}</p>`
+    + `<p>${attachInfo} Devis valable 7 jours, sous réserve de disponibilité confirmée à la commande.</p>`
+    + `<p>Pour confirmer votre commande ou pour toute question, il vous suffit de répondre à cet email${phoneTxt}.</p>`
+    + `<p>Cordialement,<br>L'équipe Autoliva</p></div>`;
+  const text = `Bonjour${greeting},\n\n`
+    + `Suite à votre demande pour le véhicule ${plate}${engineModel.replace(/[()]/g, '')}, voici ${prepared.length > 1 ? 'vos options' : 'votre devis'} :\n`
+    + lines.map((l) => '- ' + l).join('\n')
+    + `\n\n${attachInfo} Devis valable 7 jours.\n\n`
+    + `Pour confirmer ou pour toute question, répondez à cet email${phoneTxt}.\n\nCordialement,\nL'équipe Autoliva`;
 
   const attachments = prepared.map((p) => ({ filename: `Devis-${quoteRef || cart._id}-${p.kind}.pdf`, content: p.pdfBuffer.toString('base64'), disposition: 'attachment' }));
-  const subject = prepared.length > 1 ? `Vos devis ${quoteRef} (occasion + reconditionné) — Autoliva` : `Votre devis ${quoteRef} — Autoliva`;
+  const subject = `Votre devis Autoliva${quoteRef ? ' ' + quoteRef : ''}${plate ? ' — ' + plate : ''}`;
   const sendResult = await emailService.sendEmail({ toEmail: cart.email, subject, html, text, attachments });
 
   // ─── UN SEUL SMS (lien court vers le 1er devis) ───
