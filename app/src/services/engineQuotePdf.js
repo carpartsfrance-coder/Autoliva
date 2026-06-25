@@ -165,7 +165,7 @@ function buildQuotePdf(input) {
         doc.fontSize(24).font('Helvetica-Bold').fillColor(C_NAVY).text(brand.NAME || 'Autoliva', M, 38, { lineGap: -4 });
       }
       doc.fontSize(20).font('Helvetica-Bold').fillColor(C_NAVY).text('DEVIS', M + W - 200, 40, { width: 200, align: 'right', characterSpacing: 1.5 });
-      doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text(lex.headerLabel, M + W - 200, 64, { width: 200, align: 'right' });
+      doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text(input.isReconditionne ? lex.headerLabelReconditionne : lex.headerLabel, M + W - 200, 64, { width: 200, align: 'right' });
       doc.moveTo(M, 84).lineTo(M + W, 84).strokeColor(C_OUTLINE_LT).lineWidth(0.6).stroke();
     }
 
@@ -229,7 +229,7 @@ function buildQuotePdf(input) {
     infoCard(M + (cw + gp) * 2, y, 'Informations devis', [
       'N° ' + (input.quoteRef || '—'),
       'Émis le ' + fmtDateTimeShort(new Date()),
-      'Valable 24h seulement',
+      'Valable 7 jours',
     ]);
     y += ch + 12;
 
@@ -255,7 +255,7 @@ function buildQuotePdf(input) {
       M + 14, y + 36, { width: descMaxW, lineBreak: true, ellipsis: true, height: 26 }
     );
     doc.fontSize(8).font('Helvetica').fillColor(C_TEXT_MUTED).text(
-      `Compatible véhicule ${input.plate || '—'} · garantie ${warrantyMonths} mois sans limite km · devis valable 24h (${lex.peutEtreVendu})`,
+      `Compatible véhicule ${input.plate || '—'} · garantie ${warrantyMonths} mois sans limite km · devis valable 7 jours (${lex.peutEtreVendu})`,
       M + 14, y + 66, { width: descMaxW, lineBreak: true, height: 30, ellipsis: true }
     );
 
@@ -352,7 +352,9 @@ function buildQuotePdf(input) {
     doc.fontSize(7.5).font('Helvetica-Bold').fillColor(C_NAVY).text(lex.reserveTitle, M + 28, y + 10, { characterSpacing: 1, lineBreak: false });
 
     doc.fontSize(9).font('Helvetica').fillColor(C_TEXT).text(
-      'Le versement de l\'acompte permet de bloquer la pièce, lancer la préparation et organiser l\'expédition.',
+      depositTtc > 0
+        ? 'Le versement de l\'acompte permet de bloquer la pièce, lancer la préparation et organiser l\'expédition.'
+        : 'Pour commander, contactez notre équipe : nous confirmons la disponibilité, puis lançons la préparation et l\'expédition.',
       M + 14, y + 32, { width: modW - 28, height: 28, lineGap: 1 }
     );
     doc.moveTo(M + 14, y + 70).lineTo(M + modW - 14, y + 70).strokeColor(C_OUTLINE_LT).lineWidth(0.5).stroke();

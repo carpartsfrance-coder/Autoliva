@@ -310,7 +310,7 @@ Envoyer ma demande
       if (o.occasion || o.reman) {
         var p = [];
         if (o.occasion) p.push('Occasion dès ' + iqEur(o.occasion.prix) + (o.occasion.km ? ' (' + Number(o.occasion.km).toLocaleString('fr-FR') + ' km)' : ''));
-        if (o.reman) p.push('Reconditionné ' + iqEur(o.reman.pvp) + (o.reman.consigne ? ' +consigne ' + iqEur(o.reman.consigne) : '') + (o.reman.dispo ? ' (' + o.reman.dispo + ')' : ''));
+        if (o.reman) p.push('Reconditionné ' + iqEur(Math.round(o.reman.pvp * 1.2)) + (o.reman.consigne ? ' +consigne ' + iqEur(o.reman.consigne) : '') + (o.reman.dispo ? ' (' + o.reman.dispo + ')' : ''));
         off = p.join(' · ');
       } else { off = 'Aucune offre auto → devis manuel'; }
     }
@@ -350,7 +350,7 @@ Envoyer ma demande
     }
     if (o.reman) {
       var rsub = 'échange standard' + (o.reman.dispo ? ' · ' + iqEsc(o.reman.dispo) : '') + (o.reman.consigne ? ' · consigne ' + iqEur(o.reman.consigne) : '');
-      cards += iqCard('Reconditionné', iqEur(o.reman.pvp), null, rsub, 'garantie 1 an');
+      cards += iqCard('Reconditionné', iqEur(Math.round(o.reman.pvp * 1.2)), null, rsub, 'garantie 1 an');
     }
     var body;
     if (cards) {
