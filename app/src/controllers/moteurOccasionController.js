@@ -746,20 +746,28 @@ async function postDevis(req, res, next) {
             if (!AUTO_DEVIS_ENABLED || !_plateOk || !detCode) return;
             try {
               const { matchOffers } = require('../services/instantEngineQuote');
-              const engineQuoteAdmin = require('./engineQuoteAdminController');
               const offers = matchOffers(detCode);
               const freshCart = await AbandonedCart.findById(result.leadId);
               if (!freshCart || !freshCart.email) return; // un devis par email exige une adresse
-              const _dry = !AUTO_DEVIS_LIVE;
               const _offers = [];
               if (offers.occasion) _offers.push({ kind: 'occasion', sellPrice: offers.occasion.prix, mileage: offers.occasion.km, stockLabel: 'Sourcé à la commande', delay: '7 à 10 jours', createMollie: true });
               if (offers.reman) _offers.push({ kind: 'reman', sellPrice: offers.reman.pvp, consigne: offers.reman.consigne, stockLabel: 'En stock', delay: offers.reman.dispo || 'Livraison sous 3-5 jours ouvrés', equip: offers.reman.equip || '' });
               if (_offers.length) {
-                // 1 SEUL email + 1 SEUL SMS, avec 1 ou 2 devis (PDF) selon les offres dispo.
-                const r = await engineQuoteAdmin.sendInstantDevis(freshCart, { offers: _offers, dryRun: _dry });
-                console.log(`[auto-devis] ${_dry ? 'DRY-RUN (non envoyé)' : 'ENVOYÉ'} → ${freshCart.email} · ${_offers.length} devis / 1 email · ${(r.devis || []).map((d) => d.kind + ' ' + d.sellTtc + '€').join(' + ')} · ok=${r.ok}`);
+                // On N'ENVOIE PAS tout de suite : l'accusé de réception part à la
+                // soumission, le devis est PROGRAMMÉ (échéance = capture + délai)
+                // et envoyé par le cron processScheduledAutoDevis. Le garde
+                // status:null (matche aussi champ absent) = 1 seule programmation
+                // même en cas de resoumission du formulaire (idempotence).
+                const delayMs = Number(process.env.AUTO_DEVIS_DELAY_MS) || 5 * 60 * 1000; // 5 min par défaut
+                const dueAt = new Date(Date.now() + delayMs);
+                const upd = await AbandonedCart.updateOne(
+                  { _id: freshCart._id, 'engineQuote.autoDevis.status': null },
+                  { $set: { 'engineQuote.autoDevis': { status: 'scheduled', dueAt, scheduledAt: new Date(), offers: _offers, result: '' } } }
+                );
+                if (upd.modifiedCount) console.log(`[auto-devis] PROGRAMMÉ → ${freshCart.email} · ${_offers.length} devis · échéance ${dueAt.toISOString()}`);
+                else console.log(`[auto-devis] déjà programmé/envoyé → ${freshCart.email} (resubmit ignoré)`);
               }
-            } catch (e) { console.error('[auto-devis] échec:', e && e.message); }
+            } catch (e) { console.error('[auto-devis] échec programmation:', e && e.message); }
           });
         }).catch(() => {});
       }

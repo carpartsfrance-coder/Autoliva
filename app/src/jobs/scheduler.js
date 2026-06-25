@@ -10,6 +10,7 @@ const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations } = requi
 const { reconcileScalapayOrders } = require('./reconcileScalapayOrders');
 const { syncShipmentTracking } = require('./syncShipmentTracking');
 const { runEngineQuoteReminders } = require('./sendEngineQuoteReminders');
+const { processScheduledAutoDevis } = require('./processScheduledAutoDevis');
 const { syncConversions } = require('../services/googleAdsConversionSync');
 const { isConfigured: googleAdsConfigured } = require('../services/googleAdsConversions');
 
@@ -126,6 +127,17 @@ function startScheduler() {
     }
   });
 
+  // Devis instantanés DIFFÉRÉS : chaque minute, envoie ceux arrivés à échéance.
+  // L'accusé de réception part à la soumission, le devis suit ~5 min après.
+  cron.schedule('* * * * *', async () => {
+    try {
+      const r = await processScheduledAutoDevis();
+      if (r && r.processed) console.log('[scheduler] auto-devis différés envoyés:', r.processed);
+    } catch (err) {
+      console.error('[scheduler] Erreur auto-devis différés:', err.message || err);
+    }
+  });
+
   // Relances devis moteurs : tous les jours à 09:30 (J+3, J+7, J+14 auto-lost)
   cron.schedule('30 9 * * *', async () => {
     console.log('[scheduler] Lancement relances devis moteurs...');
@@ -152,6 +164,7 @@ function startScheduler() {
 
   console.log('[scheduler] CRON paniers abandonnés programmé (détection :00, relances :05)');
   console.log('[scheduler] CRON relances devis moteurs programmé (09:30 quotidien)');
+  console.log('[scheduler] CRON auto-devis différés programmé (chaque minute)');
   console.log('[scheduler] CRON SAV programmé (SLA :15, relances 09:05)');
   console.log('[scheduler] CRON alertes commandes programmé (:10)');
   console.log('[scheduler] CRON relances consigne programmé (09:00 quotidien)');

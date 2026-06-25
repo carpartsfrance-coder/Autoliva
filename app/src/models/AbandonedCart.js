@@ -153,6 +153,22 @@ const engineQuoteSchema = new mongoose.Schema(
     /** Relances automatiques envoyées (anti-doublon cron) */
     remindersSent: { type: [engineQuoteReminderSchema], default: [] },
 
+    /**
+     * Devis instantané PROGRAMMÉ (envoi différé) : à la capture on programme le
+     * devis (dueAt = capture + délai) au lieu de l'envoyer ; l'accusé de
+     * réception part d'abord, le devis suit après le délai via le cron
+     * processScheduledAutoDevis. Claim atomique scheduled->sending = idempotence.
+     */
+    autoDevis: {
+      status: { type: String, enum: ['scheduled', 'sending', 'sent', 'error'], default: null },
+      dueAt: { type: Date, default: null },
+      scheduledAt: { type: Date, default: null },
+      claimedAt: { type: Date, default: null },
+      sentAt: { type: Date, default: null },
+      result: { type: String, default: '' },
+      offers: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    },
+
     /** Paiement acompte reçu (webhook Mollie) */
     payment: {
       mollieId: { type: String, default: '' },
