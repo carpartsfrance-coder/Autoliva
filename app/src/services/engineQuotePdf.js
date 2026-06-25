@@ -453,7 +453,9 @@ function buildQuotePdf(input) {
     checkmark(M + 22, y + 15, C_NAVY, 7);
     doc.fontSize(8).font('Helvetica-Bold').fillColor(C_NAVY).text('INCLUS', M + 42, y + 12, { characterSpacing: 1, lineBreak: false });
     doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text(
-      lex.controlListItem + ' · photos · préparation palette · garantie ' + warrantyMonths + ' mois · assistance compatibilité',
+      (input.isReconditionne
+        ? 'reconditionnement complet · pièces d\'usure remplacées · préparation palette'
+        : lex.controlListItem + ' · photos · préparation palette') + ' · garantie ' + warrantyMonths + ' mois · assistance compatibilité',
       M + 90, y + 12, { width: W - 105, lineBreak: false, ellipsis: true }
     );
     y += inclH + 12;
@@ -547,20 +549,38 @@ function buildQuotePdf(input) {
       });
     }
 
-    checkList(M, y, cW2, cH2, 'Contrôles inclus avant expédition', [
-      lex.controlTitle,
-      lex.visualControl,
-      'Vérification absence de défaut majeur',
-      lex.photosPartExp,
-      'Préparation sur palette sécurisée',
-    ]);
-    checkList(M + cW2 + 12, y, cW2, cH2, 'Documents transmis avec la commande', [
-      'Facture d\'achat',
-      lex.photosPart,
-      'Photos compteur donneur si disponible',
-      'Rapport de contrôle interne',
-      'Attestation de préparation',
-    ]);
+    if (input.isReconditionne) {
+      // Reconditionné = moteur REFAIT en atelier (pas un moteur d'occasion testé) :
+      // pas d'endoscopie / km / compteur donneur, mais reconditionnement + pièces remplacées.
+      checkList(M, y, cW2, cH2, 'Reconditionnement (atelier)', [
+        'Moteur entièrement reconditionné',
+        'Pièces d\'usure remplacées (joints, segments, coussinets)',
+        'Remontage aux préconisations constructeur',
+        'Contrôle qualité avant expédition',
+        'Préparation sur palette sécurisée',
+      ]);
+      checkList(M + cW2 + 12, y, cW2, cH2, 'Documents transmis avec la commande', [
+        'Facture',
+        'Attestation de reconditionnement',
+        'Conditions de garantie 12 mois',
+        'Préconisations de montage',
+      ]);
+    } else {
+      checkList(M, y, cW2, cH2, 'Contrôles inclus avant expédition', [
+        lex.controlTitle,
+        lex.visualControl,
+        'Vérification absence de défaut majeur',
+        lex.photosPartExp,
+        'Préparation sur palette sécurisée',
+      ]);
+      checkList(M + cW2 + 12, y, cW2, cH2, 'Documents transmis avec la commande', [
+        'Facture d\'achat',
+        lex.photosPart,
+        'Photos compteur donneur si disponible',
+        'Rapport de contrôle interne',
+        'Attestation de préparation',
+      ]);
+    }
     y += cH2 + 14;
 
     // ─── 2 cols dans card grise : Compatibilité | Garantie ──────────
@@ -598,12 +618,14 @@ function buildQuotePdf(input) {
       M + 14, y + 42, { width: W - 28, height: 22, lineGap: 1, ellipsis: true }
     );
     doc.moveTo(M + 14, y + lH - 18).lineTo(M + W - 14, y + lH - 18).strokeColor(C_OUTLINE_LT).lineWidth(0.5).stroke();
-    doc.fontSize(8).font('Helvetica-Bold').fillColor(C_NAVY).text('Kilométrage', M + 14, y + lH - 12, { lineBreak: false });
+    doc.fontSize(8).font('Helvetica-Bold').fillColor(C_NAVY).text(input.isReconditionne ? 'Reconditionné' : 'Kilométrage', M + 14, y + lH - 12, { lineBreak: false });
     doc.fontSize(8).font('Helvetica').fillColor(C_TEXT_MUTED).text(
-      input.engine && input.engine.mileage > 0
-        ? fmtMileage(input.engine.mileage) + ' certifiés au compteur donneur, photo transmise avec la commande.'
-        : 'Kilométrage relevé sur compteur donneur, transmis avec photo lorsque disponible.',
-      M + 72, y + lH - 12, { width: W - 86, lineBreak: false, ellipsis: true }
+      input.isReconditionne
+        ? 'Moteur entièrement refait en atelier, pièces d\'usure remplacées, contrôlé avant expédition.'
+        : (input.engine && input.engine.mileage > 0
+          ? fmtMileage(input.engine.mileage) + ' certifiés au compteur donneur, photo transmise avec la commande.'
+          : 'Kilométrage relevé sur compteur donneur, transmis avec photo lorsque disponible.'),
+      M + 80, y + lH - 12, { width: W - 94, lineBreak: false, ellipsis: true }
     );
     y += lH + 14;
 
@@ -616,7 +638,9 @@ function buildQuotePdf(input) {
     const tlLineY = y + 52;
     doc.moveTo(M + 60, tlLineY).lineTo(M + W - 60, tlLineY).strokeColor(C_OUTLINE).lineWidth(0.8).dash(2, { space: 2 }).stroke();
     doc.undash();
-    const steps = ['Paiement\nacompte', lex.blocageStep, 'Contrôles\n+ photos', 'Préparation\npalette', 'Expédition\nlivraison'];
+    const steps = input.isReconditionne
+      ? ['Commande\nvalidée', 'Préparation\nen atelier', 'Contrôle\nqualité', 'Préparation\npalette', 'Expédition\nlivraison']
+      : ['Paiement\nacompte', lex.blocageStep, 'Contrôles\n+ photos', 'Préparation\npalette', 'Expédition\nlivraison'];
     const stW = (W - 60) / steps.length;
     steps.forEach((label, i) => {
       const cx = M + 30 + stW * i + stW / 2;
