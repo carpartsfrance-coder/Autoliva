@@ -31,6 +31,13 @@ const LANDING_PATH = '/moteurs';
 const RECOND_PATH = '/moteurs-reconditionnes';
 const CAPTURE_SOURCE = 'landing_moteurs';
 
+// Envoi automatique des devis fermes à la capture (OFF par défaut → inerte tant
+// que la variable d'env n'est pas explicitement 'true').
+const AUTO_DEVIS_ENABLED = String(process.env.AUTO_DEVIS_ENABLED || '').toLowerCase() === 'true';
+// Sécurité 2 niveaux : ENABLED seul = DRY-RUN (génère les devis, logge, n'envoie
+// RIEN). L'envoi réel (email/SMS/Mollie) exige EN PLUS AUTO_DEVIS_LIVE='true'.
+const AUTO_DEVIS_LIVE = String(process.env.AUTO_DEVIS_LIVE || '').toLowerCase() === 'true';
+
 /* Deux landing pages partagent la MÊME vue + le MÊME tunnel de devis, avec une
  * "copy" (message) adaptée à l'intention de recherche (message match Google Ads) :
  *  - /moteurs                → occasion (garantie 6 mois)
@@ -731,7 +738,27 @@ async function postDevis(req, res, next) {
             const noteText = `Détection plaque automatique — ${detVeh}${detCode ? ' [' + detCode + ']' : ''}${detOff ? ' · ' + detOff : ''}`.trim();
             _update.$push = { notes: { text: noteText, addedByName: 'Détection plaque', addedAt: new Date() } };
           }
-          return AbandonedCart.updateOne({ _id: result.leadId }, _update);
+          return AbandonedCart.updateOne({ _id: result.leadId }, _update).then(async () => {
+            // Envoi AUTOMATIQUE des devis fermes (derrière flag) — le serveur
+            // re-matche le code détecté (source de vérité), 2 devis séparés.
+            if (!AUTO_DEVIS_ENABLED || !_plateOk || !detCode) return;
+            try {
+              const { matchOffers } = require('../services/instantEngineQuote');
+              const engineQuoteAdmin = require('./engineQuoteAdminController');
+              const offers = matchOffers(detCode);
+              const freshCart = await AbandonedCart.findById(result.leadId);
+              if (!freshCart || !freshCart.email) return; // un devis par email exige une adresse
+              const _dry = !AUTO_DEVIS_LIVE;
+              if (offers.occasion) {
+                const r = await engineQuoteAdmin.sendInstantDevis(freshCart, { kind: 'occasion', sellPrice: offers.occasion.prix, stockLabel: 'Sourcé à la commande', delay: 'Livraison sous 3-5 jours ouvrés', createMollie: true, dryRun: _dry });
+                console.log(`[auto-devis] occasion ${_dry ? 'DRY-RUN (non envoyé)' : 'ENVOYÉ'} → ${freshCart.email} · ${r.sellTtc}€ TTC · acompte ${(r.depositCents || 0) / 100}€ · ok=${r.ok}`);
+              }
+              if (offers.reman) {
+                const r = await engineQuoteAdmin.sendInstantDevis(freshCart, { kind: 'reman', sellPrice: offers.reman.pvp, consigne: offers.reman.consigne, stockLabel: 'En stock', delay: offers.reman.dispo || 'Livraison sous 3-5 jours ouvrés', dryRun: _dry });
+                console.log(`[auto-devis] reman ${_dry ? 'DRY-RUN (non envoyé)' : 'ENVOYÉ'} → ${freshCart.email} · ${r.sellTtc}€ TTC · ok=${r.ok}`);
+              }
+            } catch (e) { console.error('[auto-devis] échec:', e && e.message); }
+          });
         }).catch(() => {});
       }
     }).catch(() => {});
