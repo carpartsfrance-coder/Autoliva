@@ -398,108 +398,143 @@ function buildAcompteConfirmationHtml(opts) {
  */
 function buildBundleQuoteEmailHtml(opts) {
   const lex = partLexicon(opts.category);
+  const isBoite = lex.category === 'boite';
   const greeting = opts.firstName ? 'Bonjour ' + escapeHtml(opts.firstName) + ',' : 'Bonjour,';
   const offers = Array.isArray(opts.offers) ? opts.offers : [];
   const multi = offers.length > 1;
-  const lbl = 'margin:0 0 12px;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;';
+  const eur0 = (n) => new Intl.NumberFormat('fr-FR').format(Math.round(Number(n) || 0)) + ' €';
+
+  const ouDivider = '<tr><td class="pad-x" style="padding:14px 36px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>'
+    + '<td style="border-top:1px solid #e2e8f0;font-size:0;line-height:0;">&nbsp;</td>'
+    + '<td width="42" align="center" style="font-size:11px;font-weight:700;letter-spacing:0.1em;color:#94a3b8;white-space:nowrap;padding:0 10px;">OU</td>'
+    + '<td style="border-top:1px solid #e2e8f0;font-size:0;line-height:0;">&nbsp;</td>'
+    + '</tr></table></td></tr>';
 
   const offerBlock = (o, idx) => {
-    const badge = o.conditionBadge || (o.isReconditionne ? 'Reconditionné' : 'Occasion');
-    const badgeColor = o.isReconditionne ? RED : NAVY;
-    const engineTitle = (o.engine && o.engine.model) ? escapeHtml(o.engine.model) : lex.defaultTitle;
+    const isReman = !!o.isReconditionne;
+    const bandColor = isReman ? RED : NAVY;
+    const bandSub = isReman ? '#ffd0d3' : '#8fa6c9';
+    const borderColor = isReman ? '#f6c4c7' : '#d7deea';
+    const badge = o.conditionBadge || (isReman ? 'Reconditionné' : 'Occasion');
+    const bandName = isReman ? lex.headerLabelReconditionne : lex.defaultConditionText;
+    const priceLabel = isReman ? 'Total TTC' : 'Prix total TTC';
+    const engineTitle = (o.engine && o.engine.model) ? escapeHtml(o.engine.model) : escapeHtml(lex.defaultTitle);
     const engineCode = (o.engine && o.engine.code) ? escapeHtml(o.engine.code) : '';
     const mileage = (o.engine && o.engine.mileage) ? fmtMileage(o.engine.mileage) : '';
-    const conditionText = o.conditionLabel || lex.defaultConditionText;
     const sellHt = Number(o.sellHt) || 0;
     const sellTtc = Number(o.sellTtc) || 0;
     const depositTtc = Number(o.depositTtc) || 0;
     const remaining = Math.max(sellTtc - depositTtc, 0);
-    const vatRate = o.vatRate != null ? Number(o.vatRate) : 20;
-    const isMarginScheme = o.vatScheme !== 'normal';
-    const warrantyMonths = o.isReconditionne ? 12 : 6;
+    const warr = isReman ? 12 : 6;
     const inStock = /stock/i.test(o.stockLabel || '');
 
-    let reservationCard = '';
-    if (depositTtc > 0) {
-      const soldeLine = 'Solde de <strong>' + fmtEur(remaining) + '</strong> à régler une fois ' + lex.leNoun + ' ' + (inStock ? '' : lex.sourced + ', ') + lex.controlledPast + ' en atelier et ' + lex.declaredPast + ' conforme.';
+    const line1 = isReman
+      ? '✓&nbsp;&nbsp;Reconditionnement complet en atelier, garantie ' + warr + ' mois'
+      : "✓&nbsp;&nbsp;Contrôle au banc d'essai, garantie " + warr + ' mois';
+    const line2 = isReman
+      ? '✓&nbsp;&nbsp;Sans limite de kilométrage'
+      : (mileage ? '◷&nbsp;&nbsp;Kilométrage certifié : ' + mileage : '');
+    const marginNote = (!isReman)
+      ? '<p style="margin:7px 0 0;font-size:10px;color:#94a3b8;line-height:1.4;">Prix TTC — TVA sur marge (art. 297 A du CGI).</p>'
+      : '';
+
+    let acompteBox = '';
+    if (!isReman && depositTtc > 0) {
+      const soldeLine = 'Solde de <strong>' + eur0(remaining) + '</strong> à régler une fois ' + lex.leNoun + ' ' + (inStock ? '' : lex.sourced + ', ') + lex.controlledPast + ' en atelier et ' + lex.declaredPast + ' conforme.';
       const payHref = o.payTrackUrl || o.mollieUrl;
       const action = payHref
-        ? `<a href="${escapeHtml(payHref)}" style="display:block;background:${RED};color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.03em;text-transform:uppercase;text-align:center;padding:13px 12px;border-radius:8px;">Valider la réservation →</a>`
-        : `<p style="margin:0;font-size:11px;color:#64748b;line-height:1.5;">Lien de paiement sécurisé transmis par retour de mail.</p>`;
-      reservationCard = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fef2f2;border:1px solid #fecaca;border-radius:14px;margin-top:14px;"><tr><td style="padding:18px 20px;">`
-        + `<p style="margin:0 0 5px;font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:${RED};">Acompte de réservation</p>`
-        + `<p style="margin:0 0 6px;font-size:26px;line-height:1;font-weight:800;color:${RED};">${fmtEur(depositTtc)}</p>`
-        + `<p style="margin:0 0 14px;font-size:12px;color:#475569;line-height:1.5;">${soldeLine}</p>${action}</td></tr></table>`;
+        ? '<a href="' + escapeHtml(payHref) + '" style="display:block;background:' + RED + ';color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.02em;text-align:center;padding:12px;border-radius:8px;margin-top:12px;">Valider la réservation →</a>'
+        : '';
+      acompteBox = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;margin-top:14px;"><tr><td style="padding:13px 16px;">'
+        + '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>'
+        + '<td style="font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:' + RED + ';vertical-align:bottom;">Acompte de réservation</td>'
+        + '<td align="right" style="font-size:20px;font-weight:800;color:' + RED + ';">' + eur0(depositTtc) + '</td></tr></table>'
+        + '<p style="margin:6px 0 0;font-size:12px;color:#7f1d1d;line-height:1.5;">' + soldeLine + '</p>' + action
+        + '</td></tr></table>';
+    }
+
+    let breakdownBox = '';
+    if (isReman) {
+      breakdownBox = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;margin-top:14px;"><tr><td style="padding:12px 16px;">'
+        + '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">'
+        + '<tr><td style="font-size:13px;color:' + NAVY + ';padding:2px 0;">Prix HT</td><td align="right" style="font-size:13px;color:' + NAVY + ';padding:2px 0;">' + eur0(sellHt) + '</td></tr>'
+        + '<tr><td style="font-size:13px;color:' + NAVY + ';padding:2px 0 9px;border-bottom:1px solid #eef0f3;">TVA 20 %</td><td align="right" style="font-size:13px;color:' + NAVY + ';padding:2px 0 9px;border-bottom:1px solid #eef0f3;">' + eur0(sellTtc - sellHt) + '</td></tr>'
+        + '<tr><td style="font-size:14px;font-weight:700;color:' + NAVY + ';padding-top:9px;">Total TTC</td><td align="right" style="font-size:18px;font-weight:800;color:' + RED + ';padding-top:9px;">' + eur0(sellTtc) + '</td></tr>'
+        + '</table></td></tr></table>';
     }
 
     const consigneAmount = Number(o.consigne && o.consigne.amount) || 0;
     const consigneDelay = Number(o.consigne && o.consigne.delayDays) || 30;
-    const consigneBlock = consigneAmount > 0
-      ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fffbeb;border:1px solid #fde68a;border-radius:14px;margin-top:12px;"><tr><td style="padding:16px 20px;">`
-        + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>`
-        + `<td style="vertical-align:top;"><p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#b45309;">Échange standard — consigne</p></td>`
-        + `<td align="right"><span style="font-size:18px;font-weight:800;color:#b45309;">+ ${fmtEur(consigneAmount)}</span></td></tr></table>`
-        + `<p style="margin:6px 0 0;font-size:13px;line-height:1.6;color:#78350f;">Caution <strong>remboursable</strong> (hors TVA), restituée au retour de ${lex.oldNoun} sous ${consigneDelay} jours.</p></td></tr></table>`
+    const consigneBox = consigneAmount > 0
+      ? '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;margin-top:12px;"><tr><td style="padding:13px 16px;">'
+        + '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>'
+        + '<td style="font-size:11px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:#b45309;vertical-align:bottom;">Échange standard — consigne</td>'
+        + '<td align="right" style="font-size:18px;font-weight:800;color:#b45309;">+ ' + eur0(consigneAmount) + '</td></tr></table>'
+        + '<p style="margin:6px 0 0;font-size:12px;line-height:1.5;color:#78350f;">Caution <strong>remboursable</strong> (hors TVA), restituée au retour de ' + lex.oldNoun + ' sous ' + consigneDelay + ' jours.</p>'
+        + '</td></tr></table>'
       : '';
 
-    const sectionTitle = multi
-      ? `<tr><td class="pad-x" style="padding:18px 30px 4px;"><p style="margin:0;font-size:13px;font-weight:800;color:${badgeColor};text-transform:uppercase;letter-spacing:0.04em;">Option ${idx + 1} — ${o.isReconditionne ? 'Reconditionné' : 'Occasion testée'}</p></td></tr>`
+    const cta = o.pdfTrackUrl
+      ? '<a href="' + escapeHtml(o.pdfTrackUrl) + '" style="display:block;text-align:center;background:' + bandColor + ';color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;letter-spacing:0.02em;padding:13px;border-radius:9px;margin-top:14px;">Voir le devis ' + (isReman ? 'reconditionné' : 'occasion') + ' (PDF) →</a>'
       : '';
 
-    return sectionTitle + `<tr><td class="pad-x" style="padding:8px 30px 8px;">`
-      + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>`
-      + `<td class="col-l" width="400" style="vertical-align:top;padding-right:14px;">`
-      + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #e5e7eb;border-radius:14px;height:100%;"><tr><td style="padding:22px;">`
-      + `<p style="${lbl}">${lex.proposedLabel}</p>`
-      + `<span style="display:inline-block;background:${badgeColor};color:#fff;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 9px;border-radius:4px;margin-bottom:12px;">${escapeHtml(badge)}</span>`
-      + `<h2 style="margin:0 0 ${engineCode ? '4px' : '12px'};font-size:16px;line-height:1.3;font-weight:700;color:${NAVY};text-transform:uppercase;">${engineTitle}</h2>`
-      + (engineCode ? `<p style="margin:0 0 14px;font-size:14px;color:#6b7280;font-weight:600;">${engineCode}</p>` : '')
-      + `<p style="margin:0 0 8px;font-size:13px;color:#475569;">✓&nbsp;&nbsp;${escapeHtml(conditionText)}, garantie ${warrantyMonths} mois</p>`
-      + (mileage ? `<p style="margin:0 0 8px;font-size:13px;color:#475569;">◷&nbsp;&nbsp;Kilométrage certifié : ${mileage}</p>` : '')
-      + (o.stockLabel ? `<p style="margin:0;font-size:13px;font-weight:700;color:${RED};">→&nbsp;&nbsp;${escapeHtml(o.stockLabel)}${o.delay ? ' · délai ' + escapeHtml(o.delay) : ''}</p>` : '')
-      + `</td></tr></table></td>`
-      + `<td class="col-r" width="276" style="vertical-align:top;">`
-      + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #e5e7eb;border-radius:14px;"><tr><td style="padding:20px;">`
-      + `<p style="${lbl}">Récapitulatif</p>`
-      + (isMarginScheme ? '' : `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td style="padding:2px 0;font-size:14px;color:${NAVY};">Prix HT</td><td style="padding:2px 0;font-size:14px;color:${NAVY};text-align:right;">${fmtEur(sellHt)}</td></tr><tr><td style="padding:2px 0 12px;font-size:14px;color:${NAVY};">TVA ${vatRate}%</td><td style="padding:2px 0 12px;font-size:14px;color:${NAVY};text-align:right;">${fmtEur(sellTtc - sellHt)}</td></tr></table>`)
-      + `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="${isMarginScheme ? '' : 'border-top:1px solid #f1f5f9;'}"><tr><td style="padding-top:12px;font-size:14px;font-weight:700;color:${NAVY};vertical-align:bottom;">${isMarginScheme ? 'Prix total' : 'Total TTC'}</td><td style="padding-top:12px;font-size:22px;font-weight:800;color:${RED};text-align:right;line-height:1;">${fmtEur(sellTtc)}</td></tr></table>`
-      + (isMarginScheme ? `<p style="margin:8px 0 0;font-size:10px;color:#94a3b8;line-height:1.4;">TVA sur marge — art. 297 A du CGI.</p>` : '')
-      + `</td></tr></table>${reservationCard}${consigneBlock}</td></tr></table>`
-      + (o.pdfTrackUrl ? `<p style="margin:10px 0 0;font-size:14px;"><a href="${escapeHtml(o.pdfTrackUrl)}" style="color:#2563eb;text-decoration:none;font-weight:600;">📄 Voir ${multi ? 'ce devis' : 'le devis'} en ligne (PDF) →</a></p>` : '')
-      + `</td></tr>`;
+    const band = '<tr><td style="background:' + bandColor + ';padding:14px 20px;">'
+      + '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>'
+      + '<td style="vertical-align:middle;">'
+      + '<span style="display:block;font-size:11px;font-weight:700;letter-spacing:0.08em;color:' + bandSub + ';">OPTION ' + (idx + 1) + '</span>'
+      + '<span style="display:block;font-size:16px;font-weight:700;color:#ffffff;margin-top:2px;">' + escapeHtml(bandName) + '</span></td>'
+      + '<td align="right" style="vertical-align:middle;white-space:nowrap;">'
+      + '<span style="display:block;font-size:11px;color:' + bandSub + ';">' + priceLabel + '</span>'
+      + '<span style="display:block;font-size:22px;font-weight:800;color:#ffffff;line-height:1.15;">' + eur0(sellTtc) + '</span></td>'
+      + '</tr></table></td></tr>';
+
+    const body = '<tr><td style="padding:18px 20px;background:#ffffff;">'
+      + '<span style="display:inline-block;background:' + bandColor + ';color:#ffffff;font-size:10px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:4px 9px;border-radius:4px;margin-bottom:9px;">' + escapeHtml(badge) + '</span>'
+      + '<p style="margin:0 0 ' + (engineCode ? '2px' : '12px') + ';font-size:15px;font-weight:700;color:' + NAVY + ';text-transform:uppercase;line-height:1.3;">' + engineTitle + '</p>'
+      + (engineCode ? '<p style="margin:0 0 12px;font-size:13px;color:#6b7280;font-weight:600;">' + engineCode + '</p>' : '')
+      + '<p style="margin:0 0 5px;font-size:13px;color:#475569;">' + line1 + '</p>'
+      + (line2 ? '<p style="margin:0 0 5px;font-size:13px;color:#475569;">' + line2 + '</p>' : '')
+      + (o.stockLabel ? '<p style="margin:0;font-size:13px;font-weight:700;color:' + RED + ';">→&nbsp;&nbsp;' + escapeHtml(o.stockLabel) + (o.delay ? ' · délai ' + escapeHtml(o.delay) : '') + '</p>' : '')
+      + acompteBox + breakdownBox + consigneBox + marginNote + cta
+      + '</td></tr>';
+
+    const card = '<tr><td class="pad-x" style="padding:8px 22px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid ' + borderColor + ';border-radius:14px;overflow:hidden;">'
+      + band + body + '</table></td></tr>';
+
+    return (idx > 0 && multi ? ouDivider : '') + card;
   };
 
   const intro = multi
-    ? `Voici <strong style="color:${NAVY};">vos ${offers.length} options</strong> pour votre <strong style="color:${NAVY};">${escapeHtml(opts.plate || 'véhicule')}</strong>. Le détail complet de chaque devis est en pièce jointe (PDF).`
-    : `Voici votre devis personnalisé pour votre <strong style="color:${NAVY};">${escapeHtml(opts.plate || 'véhicule')}</strong>. Le détail complet est en pièce jointe (PDF).`;
+    ? 'Voici <strong style="color:' + NAVY + ';">vos ' + offers.length + ' options</strong> pour votre <strong style="color:' + NAVY + ';">' + escapeHtml(opts.plate || 'véhicule') + '</strong>. Choisissez celle qui vous convient — le détail complet de chaque devis est en pièce jointe (PDF).'
+    : 'Voici votre devis personnalisé pour votre <strong style="color:' + NAVY + ';">' + escapeHtml(opts.plate || 'véhicule') + '</strong>. Le détail complet est en pièce jointe (PDF).';
 
-  return `<!DOCTYPE html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Votre devis ${escapeHtml(opts.quoteRef)} — Autoliva</title>
-<style>@media only screen and (max-width:600px){.email-pad{padding:0 !important}.email-container{border-radius:0 !important}.pad-x{padding-left:18px !important;padding-right:18px !important}.col-l,.col-r{display:block !important;width:100% !important;padding:0 !important}.col-r{padding-top:14px !important}.h1-mobile{font-size:30px !important}}</style></head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:${NAVY};">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f3f4f6;"><tr><td align="center" class="email-pad" style="padding:24px 12px;">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="720" class="email-container" style="max-width:720px;width:100%;background:#ffffff;border-radius:16px;border:1px solid #eef0f3;overflow:hidden;">
-  <tr><td class="pad-x" style="padding:26px 30px 22px;border-bottom:1px solid #eef0f3;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-    <td style="vertical-align:middle;"><img src="${LOGO_URL}" alt="Autoliva" width="148" style="display:block;border:0;height:auto;width:148px;"></td>
-    <td align="right" style="vertical-align:middle;"><span style="display:inline-block;background:#f3f4f6;border-radius:8px;padding:7px 12px;font-size:13px;color:#475569;font-weight:500;">Devis <span style="color:${NAVY};">${escapeHtml(opts.quoteRef)}</span></span></td>
-  </tr></table></td></tr>
-  <tr><td class="pad-x" style="padding:28px 30px 8px;">
-    <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:${RED};">${multi ? 'Vos devis sont prêts' : 'Votre devis est prêt'}</p>
-    <h1 class="h1-mobile" style="margin:0 0 12px;font-size:32px;line-height:1.1;font-weight:800;color:${NAVY};letter-spacing:-0.02em;">${greeting}</h1>
-    <p style="margin:0;font-size:15px;line-height:1.6;color:#475569;">${intro}</p>
-  </td></tr>
-  ${offers.map(offerBlock).join('')}
-  <tr><td class="pad-x" style="padding:14px 30px 8px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border:1px solid #e5e7eb;border-radius:14px;"><tr><td style="padding:20px 24px;">
-    <p style="${lbl}">Inclus dans chaque devis</p>
-    <p style="margin:0;font-size:14px;color:${NAVY};line-height:1.7;">✓ Banc d'essai (compression, étanchéité) · ✓ Garantie sans franchise kilométrique · ✓ Transférable en cas de revente · ✓ Expédition sécurisée Europe (palette, scellés, attestation)</p>
-  </td></tr></table></td></tr>
-  <tr><td class="pad-x" style="padding:14px 30px 28px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #eef0f3;"><tr><td style="padding-top:18px;">
-    <p style="margin:0 0 14px;font-size:14px;font-weight:700;color:${NAVY};">À votre disposition pour toute question — L'équipe Autoliva</p>
-    <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">Devis valable 7 jours · Référence : <strong style="color:#475569;">${escapeHtml(opts.quoteRef)}</strong><br>
-    <a href="mailto:contact@autoliva.com" style="color:#2563eb;text-decoration:none;">contact@autoliva.com</a> · <a href="tel:${escapeHtml(opts.brandPhoneIntl || '+33465848539')}" style="color:#64748b;text-decoration:none;">${escapeHtml(opts.brandPhone || '04 65 84 85 39')}</a> · <a href="${PUBLIC_SITE}" style="color:#2563eb;text-decoration:none;">autoliva.com</a></p>
-  </td></tr></table></td></tr>
-</table></td></tr></table></body></html>`;
+  const inclusLine = 'Banc d\'essai ' + (isBoite ? '(passage des rapports, étanchéité)' : '(compression, étanchéité)') + ' · Garantie sans franchise kilométrique · Transférable en cas de revente · Expédition sécurisée en Europe (palette, scellés, attestation)';
+
+  return '<!DOCTYPE html>\n'
+    + '<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Votre devis ' + escapeHtml(opts.quoteRef) + ' — Autoliva</title>\n'
+    + '<style>@media only screen and (max-width:600px){.email-pad{padding:0 !important}.email-container{border-radius:0 !important}.pad-x{padding-left:16px !important;padding-right:16px !important}.h1-mobile{font-size:26px !important}}</style></head>\n'
+    + '<body style="margin:0;padding:0;background:#f3f4f6;font-family:\'Inter\',-apple-system,BlinkMacSystemFont,\'Segoe UI\',Roboto,Arial,sans-serif;color:' + NAVY + ';">\n'
+    + '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f3f4f6;"><tr><td align="center" class="email-pad" style="padding:24px 12px;">\n'
+    + '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="640" class="email-container" style="max-width:640px;width:100%;background:#ffffff;border-radius:14px;border:1px solid #eef0f3;overflow:hidden;">\n'
+    + '<tr><td class="pad-x" style="padding:20px 26px;border-bottom:1px solid #eef0f3;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr>'
+    + '<td style="vertical-align:middle;"><img src="' + LOGO_URL + '" alt="Autoliva" width="140" style="display:block;border:0;height:auto;width:140px;"></td>'
+    + '<td align="right" style="vertical-align:middle;"><span style="display:inline-block;background:#f3f4f6;border-radius:8px;padding:7px 12px;font-size:12px;color:#475569;">Devis <span style="color:' + NAVY + ';font-weight:600;">' + escapeHtml(opts.quoteRef) + '</span></span></td>'
+    + '</tr></table></td></tr>'
+    + '<tr><td class="pad-x" style="padding:24px 26px 6px;">'
+    + '<p style="margin:0 0 7px;font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;color:' + RED + ';">' + (multi ? 'Vos devis sont prêts' : 'Votre devis est prêt') + '</p>'
+    + '<h1 class="h1-mobile" style="margin:0 0 10px;font-size:28px;line-height:1.15;font-weight:800;color:' + NAVY + ';letter-spacing:-0.02em;">' + greeting + '</h1>'
+    + '<p style="margin:0;font-size:14px;line-height:1.6;color:#475569;">' + intro + '</p></td></tr>'
+    + offers.map(offerBlock).join('')
+    + '<tr><td class="pad-x" style="padding:18px 22px 6px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8fafc;border:1px solid #eef0f3;border-radius:12px;"><tr><td style="padding:16px 20px;">'
+    + '<p style="margin:0 0 7px;font-size:11px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;color:#64748b;">Inclus dans chaque devis</p>'
+    + '<p style="margin:0;font-size:13px;color:' + NAVY + ';line-height:1.7;">' + inclusLine + '</p>'
+    + '</td></tr></table></td></tr>'
+    + '<tr><td class="pad-x" style="padding:16px 26px 26px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #eef0f3;"><tr><td style="padding-top:18px;">'
+    + '<p style="margin:0 0 10px;font-size:13px;font-weight:700;color:' + NAVY + ';">À votre disposition pour toute question — L\'équipe Autoliva</p>'
+    + '<p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">Devis valable 7 jours · Référence : <strong style="color:#475569;">' + escapeHtml(opts.quoteRef) + '</strong><br>'
+    + '<a href="mailto:contact@autoliva.com" style="color:#2563eb;text-decoration:none;">contact@autoliva.com</a> · <a href="tel:' + escapeHtml(opts.brandPhoneIntl || '+33465848539') + '" style="color:#64748b;text-decoration:none;">' + escapeHtml(opts.brandPhone || '04 65 84 85 39') + '</a> · <a href="' + PUBLIC_SITE + '" style="color:#2563eb;text-decoration:none;">autoliva.com</a></p>'
+    + '</td></tr></table></td></tr>'
+    + '</table></td></tr></table></body></html>';
 }
-
 
 module.exports = { buildQuoteEmailHtml, buildBundleQuoteEmailHtml, buildReminderEmailHtml, buildShipmentEmailHtml, buildAcompteConfirmationHtml };
