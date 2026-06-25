@@ -556,6 +556,9 @@ app.use('/api/blog', require('./routes/api/blogImport'));
 // Devis moteurs API publique : webhook Mollie acompte + pixel tracking email
 app.use('/api/devis-moteurs', require('./routes/api/engineQuote'));
 
+// Devis instantané : plaque -> code moteur (API) -> offres occasion + reman
+app.use('/api/devis-instantane', require('./routes/api/instantQuote'));
+
 // Lien court de marque pour le SMS de devis : /d/<shortCode> → vue trackée + PDF
 app.get('/d/:code', require('./controllers/engineQuotePublicController').getShortDevisLink);
 
