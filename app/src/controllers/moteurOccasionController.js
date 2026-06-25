@@ -751,13 +751,13 @@ async function postDevis(req, res, next) {
               const freshCart = await AbandonedCart.findById(result.leadId);
               if (!freshCart || !freshCart.email) return; // un devis par email exige une adresse
               const _dry = !AUTO_DEVIS_LIVE;
-              if (offers.occasion) {
-                const r = await engineQuoteAdmin.sendInstantDevis(freshCart, { kind: 'occasion', sellPrice: offers.occasion.prix, stockLabel: 'Sourcé à la commande', delay: 'Livraison sous 3-5 jours ouvrés', createMollie: true, dryRun: _dry });
-                console.log(`[auto-devis] occasion ${_dry ? 'DRY-RUN (non envoyé)' : 'ENVOYÉ'} → ${freshCart.email} · ${r.sellTtc}€ TTC · acompte ${(r.depositCents || 0) / 100}€ · ok=${r.ok}`);
-              }
-              if (offers.reman) {
-                const r = await engineQuoteAdmin.sendInstantDevis(freshCart, { kind: 'reman', sellPrice: offers.reman.pvp, consigne: offers.reman.consigne, stockLabel: 'En stock', delay: offers.reman.dispo || 'Livraison sous 3-5 jours ouvrés', dryRun: _dry });
-                console.log(`[auto-devis] reman ${_dry ? 'DRY-RUN (non envoyé)' : 'ENVOYÉ'} → ${freshCart.email} · ${r.sellTtc}€ TTC · ok=${r.ok}`);
+              const _offers = [];
+              if (offers.occasion) _offers.push({ kind: 'occasion', sellPrice: offers.occasion.prix, stockLabel: 'Sourcé à la commande', delay: 'Livraison sous 3-5 jours ouvrés', createMollie: true });
+              if (offers.reman) _offers.push({ kind: 'reman', sellPrice: offers.reman.pvp, consigne: offers.reman.consigne, stockLabel: 'En stock', delay: offers.reman.dispo || 'Livraison sous 3-5 jours ouvrés' });
+              if (_offers.length) {
+                // 1 SEUL email + 1 SEUL SMS, avec 1 ou 2 devis (PDF) selon les offres dispo.
+                const r = await engineQuoteAdmin.sendInstantDevis(freshCart, { offers: _offers, dryRun: _dry });
+                console.log(`[auto-devis] ${_dry ? 'DRY-RUN (non envoyé)' : 'ENVOYÉ'} → ${freshCart.email} · ${_offers.length} devis / 1 email · ${(r.devis || []).map((d) => d.kind + ' ' + d.sellTtc + '€').join(' + ')} · ok=${r.ok}`);
               }
             } catch (e) { console.error('[auto-devis] échec:', e && e.message); }
           });

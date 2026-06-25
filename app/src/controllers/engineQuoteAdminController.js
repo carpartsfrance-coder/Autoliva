@@ -1560,122 +1560,111 @@ async function postSendQuote(req, res, next) {
 }
 
 /* ─── ENVOI AUTOMATIQUE DU DEVIS (devis instantané plaque) ───────────────
- * Réutilise la machinerie de postSendQuote pour envoyer un devis FERME
- * automatiquement à la capture, à partir d'une offre matchée. Paramétré
- * occasion (régime marge + acompte/Mollie) ou reman (normal 20%, sans lien).
- * opts.dryRun = true → génère le PDF mais N'ENVOIE/NE PERSISTE RIEN (test sûr).
+ * Réutilise la machinerie de postSendQuote pour envoyer les devis FERMES
+ * automatiquement à la capture, à partir des offres matchées. opts.offers =
+ * tableau [{ kind:'occasion'|'reman', sellPrice, consigne, stockLabel, delay,
+ * createMollie }]. Les offres sont regroupées dans UN SEUL email (avec les 2
+ * PDF joints) + UN SEUL SMS. opts.dryRun = true → génère les PDF mais
+ * N'ENVOIE/NE PERSISTE RIEN (test sûr).
  */
 async function sendInstantDevis(cart, opts = {}) {
-  const kind = opts.kind === 'reman' ? 'reman' : 'occasion';
-  const isReman = kind === 'reman';
   const dryRun = !!opts.dryRun;
-  const sellPriceInput = Number(opts.sellPrice) || 0;
-  if (!cart || !cart.email || sellPriceInput <= 0) return { ok: false, reason: 'precondition', kind };
+  const offersIn = Array.isArray(opts.offers) ? opts.offers.filter((o) => o && Number(o.sellPrice) > 0) : [];
+  if (!cart || !cart.email || !offersIn.length) return { ok: false, reason: 'precondition' };
 
   const eq = cart.engineQuote || {};
   const sendCat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
-  const lex = partLexicon(sendCat);
-
-  const pricing = { sellPrice: sellPriceInput, vatRate: 20, vatScheme: isReman ? 'normal' : 'margin', purchasePrice: 0, additionalFees: 0 };
-  const _totals = computeQuoteTotals(pricing, isReman);
-  const vatRate = _totals.vatRate;
-  const sellHt = Number(pricing.sellPrice) || 0;
-  const sellTtc = _totals.clientTotal;
-  const vatScheme = _totals.isMargin ? 'margin' : 'normal';
-
-  const conditionKey = isReman ? 'reconditionne_complet' : 'occasion';
-  const conditionInfo = CONDITION_LABELS[conditionKey] || CONDITION_LABELS[''];
-  const conditionLabelClient = conditionClientLabel(conditionKey, sendCat);
-  const sendConsigne = { amount: Number(opts.consigne) || 0, delayDays: 30 };
-
-  const depositPct = isReman ? 0 : (opts.depositPct != null ? Number(opts.depositPct) : 30);
-  const depositTtc = depositPct > 0 ? (sellTtc * depositPct / 100) : 0;
-  const depositCents = Math.round(depositTtc * 100);
-  const createMollie = !isReman && depositCents > 0 && MOLLIE_ENABLED && opts.createMollie !== false;
-
   const quoteRef = (cart.requested && cart.requested.ref) || '';
-  const stockLabelClient = opts.stockLabel || '';
-  const delay = opts.delay || '';
-  const stockLocation = isReman ? 'atelier' : 'sourcing';
-  const sentByName = opts.sentByName || 'Devis automatique';
-
-  const sentQuoteObjectId = new mongoose.Types.ObjectId();
+  const plate = (cart.requested && cart.requested.plate) || '';
   let publicBase = String(process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').trim().replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(publicBase)) publicBase = 'https://' + publicBase;
   const trackBase = publicBase + '/api/devis-moteurs';
-  const trackSuffix = '/' + String(cart._id) + '/' + String(sentQuoteObjectId);
-  const trackPixelUrl = trackBase + '/track-open' + trackSuffix;
-  const pdfTrackUrl = trackBase + '/track-pdf' + trackSuffix;
+  const eur = (n) => Number(n || 0).toLocaleString('fr-FR') + ' €';
 
-  let mollieUrl = '';
-  let mollieId = '';
-  if (createMollie && !dryRun) {
-    try {
-      const payment = await mollie.createPayment({
-        amountCents: depositCents,
-        description: `Acompte devis ${quoteRef} — Autoliva`,
-        redirectUrl: publicBase + '/devis/merci?ref=' + encodeURIComponent(quoteRef),
-        webhookUrl: publicBase + '/api/devis-moteurs/mollie-webhook',
-        metadata: { kind: 'engine_quote_deposit', quoteRef, engineQuoteId: String(cart._id) },
-      });
-      if (payment && payment._links && payment._links.checkout) { mollieUrl = payment._links.checkout.href; mollieId = payment.id; }
-    } catch (err) { console.error('[instant-devis] Mollie failed:', err && err.message); }
+  // Prépare chaque devis (pricing + PDF + lien Mollie pour l'occasion).
+  const prepared = [];
+  for (const o of offersIn) {
+    const isReman = o.kind === 'reman';
+    const pricing = { sellPrice: Number(o.sellPrice), vatRate: 20, vatScheme: isReman ? 'normal' : 'margin', purchasePrice: 0, additionalFees: 0 };
+    const t = computeQuoteTotals(pricing, isReman);
+    const sellHt = Number(pricing.sellPrice) || 0;
+    const sellTtc = t.clientTotal;
+    const vatScheme = t.isMargin ? 'margin' : 'normal';
+    const conditionKey = isReman ? 'reconditionne_complet' : 'occasion';
+    const conditionInfo = CONDITION_LABELS[conditionKey] || CONDITION_LABELS[''];
+    const conditionLabelClient = conditionClientLabel(conditionKey, sendCat);
+    const consigne = { amount: Number(o.consigne) || 0, delayDays: 30 };
+    const depositTtc = isReman ? 0 : (sellTtc * 30 / 100);
+    const depositCents = Math.round(depositTtc * 100);
+    const sentQuoteObjectId = new mongoose.Types.ObjectId();
+
+    let mollieUrl = '', mollieId = '';
+    const createMollie = !isReman && depositCents > 0 && MOLLIE_ENABLED && o.createMollie !== false;
+    if (createMollie && !dryRun) {
+      try {
+        const payment = await mollie.createPayment({
+          amountCents: depositCents,
+          description: `Acompte devis ${quoteRef} — Autoliva`,
+          redirectUrl: publicBase + '/devis/merci?ref=' + encodeURIComponent(quoteRef),
+          webhookUrl: publicBase + '/api/devis-moteurs/mollie-webhook',
+          metadata: { kind: 'engine_quote_deposit', quoteRef, engineQuoteId: String(cart._id) },
+        });
+        if (payment && payment._links && payment._links.checkout) { mollieUrl = payment._links.checkout.href; mollieId = payment.id; }
+      } catch (err) { console.error('[instant-devis] Mollie failed:', err && err.message); }
+    }
+    const payTrackUrl = mollieUrl ? (trackBase + '/track-pay/' + cart._id + '/' + sentQuoteObjectId) : '';
+
+    const pdfBuffer = await buildQuotePdf({
+      quoteRef,
+      customerName: ((cart.firstName || '') + ' ' + (cart.lastName || '')).trim() || cart.email,
+      customerEmail: cart.email, customerPhone: cart.phone, plate, engine: eq.identifiedEngine || {},
+      pricing: { sellPrice: sellHt, vatRate: 20, vatScheme, purchasePrice: 0, additionalFees: 0 },
+      stockLabel: o.stockLabel || '', delay: o.delay || '', depositCents,
+      mollieUrl: payTrackUrl || mollieUrl, customMessage: '',
+      conditionLabel: conditionLabelClient, category: sendCat, consigne,
+      conditionBadge: conditionInfo.short, isReconditionne: isReman, photos: [],
+    });
+
+    prepared.push({ kind: o.kind, isReman, sellHt, sellTtc, depositTtc, depositCents, mollieUrl, mollieId, pdfBuffer, sentQuoteObjectId });
   }
-  const payTrackUrl = mollieUrl ? (trackBase + '/track-pay' + trackSuffix) : '';
 
-  const pdfBuffer = await buildQuotePdf({
-    quoteRef,
-    customerName: ((cart.firstName || '') + ' ' + (cart.lastName || '')).trim() || cart.email,
-    customerEmail: cart.email,
-    customerPhone: cart.phone,
-    plate: (cart.requested && cart.requested.plate) || '',
-    engine: eq.identifiedEngine || {},
-    pricing: { sellPrice: sellHt, vatRate, vatScheme, purchasePrice: 0, additionalFees: 0 },
-    stockLabel: stockLabelClient, delay, depositCents,
-    mollieUrl: payTrackUrl || mollieUrl, customMessage: '',
-    conditionLabel: conditionLabelClient, category: sendCat,
-    consigne: sendConsigne, conditionBadge: conditionInfo.short,
-    isReconditionne: isReman, photos: [],
-  });
+  if (dryRun) {
+    return { ok: true, dryRun: true, devis: prepared.map((p) => ({ kind: p.kind, sellTtc: p.sellTtc, depositCents: p.depositCents })), pdfs: prepared.map((p) => p.pdfBuffer) };
+  }
 
-  if (dryRun) return { ok: true, dryRun: true, kind, quoteRef, sellHt, sellTtc, depositCents, pdfBuffer, pdfSize: pdfBuffer.length };
+  // ─── UN SEUL email avec tous les PDF en pièces jointes ───
+  const rows = prepared.map((p) => {
+    const cta = p.isReman
+      ? "Pour commander : répondez à cet email ou appelez-nous."
+      : (p.depositTtc > 0
+        ? (`Réservez en versant l'acompte de <strong>${eur(p.depositTtc)}</strong>` + (p.mollieUrl ? ` — <a href="${p.mollieUrl}" style="color:#E1001A;">payer en ligne</a>` : '.'))
+        : '');
+    return `<tr><td style="padding:14px 0;border-top:1px solid #eee;"><strong style="font-size:15px;">${p.isReman ? 'Reconditionné (échange standard)' : 'Occasion testée'}</strong> — <span style="color:#E1001A;font-weight:bold;font-size:15px;">${eur(p.sellTtc)} TTC</span><br><span style="font-size:13px;color:#666;">Garantie ${p.isReman ? 12 : 6} mois. ${cta}</span></td></tr>`;
+  }).join('');
+  const greeting = (cart.firstName && cart.lastName) ? ' ' + cart.firstName : '';
+  const intro = prepared.length > 1 ? 'vos <strong>2 options</strong>' : 'votre devis';
+  const attachInfo = prepared.length > 1 ? 'Les 2 devis détaillés sont en pièces jointes (PDF).' : 'Le devis détaillé est en pièce jointe (PDF).';
+  const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#222;line-height:1.5;">`
+    + `<p>Bonjour${greeting},</p>`
+    + `<p>Voici ${intro} pour votre véhicule <strong>${plate}</strong>${eq.identifiedEngine && eq.identifiedEngine.model ? ' (' + eq.identifiedEngine.model + ')' : ''} :</p>`
+    + `<table style="width:100%;border-collapse:collapse;margin:8px 0 16px;">${rows}</table>`
+    + `<p style="font-size:13px;color:#666;">${attachInfo} Devis valables 7 jours, sous réserve de disponibilité confirmée à la commande.</p>`
+    + `<p>L'équipe Autoliva${brand.PHONE_MOTEUR ? ' — ' + brand.PHONE_MOTEUR : ''}</p></div>`;
+  const text = `Bonjour,\n\nVoici ${prepared.length > 1 ? 'vos 2 options' : 'votre devis'} pour ${plate} :\n`
+    + prepared.map((p) => `- ${p.isReman ? 'Reconditionné' : 'Occasion'} : ${p.sellTtc.toFixed(2)} EUR TTC`).join('\n')
+    + `\n\n${attachInfo.replace(/<[^>]+>/g, '')}\nL'équipe Autoliva`;
 
-  const pdfSaved = await storage.saveBuffer({
-    buffer: pdfBuffer, filename: `Devis-${quoteRef || cart._id}-${kind}.pdf`, mime: 'application/pdf',
-    metadata: { kind: 'engine_quote_pdf', engineQuoteId: String(cart._id), quoteRef },
-  });
+  const attachments = prepared.map((p) => ({ filename: `Devis-${quoteRef || cart._id}-${p.kind}.pdf`, content: p.pdfBuffer.toString('base64'), disposition: 'attachment' }));
+  const subject = prepared.length > 1 ? `Vos devis ${quoteRef} (occasion + reconditionné) — Autoliva` : `Votre devis ${quoteRef} — Autoliva`;
+  const sendResult = await emailService.sendEmail({ toEmail: cart.email, subject, html, text, attachments });
 
-  const firstNameForEmail = (cart.firstName && cart.lastName) ? cart.firstName : '';
-  const html = buildQuoteEmailHtml({
-    quoteRef, firstName: firstNameForEmail, plate: (cart.requested && cart.requested.plate) || '',
-    engine: eq.identifiedEngine || {}, stockLabel: stockLabelClient, delay,
-    sellHt, sellTtc, depositTtc, vatRate, vatScheme, stockLocation, mollieUrl, customMessage: '', photoCount: 0,
-    brandPhone: brand.PHONE_MOTEUR, brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
-    conditionLabel: conditionLabelClient, category: sendCat, consigne: sendConsigne,
-    conditionBadge: conditionInfo.short, isReconditionne: isReman, trackPixelUrl, payTrackUrl, pdfTrackUrl,
-  });
-  const text = [
-    'Bonjour,', '', `Votre devis Autoliva ${quoteRef} (${isReman ? 'reconditionné' : 'occasion'}) est prêt.`, '',
-    `Véhicule : ${(cart.requested && cart.requested.plate) || ''}`,
-    eq.identifiedEngine && eq.identifiedEngine.model ? `${lex.nounCap} : ${eq.identifiedEngine.model}` : '',
-    `Total TTC : ${sellTtc.toFixed(2)} €`, depositTtc > 0 ? `Acompte : ${depositTtc.toFixed(2)} €` : '',
-    mollieUrl ? `Lien acompte : ${mollieUrl}` : '', '', 'Détail complet en pièce jointe.', "L'équipe Autoliva",
-  ].filter(Boolean).join('\n');
-
-  const sendResult = await emailService.sendEmail({
-    toEmail: cart.email,
-    subject: `Votre devis ${quoteRef} (${isReman ? 'reconditionné' : 'occasion testé'}) — Autoliva`,
-    html, text,
-    attachments: [{ filename: `Devis-${quoteRef || cart._id}-${kind}.pdf`, content: pdfBuffer.toString('base64'), disposition: 'attachment' }],
-  });
-
+  // ─── UN SEUL SMS (lien court vers le 1er devis) ───
   const shortCode = await generateUniqueShortCode();
-  const pdfShortUrl = publicBase + '/d/' + shortCode;
   let devisSmsResult = null;
   if (cart.phone) {
     try {
-      const totalTtcFmt = sellTtc.toFixed(2).replace('.', ',') + ' €';
-      const { enabled: smsOn, text: smsBody } = await resolveSms('moteur_devis', { quoteRef, totalTtc: totalTtcFmt, pdfUrl: pdfShortUrl, phoneMoteur: brand.PHONE_MOTEUR });
+      const totalTtcFmt = prepared.map((p) => Math.round(p.sellTtc)).join(' / ') + ' €';
+      const { enabled: smsOn, text: smsBody } = await resolveSms('moteur_devis', { quoteRef, totalTtc: totalTtcFmt, pdfUrl: publicBase + '/d/' + shortCode, phoneMoteur: brand.PHONE_MOTEUR });
       if (smsOn && smsBody) {
         const r = await sendSms({ to: cart.phone, text: smsBody });
         devisSmsResult = { status: r && r.ok ? 'sent' : 'failed', reason: (r && r.reason) || '', message: (r && r.message) || '', at: new Date(), phone: cart.phone };
@@ -1685,21 +1674,21 @@ async function sendInstantDevis(cart, opts = {}) {
     } catch (err) { devisSmsResult = { status: 'failed', reason: 'exception', message: (err && err.message) || 'Erreur', at: new Date(), phone: cart.phone }; }
   }
 
+  // ─── Persiste un sentQuote par devis (le 1er porte le shortCode + le SMS) ───
+  const sentByName = opts.sentByName || 'Devis automatique';
+  const baseVer = (Array.isArray(eq.sentQuotes) ? eq.sentQuotes.length : 0);
+  const sentDocs = [];
+  for (let i = 0; i < prepared.length; i++) {
+    const p = prepared[i];
+    const saved = await storage.saveBuffer({ buffer: p.pdfBuffer, filename: `Devis-${quoteRef || cart._id}-${p.kind}.pdf`, mime: 'application/pdf', metadata: { kind: 'engine_quote_pdf', engineQuoteId: String(cart._id), quoteRef } });
+    sentDocs.push({ _id: p.sentQuoteObjectId, sentAt: new Date(), version: baseVer + i + 1, pdfId: saved.id, pdfUrl: saved.url, shortCode: i === 0 ? shortCode : '', sellPriceHt: p.sellHt, sellPriceTtc: p.sellTtc, depositCents: p.depositCents, mollieUrl: p.mollieUrl, mollieId: p.mollieId, customMessage: '', sentByName, sms: i === 0 ? devisSmsResult : null, attachedPhotos: [] });
+  }
   await AbandonedCart.updateOne(
     { _id: cart._id },
-    {
-      $push: { 'engineQuote.sentQuotes': {
-        _id: sentQuoteObjectId, sentAt: new Date(),
-        version: (Array.isArray(eq.sentQuotes) ? eq.sentQuotes.length : 0) + 1,
-        pdfId: pdfSaved.id, pdfUrl: pdfSaved.url, shortCode,
-        sellPriceHt: sellHt, sellPriceTtc: sellTtc, depositCents, mollieUrl, mollieId,
-        customMessage: '', sentByName, sms: devisSmsResult, attachedPhotos: [],
-      } },
-      $set: { 'engineQuote.status': 'quote_sent', 'engineQuote.updatedAt': new Date(), 'engineQuote.updatedByName': sentByName },
-    }
+    { $push: { 'engineQuote.sentQuotes': { $each: sentDocs } }, $set: { 'engineQuote.status': 'quote_sent', 'engineQuote.updatedAt': new Date(), 'engineQuote.updatedByName': sentByName } }
   );
 
-  return { ok: true, kind, quoteRef, sellHt, sellTtc, depositCents, emailOk: !!(sendResult && sendResult.ok !== false), smsStatus: devisSmsResult && devisSmsResult.status, pdfUrl: pdfSaved.url, mollieUrl };
+  return { ok: true, count: prepared.length, devis: prepared.map((p) => ({ kind: p.kind, sellTtc: p.sellTtc })), emailOk: !!(sendResult && sendResult.ok !== false), smsStatus: devisSmsResult && devisSmsResult.status };
 }
 
 /* ─── TABLEAU DE CONVERSION (FUNNEL) ─────────────────────────────────────
