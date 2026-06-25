@@ -14,30 +14,36 @@ function normalizeCode(code) {
   return String(code == null ? '' : code).toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-// Les codes du catalogue occasion portent souvent un suffixe (n° de série /
-// châssis) collé au code moteur : « N47D20C-157055 » -> « N47D20C157055 ».
-// L'API plaque renvoie le code propre « N47D20C ». On matche donc :
-//   1) en exact ; 2) sinon en préfixe (clé catalogue commençant par le code API),
-//      en gardant l'offre la moins chère. Préfixe réservé aux codes >= 4 car.
-//      pour éviter les faux positifs sur les codes courts (AXE, AXD…).
+// Règle de matching (devis FERME → on exige les mêmes LETTRES exactement).
+// On normalise (tirets/espaces/underscores retirés), puis :
+//   - match exact, OU
+//   - un suffixe purement NUMÉRIQUE est toléré (c'est l'id d'annonce / n° de
+//     série collé au code moteur côté catalogue Ovoko : « N47D20C-157055 »
+//     == « N47D20C »).
+// Une LETTRE différente = moteur différent : « N47D20A » ≠ « N47D20C ».
+function codesMatch(a, b) {
+  if (a === b) return true;
+  if (a.length >= 3 && b.startsWith(a) && /^\d+$/.test(b.slice(a.length))) return true;
+  if (b.length >= 3 && a.startsWith(b) && /^\d+$/.test(a.slice(b.length))) return true;
+  return false;
+}
+
 function matchOne(index, apiCode, priceKey) {
   const nc = normalizeCode(apiCode);
   if (!nc) return null;
   if (index[nc]) return Object.assign({ codeCatalogue: nc, match: 'exact' }, index[nc]);
-  if (nc.length >= 4) {
-    let best = null;
-    let bestKey = null;
-    for (const key in index) {
-      if (key.startsWith(nc)) {
-        const entry = index[key];
-        if (best === null || entry[priceKey] < best[priceKey]) {
-          best = entry;
-          bestKey = key;
-        }
+  let best = null;
+  let bestKey = null;
+  for (const key in index) {
+    if (codesMatch(nc, key)) {
+      const entry = index[key];
+      if (best === null || entry[priceKey] < best[priceKey]) {
+        best = entry;
+        bestKey = key;
       }
     }
-    if (best) return Object.assign({ codeCatalogue: bestKey, match: 'prefix' }, best);
   }
+  if (best) return Object.assign({ codeCatalogue: bestKey, match: 'suffix' }, best);
   return null;
 }
 
