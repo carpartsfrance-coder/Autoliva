@@ -19,7 +19,7 @@ const AbandonedCart = require('../models/AbandonedCart');
 const storage = require('../services/savFileStorage');
 const emailService = require('../services/emailService');
 const { buildQuotePdf } = require('../services/engineQuotePdf');
-const { buildQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
+const { buildQuoteEmailHtml, buildBundleQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
 const { partLexicon } = require('../services/partLexicon');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
@@ -1613,6 +1613,7 @@ async function sendInstantDevis(cart, opts = {}) {
       } catch (err) { console.error('[instant-devis] Mollie failed:', err && err.message); }
     }
     const payTrackUrl = mollieUrl ? (trackBase + '/track-pay/' + cart._id + '/' + sentQuoteObjectId) : '';
+    const pdfTrackUrl = trackBase + '/track-pdf/' + cart._id + '/' + sentQuoteObjectId;
 
     const pdfBuffer = await buildQuotePdf({
       quoteRef,
@@ -1625,41 +1626,37 @@ async function sendInstantDevis(cart, opts = {}) {
       conditionBadge: conditionInfo.short, isReconditionne: isReman, photos: [],
     });
 
-    prepared.push({ kind: o.kind, isReman, sellHt, sellTtc, depositTtc, depositCents, mollieUrl, mollieId, pdfBuffer, sentQuoteObjectId });
+    prepared.push({ kind: o.kind, isReman, sellHt, sellTtc, depositTtc, depositCents, vatScheme, mollieUrl, mollieId, payTrackUrl, pdfTrackUrl, pdfBuffer, sentQuoteObjectId, badge: conditionInfo.short, conditionLabel: conditionLabelClient, consigne, stockLabel: o.stockLabel || '', delay: o.delay || '' });
   }
 
   if (dryRun) {
     return { ok: true, dryRun: true, devis: prepared.map((p) => ({ kind: p.kind, sellTtc: p.sellTtc, depositCents: p.depositCents })), pdfs: prepared.map((p) => p.pdfBuffer) };
   }
 
-  // ─── UN SEUL email, style PERSONNEL/TRANSACTIONNEL ───
-  // Pour rester dans l'onglet « Principale » de Gmail : aucune mise en forme
-  // marketing (pas de tableau, pas de couleur, pas de bouton), ton « suite à
-  // votre demande », ratio texte élevé. Le détail (prix en gros + CTA paiement)
-  // est dans les PDF joints.
-  const greeting = (cart.firstName && cart.lastName) ? ' ' + cart.firstName : '';
-  const engineModel = (eq.identifiedEngine && eq.identifiedEngine.model) ? ' (' + eq.identifiedEngine.model + ')' : '';
-  const lineFor = (p) => {
-    const extra = p.isReman
-      ? 'garantie 12 mois, échange standard'
-      : ('garantie 6 mois' + (p.depositTtc > 0 ? ', acompte de ' + eur(p.depositTtc) + ' à la réservation' : ''));
-    return (p.isReman ? 'Moteur reconditionné' : "Moteur d'occasion testé") + ' : ' + eur(p.sellTtc) + ' TTC (' + extra + ')';
-  };
-  const lines = prepared.map(lineFor);
-  const attachInfo = prepared.length > 1 ? 'Vous trouverez les deux devis détaillés en pièce jointe.' : 'Vous trouverez le devis détaillé en pièce jointe.';
-  const phoneTxt = brand.PHONE_MOTEUR ? ' ou en nous appelant au ' + brand.PHONE_MOTEUR : '';
-  const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6;">`
-    + `<p>Bonjour${greeting},</p>`
-    + `<p>Suite à votre demande pour le véhicule ${plate}${engineModel}, voici ${prepared.length > 1 ? 'vos options' : 'votre devis'} :</p>`
-    + `<p>${lines.join('<br>')}</p>`
-    + `<p>${attachInfo} Devis valable 7 jours, sous réserve de disponibilité confirmée à la commande.</p>`
-    + `<p>Pour confirmer votre commande ou pour toute question, il vous suffit de répondre à cet email${phoneTxt}.</p>`
-    + `<p>Cordialement,<br>L'équipe Autoliva</p></div>`;
-  const text = `Bonjour${greeting},\n\n`
-    + `Suite à votre demande pour le véhicule ${plate}${engineModel.replace(/[()]/g, '')}, voici ${prepared.length > 1 ? 'vos options' : 'votre devis'} :\n`
-    + lines.map((l) => '- ' + l).join('\n')
-    + `\n\n${attachInfo} Devis valable 7 jours.\n\n`
-    + `Pour confirmer ou pour toute question, répondez à cet email${phoneTxt}.\n\nCordialement,\nL'équipe Autoliva`;
+  // ─── UN SEUL bel email (template de marque) : 1 ou 2 offres, chacune avec
+  //     son lien « voir le devis (PDF) » tracké → on sait quel devis a été
+  //     consulté. Le détail complet est dans les PDF joints.
+  const html = buildBundleQuoteEmailHtml({
+    quoteRef,
+    firstName: (cart.firstName && cart.lastName) ? cart.firstName : '',
+    plate,
+    brandPhone: brand.PHONE_MOTEUR,
+    brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
+    category: sendCat,
+    offers: prepared.map((p) => ({
+      engine: eq.identifiedEngine || {},
+      isReconditionne: p.isReman,
+      conditionBadge: p.badge,
+      conditionLabel: p.conditionLabel,
+      sellHt: p.sellHt, sellTtc: p.sellTtc, depositTtc: p.depositTtc, vatScheme: p.vatScheme,
+      stockLabel: p.stockLabel, delay: p.delay, consigne: p.consigne,
+      mollieUrl: p.mollieUrl, payTrackUrl: p.payTrackUrl, pdfTrackUrl: p.pdfTrackUrl,
+    })),
+  });
+  const text = `Bonjour,\n\n`
+    + `Suite à votre demande pour le véhicule ${plate}, voici ${prepared.length > 1 ? 'vos options' : 'votre devis'} :\n`
+    + prepared.map((p) => `- ${p.isReman ? 'Moteur reconditionné' : "Moteur d'occasion testé"} : ${p.sellTtc.toFixed(2)} EUR TTC`).join('\n')
+    + `\n\nLe détail complet est en pièce jointe (PDF). Devis valable 7 jours.\n\nL'équipe Autoliva`;
 
   const attachments = prepared.map((p) => ({ filename: `Devis-${quoteRef || cart._id}-${p.kind}.pdf`, content: p.pdfBuffer.toString('base64'), disposition: 'attachment' }));
   const subject = `Votre devis Autoliva${quoteRef ? ' ' + quoteRef : ''}${plate ? ' — ' + plate : ''}`;
