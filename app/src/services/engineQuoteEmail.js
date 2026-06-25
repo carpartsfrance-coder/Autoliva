@@ -495,6 +495,7 @@ function buildBundleQuoteEmailHtml(opts) {
       + '<p style="margin:0 0 5px;font-size:13px;color:#475569;">' + line1 + '</p>'
       + (line2 ? '<p style="margin:0 0 5px;font-size:13px;color:#475569;">' + line2 + '</p>' : '')
       + (o.stockLabel ? '<p style="margin:0;font-size:13px;font-weight:700;color:' + RED + ';">→&nbsp;&nbsp;' + escapeHtml(o.stockLabel) + (o.delay ? ' · délai ' + escapeHtml(o.delay) : '') + '</p>' : '')
+      + (isReman && o.equip ? '<p style="margin:9px 0 0;font-size:12px;color:#6b7280;line-height:1.55;"><span style="color:#475569;font-weight:600;">Pièces fournies :</span> ' + escapeHtml(o.equip) + '</p>' : '')
       + acompteBox + breakdownBox + consigneBox + marginNote + cta
       + '</td></tr>';
 

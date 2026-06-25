@@ -1626,9 +1626,10 @@ async function sendInstantDevis(cart, opts = {}) {
       mollieUrl: payTrackUrl || mollieUrl, customMessage: '',
       conditionLabel: conditionLabelClient, category: sendCat, consigne,
       conditionBadge: conditionInfo.short, isReconditionne: isReman, photos: [],
+      equip: isReman ? (o.equip || '') : '',
     });
 
-    prepared.push({ kind: o.kind, isReman, engine: engineForOffer, sellHt, sellTtc, depositTtc, depositCents, vatScheme, mollieUrl, mollieId, payTrackUrl, pdfTrackUrl, pdfBuffer, sentQuoteObjectId, badge: conditionInfo.short, conditionLabel: conditionLabelClient, consigne, stockLabel: o.stockLabel || '', delay: o.delay || '' });
+    prepared.push({ kind: o.kind, isReman, engine: engineForOffer, sellHt, sellTtc, depositTtc, depositCents, vatScheme, mollieUrl, mollieId, payTrackUrl, pdfTrackUrl, pdfBuffer, sentQuoteObjectId, badge: conditionInfo.short, conditionLabel: conditionLabelClient, consigne, stockLabel: o.stockLabel || '', delay: o.delay || '', equip: isReman ? (o.equip || '') : '' });
   }
 
   if (dryRun) {
@@ -1651,7 +1652,7 @@ async function sendInstantDevis(cart, opts = {}) {
       conditionBadge: p.badge,
       conditionLabel: p.conditionLabel,
       sellHt: p.sellHt, sellTtc: p.sellTtc, depositTtc: p.depositTtc, vatScheme: p.vatScheme,
-      stockLabel: p.stockLabel, delay: p.delay, consigne: p.consigne,
+      stockLabel: p.stockLabel, delay: p.delay, consigne: p.consigne, equip: p.equip,
       mollieUrl: p.mollieUrl, payTrackUrl: p.payTrackUrl, pdfTrackUrl: p.pdfTrackUrl,
     })),
   });

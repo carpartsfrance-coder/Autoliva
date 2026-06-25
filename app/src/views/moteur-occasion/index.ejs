@@ -305,7 +305,8 @@ Envoyer ma demande
       var v = d.vehicle, o = d.offers || {};
       code = v.codeMoteur || '';
       var lbl = (v.label && String(v.label).toUpperCase() !== 'INCONNU') ? v.label : '';
-      var en2 = (v.energie && String(v.energie).toUpperCase() !== 'INCONNU') ? v.energie : '';
+      var enMap2 = { GAZOLE: 'Diesel', ESSENCE: 'Essence' };
+      var en2 = (v.energie && String(v.energie).toUpperCase() !== 'INCONNU') ? (enMap2[String(v.energie).toUpperCase()] || v.energie) : '';
       var bits = [lbl, en2, (v.cylindree && String(v.cylindree) !== '0' ? v.cylindree + ' cm³' : ''), (v.puissance && String(v.puissance) !== '0' ? v.puissance + ' ch' : '')].filter(Boolean);
       veh = [v.marque, v.modele].filter(Boolean).join(' ') + (bits.length ? ' · ' + bits.join(' · ') : '');
       if (o.occasion || o.reman) {

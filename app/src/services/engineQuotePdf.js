@@ -360,14 +360,17 @@ function buildQuotePdf(input) {
     doc.moveTo(M + 14, y + 70).lineTo(M + modW - 14, y + 70).strokeColor(C_OUTLINE_LT).lineWidth(0.5).stroke();
     doc.fontSize(8).font('Helvetica').fillColor(C_TEXT_MUTED).text('Modalités de paiement :', M + 14, y + 76, { lineBreak: false });
 
-    const bullets = [
-      depositTtc > 0
-        ? (isFull ? 'Paiement intégral : ' + eur(depositTtc) : 'Acompte immédiat : ' + eur(depositTtc))
-        : 'Paiement à confirmer avec notre équipe',
-      (/stock/i.test(input.stockLabel || '') ? 'Solde après test et attestation de conformité' : 'Solde après sourcing, test et attestation de conformité'),
-      'Paiement sécurisé par carte bancaire ou virement',
-      'Lien de paiement transmis par email',
-    ];
+    const bullets = depositTtc > 0
+      ? [
+          (isFull ? 'Paiement intégral : ' + eur(depositTtc) : 'Acompte immédiat : ' + eur(depositTtc)),
+          (/stock/i.test(input.stockLabel || '') ? 'Solde après test et attestation de conformité' : 'Solde après sourcing, test et attestation de conformité'),
+          'Paiement sécurisé par carte bancaire ou virement',
+        ]
+      : [
+          'Paiement à confirmer avec notre équipe',
+          'Règlement à la commande, avant expédition',
+          'Paiement sécurisé par carte bancaire ou virement',
+        ];
     let bY = y + 92;
     bullets.forEach(b => {
       bullet(M + 18, bY + 4, C_RED);
@@ -452,10 +455,12 @@ function buildQuotePdf(input) {
     doc.save().circle(M + 22, y + 15, 9).strokeColor(C_NAVY).lineWidth(1).stroke().restore();
     checkmark(M + 22, y + 15, C_NAVY, 7);
     doc.fontSize(8).font('Helvetica-Bold').fillColor(C_NAVY).text('INCLUS', M + 42, y + 12, { characterSpacing: 1, lineBreak: false });
+    const equipText = String(input.equip || '').trim();
+    const inclusCore = input.isReconditionne
+      ? (equipText ? 'Pièces fournies : ' + equipText : 'reconditionnement complet · pièces d\'usure remplacées · préparation palette')
+      : lex.controlListItem + ' · photos · préparation palette';
     doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED).text(
-      (input.isReconditionne
-        ? 'reconditionnement complet · pièces d\'usure remplacées · préparation palette'
-        : lex.controlListItem + ' · photos · préparation palette') + ' · garantie ' + warrantyMonths + ' mois · assistance compatibilité',
+      inclusCore + ' · garantie ' + warrantyMonths + ' mois · assistance compatibilité',
       M + 90, y + 12, { width: W - 105, lineBreak: false, ellipsis: true }
     );
     y += inclH + 12;
@@ -552,13 +557,30 @@ function buildQuotePdf(input) {
     if (input.isReconditionne) {
       // Reconditionné = moteur REFAIT en atelier (pas un moteur d'occasion testé) :
       // pas d'endoscopie / km / compteur donneur, mais reconditionnement + pièces remplacées.
-      checkList(M, y, cW2, cH2, 'Reconditionnement (atelier)', [
-        'Moteur entièrement reconditionné',
-        'Pièces d\'usure remplacées (joints, segments, coussinets)',
-        'Remontage aux préconisations constructeur',
-        'Contrôle qualité avant expédition',
-        'Préparation sur palette sécurisée',
-      ]);
+      const equipParts = String(input.equip || '').trim();
+      if (equipParts) {
+        // Liste réelle des pièces fournies (col « Équipement » Asysum). Longueur
+        // variable selon le moteur -> rendu paragraphe (puces ·) pour tout afficher.
+        card(M, y, cW2, cH2, C_WHITE);
+        doc.fontSize(11).font('Helvetica-Bold').fillColor(C_NAVY).text('Pièces fournies avec le moteur', M + 14, y + 14, { width: cW2 - 28, lineBreak: false, ellipsis: true });
+        doc.moveTo(M + 14, y + 38).lineTo(M + cW2 - 14, y + 38).strokeColor(C_OUTLINE_LT).lineWidth(0.5).stroke();
+        doc.fontSize(9.5).font('Helvetica').fillColor(C_TEXT).text(
+          equipParts.replace(/\s*,\s*/g, '   ·   '),
+          M + 14, y + 50, { width: cW2 - 28, height: cH2 - 64, lineGap: 4, ellipsis: true }
+        );
+        doc.fontSize(7.5).font('Helvetica').fillColor(C_TEXT_MUTED).text(
+          'Reconditionné en atelier, pièces d\'usure remplacées, contrôlé avant expédition.',
+          M + 14, y + cH2 - 26, { width: cW2 - 28, lineGap: 1 }
+        );
+      } else {
+        checkList(M, y, cW2, cH2, 'Reconditionnement (atelier)', [
+          'Moteur entièrement reconditionné',
+          'Pièces d\'usure remplacées (joints, segments, coussinets)',
+          'Remontage aux préconisations constructeur',
+          'Contrôle qualité avant expédition',
+          'Préparation sur palette sécurisée',
+        ]);
+      }
       checkList(M + cW2 + 12, y, cW2, cH2, 'Documents transmis avec la commande', [
         'Facture',
         'Attestation de reconditionnement',

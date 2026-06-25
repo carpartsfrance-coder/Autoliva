@@ -80,6 +80,7 @@ for code, b in occ_best.items():
 ws2 = openpyxl.load_workbook(REMAN_XLSX, data_only=True, read_only=True)["Sheet1"]
 h2 = headers(ws2)
 c_desc, c_pvp, c_cons, c_disp = h2["Description"], h2["PVP"], h2["Consigne"], h2["Disponibilité"]
+c_equip = h2.get("Équipement")  # col « Équipement » = pièces incluses dans le moteur fourni
 pat = re.compile(r"compatible\s+(\S+)\s+\(([^)]+)\)\s*(.*)", re.I)
 pat_type = re.compile(r"moteur\s+\w+\s+(neuf|recons)", re.I)
 reman_best, reman_count = {}, defaultdict(int)
@@ -107,6 +108,7 @@ for r in ws2.iter_rows(min_row=2, values_only=True):
             "label": m.group(3).strip(),
             "marque": m.group(2).strip(),
             "type": (mt.group(1).lower() if mt else ""),
+            "equip": (str(r[c_equip - 1] or "").strip() if c_equip else ""),
         }
 for code, b in reman_best.items():
     b["count"] = reman_count[code]

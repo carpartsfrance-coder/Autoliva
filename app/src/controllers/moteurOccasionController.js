@@ -753,7 +753,7 @@ async function postDevis(req, res, next) {
               const _dry = !AUTO_DEVIS_LIVE;
               const _offers = [];
               if (offers.occasion) _offers.push({ kind: 'occasion', sellPrice: offers.occasion.prix, mileage: offers.occasion.km, stockLabel: 'Sourcé à la commande', delay: 'Livraison sous 3-5 jours ouvrés', createMollie: true });
-              if (offers.reman) _offers.push({ kind: 'reman', sellPrice: offers.reman.pvp, consigne: offers.reman.consigne, stockLabel: 'En stock', delay: offers.reman.dispo || 'Livraison sous 3-5 jours ouvrés' });
+              if (offers.reman) _offers.push({ kind: 'reman', sellPrice: offers.reman.pvp, consigne: offers.reman.consigne, stockLabel: 'En stock', delay: offers.reman.dispo || 'Livraison sous 3-5 jours ouvrés', equip: offers.reman.equip || '' });
               if (_offers.length) {
                 // 1 SEUL email + 1 SEUL SMS, avec 1 ou 2 devis (PDF) selon les offres dispo.
                 const r = await engineQuoteAdmin.sendInstantDevis(freshCart, { offers: _offers, dryRun: _dry });
