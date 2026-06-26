@@ -19,6 +19,20 @@ const AbandonedCart = require('../models/AbandonedCart');
 const storage = require('../services/savFileStorage');
 const emailService = require('../services/emailService');
 const { buildQuotePdf } = require('../services/engineQuotePdf');
+const { getCompanyBrochureBuffer } = require('../services/companyBrochurePdf');
+
+// Pièce jointe « brochure de présentation » (statique, mise en cache) ajoutée à
+// chaque devis envoyé au client (auto + manuel). Échec silencieux = on envoie
+// quand même le devis.
+async function brochureAttachment() {
+  try {
+    const buf = await getCompanyBrochureBuffer();
+    if (buf && buf.length) {
+      return { filename: 'Presentation-' + String(brand.NAME || 'Autoliva').replace(/\s+/g, '-') + '.pdf', content: buf.toString('base64'), disposition: 'attachment' };
+    }
+  } catch (e) { console.error('[brochure] indisponible:', e && e.message); }
+  return null;
+}
 const { buildQuoteEmailHtml, buildBundleQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
 const { partLexicon } = require('../services/partLexicon');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
@@ -1462,6 +1476,7 @@ async function postSendQuote(req, res, next) {
       `L'équipe Autoliva`,
     ].filter(Boolean).join('\n');
 
+    const _brochManual = await brochureAttachment();
     const sendResult = await emailService.sendEmail({
       toEmail: cart.email,
       subject: `Votre devis ${quoteRef} est prêt — Autoliva`,
@@ -1474,6 +1489,7 @@ async function postSendQuote(req, res, next) {
           disposition: 'attachment',
         },
         ...photoAttachments,
+        ...(_brochManual ? [_brochManual] : []),
       ],
     });
 
@@ -1662,6 +1678,8 @@ async function sendInstantDevis(cart, opts = {}) {
     + `\n\nLe détail complet est en pièce jointe (PDF). Devis valable 7 jours.\n\nL'équipe Autoliva`;
 
   const attachments = prepared.map((p) => ({ filename: `Devis-${quoteRef || cart._id}-${p.kind}.pdf`, content: p.pdfBuffer.toString('base64'), disposition: 'attachment' }));
+  const _broch = await brochureAttachment();
+  if (_broch) attachments.push(_broch);
   const subject = `Votre devis Autoliva${quoteRef ? ' ' + quoteRef : ''}${plate ? ' — ' + plate : ''}`;
   const sendResult = await emailService.sendEmail({ toEmail: cart.email, subject, html, text, attachments });
 

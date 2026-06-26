@@ -119,8 +119,14 @@ function buildCompanyBrochurePdf(opts = {}) {
       .text("Testées sur banc d'essai, certifiées et expédiées rapidement partout en Europe — pour les particuliers comme pour les professionnels.",
         M, y, { width: W - 30, lineGap: 3 });
 
+    // Preuve sociale (avis clients confirmés)
+    doc.fontSize(11).font('Helvetica-Bold').fillColor(C_NAVY)
+      .text('Déjà plus de 1 000 clients satisfaits en Europe', M, 336, { width: W, align: 'center', lineBreak: false });
+    doc.fontSize(9).font('Helvetica').fillColor(C_TEXT_MUTED)
+      .text('Particuliers et professionnels nous font confiance.', M, 351, { width: W, align: 'center', lineBreak: false });
+
     // Bandeau de réassurance (marine) — 3 colonnes
-    const bandY = 372, bandH = 120;
+    const bandY = 384, bandH = 116;
     card(M, bandY, W, bandH, C_NAVY);
     const cols = [
       { g: glyphShield, t: 'Testé & certifié', s: "sur banc d'essai" },
@@ -211,6 +217,27 @@ function buildCompanyBrochurePdf(opts = {}) {
     doc.fontSize(11).font('Helvetica').fillColor(C_TEXT)
       .text("Moteur d'occasion testé : 6 mois, sans franchise km, transférable   ·   Moteur reconditionné : 1 an",
         M + 20, y2 + 30, { width: W - 40, lineBreak: false });
+    y2 += 58 + 30;
+
+    // Preuve sociale + partenaires
+    eyebrow(M, y2, 'Ils nous font confiance');
+    y2 += 22;
+    doc.fontSize(16).font('Helvetica-Bold').fillColor(C_NAVY)
+      .text('Plus de 1 000 clients satisfaits en Europe', M, y2, { width: W, lineBreak: false });
+    y2 += 23;
+    doc.fontSize(10).font('Helvetica').fillColor(C_TEXT_MUTED)
+      .text('Professionnels et particuliers nous font confiance. Nos moteurs ont été montés par :', M, y2, { width: W, lineBreak: false });
+    y2 += 22;
+    const partners = ['logo-porsche.png', 'sun-motors.png', 'mougins-autosport.png', 'chassay-automobiles.png', 'LOGO-SIMPLICI-CAR-NOIR-copie.png'];
+    const logoH = 86;
+    card(M, y2, W, logoH, C_WHITE, C_OUTLINE_LT);
+    const slotW = W / partners.length;
+    partners.forEach((p, i) => {
+      const lp = path.join(__dirname, '..', '..', 'public', 'images', 'partenaires', p);
+      if (!fs.existsSync(lp)) return;
+      try { doc.image(lp, M + slotW * i + 16, y2 + 20, { fit: [slotW - 32, logoH - 40], align: 'center', valign: 'center' }); } catch (_) {}
+      if (i < partners.length - 1) doc.save().strokeColor(C_OUTLINE_LT).lineWidth(0.6).moveTo(M + slotW * (i + 1), y2 + 18).lineTo(M + slotW * (i + 1), y2 + logoH - 18).stroke().restore();
+    });
 
     pageFooter(2);
 
@@ -295,4 +322,13 @@ function buildCompanyBrochurePdf(opts = {}) {
   });
 }
 
-module.exports = { buildCompanyBrochurePdf };
+// Brochure STATIQUE : on la génère une seule fois par process et on met le
+// buffer en cache (réutilisé pour tous les devis).
+let _brochureCache = null;
+async function getCompanyBrochureBuffer() {
+  if (_brochureCache) return _brochureCache;
+  _brochureCache = await buildCompanyBrochurePdf();
+  return _brochureCache;
+}
+
+module.exports = { buildCompanyBrochurePdf, getCompanyBrochureBuffer };
