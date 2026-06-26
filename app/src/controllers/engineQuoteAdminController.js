@@ -1512,11 +1512,11 @@ async function postSendQuote(req, res, next) {
       try {
         // Format GSM-7 (évite l'espace insécable de toLocaleString qui forcerait
         // l'encodage Unicode → segments de 70 car. au lieu de 160).
-        const totalTtcFmt = sellTtc.toFixed(2).replace('.', ',') + ' €';
+        const fmtE = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' €';
+        const offres = (isReconditionneLead ? 'Reconditionné' : 'Occasion') + ' ' + fmtE(sellTtc);
         const { enabled: smsOn, text: smsBody } = await resolveSms('moteur_devis', {
           quoteRef,
-          totalTtc: totalTtcFmt,
-          pdfUrl: pdfShortUrl,
+          offres,
           phoneMoteur: brand.PHONE_MOTEUR,
         });
         if (smsOn && smsBody) {
@@ -1688,8 +1688,11 @@ async function sendInstantDevis(cart, opts = {}) {
   let devisSmsResult = null;
   if (cart.phone) {
     try {
-      const totalTtcFmt = prepared.map((p) => Math.round(p.sellTtc)).join(' / ') + ' €';
-      const { enabled: smsOn, text: smsBody } = await resolveSms('moteur_devis', { quoteRef, totalTtc: totalTtcFmt, pdfUrl: publicBase + '/d/' + shortCode, phoneMoteur: brand.PHONE_MOTEUR });
+      // Libellé + prix par offre (occasion / reconditionné), séparées par « ou »
+      // si 2 offres. Espace fine évitée (GSM-7).
+      const fmtE = (n) => String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' €';
+      const offres = prepared.map((p) => (p.isReman ? 'Reconditionné' : 'Occasion') + ' ' + fmtE(p.sellTtc)).join(' ou ');
+      const { enabled: smsOn, text: smsBody } = await resolveSms('moteur_devis', { quoteRef, offres, phoneMoteur: brand.PHONE_MOTEUR });
       if (smsOn && smsBody) {
         const r = await sendSms({ to: cart.phone, text: smsBody });
         devisSmsResult = { status: r && r.ok ? 'sent' : 'failed', reason: (r && r.reason) || '', message: (r && r.message) || '', at: new Date(), phone: cart.phone };
