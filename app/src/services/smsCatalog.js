@@ -101,7 +101,7 @@ const CATALOG = [
   },
   {
     key: 'moteur_devis', category: 'Devis', label: 'Devis envoyé (notification + lien)',
-    defaultTemplate: "Autoliva : votre devis {quoteRef} est disponible ({totalTtc}) !\nLe voir : {pdfUrl}\nValable 24h, stock limité.\nQuestions ? {phoneMoteur}",
+    defaultTemplate: "Autoliva : votre devis {quoteRef} ({totalTtc}) est prêt.\nLe consulter : {pdfUrl}\nUne question ? Appelez le {phoneMoteur}.",
     vars: [['quoteRef', 'N° de dossier devis'], ['totalTtc', 'Montant total TTC'], ['pdfUrl', 'Lien court pour voir le devis (tracké)'], ['phoneMoteur', 'Téléphone commercial']],
     example: { quoteRef: 'AUT-2026-06-7AB12', totalTtc: '1466,40 €', pdfUrl: 'https://autoliva.com/d/Xa7Qk2', phoneMoteur: '04 65 84 85 39' },
   },
