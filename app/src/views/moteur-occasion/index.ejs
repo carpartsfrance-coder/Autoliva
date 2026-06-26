@@ -121,6 +121,8 @@
 </div>
 </fieldset>
 <p class="text-xs text-gray-400 mt-2">Ex: AB-123-CD ou VF1XXXXXXXXXXXXX ou M48.50</p>
+<!-- Détection live du véhicule (remplie par JS dès la saisie) -->
+<div data-iq-step1 class="hidden mt-3"></div>
 </div>
 
 <% if (copy.showStateField) { %>
@@ -327,17 +329,15 @@ Envoyer ma demande
       + '<p class="text-lg font-bold text-brand-red mt-1">' + (prefix ? '<span class="text-xs font-medium text-gray-400">' + prefix + '</span> ' : '') + price + '</p>'
       + (sub ? '<p class="text-xs text-gray-500 mt-0.5">' + sub + '</p>' : '') + '</div>';
   }
-  function iqRender(d) {
-    if (!iqBox) return;
-    if (!d || !d.ok || !d.vehicle) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; return; }
-    var v = d.vehicle, o = d.offers || {};
-    var label = (v.label && String(v.label).toUpperCase() !== 'INCONNU') ? v.label : '';
-    var energyMap = { GAZOLE: 'Diesel', ESSENCE: 'Essence' };
-    var en = (v.energie && String(v.energie).toUpperCase() !== 'INCONNU') ? (energyMap[String(v.energie).toUpperCase()] || v.energie) : '';
+  // Carte « véhicule identifié » : logo marque + modèle + carburant/cylindrée/
+  // puissance + code moteur. Réutilisée à l'étape 1 (live) et à l'étape 2.
+  function iqVehicleCard(v) {
+    var enMap = { GAZOLE: 'Diesel', ESSENCE: 'Essence' };
+    var en = (v.energie && String(v.energie).toUpperCase() !== 'INCONNU') ? (enMap[String(v.energie).toUpperCase()] || v.energie) : '';
     var name = [v.marque, v.modele].filter(Boolean).join(' ');
     var specs = [en, (v.cylindree && String(v.cylindree) !== '0' ? v.cylindree + ' cm³' : ''), (v.puissance && String(v.puissance) !== '0' ? v.puissance + ' ch' : '')].filter(Boolean).join(' · ');
     var logoUrl = iqBrandLogo(v.marque);
-    var head = '<div class="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-3">'
+    return '<div class="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">'
       + (logoUrl
           ? '<span class="shrink-0 w-14 h-14 rounded-lg bg-white border border-gray-200 flex items-center justify-center p-1.5"><img src="' + logoUrl + '" alt="' + iqEsc(v.marque) + '" class="max-w-full max-h-full object-contain" onerror="this.parentNode.style.display=\'none\'"></span>'
           : '<span class="shrink-0 w-14 h-14 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-400"><svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 17a2 2 0 104 0M15 17a2 2 0 104 0M5 17h-2v-4l2-5h11l4 5v4h-2M5 13h14" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg></span>')
@@ -347,6 +347,12 @@ Envoyer ma demande
       + (specs ? '<p class="text-xs text-gray-500">' + iqEsc(specs) + '</p>' : '')
       + (v.codeMoteur ? '<p class="text-[11px] text-gray-400 mt-0.5">Code moteur : <span class="font-semibold text-gray-600">' + iqEsc(v.codeMoteur) + '</span></p>' : '')
       + '</div></div>';
+  }
+  function iqRender(d) {
+    if (!iqBox) return;
+    if (!d || !d.ok || !d.vehicle) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; return; }
+    var v = d.vehicle, o = d.offers || {};
+    var head = '<div class="mb-3">' + iqVehicleCard(v) + '</div>';
     var cards = '';
     if (o.occasion) {
       var osub = (o.occasion.km ? Number(o.occasion.km).toLocaleString('fr-FR') + ' km · ' : '') + 'testé, garantie 6 mois';
@@ -367,19 +373,47 @@ Envoyer ma demande
     iqBox.innerHTML = '<div class="rounded-2xl border border-gray-200 bg-white p-4">' + body + '</div>';
     iqBox.classList.remove('hidden');
   }
+  // Fetch mutualisé + cache par plaque (évite de re-fetcher entre la détection
+  // live de l'étape 1 et le rendu complet de l'étape 2).
+  var iqCache = {};
+  function iqEnsure(plate, done) {
+    plate = String(plate || '').trim();
+    if (!iqLooksLikePlate(plate)) { done(null); return; }
+    if (iqCache[plate]) { done(iqCache[plate]); return; }
+    fetch('/api/devis-instantane?plaque=' + encodeURIComponent(plate), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { iqCache[plate] = d; done(d); })
+      .catch(function () { done(null); });
+  }
   function loadInstantQuote(plate) {
+    plate = String(plate || '').trim();
     if (!iqBox || !iqLooksLikePlate(plate)) { if (iqBox) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; } iqStoreFromResponse(null); return; }
-    if (plate === iqLast) return;
-    iqLast = plate;
     iqBox.classList.remove('hidden');
     iqBox.innerHTML = '<div class="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-500 flex items-center gap-2">'
       + '<svg class="w-4 h-4 animate-spin text-brand-red" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"></path></svg>'
       + 'Identification de votre moteur…</div>';
-    fetch('/api/devis-instantane?plaque=' + encodeURIComponent(plate), { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.json(); })
-      .then(function (d) { iqRender(d); iqStoreFromResponse(d); track('instant_quote', { hasOffer: !!(d && d.hasOffer) }); })
-      .catch(function () { if (iqBox) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; } iqStoreFromResponse(null); iqLast = ''; });
+    iqEnsure(plate, function (d) { iqRender(d); iqStoreFromResponse(d); track('instant_quote', { hasOffer: !!(d && d.hasOffer) }); });
   }
+  // Détection LIVE à l'étape 1 : dès la saisie d'une plaque/VIN valide, on
+  // affiche la carte « véhicule identifié » (logo + modèle + specs) pour rassurer.
+  var iqBoxStep1 = form.querySelector('[data-iq-step1]');
+  function iqLive() {
+    if (!iqBoxStep1) return;
+    var plate = plateInput.value.trim();
+    if (!iqLooksLikePlate(plate)) { iqBoxStep1.classList.add('hidden'); iqBoxStep1.innerHTML = ''; iqStoreFromResponse(null); return; }
+    iqBoxStep1.classList.remove('hidden');
+    iqBoxStep1.innerHTML = '<div class="rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-500 flex items-center gap-2">'
+      + '<svg class="w-4 h-4 animate-spin text-brand-red" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"></path></svg>'
+      + 'Identification de votre véhicule…</div>';
+    iqEnsure(plate, function (d) {
+      if (plateInput.value.trim() !== plate) return; // plaque changée entre-temps
+      if (d && d.ok && d.vehicle) { iqBoxStep1.innerHTML = iqVehicleCard(d.vehicle); iqBoxStep1.classList.remove('hidden'); }
+      else { iqBoxStep1.classList.add('hidden'); iqBoxStep1.innerHTML = ''; }
+      iqStoreFromResponse(d);
+    });
+  }
+  var iqDebounce;
+  if (plateInput) plateInput.addEventListener('input', function () { clearTimeout(iqDebounce); iqDebounce = setTimeout(iqLive, 450); });
 
   nextBtn.addEventListener('click', function () {
     if (!plateInput.value.trim()) {
