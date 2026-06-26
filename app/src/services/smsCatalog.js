@@ -100,10 +100,14 @@ const CATALOG = [
     example: { quoteRef: 'AUT-2026-06-7AB12', phoneMoteur: '04 65 84 85 39' },
   },
   {
-    key: 'moteur_devis', category: 'Devis', label: 'Devis envoyé (notification + lien)',
-    defaultTemplate: "Autoliva : votre devis {quoteRef} ({totalTtc}) est prêt.\nLe consulter : {pdfUrl}\nUne question ? Appelez le {phoneMoteur}.",
-    vars: [['quoteRef', 'N° de dossier devis'], ['totalTtc', 'Montant total TTC'], ['pdfUrl', 'Lien court pour voir le devis (tracké)'], ['phoneMoteur', 'Téléphone commercial']],
-    example: { quoteRef: 'AUT-2026-06-7AB12', totalTtc: '1466,40 €', pdfUrl: 'https://autoliva.com/d/Xa7Qk2', phoneMoteur: '04 65 84 85 39' },
+    key: 'moteur_devis', category: 'Devis', label: 'Devis envoyé (notification, sans lien)',
+    // PAS d'URL : les opérateurs FR soft-bouncent les SMS avec lien envoyés
+    // depuis un expéditeur alphanumérique (constaté sur Brevo : accusé sans lien
+    // « Délivré », devis avec lien « Soft bounce » au même n°). Le devis complet
+    // (PDF + lien) part par email ; le SMS ne fait que notifier.
+    defaultTemplate: "Autoliva : votre devis {quoteRef} ({totalTtc}) est prêt et vous a été envoyé par email.\nUne question ? Appelez le {phoneMoteur}.",
+    vars: [['quoteRef', 'N° de dossier devis'], ['totalTtc', 'Montant total TTC'], ['phoneMoteur', 'Téléphone commercial']],
+    example: { quoteRef: 'AUT-2026-06-7AB12', totalTtc: '1466,40 €', phoneMoteur: '04 65 84 85 39' },
   },
   {
     key: 'moteur_relance_j7', category: 'Devis', label: 'Relance devis J+7',
