@@ -145,19 +145,6 @@
 <p data-etat-hint class="text-xs text-gray-500 mt-2 leading-snug min-h-[2rem]">Touchez un état pour voir le détail — ou « Peu importe », on vous propose le mieux.</p>
 </div>
 
-<!-- Type de moteur : masqué si reconditionné (toujours complet) -->
-<div data-enginetype-block class="<%= form.etat === 'reconditionne' ? 'hidden' : '' %>">
-<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Type de moteur</p>
-<div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Type de moteur">
-<% [['complet','Moteur complet'],['nu','Moteur nu']].forEach(function (opt) { %>
-<label class="cursor-pointer">
-<input type="radio" name="engineType" value="<%= opt[0] %>" class="peer sr-only" <%= form.engineType === opt[0] ? 'checked' : '' %> data-enginetype-input>
-<span class="block text-center text-xs font-semibold border border-gray-300 rounded-lg py-2.5 px-1 text-gray-600 peer-checked:border-brand-red peer-checked:bg-brand-red/5 peer-checked:text-brand-red transition"><%= opt[1] %></span>
-</label>
-<% }) %>
-</div>
-<p class="text-xs text-gray-400 mt-2">Complet = avec accessoires · Nu = bloc seul.</p>
-</div>
 <% } %>
 
 <!-- CTA étape 1 -->
@@ -326,6 +313,13 @@ Envoyer ma demande
   function iqEur(n) { return Number(n).toLocaleString('fr-FR') + ' €'; }
   function iqEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
   function iqLooksLikePlate(v) { return /^[A-Z]{2}-?\d{3}-?[A-Z]{2}$/i.test(String(v || '').trim()); }
+  // Marque détectée -> URL du logo (public/images/brands). Renvoie '' si inconnue.
+  function iqBrandLogo(marque) {
+    if (!marque) return '';
+    var slug = String(marque).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    var known = { audi: 'webp', bmw: 'webp', citroen: 'webp', ford: 'webp', honda: 'png', hyundai: 'webp', kia: 'webp', 'land-rover': 'webp', mazda: 'webp', 'mercedes-benz': 'webp', mitsubishi: 'webp', nissan: 'webp', opel: 'webp', peugeot: 'png', renault: 'webp', seat: 'webp', skoda: 'webp', toyota: 'webp', volkswagen: 'webp', volvo: 'webp' };
+    return known[slug] ? '/images/brands/' + slug + '-logo.' + known[slug] : '';
+  }
   function iqCard(title, price, prefix, sub, badge) {
     return '<div class="rounded-xl border border-gray-200 p-3">'
       + '<div class="flex items-center justify-between gap-2"><p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">' + title + '</p>'
@@ -341,10 +335,18 @@ Envoyer ma demande
     var energyMap = { GAZOLE: 'Diesel', ESSENCE: 'Essence' };
     var en = (v.energie && String(v.energie).toUpperCase() !== 'INCONNU') ? (energyMap[String(v.energie).toUpperCase()] || v.energie) : '';
     var name = [v.marque, v.modele].filter(Boolean).join(' ');
-    var desc = [label, en, (v.cylindree && String(v.cylindree) !== '0' ? v.cylindree + ' cm³' : ''), (v.puissance && String(v.puissance) !== '0' ? v.puissance + ' ch' : '')].filter(Boolean).join(' · ');
-    var head = '<div class="flex items-start gap-2 text-sm text-emerald-800 mb-3">'
-      + '<svg class="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path></svg>'
-      + '<span>Votre moteur : <strong>' + iqEsc(name) + '</strong>' + (desc ? '<span class="block text-xs font-normal text-emerald-700/80">' + iqEsc(desc) + '</span>' : '') + '</span></div>';
+    var specs = [en, (v.cylindree && String(v.cylindree) !== '0' ? v.cylindree + ' cm³' : ''), (v.puissance && String(v.puissance) !== '0' ? v.puissance + ' ch' : '')].filter(Boolean).join(' · ');
+    var logoUrl = iqBrandLogo(v.marque);
+    var head = '<div class="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-3">'
+      + (logoUrl
+          ? '<span class="shrink-0 w-14 h-14 rounded-lg bg-white border border-gray-200 flex items-center justify-center p-1.5"><img src="' + logoUrl + '" alt="' + iqEsc(v.marque) + '" class="max-w-full max-h-full object-contain" onerror="this.parentNode.style.display=\'none\'"></span>'
+          : '<span class="shrink-0 w-14 h-14 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-400"><svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 17a2 2 0 104 0M15 17a2 2 0 104 0M5 17h-2v-4l2-5h11l4 5v4h-2M5 13h14" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg></span>')
+      + '<div class="min-w-0 flex-1">'
+      + '<div class="flex items-center gap-1 text-emerald-700 text-[11px] font-semibold uppercase tracking-wide"><svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path></svg>Véhicule identifié</div>'
+      + '<p class="font-bold text-gray-900 text-sm leading-tight">' + iqEsc(name || 'Véhicule détecté') + '</p>'
+      + (specs ? '<p class="text-xs text-gray-500">' + iqEsc(specs) + '</p>' : '')
+      + (v.codeMoteur ? '<p class="text-[11px] text-gray-400 mt-0.5">Code moteur : <span class="font-semibold text-gray-600">' + iqEsc(v.codeMoteur) + '</span></p>' : '')
+      + '</div></div>';
     var cards = '';
     if (o.occasion) {
       var osub = (o.occasion.km ? Number(o.occasion.km).toLocaleString('fr-FR') + ' km · ' : '') + 'testé, garantie 6 mois';
@@ -441,7 +443,6 @@ Envoyer ma demande
      si le champ État n'est pas présent (landing /moteurs-reconditionnes). */
   (function () {
     var etatInputs = document.querySelectorAll('[data-etat-input]');
-    var etBlock = document.querySelector('[data-enginetype-block]');
     if (!etatInputs.length) return;
     var hint = document.querySelector('[data-etat-hint]');
     var defaultHint = hint ? hint.textContent : '';
@@ -451,12 +452,6 @@ Envoyer ma demande
       return sel ? sel.getAttribute('data-etat-desc') : '';
     }
     function sync() {
-      var sel = document.querySelector('[data-etat-input]:checked');
-      var isRecond = !!(sel && sel.value === 'reconditionne');
-      if (etBlock) {
-        etBlock.classList.toggle('hidden', isRecond);
-        if (isRecond) document.querySelectorAll('[data-enginetype-input]').forEach(function (r) { r.checked = false; });
-      }
       setHint(selectedDesc());
     }
     etatInputs.forEach(function (r) {
