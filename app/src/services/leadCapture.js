@@ -150,13 +150,20 @@ async function captureContactLead({ req, mode, email, firstName, lastName, phone
 
     const now = new Date();
 
-    // 1. Cherche un lead existant pour cette session, ou pour cet email
-    const existingFilter = {
-      $or: [
-        { sessionId },
-        cleanEmail ? { email: cleanEmail, status: { $nin: ['recovered', 'expired'] } } : null,
-      ].filter(Boolean),
-    };
+    // 1. Cherche un lead existant pour cette session, ou pour cet email.
+    //    Pour une demande de DEVIS portant sur un véhicule identifié (plaque /
+    //    VIN / code moteur), on RESTREINT la dédup au MÊME véhicule : deux
+    //    demandes pour deux véhicules différents = deux leads distincts (sinon
+    //    elles fusionneraient sur un seul lead via la session/l'email). Un
+    //    ré-envoi du MÊME véhicule retombe bien sur le même lead (anti-doublon
+    //    + idempotence de l'auto-devis).
+    const contactOr = [
+      { sessionId },
+      cleanEmail ? { email: cleanEmail, status: { $nin: ['recovered', 'expired'] } } : null,
+    ].filter(Boolean);
+    const existingFilter = (mode === 'devis' && requested.plate)
+      ? { 'requested.plate': requested.plate, $or: contactOr }
+      : { $or: contactOr };
 
     const existing = await AbandonedCart.findOne(existingFilter).sort({ createdAt: -1 }).lean();
 
