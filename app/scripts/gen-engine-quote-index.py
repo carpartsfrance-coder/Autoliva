@@ -13,7 +13,7 @@ from collections import defaultdict
 
 OCC_XLSX = os.environ.get(
     "OCC_XLSX",
-    "/Users/killianbelabbes/Documents/moteur_stock_COMPLET_ovoko_AVEC-PRIX-FINAL.xlsx",
+    "/Users/killianbelabbes/Documents/moteur_stock_COMPLET_ovoko_AVEC-PRIX-FINAL_km-corrige.xlsx",
 )
 REMAN_XLSX = os.environ.get(
     "REMAN_XLSX",
