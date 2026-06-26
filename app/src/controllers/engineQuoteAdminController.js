@@ -19,7 +19,21 @@ const AbandonedCart = require('../models/AbandonedCart');
 const storage = require('../services/savFileStorage');
 const emailService = require('../services/emailService');
 const { buildQuotePdf } = require('../services/engineQuotePdf');
-const { buildQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
+const { getCompanyBrochureBuffer } = require('../services/companyBrochurePdf');
+
+// Pièce jointe « brochure de présentation » (statique, mise en cache) ajoutée à
+// chaque devis envoyé au client (auto + manuel). Échec silencieux = on envoie
+// quand même le devis.
+async function brochureAttachment() {
+  try {
+    const buf = await getCompanyBrochureBuffer();
+    if (buf && buf.length) {
+      return { filename: 'Presentation-' + String(brand.NAME || 'Autoliva').replace(/\s+/g, '-') + '.pdf', content: buf.toString('base64'), disposition: 'attachment' };
+    }
+  } catch (e) { console.error('[brochure] indisponible:', e && e.message); }
+  return null;
+}
+const { buildQuoteEmailHtml, buildBundleQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
 const { partLexicon } = require('../services/partLexicon');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
@@ -1462,6 +1476,7 @@ async function postSendQuote(req, res, next) {
       `L'équipe Autoliva`,
     ].filter(Boolean).join('\n');
 
+    const _brochManual = await brochureAttachment();
     const sendResult = await emailService.sendEmail({
       toEmail: cart.email,
       subject: `Votre devis ${quoteRef} est prêt — Autoliva`,
@@ -1474,6 +1489,7 @@ async function postSendQuote(req, res, next) {
           disposition: 'attachment',
         },
         ...photoAttachments,
+        ...(_brochManual ? [_brochManual] : []),
       ],
     });
 
@@ -1557,6 +1573,147 @@ async function postSendQuote(req, res, next) {
   } catch (err) {
     return next(err);
   }
+}
+
+/* ─── ENVOI AUTOMATIQUE DU DEVIS (devis instantané plaque) ───────────────
+ * Réutilise la machinerie de postSendQuote pour envoyer les devis FERMES
+ * automatiquement à la capture, à partir des offres matchées. opts.offers =
+ * tableau [{ kind:'occasion'|'reman', sellPrice, consigne, stockLabel, delay,
+ * createMollie }]. Les offres sont regroupées dans UN SEUL email (avec les 2
+ * PDF joints) + UN SEUL SMS. opts.dryRun = true → génère les PDF mais
+ * N'ENVOIE/NE PERSISTE RIEN (test sûr).
+ */
+async function sendInstantDevis(cart, opts = {}) {
+  const dryRun = !!opts.dryRun;
+  const offersIn = Array.isArray(opts.offers) ? opts.offers.filter((o) => o && Number(o.sellPrice) > 0) : [];
+  if (!cart || !cart.email || !offersIn.length) return { ok: false, reason: 'precondition' };
+
+  const eq = cart.engineQuote || {};
+  const sendCat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+  const quoteRef = (cart.requested && cart.requested.ref) || '';
+  const plate = (cart.requested && cart.requested.plate) || '';
+  let publicBase = String(process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(publicBase)) publicBase = 'https://' + publicBase;
+  const trackBase = publicBase + '/api/devis-moteurs';
+  const eur = (n) => Number(n || 0).toLocaleString('fr-FR') + ' €';
+
+  // Prépare chaque devis (pricing + PDF + lien Mollie pour l'occasion).
+  const prepared = [];
+  for (const o of offersIn) {
+    const isReman = o.kind === 'reman';
+    const pricing = { sellPrice: Number(o.sellPrice), vatRate: 20, vatScheme: isReman ? 'normal' : 'margin', purchasePrice: 0, additionalFees: 0 };
+    const t = computeQuoteTotals(pricing, isReman);
+    const sellHt = Number(pricing.sellPrice) || 0;
+    const sellTtc = t.clientTotal;
+    const vatScheme = t.isMargin ? 'margin' : 'normal';
+    const conditionKey = isReman ? 'reconditionne_complet' : 'occasion';
+    const conditionInfo = CONDITION_LABELS[conditionKey] || CONDITION_LABELS[''];
+    const conditionLabelClient = conditionClientLabel(conditionKey, sendCat);
+    const consigne = { amount: Number(o.consigne) || 0, delayDays: 30 };
+    const depositTtc = isReman ? 0 : (sellTtc * 30 / 100);
+    const depositCents = Math.round(depositTtc * 100);
+    const sentQuoteObjectId = new mongoose.Types.ObjectId();
+
+    let mollieUrl = '', mollieId = '';
+    const createMollie = !isReman && depositCents > 0 && MOLLIE_ENABLED && o.createMollie !== false;
+    if (createMollie && !dryRun) {
+      try {
+        const payment = await mollie.createPayment({
+          amountCents: depositCents,
+          description: `Acompte devis ${quoteRef} — Autoliva`,
+          redirectUrl: publicBase + '/devis/merci?ref=' + encodeURIComponent(quoteRef),
+          webhookUrl: publicBase + '/api/devis-moteurs/mollie-webhook',
+          metadata: { kind: 'engine_quote_deposit', quoteRef, engineQuoteId: String(cart._id) },
+        });
+        if (payment && payment._links && payment._links.checkout) { mollieUrl = payment._links.checkout.href; mollieId = payment.id; }
+      } catch (err) { console.error('[instant-devis] Mollie failed:', err && err.message); }
+    }
+    const payTrackUrl = mollieUrl ? (trackBase + '/track-pay/' + cart._id + '/' + sentQuoteObjectId) : '';
+    const pdfTrackUrl = trackBase + '/track-pdf/' + cart._id + '/' + sentQuoteObjectId;
+    // Km du moteur donneur (occasion) → affiché sur le devis ; reman = pas de km.
+    const engineForOffer = (Number(o.mileage) > 0) ? Object.assign({}, eq.identifiedEngine || {}, { mileage: Number(o.mileage) }) : (eq.identifiedEngine || {});
+
+    const pdfBuffer = await buildQuotePdf({
+      quoteRef,
+      customerName: ((cart.firstName || '') + ' ' + (cart.lastName || '')).trim() || cart.email,
+      customerEmail: cart.email, customerPhone: cart.phone, plate, engine: engineForOffer,
+      pricing: { sellPrice: sellHt, vatRate: 20, vatScheme, purchasePrice: 0, additionalFees: 0 },
+      stockLabel: o.stockLabel || '', delay: o.delay || '', depositCents,
+      mollieUrl: payTrackUrl || mollieUrl, customMessage: '',
+      conditionLabel: conditionLabelClient, category: sendCat, consigne,
+      conditionBadge: conditionInfo.short, isReconditionne: isReman, photos: [],
+      equip: isReman ? (o.equip || '') : '',
+    });
+
+    prepared.push({ kind: o.kind, isReman, engine: engineForOffer, sellHt, sellTtc, depositTtc, depositCents, vatScheme, mollieUrl, mollieId, payTrackUrl, pdfTrackUrl, pdfBuffer, sentQuoteObjectId, badge: conditionInfo.short, conditionLabel: conditionLabelClient, consigne, stockLabel: o.stockLabel || '', delay: o.delay || '', equip: isReman ? (o.equip || '') : '' });
+  }
+
+  if (dryRun) {
+    return { ok: true, dryRun: true, devis: prepared.map((p) => ({ kind: p.kind, sellTtc: p.sellTtc, depositCents: p.depositCents })), pdfs: prepared.map((p) => p.pdfBuffer) };
+  }
+
+  // ─── UN SEUL bel email (template de marque) : 1 ou 2 offres, chacune avec
+  //     son lien « voir le devis (PDF) » tracké → on sait quel devis a été
+  //     consulté. Le détail complet est dans les PDF joints.
+  const html = buildBundleQuoteEmailHtml({
+    quoteRef,
+    firstName: (cart.firstName && cart.lastName) ? cart.firstName : '',
+    plate,
+    brandPhone: brand.PHONE_MOTEUR,
+    brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
+    category: sendCat,
+    offers: prepared.map((p) => ({
+      engine: p.engine || eq.identifiedEngine || {},
+      isReconditionne: p.isReman,
+      conditionBadge: p.badge,
+      conditionLabel: p.conditionLabel,
+      sellHt: p.sellHt, sellTtc: p.sellTtc, depositTtc: p.depositTtc, vatScheme: p.vatScheme,
+      stockLabel: p.stockLabel, delay: p.delay, consigne: p.consigne, equip: p.equip,
+      mollieUrl: p.mollieUrl, payTrackUrl: p.payTrackUrl, pdfTrackUrl: p.pdfTrackUrl,
+    })),
+  });
+  const text = `Bonjour,\n\n`
+    + `Suite à votre demande pour le véhicule ${plate}, voici ${prepared.length > 1 ? 'vos options' : 'votre devis'} :\n`
+    + prepared.map((p) => `- ${p.isReman ? 'Moteur reconditionné' : "Moteur d'occasion testé"} : ${p.sellTtc.toFixed(2)} EUR TTC`).join('\n')
+    + `\n\nLe détail complet est en pièce jointe (PDF). Devis valable 7 jours.\n\nL'équipe Autoliva`;
+
+  const attachments = prepared.map((p) => ({ filename: `Devis-${quoteRef || cart._id}-${p.kind}.pdf`, content: p.pdfBuffer.toString('base64'), disposition: 'attachment' }));
+  const _broch = await brochureAttachment();
+  if (_broch) attachments.push(_broch);
+  const subject = `Votre devis Autoliva${quoteRef ? ' ' + quoteRef : ''}${plate ? ' — ' + plate : ''}`;
+  const sendResult = await emailService.sendEmail({ toEmail: cart.email, subject, html, text, attachments });
+
+  // ─── UN SEUL SMS (lien court vers le 1er devis) ───
+  const shortCode = await generateUniqueShortCode();
+  let devisSmsResult = null;
+  if (cart.phone) {
+    try {
+      const totalTtcFmt = prepared.map((p) => Math.round(p.sellTtc)).join(' / ') + ' €';
+      const { enabled: smsOn, text: smsBody } = await resolveSms('moteur_devis', { quoteRef, totalTtc: totalTtcFmt, pdfUrl: publicBase + '/d/' + shortCode, phoneMoteur: brand.PHONE_MOTEUR });
+      if (smsOn && smsBody) {
+        const r = await sendSms({ to: cart.phone, text: smsBody });
+        devisSmsResult = { status: r && r.ok ? 'sent' : 'failed', reason: (r && r.reason) || '', message: (r && r.message) || '', at: new Date(), phone: cart.phone };
+      } else {
+        devisSmsResult = { status: 'disabled', reason: 'disabled', message: 'Template SMS désactivé.', at: new Date(), phone: cart.phone };
+      }
+    } catch (err) { devisSmsResult = { status: 'failed', reason: 'exception', message: (err && err.message) || 'Erreur', at: new Date(), phone: cart.phone }; }
+  }
+
+  // ─── Persiste un sentQuote par devis (le 1er porte le shortCode + le SMS) ───
+  const sentByName = opts.sentByName || 'Devis automatique';
+  const baseVer = (Array.isArray(eq.sentQuotes) ? eq.sentQuotes.length : 0);
+  const sentDocs = [];
+  for (let i = 0; i < prepared.length; i++) {
+    const p = prepared[i];
+    const saved = await storage.saveBuffer({ buffer: p.pdfBuffer, filename: `Devis-${quoteRef || cart._id}-${p.kind}.pdf`, mime: 'application/pdf', metadata: { kind: 'engine_quote_pdf', engineQuoteId: String(cart._id), quoteRef } });
+    sentDocs.push({ _id: p.sentQuoteObjectId, sentAt: new Date(), version: baseVer + i + 1, pdfId: saved.id, pdfUrl: saved.url, shortCode: i === 0 ? shortCode : '', sellPriceHt: p.sellHt, sellPriceTtc: p.sellTtc, depositCents: p.depositCents, mollieUrl: p.mollieUrl, mollieId: p.mollieId, customMessage: '', sentByName, sms: i === 0 ? devisSmsResult : null, attachedPhotos: [] });
+  }
+  await AbandonedCart.updateOne(
+    { _id: cart._id },
+    { $push: { 'engineQuote.sentQuotes': { $each: sentDocs } }, $set: { 'engineQuote.status': 'quote_sent', 'engineQuote.updatedAt': new Date(), 'engineQuote.updatedByName': sentByName } }
+  );
+
+  return { ok: true, count: prepared.length, devis: prepared.map((p) => ({ kind: p.kind, sellTtc: p.sellTtc })), emailOk: !!(sendResult && sendResult.ok !== false), smsStatus: devisSmsResult && devisSmsResult.status };
 }
 
 /* ─── TABLEAU DE CONVERSION (FUNNEL) ─────────────────────────────────────
@@ -1688,6 +1845,7 @@ async function getEngineQuoteFunnel(req, res, next) {
 }
 
 module.exports = {
+  sendInstantDevis,
   getEngineQuotesList,
   getEngineQuoteFunnel,
   getEngineQuoteNew,

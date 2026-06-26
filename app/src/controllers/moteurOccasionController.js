@@ -31,6 +31,13 @@ const LANDING_PATH = '/moteurs';
 const RECOND_PATH = '/moteurs-reconditionnes';
 const CAPTURE_SOURCE = 'landing_moteurs';
 
+// Envoi automatique des devis fermes à la capture (OFF par défaut → inerte tant
+// que la variable d'env n'est pas explicitement 'true').
+const AUTO_DEVIS_ENABLED = String(process.env.AUTO_DEVIS_ENABLED || '').toLowerCase() === 'true';
+// Sécurité 2 niveaux : ENABLED seul = DRY-RUN (génère les devis, logge, n'envoie
+// RIEN). L'envoi réel (email/SMS/Mollie) exige EN PLUS AUTO_DEVIS_LIVE='true'.
+const AUTO_DEVIS_LIVE = String(process.env.AUTO_DEVIS_LIVE || '').toLowerCase() === 'true';
+
 /* Deux landing pages partagent la MÊME vue + le MÊME tunnel de devis, avec une
  * "copy" (message) adaptée à l'intention de recherche (message match Google Ads) :
  *  - /moteurs                → occasion (garantie 6 mois)
@@ -554,11 +561,13 @@ async function postDevis(req, res, next) {
         errorMessage: 'Merci d’indiquer un numéro de téléphone pour qu’on puisse vous rappeler.',
       });
     }
-    if (form.email && !cleanEmail) {
+    if (!cleanEmail) {
       return renderPage(res, req, {
         form,
         statusCode: 400,
-        errorMessage: 'L’email ne semble pas valide.',
+        errorMessage: form.email
+          ? 'L’email ne semble pas valide.'
+          : 'Merci d’indiquer votre email pour recevoir votre devis.',
       });
     }
 
@@ -712,7 +721,54 @@ async function postDevis(req, res, next) {
         ).catch(() => {}).then(() => {
           const _set = { captureSource: CAPTURE_SOURCE };
           if (ackSmsResult) _set['engineQuote.ackSms'] = ackSmsResult;
-          return AbandonedCart.updateOne({ _id: result.leadId }, { $set: _set });
+          // Enrichissement « devis instantané » : moteur détecté + offres (champs
+          // cachés remplis par le JS de la landing). Pré-remplit l'identification
+          // moteur pour le commercial + trace une note. Données client-fournies →
+          // on borne la taille.
+          // On ne garde la détection que si la plaque détectée == plaque envoyée
+          // (sinon détection périmée : le client a changé de plaque après coup).
+          const _normPlate = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          const _detPlate = String(body.detectedPlate || '');
+          const _plateOk = _detPlate && _normPlate(_detPlate) === _normPlate(form.plate);
+          const detCode = _plateOk ? String(body.detectedEngineCode || '').trim().slice(0, 40) : '';
+          const detVeh = _plateOk ? String(body.detectedVehicle || '').trim().slice(0, 140) : '';
+          const detOff = _plateOk ? String(body.detectedOffers || '').trim().slice(0, 300) : '';
+          if (detCode) _set['engineQuote.identifiedEngine.code'] = detCode;
+          if (detVeh) _set['engineQuote.identifiedEngine.model'] = detVeh;
+          const _update = { $set: _set };
+          if (detCode || detVeh) {
+            const noteText = `Détection plaque automatique — ${detVeh}${detCode ? ' [' + detCode + ']' : ''}${detOff ? ' · ' + detOff : ''}`.trim();
+            _update.$push = { notes: { text: noteText, addedByName: 'Détection plaque', addedAt: new Date() } };
+          }
+          return AbandonedCart.updateOne({ _id: result.leadId }, _update).then(async () => {
+            // Envoi AUTOMATIQUE des devis fermes (derrière flag) — le serveur
+            // re-matche le code détecté (source de vérité), 2 devis séparés.
+            if (!AUTO_DEVIS_ENABLED || !_plateOk || !detCode) return;
+            try {
+              const { matchOffers } = require('../services/instantEngineQuote');
+              const offers = matchOffers(detCode);
+              const freshCart = await AbandonedCart.findById(result.leadId);
+              if (!freshCart || !freshCart.email) return; // un devis par email exige une adresse
+              const _offers = [];
+              if (offers.occasion) _offers.push({ kind: 'occasion', sellPrice: offers.occasion.prix, mileage: offers.occasion.km, stockLabel: 'Sourcé à la commande', delay: '7 à 10 jours', createMollie: true });
+              if (offers.reman) _offers.push({ kind: 'reman', sellPrice: offers.reman.pvp, consigne: offers.reman.consigne, stockLabel: 'En stock', delay: offers.reman.dispo || 'Livraison sous 3-5 jours ouvrés', equip: offers.reman.equip || '' });
+              if (_offers.length) {
+                // On N'ENVOIE PAS tout de suite : l'accusé de réception part à la
+                // soumission, le devis est PROGRAMMÉ (échéance = capture + délai)
+                // et envoyé par le cron processScheduledAutoDevis. Le garde
+                // status:null (matche aussi champ absent) = 1 seule programmation
+                // même en cas de resoumission du formulaire (idempotence).
+                const delayMs = Number(process.env.AUTO_DEVIS_DELAY_MS) || 5 * 60 * 1000; // 5 min par défaut
+                const dueAt = new Date(Date.now() + delayMs);
+                const upd = await AbandonedCart.updateOne(
+                  { _id: freshCart._id, 'engineQuote.autoDevis.status': null },
+                  { $set: { 'engineQuote.autoDevis': { status: 'scheduled', dueAt, scheduledAt: new Date(), offers: _offers, result: '' } } }
+                );
+                if (upd.modifiedCount) console.log(`[auto-devis] PROGRAMMÉ → ${freshCart.email} · ${_offers.length} devis · échéance ${dueAt.toISOString()}`);
+                else console.log(`[auto-devis] déjà programmé/envoyé → ${freshCart.email} (resubmit ignoré)`);
+              }
+            } catch (e) { console.error('[auto-devis] échec programmation:', e && e.message); }
+          });
         }).catch(() => {});
       }
     }).catch(() => {});

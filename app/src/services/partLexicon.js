@@ -27,6 +27,7 @@ function partLexicon(category) {
     // titres / libellés
     devisSubject: b ? 'Devis boîte de vitesse' : "Devis moteur d'occasion",
     headerLabel: b ? 'Boîte de vitesse' : 'Moteur occasion',
+    headerLabelReconditionne: b ? 'Boîte reconditionnée' : 'Moteur reconditionné',
     reserveTitle: b ? 'POUR RÉSERVER CETTE BOÎTE' : 'POUR RÉSERVER CE MOTEUR',
     proposedLabel: b ? 'Boîte proposée' : 'Moteur proposé',
     defaultTitle: b ? 'Boîte de vitesse' : "Moteur d'occasion",
@@ -45,8 +46,8 @@ function partLexicon(category) {
       ? 'La boîte est préparée sur palette, protégée, filmée et expédiée avec suivi transporteur. Des photos de préparation peuvent être transmises avant départ.'
       : 'Le moteur est préparé sur palette, protégé, filmé et expédié avec suivi transporteur. Des photos de préparation peuvent être transmises avant départ.',
     validitySentence: b
-      ? 'Le devis est valable 24h : la boîte restant disponible à la vente, elle peut être cédée à un autre client entre-temps.'
-      : 'Le devis est valable 24h : le moteur restant disponible à la vente, il peut être cédé à un autre client entre-temps.',
+      ? 'Le devis est valable 7 jours : la boîte restant disponible à la vente, elle peut être cédée à un autre client entre-temps.'
+      : 'Le devis est valable 7 jours : le moteur restant disponible à la vente, il peut être cédé à un autre client entre-temps.',
     recondDesc: b
       ? "Boîte entièrement reconditionnée en atelier (pièces d'usure remplacées, mécatronique contrôlée), contrôlée avant expédition."
       : "Moteur entièrement reconditionné en atelier (pièces d'usure remplacées), contrôlé avant expédition.",

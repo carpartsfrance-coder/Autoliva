@@ -101,6 +101,11 @@
 
 <form id="quote-multistep" class="space-y-6" action="<%= copy.formAction %>" method="post" novalidate>
 <input type="text" name="website" value="" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
+<!-- Devis instantané : moteur détecté + offres, passés au back pour qualifier le lead (remplis par JS, sinon vides) -->
+<input type="hidden" name="detectedEngineCode" value="">
+<input type="hidden" name="detectedVehicle" value="">
+<input type="hidden" name="detectedOffers" value="">
+<input type="hidden" name="detectedPlate" value="">
 
 <!-- ─────── ÉTAPE 1 : VÉHICULE + TYPE DE MOTEUR ─────── -->
 <div data-step="1" class="space-y-6">
@@ -116,6 +121,8 @@
 </div>
 </fieldset>
 <p class="text-xs text-gray-400 mt-2">Ex: AB-123-CD ou VF1XXXXXXXXXXXXX ou M48.50</p>
+<!-- Détection live du véhicule (remplie par JS dès la saisie) -->
+<div data-iq-step1 class="hidden mt-3"></div>
 </div>
 
 <% if (copy.showStateField) { %>
@@ -140,19 +147,6 @@
 <p data-etat-hint class="text-xs text-gray-500 mt-2 leading-snug min-h-[2rem]">Touchez un état pour voir le détail — ou « Peu importe », on vous propose le mieux.</p>
 </div>
 
-<!-- Type de moteur : masqué si reconditionné (toujours complet) -->
-<div data-enginetype-block class="<%= form.etat === 'reconditionne' ? 'hidden' : '' %>">
-<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Type de moteur</p>
-<div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Type de moteur">
-<% [['complet','Moteur complet'],['nu','Moteur nu']].forEach(function (opt) { %>
-<label class="cursor-pointer">
-<input type="radio" name="engineType" value="<%= opt[0] %>" class="peer sr-only" <%= form.engineType === opt[0] ? 'checked' : '' %> data-enginetype-input>
-<span class="block text-center text-xs font-semibold border border-gray-300 rounded-lg py-2.5 px-1 text-gray-600 peer-checked:border-brand-red peer-checked:bg-brand-red/5 peer-checked:text-brand-red transition"><%= opt[1] %></span>
-</label>
-<% }) %>
-</div>
-<p class="text-xs text-gray-400 mt-2">Complet = avec accessoires · Nu = bloc seul.</p>
-</div>
 <% } %>
 
 <!-- CTA étape 1 -->
@@ -167,6 +161,9 @@ Suivant
 
 <!-- ─────── ÉTAPE 2 : COORDONNÉES ─────── -->
 <div data-step="2" class="space-y-4 hidden">
+
+<!-- Devis instantané : rempli par JS si la plaque est reconnue (sinon masqué) -->
+<div data-instant-quote class="hidden"></div>
 
 <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Coordonnées</p>
 
@@ -184,12 +181,13 @@ Suivant
 
 <!-- Email -->
 <fieldset class="border border-gray-300 rounded-xl px-4 pb-3 pt-1 focus-within:border-brand-red focus-within:ring-1 focus-within:ring-brand-red/30 transition">
-<legend class="px-1 text-xs text-gray-500">Email</legend>
+<legend class="px-1 text-xs text-gray-500">Email * (pour recevoir votre devis)</legend>
 <div class="flex items-center gap-3">
 <svg class="w-6 h-6 text-brand-red shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
-<input type="email" name="email" value="<%= form.email || '' %>" class="w-full border-0 p-0 text-sm focus:ring-0 placeholder-gray-300" placeholder="nom@exemple.fr">
+<input type="email" name="email" required value="<%= form.email || '' %>" class="w-full border-0 p-0 text-sm focus:ring-0 placeholder-gray-300" placeholder="nom@exemple.fr">
 </div>
 </fieldset>
+<p data-email-error class="text-xs text-red-600 mt-1 hidden">Merci d'indiquer un email valide pour recevoir votre devis.</p>
 
 <!-- Nom -->
 <fieldset class="border border-gray-300 rounded-xl px-4 pb-3 pt-1 focus-within:border-brand-red focus-within:ring-1 focus-within:ring-brand-red/30 transition">
@@ -280,6 +278,127 @@ Envoyer ma demande
     }
   }
 
+  // ── Devis instantané : plaque reconnue → moteur identifié + offres dispo ──
+  // Enrichissement progressif : en cas d'échec API / non-plaque, le bloc se masque
+  // et le formulaire fonctionne comme avant.
+  var iqBox = form.querySelector('[data-instant-quote]');
+  var iqFCode = form.querySelector('input[name="detectedEngineCode"]');
+  var iqFVeh = form.querySelector('input[name="detectedVehicle"]');
+  var iqFOff = form.querySelector('input[name="detectedOffers"]');
+  var iqFPlate = form.querySelector('input[name="detectedPlate"]');
+  var iqLast = '';
+  // Remplit les champs cachés (qualification du lead) depuis la réponse API.
+  function iqStoreFromResponse(d) {
+    var code = '', veh = '', off = '';
+    if (d && d.ok && d.vehicle) {
+      var v = d.vehicle, o = d.offers || {};
+      code = v.codeMoteur || '';
+      var lbl = (v.label && String(v.label).toUpperCase() !== 'INCONNU') ? v.label : '';
+      var enMap2 = { GAZOLE: 'Diesel', ESSENCE: 'Essence' };
+      var en2 = (v.energie && String(v.energie).toUpperCase() !== 'INCONNU') ? (enMap2[String(v.energie).toUpperCase()] || v.energie) : '';
+      var bits = [lbl, en2, (v.cylindree && String(v.cylindree) !== '0' ? v.cylindree + ' cm³' : ''), (v.puissance && String(v.puissance) !== '0' ? v.puissance + ' ch' : '')].filter(Boolean);
+      veh = [v.marque, v.modele].filter(Boolean).join(' ') + (bits.length ? ' · ' + bits.join(' · ') : '');
+      if (o.occasion || o.reman) {
+        var p = [];
+        if (o.occasion) p.push('Occasion dès ' + iqEur(o.occasion.prix) + (o.occasion.km ? ' (' + Number(o.occasion.km).toLocaleString('fr-FR') + ' km)' : ''));
+        if (o.reman) p.push('Reconditionné ' + iqEur(Math.round(o.reman.pvp * 1.2)) + (o.reman.consigne ? ' +consigne ' + iqEur(o.reman.consigne) : '') + (o.reman.dispo ? ' (' + o.reman.dispo + ')' : ''));
+        off = p.join(' · ');
+      } else { off = 'Aucune offre auto → devis manuel'; }
+    }
+    if (iqFCode) iqFCode.value = code;
+    if (iqFVeh) iqFVeh.value = veh;
+    if (iqFOff) iqFOff.value = off;
+    // Plaque réellement détectée → le back ne garde l'enrichissement que si elle
+    // correspond à la plaque envoyée (évite une détection périmée).
+    if (iqFPlate) iqFPlate.value = code ? (plateInput ? plateInput.value.trim() : '') : '';
+  }
+  function iqEur(n) { return Number(n).toLocaleString('fr-FR') + ' €'; }
+  function iqEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  function iqLooksLikePlate(v) { return /^[A-Z]{2}-?\d{3}-?[A-Z]{2}$/i.test(String(v || '').trim()); }
+  // Marque détectée -> URL du logo (public/images/brands). Renvoie '' si inconnue.
+  function iqBrandLogo(marque) {
+    if (!marque) return '';
+    var slug = String(marque).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    var known = { audi: 'webp', bmw: 'webp', citroen: 'webp', ford: 'webp', honda: 'png', hyundai: 'webp', kia: 'webp', 'land-rover': 'webp', mazda: 'webp', 'mercedes-benz': 'webp', mitsubishi: 'webp', nissan: 'webp', opel: 'webp', peugeot: 'png', renault: 'webp', seat: 'webp', skoda: 'webp', toyota: 'webp', volkswagen: 'webp', volvo: 'webp' };
+    return known[slug] ? '/images/brands/' + slug + '-logo.' + known[slug] : '';
+  }
+  function iqCard(title, price, prefix, sub, badge) {
+    return '<div class="rounded-xl border border-gray-200 p-3">'
+      + '<div class="flex items-center justify-between gap-2"><p class="text-xs font-semibold text-gray-500 uppercase tracking-wide">' + title + '</p>'
+      + (badge ? '<span class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5 shrink-0">' + badge + '</span>' : '') + '</div>'
+      + '<p class="text-lg font-bold text-brand-red mt-1">' + (prefix ? '<span class="text-xs font-medium text-gray-400">' + prefix + '</span> ' : '') + price + '</p>'
+      + (sub ? '<p class="text-xs text-gray-500 mt-0.5">' + sub + '</p>' : '') + '</div>';
+  }
+  // Carte « véhicule identifié » : logo marque + modèle + carburant/cylindrée/
+  // puissance + code moteur. Réutilisée à l'étape 1 (live) et à l'étape 2.
+  function iqVehicleCard(v) {
+    var enMap = { GAZOLE: 'Diesel', ESSENCE: 'Essence' };
+    var en = (v.energie && String(v.energie).toUpperCase() !== 'INCONNU') ? (enMap[String(v.energie).toUpperCase()] || v.energie) : '';
+    var name = [v.marque, v.modele].filter(Boolean).join(' ');
+    var specs = [en, (v.cylindree && String(v.cylindree) !== '0' ? v.cylindree + ' cm³' : ''), (v.puissance && String(v.puissance) !== '0' ? v.puissance + ' ch' : '')].filter(Boolean).join(' · ');
+    var logoUrl = iqBrandLogo(v.marque);
+    return '<div class="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-3">'
+      + (logoUrl
+          ? '<span class="shrink-0 w-14 h-14 rounded-lg bg-white border border-gray-200 flex items-center justify-center p-1.5"><img src="' + logoUrl + '" alt="' + iqEsc(v.marque) + '" class="max-w-full max-h-full object-contain" onerror="this.parentNode.style.display=\'none\'"></span>'
+          : '<span class="shrink-0 w-14 h-14 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-gray-400"><svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 17a2 2 0 104 0M15 17a2 2 0 104 0M5 17h-2v-4l2-5h11l4 5v4h-2M5 13h14" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg></span>')
+      + '<div class="min-w-0 flex-1">'
+      + '<div class="flex items-center gap-1 text-emerald-700 text-[11px] font-semibold uppercase tracking-wide"><svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path></svg>Véhicule identifié</div>'
+      + '<p class="font-bold text-gray-900 text-sm leading-tight">' + iqEsc(name || 'Véhicule détecté') + '</p>'
+      + (specs ? '<p class="text-xs text-gray-500">' + iqEsc(specs) + '</p>' : '')
+      + (v.codeMoteur ? '<p class="text-[11px] text-gray-400 mt-0.5">Code moteur : <span class="font-semibold text-gray-600">' + iqEsc(v.codeMoteur) + '</span></p>' : '')
+      + '</div></div>';
+  }
+  function iqRender(d) {
+    if (!iqBox) return;
+    if (!d || !d.ok || !d.vehicle) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; return; }
+    // Le formulaire est une simple DEMANDE de devis : on confirme le véhicule
+    // détecté (rassurant), mais on N'AFFICHE PAS les prix/offres ici — le devis
+    // ferme est envoyé ensuite par email.
+    iqBox.innerHTML = iqVehicleCard(d.vehicle);
+    iqBox.classList.remove('hidden');
+  }
+  // Fetch mutualisé + cache par plaque (évite de re-fetcher entre la détection
+  // live de l'étape 1 et le rendu complet de l'étape 2).
+  var iqCache = {};
+  function iqEnsure(plate, done) {
+    plate = String(plate || '').trim();
+    if (!iqLooksLikePlate(plate)) { done(null); return; }
+    if (iqCache[plate]) { done(iqCache[plate]); return; }
+    fetch('/api/devis-instantane?plaque=' + encodeURIComponent(plate), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { iqCache[plate] = d; done(d); })
+      .catch(function () { done(null); });
+  }
+  function loadInstantQuote(plate) {
+    plate = String(plate || '').trim();
+    if (!iqBox || !iqLooksLikePlate(plate)) { if (iqBox) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; } iqStoreFromResponse(null); return; }
+    iqBox.classList.remove('hidden');
+    iqBox.innerHTML = '<div class="rounded-2xl border border-gray-200 bg-white p-4 text-sm text-gray-500 flex items-center gap-2">'
+      + '<svg class="w-4 h-4 animate-spin text-brand-red" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"></path></svg>'
+      + 'Identification de votre moteur…</div>';
+    iqEnsure(plate, function (d) { iqRender(d); iqStoreFromResponse(d); track('instant_quote', { hasOffer: !!(d && d.hasOffer) }); });
+  }
+  // Détection LIVE à l'étape 1 : dès la saisie d'une plaque/VIN valide, on
+  // affiche la carte « véhicule identifié » (logo + modèle + specs) pour rassurer.
+  var iqBoxStep1 = form.querySelector('[data-iq-step1]');
+  function iqLive() {
+    if (!iqBoxStep1) return;
+    var plate = plateInput.value.trim();
+    if (!iqLooksLikePlate(plate)) { iqBoxStep1.classList.add('hidden'); iqBoxStep1.innerHTML = ''; iqStoreFromResponse(null); return; }
+    iqBoxStep1.classList.remove('hidden');
+    iqBoxStep1.innerHTML = '<div class="rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-500 flex items-center gap-2">'
+      + '<svg class="w-4 h-4 animate-spin text-brand-red" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z"></path></svg>'
+      + 'Identification de votre véhicule…</div>';
+    iqEnsure(plate, function (d) {
+      if (plateInput.value.trim() !== plate) return; // plaque changée entre-temps
+      if (d && d.ok && d.vehicle) { iqBoxStep1.innerHTML = iqVehicleCard(d.vehicle); iqBoxStep1.classList.remove('hidden'); }
+      else { iqBoxStep1.classList.add('hidden'); iqBoxStep1.innerHTML = ''; }
+      iqStoreFromResponse(d);
+    });
+  }
+  var iqDebounce;
+  if (plateInput) plateInput.addEventListener('input', function () { clearTimeout(iqDebounce); iqDebounce = setTimeout(iqLive, 450); });
+
   nextBtn.addEventListener('click', function () {
     if (!plateInput.value.trim()) {
       errMsg.classList.remove('hidden');
@@ -289,6 +408,7 @@ Envoyer ma demande
     errMsg.classList.add('hidden');
     track('funnel_step1_complete');
     goStep(2);
+    loadInstantQuote(plateInput.value.trim());
   });
 
   backBtns.forEach(function (btn) {
@@ -307,6 +427,17 @@ Envoyer ma demande
       e.preventDefault();
       goStep(2);
       phoneInput.focus();
+      return;
+    }
+    var emailInput = form.querySelector('input[name="email"]');
+    var emailErr = form.querySelector('[data-email-error]');
+    var emailVal = emailInput ? emailInput.value.trim() : '';
+    if (!emailVal || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(emailVal)) {
+      e.preventDefault();
+      goStep(2);
+      if (emailErr) emailErr.classList.remove('hidden');
+      if (emailInput) emailInput.focus();
+      return;
     }
   });
 
@@ -330,7 +461,6 @@ Envoyer ma demande
      si le champ État n'est pas présent (landing /moteurs-reconditionnes). */
   (function () {
     var etatInputs = document.querySelectorAll('[data-etat-input]');
-    var etBlock = document.querySelector('[data-enginetype-block]');
     if (!etatInputs.length) return;
     var hint = document.querySelector('[data-etat-hint]');
     var defaultHint = hint ? hint.textContent : '';
@@ -340,12 +470,6 @@ Envoyer ma demande
       return sel ? sel.getAttribute('data-etat-desc') : '';
     }
     function sync() {
-      var sel = document.querySelector('[data-etat-input]:checked');
-      var isRecond = !!(sel && sel.value === 'reconditionne');
-      if (etBlock) {
-        etBlock.classList.toggle('hidden', isRecond);
-        if (isRecond) document.querySelectorAll('[data-enginetype-input]').forEach(function (r) { r.checked = false; });
-      }
       setHint(selectedDesc());
     }
     etatInputs.forEach(function (r) {
