@@ -351,26 +351,10 @@ Envoyer ma demande
   function iqRender(d) {
     if (!iqBox) return;
     if (!d || !d.ok || !d.vehicle) { iqBox.classList.add('hidden'); iqBox.innerHTML = ''; return; }
-    var v = d.vehicle, o = d.offers || {};
-    var head = '<div class="mb-3">' + iqVehicleCard(v) + '</div>';
-    var cards = '';
-    if (o.occasion) {
-      var osub = (o.occasion.km ? Number(o.occasion.km).toLocaleString('fr-FR') + ' km · ' : '') + 'testé, garantie 6 mois';
-      cards += iqCard('Occasion testée', iqEur(o.occasion.prix), 'à partir de', osub, null);
-    }
-    if (o.reman) {
-      var rsub = 'échange standard' + (o.reman.dispo ? ' · ' + iqEsc(o.reman.dispo) : '') + (o.reman.consigne ? ' · consigne ' + iqEur(o.reman.consigne) : '');
-      cards += iqCard('Reconditionné', iqEur(Math.round(o.reman.pvp * 1.2)), null, rsub, 'garantie 1 an');
-    }
-    var body;
-    if (cards) {
-      var grid = (o.occasion && o.reman) ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1';
-      body = head + '<div class="grid gap-2 ' + grid + '">' + cards + '</div>'
-        + '<p class="text-[11px] text-gray-400 mt-2">Prix indicatif TTC — devis ferme et disponibilité confirmés après votre demande.</p>';
-    } else {
-      body = head + '<div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Nous vous préparons un <strong>devis personnalisé sous 1h</strong>. Laissez vos coordonnées juste en dessous.</div>';
-    }
-    iqBox.innerHTML = '<div class="rounded-2xl border border-gray-200 bg-white p-4">' + body + '</div>';
+    // Le formulaire est une simple DEMANDE de devis : on confirme le véhicule
+    // détecté (rassurant), mais on N'AFFICHE PAS les prix/offres ici — le devis
+    // ferme est envoyé ensuite par email.
+    iqBox.innerHTML = iqVehicleCard(d.vehicle);
     iqBox.classList.remove('hidden');
   }
   // Fetch mutualisé + cache par plaque (évite de re-fetcher entre la détection
