@@ -23,7 +23,7 @@
     </div>
 
     <!-- KPIs -->
-    <div class="mt-8 grid grid-cols-2 lg:grid-cols-7 gap-4">
+    <div class="mt-8 grid grid-cols-2 lg:grid-cols-8 gap-4">
       <div class="rounded-2xl border border-slate-200 bg-white p-4">
         <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Total</div>
         <div class="mt-1 text-2xl font-bold text-slate-900"><%= stats.total %></div>
@@ -44,6 +44,10 @@
         <div class="text-xs uppercase tracking-widest text-violet-500 font-semibold">Devis envoyés</div>
         <div class="mt-1 text-2xl font-bold text-violet-700"><%= stats.quoteSent %></div>
       </div>
+      <a href="/admin/devis-moteurs?sourcing=1" title="Auto-devis non envoyé : l'état demandé (occasion/reconditionné) est indisponible au catalogue — à sourcer / rappeler" class="rounded-2xl border <%= filters.sourcing ? 'border-orange-300 ring-2 ring-orange-200' : 'border-orange-100' %> bg-orange-50/50 p-4 block hover:bg-orange-50 transition">
+        <div class="text-xs uppercase tracking-widest text-orange-500 font-semibold">À sourcer</div>
+        <div class="mt-1 text-2xl font-bold text-orange-700"><%= stats.sourcing %></div>
+      </a>
       <div class="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
         <div class="text-xs uppercase tracking-widest text-emerald-500 font-semibold">CA en attente</div>
         <div class="mt-1 text-2xl font-bold text-emerald-700"><%= fmt(stats.caExpected) %> €</div>
@@ -166,7 +170,12 @@
                     <% } %>
                   </td>
                   <td class="px-4 py-3 align-top">
-                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold <%= it.statusBadge.className %>"><%= it.statusBadge.label %></span>
+                    <div class="flex flex-col items-start gap-1">
+                      <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold <%= it.statusBadge.className %>"><%= it.statusBadge.label %></span>
+                      <% if (it.needsSourcing) { %>
+                        <span title="État demandé indisponible au catalogue — à sourcer / rappeler" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">À sourcer<%= it.sourcingRequested ? ' · ' + (it.sourcingRequested === 'reconditionne' ? 'reconditionné' : it.sourcingRequested) : '' %></span>
+                      <% } %>
+                    </div>
                   </td>
                   <td class="px-4 py-3 align-top">
                     <% if (it.stockLabel) { %>
