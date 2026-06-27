@@ -773,15 +773,20 @@ async function postDevis(req, res, next) {
                 else console.log(`[auto-devis] déjà programmé/envoyé → ${freshCart.email} (resubmit ignoré)`);
               } else if (etat === 'occasion' || etat === 'reconditionne') {
                 // L'état demandé n'est PAS disponible au catalogue → on n'envoie pas
-                // une condition non demandée. Pas d'auto-devis : le lead reste
-                // « Nouveau », le commercial source la bonne pièce (note interne).
+                // une condition non demandée. Pas d'auto-devis : on POSE un flag
+                // « à sourcer » (badge + tuile back-office) + une note. Le lead reste
+                // « Nouveau », le commercial source la bonne pièce. Garde status:null
+                // = une seule fois (pas de re-flag/re-note au resubmit).
                 const _wanted = etat === 'occasion' ? 'occasion' : 'reconditionné';
                 const _avail = [offers.occasion ? 'occasion' : '', offers.reman ? 'reconditionné' : ''].filter(Boolean).join(' + ') || 'aucune';
-                await AbandonedCart.updateOne(
-                  { _id: freshCart._id },
-                  { $push: { notes: { text: `Auto-devis NON envoyé : ${_wanted} demandé par le client, indisponible au catalogue (dispo : ${_avail}). À sourcer / rappeler.`, addedByName: 'Auto-devis', addedAt: new Date() } } }
+                const _updS = await AbandonedCart.updateOne(
+                  { _id: freshCart._id, 'engineQuote.autoDevis.status': null },
+                  {
+                    $set: { 'engineQuote.autoDevis': { status: 'sourcing', requested: etat, scheduledAt: new Date(), result: `dispo: ${_avail}`, offers: [] } },
+                    $push: { notes: { text: `Auto-devis NON envoyé : ${_wanted} demandé par le client, indisponible au catalogue (dispo : ${_avail}). À sourcer / rappeler.`, addedByName: 'Auto-devis', addedAt: new Date() } },
+                  }
                 );
-                console.log(`[auto-devis] ${_wanted} demandé mais indispo (dispo: ${_avail}) → pas d'envoi auto, traitement commercial · ${freshCart.email}`);
+                if (_updS.modifiedCount) console.log(`[auto-devis] ${_wanted} demandé mais indispo (dispo: ${_avail}) → À SOURCER (pas d'envoi auto) · ${freshCart.email}`);
               }
             } catch (e) { console.error('[auto-devis] échec programmation:', e && e.message); }
           });

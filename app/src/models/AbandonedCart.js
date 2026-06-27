@@ -160,13 +160,17 @@ const engineQuoteSchema = new mongoose.Schema(
      * processScheduledAutoDevis. Claim atomique scheduled->sending = idempotence.
      */
     autoDevis: {
-      status: { type: String, enum: ['scheduled', 'sending', 'sent', 'error'], default: null },
+      // 'sourcing' = état demandé par le client indisponible au catalogue →
+      // pas d'envoi auto, à sourcer/rappeler par le commercial (badge back-office).
+      status: { type: String, enum: ['scheduled', 'sending', 'sent', 'error', 'sourcing'], default: null },
       dueAt: { type: Date, default: null },
       scheduledAt: { type: Date, default: null },
       claimedAt: { type: Date, default: null },
       sentAt: { type: Date, default: null },
       result: { type: String, default: '' },
       offers: { type: [mongoose.Schema.Types.Mixed], default: [] },
+      // Condition demandée par le client quand status='sourcing' ('occasion'/'reconditionne').
+      requested: { type: String, default: '' },
     },
 
     /** Paiement acompte reçu (webhook Mollie) */

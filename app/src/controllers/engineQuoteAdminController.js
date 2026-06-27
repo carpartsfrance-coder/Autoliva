@@ -285,6 +285,7 @@ async function getEngineQuotesList(req, res, next) {
     const statusFilter = typeof req.query.status === 'string' ? req.query.status.trim() : '';
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const conditionFilter = (req.query.condition === 'reconditionne' || req.query.condition === 'occasion') ? req.query.condition : '';
+    const sourcingFilter = req.query.sourcing === '1'; // leads « à sourcer » (état demandé indispo)
     // Vue active (défaut) ou archivés. Les archivés sont sortis de la liste
     // active pour la désencombrer, mais restent consultables via le toggle.
     const view = req.query.view === 'archived' ? 'archived' : 'active';
@@ -297,6 +298,9 @@ async function getEngineQuotesList(req, res, next) {
     if (conditionFilter) {
       // Couvre les leads récents (libellé exact) ET anciens (« …occasion · complet »).
       query['requested.vehicle'] = conditionFilter === 'reconditionne' ? /recondition/i : /occasion/i;
+    }
+    if (sourcingFilter) {
+      query['engineQuote.autoDevis.status'] = 'sourcing';
     }
     if (q) {
       const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
@@ -356,6 +360,10 @@ async function getEngineQuotesList(req, res, next) {
         receivedAt,
         ageDays,
         priority,
+        // « À sourcer » : auto-devis non envoyé car l'état demandé (occasion/
+        // reconditionné) est indisponible au catalogue → traitement commercial.
+        needsSourcing: !!(eq.autoDevis && eq.autoDevis.status === 'sourcing'),
+        sourcingRequested: (eq.autoDevis && eq.autoDevis.requested) || '',
         status,
         statusBadge: STATUS_LABELS[status] || STATUS_LABELS.new,
         stockLabel: stock ? STOCK_LABELS[stock].label : '',
@@ -391,6 +399,7 @@ async function getEngineQuotesList(req, res, next) {
       newCount: items.filter(i => i.status === 'new').length,
       analyzing: items.filter(i => i.status === 'analyzing').length,
       quoteSent: items.filter(i => i.status === 'quote_sent').length,
+      sourcing: items.filter(i => i.needsSourcing).length,
       won: items.filter(i => i.status === 'won').length,
       fromAds: items.filter(i => i.source && i.source.isAds).length,
       caExpected: items.filter(i => i.status === 'quote_sent').reduce((s, i) => s + i.sellPrice, 0),
@@ -408,7 +417,7 @@ async function getEngineQuotesList(req, res, next) {
       activeKey: 'engine-quotes',
       items,
       stats,
-      filters: { status: statusFilter, q, condition: conditionFilter },
+      filters: { status: statusFilter, q, condition: conditionFilter, sourcing: sourcingFilter },
       view,
       archivedCount,
       statusLabels: STATUS_LABELS,
