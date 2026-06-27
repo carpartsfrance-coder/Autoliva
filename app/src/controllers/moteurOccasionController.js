@@ -749,9 +749,14 @@ async function postDevis(req, res, next) {
               const offers = matchOffers(detCode);
               const freshCart = await AbandonedCart.findById(result.leadId);
               if (!freshCart || !freshCart.email) return; // un devis par email exige une adresse
+              // L'auto-devis RESPECTE l'état demandé : on ne propose QUE la condition
+              // souhaitée (occasion OU reconditionné). « Peu importe » (je_sais_pas)
+              // ou non renseigné → on propose tout ce qui est disponible.
+              const _wantsOcc = etat === 'occasion' || etat === 'je_sais_pas' || etat === '';
+              const _wantsRem = etat === 'reconditionne' || etat === 'je_sais_pas' || etat === '';
               const _offers = [];
-              if (offers.occasion) _offers.push({ kind: 'occasion', sellPrice: offers.occasion.prix, mileage: offers.occasion.km, stockLabel: 'Sourcé à la commande', delay: '7 à 10 jours', createMollie: true });
-              if (offers.reman) _offers.push({ kind: 'reman', sellPrice: offers.reman.pvp, consigne: offers.reman.consigne, stockLabel: 'En stock', delay: offers.reman.dispo || 'Livraison sous 3-5 jours ouvrés', equip: offers.reman.equip || '' });
+              if (offers.occasion && _wantsOcc) _offers.push({ kind: 'occasion', sellPrice: offers.occasion.prix, mileage: offers.occasion.km, stockLabel: 'Sourcé à la commande', delay: '7 à 10 jours', createMollie: true });
+              if (offers.reman && _wantsRem) _offers.push({ kind: 'reman', sellPrice: offers.reman.pvp, consigne: offers.reman.consigne, stockLabel: 'En stock', delay: offers.reman.dispo || 'Livraison sous 3-5 jours ouvrés', equip: offers.reman.equip || '' });
               if (_offers.length) {
                 // On N'ENVOIE PAS tout de suite : l'accusé de réception part à la
                 // soumission, le devis est PROGRAMMÉ (échéance = capture + délai)
@@ -766,6 +771,17 @@ async function postDevis(req, res, next) {
                 );
                 if (upd.modifiedCount) console.log(`[auto-devis] PROGRAMMÉ → ${freshCart.email} · ${_offers.length} devis · échéance ${dueAt.toISOString()}`);
                 else console.log(`[auto-devis] déjà programmé/envoyé → ${freshCart.email} (resubmit ignoré)`);
+              } else if (etat === 'occasion' || etat === 'reconditionne') {
+                // L'état demandé n'est PAS disponible au catalogue → on n'envoie pas
+                // une condition non demandée. Pas d'auto-devis : le lead reste
+                // « Nouveau », le commercial source la bonne pièce (note interne).
+                const _wanted = etat === 'occasion' ? 'occasion' : 'reconditionné';
+                const _avail = [offers.occasion ? 'occasion' : '', offers.reman ? 'reconditionné' : ''].filter(Boolean).join(' + ') || 'aucune';
+                await AbandonedCart.updateOne(
+                  { _id: freshCart._id },
+                  { $push: { notes: { text: `Auto-devis NON envoyé : ${_wanted} demandé par le client, indisponible au catalogue (dispo : ${_avail}). À sourcer / rappeler.`, addedByName: 'Auto-devis', addedAt: new Date() } } }
+                );
+                console.log(`[auto-devis] ${_wanted} demandé mais indispo (dispo: ${_avail}) → pas d'envoi auto, traitement commercial · ${freshCart.email}`);
               }
             } catch (e) { console.error('[auto-devis] échec programmation:', e && e.message); }
           });
