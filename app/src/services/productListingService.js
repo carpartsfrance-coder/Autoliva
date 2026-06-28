@@ -110,6 +110,25 @@ async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, per
   }
 }
 
+/* États produits pour le filtre catalogue : chaque clé mappe vers une regex
+ * sur le champ texte libre badges.condition. Permet de filtrer
+ * occasion / reconditionné / neuf sans normaliser la donnée existante. */
+const CONDITION_FILTERS = [
+  { key: 'occasion', label: 'Occasion', rx: /occasion|used|utilis/i },
+  { key: 'reconditionne', label: 'Reconditionné', rx: /recondition|refurb|[ée]change\s*standard/i },
+  { key: 'neuf', label: 'Neuf', rx: /\bneuf\b|\bneuve\b|\bnew\b/i },
+];
+function parseConditionParam(raw) {
+  const valid = new Set(CONDITION_FILTERS.map((c) => c.key));
+  const list = Array.isArray(raw) ? raw : (typeof raw === 'string' ? raw.split(',') : []);
+  const out = [];
+  for (const v of list) {
+    const k = String(v || '').trim().toLowerCase();
+    if (valid.has(k) && !out.includes(k)) out.push(k);
+  }
+  return out;
+}
+
 async function prepareProductListingData(req, options = {}) {
   const { escapeRegex, toNumberOrNull, normalizeProduct } = getProductHelpers();
   const dbConnected = mongoose.connection.readyState === 1;
@@ -173,6 +192,7 @@ async function prepareProductListingData(req, options = {}) {
     ? `${selectedMainCategory} > ${selectedSubCategory}`
     : selectedMainCategory;
   const selectedStock = typeof req.query.stock === 'string' ? req.query.stock.trim() : '';
+  const selectedConditions = parseConditionParam(req.query.condition);
   const sort = typeof req.query.sort === 'string' ? req.query.sort.trim() : '';
 
   let page = 1;
@@ -353,6 +373,11 @@ async function prepareProductListingData(req, options = {}) {
     filter.priceCents = priceFilter;
   }
 
+  if (selectedConditions.length) {
+    const rxs = CONDITION_FILTERS.filter((c) => selectedConditions.includes(c.key)).map((c) => c.rx);
+    if (rxs.length) filter['badges.condition'] = { $in: rxs };
+  }
+
   // 5) Facettes : marques + modèles véhicules disponibles
   let vehicleMakes = [];
   let vehicleModelsByMake = {};
@@ -497,6 +522,7 @@ async function prepareProductListingData(req, options = {}) {
       !selectedMainCategory &&
       !selectedSubCategory &&
       !selectedStock &&
+      selectedConditions.length === 0 &&
       minPriceEuros === null &&
       maxPriceEuros === null;
 
@@ -537,6 +563,12 @@ async function prepareProductListingData(req, options = {}) {
           }
         }
         if (selectedStock === 'in' && !p.inStock) return false;
+
+        if (selectedConditions.length) {
+          const cond = String((p.badges && p.badges.condition) || '');
+          const rxs = CONDITION_FILTERS.filter((c) => selectedConditions.includes(c.key)).map((c) => c.rx);
+          if (!rxs.some((rx) => rx.test(cond))) return false;
+        }
 
         if (minPriceCents !== null && p.priceCents < minPriceCents) return false;
         if (maxPriceCents !== null && p.priceCents > maxPriceCents) return false;
@@ -603,6 +635,7 @@ async function prepareProductListingData(req, options = {}) {
     !!selectedMainCategory ||
     !!selectedSubCategory ||
     !!selectedStock ||
+    selectedConditions.length > 0 ||
     minPriceEuros !== null ||
     maxPriceEuros !== null ||
     (!!sort && sort !== 'newest') ||
@@ -642,6 +675,8 @@ async function prepareProductListingData(req, options = {}) {
     selectedSubCategory,
     selectedCategoryLabel,
     selectedStock,
+    selectedConditions,
+    conditionOptions: CONDITION_FILTERS.map((c) => ({ key: c.key, label: c.label })),
     minPriceEuros,
     maxPriceEuros,
     sort,
@@ -661,6 +696,7 @@ async function prepareProductListingData(req, options = {}) {
       selectedMainCategory,
       selectedSubCategory,
       selectedStock,
+      selectedConditions,
       minPriceEuros,
       maxPriceEuros,
     }),
@@ -675,6 +711,7 @@ function countActiveFilters(s) {
   if (s.selectedMainCategory) count++;
   if (s.selectedSubCategory) count++;
   if (s.selectedStock) count++;
+  if (Array.isArray(s.selectedConditions)) count += s.selectedConditions.length;
   if (s.minPriceEuros !== null && s.minPriceEuros !== undefined) count++;
   if (s.maxPriceEuros !== null && s.maxPriceEuros !== undefined) count++;
   return count;

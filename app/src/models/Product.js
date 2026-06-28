@@ -293,5 +293,7 @@ const productSchema = new mongoose.Schema(
 /* Servir + lister les fiches traduites (route /de/produits + sitemap DE). */
 productSchema.index({ 'localizations.de.translatedAt': 1 });
 productSchema.index({ 'localizations.de.slug': 1 }, { sparse: true });
+/* Filtre catalogue par état (occasion / reconditionné / neuf), champ texte libre. */
+productSchema.index({ 'badges.condition': 1 });
 
 module.exports = mongoose.model('Product', productSchema);
