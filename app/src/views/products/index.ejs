@@ -140,17 +140,6 @@
                       <% }) %>
                     </select>
                   </div>
-                  <div>
-                    <div class="text-xs font-semibold text-gray-500 mb-2"><%= t('listing.engine') %></div>
-                    <% const _engKey = (selectedVehicleMake && selectedVehicleModel) ? (selectedVehicleMake + '|||' + selectedVehicleModel) : ''; %>
-                    <% const enginesForSel = (_engKey && vehicleEnginesByMakeModel && vehicleEnginesByMakeModel[_engKey]) ? vehicleEnginesByMakeModel[_engKey] : []; %>
-                    <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="vehicleEngine" data-vehicle-engine <%= selectedVehicleModel ? '' : 'disabled' %>>
-                      <option value="" <%= (selectedVehicleModel && !selectedVehicleEngine) ? 'selected' : '' %>><%= selectedVehicleModel ? t('listing.allF') : t('listing.chooseModel') %></option>
-                      <% (enginesForSel || []).forEach((en) => { %>
-                        <option value="<%= en %>" <%= selectedVehicleEngine === en ? 'selected' : '' %>><%= en %></option>
-                      <% }) %>
-                    </select>
-                  </div>
                 </div>
               <% } %>
             </div>
@@ -217,14 +206,6 @@
                   </div>
                 <% } %>
               </div>
-            </div>
-
-            <div class="filter-section">
-              <p class="font-semibold text-sm mb-4"><%= t('listing.availability') %></p>
-              <label class="flex items-center gap-3 text-sm cursor-pointer">
-                <input <%= selectedStock === 'in' ? 'checked' : '' %> class="rounded text-primary focus:ring-primary border-gray-300" name="stock" type="checkbox" value="in" />
-                <span><%= t('listing.inStock') %></span>
-              </label>
             </div>
 
             <% if (typeof conditionOptions !== 'undefined' && Array.isArray(conditionOptions) && conditionOptions.length) { %>
@@ -311,7 +292,6 @@
             <% if (!_vehicleContext) { %>
               <input name="vehicleMake" type="hidden" value="<%= typeof selectedVehicleMake !== 'undefined' ? selectedVehicleMake : '' %>" />
               <input name="vehicleModel" type="hidden" value="<%= typeof selectedVehicleModel !== 'undefined' ? selectedVehicleModel : '' %>" />
-              <input name="vehicleEngine" type="hidden" value="<%= typeof selectedVehicleEngine !== 'undefined' ? selectedVehicleEngine : '' %>" />
             <% } %>
             <% /* mainCategory absent du form sur les pages /categorie/<slug> :
                   la catégorie est déjà encodée dans l'URL, l'inclure
@@ -320,7 +300,6 @@
               <input name="mainCategory" type="hidden" value="<%= typeof selectedMainCategory !== 'undefined' ? selectedMainCategory : '' %>" />
             <% } %>
             <input name="subCategory" type="hidden" value="<%= typeof selectedSubCategory !== 'undefined' ? selectedSubCategory : '' %>" />
-            <input name="stock" type="hidden" value="<%= typeof selectedStock !== 'undefined' ? selectedStock : '' %>" />
             <input name="minPrice" type="hidden" value="<%= (minPriceEuros !== null && typeof minPriceEuros !== 'undefined') ? minPriceEuros : '' %>" />
             <input name="maxPrice" type="hidden" value="<%= (maxPriceEuros !== null && typeof maxPriceEuros !== 'undefined') ? maxPriceEuros : '' %>" />
             <input name="page" type="hidden" value="1" />
@@ -352,12 +331,6 @@
           <% if (typeof selectedVehicleModel !== 'undefined' && selectedVehicleModel) { %>
             <a class="shrink-0 bg-primary/5 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2" href="<%= buildUrl({ vehicleModel: '', page: 1 }) %>">
               Modèle : <%= selectedVehicleModel %>
-              <span class="material-symbols-outlined text-sm">close</span>
-            </a>
-          <% } %>
-          <% if (selectedStock === 'in') { %>
-            <a class="shrink-0 bg-primary/5 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2" href="<%= buildUrl({ stock: '', page: 1 }) %>">
-              En stock
               <span class="material-symbols-outlined text-sm">close</span>
             </a>
           <% } %>
