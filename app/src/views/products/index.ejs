@@ -22,6 +22,7 @@
   const maxVal = overrides.maxPrice !== undefined ? overrides.maxPrice : (maxPriceEuros !== null && typeof maxPriceEuros !== 'undefined' ? String(maxPriceEuros) : '');
   const sortVal = overrides.sort !== undefined ? overrides.sort : (typeof sort !== 'undefined' ? sort : '');
   const pageVal = overrides.page !== undefined ? overrides.page : (typeof page !== 'undefined' ? page : 1);
+  const conditionVal = overrides.condition !== undefined ? overrides.condition : (typeof selectedConditions !== 'undefined' ? selectedConditions : []);
 
   if (qVal) params.set('q', qVal);
   if (vehicleMakeVal) params.set('vehicleMake', vehicleMakeVal);
@@ -36,6 +37,7 @@
   if (minVal) params.set('minPrice', minVal);
   if (maxVal) params.set('maxPrice', maxVal);
   if (sortVal) params.set('sort', sortVal);
+  (Array.isArray(conditionVal) ? conditionVal : []).forEach((c) => { if (c) params.append('condition', c); });
   if (pageVal && Number(pageVal) > 1) params.set('page', String(pageVal));
 
   const qs = params.toString();
@@ -48,6 +50,7 @@
   (typeof selectedVehicleModel !== 'undefined' && selectedVehicleModel) ? 1 : 0,
   (typeof selectedVehicleEngine !== 'undefined' && selectedVehicleEngine) ? 1 : 0,
   selectedStock === 'in' ? 1 : 0,
+  (typeof selectedConditions !== 'undefined' && Array.isArray(selectedConditions)) ? selectedConditions.length : 0,
   selectedMainCategory ? 1 : 0,
   selectedSubCategory ? 1 : 0,
   (minPriceEuros !== null && typeof minPriceEuros !== 'undefined' && String(minPriceEuros)) ? 1 : 0,
@@ -206,6 +209,20 @@
                 <span><%= t('listing.inStock') %></span>
               </label>
             </div>
+
+            <% if (typeof conditionOptions !== 'undefined' && Array.isArray(conditionOptions) && conditionOptions.length) { %>
+            <div class="filter-section">
+              <p class="font-semibold text-sm mb-4">État</p>
+              <div class="space-y-3">
+                <% conditionOptions.forEach((c) => { %>
+                  <label class="flex items-center gap-3 text-sm cursor-pointer">
+                    <input <%= (typeof selectedConditions !== 'undefined' && selectedConditions.includes(c.key)) ? 'checked' : '' %> class="rounded text-primary focus:ring-primary border-gray-300" name="condition" type="checkbox" value="<%= c.key %>" />
+                    <span><%= c.label %></span>
+                  </label>
+                <% }) %>
+              </div>
+            </div>
+            <% } %>
 
             <div class="mt-6 grid grid-cols-1 gap-3">
               <button class="bg-primary hover:bg-red-700 text-white font-bold py-3 px-6 rounded-xl" type="submit"><%= t('listing.apply') %></button>
