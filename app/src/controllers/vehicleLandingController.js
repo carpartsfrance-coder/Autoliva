@@ -56,12 +56,12 @@ function clampSeoTitle(t) {
 /* Auto-templates de contenu SEO (utilisés quand pas de VehicleLanding admin) */
 function buildAutoSeoText({ makeName, modelName, partTypeName, totalCount }) {
   if (modelName && partTypeName) {
-    return `<p>Notre catalogue propose ${totalCount} ${partTypeName.toLowerCase()} compatible(s) avec ${makeName} ${modelName}, reconditionnées dans nos ateliers et garanties 24 mois. Chaque pièce est testée sur banc, expédiée sous 24-48h, et bénéficie d'un paiement en 3x ou 4x sans frais.</p>`;
+    return `<p>Notre catalogue propose ${totalCount} ${partTypeName.toLowerCase()} d'occasion et reconditionné(e)s compatibles avec ${makeName} ${modelName}, contrôlé(e)s et garanti(e)s. Paiement en 3x ou 4x sans frais, expédition en France et en Europe.</p>`;
   }
   if (modelName) {
-    return `<p>Découvrez notre sélection de pièces auto reconditionnées compatibles avec ${makeName} ${modelName} : ${totalCount} référence(s) garanties 24 mois, expédiées sous 24-48h, paiement en 3x ou 4x sans frais.</p>`;
+    return `<p>Découvrez notre sélection de pièces auto ${makeName} ${modelName} (occasion et reconditionné) : ${totalCount} référence(s) contrôlées et garanties, paiement en 3x ou 4x sans frais, expédition rapide en France et en Europe.</p>`;
   }
-  return `<p>Notre catalogue de pièces auto reconditionnées ${makeName} couvre l'ensemble des modèles de la marque : ${totalCount} référence(s) testées sur banc, garanties 24 mois et expédiées rapidement. Toutes nos pièces ${makeName} bénéficient d'un paiement en 3x ou 4x sans frais.</p>`;
+  return `<p>Notre catalogue de pièces auto ${makeName} (occasion, reconditionné et neuf) couvre l'ensemble des modèles de la marque : ${totalCount} référence(s) contrôlées et garanties, expédiées en France et en Europe. Toutes nos pièces ${makeName} bénéficient d'un paiement en 3x ou 4x sans frais.</p>`;
 }
 
 /* Construit un title 60 char max EN PRÉSERVANT le nom modèle complet.
@@ -81,20 +81,20 @@ function buildAutoTitle({ makeName, modelName, partTypeName }) {
   let candidates;
   if (modelName && partTypeName) {
     candidates = [
-      `${partTypeName} ${makeName} ${modelName} reconditionné${suffix}`,
+      `${partTypeName} ${makeName} ${modelName} occasion${suffix}`,
       `${partTypeName} ${makeName} ${modelName}${suffix}`,
       `${partTypeName} ${modelName}${suffix}`,
     ];
   } else if (modelName) {
     candidates = [
-      `Pièces auto ${makeName} ${modelName} reconditionnées${suffix}`,
+      `Pièces auto ${makeName} ${modelName} occasion${suffix}`,
       `Pièces auto ${makeName} ${modelName}${suffix}`,
       `${makeName} ${modelName}${suffix}`,
     ];
   } else {
     candidates = [
-      `Pièces auto ${makeName} reconditionnées et garanties${suffix}`,
-      `Pièces auto ${makeName} reconditionnées${suffix}`,
+      `Pièces auto ${makeName} occasion et reconditionné${suffix}`,
+      `Pièces auto ${makeName} occasion${suffix}`,
       `Pièces auto ${makeName}${suffix}`,
     ];
   }
@@ -109,12 +109,12 @@ function buildAutoTitle({ makeName, modelName, partTypeName }) {
 function buildAutoMetaDescription({ makeName, modelName, partTypeName, totalCount }) {
   const count = totalCount > 0 ? `${totalCount} référence${totalCount > 1 ? 's' : ''}` : 'Large choix';
   if (modelName && partTypeName) {
-    return `${partTypeName} ${makeName} ${modelName} reconditionné — ${count} testée(s) sur banc, garantie 2 ans, livraison 24-48h. Paiement 3x/4x.`;
+    return `${partTypeName} ${makeName} ${modelName} d'occasion et reconditionné — ${count} contrôlées et garanties. Livraison France & Europe. Paiement 3x/4x.`;
   }
   if (modelName) {
-    return `Pièces auto ${makeName} ${modelName} reconditionnées : ${count} testées et garanties 2 ans. Livraison express 24-48h. Paiement 3x/4x sans frais.`;
+    return `Pièces auto ${makeName} ${modelName} occasion et reconditionné : ${count} contrôlées et garanties. Paiement 3x/4x sans frais. Expédition rapide.`;
   }
-  return `Pièces auto ${makeName} reconditionnées et garanties 2 ans. ${count} testées sur banc, expédition 24-48h. Paiement 3x/4x sans frais.`;
+  return `Pièces auto ${makeName} d'occasion, reconditionnées et neuves — ${count} contrôlées et garanties. Paiement 3x/4x. Livraison France & Europe.`;
 }
 
 /* Lookup le VehicleLanding override pour un combo. Renvoie null si rien. */
@@ -137,8 +137,8 @@ async function listMakes(req, res, next) {
 
     const baseUrl = getPublicBaseUrlFromReq(req);
     const canonicalUrl = baseUrl ? `${baseUrl}/pieces-auto` : '/pieces-auto';
-    const title = clampSeoTitle(`Pièces auto reconditionnées par marque | ${brand.NAME}`);
-    const metaDescription = `Trouvez vos pièces auto reconditionnées et garanties 2 ans, classées par marque véhicule. Catalogue complet : Audi, BMW, Peugeot, Renault, Volkswagen et plus. Livraison 24-48h.`;
+    const title = clampSeoTitle(`Pièces auto d'occasion et reconditionnées par marque | ${brand.NAME}`);
+    const metaDescription = `Trouvez vos pièces auto d'occasion et reconditionnées, contrôlées et garanties, classées par marque véhicule. Catalogue complet : Audi, BMW, Peugeot, Renault, Volkswagen et plus. Paiement 3x/4x sans frais.`;
 
     const jsonLd = toJsonLdSafe({
       '@context': 'https://schema.org',
@@ -324,7 +324,7 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
   }
   // Fallback final si même l'auto-template matche : on ajoute un qualifier.
   if (normalizeForCompare(h1) === normalizeForCompare(titleWithoutSuffix)) {
-    h1 = `${h1} : catalogue, garantie 2 ans`;
+    h1 = `${h1} : catalogue occasion & reconditionné`;
   }
 
   /* Maillage interne : matrice de liens contextuels (modèles enfants,
