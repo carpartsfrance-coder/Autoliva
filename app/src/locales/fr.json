@@ -419,6 +419,7 @@
   "product.allPartsFor": "Toutes les pièces %make%",
   "product.mountingWarranty": "Montage et garantie",
   "product.mountingPara": "Toutes nos pièces sont reconditionnées en atelier spécialisé, testées sur banc d'essai et expédiées avec une <strong>garantie de %warranty%</strong>. Nous recommandons un montage par un professionnel qualifié pour garantir un fonctionnement optimal.",
+  "product.mountingParaOccasion": "Tous nos moteurs d'occasion sont contrôlés avant expédition (contrôle extérieur, mesure de compression, analyse d'huile et endoscopie) et expédiés avec une <strong>garantie de %warranty%</strong>. Nous recommandons un montage par un professionnel qualifié pour garantir un fonctionnement optimal.",
   "product.mount1": "Vérifier la référence OEM avant montage",
   "product.mount2": "Effectuer un réglage de base / adaptation après installation (si applicable)",
   "product.mount3": "Vidanger et remplacer l'huile selon les préconisations constructeur",
