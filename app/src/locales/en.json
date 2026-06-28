@@ -419,6 +419,7 @@
   "product.allPartsFor": "All %make% parts",
   "product.mountingWarranty": "Installation and warranty",
   "product.mountingPara": "All our parts are reconditioned in a specialized workshop, bench-tested and shipped with a <strong>%warranty% warranty</strong>. We recommend installation by a qualified professional for optimal operation.",
+  "product.mountingParaOccasion": "All our used engines are inspected before shipping (visual inspection, compression test, oil analysis and endoscopy) and shipped with a <strong>%warranty% warranty</strong>. We recommend installation by a qualified professional for optimal operation.",
   "product.mount1": "Check the OEM reference before installation",
   "product.mount2": "Perform a basic setting / adaptation after installation (if applicable)",
   "product.mount3": "Drain and replace the oil per manufacturer recommendations",

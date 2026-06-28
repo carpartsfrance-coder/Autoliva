@@ -419,6 +419,7 @@
   "product.allPartsFor": "Alle %make% Teile",
   "product.mountingWarranty": "Einbau und Garantie",
   "product.mountingPara": "Alle unsere Teile werden in einer Fachwerkstatt aufbereitet, auf dem Prüfstand getestet und mit einer <strong>Garantie von %warranty%</strong> geliefert. Wir empfehlen den Einbau durch einen qualifizierten Fachmann für eine optimale Funktion.",
+  "product.mountingParaOccasion": "Alle unsere Gebrauchtmotoren werden vor dem Versand geprüft (Sichtprüfung, Kompressionsmessung, Ölanalyse und Endoskopie) und mit einer <strong>Garantie von %warranty%</strong> geliefert. Wir empfehlen den Einbau durch einen qualifizierten Fachmann für eine optimale Funktion.",
   "product.mount1": "OEM-Referenz vor dem Einbau prüfen",
   "product.mount2": "Grundeinstellung / Anpassung nach dem Einbau durchführen (falls zutreffend)",
   "product.mount3": "Öl gemäß den Herstellervorgaben ablassen und wechseln",
