@@ -652,6 +652,43 @@ async function prepareProductListingData(req, options = {}) {
 
   const metaDescription = 'Catalogue de pièces auto : recherche par référence, marque et catégorie. Livraison rapide. Paiement sécurisé.';
 
+  // Compteurs de facettes (produits publiés) affichés à côté des filtres.
+  // Best-effort : si une agrégation échoue, le listing reste fonctionnel (compteurs vides).
+  const mainCategoryCounts = {};
+  const conditionCounts = {};
+  const makeCounts = {};
+  if (dbConnected) {
+    try {
+      const pub = { isPublished: { $ne: false } };
+      const [catRows, makeRows, condRows] = await Promise.all([
+        Product.aggregate([
+          { $match: { ...pub, category: { $type: 'string', $ne: '' } } },
+          { $group: { _id: '$category', n: { $sum: 1 } } },
+        ]),
+        Product.aggregate([
+          { $match: pub },
+          { $unwind: '$compatibility' },
+          { $match: { 'compatibility.make': { $type: 'string', $ne: '' } } },
+          { $group: { _id: { p: '$_id', m: { $trim: { input: '$compatibility.make' } } } } },
+          { $group: { _id: '$_id.m', n: { $sum: 1 } } },
+        ]),
+        Promise.all(CONDITION_FILTERS.map(async (c) => ({
+          key: c.key,
+          n: await Product.countDocuments({ ...pub, 'badges.condition': { $regex: c.rx } }),
+        }))),
+      ]);
+      for (const r of catRows) {
+        const main = String(r._id || '').split('>')[0].trim();
+        if (main) mainCategoryCounts[main] = (mainCategoryCounts[main] || 0) + (Number(r.n) || 0);
+      }
+      for (const r of makeRows) {
+        const k = String(r._id || '').trim();
+        if (k) makeCounts[k] = Number(r.n) || 0;
+      }
+      for (const r of condRows) conditionCounts[r.key] = Number(r.n) || 0;
+    } catch (_) { /* compteurs best-effort */ }
+  }
+
   return {
     // SEO
     title,
@@ -677,6 +714,9 @@ async function prepareProductListingData(req, options = {}) {
     selectedStock,
     selectedConditions,
     conditionOptions: CONDITION_FILTERS.map((c) => ({ key: c.key, label: c.label })),
+    mainCategoryCounts,
+    conditionCounts,
+    makeCounts,
     minPriceEuros,
     maxPriceEuros,
     sort,

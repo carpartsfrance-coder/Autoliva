@@ -126,7 +126,7 @@
                     <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="vehicleMake" data-vehicle-make>
                       <option value="" <%= !selectedVehicleMake ? 'selected' : '' %>><%= t('listing.allF') %></option>
                       <% vehicleMakeOptions.forEach((mk) => { %>
-                        <option value="<%= mk %>" <%= selectedVehicleMake === mk ? 'selected' : '' %>><%= mk %></option>
+                        <option value="<%= mk %>" <%= selectedVehicleMake === mk ? 'selected' : '' %>><%= mk %><% if (typeof makeCounts !== 'undefined' && makeCounts[mk]) { %> (<%= makeCounts[mk] %>)<% } %></option>
                       <% }) %>
                     </select>
                   </div>
@@ -185,7 +185,7 @@
                     <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="mainCategory" onchange="this.form.subCategory.value=''; this.form.submit();">
                       <option value="" <%= !selectedMainCategory ? 'selected' : '' %>><%= t('listing.allF') %></option>
                       <% (mainCategories || []).forEach((c) => { %>
-                        <option value="<%= c %>" <%= selectedMainCategory === c ? 'selected' : '' %>><%= c %></option>
+                        <option value="<%= c %>" <%= selectedMainCategory === c ? 'selected' : '' %>><%= c %><% if (typeof mainCategoryCounts !== 'undefined' && mainCategoryCounts[c]) { %> (<%= mainCategoryCounts[c] %>)<% } %></option>
                       <% }) %>
                     </select>
                   </div>
@@ -217,7 +217,7 @@
                 <% conditionOptions.forEach((c) => { %>
                   <label class="flex items-center gap-3 text-sm cursor-pointer">
                     <input <%= (typeof selectedConditions !== 'undefined' && selectedConditions.includes(c.key)) ? 'checked' : '' %> class="rounded text-primary focus:ring-primary border-gray-300" name="condition" type="checkbox" value="<%= c.key %>" />
-                    <span><%= c.label %></span>
+                    <span><%= c.label %><% if (typeof conditionCounts !== 'undefined' && conditionCounts[c.key]) { %> <span class="text-gray-400">(<%= conditionCounts[c.key] %>)</span><% } %></span>
                   </label>
                 <% }) %>
               </div>
@@ -367,6 +367,15 @@
               Max <%= maxPriceEuros %> €
               <span class="material-symbols-outlined text-sm">close</span>
             </a>
+          <% } %>
+          <% if (typeof selectedConditions !== 'undefined' && Array.isArray(selectedConditions) && selectedConditions.length) { %>
+            <% selectedConditions.forEach((ck) => { %>
+              <% const _co = (typeof conditionOptions !== 'undefined' ? conditionOptions : []).find((o) => o.key === ck); %>
+              <a class="shrink-0 bg-primary/5 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2" href="<%= buildUrl({ condition: selectedConditions.filter((k) => k !== ck), page: 1 }) %>">
+                <%= _co ? _co.label : ck %>
+                <span class="material-symbols-outlined text-sm">close</span>
+              </a>
+            <% }) %>
           <% } %>
         </div>
 
