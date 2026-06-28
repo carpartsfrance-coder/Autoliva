@@ -95,9 +95,9 @@ async function getReferenceLanding(req, res, next) {
     }
     const vehicleCompat = Array.from(vehicleCompatSet).slice(0, 12);
 
-    const title = `Référence ${refUpper} - Pièce auto reconditionnée | ${brand.NAME}`;
+    const title = `Référence ${refUpper} - Pièce auto occasion & reconditionné | ${brand.NAME}`;
     const compatStr = vehicleCompat.length ? ` Compatible ${vehicleCompat.slice(0, 3).join(', ')}.` : '';
-    const metaDescription = `Pièce auto référence ${refUpper} reconditionnée et garantie 2 ans.${compatStr} Livraison 24-48h. Paiement 3x/4x sans frais.`;
+    const metaDescription = `Pièce auto référence ${refUpper} d'occasion ou reconditionnée, contrôlée et garantie.${compatStr} Paiement 3x/4x sans frais. Expédition France & Europe.`;
 
     /* JSON-LD : ItemList des produits avec cette référence */
     const itemListElements = productsView.map((p, idx) => ({
