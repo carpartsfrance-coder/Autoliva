@@ -652,21 +652,26 @@ async function prepareProductListingData(req, options = {}) {
 
   const metaDescription = 'Catalogue de pièces auto : recherche par référence, marque et catégorie. Livraison rapide. Paiement sécurisé.';
 
-  // Compteurs de facettes (produits publiés) affichés à côté des filtres.
-  // Best-effort : si une agrégation échoue, le listing reste fonctionnel (compteurs vides).
+  // Compteurs de facettes CROISÉS : chaque facette est comptée en appliquant
+  // tous les AUTRES filtres actifs (on clone `filter` en retirant la clé de la
+  // facette concernée). Best-effort : si une agrégation échoue, le listing
+  // reste fonctionnel (compteurs vides).
   const mainCategoryCounts = {};
+  const categoryCounts = {};
   const conditionCounts = {};
   const makeCounts = {};
   if (dbConnected) {
     try {
-      const pub = { isPublished: { $ne: false } };
+      const catScope = { ...filter }; delete catScope.category;
+      const makeScope = { ...filter }; delete makeScope.compatibility;
+      const condScope = { ...filter }; delete condScope['badges.condition'];
       const [catRows, makeRows, condRows] = await Promise.all([
         Product.aggregate([
-          { $match: { ...pub, category: { $type: 'string', $ne: '' } } },
+          { $match: { ...catScope, category: { $type: 'string', $ne: '' } } },
           { $group: { _id: '$category', n: { $sum: 1 } } },
         ]),
         Product.aggregate([
-          { $match: pub },
+          { $match: makeScope },
           { $unwind: '$compatibility' },
           { $match: { 'compatibility.make': { $type: 'string', $ne: '' } } },
           { $group: { _id: { p: '$_id', m: { $trim: { input: '$compatibility.make' } } } } },
@@ -674,12 +679,16 @@ async function prepareProductListingData(req, options = {}) {
         ]),
         Promise.all(CONDITION_FILTERS.map(async (c) => ({
           key: c.key,
-          n: await Product.countDocuments({ ...pub, 'badges.condition': { $regex: c.rx } }),
+          n: await Product.countDocuments({ ...condScope, 'badges.condition': { $regex: c.rx } }),
         }))),
       ]);
       for (const r of catRows) {
-        const main = String(r._id || '').split('>')[0].trim();
-        if (main) mainCategoryCounts[main] = (mainCategoryCounts[main] || 0) + (Number(r.n) || 0);
+        const full = String(r._id || '').trim();
+        const n = Number(r.n) || 0;
+        if (!full) continue;
+        categoryCounts[full] = n;
+        const main = full.split('>')[0].trim();
+        if (main) mainCategoryCounts[main] = (mainCategoryCounts[main] || 0) + n;
       }
       for (const r of makeRows) {
         const k = String(r._id || '').trim();
@@ -715,6 +724,7 @@ async function prepareProductListingData(req, options = {}) {
     selectedConditions,
     conditionOptions: CONDITION_FILTERS.map((c) => ({ key: c.key, label: c.label })),
     mainCategoryCounts,
+    categoryCounts,
     conditionCounts,
     makeCounts,
     minPriceEuros,

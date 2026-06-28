@@ -168,9 +168,6 @@
               <% const subOptions = (selectedMainCategory && subCategoriesByMain && subCategoriesByMain[selectedMainCategory]) ? subCategoriesByMain[selectedMainCategory] : []; %>
               <div class="space-y-3">
                 <% if (_categoryContext) { %>
-                  <%/* Page /categorie/<slug> : la catégorie principale est encodée
-                       dans l'URL, on n'affiche pas le select "main" mais on garde
-                       un lien discret pour changer (revient au catalogue global). */%>
                   <div class="rounded-lg bg-primary/5 border border-primary/20 p-3">
                     <div class="text-[10px] font-bold uppercase tracking-widest text-primary mb-1"><%= t('listing.activeCategory') %></div>
                     <div class="text-sm font-semibold text-slate-800"><%= _categoryContext.name %></div>
@@ -179,26 +176,46 @@
                       <%= t('listing.viewAllCatalog') %>
                     </a>
                   </div>
-                <% } else { %>
                   <div>
-                    <div class="text-xs font-semibold text-gray-500 mb-2"><%= t('listing.mainCategory') %></div>
-                    <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="mainCategory" onchange="this.form.subCategory.value=''; this.form.submit();">
-                      <option value="" <%= !selectedMainCategory ? 'selected' : '' %>><%= t('listing.allF') %></option>
-                      <% (mainCategories || []).forEach((c) => { %>
-                        <option value="<%= c %>" <%= selectedMainCategory === c ? 'selected' : '' %>><%= c %><% if (typeof mainCategoryCounts !== 'undefined' && mainCategoryCounts[c]) { %> (<%= mainCategoryCounts[c] %>)<% } %></option>
+                    <div class="text-xs font-semibold text-gray-500 mb-2"><%= t('listing.subCategory') %></div>
+                    <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="subCategory" <%= selectedMainCategory ? '' : 'disabled' %>>
+                      <option value="" <%= selectedMainCategory && !selectedSubCategory ? 'selected' : '' %>><%= selectedMainCategory ? t('listing.allF') : t('listing.chooseCategory') %></option>
+                      <% (subOptions || []).forEach((s) => { %>
+                        <option value="<%= s %>" <%= selectedSubCategory === s ? 'selected' : '' %>><%= s %></option>
                       <% }) %>
                     </select>
                   </div>
-                <% } %>
-                <div>
-                  <div class="text-xs font-semibold text-gray-500 mb-2"><%= t('listing.subCategory') %></div>
-                  <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="subCategory" <%= selectedMainCategory ? '' : 'disabled' %>>
-                    <option value="" <%= selectedMainCategory && !selectedSubCategory ? 'selected' : '' %>><%= selectedMainCategory ? t('listing.allF') : t('listing.chooseCategory') %></option>
-                    <% (subOptions || []).forEach((s) => { %>
-                      <option value="<%= s %>" <%= selectedSubCategory === s ? 'selected' : '' %>><%= s %></option>
+                <% } else { %>
+                  <%/* Arbre de catégories (liens) : 1 ligne par catégorie principale,
+                       sous-catégories dépliées quand la principale est active.
+                       Compteurs croisés à droite. Les inputs cachés permettent au
+                       bouton « Appliquer » de conserver la catégorie courante. */%>
+                  <input name="mainCategory" type="hidden" value="<%= typeof selectedMainCategory !== 'undefined' ? selectedMainCategory : '' %>" />
+                  <input name="subCategory" type="hidden" value="<%= typeof selectedSubCategory !== 'undefined' ? selectedSubCategory : '' %>" />
+                  <div class="-mx-1" data-category-tree>
+                    <% (mainCategories || []).forEach((m) => { %>
+                      <% const _on = selectedMainCategory === m; %>
+                      <% const _mc = (typeof mainCategoryCounts !== 'undefined' && mainCategoryCounts[m]) ? mainCategoryCounts[m] : 0; %>
+                      <a class="flex items-center gap-2.5 py-1.5 px-2 rounded-lg <%= _on ? 'bg-primary/10' : 'hover:bg-gray-50' %>" href="<%= buildUrl({ mainCategory: _on ? '' : m, subCategory: '', page: 1 }) %>">
+                        <span class="w-4 h-4 rounded border flex items-center justify-center shrink-0 <%= _on ? 'bg-primary border-primary text-white' : 'border-gray-300 text-transparent' %>"><span class="material-symbols-outlined text-[13px]">check</span></span>
+                        <span class="flex-1 truncate text-sm <%= _on ? 'font-semibold text-primary' : 'text-gray-700' %>"><%= m %></span>
+                        <% if (_mc) { %><span class="text-xs text-gray-400 shrink-0"><%= _mc %></span><% } %>
+                      </a>
+                      <% if (_on && subCategoriesByMain && Array.isArray(subCategoriesByMain[m]) && subCategoriesByMain[m].length) { %>
+                        <% subCategoriesByMain[m].forEach((s) => { %>
+                          <% const _son = selectedSubCategory === s; %>
+                          <% const _full = m + ' > ' + s; %>
+                          <% const _sc = (typeof categoryCounts !== 'undefined' && categoryCounts[_full]) ? categoryCounts[_full] : 0; %>
+                          <a class="flex items-center gap-2.5 py-1 pl-8 pr-2 rounded-lg <%= _son ? 'bg-primary/5' : 'hover:bg-gray-50' %>" href="<%= buildUrl({ mainCategory: m, subCategory: _son ? '' : s, page: 1 }) %>">
+                            <span class="w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 <%= _son ? 'bg-primary border-primary text-white' : 'border-gray-300 text-transparent' %>"><span class="material-symbols-outlined text-[11px]">check</span></span>
+                            <span class="flex-1 truncate text-[13px] <%= _son ? 'font-semibold text-primary' : 'text-gray-600' %>"><%= s %></span>
+                            <% if (_sc) { %><span class="text-xs text-gray-400 shrink-0"><%= _sc %></span><% } %>
+                          </a>
+                        <% }) %>
+                      <% } %>
                     <% }) %>
-                  </select>
-                </div>
+                  </div>
+                <% } %>
               </div>
             </div>
 
