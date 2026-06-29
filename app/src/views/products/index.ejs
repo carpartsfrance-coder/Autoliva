@@ -186,32 +186,37 @@
                     </select>
                   </div>
                 <% } else { %>
-                  <%/* Arbre de catégories (liens) : 1 ligne par catégorie principale,
-                       sous-catégories dépliées quand la principale est active.
-                       Compteurs croisés à droite. Les inputs cachés permettent au
-                       bouton « Appliquer » de conserver la catégorie courante. */%>
+                  <%/* Filtre catégorie À PLAT : une ligne par catégorie sélectionnable,
+                       toujours visible. Les catégories à enfants (ex. « Transmission »)
+                       ne sont PAS affichées comme parent : chaque sous-catégorie devient
+                       une ligne de 1er niveau (plus besoin de cocher le parent pour la voir).
+                       Les inputs cachés permettent au bouton « Appliquer » de conserver la
+                       catégorie courante. Vue uniquement : le service garde la taxonomie. */%>
                   <input name="mainCategory" type="hidden" value="<%= typeof selectedMainCategory !== 'undefined' ? selectedMainCategory : '' %>" />
                   <input name="subCategory" type="hidden" value="<%= typeof selectedSubCategory !== 'undefined' ? selectedSubCategory : '' %>" />
                   <div class="-mx-1" data-category-tree>
                     <% (mainCategories || []).forEach((m) => { %>
-                      <% const _on = selectedMainCategory === m; %>
-                      <% const _mc = (typeof mainCategoryCounts !== 'undefined' && mainCategoryCounts[m]) ? mainCategoryCounts[m] : 0; %>
-                      <a class="flex items-center gap-2.5 py-1.5 px-2 rounded-lg <%= _on ? 'bg-primary/10' : 'hover:bg-gray-50' %>" href="<%= buildUrl({ mainCategory: _on ? '' : m, subCategory: '', page: 1 }) %>">
-                        <span class="w-4 h-4 rounded border flex items-center justify-center shrink-0 <%= _on ? 'bg-primary border-primary text-white' : 'border-gray-300 text-transparent' %>"><span class="material-symbols-outlined text-[13px]">check</span></span>
-                        <span class="flex-1 truncate text-sm <%= _on ? 'font-semibold text-primary' : 'text-gray-700' %>"><%= m %></span>
-                        <% if (_mc) { %><span class="text-xs text-gray-400 shrink-0"><%= _mc %></span><% } %>
-                      </a>
-                      <% if (_on && subCategoriesByMain && Array.isArray(subCategoriesByMain[m]) && subCategoriesByMain[m].length) { %>
-                        <% subCategoriesByMain[m].forEach((s) => { %>
-                          <% const _son = selectedSubCategory === s; %>
+                      <% const _kids = (subCategoriesByMain && Array.isArray(subCategoriesByMain[m])) ? subCategoriesByMain[m] : []; %>
+                      <% if (_kids.length) { %>
+                        <%/* parent à enfants : aplati, on n'affiche que les enfants */%>
+                        <% _kids.forEach((s) => { %>
+                          <% const _son = (selectedMainCategory === m && selectedSubCategory === s); %>
                           <% const _full = m + ' > ' + s; %>
                           <% const _sc = (typeof categoryCounts !== 'undefined' && categoryCounts[_full]) ? categoryCounts[_full] : 0; %>
-                          <a class="flex items-center gap-2.5 py-1 pl-8 pr-2 rounded-lg <%= _son ? 'bg-primary/5' : 'hover:bg-gray-50' %>" href="<%= buildUrl({ mainCategory: m, subCategory: _son ? '' : s, page: 1 }) %>">
-                            <span class="w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 <%= _son ? 'bg-primary border-primary text-white' : 'border-gray-300 text-transparent' %>"><span class="material-symbols-outlined text-[11px]">check</span></span>
-                            <span class="flex-1 truncate text-[13px] <%= _son ? 'font-semibold text-primary' : 'text-gray-600' %>"><%= s %></span>
+                          <a class="flex items-center gap-2.5 py-1.5 px-2 rounded-lg <%= _son ? 'bg-primary/10' : 'hover:bg-gray-50' %>" href="<%= buildUrl({ mainCategory: _son ? '' : m, subCategory: _son ? '' : s, page: 1 }) %>">
+                            <span class="w-4 h-4 rounded border flex items-center justify-center shrink-0 <%= _son ? 'bg-primary border-primary text-white' : 'border-gray-300 text-transparent' %>"><span class="material-symbols-outlined text-[13px]">check</span></span>
+                            <span class="flex-1 truncate text-sm <%= _son ? 'font-semibold text-primary' : 'text-gray-700' %>"><%= s %></span>
                             <% if (_sc) { %><span class="text-xs text-gray-400 shrink-0"><%= _sc %></span><% } %>
                           </a>
                         <% }) %>
+                      <% } else { %>
+                        <% const _on = selectedMainCategory === m; %>
+                        <% const _mc = (typeof mainCategoryCounts !== 'undefined' && mainCategoryCounts[m]) ? mainCategoryCounts[m] : 0; %>
+                        <a class="flex items-center gap-2.5 py-1.5 px-2 rounded-lg <%= _on ? 'bg-primary/10' : 'hover:bg-gray-50' %>" href="<%= buildUrl({ mainCategory: _on ? '' : m, subCategory: '', page: 1 }) %>">
+                          <span class="w-4 h-4 rounded border flex items-center justify-center shrink-0 <%= _on ? 'bg-primary border-primary text-white' : 'border-gray-300 text-transparent' %>"><span class="material-symbols-outlined text-[13px]">check</span></span>
+                          <span class="flex-1 truncate text-sm <%= _on ? 'font-semibold text-primary' : 'text-gray-700' %>"><%= m %></span>
+                          <% if (_mc) { %><span class="text-xs text-gray-400 shrink-0"><%= _mc %></span><% } %>
+                        </a>
                       <% } %>
                     <% }) %>
                   </div>
