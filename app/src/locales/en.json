@@ -385,6 +385,8 @@
   "product.warranty24": "24-month warranty",
   "product.progIncluded": "Programming included",
   "product.benchTested": "Bench-tested",
+  "product.isoBadge": "Reconditioned to ISO 9001 standards",
+  "product.isoProcessNote": "Reconditioning carried out in accordance with the ISO 9001 quality standard.",
   "product.consigneRefundable": "Refundable deposit",
   "product.noDeposit": "No deposit",
   "product.svcFixedPrice": "€199 fixed price",
