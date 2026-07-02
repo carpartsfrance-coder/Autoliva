@@ -1017,6 +1017,40 @@
         </div>
       </div>
 
+      <%/* Preuve sociale : logos des garages qui montent nos pièces (titre générique).
+           CSS marquee inline (non global). Repris de la landing moteur-occasion. */%>
+      <% if (!isService) { %>
+        <% var _montLabel = 'Nos pièces ont été montées par';
+           var _montBrands = [
+             ['Porsche', '/images/partenaires/logo-porsche.webp'],
+             ['Simplici Car', '/images/partenaires/LOGO-SIMPLICI-CAR-NOIR-copie.png'],
+             ['Flat 44', '/images/partenaires/Logo-FLAT44-contact.png'],
+             ['Mougins Autosport', '/images/partenaires/mougins-autosport.webp'],
+             ['Sun Motors', '/images/partenaires/sun-motors.webp'],
+             ['Chassay Automobiles', '/images/partenaires/chassay-automobiles.png']
+           ]; %>
+        <style>
+          @keyframes brand-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+          .brand-marquee-track { animation: brand-marquee 28s linear infinite; will-change: transform; }
+          .brand-marquee:hover .brand-marquee-track { animation-play-state: paused; }
+          @media (prefers-reduced-motion: reduce) { .brand-marquee-track { animation: none; } }
+        </style>
+        <section class="mt-16 border-t border-slate-100 dark:border-slate-800 pt-10">
+          <p class="text-center text-xs font-bold text-slate-400 uppercase tracking-widest mb-8"><%= _montLabel %></p>
+          <div class="brand-marquee relative overflow-hidden" style="-webkit-mask-image:linear-gradient(to right,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(to right,transparent,#000 8%,#000 92%,transparent);">
+            <div class="brand-marquee-track flex items-center gap-12 w-max">
+              <% for (var _d = 0; _d < 2; _d++) { %>
+                <% _montBrands.forEach(function (b) { %>
+                  <div class="h-12 w-28 md:h-14 md:w-32 flex items-center justify-center shrink-0 grayscale hover:grayscale-0 opacity-70 hover:opacity-100 transition duration-300">
+                    <img alt="<%= b[0] %>" class="max-h-full max-w-full object-contain" src="<%= b[1] %>" loading="lazy" <%= _d === 1 ? 'aria-hidden="true"' : '' %> />
+                  </div>
+                <% }); %>
+              <% } %>
+            </div>
+          </div>
+        </section>
+      <% } %>
+
       <% if (product.sections && product.sections.showRelatedProducts && Array.isArray(relatedProducts) && relatedProducts.length) { %>
         <section class="mt-16">
           <h2 class="text-xl font-black uppercase mb-8 tracking-wider text-slate-900 dark:text-white border-b-2 border-slate-200 dark:border-slate-800 pb-4"><%= t('product.boughtTogether') %></h3>
