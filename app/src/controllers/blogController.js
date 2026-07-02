@@ -295,6 +295,31 @@ function formatDateFR(value) {
   }
 }
 
+/**
+ * Fallback couverture : pour une liste d'articles, résout l'image principale du
+ * 1er produit lié des articles SANS coverImageUrl. Retourne (docId|slug) -> imageUrl.
+ * Une seule requête produits (pas de N+1).
+ */
+async function resolveRelatedCoverMap(docs) {
+  const map = new Map();
+  const wanted = new Map(); // productId -> [clés d'articles]
+  for (const d of docs || []) {
+    if (!d || d.coverImageUrl) continue;
+    const pid = Array.isArray(d.relatedProductIds) && d.relatedProductIds[0] ? String(d.relatedProductIds[0]) : '';
+    if (!pid) continue;
+    const key = String(d.slug || d._id || '');
+    if (!wanted.has(pid)) wanted.set(pid, []);
+    wanted.get(pid).push(key);
+  }
+  if (!wanted.size) return map;
+  const prods = await Product.find({ _id: { $in: [...wanted.keys()] } }).select('_id imageUrl').lean();
+  for (const p of prods) {
+    if (!p || !p.imageUrl) continue;
+    for (const key of wanted.get(String(p._id)) || []) map.set(key, p.imageUrl);
+  }
+  return map;
+}
+
 function clampInt(value, { min, max, fallback } = {}) {
   const n = typeof value === 'number' ? value : Number.parseInt(String(value || ''), 10);
   if (!Number.isFinite(n)) return fallback;
@@ -433,6 +458,10 @@ function getBlogIndex(req, res) {
       .select('category')
       .lean();
 
+    // Fallback couverture (image du produit lié) pour les cartes sans image.
+    const coverMap = await resolveRelatedCoverMap([featuredDoc, ...docs].filter(Boolean));
+    const coverFor = (d) => (d && d.coverImageUrl) || (d ? coverMap.get(String(d.slug || d._id || '')) : '') || '';
+
     const mappedAll = docs.map((d) => {
       const publishedAt = d && d.publishedAt ? d.publishedAt : d && d.createdAt ? d.createdAt : null;
       const contentHtml = getPostContentHtml(d);
@@ -444,7 +473,7 @@ function getBlogIndex(req, res) {
         slug: d.slug,
         title: d.title,
         excerpt: d.excerpt,
-        imageUrl: buildSeoMediaUrl(d.coverImageUrl, d.title),
+        imageUrl: buildSeoMediaUrl(coverFor(d), d.title),
         category: d.category && d.category.slug ? { slug: d.category.slug, label: d.category.label || d.category.slug } : null,
         dateLabel: formatDateFR(publishedAt),
         readTimeLabel: `${minutes} min`,
@@ -464,7 +493,7 @@ function getBlogIndex(req, res) {
           slug: featuredDoc.slug,
           title: featuredDoc.title,
           excerpt: featuredDoc.excerpt,
-          imageUrl: buildSeoMediaUrl(featuredDoc.coverImageUrl, featuredDoc.title),
+          imageUrl: buildSeoMediaUrl(coverFor(featuredDoc), featuredDoc.title),
           category: featuredDoc.category && featuredDoc.category.slug ? { slug: featuredDoc.category.slug, label: featuredDoc.category.label || featuredDoc.category.slug } : null,
           dateLabel: formatDateFR(featuredDoc.publishedAt || featuredDoc.createdAt),
           readTimeLabel: `${Number.isFinite(featuredDoc.readingTimeMinutes) && featuredDoc.readingTimeMinutes > 0 ? featuredDoc.readingTimeMinutes : estimateReadingTimeMinutes(getPostContentHtml(featuredDoc) || '')} min`,
@@ -651,7 +680,18 @@ async function getBlogPost(req, res) {
     const ogDescription = metaDescription;
     const ogUrl = canonicalUrl;
     const ogType = 'article';
-    const ogImageRaw = (post.seo && post.seo.ogImageUrl) ? post.seo.ogImageUrl : post.coverImageUrl;
+    let related = [];
+    if (Array.isArray(post.relatedProductIds) && post.relatedProductIds.length) {
+      related = await Product.find({ _id: { $in: post.relatedProductIds } })
+        .select('_id name priceCents imageUrl slug')
+        .lean();
+    }
+
+    // Couverture : image de l'article ; à défaut, image principale du 1er produit lié.
+    const relatedMainImage = (related.find((p) => p && p.imageUrl) || {}).imageUrl || '';
+    const effectiveCoverImageUrl = post.coverImageUrl || relatedMainImage;
+
+    const ogImageRaw = (post.seo && post.seo.ogImageUrl) ? post.seo.ogImageUrl : effectiveCoverImageUrl;
     const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
 
     const publishedAt = post.publishedAt || post.createdAt || null;
@@ -659,13 +699,6 @@ async function getBlogPost(req, res) {
     const readingTimeMinutes = Number.isFinite(post.readingTimeMinutes) && post.readingTimeMinutes > 0
       ? post.readingTimeMinutes
       : estimateReadingTimeMinutes(contentHtml || '');
-
-    let related = [];
-    if (Array.isArray(post.relatedProductIds) && post.relatedProductIds.length) {
-      related = await Product.find({ _id: { $in: post.relatedProductIds } })
-        .select('_id name priceCents imageUrl slug')
-        .lean();
-    }
 
     const relatedView = (related || []).map((p) => {
       const priceEuros = Number.isFinite(p.priceCents) ? (p.priceCents / 100).toFixed(2).replace('.', ',') : '';
@@ -713,13 +746,14 @@ async function getBlogPost(req, res) {
     })
       .sort({ publishedAt: -1, createdAt: -1 })
       .limit(4)
-      .select('slug title coverImageUrl')
+      .select('slug title coverImageUrl relatedProductIds')
       .lean();
 
+    const similarCoverMap = await resolveRelatedCoverMap(similarDocs || []);
     const similarPosts = (similarDocs || []).map((s) => ({
       slug: s.slug,
       title: s.title,
-      imageUrl: buildSeoMediaUrl(s.coverImageUrl, s.title),
+      imageUrl: buildSeoMediaUrl(s.coverImageUrl || similarCoverMap.get(String(s.slug || s._id || '')) || '', s.title),
       url: `/blog/${encodeURIComponent(s.slug)}`,
     }));
 
@@ -853,7 +887,7 @@ async function getBlogPost(req, res) {
         title: post.title,
         slug: post.slug,
         excerpt: excerptForView,
-        coverImageUrl: buildSeoMediaUrl(post.coverImageUrl, post.title),
+        coverImageUrl: buildSeoMediaUrl(effectiveCoverImageUrl, post.title),
         category: post.category && post.category.slug ? { slug: post.category.slug, label: post.category.label || post.category.slug } : null,
         authorName: post.authorName || 'Expert CarParts',
         dateLabel: formatDateFR(publishedAt),
