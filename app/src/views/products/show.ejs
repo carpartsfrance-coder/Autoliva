@@ -1017,15 +1017,10 @@
         </div>
       </div>
 
-      <%/* Preuve sociale : logos des garages qui montent nos pièces. Titre dynamique selon la
-           catégorie. CSS marquee inline (non global). Repris de la landing moteur-occasion. */%>
+      <%/* Preuve sociale : logos des garages qui montent nos pièces (titre générique).
+           CSS marquee inline (non global). Repris de la landing moteur-occasion. */%>
       <% if (!isService) { %>
-        <% var _catStr = String(product.category || '').toLowerCase();
-           var _montLabel = /moteur/.test(_catStr) ? 'Nos moteurs ont été montés par'
-             : /bo[iî]te de transfert|transfert/.test(_catStr) ? 'Nos boîtes de transfert ont été montées par'
-             : /bo[iî]te/.test(_catStr) ? 'Nos boîtes de vitesses ont été montées par'
-             : /pont|diff[ée]rentiel/.test(_catStr) ? 'Nos ponts ont été montés par'
-             : 'Nos pièces ont été montées par';
+        <% var _montLabel = 'Nos pièces ont été montées par';
            var _montBrands = [
              ['Porsche', '/images/partenaires/logo-porsche.webp'],
              ['Simplici Car', '/images/partenaires/LOGO-SIMPLICI-CAR-NOIR-copie.png'],
