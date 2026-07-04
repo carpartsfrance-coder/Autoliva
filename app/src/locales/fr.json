@@ -452,5 +452,12 @@
   "product.monthsWord": "mois",
   "product.jsonldCompatRef": "Référence compatible",
   "product.jsonldQualityTest": "Test qualité",
-  "product.yearsWord": "ans"
+  "product.yearsWord": "ans",
+  "product.realPhotos": "Photos réelles de la pièce",
+  "product.compatLabel": "Compatibilité",
+  "product.vehiclesWord": "véhicules",
+  "product.freeBadge": "Gratuit",
+  "product.anyDoubt": "Un doute ?",
+  "product.vehicleNotListed": "Votre véhicule n'est pas listé ? Un technicien vous répond immédiatement.",
+  "product.goFurther": "Pour aller plus loin"
 }
