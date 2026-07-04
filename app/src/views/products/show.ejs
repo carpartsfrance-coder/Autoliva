@@ -146,12 +146,15 @@
       <% const consigneAmountEuro = hasConsigne ? (product.consigne.amountCents / 100).toFixed(2).replace('.', ',') : ''; %>
       <% const consigneDelayDays = hasConsigne ? (product.consigne.delayDays || 30) : 30; %>
       <% const stockLabel = product.inStock ? t('product.stockIn') : t('product.stockOrder'); %>
-      <%# Code moteur (ex: CLHA) — info n°1 recherchée par le client. %>
+      <%# Code moteur/boîte (ex: CLHA, DQR) — info n°1 recherchée par le client. %>
       <% const engineCodeVal = (product.engineCode && String(product.engineCode).trim()) ? String(product.engineCode).trim() : ''; %>
+      <%# Label du code adapté au genre : « Code boîte » pour les transmissions, « Code moteur » sinon. %>
+      <% const _isGearbox = /bo[iî]te|vitesse|transmission|\bdsg\b|s-?tronic|\bdq\d/i.test(String(product.category || '') + ' ' + String(product.name || '')); %>
+      <% const _codeLabel = _isGearbox ? t('product.codeBoite') : t('product.codeMoteur'); %>
       <% let productSubtitle; %>
       <% if (engineCodeVal) {
-           // Sous-titre prioritaire : code moteur + référence (les marques sont déjà dans le titre H1).
-           const _st = [t('product.codeMoteur') + ' : ' + engineCodeVal];
+           // Sous-titre prioritaire : code moteur/boîte + référence (les marques sont déjà dans le titre H1).
+           const _st = [_codeLabel + ' : ' + engineCodeVal];
            if (ref) _st.push(t('product.refPrefix') + ' ' + ref);
            productSubtitle = _st.join(' · ');
          } else {
@@ -231,13 +234,13 @@
       }); %>
       <% if (technicalSpecs.length < 6 && engineCodeVal) {
            var _compatCodes = Array.isArray(product.compatibleReferences) ? product.compatibleReferences.filter(Boolean).slice(0, 2) : [];
-           pushTechnicalSpec(t('product.codeMoteur'), engineCodeVal + (_compatCodes.length ? ' (compatible ' + _compatCodes.join(', ') + ')' : ''));
+           pushTechnicalSpec(_codeLabel, engineCodeVal + (_compatCodes.length ? ' (compatible ' + _compatCodes.join(', ') + ')' : ''));
          } %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.specRef'), ref); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.specType'), keyType); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.specState'), keyEtat); %>
       <% if (technicalSpecs.length < 6 && keyProgrammation) pushTechnicalSpec(t('product.specProg'), keyProgrammation); %>
-      <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.guarantee'), keyGarantie || t('product.specIncluded')); %>
+      <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.guarantee'), (product.warranty && Number(product.warranty.months) > 0) ? (Number(product.warranty.months) + ' ' + t('product.monthsWord')) : (keyGarantie || t('product.specIncluded'))); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.shippingLabel'), shippingDelayText || t('product.specShipping2448')); %>
 
       <%# ══════════════════════════ REFONTE DESIGN v3 ══════════════════════════
@@ -253,7 +256,7 @@
         .pp-eyebrow { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #E02128; margin-bottom: 10px; }
         .pp-h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 0; color: #131B2E; }
         .pp-mono { font-family: ui-monospace, 'SF Mono', Consolas, monospace; }
-        .pp-section { margin-top: 72px; }
+        .pp-section { margin-top: 88px; }
         /* Breadcrumb */
         .pp-crumb { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #8A909E; margin-bottom: 26px; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
         .pp-crumb::-webkit-scrollbar { display: none; }
@@ -262,7 +265,7 @@
         .pp-crumb .sep { color: #C9CDD6; }
         .pp-crumb .cur { color: #131B2E; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
         /* Hero grid */
-        .pp-hero { display: grid; grid-template-columns: minmax(0, 1fr) 464px; gap: 48px; align-items: start; }
+        .pp-hero { display: grid; grid-template-columns: minmax(0, 1fr) 464px; gap: 64px; align-items: start; }
         /* Galerie */
         .pp-scene { position: relative; border-radius: 24px; overflow: hidden; aspect-ratio: 1 / 0.96; background: #F2F3F6; }
         .pp-scene > img, .pp-scene > video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -283,8 +286,7 @@
         /* Panneau d'achat */
         .pp-statebadge { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #E02128; background: #E0212812; padding: 7px 12px; border-radius: 999px; margin-bottom: 16px; }
         .pp-statebadge .dot { width: 6px; height: 6px; border-radius: 50%; background: #E02128; }
-        .pp-h1 { font-size: 32px; font-weight: 800; line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 6px 0; color: #131B2E; }
-        .pp-subtitle { font-size: 13px; color: #8A909E; margin: 0 0 20px 0; }
+        .pp-h1 { font-size: 34px; font-weight: 800; line-height: 1.12; letter-spacing: -0.02em; margin: 0 0 14px 0; color: #131B2E; }
         .pp-meta { display: flex; align-items: stretch; gap: 18px; margin-bottom: 24px; flex-wrap: wrap; }
         .pp-meta .sep { width: 1px; background: #E8EAEF; flex-shrink: 0; }
         .pp-meta-k { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #A6ACBB; margin-bottom: 4px; white-space: nowrap; }
@@ -314,7 +316,7 @@
         .pp-exchange .d { margin-top: 2px; font-size: 12.5px; color: #5B6270; line-height: 1.45; }
         /* Carte prix */
         .pp-pricebox { background: #F7F8FA; border-radius: 18px; padding: 22px; }
-        .pp-price-main { font-size: 38px; font-weight: 800; letter-spacing: -0.025em; color: #131B2E; line-height: 1; }
+        .pp-price-main { font-size: 40px; font-weight: 800; letter-spacing: -0.025em; color: #131B2E; line-height: 1; }
         .pp-price-ht-note { font-size: 12.5px; color: #8A909E; }
         .pp-stock { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; color: #1E9E5A; background: #1E9E5A14; padding: 6px 11px; border-radius: 999px; white-space: nowrap; }
         .pp-stock .dot { width: 7px; height: 7px; border-radius: 50%; background: #1E9E5A; }
@@ -344,8 +346,9 @@
         .pp-tel { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 14px 6px 0 6px; font-size: 13px; color: #5B6270; }
         .pp-tel a { color: #131B2E; font-weight: 700; text-decoration: none; }
         /* Réassurance */
-        .pp-reassure { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; border-top: 1px solid #E8EAEF; border-bottom: 1px solid #E8EAEF; padding: 26px 0; margin-top: 64px; }
+        .pp-reassure { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; border-top: 1px solid #E8EAEF; border-bottom: 1px solid #E8EAEF; padding: 26px 0; margin-top: 72px; }
         .pp-reassure .it { display: flex; align-items: center; gap: 13px; min-width: 0; }
+        .pp-reassure .sb { display: block; font-size: 12px; color: #8A909E; margin-top: 2px; line-height: 1.4; }
         .pp-reassure .ic { width: 42px; height: 42px; border-radius: 12px; background: #E0212812; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
         .pp-reassure .ic .material-symbols-outlined { font-size: 21px; color: #E02128; }
         .pp-reassure .lb { display: block; font-size: 13.5px; font-weight: 700; color: #131B2E; line-height: 1.3; }
@@ -353,17 +356,17 @@
         .pp-tablecard { border: 1px solid #E8EAEF; border-radius: 20px; overflow: hidden; }
         .pp-tablewrap { overflow-x: auto; }
         .pp-table { width: 100%; border-collapse: collapse; min-width: 640px; }
-        .pp-table thead th { text-align: left; padding: 13px 22px; background: #F7F8FA; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8A909E; }
-        .pp-table td { padding: 13px 22px; border-top: 1px solid #F0F1F4; font-size: 13.5px; color: #5B6270; vertical-align: baseline; }
+        .pp-table thead th { text-align: left; padding: 13px 26px; background: #F7F8FA; font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8A909E; }
+        .pp-table td { padding: 14px 26px; border-top: 1px solid #F0F1F4; font-size: 13.5px; color: #5B6270; vertical-align: baseline; }
         .pp-table td.v { font-weight: 600; color: #131B2E; white-space: nowrap; }
-        .pp-tablefoot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 22px; border-top: 1px solid #F0F1F4; background: #F7F8FA; flex-wrap: wrap; }
+        .pp-tablefoot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 26px; border-top: 1px solid #F0F1F4; background: #F7F8FA; flex-wrap: wrap; }
         .pp-tablefoot .q { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #5B6270; }
         .pp-tablefoot a { display: inline-flex; align-items: center; gap: 7px; text-decoration: none; font-size: 13.5px; font-weight: 700; color: #131B2E; white-space: nowrap; }
         .pp-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
         .pp-pill { display: inline-flex; align-items: center; gap: 5px; background: #fff; border: 1px solid #E8EAEF; color: #3C4354; font-size: 12px; font-weight: 600; padding: 7px 12px; border-radius: 999px; text-decoration: none; transition: 0.15s; }
         .pp-pill:hover { border-color: #E02128; color: #E02128; }
         /* Description + fiche */
-        .pp-desc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 48px; align-items: start; }
+        .pp-desc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 64px; align-items: start; }
         .pp-prose { font-size: 15px; line-height: 1.7; color: #3C4354; }
         .pp-prose p { margin: 0 0 14px 0; }
         .pp-softcard { background: #F7F8FA; border-radius: 20px; padding: 24px 26px; }
@@ -387,7 +390,39 @@
         .pp-step .tx { font-size: 13px; color: #5B6270; line-height: 1.55; }
         .pp-step .arrow { position: absolute; top: 32px; right: -20px; z-index: 2; color: #C9CDD6; font-size: 20px; }
         /* FAQ */
-        .pp-faq-grid { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 48px; align-items: start; }
+        .pp-faq-grid { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 64px; align-items: start; }
+        /* Atelier (bande sombre) */
+        .pp-atelier { background: #131B2E; border-radius: 26px; padding: 44px 48px; }
+        .pp-atelier .hd { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 28px; flex-wrap: wrap; }
+        .pp-atelier .eb { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #FF6B70; margin-bottom: 10px; }
+        .pp-atelier h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin: 0; color: #fff; }
+        .pp-atelier .intro { font-size: 14px; color: #A6ACBB; margin: 0; max-width: 380px; line-height: 1.55; text-align: right; }
+        .pp-atelier .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .pp-atelier .frame { background: #F5F6F8; padding: 8px; border-radius: 16px; }
+        .pp-atelier .ph { width: 100%; height: 230px; border-radius: 10px; overflow: hidden; background: linear-gradient(135deg, #EEF0F4, #E3E6EC); display: flex; align-items: center; justify-content: center; }
+        .pp-atelier .ph img { width: 100%; height: 100%; object-fit: cover; }
+        .pp-atelier .ph .material-symbols-outlined { font-size: 42px; color: #B9BFCC; }
+        .pp-atelier .ct { font-size: 14.5px; font-weight: 700; color: #fff; margin: 12px 0 2px 0; }
+        .pp-atelier .cd { font-size: 13px; color: #A6ACBB; line-height: 1.5; }
+        /* Vérif plaque inline (design) */
+        .pp-plate { border: 1px solid #E8EAEF; border-radius: 16px; margin-top: 14px; overflow: hidden; background: #fff; }
+        .pp-plate-head { width: 100%; border: none; background: transparent; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 16px 20px; font-family: inherit; text-align: left; }
+        .pp-plate-head:hover { background: #FAFBFC; }
+        .pp-plate-head .lbl { flex: 1; font-size: 14px; font-weight: 700; color: #131B2E; }
+        .pp-plate-head .free { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #1E9E5A; }
+        .pp-plate-head .chev { font-size: 20px; color: #8A909E; transition: transform 0.2s; }
+        .pp-plate.open .pp-plate-head .chev { transform: rotate(180deg); }
+        .pp-plate-body { display: none; padding: 2px 20px 18px 20px; }
+        .pp-plate.open .pp-plate-body { display: block; }
+        .pp-plate-body .note { font-size: 12.5px; color: #5B6270; line-height: 1.5; margin-bottom: 13px; }
+        .pp-plate-inputs { display: flex; gap: 8px; }
+        .pp-plate-inputs input { height: 44px; border: 1px solid #DFE1E8; border-radius: 11px; padding: 0 12px; font-family: inherit; font-size: 13.5px; color: #131B2E; outline: none; background: #fff; }
+        .pp-plate-inputs input:focus { border-color: #131B2E; }
+        .pp-plate-inputs .plate { width: 128px; font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+        .pp-plate-inputs .email { flex: 1; min-width: 0; }
+        .pp-plate-send { margin-top: 8px; height: 44px; width: 100%; border: none; border-radius: 11px; background: #131B2E; color: #fff; font-family: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .pp-plate-send:hover { background: #232D45; }
+        .pp-plate-ok { display: flex; align-items: flex-start; gap: 10px; background: #1E9E5A10; border: 1px solid #1E9E5A33; border-radius: 11px; padding: 13px 15px; font-size: 13px; line-height: 1.5; color: #131B2E; }
         .pp-faq { border: 1px solid #E8EAEF; border-radius: 16px; overflow: hidden; background: #fff; }
         .pp-faq summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; font-size: 15px; font-weight: 700; color: #131B2E; cursor: pointer; }
         .pp-faq summary::-webkit-details-marker { display: none; }
@@ -444,11 +479,15 @@
           .pp-step .arrow { display: none !important; }
           .pp-related { grid-template-columns: repeat(2, minmax(0, 1fr)); }
           .pp-blog { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .pp-atelier { padding: 32px 28px; }
+          .pp-atelier .cols { grid-template-columns: 1fr; gap: 16px; }
+          .pp-atelier .intro { text-align: left; max-width: none; }
+          .pp-atelier .ph { height: 200px; }
           .pp-section { margin-top: 56px; }
         }
         @media (max-width: 640px) {
-          .pp-h1 { font-size: 24px; }
-          .pp-price-main { font-size: 32px; }
+          .pp-h1 { font-size: 26px; }
+          .pp-price-main { font-size: 34px; }
           .pp-scene { aspect-ratio: 4 / 3.4; border-radius: 18px; }
           .pp-reassure, .pp-steps, .pp-related, .pp-blog, .pp-links { grid-template-columns: 1fr; }
           .pp-optcards { grid-template-columns: 1fr; }
@@ -551,7 +590,7 @@
             <div class="pp-caption">
               <span class="material-symbols-outlined" style="font-size:16px;">photo_camera</span>
               <%= t('product.realPhotos') %>
-              <span class="pp-mono" style="margin-left:auto;font-size:12px;color:#A6ACBB;flex-shrink:0;"><%= mediaItems.length %></span>
+              <span class="pp-mono" style="margin-left:auto;font-size:12px;color:#A6ACBB;flex-shrink:0;">1 / <%= mediaItems.length %></span>
             </div>
           <% } %>
 
@@ -588,12 +627,11 @@
         <div>
           <div class="pp-statebadge"><span class="dot"></span><%= heroBadge %></div>
           <h1 class="pp-h1"><%= product.name %></h1>
-          <% if (productSubtitle) { %><p class="pp-subtitle"><%= productSubtitle %></p><% } %>
 
           <div class="pp-meta">
             <% if (engineCodeVal) { %>
               <div style="min-width:0;">
-                <div class="pp-meta-k"><%= t('product.codeMoteur') %></div>
+                <div class="pp-meta-k"><%= _codeLabel %></div>
                 <div class="pp-meta-v pp-mono"><%= engineCodeVal %></div>
               </div>
               <div class="sep"></div>
@@ -724,35 +762,74 @@
               </div>
 
               <p class="pp-consigne<%= hasConsigne ? ' ok' : '' %>"><%= hasConsigne ? (consigneUpfront ? (t('product.consigneRefundShort', { amount: consigneAmountEuro, days: consigneDelayDays })) : (t('product.exchangeNoDeposit', { days: consigneDelayDays }))) : (shippingDelayText || (product.inStock ? t('product.fastDeliveryFr') : t('product.onOrderAvailable'))) %></p>
-
-              <div class="pp-trust">
-                <span><span class="material-symbols-outlined" style="font-size:15px;">lock</span> <%= t('product.securePay') %></span>
-                <span><span class="material-symbols-outlined" style="font-size:15px;">local_shipping</span> <%= shippingDelayText || t('product.fastDelivery') %></span>
-                <a href="<%= compatibilityContactUrl %>"><span class="material-symbols-outlined" style="font-size:15px;">search</span> <%= t('product.checkCompat') %></a>
-              </div>
-
-              <% if (_showIso) { %>
-                <div class="pp-isoline">
-                  <span class="material-symbols-outlined" style="font-size:17px;">workspace_premium</span>
-                  <%= t('product.isoBadge') %>
-                </div>
-              <% } %>
             </div>
           </form>
 
-          <button type="button" id="quote-by-email-btn" class="pp-plate">
-            <span class="material-symbols-outlined" style="font-size:19px;color:#E02128;">verified</span>
-            <span class="lbl"><%= t('product.checkCompat') %> — <%= t('product.receiveQuote').toLowerCase() %></span>
-            <span class="free"><%= t('product.freeBadge') %></span>
-            <span class="material-symbols-outlined" style="font-size:20px;color:#8A909E;">expand_more</span>
-          </button>
+          <%# Vérification plaque INLINE (design v3) — poste sur le vrai endpoint lead %>
+          <div class="pp-plate" id="pp-plate" data-product-id="<%= product._id %>">
+            <button class="pp-plate-head" type="button" data-pp-plate-toggle>
+              <span class="material-symbols-outlined" style="font-size:19px;color:#E02128;">verified</span>
+              <span class="lbl"><%= t('product.plateVerifyTitle') %></span>
+              <span class="free"><%= t('product.freeBadge') %></span>
+              <span class="material-symbols-outlined chev">expand_more</span>
+            </button>
+            <div class="pp-plate-body">
+              <div class="note"><%= t('product.plateVerifyNote') %></div>
+              <div data-pp-plate-form>
+                <div class="pp-plate-inputs">
+                  <input class="plate" data-pp-plate placeholder="AA-123-BC" maxlength="16" />
+                  <input class="email" type="email" data-pp-email placeholder="<%= t('product.phEmailReq') %>" />
+                </div>
+                <button class="pp-plate-send" type="button" data-pp-plate-send>
+                  <span class="material-symbols-outlined" style="font-size:18px;"><%= 'send' %></span>
+                  <%= t('product.plateVerifyCta') %>
+                </button>
+              </div>
+              <div class="pp-plate-ok" data-pp-plate-ok style="display:none;">
+                <span class="material-symbols-outlined" style="font-size:19px;color:#1E9E5A;">check_circle</span>
+                <div><strong><%= t('product.plateSentTitle') %> <span data-pp-plate-shown></span>.</strong> <%= t('product.plateSentBody') %></div>
+              </div>
+            </div>
+          </div>
 
           <div class="pp-tel">
             <span class="material-symbols-outlined" style="font-size:18px;color:#8A909E;">support_agent</span>
-            <span><%= t('product.anyDoubt') %> <a href="tel:<%= brand.PHONE_INTL %>"><%= brand.PHONE %></a></span>
+            <span><%= t('product.anyDoubt') %> <a href="tel:<%= brand.PHONE_INTL %>"><%= brand.PHONE %></a> · <%= t('product.workHours') %></span>
           </div>
         </div>
       </div>
+
+      <script>
+        (function () {
+          var box = document.getElementById('pp-plate');
+          if (!box) return;
+          var head = box.querySelector('[data-pp-plate-toggle]');
+          var plate = box.querySelector('[data-pp-plate]');
+          var email = box.querySelector('[data-pp-email]');
+          var send = box.querySelector('[data-pp-plate-send]');
+          var form = box.querySelector('[data-pp-plate-form]');
+          var ok = box.querySelector('[data-pp-plate-ok]');
+          var shown = box.querySelector('[data-pp-plate-shown]');
+          head.addEventListener('click', function () { box.classList.toggle('open'); });
+          if (plate) plate.addEventListener('input', function () { this.value = this.value.toUpperCase(); });
+          send.addEventListener('click', function () {
+            var p = (plate.value || '').trim();
+            if (p.length < 4) { plate.focus(); return; }
+            var payload = { productId: box.getAttribute('data-product-id'), plate: p, email: (email.value || '').trim(), message: 'Vérification de compatibilité par plaque : ' + p };
+            send.disabled = true;
+            fetch('/api/lead/product-quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+              .then(function (r) { return r.json().catch(function () { return null; }); })
+              .then(function (d) {
+                if (d && d.ok) {
+                  if (shown) shown.textContent = p;
+                  form.style.display = 'none'; ok.style.display = 'flex';
+                  if (window.dataLayer) window.dataLayer.push({ event: 'lead_product_quote', product_id: payload.productId, email: payload.email });
+                } else { send.disabled = false; }
+              })
+              .catch(function () { send.disabled = false; });
+          });
+        })();
+      </script>
 
       <script>
         (function () {
@@ -852,13 +929,25 @@
       })();
       </script>
 
-      <%# ═══ Bande réassurance ═══ %>
-      <% if (qualityHighlights.length) { %>
+      <%# ═══ Bande réassurance (design v3 : icône + label + sous-texte, contenu fixe) ═══ %>
+      <% var _wm = (product.warranty && Number(product.warranty.months) > 0) ? Number(product.warranty.months) : 0; %>
+      <% var _garLabel = _wm
+           ? (_wm % 12 === 0 ? t('product.warrantyYears', { years: _wm / 12 }) : t('product.warrantyMonths', { months: _wm }))
+           : (keyGarantie || t('product.warranty24')); %>
+      <% var _reassure = isService
+           ? autoHighlights.slice(0, 4).map((h) => ({ icon: h.icon, label: h.label, sub: '' }))
+           : [
+               { icon: 'speed', label: t('product.reassure1'), sub: t('product.reassureSub1') },
+               { icon: 'workspace_premium', label: _garLabel, sub: t('product.reassureSub2') },
+               { icon: 'sync_alt', label: t('product.reassure3'), sub: t('product.reassureSub3') },
+               { icon: 'savings', label: t('product.reassure4'), sub: t('product.reassureSub4') },
+             ]; %>
+      <% if (_reassure.length) { %>
         <div class="pp-reassure">
-          <% qualityHighlights.slice(0, 4).forEach((item) => { %>
+          <% _reassure.slice(0, 4).forEach((item) => { %>
             <div class="it">
               <span class="ic"><span class="material-symbols-outlined"><%= item.icon %></span></span>
-              <span style="min-width:0;"><span class="lb"><%= item.label %></span></span>
+              <span style="min-width:0;"><span class="lb"><%= item.label %></span><% if (item.sub) { %><span class="sb"><%= item.sub %></span><% } %></span>
             </div>
           <% }) %>
         </div>
@@ -877,20 +966,18 @@
               <table class="pp-table">
                 <thead>
                   <tr>
-                    <th><%= t('product.make') %></th>
-                    <th><%= t('product.model') %></th>
-                    <th><%= t('product.years') %></th>
+                    <th style="width:34%;"><%= t('product.vehicleWord') %></th>
                     <th><%= t('product.engine') %></th>
+                    <th><%= t('product.years') %></th>
                     <th><%= t('product.power') %></th>
                   </tr>
                 </thead>
                 <tbody>
                   <% compatVehicles.forEach((v) => { %>
                     <tr>
-                      <td class="v"><%= v.make %></td>
-                      <td><%= v.model %></td>
-                      <td style="white-space:nowrap;"><%= v.years || '—' %></td>
+                      <td class="v"><%= [v.make, v.model].filter(Boolean).join(' ') || '—' %></td>
                       <td><%= v.engine || '—' %></td>
+                      <td style="white-space:nowrap;"><%= v.years || '—' %></td>
                       <td class="pp-mono" style="font-size:12.5px;white-space:nowrap;"><%= v.power || '—' %></td>
                     </tr>
                   <% }) %>
@@ -905,26 +992,6 @@
               <a href="tel:<%= brand.PHONE_INTL %>"><span class="material-symbols-outlined" style="font-size:16px;">call</span><%= brand.PHONE %></a>
             </div>
           </div>
-          <p style="margin-top:12px;font-size:12px;color:#A6ACBB;"><%= t('product.indicativeList') %></p>
-          <% if (compMakes.length) { %>
-            <div class="pp-pills">
-              <% compMakes.slice(0, 4).forEach((mk) => { %>
-                <% const mkSlug = normalizeLoose(mk); %>
-                <a class="pp-pill" href="/pieces-auto/<%= mkSlug %>">
-                  <span class="material-symbols-outlined" style="font-size:14px;">directions_car</span>
-                  <%= t('product.allPartsFor', { make: mk }) %>
-                </a>
-                <% const row = compGrouped[mk]; %>
-                <% const modelsArr = row ? Array.from(row.models).slice(0, 2) : []; %>
-                <% modelsArr.forEach((md) => { %>
-                  <a class="pp-pill" href="/pieces-auto/<%= mkSlug %>/<%= normalizeLoose(md) %>">
-                    <span class="material-symbols-outlined" style="font-size:14px;">car_repair</span>
-                    <%= mk %> <%= md %>
-                  </a>
-                <% }) %>
-              <% }) %>
-            </div>
-          <% } %>
         </div>
       <% } %>
 
@@ -933,7 +1000,8 @@
         <div class="pp-desc-grid">
           <div>
             <div class="pp-eyebrow"><%= t('product.description') %></div>
-            <h2 class="pp-h2" style="margin-bottom:18px;"><%= keyType || product.name %></h2>
+            <% var _isOcc = /occasion/i.test(String(product.category || '') + ' ' + String(conditionBadge || '') + ' ' + String(keyEtat || '')); %>
+            <h2 class="pp-h2" style="margin-bottom:20px;"><%= (isService || _isOcc) ? (keyType || product.name) : t('product.descHeadline') %></h2>
             <div class="desc-collapse-wrapper relative" data-desc-collapse>
               <div class="desc-collapse-inner" data-desc-collapse-inner>
                 <% const hasSafeHtml = product && typeof product.descriptionHtmlSafe === 'string' && product.descriptionHtmlSafe.trim(); %>
@@ -941,16 +1009,6 @@
                   <div class="pp-prose product-html"><%- product.descriptionHtmlSafe %></div>
                 <% } else { %>
                   <p class="pp-prose" style="white-space:pre-line;margin:0;"><%= product.descriptionText || product.description || product.shortDescription || '' %></p>
-                <% } %>
-                <% if (summaryPoints.length) { %>
-                  <ul style="list-style:none;padding:0;margin:18px 0 0 0;display:flex;flex-direction:column;gap:10px;">
-                    <% summaryPoints.forEach((point) => { %>
-                      <li class="pp-checkline">
-                        <span class="material-symbols-outlined" style="color:#E02128;font-size:20px;">check_circle</span>
-                        <span><%= point %></span>
-                      </li>
-                    <% }) %>
-                  </ul>
                 <% } %>
               </div>
               <div class="desc-collapse-fade hidden" data-desc-fade>
@@ -1021,53 +1079,15 @@
                   <span class="v"><%= entry.value %></span>
                 </div>
               <% }) %>
-              <% if (keyGarantie) { %>
+              <% if (_garLabel) { %>
                 <div class="pp-greenline">
                   <span class="material-symbols-outlined" style="font-size:16px;color:#1E9E5A;">workspace_premium</span>
-                  <%= keyGarantie %><% if (_showIso) { %> · ISO 9001<% } %>
+                  <%= _garLabel %><% if (_showIso) { %> · <%= t('product.isoNorm') %><% } %>
                 </div>
               <% } %>
             </div>
 
-            <% if (compatibleReferences.length) { %>
-              <div style="margin-top:16px;">
-                <div class="pp-speclabel"><%= t('product.oemRefs') %></div>
-                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;">
-                  <% compatibleReferences.forEach((r) => { %>
-                    <span class="pp-mono" style="padding:6px 12px;border-radius:999px;border:1px solid #E8EAEF;background:#fff;font-size:12px;font-weight:600;color:#3C4354;"><%= r %></span>
-                  <% }) %>
-                </div>
-              </div>
-            <% } %>
-
-            <% if (product.sections && product.sections.showSupportBox) { %>
-              <div class="pp-softcard" style="margin-top:16px;">
-                <div style="display:flex;align-items:flex-start;gap:14px;">
-                  <span style="width:42px;height:42px;border-radius:12px;background:#E0212812;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><span class="material-symbols-outlined" style="font-size:21px;color:#E02128;">support_agent</span></span>
-                  <div>
-                    <div style="font-size:14.5px;font-weight:700;color:#131B2E;"><%= t('product.needValidation') %></div>
-                    <p style="margin:6px 0 12px 0;font-size:13px;color:#5B6270;line-height:1.5;"><%= t('product.techCanConfirm') %></p>
-                    <a class="pp-telbtn" href="/devis" style="font-size:13px;padding:9px 14px;"><%= t('product.contactTech') %></a>
-                  </div>
-                </div>
-              </div>
-            <% } %>
           </div>
-        </div>
-
-        <%# Montage & garantie %>
-        <div class="pp-softcard" style="margin-top:32px;">
-          <div class="pp-speclabel"><%= t('product.mountingWarranty') %></div>
-          <p class="pp-prose" style="margin:8px 0 14px 0;">
-            <% var _isOccasion = /occasion/i.test(String(product.category || '') + ' ' + String((product.badges && product.badges.condition) || '')); %>
-            <%- t(_isOccasion ? 'product.mountingParaOccasion' : 'product.mountingPara', { warranty: (typeof keyGarantie !== 'undefined' && keyGarantie ? keyGarantie : t('product.warrantyOf')) }) %>
-          </p>
-          <ul style="list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;">
-            <li class="pp-checkline" style="font-size:13.5px;"><span class="material-symbols-outlined" style="color:#E02128;font-size:18px;">check</span> <%= t('product.mount1') %></li>
-            <li class="pp-checkline" style="font-size:13.5px;"><span class="material-symbols-outlined" style="color:#E02128;font-size:18px;">check</span> <%= t('product.mount2') %></li>
-            <li class="pp-checkline" style="font-size:13.5px;"><span class="material-symbols-outlined" style="color:#E02128;font-size:18px;">check</span> <%= t('product.mount3') %></li>
-            <li class="pp-checkline" style="font-size:13.5px;"><span class="material-symbols-outlined" style="color:#E02128;font-size:18px;">check</span> <%= t('product.mount4') %></li>
-          </ul>
         </div>
 
         <%# Processus qualité (étapes réelles back-office) %>
@@ -1096,6 +1116,46 @@
           </div>
         <% } %>
       </div>
+
+      <%# ═══ L'atelier (bande sombre — design v3) ═══
+          Photos réelles atelier à fournir : product.workshopPhotos = [url,url,url].
+          Sinon cadres placeholder stylés (frame clair + icône). Reconditionné only. %>
+      <% if (_showIso) { %>
+        <% var _wp = Array.isArray(product.workshopPhotos) ? product.workshopPhotos : []; %>
+        <% var _wCards = [
+             { icon: 'analytics', cap: t('product.workshopCap1'), txt: t('product.workshopTxt1') },
+             { icon: 'build', cap: t('product.workshopCap2'), txt: t('product.workshopTxt2') },
+             { icon: 'package_2', cap: t('product.workshopCap3'), txt: t('product.workshopTxt3') },
+           ]; %>
+        <div class="pp-section">
+          <div class="pp-atelier">
+            <div class="hd">
+              <div>
+                <div class="eb"><%= t('product.atelierWord') %></div>
+                <h2><%= t('product.workshopTitle') %></h2>
+              </div>
+              <p class="intro"><%= t('product.workshopIntro') %></p>
+            </div>
+            <div class="cols">
+              <% _wCards.forEach((c, i) => { %>
+                <div>
+                  <div class="frame">
+                    <div class="ph">
+                      <% if (_wp[i]) { %>
+                        <img src="<%= _wp[i] %>" alt="<%= c.cap %>" loading="lazy" decoding="async" />
+                      <% } else { %>
+                        <span class="material-symbols-outlined"><%= c.icon %></span>
+                      <% } %>
+                    </div>
+                  </div>
+                  <div class="ct"><%= c.cap %></div>
+                  <div class="cd"><%= c.txt %></div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+        </div>
+      <% } %>
 
       <%# ═══ Bon à savoir (blocs back-office dédiés) ═══ %>
       <% if (_ib.dedicated_tab && _ib.dedicated_tab.length) { %>
