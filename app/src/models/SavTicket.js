@@ -86,6 +86,10 @@ const messageSchema = new mongoose.Schema(
     },
     contenu: { type: String, required: true },
     attachments: { type: [messageAttachmentSchema], default: [] },
+    // Résultat d'un appel téléphonique (canal 'tel' uniquement). Sert de
+    // preuve au verrou « appel obligatoire avant refus » : un refus écrit ne
+    // peut partir que si un appel 'joint' (ou 2 tentatives 'echec') est logué.
+    callOutcome: { type: String, enum: ['', 'joint', 'vocal', 'echec'], default: '' },
     // Modification admin (champs absents = jamais édité)
     editedAt: { type: Date },
     editedBy: { type: String },
@@ -243,6 +247,32 @@ const savTicketSchema = new mongoose.Schema(
       },
       montant: { type: Number, min: 0 },
       dateResolution: { type: Date },
+      // Geste commercial de réconciliation — surtout quand le client est en
+      // tort (mauvais montage / usure) : on refuse la garantie mais on offre
+      // quelque chose pour préserver la relation. Barème indicatif :
+      //   B2C → bon d'achat 50 € ; B2B → remise 10 % pièce de remplacement ;
+      //   pro récurrent → prix préférentiel négocié à l'appel.
+      //   + forfait analyse offert si rachat d'une pièce de remplacement.
+      gesteCommercial: {
+        type: { type: String, enum: ['', 'bon_achat', 'remise_remplacement', 'prix_preferentiel', 'analyse_offerte', 'aucun'], default: '' },
+        montant: { type: Number, min: 0, default: 0 },   // € ou % selon le type
+        code: { type: String, trim: true, default: '' }, // code promo remis au client
+        motif: { type: String, trim: true, default: '' },
+        offertLe: { type: Date, default: null },
+      },
+    },
+
+    // Suivi relationnel automatique (anti-« froid ») : trace des emails de
+    // tenue au courant envoyés par le cron pour ne jamais spammer.
+    //   heartbeat = « où en est votre dossier » (48 h sans contact, 24 h B2B)
+    //   j7_check  = « tout fonctionne ? » 7 j après résolution
+    //   j14_geste = rappel du geste commercial 14 j après un refus
+    relationSent: {
+      type: [{
+        kind: { type: String, enum: ['heartbeat', 'j7_check', 'j14_geste'], required: true },
+        at: { type: Date, default: Date.now },
+      }],
+      default: [],
     },
 
     // ──────────────────────────────────────────────────────────

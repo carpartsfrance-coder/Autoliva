@@ -6,7 +6,7 @@ const { expireDraftOrders } = require('./expireDraftOrders');
 const { purgeTrashedOrders } = require('./purgeTrashedOrders');
 const { checkOrderAlerts } = require('./checkOrderAlerts');
 const { sendConsigneReminders } = require('./sendConsigneReminders');
-const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations } = require('./savCronJobs');
+const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations, runSavRelationCare } = require('./savCronJobs');
 const { reconcileScalapayOrders } = require('./reconcileScalapayOrders');
 const { syncShipmentTracking } = require('./syncShipmentTracking');
 const { runEngineQuoteReminders } = require('./sendEngineQuoteReminders');
@@ -102,6 +102,17 @@ function startScheduler() {
       await runSavDailyReminders();
     } catch (err) {
       console.error('[scheduler] Erreur SAV relances:', err.message || err);
+    }
+  });
+
+  // SAV — soin relationnel (heartbeat anti-silence + rappel geste J+14).
+  // 2×/jour pour que le seuil 24 h des pros reste réactif.
+  cron.schedule('20 9,15 * * *', async () => {
+    console.log('[scheduler] SAV: soin relationnel...');
+    try {
+      await runSavRelationCare();
+    } catch (err) {
+      console.error('[scheduler] Erreur SAV relation:', err.message || err);
     }
   });
 
