@@ -351,10 +351,12 @@ async function prepareProductListingData(req, options = {}) {
 
   if (selectedMainCategory) {
     if (selectedSubCategory) {
-      filter.category = `${selectedMainCategory} > ${selectedSubCategory}`;
+      // Sous-catégorie exacte, insensible à la casse (cohérent avec le comptage du menu).
+      filter.category = { $regex: new RegExp(`^${escapeRegex(selectedMainCategory)}\\s*>\\s*${escapeRegex(selectedSubCategory)}$`, 'i') };
     } else {
+      // Nom exact OU « Nom > … », insensible à la casse (imports = casse variable).
       const rx = `^${escapeRegex(selectedMainCategory)}(\\s*>|$)`;
-      filter.category = { $regex: new RegExp(rx) };
+      filter.category = { $regex: new RegExp(rx, 'i') };
     }
   }
 
