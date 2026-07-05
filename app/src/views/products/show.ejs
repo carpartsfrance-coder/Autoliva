@@ -319,7 +319,12 @@
         [data-ap-compat].is-expanded .ap-compat-extra { display: grid !important; }
         [data-ap-compat-toggle].is-open [data-ap-compat-caret] { transform: rotate(180deg); }
         @media (max-width: 760px) {
-          .ap-hero-grid { grid-template-columns: 1fr !important; }
+          .ap-hero-grid { grid-template-columns: minmax(0, 1fr) !important; }
+          .ap-buypanel { min-width: 0 !important; width: auto !important; }
+          .ap-buypanel * { min-width: 0; }
+          .ap-sticky-inner { padding: 0 14px !important; gap: 10px !important; height: 62px !important; }
+          .ap-sticky-thumb, .ap-sticky-info { display: none !important; }
+          .ap-sticky-price { margin-left: 0 !important; margin-right: auto !important; text-align: left !important; }
           .ap-two-col { grid-template-columns: 1fr !important; gap: 32px !important; }
           .ap-recond-grid { grid-template-columns: 1fr !important; }
           .ap-cmp-grid { display: none !important; }
@@ -335,14 +340,14 @@
 
       <%# ═══ Barre sticky d'achat (apparaît après 780px de scroll — JS) ═══ %>
       <div data-ap-sticky style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: #FFFFFF; border-top: 1px solid #E9ECF1; box-shadow: 0 -6px 24px rgba(15,22,38,0.08); display: none;">
-        <div style="max-width: 1264px; margin: 0 auto; padding: 0 32px; height: 66px; display: flex; align-items: center; gap: 14px;">
-          <% if (mainImage) { %><img src="<%= mainImage %>" alt="" style="width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" /><% } %>
-          <div style="min-width: 0;">
+        <div class="ap-sticky-inner" style="max-width: 1264px; margin: 0 auto; padding: 0 32px; height: 66px; display: flex; align-items: center; gap: 14px;">
+          <% if (mainImage) { %><img class="ap-sticky-thumb" src="<%= mainImage %>" alt="" style="width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" /><% } %>
+          <div class="ap-sticky-info" style="min-width: 0;">
             <div style="font-size: 13px; font-weight: 800; color: #0F1626; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px;"><%= product.name %></div>
             <div style="font-size: 11px; font-weight: 600; color: #8A93A4; margin-top: 1px;">Réf. <%= ref %> · <%= t('product.shippingLabel') %> <%= shippingDelayText || '24/48h' %><% if (_garLabel) { %> · <%= _garLabel %><% } %></div>
           </div>
           <span data-ap-sticky-checkok style="display: none; align-items: center; gap: 6px; background: #E4F5EC; color: #128A52; font-size: 11.5px; font-weight: 800; padding: 5px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;"><span class="material-symbols-outlined ap-fill" style="font-size: 14px;">check_circle</span>Vérification expert en cours</span>
-          <div style="margin-left: auto; text-align: right; flex-shrink: 0;">
+          <div class="ap-sticky-price" style="margin-left: auto; text-align: right; flex-shrink: 0;">
             <div style="font-size: 17px; font-weight: 800; color: #0F1626;"><%= formatMoney(basePriceCents) %> €</div>
             <% if (installmentEligible) { %><div style="font-size: 10.5px; font-weight: 600; color: #6B7482;">3x / 4x sans frais avec Scalapay</div><% } %>
           </div>
@@ -494,8 +499,8 @@
           <% } %>
 
           <div style="background: #F5F6F8; border-radius: 14px; padding: 22px;">
-            <div style="display: flex; align-items: flex-start;">
-              <div>
+            <div style="display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px 16px;">
+              <div style="min-width: 0;">
                 <div style="display: flex; align-items: flex-end; flex-wrap: wrap;">
                   <span style="font-size: 32px; font-weight: 800; letter-spacing: -0.01em; color: #0F1626; line-height: 1;" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="4" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(basePriceCents) %> €</span>
                   <span style="font-size: 12px; font-weight: 700; color: #8A93A4; margin-left: 8px; padding-bottom: 2px;"><%= t('product.ttc') %></span>
@@ -522,13 +527,13 @@
 
             <%# ── Vérif compatibilité par un expert (POST /api/lead/product-quote) ── %>
             <div style="font-size: 12px; font-weight: 800; color: #0F1626; margin-bottom: 8px;"><%= t('product.checkCompatExpert') %></div>
-            <div style="display: flex; gap: 8px;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
               <div style="display: flex; height: 48px; flex: 0 0 148px; border: 1px solid #DEE2E9; border-radius: 10px; overflow: hidden; background: #FFFFFF;">
                 <div style="width: 30px; background: #2653C6; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; flex-shrink: 0;"><span style="font-size: 7px; letter-spacing: 1px; opacity: 0.9;">★</span><span style="font-size: 11px; font-weight: 800;">F</span></div>
                 <input type="text" data-ap-plate placeholder="AA-123-AA" style="flex: 1; min-width: 0; border: none; outline: none; font-family: inherit; font-size: 13.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #0F1626; padding: 0 10px; background: transparent;" />
               </div>
-              <input type="text" data-ap-contact placeholder="<%= t('product.phoneOrEmail') %>" style="flex: 1; min-width: 0; height: 48px; border: 1px solid #DEE2E9; border-radius: 10px; outline: none; font-family: inherit; font-size: 12.5px; font-weight: 500; color: #0F1626; padding: 0 12px; background: #FFFFFF;" />
-              <button type="button" data-ap-check-btn style="height: 48px; padding: 0 16px; border: none; border-radius: 10px; background: #15213B; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer; white-space: nowrap; flex-shrink: 0;" class="ap-navy"><%= t('product.checkCta') %></button>
+              <input type="text" data-ap-contact placeholder="<%= t('product.phoneOrEmail') %>" style="flex: 1 1 140px; min-width: 0; height: 48px; border: 1px solid #DEE2E9; border-radius: 10px; outline: none; font-family: inherit; font-size: 12.5px; font-weight: 500; color: #0F1626; padding: 0 12px; background: #FFFFFF;" />
+              <button type="button" data-ap-check-btn style="height: 48px; padding: 0 18px; border: none; border-radius: 10px; background: #15213B; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer; white-space: nowrap; flex: 1 1 auto;" class="ap-navy"><%= t('product.checkCta') %></button>
             </div>
             <div data-ap-check-idle style="font-size: 11.5px; font-weight: 500; color: #8A93A4; margin-top: 9px;"><%= t('product.expertConfirms') %></div>
             <div data-ap-check-loading style="display: none; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; font-weight: 600; color: #6B7482;"><span class="material-symbols-outlined" style="font-size: 15px;">progress_activity</span><%= t('product.sendingRequest') %></div>
