@@ -96,10 +96,10 @@
           <option value="90d" <%= filters.period === '90d' ? 'selected' : '' %>>90 jours</option>
         </select>
 
-        <select name="sort" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
-          <option value="recent" <%= !filters.sort || filters.sort === 'recent' ? 'selected' : '' %>>Récent ↓</option>
+        <select name="sort" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white" title="Le tri se base sur le DERNIER SIGNE du client (dernière activité sur le site), pas sur la date de réception.">
+          <option value="recent" <%= !filters.sort || filters.sort === 'recent' ? 'selected' : '' %>>Dernier signe ↓ (chaud d'abord)</option>
           <option value="amount" <%= filters.sort === 'amount' ? 'selected' : '' %>>Montant ↓</option>
-          <option value="oldest" <%= filters.sort === 'oldest' ? 'selected' : '' %>>Ancien ↑</option>
+          <option value="oldest" <%= filters.sort === 'oldest' ? 'selected' : '' %>>Dernier signe ↑ (ancien d'abord)</option>
         </select>
 
       </div>
@@ -180,7 +180,11 @@
                         <span class="material-symbols-outlined text-base text-slate-400">mail</span><%= c.email %>
                       </a>
                     <% } %>
-                    <span class="text-slate-400 text-xs cursor-help border-b border-dotted border-slate-300" title="« Reçu » = quand le client a laissé sa demande / abandonné son panier. « Dernier signe » = sa dernière action sur le site (nouveau passage, formulaire) — <%= c.lastActivityAbsolute %>. Plus c'est récent, plus il est chaud !">Reçu <%= c.receivedRel %><% if (c.lastActivityRel !== c.receivedRel) { %> · dernier signe du client <%= c.lastActivityRel %><% } %></span>
+                    <% if (c.lastActivityRel !== c.receivedRel) { %>
+                      <span class="inline-flex items-center gap-0.5 text-xs font-semibold text-amber-700 cursor-help border-b border-dotted border-amber-400" title="Le client est REVENU sur le site après sa 1ère demande — c'est le critère de tri « Dernier signe ». Reçu initialement : <%= c.receivedRel %> (<%= c.lastActivityAbsolute %>). Plus c'est récent, plus il est chaud, appelle-le en priorité !"><span class="material-symbols-outlined text-[13px]">local_fire_department</span>Revenu <%= c.lastActivityRel %><span class="font-normal text-slate-400"> · reçu <%= c.receivedRel %></span></span>
+                    <% } else { %>
+                      <span class="text-slate-400 text-xs cursor-help border-b border-dotted border-slate-300" title="Quand le client a laissé sa demande / abandonné son panier. Il n'est pas revenu sur le site depuis.">Reçu <%= c.receivedRel %></span>
+                    <% } %>
                   </div>
 
                   <% if (c.showRequestAsPrimary) { %>
