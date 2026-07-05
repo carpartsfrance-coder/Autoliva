@@ -633,5 +633,6 @@
   "product.trustExchangeConsigne": "Échange standard : consigne de %amount% € remboursée au retour",
   "product.exchangeHowSubConsigne": "Vous recevez la pièce reconditionnée et nous renvoyez l’ancienne. Une consigne de %amount% € est encaissée à la commande, puis remboursée au retour.",
   "product.exStep1TextConsigne": "Votre pièce reconditionnée est expédiée sous 24/48h. Une consigne de %amount% € est encaissée à la commande.",
-  "product.depositNote": "Consigne de %amount% € remboursée intégralement au retour de l’ancienne pièce sous %days% jours."
+  "product.depositNote": "Consigne de %amount% € remboursée intégralement au retour de l’ancienne pièce sous %days% jours.",
+  "product.recommended": "Recommandé"
 }
