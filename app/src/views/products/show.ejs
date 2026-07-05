@@ -425,17 +425,69 @@
             <%= _specBits.join(' · ') %><% if (_showIso) { %> · <%= t('product.isoFactories') %><% } %>
           </div>
 
+          <%# ═══ Options produit (Mode de fourniture, programmation…) — hooks réels du script principal ═══ %>
+          <% if (Array.isArray(optionGroups) && optionGroups.length) { %>
+          <style>
+            .ap-optcard { position: relative; display: block; cursor: pointer; text-align: left; padding: 13px 14px; border: 1px solid #E1E5EB; background: #fff; border-radius: 14px; transition: border-color .15s, background .15s; }
+            .ap-optcard:has(input:checked) { border-color: #ED1C24; background: #FEF2F2; }
+            .ap-optcard input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+            .ap-optcard .chk { position: absolute; top: 12px; right: 12px; width: 20px; height: 20px; border-radius: 999px; border: 2px solid #DEE2E9; display: flex; align-items: center; justify-content: center; transition: background .15s, border-color .15s; }
+            .ap-optcard .chk .material-symbols-outlined { font-size: 13px; color: #fff; opacity: 0; }
+            .ap-optcard:has(input:checked) .chk { background: #ED1C24; border-color: #ED1C24; }
+            .ap-optcard:has(input:checked) .chk .material-symbols-outlined { opacity: 1; }
+            .ap-opttext { width: 100%; height: 46px; border: 1px solid #DEE2E9; border-radius: 12px; padding: 0 13px; font-family: inherit; font-size: 14px; color: #0F1626; outline: none; background: #fff; }
+            .ap-opttext:focus { border-color: #8A93A4; }
+          </style>
+          <div style="margin-bottom: 20px;">
+            <% optionGroups.forEach(function (g) { %>
+              <% var gKey = g && g.key ? String(g.key) : ''; if (!gKey) return; %>
+              <% var fieldName = 'opt_' + gKey; var groupLabel = g && g.label ? g.label : gKey; %>
+              <% var isSupplyModeGroup = normalizeLoose(groupLabel).includes('mode-de-fourniture'); %>
+              <% var choices = Array.isArray(g && g.choices) ? g.choices : []; %>
+              <div style="margin-bottom: 14px;">
+                <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 8px;">
+                  <span style="font-size: 11.5px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: #8A93A4;"><%= groupLabel %></span>
+                  <% if (g && g.required) { %><span style="font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #ED1C24;"><%= t('product.required') %></span><% } %>
+                </div>
+                <% if (g && String(g.type) === 'text') { %>
+                  <input class="ap-opttext" type="text" name="<%= fieldName %>" placeholder="<%= g && g.placeholder ? g.placeholder : '' %>" <%= g && g.required ? 'required' : '' %> data-option-input data-option-type="text" data-price-delta-cents="<%= Number(g.priceDeltaCents) || 0 %>" />
+                <% } else if (choices.length) { %>
+                  <div style="display: grid; grid-template-columns: repeat(<%= choices.length === 1 ? 1 : 2 %>, minmax(0, 1fr)); gap: 8px;">
+                    <% choices.forEach(function (c, ci) { %>
+                      <% var cKey = c && c.key ? String(c.key) : ''; if (!cKey) return; %>
+                      <% var cAbsRaw = (c && c.absolutePriceCents !== null && typeof c.absolutePriceCents !== 'undefined') ? String(c.absolutePriceCents).trim() : ''; %>
+                      <% var hasAbs = cAbsRaw !== '' && Number.isFinite(Number(cAbsRaw)) && Number(cAbsRaw) >= 0; %>
+                      <label class="ap-optcard">
+                        <input type="radio" name="<%= fieldName %>" value="<%= cKey %>" <%= (g && g.required && ci === 0) ? 'checked' : '' %> <%= g && g.required ? 'required' : '' %> data-option-input data-option-type="choice" data-absolute-price-cents="<%= hasAbs ? Number(cAbsRaw) : '' %>" data-price-delta-cents="<%= Number(c.priceDeltaCents) || 0 %>"<%- isSupplyModeGroup ? (' data-supply-mode-choice="' + normalizeLoose(c && c.label ? c.label : cKey) + '"') : '' %> />
+                        <span class="chk"><span class="material-symbols-outlined">check</span></span>
+                        <span style="display: block; font-size: 13.5px; font-weight: 700; color: #0F1626; line-height: 1.3; padding-right: 24px;"><%= c && c.label ? c.label : cKey %></span>
+                        <% if (hasAbs) { %>
+                          <span style="display: block; font-size: 13px; font-weight: 700; color: #0F1626; margin-top: 8px;"><%= formatMoney(c.absolutePriceCents) %> €</span>
+                        <% } else if (Number(c && c.priceDeltaCents) > 0) { %>
+                          <span style="display: block; font-size: 13px; font-weight: 700; color: #0F1626; margin-top: 8px;">+ <%= formatMoney(c.priceDeltaCents) %> €</span>
+                        <% } else { %>
+                          <span style="display: block; font-size: 13px; font-weight: 700; color: #128A52; margin-top: 8px;"><%= t('product.included') %></span>
+                        <% } %>
+                      </label>
+                    <% }); %>
+                  </div>
+                <% } %>
+              </div>
+            <% }); %>
+          </div>
+          <% } %>
+
           <div style="background: #F5F6F8; border-radius: 14px; padding: 22px;">
             <div style="display: flex; align-items: flex-start;">
               <div>
                 <div style="display: flex; align-items: flex-end; flex-wrap: wrap;">
                   <span style="font-size: 32px; font-weight: 800; letter-spacing: -0.01em; color: #0F1626; line-height: 1;" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="4" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(basePriceCents) %> €</span>
                   <span style="font-size: 12px; font-weight: 700; color: #8A93A4; margin-left: 8px; padding-bottom: 2px;"><%= t('product.ttc') %></span>
-                  <span style="font-size: 12.5px; font-weight: 700; color: #99A1B0; margin-left: 12px; padding-bottom: 2px;"><span data-price-display-ht><%= formatMoney(priceHTcents) %></span> <%= t('product.ht') %></span>
+<% if (product.vatRecoverable) { %><span style="font-size: 12.5px; font-weight: 700; color: #99A1B0; margin-left: 12px; padding-bottom: 2px;"><span data-price-display-ht><%= formatMoney(priceHTcents) %></span> <%= t('product.ht') %></span><% } %>
                 </div>
                 <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;">
                   <% if (installmentEligible) { %>
-                  <span data-installment-wrapper style="display: inline-flex; align-items: center; gap: 7px; background: #FFFFFF; border: 1px solid #E1E5EB; border-radius: 999px; padding: 5px 12px; font-size: 11.5px; font-weight: 700; color: #2A3242;">4 × <span data-installment-amount><%= formatMoney(installment4Cents) %> €</span> <%= t('product.noFees') %><img src="/design/autoparts/scalapay.png" alt="Scalapay" style="height: 11px; display: block;" /></span>
+                  <span data-installment-wrapper><span style="display: inline-flex; align-items: center; gap: 7px; background: #FFFFFF; border: 1px solid #E1E5EB; border-radius: 999px; padding: 5px 12px; font-size: 11.5px; font-weight: 700; color: #2A3242;">4 × <span data-installment-amount><%= formatMoney(installment4Cents) %> €</span> <%= t('product.noFees') %><img src="/design/autoparts/scalapay.png" alt="Scalapay" style="height: 11px; display: block;" /></span></span>
                   <% } %>
                   <span style="display: inline-flex; align-items: center; background: #E4F5EC; border-radius: 999px; padding: 5px 12px; font-size: 11.5px; font-weight: 800; color: #128A52;"><%= (compareAt && compareAt > basePriceCents) ? t('product.newVsSave', { newp: formatMoney(compareAt), save: formatMoney(compareAt - basePriceCents) }) : t('product.cheaperThanNew') %></span>
                 </div>
