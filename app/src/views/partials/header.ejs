@@ -45,30 +45,54 @@
   .cat-nav__trigger { display: inline-flex; align-items: center; gap: 4px; }
   .cat-nav__caret { font-size: 18px; transition: transform .18s; }
   .cat-nav:hover .cat-nav__caret { transform: rotate(180deg); }
-  .cat-nav__panel { position: absolute; left: 0; top: 100%; padding-top: 12px; opacity: 0; visibility: hidden; transform: translateY(4px); transition: opacity .15s, transform .15s, visibility .15s; z-index: 60; }
+  .cat-nav__panel { position: absolute; left: 0; top: 100%; padding-top: 12px; opacity: 0; visibility: hidden; transform: translateY(6px); transition: opacity .16s ease, transform .16s ease, visibility .16s; z-index: 60; }
   .cat-nav:hover .cat-nav__panel, .cat-nav__panel:hover { opacity: 1; visibility: visible; transform: translateY(0); }
-  .cat-nav__card { width: min(92vw, 560px); background: #fff; border-radius: 18px; box-shadow: 0 20px 48px rgba(15,22,38,.14); border: 1px solid #EEF0F4; padding: 12px; }
-  .cat-nav__label { padding: 6px 12px 8px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #99A1B0; }
-  .cat-nav__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
-  .cat-nav__item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; font-size: 14px; font-weight: 600; color: #334155; text-decoration: none; transition: background .12s, color .12s; }
-  .cat-nav__item:hover { background: #F8FAFC; color: #ED1C24; }
-  .cat-nav__item .material-symbols-outlined { font-size: 18px; color: #CBD5E1; transition: color .12s; }
-  .cat-nav__item:hover .material-symbols-outlined { color: #ED1C24; }
-  .cat-nav__all { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 6px; padding: 11px; border-top: 1px solid #EEF0F4; border-radius: 12px; font-size: 14px; font-weight: 800; color: #ED1C24; text-decoration: none; }
-  .cat-nav__all:hover { background: rgba(237,28,36,.05); }
+  .cat-nav__card { width: min(94vw, 840px); max-height: min(74vh, 560px); overflow-y: auto; background: #fff; border-radius: 20px; box-shadow: 0 26px 60px rgba(15,22,38,.18); border: 1px solid #EDF0F4; padding: 18px; }
+  .cat-nav__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 8px 14px; }
+  .cat-nav__label { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #99A1B0; }
+  .cat-nav__seeall { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; color: #ED1C24; text-decoration: none; white-space: nowrap; }
+  .cat-nav__seeall:hover { text-decoration: underline; }
+  .cat-nav__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .cat-nav__item { display: flex; align-items: center; gap: 11px; padding: 10px 11px; border-radius: 14px; text-decoration: none; transition: background .12s; }
+  .cat-nav__item:hover { background: #F7F8FA; }
+  .cat-nav__ic { width: 40px; height: 40px; border-radius: 12px; background: #F4F5F8; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background .12s; }
+  .cat-nav__ic .material-symbols-outlined { font-size: 21px; color: #6B7482; transition: color .12s; }
+  .cat-nav__item:hover .cat-nav__ic { background: #FEECEC; }
+  .cat-nav__item:hover .cat-nav__ic .material-symbols-outlined { color: #ED1C24; }
+  .cat-nav__nm { font-size: 13px; font-weight: 700; color: #1F2937; line-height: 1.25; }
+  .cat-nav__item:hover .cat-nav__nm { color: #ED1C24; }
+  @media (max-width: 1180px) { .cat-nav__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .cat-nav__card { width: min(94vw, 640px); } }
 </style>
+<% function _catIcon(name){ var n = (name || '').toLowerCase();
+     if (/transfert/.test(n)) return 'sync_alt';
+     if (/bo[iî]te|vitesse|transmission/.test(n)) return 'settings';
+     if (/moteur/.test(n)) return 'settings_suggest';
+     if (/pont|diff/.test(n)) return 'linear_scale';
+     if (/turbo/.test(n)) return 'cyclone';
+     if (/culasse/.test(n)) return 'view_in_ar';
+     if (/m[eé]catronique|injection|pompe/.test(n)) return 'memory';
+     if (/[eé]lectr/.test(n)) return 'bolt';
+     if (/[eé]clairage|phare|feu|optique/.test(n)) return 'lightbulb';
+     if (/frein/.test(n)) return 'album';
+     if (/embrayage/.test(n)) return 'trip_origin';
+     return 'build'; } %>
 <div class="cat-nav">
   <a class="cat-nav__trigger px-3 py-2 rounded-xl transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/produits" <%= _navActive('/produits') ? 'aria-current="page"' : '' %>><%= t('nav.catalog') %><span class="cat-nav__caret material-symbols-outlined">expand_more</span></a>
   <% if (Array.isArray(navCategories) && navCategories.length) { %>
   <div class="cat-nav__panel">
     <div class="cat-nav__card">
-      <div class="cat-nav__label"><%= t('header.allCategories') %></div>
+      <div class="cat-nav__head">
+        <span class="cat-nav__label"><%= t('header.allCategories') %></span>
+        <a class="cat-nav__seeall" href="<%= _lp %>/produits"><%= t('header.viewCatalog') %> <span class="material-symbols-outlined" style="font-size:15px;">arrow_forward</span></a>
+      </div>
       <div class="cat-nav__grid">
         <% navCategories.forEach(function (cat) { %>
-          <a class="cat-nav__item" href="<%= _lp %>/categorie/<%= encodeURIComponent(cat.slug) %>"><span class="material-symbols-outlined">chevron_right</span><span><%= _isDe && cat.nameDe ? cat.nameDe : cat.name %></span></a>
+          <a class="cat-nav__item" href="<%= _lp %>/categorie/<%= encodeURIComponent(cat.slug) %>">
+            <span class="cat-nav__ic"><span class="material-symbols-outlined"><%= _catIcon(cat.name) %></span></span>
+            <span class="cat-nav__nm"><%= _isDe && cat.nameDe ? cat.nameDe : cat.name %></span>
+          </a>
         <% }); %>
       </div>
-      <a class="cat-nav__all" href="<%= _lp %>/produits"><%= t('header.viewCatalog') %><span class="material-symbols-outlined" style="font-size:18px;">arrow_forward</span></a>
     </div>
   </div>
   <% } %>
