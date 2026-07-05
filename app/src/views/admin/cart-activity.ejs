@@ -49,6 +49,9 @@
       <div class="ml-2 text-xs text-slate-400 hidden md:block">
         <% if (view === 'todo') { %>Jamais contactés, cycle en cours — hors devis moteur/boîte (gérés dans « Devis moteurs &amp; boîtes »).<% } else { %>Historique complet, y compris contactés, convertis, perdus et leads devis.<% } %>
       </div>
+      <button type="button" id="leads-help-btn" class="ml-auto inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex-shrink-0">
+        <span class="material-symbols-outlined text-base text-primary">school</span>Comprendre cette page
+      </button>
     </div>
 
     <!-- Filtres -->
@@ -177,7 +180,7 @@
                         <span class="material-symbols-outlined text-base text-slate-400">mail</span><%= c.email %>
                       </a>
                     <% } %>
-                    <span class="text-slate-400 text-xs" title="Reçu <%= c.receivedRel %> · dernière activité client <%= c.lastActivityAbsolute %>">Reçu <%= c.receivedRel %> · actif <%= c.lastActivityRel %></span>
+                    <span class="text-slate-400 text-xs cursor-help border-b border-dotted border-slate-300" title="« Reçu » = quand le client a laissé sa demande / abandonné son panier. « Dernier signe » = sa dernière action sur le site (nouveau passage, formulaire) — <%= c.lastActivityAbsolute %>. Plus c'est récent, plus il est chaud !">Reçu <%= c.receivedRel %><% if (c.lastActivityRel !== c.receivedRel) { %> · dernier signe du client <%= c.lastActivityRel %><% } %></span>
                   </div>
 
                   <% if (c.showRequestAsPrimary) { %>
@@ -339,6 +342,114 @@
   </div>
 </main>
 
+<!-- Modal: guide « Comprendre cette page » (formation commercial) -->
+<div id="leads-help-modal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/50" id="leads-help-overlay"></div>
+  <div class="absolute right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl overflow-y-auto">
+    <div class="p-6">
+      <div class="flex items-center justify-between mb-1">
+        <div class="text-lg font-bold text-slate-900">📖 Comprendre cette page</div>
+        <button type="button" id="leads-help-close" class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <p class="text-sm text-slate-500 mb-6">Chaque carte = un client à convertir. Voici comment tout lire, en 2 minutes.</p>
+
+      <!-- 1. Les dates -->
+      <div class="rounded-xl border border-slate-200 p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">🕐 Les deux dates</div>
+        <div class="text-sm text-slate-700 space-y-2">
+          <div><span class="text-slate-400 text-xs border-b border-dotted border-slate-300">Reçu il y a 5 j</span> — quand le client a laissé sa demande ou abandonné son panier (l'âge du lead).</div>
+          <div><span class="text-slate-400 text-xs border-b border-dotted border-slate-300">dernier signe du client il y a 25 min</span> — sa dernière action sur le site (nouveau passage, formulaire re-rempli, panier modifié).</div>
+          <div class="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-emerald-800 font-medium">💡 « Reçu il y a 5 j · dernier signe il y a 25 min » = il hésite depuis 5 jours et il est REVENU il y a 25 minutes. Il est chaud : appelle-le maintenant.</div>
+        </div>
+      </div>
+
+      <!-- 2. Couleur du bord -->
+      <div class="rounded-xl border border-slate-200 p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">🎨 La couleur du bord gauche = ta priorité</div>
+        <div class="text-sm text-slate-700 space-y-2">
+          <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded-sm bg-red-500 flex-shrink-0"></span><div><strong>Rouge — à appeler.</strong> Personne ne l'a encore contacté. C'est par LÀ qu'on commence.</div></div>
+          <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded-sm bg-amber-400 flex-shrink-0"></span><div><strong>Ambre — relances auto en cours.</strong> Les emails automatiques travaillent, mais aucun humain ne l'a appelé.</div></div>
+          <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded-sm bg-blue-400 flex-shrink-0"></span><div><strong>Bleu — en cours.</strong> Un commercial s'en occupe déjà (contacté / suivi).</div></div>
+          <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded-sm bg-green-500 flex-shrink-0"></span><div><strong>Vert — gagné.</strong> Il a commandé ou payé son acompte.</div></div>
+          <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded-sm bg-slate-300 flex-shrink-0"></span><div><strong>Gris — perdu.</strong> Marqué perdu (a acheté ailleurs, ne répond plus…).</div></div>
+        </div>
+      </div>
+
+      <!-- 3. Relances AUTO -->
+      <div class="rounded-xl border border-slate-200 p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">🤖 Les emails automatiques (pastilles R1 R2 R3)</div>
+        <div class="flex items-center gap-1.5 mb-3">
+          <span class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-[5px] text-[11.5px] font-medium text-slate-600"><span class="material-symbols-outlined text-[13px] text-slate-400">schedule_send</span>Auto
+            <span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold bg-emerald-500 text-white">R1</span>
+            <span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold bg-emerald-500 text-white">R2</span>
+            <span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-500">R3</span>
+            <span class="text-slate-400 font-normal">dern. il y a 20 h</span>
+          </span>
+        </div>
+        <div class="text-sm text-slate-700 space-y-1.5">
+          <div>Le site relance <strong>tout seul</strong> les paniers abandonnés par email : <strong>R1</strong> ≈ 1 h après l'abandon, <strong>R2</strong> 24 h plus tard, <strong>R3</strong> 72 h plus tard (avec code promo).</div>
+          <div><span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold bg-emerald-500 text-white align-middle">R1</span> <strong>vert = déjà parti</strong> · <span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-500 align-middle">R3</span> gris = pas encore. « cycle terminé » = les 3 sont partis.</div>
+          <div>Sur l'exemple : le client a reçu 2 emails auto, le dernier il y a 20 h — inutile de lui renvoyer la même chose, <strong>appelle-le</strong> ou utilise un autre angle.</div>
+          <div class="text-slate-500 text-xs">Ces emails ne partent QUE pour les paniers (jamais pour les demandes de devis moteur/boîte, qui ont leurs propres relances).</div>
+        </div>
+      </div>
+
+      <!-- 4. Suivi commercial -->
+      <div class="rounded-xl border border-slate-200 p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">👤 Ce que TOI tu as déjà fait (suivi commercial)</div>
+        <div class="flex flex-wrap items-center gap-1.5 mb-3">
+          <span class="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-[5px] text-[11.5px] font-bold text-red-700"><span class="material-symbols-outlined text-[13px]">priority_high</span>Jamais contacté par le commercial</span>
+          <span class="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2 py-[5px] text-[11.5px] font-medium text-blue-800"><span class="material-symbols-outlined text-[13px]">support_agent</span>2 emails · 1 SMS <span class="font-normal text-blue-600">· dern. il y a 4 h</span></span>
+        </div>
+        <div class="text-sm text-slate-700 space-y-1.5">
+          <div><strong>Rouge</strong> = aucun humain ne l'a appelé/écrit → c'est ta priorité.</div>
+          <div><strong>Bleu</strong> = le compte de TES emails et SMS envoyés depuis cette page, avec la date du dernier.</div>
+          <div>« <strong>→ Contacté par Kevin · il y a 4 h</strong> » = qui a posé le statut, et quand. Comme ça, à deux commerciaux, vous ne rappelez jamais deux fois le même client.</div>
+          <div>📝 La <strong>dernière note</strong> s'affiche sur la carte (ex. « À rappeler jeudi matin ») — l'historique complet est dans « Détail &amp; notes ».</div>
+        </div>
+      </div>
+
+      <!-- 5. Les boutons -->
+      <div class="rounded-xl border border-slate-200 p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">⚡ Les boutons d'action</div>
+        <div class="text-sm text-slate-700 space-y-2">
+          <div class="flex items-start gap-2"><span class="inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 text-white text-xs font-bold px-2.5 py-1.5 flex-shrink-0"><span class="material-symbols-outlined text-sm">call</span>Appeler</span><div>Lance l'appel (sur mobile ou softphone). <strong>L'appel convertit 10× mieux que l'email.</strong></div></div>
+          <div class="flex items-start gap-2"><span class="btn btn-secondary text-xs flex-shrink-0"><span class="material-symbols-outlined text-sm mr-1">mail</span>Email</span><span class="btn btn-secondary text-xs flex-shrink-0"><span class="material-symbols-outlined text-sm mr-1">sms</span>SMS</span><div>Messages avec modèles préremplis (les variables {prenom}, {lien_panier}… se remplissent toutes seules). Chaque envoi est compté et daté sur la carte.</div></div>
+          <div class="flex items-start gap-2"><span class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[11px] font-bold px-2 py-1.5 flex-shrink-0"><span class="material-symbols-outlined text-sm">forward_to_inbox</span>Relance auto n°3</span><div>Force l'envoi immédiat du prochain email automatique du cycle, sans attendre.</div></div>
+          <div class="flex items-start gap-2"><span class="inline-flex items-stretch rounded-lg overflow-hidden border border-slate-200 flex-shrink-0 text-[10.5px]"><span class="px-1.5 py-1.5 bg-white text-slate-600">📞 Contacté</span><span class="px-1.5 py-1.5 border-l border-slate-200 bg-white text-slate-600">✅ Gagné</span><span class="px-1.5 py-1.5 border-l border-slate-200 bg-white text-slate-600">✖ Perdu</span></span><div>Marque où tu en es. <strong>Gagné/Perdu sortent le lead de « À traiter »</strong> et coupent les relances auto. Re-clique pour annuler.</div></div>
+          <div class="flex items-start gap-2"><span class="btn btn-ghost text-xs flex-shrink-0"><span class="material-symbols-outlined text-sm mr-1">visibility</span>Détail &amp; notes</span><div>Fiche complète : demande, articles, historique de tous les contacts, et <strong>ajout de note</strong> (fais-le après CHAQUE appel — tes collègues te remercieront).</div></div>
+          <div class="flex items-start gap-2"><span class="btn btn-ghost text-xs px-2 flex-shrink-0"><span class="material-symbols-outlined text-sm">play_circle</span></span><div>Rejoue la navigation du client sur le site (les pages qu'il a regardées = ses vrais besoins).</div></div>
+          <div class="flex items-start gap-2"><span class="inline-flex items-center gap-0.5 text-[11px] font-semibold text-primary flex-shrink-0">Dossier devis <span class="material-symbols-outlined text-xs">arrow_forward</span></span><div>Sur les leads moteur/boîte : ouvre le dossier complet dans « Devis moteurs &amp; boîtes » (c'est LÀ qu'on gère leurs devis et relances).</div></div>
+        </div>
+      </div>
+
+      <!-- 6. Onglets & badges -->
+      <div class="rounded-xl border border-slate-200 p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">🗂 Les onglets et les badges</div>
+        <div class="text-sm text-slate-700 space-y-1.5">
+          <div><strong>« À traiter »</strong> = ta file de travail : jamais contactés, cycle en cours, sans les leads moteur/boîte. Objectif : la vider chaque jour.</div>
+          <div><strong>« Tous »</strong> = l'historique complet (contactés, gagnés, perdus, devis…).</div>
+          <div class="pt-1"><strong>Badges :</strong> <em>Abandonné</em> = panier laissé · <em>Relance 1/2/3</em> = position dans le cycle auto · <em>Récupéré</em> = a commandé · <em>Expiré</em> = cycle fini sans achat · <em>Devis envoyé / Acompte reçu</em> = pipeline devis moteur/boîte.</div>
+          <div><strong>Sources :</strong> <em>Devis / Contact</em> = a rempli un formulaire (demande explicite en vert) · <em>Panier / Guest checkout / Compte</em> = panier abandonné · <em>Moteur / Boîte occasion</em> = tunnels de devis.</div>
+        </div>
+      </div>
+
+      <!-- 7. La méthode -->
+      <div class="rounded-xl border-2 border-primary/30 bg-red-50/40 p-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3">🎯 La méthode qui convertit</div>
+        <ol class="text-sm text-slate-800 space-y-1.5 list-decimal list-inside font-medium">
+          <li>Ouvre <strong>« À traiter »</strong>, commence par les <strong>bords rouges</strong> au plus gros montant.</li>
+          <li><strong>Appelle d'abord.</strong> Pas de réponse → SMS tout de suite (« Je viens d'essayer de vous joindre… ») → Email ensuite.</li>
+          <li>Regarde la chip <strong>Auto</strong> avant d'écrire : s'il a déjà reçu 2 emails auto, change d'angle (appel, question technique), ne répète pas la même relance.</li>
+          <li>Après CHAQUE contact : <strong>note</strong> le résultat + statut <strong>Contacté</strong>.</li>
+          <li>Un « dernier signe du client » récent (minutes/heures) = <strong>client chaud, à appeler en premier</strong>.</li>
+        </ol>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- Modal: action (email / sms / detail) -->
 <div id="lead-modal" class="fixed inset-0 z-50 hidden">
   <div class="absolute inset-0 bg-black/50" id="lead-modal-overlay"></div>
@@ -369,6 +480,17 @@
   function closeModal() { modal.classList.add('hidden'); }
   if (overlay) overlay.addEventListener('click', closeModal);
   if (closeBtn) closeBtn.addEventListener('click', closeModal);
+
+  // ─ Guide « Comprendre cette page » ─
+  var helpModal = document.getElementById('leads-help-modal');
+  var helpBtn = document.getElementById('leads-help-btn');
+  if (helpBtn && helpModal) {
+    helpBtn.addEventListener('click', function () { helpModal.classList.remove('hidden'); });
+    ['leads-help-overlay', 'leads-help-close'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('click', function () { helpModal.classList.add('hidden'); });
+    });
+  }
 
   function escapeHtml(s) {
     return String(s == null ? '' : s)
