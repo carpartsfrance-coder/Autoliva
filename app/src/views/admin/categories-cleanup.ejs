@@ -1,0 +1,79 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'categories' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8 max-w-5xl">
+    <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Catégories', href: '/admin/categories'}, {label: 'Nettoyage'}] }) %>
+    <div class="flex items-center justify-between gap-4 flex-wrap">
+      <div>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Nettoyer &amp; fusionner les catégories</div>
+        <div class="mt-1 text-sm text-slate-500">Regroupe les variantes (« moteur », « moteur diesel », « bloc moteur »…) dans une seule catégorie propre. Les produits sont réaffectés automatiquement.</div>
+      </div>
+      <a href="/admin/categories" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">← Retour aux catégories</a>
+    </div>
+
+    <% if (typeof successMessage !== 'undefined' && successMessage) { %>
+      <div class="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-900"><div class="font-bold">✓ Fusion effectuée</div><div class="mt-1 text-sm"><%= successMessage %></div></div>
+    <% } %>
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900"><div class="font-bold">Erreur</div><div class="mt-1 text-sm"><%= errorMessage %></div></div>
+    <% } %>
+
+    <div class="mt-6 flex gap-3 flex-wrap text-sm">
+      <span class="inline-flex items-center gap-2 rounded-full bg-emerald-50 text-emerald-700 px-3 py-1 font-semibold"><span class="material-symbols-outlined text-base">check_circle</span><%= cleanCount %> propre(s)</span>
+      <span class="inline-flex items-center gap-2 rounded-full bg-amber-50 text-amber-700 px-3 py-1 font-semibold"><span class="material-symbols-outlined text-base">warning</span><%= messyCount %> à reclasser</span>
+    </div>
+
+    <% if (!dbConnected) { %>
+      <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900">Base de données indisponible.</div>
+    <% } else if (!rows.length) { %>
+      <div class="mt-8 rounded-xl border border-slate-200 bg-white p-6 text-slate-500">Aucun produit catégorisé pour le moment.</div>
+    <% } else { %>
+    <form action="/admin/categories/nettoyage/fusion" method="POST" class="mt-6">
+      <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+        <div class="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 px-5 py-3 bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-widest text-slate-400">
+          <span></span><span>Catégorie (valeur des produits)</span><span class="text-right">Produits</span><span class="text-right pr-1">Statut</span>
+        </div>
+        <% rows.slice().sort((a,b)=> (a.isClean===b.isClean ? b.total-a.total : (a.isClean?1:-1))).forEach(function(r){ %>
+          <label class="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 px-5 py-3 border-b border-slate-100 hover:bg-slate-50 cursor-pointer">
+            <input type="checkbox" name="sources" value="<%= r.value %>" class="rounded border-slate-300 text-primary focus:ring-primary" />
+            <span class="min-w-0">
+              <span class="block text-sm font-semibold text-slate-900 truncate"><%= r.value %></span>
+            </span>
+            <span class="text-right text-sm text-slate-600"><span class="font-bold text-slate-900"><%= r.total %></span><% if (r.published !== r.total) { %> <span class="text-xs text-slate-400">(<%= r.published %> publié<%= r.published>1?'s':'' %>)</span><% } %></span>
+            <span class="text-right pr-1">
+              <% if (r.isClean) { %>
+                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide">Propre</span>
+              <% } else { %>
+                <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide">À reclasser</span>
+              <% } %>
+            </span>
+          </label>
+        <% }); %>
+      </div>
+
+      <div class="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
+        <div class="text-sm font-bold text-slate-900">Fusionner la sélection dans :</div>
+        <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Catégorie cible existante</label>
+            <select name="target" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold">
+              <option value="">— Choisir —</option>
+              <% cleanNames.forEach(function(n){ %><option value="<%= n %>"><%= n %></option><% }); %>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">…ou nouvelle catégorie cible</label>
+            <input type="text" name="targetNew" placeholder="Ex: Moteurs" class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold" />
+          </div>
+        </div>
+        <div class="mt-4 flex items-center gap-3 flex-wrap">
+          <button type="submit" class="btn btn-primary" <%= dbConnected ? '' : 'disabled' %>>Fusionner la sélection</button>
+          <span class="text-xs text-slate-500">Coche les catégories à regrouper, choisis (ou crée) la cible, puis fusionne. Les produits sont réaffectés et les catégories fusionnées supprimées.</span>
+        </div>
+      </div>
+    </form>
+    <% } %>
+  </div>
+</main>

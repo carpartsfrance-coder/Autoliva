@@ -1332,6 +1332,86 @@ async function postAdminUpdateCategory(req, res, next) {
   }
 }
 
+/* Page de nettoyage : liste TOUTES les valeurs de `category` des produits (y compris
+   les variantes en texte libre héritées d'imports) + leur nb de produits, en signalant
+   celles qui ne correspondent pas à une catégorie propre. Permet de fusionner. */
+async function getAdminCategoryCleanupPage(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    let rows = [];
+    let cleanNames = [];
+    if (dbConnected) {
+      const agg = await Product.aggregate([
+        { $group: { _id: '$category', total: { $sum: 1 }, published: { $sum: { $cond: ['$isPublished', 1, 0] } } } },
+        { $sort: { total: -1 } },
+      ]);
+      const cats = await Category.find({}).select('name isActive').lean();
+      const cleanSet = new Set(cats.map((c) => String(c.name || '').trim()).filter(Boolean));
+      cleanNames = cats.filter((c) => c.isActive !== false).map((c) => String(c.name || '').trim()).filter(Boolean).sort((a, b) => a.localeCompare(b, 'fr'));
+      rows = (agg || []).map((a) => {
+        const value = a._id == null ? '' : String(a._id).trim();
+        return { value, total: a.total || 0, published: a.published || 0, isClean: value !== '' && cleanSet.has(value) };
+      }).filter((r) => r.value !== '');
+    }
+    const errorMessage = req.session.adminCategoryError || null;
+    const successMessage = req.session.adminCategorySuccess || null;
+    delete req.session.adminCategoryError;
+    delete req.session.adminCategorySuccess;
+    return res.render('admin/categories-cleanup', {
+      dbConnected,
+      rows,
+      cleanNames,
+      cleanCount: rows.filter((r) => r.isClean).length,
+      messyCount: rows.filter((r) => !r.isClean).length,
+      errorMessage,
+      successMessage,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/* Fusionne plusieurs valeurs de catégorie (sources) dans une catégorie cible :
+   réaffecte tous les produits concernés, crée la cible si besoin, supprime les
+   docs Category orphelins fusionnés. */
+async function postAdminCategoryMerge(req, res, next) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.redirect('/admin/categories/nettoyage');
+    let sources = req.body && req.body.sources;
+    if (typeof sources === 'string') sources = [sources];
+    sources = Array.isArray(sources) ? sources.map((s) => String(s || '').trim()).filter(Boolean) : [];
+    const targetSelect = getTrimmedString(req.body && req.body.target);
+    const targetNew = getTrimmedString(req.body && req.body.targetNew);
+    const target = targetNew || targetSelect;
+
+    if (!target || !sources.length) {
+      req.session.adminCategoryError = 'Sélectionne au moins une catégorie à fusionner et une catégorie cible.';
+      return res.redirect('/admin/categories/nettoyage');
+    }
+
+    const toMove = sources.filter((s) => s !== target);
+    const result = toMove.length
+      ? await Product.updateMany({ category: { $in: toMove } }, { $set: { category: target } })
+      : { modifiedCount: 0 };
+
+    // S'assure que la catégorie cible existe dans la liste propre.
+    const targetSlug = slugify(target);
+    const existingTarget = await Category.findOne({ name: target }).select('_id').lean();
+    if (!existingTarget && targetSlug) {
+      try { await Category.create({ name: target, slug: targetSlug, isActive: true }); } catch (e) { /* slug/nom déjà pris : ignore */ }
+    }
+    // Supprime les catégories fusionnées (orphelines ou en doublon) sauf la cible.
+    if (toMove.length) {
+      await Category.deleteMany({ name: { $in: toMove } });
+    }
+
+    req.session.adminCategorySuccess = `${result.modifiedCount || 0} produit(s) reclassé(s) dans « ${target} »` + (toMove.length ? ` · ${toMove.length} catégorie(s) fusionnée(s).` : '.');
+    return res.redirect('/admin/categories/nettoyage');
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function postAdminToggleCategory(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -12508,6 +12588,8 @@ module.exports = {
   postAdminBulkDeleteCategories,
   postAdminUpdateCategory,
   postAdminToggleCategory,
+  getAdminCategoryCleanupPage,
+  postAdminCategoryMerge,
   postAdminDeleteCategory,
   getAdminShippingClassesPage,
   postAdminCreateShippingClass,
