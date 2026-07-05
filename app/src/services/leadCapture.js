@@ -64,6 +64,22 @@ function phoneMatchVariants(value) {
   return Array.from(variants).filter(Boolean);
 }
 
+/**
+ * Regex de rapprochement TOLÉRANTE pour un téléphone : matche le même numéro
+ * quel que soit le formatage stocké en base (« 06 88 89 99 00 », « +33 6-88… »,
+ * « 0688899900 »…). Nécessaire car certains leads historiques (détection panier)
+ * ont stocké le téléphone brut, avec espaces. Retourne null si non-FR/invalide.
+ */
+function phoneLooseRegex(value) {
+  let e164 = '';
+  try { e164 = require('./smsService').normalizePhoneFR(normalizePhone(value)) || ''; } catch (_) {}
+  if (!e164) return null;
+  const national = e164.slice(3);            // 688899900 (9 chiffres, sans le 0)
+  const sep = '[\\s.\\-()]*';
+  const digits = national.split('').join(sep);
+  return new RegExp('^' + sep + '(?:\\+33|0033|33|0)' + sep + digits + sep + '$');
+}
+
 function readSessionId(req) {
   if (!req) return '';
   return String(req.sessionID || (req.session && req.session.id) || '');
@@ -369,4 +385,5 @@ module.exports = {
   normalizePhone,
   normalizePlate,
   phoneMatchVariants,
+  phoneLooseRegex,
 };

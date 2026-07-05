@@ -10,6 +10,7 @@ const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations } = requi
 const { reconcileScalapayOrders } = require('./reconcileScalapayOrders');
 const { syncShipmentTracking } = require('./syncShipmentTracking');
 const { runEngineQuoteReminders } = require('./sendEngineQuoteReminders');
+const { sendRepurchaseReminders } = require('./sendRepurchaseReminders');
 const { processScheduledAutoDevis } = require('./processScheduledAutoDevis');
 const { syncConversions } = require('../services/googleAdsConversionSync');
 const { isConfigured: googleAdsConfigured } = require('../services/googleAdsConversions');
@@ -135,6 +136,17 @@ function startScheduler() {
       if (r && r.processed) console.log('[scheduler] auto-devis différés envoyés:', r.processed);
     } catch (err) {
       console.error('[scheduler] Erreur auto-devis différés:', err.message || err);
+    }
+  });
+
+  // Relance RÉACHAT J+90 : quotidien à 10:15. NO-OP tant que
+  // REPURCHASE_REMINDER_ENABLED=true n'est pas posé sur Render (texte de
+  // l'email à valider avant activation).
+  cron.schedule('15 10 * * *', async () => {
+    try {
+      await sendRepurchaseReminders();
+    } catch (err) {
+      console.error('[scheduler] Erreur relances réachat:', err.message || err);
     }
   });
 

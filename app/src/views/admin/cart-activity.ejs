@@ -232,8 +232,9 @@
                       </span>
                     <% } %>
 
-                    <%# Suivi commercial : jamais contacté (alerte) OU récap emails/SMS/statut %>
-                    <% if (c.neverTouched) { %>
+                    <%# Suivi commercial : jamais contacté (alerte) OU récap emails/SMS/statut.
+                        L'alerte rouge n'a pas de sens sur un lead gagné/perdu. %>
+                    <% if (c.neverTouched && c.priority !== 'won' && c.priority !== 'lost') { %>
                       <span class="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-[5px] font-bold text-red-700">
                         <span class="material-symbols-outlined text-[13px]">priority_high</span>Jamais contacté par le commercial
                       </span>
@@ -250,6 +251,19 @@
                         <% var _msLabel = { contacted: 'Contacté', converted: 'Converti', lost: 'Perdu' }[c.manualStatus] || c.manualStatus; %>
                         <span class="text-slate-500">→ <strong><%= _msLabel %></strong><%= c.manualStatusByName ? ' par ' + c.manualStatusByName : '' %><%= c.manualStatusAtRel ? ' · ' + c.manualStatusAtRel : '' %></span>
                       <% } %>
+                    <% } %>
+
+                    <%# Commande rapprochée : ce lead est devenu un CLIENT %>
+                    <% if (c.recoveredOrderBadge) { %>
+                      <a href="<%= c.recoveredOrderBadge.url %>" class="inline-flex items-center gap-1 rounded-lg border border-green-300 bg-green-50 px-2 py-[5px] font-bold text-green-800 hover:bg-green-100 transition" title="Ce client a passé commande — cliquer pour ouvrir la commande. On ne le relance plus, mais on le garde : c'est un client pour le réachat.">
+                        <span class="material-symbols-outlined text-[13px]">shopping_bag</span>
+                        A commandé<%= c.recoveredOrderBadge.number ? ' — n°' + c.recoveredOrderBadge.number : '' %><%= c.recoveredOrderBadge.totalEuro ? ' · ' + c.recoveredOrderBadge.totalEuro : '' %><%= c.recoveredOrderBadge.atRel ? ' · ' + c.recoveredOrderBadge.atRel : '' %>
+                      </a>
+                    <% } %>
+                    <% if (c.repurchaseSentRel) { %>
+                      <span class="inline-flex items-center gap-1 text-slate-500" title="Email automatique « besoin d'autre chose ? » envoyé ~3 mois après son achat">
+                        <span class="material-symbols-outlined text-[13px] text-slate-400">autorenew</span>Relance réachat envoyée <%= c.repurchaseSentRel %>
+                      </span>
                     <% } %>
 
                     <%# Dernière note interne (l'historique complet est dans Détail) %>
@@ -430,6 +444,7 @@
           <div><strong>« À traiter »</strong> = ta file de travail : jamais contactés, cycle en cours, sans les leads moteur/boîte. Objectif : la vider chaque jour.</div>
           <div><strong>« Tous »</strong> = l'historique complet (contactés, gagnés, perdus, devis…).</div>
           <div class="pt-1"><strong>Badges :</strong> <em>Abandonné</em> = panier laissé · <em>Relance 1/2/3</em> = position dans le cycle auto · <em>Récupéré</em> = a commandé · <em>Expiré</em> = cycle fini sans achat · <em>Devis envoyé / Acompte reçu</em> = pipeline devis moteur/boîte.</div>
+          <div><strong>🛍 « A commandé — n°X · montant »</strong> (chip verte) = sa commande retrouvée automatiquement (paiement en ligne, virement encaissé, commande créée à la main…) — clique pour l'ouvrir. On ne le relance plus, mais on le GARDE : c'est un client, le meilleur prospect pour la vente suivante. « 🔁 Relance réachat » = email automatique « besoin d'autre chose ? » envoyé ~3 mois après l'achat (option, désactivée par défaut).</div>
           <div><strong>Sources :</strong> <em>Devis / Contact</em> = a rempli un formulaire (demande explicite en vert) · <em>Panier / Guest checkout / Compte</em> = panier abandonné · <em>Moteur / Boîte occasion</em> = tunnels de devis.</div>
         </div>
       </div>
