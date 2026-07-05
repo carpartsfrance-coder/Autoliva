@@ -628,5 +628,10 @@
   "product.callbackOk": "Demande envoyée — on vous rappelle sous 1h ouvrée",
   "product.callbackMsg": "Demande de rappel — vérification compatibilité (fiche produit)",
   "product.addedToCartShort": "ajouté au panier",
-  "header.allCategories": "Toutes les catégories"
+  "header.allCategories": "Toutes les catégories",
+  "product.newVsSave": "Neuve : %newp% € — économisez %save% €",
+  "product.trustExchangeConsigne": "Échange standard : consigne de %amount% € remboursée au retour",
+  "product.exchangeHowSubConsigne": "Vous recevez la pièce reconditionnée et nous renvoyez l’ancienne. Une consigne de %amount% € est encaissée à la commande, puis remboursée au retour.",
+  "product.exStep1TextConsigne": "Votre pièce reconditionnée est expédiée sous 24/48h. Une consigne de %amount% € est encaissée à la commande.",
+  "product.depositNote": "Consigne de %amount% € remboursée intégralement au retour de l’ancienne pièce sous %days% jours."
 }
