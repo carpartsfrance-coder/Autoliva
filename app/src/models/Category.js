@@ -22,6 +22,9 @@ const categorySchema = new mongoose.Schema(
     slug: { type: String, required: true, trim: true, lowercase: true, unique: true },
     isActive: { type: Boolean, default: true },
     isHomeFeatured: { type: Boolean, default: false },
+    // Affichage dans le mega-menu « Catalogue » du header + icône (nom Material Symbol).
+    showInMenu: { type: Boolean, default: false },
+    menuIcon: { type: String, default: '', trim: true },
     sortOrder: { type: Number, default: 0 },
 
     shippingClassId: { type: mongoose.Schema.Types.ObjectId, ref: 'ShippingClass', default: null },

@@ -16,6 +16,29 @@ function _escapeRegExp(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/* Icône par défaut (Material Symbol) selon le nom de la catégorie, quand aucune
+   icône n'est définie en admin. */
+function _defaultIcon(name) {
+  const n = (name || '').toLowerCase();
+  if (/transfert/.test(n)) return 'sync_alt';
+  if (/bo[iî]te|vitesse|transmission/.test(n)) return 'settings';
+  if (/moteur|bloc/.test(n)) return 'settings_suggest';
+  if (/pont|diff[ée]rentiel|cardan|transmission/.test(n)) return 'linear_scale';
+  if (/turbo|compresseur/.test(n)) return 'cyclone';
+  if (/culasse/.test(n)) return 'view_in_ar';
+  if (/m[ée]catronique|calculateur|injection|pompe|valve/.test(n)) return 'memory';
+  if (/d[ée]marreur|alternateur|batterie|charge/.test(n)) return 'battery_charging_full';
+  if (/[ée]lectr|faisceau|capteur/.test(n)) return 'bolt';
+  if (/[ée]clairage|phare|feu|optique|ampoule/.test(n)) return 'lightbulb';
+  if (/frein|disque|plaquette|[ée]trier/.test(n)) return 'album';
+  if (/embrayage|volant moteur/.test(n)) return 'trip_origin';
+  if (/direction|suspension|amortisseur|cr[ée]maill/.test(n)) return 'tune';
+  if (/refroidiss|radiateur|climatis/.test(n)) return 'ac_unit';
+  if (/[ée]chappement|catalyseur|fap/.test(n)) return 'air';
+  if (/carrosserie|t[ôo]le|pare/.test(n)) return 'directions_car';
+  return 'category';
+}
+
 async function getNavCategories() {
   if (mongoose.connection.readyState !== 1) return _navCache.data || [];
   const now = Date.now();
@@ -24,34 +47,43 @@ async function getNavCategories() {
     const Category = require('../models/Category');
     const Product = require('../models/Product');
 
-    const [docs, counts] = await Promise.all([
-      Category.find({ isActive: true }).sort({ sortOrder: 1, name: 1 }).select('name slug localizations.de.name').lean(),
-      // Nombre de produits publiés par valeur de category (texte libre, parfois « Parent > Enfant »)
-      Product.aggregate([
+    // Triées par « Ordre » (sortOrder) éditable en admin, puis nom.
+    const docs = await Category.find({ isActive: true })
+      .sort({ sortOrder: 1, name: 1 })
+      .select('name slug sortOrder showInMenu menuIcon localizations.de.name')
+      .lean();
+
+    const toItem = (c) => ({
+      name: c.name,
+      slug: c.slug,
+      nameDe: (c.localizations && c.localizations.de && c.localizations.de.name) ? c.localizations.de.name : c.name,
+      icon: (c.menuIcon && String(c.menuIcon).trim()) ? String(c.menuIcon).trim() : _defaultIcon(c.name),
+    });
+
+    // Mode MANUEL : si au moins une catégorie est cochée « afficher au menu », on
+    // n'affiche QUE celles-là, dans l'ordre du champ « Ordre ».
+    const manual = docs.filter((c) => c && c.slug && c.name && c.showInMenu === true);
+    let data;
+    if (manual.length) {
+      data = manual.map(toItem);
+    } else {
+      // Repli AUTO : catégories avec ≥ NAV_MIN_PRODUCTS produits, triées par volume.
+      const counts = await Product.aggregate([
         { $match: { isPublished: true, category: { $type: 'string', $ne: '' } } },
         { $group: { _id: '$category', count: { $sum: 1 } } },
-      ]),
-    ]);
-
-    // Pour chaque catégorie, on somme les produits dont le champ category vaut le nom
-    // exact OU commence par « Nom > … » (même logique de rattachement que l'admin).
-    const countFor = (name) => {
-      const rx = new RegExp('^' + _escapeRegExp(name) + '(\\s*>|$)', 'i');
-      let total = 0;
-      for (const c of counts) { if (c && typeof c._id === 'string' && rx.test(c._id)) total += c.count; }
-      return total;
-    };
-
-    const data = docs
-      .filter((c) => c && c.slug && c.name)
-      .map((c) => ({
-        name: c.name,
-        slug: c.slug,
-        nameDe: (c.localizations && c.localizations.de && c.localizations.de.name) ? c.localizations.de.name : c.name,
-        count: countFor(c.name),
-      }))
-      .filter((c) => c.count >= NAV_MIN_PRODUCTS)
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+      ]);
+      const countFor = (name) => {
+        const rx = new RegExp('^' + _escapeRegExp(name) + '(\\s*>|$)', 'i');
+        let total = 0;
+        for (const cc of counts) { if (cc && typeof cc._id === 'string' && rx.test(cc._id)) total += cc.count; }
+        return total;
+      };
+      data = docs
+        .filter((c) => c && c.slug && c.name)
+        .map((c) => Object.assign(toItem(c), { count: countFor(c.name) }))
+        .filter((c) => c.count >= NAV_MIN_PRODUCTS)
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    }
 
     _navCache = { at: now, data };
     return data;
