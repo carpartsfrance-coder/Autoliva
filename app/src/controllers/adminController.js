@@ -1006,6 +1006,8 @@ async function getAdminCategoriesPage(req, res, next) {
         slug: c.slug,
         isActive: c.isActive !== false,
         isHomeFeatured: c.isHomeFeatured === true,
+        showInMenu: c.showInMenu === true,
+        menuIcon: typeof c.menuIcon === 'string' ? c.menuIcon : '',
         sortOrder: Number.isFinite(c.sortOrder) ? c.sortOrder : 0,
         shippingClassId: c.shippingClassId ? String(c.shippingClassId) : '',
         seoText: typeof c.seoText === 'string' ? c.seoText : '',
@@ -1196,7 +1198,7 @@ async function postAdminUpdateCategory(req, res, next) {
       return res.redirect('/admin/categories');
     }
 
-    const existing = await Category.findById(categoryId).select('_id name sortOrder shippingClassId isHomeFeatured seoText').lean();
+    const existing = await Category.findById(categoryId).select('_id name sortOrder shippingClassId isHomeFeatured seoText showInMenu menuIcon').lean();
     if (!existing || typeof existing.name !== 'string' || !existing.name.trim()) {
       return res.redirect('/admin/categories');
     }
@@ -1218,6 +1220,8 @@ async function postAdminUpdateCategory(req, res, next) {
       ? new mongoose.Types.ObjectId(shippingClassIdRaw)
       : null;
     const isHomeFeatured = isChecked(req.body && req.body.isHomeFeatured);
+    const showInMenu = isChecked(req.body && req.body.showInMenu);
+    const menuIcon = (typeof req.body.menuIcon === 'string' ? req.body.menuIcon.trim() : '').replace(/[^a-z0-9_]/gi, '').slice(0, 40);
     const seoText = typeof req.body.seoText === 'string' ? req.body.seoText.trim() : '';
 
     if (!nextName) {
@@ -1276,7 +1280,7 @@ async function postAdminUpdateCategory(req, res, next) {
             name: updatedName,
             slug: updatedSlug,
             sortOrder: updatedSortOrder,
-            ...(String(cat._id) === String(existing._id) ? { shippingClassId, isHomeFeatured, seoText } : {}),
+            ...(String(cat._id) === String(existing._id) ? { shippingClassId, isHomeFeatured, seoText, showInMenu, menuIcon } : {}),
           },
         });
       }
@@ -1303,10 +1307,12 @@ async function postAdminUpdateCategory(req, res, next) {
         nextName !== oldName ||
         sortOrder !== (Number.isFinite(existing.sortOrder) ? existing.sortOrder : 0) ||
         String(existing.shippingClassId || '') !== String(shippingClassId || '') ||
-        existing.isHomeFeatured === true !== isHomeFeatured
+        (existing.isHomeFeatured === true) !== isHomeFeatured ||
+        (existing.showInMenu === true) !== showInMenu ||
+        String(existing.menuIcon || '') !== menuIcon
       ) {
         await Category.findByIdAndUpdate(categoryId, {
-          $set: { name: nextName, slug: nextSlug, sortOrder, shippingClassId, isHomeFeatured, seoText },
+          $set: { name: nextName, slug: nextSlug, sortOrder, shippingClassId, isHomeFeatured, seoText, showInMenu, menuIcon },
         });
       }
 

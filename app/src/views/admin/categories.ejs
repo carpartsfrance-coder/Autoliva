@@ -237,6 +237,18 @@
                                   <span class="mt-1 block text-xs font-medium text-slate-500">Active cette catégorie dans la sidebar Catégories de la page d'accueil.</span>
                                 </span>
                               </label>
+                              <label class="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-500">
+                                <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="showInMenu" type="checkbox" value="true" <%= g.mainDoc.showInMenu ? 'checked' : '' %> />
+                                <span>
+                                  <span class="block font-semibold text-slate-900">Afficher dans le menu Catalogue</span>
+                                  <span class="mt-1 block text-xs font-medium text-slate-500">Inclut cette catégorie dans le mega-menu du header, dans l'ordre du champ « Ordre » ci-dessus. Si aucune catégorie n'est cochée, le menu affiche automatiquement celles qui ont le plus de produits.</span>
+                                </span>
+                              </label>
+                              <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Icône du menu</label>
+                                <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" name="menuIcon" type="text" placeholder="Ex: settings, bolt, cyclone, lightbulb…" value="<%= g.mainDoc.menuIcon || '' %>" />
+                                <div class="mt-1 text-xs text-slate-500">Nom d'une icône <a href="https://fonts.google.com/icons?icon.set=Material+Symbols" target="_blank" rel="noopener" class="text-primary underline">Material Symbols</a> (en minuscules, ex. <code>settings</code>). Vide = icône choisie automatiquement selon le nom.</div>
+                              </div>
                               <div>
                                 <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Texte SEO (HTML)</label>
                                 <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium font-mono" name="seoText" rows="6" placeholder="Texte riche affiché en bas de la page catégorie pour le référencement..."><%= g.mainDoc.seoText || '' %></textarea>

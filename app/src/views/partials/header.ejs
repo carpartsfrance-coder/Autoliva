@@ -63,19 +63,6 @@
   .cat-nav__item:hover .cat-nav__nm { color: #ED1C24; }
   @media (max-width: 1180px) { .cat-nav__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .cat-nav__card { width: min(94vw, 640px); } }
 </style>
-<% function _catIcon(name){ var n = (name || '').toLowerCase();
-     if (/transfert/.test(n)) return 'sync_alt';
-     if (/bo[iî]te|vitesse|transmission/.test(n)) return 'settings';
-     if (/moteur/.test(n)) return 'settings_suggest';
-     if (/pont|diff/.test(n)) return 'linear_scale';
-     if (/turbo/.test(n)) return 'cyclone';
-     if (/culasse/.test(n)) return 'view_in_ar';
-     if (/m[eé]catronique|injection|pompe/.test(n)) return 'memory';
-     if (/[eé]lectr/.test(n)) return 'bolt';
-     if (/[eé]clairage|phare|feu|optique/.test(n)) return 'lightbulb';
-     if (/frein/.test(n)) return 'album';
-     if (/embrayage/.test(n)) return 'trip_origin';
-     return 'build'; } %>
 <div class="cat-nav">
   <a class="cat-nav__trigger px-3 py-2 rounded-xl transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/produits" <%= _navActive('/produits') ? 'aria-current="page"' : '' %>><%= t('nav.catalog') %><span class="cat-nav__caret material-symbols-outlined">expand_more</span></a>
   <% if (Array.isArray(navCategories) && navCategories.length) { %>
@@ -88,7 +75,7 @@
       <div class="cat-nav__grid">
         <% navCategories.forEach(function (cat) { %>
           <a class="cat-nav__item" href="<%= _lp %>/categorie/<%= encodeURIComponent(cat.slug) %>">
-            <span class="cat-nav__ic"><span class="material-symbols-outlined"><%= _catIcon(cat.name) %></span></span>
+            <span class="cat-nav__ic"><span class="material-symbols-outlined"><%= cat.icon || 'category' %></span></span>
             <span class="cat-nav__nm"><%= _isDe && cat.nameDe ? cat.nameDe : cat.name %></span>
           </a>
         <% }); %>
