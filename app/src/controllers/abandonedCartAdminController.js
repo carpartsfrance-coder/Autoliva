@@ -275,13 +275,36 @@ async function getAdminLeadsPage(req, res, next) {
       .limit(perPage)
       .lean();
 
+    /* Nombre de relances AUTO déjà parties, déduit du statut du cycle */
+    const REMINDERS_SENT_BY_STATUS = { abandoned: 0, reminded_1: 1, reminded_2: 2, reminded_3: 3, expired: 3, recovered: 0 };
+
     const leads = rawLeads.map((c) => {
       const items = Array.isArray(c.items) ? c.items : [];
       const phoneFR = normalizePhoneFR(c.phone || '');
       const fullName = ((c.firstName || '') + ' ' + (c.lastName || '')).trim();
       const requested = c.requested || {};
-      const isExplicitRequest = c.captureSource === 'devis' || c.captureSource === 'contact';
+      /* Demande explicite = formulaires devis/contact ET tunnels moteur/boîte
+         (leur `requested` est l'info primaire ; sans ça un lead moteur sans
+         panier affichait « 0,00 € » au lieu de sa demande) */
+      const isExplicitRequest = ['devis', 'contact', 'landing_moteurs', 'landing_boites'].includes(c.captureSource || '');
       const hasRequested = !!(requested.vehicle || requested.vin || requested.plate || requested.ref || requested.message);
+
+      /* ── Données « suivi commercial » (timeline de la carte) ── */
+      const notesArr = Array.isArray(c.notes) ? c.notes : [];
+      const lastNoteRaw = notesArr.length ? notesArr[notesArr.length - 1] : null;
+      const autoApplicable = !NON_CART_SOURCES.includes(c.captureSource || '') && items.length > 0;
+      const neverTouched = !c.manualStatus && !(c.manualEmailsSent > 0) && !(c.manualSmsSent > 0) && !c.lastManualContactAt;
+      /* Priorité visuelle : à appeler (rouge) > en cours (bleu) > gagné (vert) > perdu (gris) > relances auto seules (ambre).
+         Leads moteur/boîte : dérivée du pipeline devis (un « Acompte reçu » est gagné, pas « à appeler »). */
+      const engStatus = (ENGINE_PIPELINE_SOURCES.includes(c.captureSource || '') && c.engineQuote && c.engineQuote.status) ? c.engineQuote.status : '';
+      let priority;
+      if (engStatus) {
+        priority = (engStatus === 'won' || engStatus === 'acompte_recu') ? 'won' : (engStatus === 'lost') ? 'lost' : 'inprogress';
+      } else if (c.manualStatus === 'converted' || c.status === 'recovered') priority = 'won';
+      else if (c.manualStatus === 'lost') priority = 'lost';
+      else if (c.manualStatus === 'contacted' || !neverTouched) priority = 'inprogress';
+      else if (REMINDERS_SENT_BY_STATUS[c.status] > 0) priority = 'auto';
+      else priority = 'call';
 
       /* Construction d'un résumé "demande explicite" pour les leads devis/contact */
       const requestSummary = (() => {
@@ -340,10 +363,31 @@ async function getAdminLeadsPage(req, res, next) {
         manualSmsSent: c.manualSmsSent || 0,
         contextMessage: c.contextMessage || '',
         attribution: c.attribution || {},
-        notes: Array.isArray(c.notes) ? c.notes : [],
+        notes: notesArr,
         canRemind: ['abandoned', 'reminded_1', 'reminded_2'].includes(c.status) && !c.manualStatus
           && !NON_CART_SOURCES.includes(c.captureSource || '') && items.length > 0,
         recoveryToken: c.recoveryToken || '',
+
+        /* ── Suivi commercial (timeline de la carte) ── */
+        priority,                                     // 'call' | 'inprogress' | 'won' | 'lost' | 'auto'
+        neverTouched,
+        receivedRel: formatRelative(c.abandonedAt || c.createdAt),
+        autoReminders: {
+          applicable: autoApplicable,
+          sent: REMINDERS_SENT_BY_STATUS[c.status] || 0,
+          lastRel: c.lastRemindedAt ? formatRelative(c.lastRemindedAt) : '',
+          cycleDone: c.status === 'expired',
+        },
+        lastManualContactRel: c.lastManualContactAt ? formatRelative(c.lastManualContactAt) : '',
+        manualStatusByName: c.manualStatusByName || '',
+        manualStatusAtRel: c.manualStatusAt ? formatRelative(c.manualStatusAt) : '',
+        notesCount: notesArr.length,
+        lastNote: lastNoteRaw ? {
+          text: String(lastNoteRaw.text || '').slice(0, 110),
+          by: lastNoteRaw.addedByName || 'Admin',
+          atRel: lastNoteRaw.addedAt ? formatRelative(lastNoteRaw.addedAt) : '',
+        } : null,
+        nextReminderNumber: { abandoned: 1, reminded_1: 2, reminded_2: 3 }[c.status] || 0,
       };
     });
 
