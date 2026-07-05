@@ -168,12 +168,13 @@
 
                   <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                     <% if (c.phone) { %>
-                      <a href="tel:<%= c.phone %>" class="font-bold text-slate-900 hover:text-primary inline-flex items-center gap-1.5">
+                      <button type="button" data-copy-phone="<%= c.phone %>" class="font-bold text-slate-900 hover:text-primary inline-flex items-center gap-1.5 cursor-pointer" title="Cliquer pour copier le numéro (à coller dans votre logiciel d'appel)">
                         <span class="material-symbols-outlined text-base text-emerald-600">call</span><%= c.phone %>
                         <% if (!c.phoneCallable) { %>
                           <span class="text-xs font-normal text-amber-600">(format ?)</span>
                         <% } %>
-                      </a>
+                        <span class="material-symbols-outlined text-[13px] text-slate-300">content_copy</span>
+                      </button>
                     <% } %>
                     <% if (c.email) { %>
                       <a href="mailto:<%= c.email %>" class="text-slate-600 hover:text-primary inline-flex items-center gap-1">
@@ -279,9 +280,9 @@
                 <!-- Actions commerciales -->
                 <div class="flex flex-wrap items-center gap-1.5 lg:flex-col lg:items-stretch lg:w-[230px] lg:flex-shrink-0 lg:border-l lg:border-slate-100 lg:pl-4">
                   <% if (c.phone && c.phoneCallable) { %>
-                    <a href="tel:<%= c.phone %>" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 transition">
-                      <span class="material-symbols-outlined text-sm">call</span>Appeler
-                    </a>
+                    <button type="button" data-copy-phone="<%= c.phone %>" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 transition" title="Copie le numéro pour le coller dans votre logiciel d'appel">
+                      <span class="material-symbols-outlined text-sm">content_copy</span>Copier le n°
+                    </button>
                   <% } %>
                   <div class="flex gap-1.5 w-full lg:w-auto">
                     <% if (c.email) { %>
@@ -427,7 +428,7 @@
       <div class="rounded-xl border border-slate-200 p-4 mb-4">
         <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">⚡ Les boutons d'action</div>
         <div class="text-sm text-slate-700 space-y-2">
-          <div class="flex items-start gap-2"><span class="inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 text-white text-xs font-bold px-2.5 py-1.5 flex-shrink-0"><span class="material-symbols-outlined text-sm">call</span>Appeler</span><div>Lance l'appel (sur mobile ou softphone). <strong>L'appel convertit 10× mieux que l'email.</strong></div></div>
+          <div class="flex items-start gap-2"><span class="inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 text-white text-xs font-bold px-2.5 py-1.5 flex-shrink-0"><span class="material-symbols-outlined text-sm">content_copy</span>Copier le n°</span><div><strong>Copie le numéro</strong> dans le presse-papier — colle-le (Ctrl+V) dans ton logiciel d'appel. Cliquer sur le numéro affiché le copie aussi. <strong>L'appel convertit 10× mieux que l'email.</strong></div></div>
           <div class="flex items-start gap-2"><span class="btn btn-secondary text-xs flex-shrink-0"><span class="material-symbols-outlined text-sm mr-1">mail</span>Email</span><span class="btn btn-secondary text-xs flex-shrink-0"><span class="material-symbols-outlined text-sm mr-1">sms</span>SMS</span><div>Messages avec modèles préremplis (les variables {prenom}, {lien_panier}… se remplissent toutes seules). Chaque envoi est compté et daté sur la carte.</div></div>
           <div class="flex items-start gap-2"><span class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[11px] font-bold px-2 py-1.5 flex-shrink-0"><span class="material-symbols-outlined text-sm">forward_to_inbox</span>Relance auto n°3</span><div>Force l'envoi immédiat du prochain email automatique du cycle, sans attendre.</div></div>
           <div class="flex items-start gap-2"><span class="inline-flex items-stretch rounded-lg overflow-hidden border border-slate-200 flex-shrink-0 text-[10.5px]"><span class="px-1.5 py-1.5 bg-white text-slate-600">📞 Contacté</span><span class="px-1.5 py-1.5 border-l border-slate-200 bg-white text-slate-600">✅ Gagné</span><span class="px-1.5 py-1.5 border-l border-slate-200 bg-white text-slate-600">✖ Perdu</span></span><div>Marque où tu en es. <strong>Gagné/Perdu sortent le lead de « À traiter »</strong> et coupent les relances auto. Re-clique pour annuler.</div></div>
@@ -515,6 +516,27 @@
 
   function refresh() { window.location.reload(); }
 
+  // ─ Copier le numéro (le commercial appelle depuis son logiciel, pas le tel: du PC) ─
+  function fallbackCopyText(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      return true;
+    } catch (_) { return false; }
+  }
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-copy-phone]') : null;
+    if (!el) return;
+    var num = el.getAttribute('data-copy-phone') || '';
+    if (!num) return;
+    var ok = function () { showToast('Numéro copié — collez-le dans votre logiciel d’appel'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(num).then(ok).catch(function () { if (fallbackCopyText(num)) ok(); });
+    } else if (fallbackCopyText(num)) { ok(); }
+  });
+
   // ─ Statut manuel rapide ─
   document.querySelectorAll('.lead-status-btn').forEach(function (btn) {
     btn.addEventListener('click', function () {
@@ -551,7 +573,7 @@
           html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Client</div>';
           html += '<div class="font-semibold text-slate-900">' + escapeHtml(((c.firstName || '') + ' ' + (c.lastName || '')).trim() || c.email || '—') + '</div>';
           if (c.email) html += '<div class="text-sm"><a href="mailto:' + escapeHtml(c.email) + '" class="text-primary hover:underline">' + escapeHtml(c.email) + '</a></div>';
-          if (c.phone) html += '<div class="text-sm"><a href="tel:' + escapeHtml(c.phone) + '" class="text-primary hover:underline">' + escapeHtml(c.phone) + '</a></div>';
+          if (c.phone) html += '<div class="text-sm"><button type="button" data-copy-phone="' + escapeHtml(c.phone) + '" class="inline-flex items-center gap-1 text-primary hover:underline cursor-pointer" title="Copier le numéro"><span class="material-symbols-outlined text-[13px]">content_copy</span>' + escapeHtml(c.phone) + '</button></div>';
           html += '<div class="text-xs text-slate-500 mt-1">Source : ' + escapeHtml(c.captureSourceLabel || '—') + '</div>';
           if (c.attribution && c.attribution.source) html += '<div class="text-xs text-slate-500">Attribution : ' + escapeHtml(c.attribution.source) + (c.attribution.medium ? ' / ' + escapeHtml(c.attribution.medium) : '') + '</div>';
           html += '</div>';
