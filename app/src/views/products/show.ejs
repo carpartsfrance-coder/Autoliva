@@ -266,7 +266,7 @@
         .ap-page .material-symbols-outlined { font-family: 'Material Symbols Outlined'; font-weight: normal; font-style: normal; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr; -webkit-font-feature-settings: 'liga'; -webkit-font-smoothing: antialiased; }
         .ap-page input::placeholder { color: #9AA1AF; opacity: 1; }
         .ap-fill { font-variation-settings: 'FILL' 1; }
-        @keyframes apStickyIn { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+        @keyframes apStickyIn { from { transform: translateY(100%); } to { transform: translateY(0); } }
         @keyframes apToastIn { from { transform: translate(-50%, 14px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
         @keyframes apImgFade { from { opacity: 0.4; } to { opacity: 1; } }
         @keyframes apLogoMarquee { to { transform: translateX(-50%); } }
@@ -318,7 +318,7 @@
       <div class="ap-page">
 
       <%# ═══ Barre sticky d'achat (apparaît après 780px de scroll — JS) ═══ %>
-      <div data-ap-sticky style="position: fixed; top: 0; left: 0; right: 0; z-index: 100; background: #FFFFFF; border-bottom: 1px solid #E9ECF1; box-shadow: 0 6px 24px rgba(15,22,38,0.08); display: none;">
+      <div data-ap-sticky style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: #FFFFFF; border-top: 1px solid #E9ECF1; box-shadow: 0 -6px 24px rgba(15,22,38,0.08); display: none;">
         <div style="max-width: 1264px; margin: 0 auto; padding: 0 32px; height: 66px; display: flex; align-items: center; gap: 14px;">
           <% if (mainImage) { %><img src="<%= mainImage %>" alt="" style="width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" /><% } %>
           <div style="min-width: 0;">
