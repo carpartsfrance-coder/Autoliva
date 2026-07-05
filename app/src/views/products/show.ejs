@@ -745,9 +745,12 @@
       <% } %>
 
       <%# ═══ Pour aller plus loin (blog) ═══ %>
+      <%# Articles de blog liés depuis le back-office : choisis dans le picker de la
+          fiche produit (relatedBlogPostIds) OU articles qui pointent vers ce produit
+          (relatedProductIds). Aucun contenu d'exemple : section masquée si rien de lié. %>
       <% var _blog = (Array.isArray(relatedBlogPosts) && relatedBlogPosts.length)
-           ? relatedBlogPosts.slice(0, 3).map((a) => ({ url: a.url, img: a.imageUrl, tag: (a.category || t('product.blogGuide')), read: (a.readingTime ? a.readingTime + ' ' + t('product.minRead') : ''), title: a.title, excerpt: a.excerpt }))
-           : [ {url:'/blog', img:'', tag: t('product.blogTutorial'), read:'3 '+t('product.minRead'), title: t('product.blog1Title'), excerpt: t('product.blog1Excerpt')}, {url:'/blog', img:'', tag: t('product.blogDiagnostic'), read:'4 '+t('product.minRead'), title: t('product.blog2Title'), excerpt: t('product.blog2Excerpt')}, {url:'/blog', img:'', tag: t('product.blogGuide'), read:'5 '+t('product.minRead'), title: t('product.blog3Title'), excerpt: t('product.blog3Excerpt')} ]; %>
+           ? relatedBlogPosts.slice(0, 3).map((a) => ({ url: a.url, img: a.imageUrl, tag: (a.categoryLabel || t('product.blogGuide')), read: (a.readTimeLabel || ''), title: a.title, excerpt: a.excerpt }))
+           : []; %>
       <% if (_blog.length) { %>
       <div style="margin-top: 72px;">
         <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 16px; flex-wrap: wrap;">
