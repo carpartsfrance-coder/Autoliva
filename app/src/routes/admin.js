@@ -241,6 +241,8 @@ router.post('/commandes/:orderId/email/resend', requireAdminAuth, orderEmailAdmi
 
 router.get('/catalogue', requireAdminAuth, adminController.getAdminCatalogPage);
 router.get('/categories', requireAdminAuth, adminController.getAdminCategoriesPage);
+router.get('/categories/nettoyage', requireAdminAuth, adminController.getAdminCategoryCleanupPage);
+router.post('/categories/nettoyage/fusion', requireAdminAuth, adminController.postAdminCategoryMerge);
 router.post('/categories', requireAdminAuth, adminController.postAdminCreateCategory);
 router.post('/categories/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteCategories);
 router.post('/categories/:categoryId', requireAdminAuth, adminController.postAdminUpdateCategory);

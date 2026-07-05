@@ -343,17 +343,19 @@
 
           <div class="md:order-3">
             <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="category">Catégorie</label>
-            <% if (typeof categories !== 'undefined' && categories && categories.length) { %>
-              <select class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="category" name="category">
-                <option value="">Autre</option>
-                <% categories.forEach((c) => { %>
-                  <option value="<%= c.name %>" <%= form && form.category === c.name ? 'selected' : '' %>><%= c.name %></option>
-                <% }) %>
-              </select>
-            <% } else { %>
-              <input class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="category" name="category" placeholder="Ex: Freinage" type="text" value="<%= form && form.category ? form.category : '' %>" />
-            <% } %>
-            <div class="mt-2 text-xs text-slate-500">Recommandé pour bien classer le produit dans le catalogue.</div>
+            <% var _cats = (typeof categories !== 'undefined' && Array.isArray(categories)) ? categories : []; %>
+            <% var _curCat = form && form.category ? String(form.category).trim() : ''; %>
+            <% var _curInList = _cats.some((c) => c.name === _curCat); %>
+            <select class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="category" name="category">
+              <option value="">— Non classé —</option>
+              <% _cats.forEach((c) => { %>
+                <option value="<%= c.name %>" <%= _curCat === c.name ? 'selected' : '' %>><%= c.name %></option>
+              <% }) %>
+              <% if (_curCat && !_curInList) { %>
+                <option value="<%= _curCat %>" selected><%= _curCat %> — à reclasser</option>
+              <% } %>
+            </select>
+            <div class="mt-2 text-xs text-slate-500">Choisis une catégorie de la liste (plus de saisie libre). Gère la liste dans <a href="/admin/categories" class="text-primary underline">Catégories</a> · nettoie les doublons via <a href="/admin/categories/nettoyage" class="text-primary underline">Nettoyer / fusionner</a>.</div>
           </div>
 
           <div class="md:order-4">
