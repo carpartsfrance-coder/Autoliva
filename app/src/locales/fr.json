@@ -636,5 +636,6 @@
   "product.depositNote": "Consigne de %amount% € remboursée intégralement au retour de l’ancienne pièce sous %days% jours.",
   "product.recommended": "Recommandé",
   "product.showMoreModels": "Voir les %count% autres modèles",
-  "product.showLessModels": "Voir moins"
+  "product.showLessModels": "Voir moins",
+  "product.swipeHint": "Faites défiler"
 }

@@ -318,21 +318,55 @@
         .ap-compat-extra { display: none !important; }
         [data-ap-compat].is-expanded .ap-compat-extra { display: grid !important; }
         [data-ap-compat-toggle].is-open [data-ap-compat-caret] { transform: rotate(180deg); }
+        /* Blocs réservés au design mobile (maquette Autoparts Mobile) */
+        .ap-m-only { display: none; }
         @media (max-width: 760px) {
-          .ap-hero-grid { grid-template-columns: minmax(0, 1fr) !important; }
-          .ap-buypanel { min-width: 0 !important; width: auto !important; }
+          /* ── Hero : galerie full-bleed empilée au-dessus du panneau ── */
+          .ap-hero-grid { display: block !important; }
+          .ap-gallery-d { display: none !important; }
+          .ap-m-only { display: block; }
+          .ap-buypanel { min-width: 0 !important; width: auto !important; margin-top: 16px !important; }
           .ap-buypanel * { min-width: 0; }
+          .ap-price-amount { font-size: 28px !important; }
+          /* Utilitaire full-bleed (bord à bord viewport) */
+          .ap-bleed { margin-left: calc(50% - 50vw) !important; margin-right: calc(50% - 50vw) !important; border-radius: 0 !important; }
+          /* ── Barre sticky bas ── */
           .ap-sticky-inner { padding: 0 14px !important; gap: 10px !important; height: 62px !important; }
           .ap-sticky-thumb, .ap-sticky-info { display: none !important; }
           .ap-sticky-price { margin-left: 0 !important; margin-right: auto !important; text-align: left !important; }
-          .ap-two-col { grid-template-columns: 1fr !important; gap: 32px !important; }
-          .ap-recond-grid { grid-template-columns: 1fr !important; }
-          .ap-cmp-grid { display: none !important; }
-          .ap-cmp-cards { display: flex !important; }
+          /* ── Form vérif compat : colonne pleine largeur, inputs 16px (anti-zoom iOS) ── */
+          .ap-check-row { flex-direction: column !important; }
+          .ap-check-plate { flex: 0 0 auto !important; height: 52px !important; }
+          .ap-check-plate input { font-size: 16px !important; }
+          .ap-check-contact, .ap-check-btn { height: 52px !important; width: 100% !important; flex: 0 0 auto !important; font-size: 16px !important; }
+          .ap-check-btn { font-size: 14px !important; }
+          /* ── Compat : liste (cache le tableau serré) ── */
+          .ap-compat-table { display: none !important; }
+          .ap-compat-list { display: block !important; }
+          [data-ap-compat].is-expanded .ap-compat-list .ap-compat-extra { display: flex !important; }
+          /* ── 2 colonnes → 1 ── */
+          .ap-two-col { display: block !important; }
+          .ap-two-col > div + div { margin-top: 44px; }
+          /* ── Bandes navy / grise full-bleed ── */
+          .ap-recond-grid { grid-template-columns: 1fr !important; gap: 24px !important; padding: 36px 20px !important; margin-left: calc(50% - 50vw) !important; margin-right: calc(50% - 50vw) !important; border-radius: 0 !important; }
+          #echange-standard { padding: 32px 20px !important; margin-left: calc(50% - 50vw) !important; margin-right: calc(50% - 50vw) !important; border-radius: 0 !important; }
+          .ap-echange-steps { grid-template-columns: 1fr !important; gap: 16px !important; }
+          /* ── Comparatif : scroll horizontal du tableau ── */
+          .ap-cmp-grid { display: grid !important; min-width: 560px; }
+          .ap-cmp-cards { display: none !important; }
+          .ap-cmp-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-right: -16px; padding-right: 16px; }
+          .ap-cmp-scroll::-webkit-scrollbar { display: none; }
+          /* ── Réassurance 2×2 ── */
           .ap-4col { grid-template-columns: repeat(2, 1fr) !important; }
           .ap-3col { grid-template-columns: 1fr !important; }
+          /* ── Carrousels scroll-snap (photos / accessoires / blog) ── */
+          .ap-carousel { display: flex !important; flex-wrap: nowrap !important; overflow-x: auto; scroll-snap-type: x proximity; gap: 12px !important; -webkit-overflow-scrolling: touch; margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw); padding: 0 20px 4px 20px; }
+          .ap-carousel::-webkit-scrollbar { display: none; }
+          .ap-carousel > * { scroll-snap-align: start; }
+          .ap-photos-carousel > * { flex: 0 0 82% !important; }
+          .ap-acc-carousel > * { flex: 0 0 280px !important; }
+          .ap-blog-carousel > * { flex: 0 0 270px !important; }
           .pp-links { grid-template-columns: 1fr; }
-          .ap-buypanel { width: auto !important; }
         }
       </style>
 
@@ -381,8 +415,8 @@
       <%# ═══ Hero : galerie + panneau d'achat ═══ %>
       <div class="ap-hero-grid" style="display: grid; grid-template-columns: minmax(0, 1fr) 520px; gap: 48px; align-items: start;">
 
-        <%# ── Galerie (hooks réels : data-main-image / data-thumb / data-gallery-*) ── %>
-        <div style="display: flex; flex-direction: column; gap: 14px;">
+        <%# ── Galerie desktop (hooks réels : data-main-image / data-thumb / data-gallery-*) ── %>
+        <div class="ap-gallery-d" style="display: flex; flex-direction: column; gap: 14px;">
           <div style="position: relative; border: 1px solid #E9ECF1; border-radius: 16px; overflow: hidden; background: #FFFFFF; aspect-ratio: 1 / 0.885;">
             <% if (mainMediaItem) { %>
               <% const _isMainVideo = mainMediaItem.type === 'video'; const _isMainEmbed = mainMediaItem.type === 'embed'; %>
@@ -421,6 +455,29 @@
             <button class="hidden" data-thumb data-index="<%= idx + 4 %>" data-src="<%= item.url %>" data-type="<%= item.type %>"<% if (item.type === 'embed') { %> data-embed-src="<%= item.embedUrl %>"<% } %> type="button"></button>
           <% }) %>
         </div>
+
+        <%# ── Galerie mobile : swipe plein écran + dots (maquette mobile) ── %>
+        <% var _mImgs = mediaItems.filter(function (m) { return m.type === 'image'; }).map(function (m) { return m.url; }); if (!_mImgs.length && mainImage) { _mImgs = [mainImage]; } %>
+        <% if (_mImgs.length) { %>
+        <div class="ap-m-only ap-bleed" style="position: relative;">
+          <div data-ap-gal-strip style="display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; border-top: 1px solid #F0F2F6; border-bottom: 1px solid #F0F2F6; scrollbar-width: none;">
+            <% _mImgs.forEach(function (u, i) { %>
+              <img src="<%= u %>" alt="<%= product.name %><%= i ? (' — vue ' + (i + 1)) : '' %>"<% if (i) { %> loading="lazy" decoding="async"<% } %> style="flex: 0 0 100%; width: 100%; aspect-ratio: 1 / 0.92; object-fit: cover; scroll-snap-align: center; display: block;" />
+            <% }) %>
+          </div>
+          <div style="position: absolute; top: 14px; left: 14px; background: #10151F; color: #FFFFFF; font-size: 11px; font-weight: 700; padding: 7px 11px; border-radius: 8px; pointer-events: none;"><%= (heroBadge || t('product.reconditioned')) %></div>
+          <button type="button" data-ap-fav title="<%= t('product.addFavorite') %>" style="position: absolute; top: 12px; right: 12px; width: 42px; height: 42px; border-radius: 999px; border: 1px solid #E9ECF1; background: #FFFFFF; box-shadow: 0 4px 12px rgba(15,22,38,0.12); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+            <span class="material-symbols-outlined" data-ap-fav-icon style="font-size: 20px; color: #0F1626;">favorite</span>
+          </button>
+          <% if (_mImgs.length > 1) { %>
+          <div style="position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; background: rgba(16,21,31,0.45); border-radius: 999px; padding: 6px 9px; pointer-events: none;">
+            <% _mImgs.forEach(function (u, i) { %>
+              <span data-ap-dot data-index="<%= i %>" style="width: <%= i === 0 ? '18px' : '6px' %>; height: 6px; border-radius: 999px; background: <%= i === 0 ? '#FFFFFF' : 'rgba(255,255,255,0.45)' %>; transition: width 0.2s, background 0.2s;"></span>
+            <% }) %>
+          </div>
+          <% } %>
+        </div>
+        <% } %>
 
         <%# ── Panneau d'achat (largeur 520 ; hooks cart/prix réels) ── %>
         <form action="/panier/ajouter/<%= product._id %>" data-add-to-cart-form data-product-id="<%= product._id %>" data-product-sku="<%= product.sku || product._id %>" data-product-image="<%= mainImage %>" data-product-name="<%= product.name %>" data-product-category="<%= product.category || '' %>" data-product-brand="<%= _ga4Brand %>" data-product-price-cents="<%= basePriceCents %>" method="POST" class="ap-buypanel" style="margin: 0;">
@@ -502,7 +559,7 @@
             <div style="display: flex; align-items: flex-start; flex-wrap: wrap; gap: 10px 16px;">
               <div style="min-width: 0;">
                 <div style="display: flex; align-items: flex-end; flex-wrap: wrap;">
-                  <span style="font-size: 32px; font-weight: 800; letter-spacing: -0.01em; color: #0F1626; line-height: 1;" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="4" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(basePriceCents) %> €</span>
+                  <span class="ap-price-amount" style="font-size: 32px; font-weight: 800; letter-spacing: -0.01em; color: #0F1626; line-height: 1;" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="4" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(basePriceCents) %> €</span>
                   <span style="font-size: 12px; font-weight: 700; color: #8A93A4; margin-left: 8px; padding-bottom: 2px;"><%= t('product.ttc') %></span>
 <% if (product.vatRecoverable) { %><span style="font-size: 12.5px; font-weight: 700; color: #99A1B0; margin-left: 12px; padding-bottom: 2px;"><span data-price-display-ht><%= formatMoney(priceHTcents) %></span> <%= t('product.ht') %></span><% } %>
                 </div>
@@ -527,13 +584,13 @@
 
             <%# ── Vérif compatibilité par un expert (POST /api/lead/product-quote) ── %>
             <div style="font-size: 12px; font-weight: 800; color: #0F1626; margin-bottom: 8px;"><%= t('product.checkCompatExpert') %></div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <div style="display: flex; height: 48px; flex: 0 0 148px; border: 1px solid #DEE2E9; border-radius: 10px; overflow: hidden; background: #FFFFFF;">
+            <div class="ap-check-row" style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <div class="ap-check-plate" style="display: flex; height: 48px; flex: 0 0 148px; border: 1px solid #DEE2E9; border-radius: 10px; overflow: hidden; background: #FFFFFF;">
                 <div style="width: 30px; background: #2653C6; color: #FFFFFF; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; flex-shrink: 0;"><span style="font-size: 7px; letter-spacing: 1px; opacity: 0.9;">★</span><span style="font-size: 11px; font-weight: 800;">F</span></div>
                 <input type="text" data-ap-plate placeholder="AA-123-AA" style="flex: 1; min-width: 0; border: none; outline: none; font-family: inherit; font-size: 13.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #0F1626; padding: 0 10px; background: transparent;" />
               </div>
-              <input type="text" data-ap-contact placeholder="<%= t('product.phoneOrEmail') %>" style="flex: 1 1 140px; min-width: 0; height: 48px; border: 1px solid #DEE2E9; border-radius: 10px; outline: none; font-family: inherit; font-size: 12.5px; font-weight: 500; color: #0F1626; padding: 0 12px; background: #FFFFFF;" />
-              <button type="button" data-ap-check-btn style="height: 48px; padding: 0 18px; border: none; border-radius: 10px; background: #15213B; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer; white-space: nowrap; flex: 1 1 auto;" class="ap-navy"><%= t('product.checkCta') %></button>
+              <input type="text" data-ap-contact class="ap-check-contact" placeholder="<%= t('product.phoneOrEmail') %>" style="flex: 1 1 140px; min-width: 0; height: 48px; border: 1px solid #DEE2E9; border-radius: 10px; outline: none; font-family: inherit; font-size: 12.5px; font-weight: 500; color: #0F1626; padding: 0 12px; background: #FFFFFF;" />
+              <button type="button" data-ap-check-btn style="height: 48px; padding: 0 18px; border: none; border-radius: 10px; background: #15213B; color: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 800; cursor: pointer; white-space: nowrap; flex: 1 1 auto;" class="ap-navy ap-check-btn"><%= t('product.checkCta') %></button>
             </div>
             <div data-ap-check-idle style="font-size: 11.5px; font-weight: 500; color: #8A93A4; margin-top: 9px;"><%= t('product.expertConfirms') %></div>
             <div data-ap-check-loading style="display: none; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; font-weight: 600; color: #6B7482;"><span class="material-symbols-outlined" style="font-size: 15px;">progress_activity</span><%= t('product.sendingRequest') %></div>
@@ -575,21 +632,37 @@
           <% var _compatLimit = 5; var _compatMore = Math.max(0, compatVehicles.length - _compatLimit); %>
           <% if (compatVehicles.length) { %>
             <div data-ap-compat>
-              <div style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr 1fr; padding: 8px 0;">
-                <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.model') %></span>
-                <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.engine') %></span>
-                <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.years') %></span>
-                <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.references') %></span>
-              </div>
-              <% compatVehicles.forEach(function (v, i) { %>
-                <% var _rowRef = refsAlternatives[i] || ref || engineCodeVal || '—'; %>
-                <div class="<%= i >= _compatLimit ? 'ap-compat-extra' : '' %>" style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr 1fr; align-items: center; padding: 13px 0; border-top: 1px solid #F0F2F6;">
-                  <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= [v.make, v.model].filter(Boolean).join(' ') || '—' %></span>
-                  <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.engine || '—' %></span>
-                  <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.years || '—' %></span>
-                  <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= _rowRef %></span>
+              <%# Desktop / tablette : tableau 4 colonnes %>
+              <div class="ap-compat-table">
+                <div style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr 1fr; padding: 8px 0;">
+                  <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.model') %></span>
+                  <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.engine') %></span>
+                  <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.years') %></span>
+                  <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.references') %></span>
                 </div>
-              <% }) %>
+                <% compatVehicles.forEach(function (v, i) { %>
+                  <% var _rowRef = refsAlternatives[i] || ref || engineCodeVal || '—'; %>
+                  <div class="<%= i >= _compatLimit ? 'ap-compat-extra' : '' %>" style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr 1fr; align-items: center; padding: 13px 0; border-top: 1px solid #F0F2F6;">
+                    <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= [v.make, v.model].filter(Boolean).join(' ') || '—' %></span>
+                    <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.engine || '—' %></span>
+                    <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.years || '—' %></span>
+                    <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= _rowRef %></span>
+                  </div>
+                <% }) %>
+              </div>
+              <%# Mobile : liste (modèle — moteur / années / réf à droite) %>
+              <div class="ap-compat-list" style="display: none;">
+                <% compatVehicles.forEach(function (v, i) { %>
+                  <% var _rowRefM = refsAlternatives[i] || ref || engineCodeVal || '—'; %>
+                  <div class="<%= i >= _compatLimit ? 'ap-compat-extra' : '' %>" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 0;<%= i === 0 ? '' : ' border-top: 1px solid #F0F2F6;' %>">
+                    <div style="min-width: 0;">
+                      <div style="font-size: 13px; font-weight: 800; color: #0F1626; line-height: 1.35;"><%= [[v.make, v.model].filter(Boolean).join(' '), v.engine].filter(Boolean).join(' — ') || '—' %></div>
+                      <% if (v.years) { %><div style="font-size: 12px; font-weight: 600; color: #6B7482; margin-top: 2px;"><%= v.years %></div><% } %>
+                    </div>
+                    <span style="font-size: 12px; font-weight: 800; color: #0F1626; flex-shrink: 0;"><%= _rowRefM %></span>
+                  </div>
+                <% }) %>
+              </div>
             </div>
             <% if (_compatMore > 0) { %>
               <button type="button" data-ap-compat-toggle style="margin-top: 12px; display: inline-flex; align-items: center; gap: 6px; background: #F5F6F8; border: 1px solid #E5E8EE; border-radius: 10px; padding: 9px 15px; font-family: inherit; font-size: 12.5px; font-weight: 800; color: #15213B; cursor: pointer; transition: background .15s;" onmouseover="this.style.background='#EEF0F4'" onmouseout="this.style.background='#F5F6F8'">
@@ -684,7 +757,9 @@
              { c: t('product.cmpEnv'), cIcon: 'eco', u: t('product.cmpReuse'), r: t('product.cmpReuseRecond'), rIcon: 'check_circle', n: t('product.cmpNewProd'), weak: [false, false, true] }
            ]; %>
 
-        <%# ── Desktop : tableau 4 colonnes ── %>
+        <%# ── Tableau 4 colonnes (desktop) — scroll horizontal sur mobile ── %>
+        <div class="ap-m-only" style="text-align: right; font-size: 11px; font-weight: 700; color: #99A1B0; margin-bottom: 8px;"><%= t('product.swipeHint') %><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: -3px;">arrow_forward</span></div>
+        <div class="ap-cmp-scroll">
         <div class="ap-cmp-grid" style="display: grid; grid-template-columns: 1.15fr 1fr 1.25fr 1fr; border: 1px solid #E5E8EE; border-radius: 16px; overflow: hidden;">
           <div style="padding: 16px 20px; background: #FFFFFF;"></div>
           <div style="padding: 16px; font-size: 11px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; background: #F7F8FA; color: #6B7482; display: flex; align-items: center; justify-content: center;"><%= t('product.usedWord') %></div>
@@ -697,8 +772,9 @@
             <div style="padding: 15px 16px; font-size: 13px; font-weight: 600; color: <%= rw.weak[2] ? '#99A1B0' : '#3E4657' %>; border-top: 1px solid #F0F2F6; display: flex; align-items: center; justify-content: center; text-align: center;"><%= rw.n %></div>
           <% }) %>
         </div>
+        </div><%# /ap-cmp-scroll %>
 
-        <%# ── Mobile : cartes empilées (Reconditionné en tête, mis en avant) ── %>
+        <%# ── (Ancien fallback cartes mobile — masqué : on scrolle désormais le tableau) ── %>
         <div class="ap-cmp-cards">
           <% var _cmpOpts = [ { k: 'r', wi: 1, label: t('product.recondWord'), cls: 'reco', badge: t('product.recommended') }, { k: 'u', wi: 0, label: t('product.usedWord'), cls: 'used' }, { k: 'n', wi: 2, label: t('product.newWord'), cls: 'newp' } ]; %>
           <% _cmpOpts.forEach(function (op) { %>
@@ -725,7 +801,7 @@
           <div style="font-size: 19px; font-weight: 800; color: #0F1626;"><%= t('product.exchangeHowTitle') %></div>
           <div style="font-size: 12.5px; font-weight: 500; color: #6B7482; margin-top: 4px;"><%= hasConsigne ? t('product.exchangeHowSubConsigne', { amount: consigneAmountEuro }) : t('product.exchangeHowSub') %></div>
         </div>
-        <div class="ap-4col" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px;">
+        <div class="ap-echange-steps" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px;">
           <% var _exSteps = [ {t: t('product.exStep1Title'), d: (hasConsigne ? t('product.exStep1TextConsigne', { amount: consigneAmountEuro }) : t('product.exStep1Text'))}, {t: t('product.exStep2Title'), d: t('product.exStep2Text')}, {t: t('product.exStep3Title'), d: t('product.exStep3Text')}, {t: t('product.exStep4Title'), d: t('product.exStep4Text')} ]; %>
           <% _exSteps.forEach((st, i) => { %>
             <div style="display: flex; align-items: flex-start; gap: 13px;">
@@ -753,7 +829,7 @@
           </div>
           <a href="tel:<%= brand.PHONE_INTL %>" style="border: 1px solid #DEE2E9; border-radius: 10px; padding: 10px 16px; background: #FFFFFF; font-family: inherit; font-size: 12.5px; font-weight: 800; color: #0F1626; text-decoration: none; white-space: nowrap;" class="ap-iconbtn"><%= t('product.areYouGarage') %></a>
         </div>
-        <div class="ap-3col" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+        <div class="ap-carousel ap-photos-carousel" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
           <% var _proofs = [ {img:'/design/autoparts/photo-porsche.jpg', t: t('product.proof1Title'), s: t('product.proof1Sub')}, {img:'/design/autoparts/photo-sun-motors.jpg', t: t('product.proof2Title'), s: t('product.proof2Sub')}, {img:'/design/autoparts/photo-chargement.jpg', t: t('product.proof3Title'), s: t('product.proof3Sub')} ]; %>
           <% _proofs.forEach((pf) => { %>
             <div class="ap-photocard" style="position: relative; border-radius: 14px; overflow: hidden; aspect-ratio: 16 / 10; background: #1A2233;">
@@ -817,7 +893,7 @@
           </div>
           <a href="/produits" style="display: flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; color: #ED1C24; text-decoration: none; white-space: nowrap;"><%= t('product.seeAllCatalog') %><span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span></a>
         </div>
-        <div class="ap-4col" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;">
+        <div class="ap-carousel ap-acc-carousel" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;">
           <% productAccessories.slice(0, 4).forEach((ac) => { %>
             <div style="border: 1px solid #E5E8EE; border-radius: 12px; padding: 12px; display: flex; gap: 12px; align-items: center;">
               <a href="<%= ac.publicPath %>" style="width: 62px; height: 62px; border-radius: 8px; background: #F4F5F8; display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; text-decoration: none;">
@@ -858,7 +934,7 @@
           </div>
           <a href="/blog" style="display: flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; color: #ED1C24; text-decoration: none; white-space: nowrap;"><%= t('product.seeAllBlog') %><span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span></a>
         </div>
-        <div class="ap-3col" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
+        <div class="ap-carousel ap-blog-carousel" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
           <% _blog.forEach((a) => { %>
             <a href="<%= a.url %>" class="ap-blogcard" style="display: block; border: 1px solid #E5E8EE; border-radius: 14px; overflow: hidden; background: #FFFFFF; text-decoration: none; color: inherit;">
               <div style="position: relative; aspect-ratio: 16 / 10; background: #F4F5F8;">
@@ -1393,15 +1469,36 @@
             });
           }
 
-          /* ── Favori (visuel) ── */
-          var favBtn = document.querySelector('[data-ap-fav]');
-          var favIcon = document.querySelector('[data-ap-fav-icon]');
-          if (favBtn && favIcon) {
-            favBtn.addEventListener('click', function () {
-              var on = favIcon.style.color === 'rgb(237, 28, 36)' || favIcon.classList.contains('ap-fill');
-              if (on) { favIcon.classList.remove('ap-fill'); favIcon.style.color = '#0F1626'; }
-              else { favIcon.classList.add('ap-fill'); favIcon.style.color = '#ED1C24'; showToast('<%= t('product.addedToFavorites') %>'); }
+          /* ── Favori (visuel) — bouton panneau + overlay galerie mobile ── */
+          var favBtns = Array.prototype.slice.call(document.querySelectorAll('[data-ap-fav]') || []);
+          var favIcons = Array.prototype.slice.call(document.querySelectorAll('[data-ap-fav-icon]') || []);
+          if (favBtns.length) {
+            var favOn = false;
+            favBtns.forEach(function (b) {
+              b.addEventListener('click', function () {
+                favOn = !favOn;
+                favIcons.forEach(function (ic) {
+                  if (favOn) { ic.classList.add('ap-fill'); ic.style.color = '#ED1C24'; }
+                  else { ic.classList.remove('ap-fill'); ic.style.color = '#0F1626'; }
+                });
+                if (favOn) showToast('<%= t('product.addedToFavorites') %>');
+              });
             });
+          }
+
+          /* ── Galerie mobile : dots synchronisés au scroll ── */
+          var galStrip = document.querySelector('[data-ap-gal-strip]');
+          var galDots = Array.prototype.slice.call(document.querySelectorAll('[data-ap-dot]') || []);
+          if (galStrip && galDots.length > 1) {
+            var syncGalDots = function () {
+              var i = Math.round(galStrip.scrollLeft / Math.max(1, galStrip.clientWidth));
+              galDots.forEach(function (d, di) {
+                var on = di === i;
+                d.style.width = on ? '18px' : '6px';
+                d.style.background = on ? '#FFFFFF' : 'rgba(255,255,255,0.45)';
+              });
+            };
+            galStrip.addEventListener('scroll', function () { window.requestAnimationFrame(syncGalDots); }, { passive: true });
           }
 
           /* ── FAQ accordéon (exclusif) ── */
