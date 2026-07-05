@@ -35,6 +35,35 @@ function normalizePhone(value) {
   return v.replace(/[^+0-9]/g, '').slice(0, 24);
 }
 
+/**
+ * Normalise une plaque/VIN pour la DÉDUPLICATION : majuscules, uniquement
+ * alphanumérique. « GD-694-FM », « gd 694 fm » et « GD694FM » deviennent
+ * identiques → un seul lead par client+véhicule au lieu d'un par formatage.
+ */
+function normalizePlate(value) {
+  return trim(value).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 32);
+}
+
+/**
+ * Variantes d'un téléphone pour matcher les leads existants quel que soit le
+ * format stocké (+33612…, 0612…, 33612…). Le champ `phone` n'a jamais été
+ * normalisé en base → on cherche avec $in sur toutes les formes plausibles.
+ */
+function phoneMatchVariants(value) {
+  const cleaned = normalizePhone(value);
+  if (!cleaned) return [];
+  const variants = new Set([cleaned]);
+  let e164 = '';
+  try { e164 = require('./smsService').normalizePhoneFR(cleaned) || ''; } catch (_) {}
+  if (e164) {
+    variants.add(e164);                     // +33612345678
+    variants.add('0' + e164.slice(3));      // 0612345678
+    variants.add(e164.slice(1));            // 33612345678
+    variants.add('00' + e164.slice(1));     // 0033612345678
+  }
+  return Array.from(variants).filter(Boolean);
+}
+
 function readSessionId(req) {
   if (!req) return '';
   return String(req.sessionID || (req.session && req.session.id) || '');
@@ -135,12 +164,14 @@ async function captureContactLead({ req, mode, email, firstName, lastName, phone
     const cleanLast = trim(lastName);
     const cleanMessage = trim(message);
 
-    /* Extraction structurée des hints produit */
+    /* Extraction structurée des hints produit.
+       Plaque NORMALISÉE (alphanumérique majuscule) : sinon « GD-694-FM » et
+       « GD694FM » créent deux leads pour le même client/véhicule. */
     const hints = productHints || {};
     const requested = {
       vehicle: trim(hints.Vehicule || hints.vehicle).slice(0, 200),
       vin: trim(hints.VIN || hints.vin).toUpperCase().slice(0, 32),
-      plate: trim(hints.Immat || hints.plate).toUpperCase().slice(0, 32), // 32 : ce champ reçoit aussi des VIN (17) via le formulaire moteur
+      plate: normalizePlate(hints.Immat || hints.plate), // 32 max : ce champ reçoit aussi des VIN (17) via le formulaire moteur
       ref: trim(hints.Reference || hints.ref).slice(0, 200),
       message: cleanMessage.slice(0, 2000),
     };
@@ -157,9 +188,13 @@ async function captureContactLead({ req, mode, email, firstName, lastName, phone
     //    elles fusionneraient sur un seul lead via la session/l'email). Un
     //    ré-envoi du MÊME véhicule retombe bien sur le même lead (anti-doublon
     //    + idempotence de l'auto-devis).
+    const phoneVariants = phoneMatchVariants(cleanPhone);
     const contactOr = [
       { sessionId },
       cleanEmail ? { email: cleanEmail, status: { $nin: ['recovered', 'expired'] } } : null,
+      // Match aussi par TÉLÉPHONE : un client qui ne laisse que son numéro
+      // depuis deux appareils/sessions ne doit faire qu'UN lead.
+      phoneVariants.length ? { phone: { $in: phoneVariants }, status: { $nin: ['recovered', 'expired'] } } : null,
     ].filter(Boolean);
     const existingFilter = (mode === 'devis' && requested.plate)
       ? { 'requested.plate': requested.plate, $or: contactOr }
@@ -332,4 +367,6 @@ module.exports = {
   buildCartSnapshot,
   normalizeEmail,
   normalizePhone,
+  normalizePlate,
+  phoneMatchVariants,
 };
