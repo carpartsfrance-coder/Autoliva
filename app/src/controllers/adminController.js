@@ -7068,6 +7068,7 @@ async function getAdminNewProductPage(req, res) {
       shippingClassId: '',
       shippingDelayText: '',
       compatibleReferences: '',
+      accessories: '',
       price: '',
       compareAtPrice: '',
       cost: '',
@@ -7171,6 +7172,7 @@ async function postAdminCreateProduct(req, res, next) {
       shippingClassId: getTrimmedString(req.body.shippingClassId),
       shippingDelayText: getTrimmedString(req.body.shippingDelayText),
       compatibleReferences: getTrimmedString(req.body.compatibleReferences),
+      accessories: getTrimmedString(req.body.accessories),
       price: getTrimmedString(req.body.price),
       compareAtPrice: getTrimmedString(req.body.compareAtPrice),
       cost: getTrimmedString(req.body.cost),
@@ -7371,6 +7373,7 @@ async function postAdminCreateProduct(req, res, next) {
     const faqs = parseFaqsFromLines(form.faqs);
     const relatedBlogPostIds = parseObjectIdListFromLines(form.relatedBlogPostIds);
     const compatibleReferences = parseLinesToArray(form.compatibleReferences);
+    const accessories = parseLinesToArray(form.accessories).filter((v) => mongoose.Types.ObjectId.isValid(v));
     const inclusions = parseLinesToArray(form.inclusions);
     const exclusions = parseLinesToArray(form.exclusions);
     const warrantyMonths = Math.max(0, parseInt(form.warrantyMonths, 10) || 0);
@@ -7463,6 +7466,7 @@ async function postAdminCreateProduct(req, res, next) {
       shippingClassId,
       shippingDelayText: form.shippingDelayText,
       compatibleReferences,
+      accessories,
       priceCents,
       vatRecoverable: form.vatRecoverable === true,
       isPublished: form.isPublished === true,
@@ -7640,6 +7644,7 @@ async function getAdminEditProductPage(req, res, next) {
         shippingClassId,
         shippingDelayText: product.shippingDelayText || '',
         compatibleReferences: Array.isArray(product.compatibleReferences) ? product.compatibleReferences.filter(Boolean).join('\n') : '',
+        accessories: Array.isArray(product.accessories) ? product.accessories.map(String).filter(Boolean).join('\n') : '',
         price: formatPriceForInput(product.priceCents),
         compareAtPrice: formatPriceForInput(product.compareAtPriceCents),
         cost: formatPriceForInput(product.costCents),
@@ -7777,6 +7782,7 @@ async function postAdminUpdateProduct(req, res, next) {
       shippingClassId: getTrimmedString(req.body.shippingClassId),
       shippingDelayText: getTrimmedString(req.body.shippingDelayText),
       compatibleReferences: getTrimmedString(req.body.compatibleReferences),
+      accessories: getTrimmedString(req.body.accessories),
       price: getTrimmedString(req.body.price),
       compareAtPrice: getTrimmedString(req.body.compareAtPrice),
       cost: getTrimmedString(req.body.cost),
@@ -8078,6 +8084,7 @@ async function postAdminUpdateProduct(req, res, next) {
     const faqs = parseFaqsFromLines(form.faqs);
     const relatedBlogPostIds = parseObjectIdListFromLines(form.relatedBlogPostIds);
     const compatibleReferences = parseLinesToArray(form.compatibleReferences);
+    const accessories = parseLinesToArray(form.accessories).filter((v) => mongoose.Types.ObjectId.isValid(v));
     const inclusions = parseLinesToArray(form.inclusions);
     const exclusions = parseLinesToArray(form.exclusions);
     const warrantyMonths = Math.max(0, parseInt(form.warrantyMonths, 10) || 0);
@@ -8155,6 +8162,7 @@ async function postAdminUpdateProduct(req, res, next) {
           shippingClassId,
           shippingDelayText: form.shippingDelayText,
           compatibleReferences,
+          accessories,
           priceCents,
           vatRecoverable: form.vatRecoverable === true,
           isPublished: form.isPublished === true,

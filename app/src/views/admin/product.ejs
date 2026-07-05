@@ -444,6 +444,15 @@
             <textarea class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary min-h-[90px]" id="compatibleReferences" name="compatibleReferences" placeholder="Ex: 0281011234 (une par ligne)"><%= form && typeof form.compatibleReferences !== 'undefined' ? form.compatibleReferences : '' %></textarea>
           </div>
 
+          <div class="md:col-span-4 md:order-12">
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="accessorySearch">Accessoires recommandés (produits du catalogue)</label>
+            <input id="accessorySearch" class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" type="text" placeholder="Rechercher un produit à lier (nom, SKU…) — min. 2 lettres" autocomplete="off" />
+            <div id="accessoryResults" class="mt-2 max-h-56 overflow-auto rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900"></div>
+            <div id="accessorySelected" class="mt-3 space-y-2"></div>
+            <textarea id="accessories" class="hidden" name="accessories"><%= form && typeof form.accessories !== 'undefined' ? form.accessories : '' %></textarea>
+            <div class="mt-1 text-xs text-slate-400">Cherchez et sélectionnez d'autres produits du catalogue. Affichés dans « Complétez votre montage » sur la fiche, avec ajout au panier réel.</div>
+          </div>
+
           <div class="md:col-span-4 md:order-13">
             <div class="flex items-center gap-3">
               <input class="rounded border-gray-300 text-primary focus:ring-primary" id="consigneEnabled" name="consigneEnabled" type="checkbox" <%= form && form.consigneEnabled ? 'checked' : '' %> />
@@ -3560,6 +3569,104 @@
         }
 
         setupRelatedBlogPostsPicker();
+
+        function setupAccessoriesPicker() {
+          var searchInput = document.getElementById('accessorySearch');
+          var resultsEl = document.getElementById('accessoryResults');
+          var selectedEl = document.getElementById('accessorySelected');
+          var idsTextarea = document.getElementById('accessories');
+          if (!searchInput || !resultsEl || !selectedEl || !idsTextarea) return;
+
+          var selfId = (function () { var el = document.querySelector('input[name="productId"]'); return el ? String(el.value || '') : ''; })();
+
+          function getIds() {
+            return String(idsTextarea.value || '').split(/\r?\n/).map(function (s) { return String(s || '').trim(); }).filter(Boolean);
+          }
+          function setIds(ids) { idsTextarea.value = (ids || []).join('\n'); }
+          function priceLabel(cents) {
+            if (cents === null || cents === undefined || cents === '') return '';
+            var n = Number(cents) / 100;
+            try { return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2 }).format(n) + ' €'; } catch (e) { return n.toFixed(2) + ' €'; }
+          }
+          function metaText(it) {
+            var bits = [];
+            if (it.sku) bits.push('Réf. ' + it.sku);
+            if (it.priceCents !== null && it.priceCents !== undefined) bits.push(priceLabel(it.priceCents));
+            if (it.inStock === false) bits.push('rupture');
+            return bits.join(' · ');
+          }
+
+          function renderSelected(map) {
+            var ids = getIds();
+            selectedEl.innerHTML = '';
+            if (!ids.length) { selectedEl.innerHTML = '<div class="text-xs text-slate-500">Aucun accessoire lié.</div>'; return; }
+            ids.forEach(function (id) {
+              var it = map && map[id] ? map[id] : null;
+              var row = document.createElement('div');
+              row.className = 'flex items-center justify-between gap-3 rounded-xl border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 px-4 py-3';
+              var left = document.createElement('div'); left.className = 'min-w-0';
+              var title = document.createElement('div'); title.className = 'font-bold text-sm text-slate-900 dark:text-white truncate';
+              title.textContent = it ? (it.name || id) : id;
+              var meta = document.createElement('div'); meta.className = 'mt-1 text-[11px] text-slate-500 truncate';
+              meta.textContent = it ? metaText(it) : '(produit introuvable)';
+              left.appendChild(title); left.appendChild(meta);
+              var del = document.createElement('button'); del.type = 'button'; del.className = 'text-slate-400 hover:text-red-600 transition-colors';
+              del.innerHTML = '<span class="material-symbols-outlined">close</span>';
+              del.addEventListener('click', function () { setIds(getIds().filter(function (x) { return x !== id; })); hydrate(); });
+              row.appendChild(left); row.appendChild(del); selectedEl.appendChild(row);
+            });
+          }
+          function hydrate() {
+            var ids = getIds();
+            if (!ids.length) { renderSelected({}); return; }
+            fetchJson('/admin/api/products/search?ids=' + encodeURIComponent(ids.join(',')), function (_e, data) {
+              var map = {};
+              if (data && data.ok === true && Array.isArray(data.items)) data.items.forEach(function (it) { map[String(it.id)] = it; });
+              renderSelected(map);
+            });
+          }
+
+          var lastQuery = '';
+          function runSearch() {
+            var q = String(searchInput.value || '').trim();
+            if (q.length < 2) { resultsEl.innerHTML = '<div class="px-3 py-3 text-xs text-slate-500">Tapez au moins 2 lettres.</div>'; return; }
+            lastQuery = q;
+            resultsEl.innerHTML = '<div class="px-3 py-3 text-xs text-slate-500">Recherche…</div>';
+            fetchJson('/admin/api/products/search?limit=10&q=' + encodeURIComponent(q), function (_e, data) {
+              if (String(searchInput.value || '').trim() !== lastQuery) return;
+              if (!data || data.ok !== true || !Array.isArray(data.items)) { resultsEl.innerHTML = '<div class="px-3 py-3 text-xs text-red-600">Erreur de recherche.</div>'; return; }
+              var selected = new Set(getIds());
+              var items = data.items.filter(function (it) { return String(it.id) !== selfId; });
+              if (!items.length) { resultsEl.innerHTML = '<div class="px-3 py-3 text-xs text-slate-500">Aucun résultat.</div>'; return; }
+              resultsEl.innerHTML = '';
+              items.forEach(function (it) {
+                var row = document.createElement('button'); row.type = 'button';
+                row.className = 'w-full text-left px-3 py-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition border-b border-border-light dark:border-border-dark last:border-0 flex items-start justify-between gap-3';
+                var left = document.createElement('div'); left.className = 'min-w-0';
+                var title = document.createElement('div'); title.className = 'font-bold text-sm text-slate-900 dark:text-white truncate'; title.textContent = it.name || it.sku || it.id;
+                var meta = document.createElement('div'); meta.className = 'mt-1 text-[11px] text-slate-500 truncate'; meta.textContent = metaText(it);
+                left.appendChild(title); left.appendChild(meta);
+                var already = selected.has(String(it.id));
+                var tag = document.createElement('span');
+                tag.className = 'shrink-0 inline-flex items-center rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-widest ' + (already ? 'bg-slate-100 text-slate-500' : 'bg-primary/10 text-primary');
+                tag.textContent = already ? 'Déjà ajouté' : 'Ajouter';
+                row.appendChild(left); row.appendChild(tag);
+                row.addEventListener('click', function () {
+                  var ids = getIds(); var id = String(it.id);
+                  if (!ids.includes(id)) ids.push(id);
+                  setIds(ids); hydrate(); runSearch();
+                });
+                resultsEl.appendChild(row);
+              });
+            });
+          }
+
+          var t = null;
+          searchInput.addEventListener('input', function () { if (t) window.clearTimeout(t); t = window.setTimeout(runSearch, 220); });
+          hydrate();
+          resultsEl.innerHTML = '<div class="px-3 py-3 text-xs text-slate-500">Tapez au moins 2 lettres.</div>';
+        }
+        setupAccessoriesPicker();
       })();
     </script>
   </div>

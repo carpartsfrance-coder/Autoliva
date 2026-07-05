@@ -434,6 +434,14 @@ app.use((req, res, next) => {
   next();
 });
 
+// Catégories du menu « Catalogue » (header) — cache court dans categoryPublic.
+app.use((req, res, next) => {
+  require('./services/categoryPublic').getNavCategories()
+    .then((cats) => { res.locals.navCategories = cats; })
+    .catch(() => { res.locals.navCategories = []; })
+    .finally(() => next());
+});
+
 app.use((req, res, next) => {
   const cart = req.session.cart || { items: {} };
 

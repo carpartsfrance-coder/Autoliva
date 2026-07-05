@@ -113,6 +113,10 @@ const productSchema = new mongoose.Schema(
 
     compatibleReferences: { type: [String], default: [] },
 
+    // Produits accessoires recommandés (kit embrayage, huile, butée…) liés depuis
+    // le catalogue → affichés dans « Complétez votre montage » avec ajout au panier.
+    accessories: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }], default: [] },
+
     searchSynonyms: { type: [String], default: [] },
 
     badges: {
