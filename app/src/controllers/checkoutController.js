@@ -364,37 +364,12 @@ function mapScalapayStatusToPaymentStatus(scalapayStatus) {
  * userId ET email pour couvrir les invités.
  */
 async function markAbandonedCartsAsRecoveredForOrder(order, user) {
-  try {
-    if (!order || !order._id) return;
-    const conditions = [];
-    if (order.userId) {
-      conditions.push({ userId: order.userId });
-    }
-    const email = user && user.email ? String(user.email).trim().toLowerCase() : '';
-    if (email) {
-      conditions.push({ email });
-    }
-    if (!conditions.length) return;
-
-    const result = await AbandonedCart.updateMany(
-      {
-        $or: conditions,
-        status: { $nin: ['recovered', 'expired'] },
-      },
-      {
-        $set: {
-          status: 'recovered',
-          recoveredAt: new Date(),
-        },
-      }
-    );
-
-    if (result && result.modifiedCount) {
-      console.log(`[abandoned-cart] ${result.modifiedCount} panier(s) marqué(s) recovered suite à la commande ${order.number || order._id}`);
-    }
-  } catch (err) {
-    console.error('[abandoned-cart] Erreur marquage recovered:', err && err.message ? err.message : err);
-  }
+  /* Délégué au service partagé : match userId + email + TÉLÉPHONE (rattrape
+     les clients qui commandent avec un autre email), et stocke la commande
+     sur le lead → badge « A commandé — n°X » dans l'admin. Le même service
+     est appelé par l'admin pour les paiements encaissés à la main. */
+  const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
+  await markLeadsRecoveredForOrder(order, { email: user && user.email ? user.email : '' });
 }
 
 function applyDiscountToOrderItems(orderItems, discountedItemsTotalCents) {

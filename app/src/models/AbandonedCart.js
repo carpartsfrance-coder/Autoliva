@@ -302,6 +302,29 @@ const abandonedCartSchema = new mongoose.Schema(
     lastActivityAt: { type: Date, default: Date.now, index: true },
     lastRemindedAt: { type: Date, default: null },
     recoveredAt: { type: Date, default: null },
+
+    /**
+     * Commande qui a « récupéré » ce lead (services/leadRecovery). Permet
+     * d'afficher « A commandé — n°X · montant » sur la carte au lieu du
+     * simple statut Récupéré. On ne supprime jamais le lead : il reste
+     * l'historique client (et le vivier réachat).
+     */
+    recoveredOrder: {
+      orderId: { type: mongoose.Schema.Types.ObjectId, default: null },
+      number: { type: String, default: '', trim: true },
+      totalCents: { type: Number, default: 0 },
+      at: { type: Date, default: null },
+    },
+
+    /**
+     * Relance réachat J+90 après achat (jobs/sendRepurchaseReminders).
+     * sentAt posé UNIQUEMENT si l'email est parti (anti-doublon) ;
+     * skippedReason documente les exclusions (ex: 'racheté').
+     */
+    repurchaseReminder: {
+      sentAt: { type: Date, default: null },
+      skippedReason: { type: String, default: '', trim: true },
+    },
     recoveryToken: {
       type: String,
       unique: true,

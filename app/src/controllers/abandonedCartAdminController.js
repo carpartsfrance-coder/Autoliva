@@ -388,6 +388,14 @@ async function getAdminLeadsPage(req, res, next) {
           atRel: lastNoteRaw.addedAt ? formatRelative(lastNoteRaw.addedAt) : '',
         } : null,
         nextReminderNumber: { abandoned: 1, reminded_1: 2, reminded_2: 3 }[c.status] || 0,
+        /* Commande rapprochée automatiquement (badge « A commandé ») */
+        recoveredOrderBadge: (c.recoveredOrder && c.recoveredOrder.orderId) ? {
+          number: c.recoveredOrder.number || '',
+          totalEuro: c.recoveredOrder.totalCents > 0 ? formatEuro(c.recoveredOrder.totalCents) : '',
+          atRel: c.recoveredOrder.at ? formatRelative(c.recoveredOrder.at) : '',
+          url: '/admin/commandes/' + String(c.recoveredOrder.orderId),
+        } : null,
+        repurchaseSentRel: (c.repurchaseReminder && c.repurchaseReminder.sentAt) ? formatRelative(c.repurchaseReminder.sentAt) : '',
       };
     });
 

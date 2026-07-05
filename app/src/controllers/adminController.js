@@ -3534,6 +3534,15 @@ async function postAdminUpdateOrderStatus(req, res, next) {
         } catch (err) {
           console.error('Erreur email changement statut (admin) :', err && err.message ? err.message : err);
         }
+
+        /* Rapprochement leads : commande passée « payée » À LA MAIN (virement,
+           téléphone…) → sortir les leads du client de « À traiter » et poser
+           le badge « A commandé ». Le checkout en ligne le fait déjà ; sans
+           cet appel, un client encaissé manuellement restait « à relancer ». */
+        try {
+          const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
+          await markLeadsRecoveredForOrder(existing);
+        } catch (_) { /* non-bloquant */ }
       }
     }
 
@@ -10150,6 +10159,15 @@ async function postAdminCreateManualOrder(req, res) {
       }
     }
 
+    /* Rapprochement leads : commande créée à la main déjà payée → le client
+       sort de « À traiter » avec le badge « A commandé ». */
+    if (initialStatus === 'paid' || initialStatus === 'processing') {
+      try {
+        const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
+        await markLeadsRecoveredForOrder(created, { email: user && user.email ? user.email : '' });
+      } catch (_) { /* non-bloquant */ }
+    }
+
     return res.json({
       ok: true,
       orderId: String(created._id),
@@ -10200,6 +10218,15 @@ async function postAdminValidateDraftOrder(req, res) {
       changedBy,
     });
     await orderDoc.save();
+
+    /* Rapprochement leads : brouillon validé directement « payé » →
+       le client sort de « À traiter » avec le badge « A commandé ». */
+    if (newStatus === 'paid' || newStatus === 'processing') {
+      try {
+        const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
+        await markLeadsRecoveredForOrder(orderDoc);
+      } catch (_) { /* non-bloquant */ }
+    }
 
     /* Decrement stock */
     if (Array.isArray(orderDoc.items)) {
