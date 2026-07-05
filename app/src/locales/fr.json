@@ -623,5 +623,9 @@
   "product.accessorySoon": "ajout au panier bientôt disponible",
   "product.compatCheckMsg": "Vérification de compatibilité par plaque (fiche produit)",
   "product.warrantyUpTo": "Garantie jusqu’à %months% mois",
-  "product.upToMonths": "Jusqu’à %months% mois"
+  "product.upToMonths": "Jusqu’à %months% mois",
+  "product.callbackCta": "Être rappelé",
+  "product.callbackOk": "Demande envoyée — on vous rappelle sous 1h ouvrée",
+  "product.callbackMsg": "Demande de rappel — vérification compatibilité (fiche produit)",
+  "product.addedToCartShort": "ajouté au panier"
 }

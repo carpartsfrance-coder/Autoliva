@@ -1187,6 +1187,38 @@ async function getProduct(req, res, next) {
       console.error('[product] internalLinking error :', err && err.message);
     }
 
+    /* Accessoires recommandés : SKU liés (product.accessorySkus) → produits réels,
+       dans l'ordre saisi. Alimente « Complétez votre montage » avec un vrai
+       ajout au panier. Section masquée si aucun accessoire lié/publié. */
+    let productAccessories = [];
+    try {
+      const accSkus = Array.isArray(product.accessorySkus) ? product.accessorySkus.filter(Boolean) : [];
+      if (dbConnected && accSkus.length) {
+        const accDocs = await Product.find({ sku: { $in: accSkus }, isPublished: true }).limit(8).lean();
+        const bySku = new Map(accDocs.map((p) => [String(p.sku), p]));
+        productAccessories = accSkus
+          .map((s) => bySku.get(String(s)))
+          .filter(Boolean)
+          .map((p) => {
+            const rawImg = p.imageUrl
+              || (Array.isArray(p.galleryUrls) && p.galleryUrls.find((u) => typeof u === 'string' && u.trim()))
+              || '';
+            return {
+              _id: String(p._id),
+              name: p.name,
+              sku: p.sku || '',
+              priceCents: Number(p.priceCents) || 0,
+              inStock: p.inStock !== false,
+              condition: (p.badges && p.badges.condition) || '',
+              imageUrl: buildSeoMediaUrl(rawImg, p.name),
+              publicPath: buildProductPublicPath(p),
+            };
+          });
+      }
+    } catch (err) {
+      console.error('[product] accessories error :', err && err.message);
+    }
+
     if (req.session) delete req.session.cartError;
     return res.render('products/show', {
       title: seoTitle,
@@ -1212,6 +1244,7 @@ async function getProduct(req, res, next) {
       categoryName,
       relatedProducts,
       relatedBlogPosts,
+      productAccessories,
       productLinking,
     });
   } catch (err) {
