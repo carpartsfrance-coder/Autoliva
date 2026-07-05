@@ -78,11 +78,45 @@ function getCaptureSourceLabel(captureSource) {
     contact: { label: 'Contact', className: 'bg-cyan-50 text-cyan-700' },
     devis: { label: 'Devis', className: 'bg-teal-50 text-teal-700' },
     landing_moteurs: { label: 'Moteur occasion', className: 'bg-red-50 text-red-700' },
+    landing_boites: { label: 'Boîte occasion', className: 'bg-red-50 text-red-700' },
     cart_activity: { label: 'Panier', className: 'bg-slate-100 text-slate-700' },
     blog_cta: { label: 'Article blog', className: 'bg-emerald-50 text-emerald-700' },
     manual: { label: 'Manuel', className: 'bg-yellow-50 text-yellow-700' },
   };
   return labels[captureSource] || { label: captureSource || '—', className: 'bg-slate-100 text-slate-500' };
+}
+
+/**
+ * Leads capturés par les tunnels devis moteur/boîte : ils ont leur PROPRE
+ * pipeline (/admin/devis-moteurs — devis envoyé, relances auto J+3/J+7,
+ * acompte…). La vue « À traiter » de la page leads les exclut pour ne pas
+ * traiter deux fois le même client dans deux écrans.
+ */
+const ENGINE_PIPELINE_SOURCES = ['landing_moteurs', 'landing_boites'];
+
+/**
+ * Sources qui ne représentent PAS un panier : la relance « votre commande en
+ * cours » (emails panier 1/2/3) ne doit jamais leur être envoyée — ce sont des
+ * demandes de devis/contact, déjà suivies par leur propre canal.
+ * Doit rester aligné avec l'exclusion du cron (sendAbandonedCartReminders).
+ */
+const NON_CART_SOURCES = ['landing_moteurs', 'landing_boites', 'contact', 'devis', 'blog_cta'];
+
+/**
+ * Badge de statut du pipeline devis moteur/boîte : sur ces leads, le statut
+ * pertinent est engineQuote.status (pas le cycle « panier abandonné », qui
+ * affichait « Abandonné » même après l'envoi d'un devis ou un acompte payé).
+ */
+function getEngineQuoteBadge(engineStatus) {
+  const badges = {
+    new: { label: 'Devis à traiter', className: 'bg-indigo-50 text-indigo-700' },
+    analyzing: { label: 'En analyse', className: 'bg-blue-50 text-blue-700' },
+    quote_sent: { label: 'Devis envoyé', className: 'bg-amber-50 text-amber-700' },
+    acompte_recu: { label: 'Acompte reçu', className: 'bg-green-100 text-green-800' },
+    won: { label: 'Gagné', className: 'bg-green-100 text-green-800' },
+    lost: { label: 'Perdu', className: 'bg-slate-200 text-slate-600' },
+  };
+  return badges[engineStatus] || null;
 }
 
 function getReminderRecipients(cart) {
@@ -109,8 +143,38 @@ async function getAdminLeadsPage(req, res, next) {
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     const sort = typeof req.query.sort === 'string' ? req.query.sort.trim() : 'recent';
 
+    /* Vue « À traiter » (défaut) = file de travail : jamais contactés, cycle
+       non terminé, HORS leads devis moteur/boîte (ils ont leur propre pipeline
+       dans /admin/devis-moteurs — les afficher ici faisait traiter deux fois
+       le même client). Un filtre explicitement incompatible (statut manuel,
+       source moteur/boîte, statut recovered/expired) bascule sur « Tous ». */
+    let view = req.query.view === 'all' ? 'all' : 'todo';
+    if (manualStatusFilter && manualStatusFilter !== 'none') view = 'all';
+    if (status && ['recovered', 'expired'].includes(status)) view = 'all';
+    if (captureSource && ENGINE_PIPELINE_SOURCES.includes(captureSource)) view = 'all';
+
     const perPage = 30;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+
+    /* Query-string canonique (noms de paramètres = ceux lus ci-dessus) pour
+       la pagination et les onglets — l'ancienne pagination sérialisait les
+       clés internes (manualStatus/captureSource) que le serveur ne lisait pas. */
+    const qsParams = {};
+    if (q) qsParams.q = q;
+    if (status) qsParams.status = status;
+    if (manualStatusFilter) qsParams.manual = manualStatusFilter;
+    if (captureSource) qsParams.source = captureSource;
+    if (channel) qsParams.channel = channel;
+    if (period && period !== '30d') qsParams.period = period;
+    if (sort && sort !== 'recent') qsParams.sort = sort;
+    const filtersQS = new URLSearchParams(Object.assign({}, qsParams, view === 'all' ? { view: 'all' } : {})).toString();
+    /* Onglet « À traiter » : on retire les filtres incompatibles avec la vue */
+    const todoParams = Object.assign({}, qsParams);
+    delete todoParams.manual;
+    if (todoParams.status && ['recovered', 'expired'].includes(todoParams.status)) delete todoParams.status;
+    if (todoParams.source && ENGINE_PIPELINE_SOURCES.includes(todoParams.source)) delete todoParams.source;
+    const todoQS = new URLSearchParams(todoParams).toString();
+    const allQS = new URLSearchParams(Object.assign({}, qsParams, { view: 'all' })).toString();
 
     const baseRender = (overrides = {}) => res.render('admin/cart-activity', Object.assign({
       title: 'Admin - Leads à relancer',
@@ -118,6 +182,9 @@ async function getAdminLeadsPage(req, res, next) {
       leads: [],
       kpis: { total: 0, uncontacted: 0, contacted: 0, converted: 0, pendingValueCents: 0, recoveryRate: '0' },
       filters: { status, manualStatus: manualStatusFilter, captureSource, channel, period, q, sort },
+      view,
+      filtersQS,
+      tabs: { todoCount: 0, allCount: 0, todoUrl: '/admin/activite-panier' + (todoQS ? '?' + todoQS : ''), allUrl: '/admin/activite-panier?' + allQS },
       pagination: { page: 1, perPage, totalItems: 0, totalPages: 1, from: 0, to: 0, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1 },
       emailTemplates: EMAIL_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body, forSource: t.forSource || [], defaultIncludeCta: t.defaultIncludeCta !== false })),
       smsTemplates: SMS_TEMPLATES.map((t) => ({ key: t.key, label: t.label, body: t.body, forSource: t.forSource || [] })),
@@ -134,7 +201,7 @@ async function getAdminLeadsPage(req, res, next) {
     if (manualStatusFilter === 'none') query.manualStatus = null;
     else if (['contacted', 'converted', 'lost'].includes(manualStatusFilter)) query.manualStatus = manualStatusFilter;
 
-    const allowedSources = new Set(['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'landing_moteurs', 'cart_activity', 'blog_cta', 'manual']);
+    const allowedSources = new Set(['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'landing_moteurs', 'landing_boites', 'cart_activity', 'blog_cta', 'manual']);
     if (captureSource && allowedSources.has(captureSource)) query.captureSource = captureSource;
 
     if (channel === 'email') query.email = { $ne: '' };
@@ -156,25 +223,41 @@ async function getAdminLeadsPage(req, res, next) {
       query.$or = [{ email: rx }, { firstName: rx }, { lastName: rx }, { phone: rx }];
     }
 
+    /* Filtres utilisateur seuls (pour compter les onglets), puis contraintes
+       de la vue « À traiter » appliquées par-dessus. */
+    const commonQuery = Object.assign({}, query);
+    const todoOverlay = {
+      manualStatus: null,
+      status: commonQuery.status || { $nin: ['recovered', 'expired'] },
+      captureSource: commonQuery.captureSource || { $nin: ENGINE_PIPELINE_SOURCES },
+    };
+    if (view === 'todo') Object.assign(query, todoOverlay);
+
     /* Tri */
     let sortSpec;
     if (sort === 'amount') sortSpec = { totalAmountCents: -1, lastActivityAt: -1 };
     else if (sort === 'oldest') sortSpec = { lastActivityAt: 1 };
     else sortSpec = { lastActivityAt: -1 };
 
-    /* KPIs (toujours sur 30j, pas filtrés) */
+    /* KPIs (toujours sur 30j, pas filtrés) — HORS leads devis moteur/boîte :
+       ils ont leurs propres stats dans /admin/devis-moteurs, les compter ici
+       gonflait « À contacter » avec des clients déjà en cours de devis. */
     const kpiSince = new Date();
     kpiSince.setDate(kpiSince.getDate() - 30);
+    const kpiBase = { lastActivityAt: { $gte: kpiSince }, captureSource: { $nin: ENGINE_PIPELINE_SOURCES } };
 
-    const [totalAll, uncontactedAll, contactedAll, convertedAll, pendingAggregate] = await Promise.all([
-      AbandonedCart.countDocuments({ lastActivityAt: { $gte: kpiSince } }),
-      AbandonedCart.countDocuments({ lastActivityAt: { $gte: kpiSince }, manualStatus: null, status: { $nin: ['recovered', 'expired'] } }),
-      AbandonedCart.countDocuments({ lastActivityAt: { $gte: kpiSince }, manualStatus: 'contacted' }),
-      AbandonedCart.countDocuments({ lastActivityAt: { $gte: kpiSince }, $or: [{ manualStatus: 'converted' }, { status: 'recovered' }] }),
+    const [totalAll, uncontactedAll, contactedAll, convertedAll, pendingAggregate, todoCount, allCount] = await Promise.all([
+      AbandonedCart.countDocuments(Object.assign({}, kpiBase)),
+      AbandonedCart.countDocuments(Object.assign({}, kpiBase, { manualStatus: null, status: { $nin: ['recovered', 'expired'] } })),
+      AbandonedCart.countDocuments(Object.assign({}, kpiBase, { manualStatus: 'contacted' })),
+      AbandonedCart.countDocuments(Object.assign({}, kpiBase, { $or: [{ manualStatus: 'converted' }, { status: 'recovered' }] })),
       AbandonedCart.aggregate([
-        { $match: { lastActivityAt: { $gte: kpiSince }, manualStatus: { $ne: 'converted' }, status: { $nin: ['recovered', 'expired'] } } },
+        { $match: Object.assign({}, kpiBase, { manualStatus: { $ne: 'converted' }, status: { $nin: ['recovered', 'expired'] } }) },
         { $group: { _id: null, total: { $sum: '$totalAmountCents' } } },
       ]),
+      /* Compteurs des onglets (respectent les filtres actifs) */
+      AbandonedCart.countDocuments(Object.assign({}, commonQuery, todoOverlay)),
+      AbandonedCart.countDocuments(commonQuery),
     ]);
 
     const pendingValueCents = pendingAggregate[0] && pendingAggregate[0].total ? pendingAggregate[0].total : 0;
@@ -244,7 +327,11 @@ async function getAdminLeadsPage(req, res, next) {
         captureBadge: getCaptureSourceLabel(c.captureSource),
         status: c.status,
         manualStatus: c.manualStatus || null,
-        statusBadge: getStatusBadge(c.status, c.manualStatus),
+        /* Leads devis moteur/boîte : le badge reflète le pipeline devis
+           (Devis envoyé, Acompte reçu…) au lieu du cycle panier abandonné. */
+        statusBadge: (ENGINE_PIPELINE_SOURCES.includes(c.captureSource || '') && c.engineQuote && c.engineQuote.status && getEngineQuoteBadge(c.engineQuote.status))
+          || getStatusBadge(c.status, c.manualStatus),
+        engineQuoteUrl: (ENGINE_PIPELINE_SOURCES.includes(c.captureSource || '') && c.engineQuote) ? ('/admin/devis-moteurs/' + String(c._id)) : '',
         lastActivityRel: formatRelative(c.lastActivityAt || c.abandonedAt),
         lastActivityAbsolute: formatDateTimeFR(c.lastActivityAt || c.abandonedAt),
         lastRemindedAt: formatDateTimeFR(c.lastRemindedAt),
@@ -254,7 +341,8 @@ async function getAdminLeadsPage(req, res, next) {
         contextMessage: c.contextMessage || '',
         attribution: c.attribution || {},
         notes: Array.isArray(c.notes) ? c.notes : [],
-        canRemind: ['abandoned', 'reminded_1', 'reminded_2'].includes(c.status) && !c.manualStatus,
+        canRemind: ['abandoned', 'reminded_1', 'reminded_2'].includes(c.status) && !c.manualStatus
+          && !NON_CART_SOURCES.includes(c.captureSource || '') && items.length > 0,
         recoveryToken: c.recoveryToken || '',
       };
     });
@@ -282,6 +370,12 @@ async function getAdminLeadsPage(req, res, next) {
         pendingValueCents,
         pendingValue: formatEuro(pendingValueCents),
         recoveryRate,
+      },
+      tabs: {
+        todoCount,
+        allCount,
+        todoUrl: '/admin/activite-panier' + (todoQS ? '?' + todoQS : ''),
+        allUrl: '/admin/activite-panier?' + allQS,
       },
       pagination,
     });
@@ -399,11 +493,10 @@ async function postAdminManualReminder(req, res, next) {
     }
 
     // Garde-fou : ne PAS envoyer la relance PANIER (« votre commande en cours »)
-    // à un lead qui n'en est pas un — devis moteur (landing_moteurs), formulaire
-    // contact/devis — ni à un panier vide. Sinon le client reçoit un mail absurde
-    // alors qu'il n'a jamais rien commandé. Même exclusion que le cron
-    // (sendAbandonedCartReminders).
-    const NON_CART_SOURCES = ['landing_moteurs', 'contact', 'devis'];
+    // à un lead qui n'en est pas un — devis moteur/boîte, formulaire
+    // contact/devis, CTA blog — ni à un panier vide. Sinon le client reçoit un
+    // mail absurde alors qu'il n'a jamais rien commandé. Même exclusion que le
+    // cron (sendAbandonedCartReminders).
     if (NON_CART_SOURCES.includes(cart.captureSource) || !(cart.items && cart.items.length)) {
       return res.status(400).json({
         ok: false,
@@ -620,13 +713,15 @@ async function postLeadSetStatus(req, res, next) {
 
     const admin = getAdminFromReq(req);
     const now = new Date();
+    /* NB : on ne touche PAS lastActivityAt ici — ce champ trace l'activité du
+       CLIENT (tri de la liste). Le bumper sur une action admin faisait
+       remonter le lead en tête de liste à chaque changement de statut. */
     const update = {
       $set: {
         manualStatus: status,
         manualStatusBy: status ? admin.id : null,
         manualStatusByName: status ? admin.name : '',
         manualStatusAt: status ? now : null,
-        lastActivityAt: now,
       },
       $push: {
         notes: {
@@ -663,9 +758,11 @@ async function postLeadAddNote(req, res, next) {
 
     const admin = getAdminFromReq(req);
     const now = new Date();
+    /* Pas de bump lastActivityAt : une note interne ne doit pas faire
+       remonter le lead en tête de liste (tri = activité CLIENT). */
     const result = await AbandonedCart.updateOne(
       { _id: id },
-      { $push: { notes: { text, addedBy: admin.id, addedByName: admin.name, addedAt: now } }, $set: { lastActivityAt: now } }
+      { $push: { notes: { text, addedBy: admin.id, addedByName: admin.name, addedAt: now } } }
     );
     if (!result.matchedCount) return res.status(404).json({ ok: false, error: 'Lead non trouvé.' });
     return res.json({ ok: true });

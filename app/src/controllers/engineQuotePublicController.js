@@ -80,6 +80,14 @@ async function postMollieWebhook(req, res) {
             'engineQuote.payment.status': 'paid',
             'engineQuote.payment.paidAt': new Date(),
             'engineQuote.updatedAt': new Date(),
+            // Synchronise le statut LEAD : un client qui a payé son acompte est
+            // converti — sans ça il restait « Abandonné / à contacter » dans
+            // /admin/activite-panier (risque de le relancer alors qu'il a payé)
+            // et éligible aux relances automatiques.
+            manualStatus: 'converted',
+            manualStatusByName: 'Système (acompte payé)',
+            manualStatusAt: new Date(),
+            recoveredAt: new Date(),
           },
         }
       );

@@ -21,6 +21,8 @@ const {
   buildCartSnapshot,
   normalizeEmail,
   normalizePhone,
+  normalizePlate,
+  phoneMatchVariants,
 } = require('../services/leadCapture');
 const brand = require('../config/brand');
 
@@ -203,16 +205,19 @@ async function upsertLead({ req, email, phone, firstName, captureSource, product
   const requested = {
     vehicle: trim(vehicle).slice(0, 200),
     vin: trim(vin).toUpperCase().slice(0, 32),
-    plate: trim(plate).toUpperCase().slice(0, 16),
+    plate: normalizePlate(plate), // normalisée pour la dédup (GD-694-FM ≡ GD694FM)
     ref: productItem ? productItem.name.slice(0, 200) : '',
     message: trim(message).slice(0, 2000),
   };
 
-  /* Cherche un lead existant par session ou email */
+  /* Cherche un lead existant par session, email OU téléphone
+     (un client « téléphone seul » sur deux appareils = un seul lead) */
+  const phoneVariants = phoneMatchVariants(phone);
   const filter = {
     $or: [
       { sessionId },
       email ? { email, status: { $nin: ['recovered', 'expired'] } } : null,
+      phoneVariants.length ? { phone: { $in: phoneVariants }, status: { $nin: ['recovered', 'expired'] } } : null,
     ].filter(Boolean),
   };
   const existing = await AbandonedCart.findOne(filter).sort({ createdAt: -1 }).lean();

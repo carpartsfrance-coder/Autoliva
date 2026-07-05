@@ -87,10 +87,29 @@ async function detectAbandonedCarts() {
 
         const sessionId = String(doc._id);
 
-        // Check if this session cart was already tracked and is still active
+        // Anti-doublon. On ne crée PAS de nouveau lead si, pour cette SESSION
+        // ou cet EMAIL (même client sur téléphone + ordinateur, cookies vidés…),
+        // il existe déjà :
+        //   - un lead actif (pas recovered/expired) → déjà suivi ;
+        //   - un lead recovered depuis < 7 j → le client vient d'ACHETER, on ne
+        //     recrée pas un « panier abandonné » dans l'heure qui suit ;
+        //   - un lead expired dont le cycle a démarré < 30 j → la séquence de
+        //     relances a déjà été jouée ce mois-ci pour ce panier (sinon un
+        //     panier qui dort en session relançait le client tous les ~10 jours,
+        //     indéfiniment).
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         const existingCart = await AbandonedCart.findOne({
-          sessionId,
-          status: { $nin: ['recovered', 'expired'] },
+          $and: [
+            { $or: [{ sessionId }, { email }] },
+            {
+              $or: [
+                { status: { $nin: ['recovered', 'expired'] } },
+                { status: 'recovered', recoveredAt: { $gte: sevenDaysAgo } },
+                { status: 'expired', abandonedAt: { $gte: thirtyDaysAgo } },
+              ],
+            },
+          ],
         }).lean();
 
         if (existingCart) {

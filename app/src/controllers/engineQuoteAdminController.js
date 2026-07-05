@@ -692,16 +692,43 @@ async function postChangeStatus(req, res, next) {
     if (!mongoose.Types.ObjectId.isValid(id)) return res.status(404).send('Not found');
 
     await ensureEngineQuote(id);
-    await AbandonedCart.updateOne(
-      { _id: id, captureSource: LEAD_SOURCE_FILTER },
-      {
-        $set: {
-          'engineQuote.status': newStatus,
-          ...buildUpdate(req),
-        },
+
+    /* Synchronise le statut LEAD (/admin/activite-panier) avec le pipeline
+       devis : gagné/acompte → converti, perdu → perdu, retour à un statut
+       actif → on efface un éventuel converti/perdu (dossier ré-ouvert).
+       Sans ça, un devis gagné restait « à contacter » dans la liste leads. */
+    const admin = getAdminInfo(req);
+    const now = new Date();
+    const leadSync = {};
+    if (newStatus === 'won' || newStatus === 'acompte_recu') {
+      leadSync.manualStatus = 'converted';
+      leadSync.manualStatusByName = admin.name || 'Admin';
+      leadSync.manualStatusAt = now;
+      leadSync.recoveredAt = now;
+    } else if (newStatus === 'lost') {
+      leadSync.manualStatus = 'lost';
+      leadSync.manualStatusByName = admin.name || 'Admin';
+      leadSync.manualStatusAt = now;
+    }
+
+    const update = {
+      $set: {
+        'engineQuote.status': newStatus,
+        ...buildUpdate(req),
+        ...leadSync,
       },
-      { upsert: false }
-    );
+    };
+    await AbandonedCart.updateOne({ _id: id, captureSource: LEAD_SOURCE_FILTER }, update, { upsert: false });
+
+    /* Ré-ouverture (new/analyzing/quote_sent) : on efface converti/perdu posés
+       par une synchro précédente — requête séparée conditionnée pour ne pas
+       écraser un statut posé manuellement pour une autre raison. */
+    if (!leadSync.manualStatus) {
+      await AbandonedCart.updateOne(
+        { _id: id, captureSource: LEAD_SOURCE_FILTER, manualStatus: { $in: ['converted', 'lost'] } },
+        { $set: { manualStatus: null, manualStatusBy: null, manualStatusByName: '', manualStatusAt: null } }
+      );
+    }
 
     return respondMutation(req, res, id);
   } catch (err) {
