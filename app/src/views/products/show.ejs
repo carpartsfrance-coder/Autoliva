@@ -314,6 +314,10 @@
         .ap-cmp-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 11px 16px; border-top: 1px solid #F0F2F6; }
         .ap-cmp-row__c { font-size: 12px; font-weight: 600; color: #8A93A4; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
         .ap-cmp-row__v { font-size: 13px; font-weight: 700; text-align: right; display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+        /* Compat : lignes en trop repliées (display inline grid → !important) */
+        .ap-compat-extra { display: none !important; }
+        [data-ap-compat].is-expanded .ap-compat-extra { display: grid !important; }
+        [data-ap-compat-toggle].is-open [data-ap-compat-caret] { transform: rotate(180deg); }
         @media (max-width: 760px) {
           .ap-hero-grid { grid-template-columns: 1fr !important; }
           .ap-two-col { grid-template-columns: 1fr !important; gap: 32px !important; }
@@ -563,22 +567,31 @@
       <div class="ap-two-col" style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 56px; margin-top: 72px;">
         <div id="compat">
           <div style="font-size: 19px; font-weight: 800; color: #0F1626; margin-bottom: 14px;"><%= t('product.compatibleVehicles') %></div>
+          <% var _compatLimit = 5; var _compatMore = Math.max(0, compatVehicles.length - _compatLimit); %>
           <% if (compatVehicles.length) { %>
-            <div style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr 1fr; padding: 8px 0;">
-              <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.model') %></span>
-              <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.engine') %></span>
-              <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.years') %></span>
-              <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.references') %></span>
-            </div>
-            <% compatVehicles.forEach((v, i) => { %>
-              <% var _rowRef = refsAlternatives[i] || ref || engineCodeVal || '—'; %>
-              <div style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr 1fr; align-items: center; padding: 13px 0; border-top: 1px solid #F0F2F6;">
-                <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= [v.make, v.model].filter(Boolean).join(' ') || '—' %></span>
-                <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.engine || '—' %></span>
-                <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.years || '—' %></span>
-                <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= _rowRef %></span>
+            <div data-ap-compat>
+              <div style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr 1fr; padding: 8px 0;">
+                <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.model') %></span>
+                <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.engine') %></span>
+                <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.years') %></span>
+                <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.references') %></span>
               </div>
-            <% }) %>
+              <% compatVehicles.forEach(function (v, i) { %>
+                <% var _rowRef = refsAlternatives[i] || ref || engineCodeVal || '—'; %>
+                <div class="<%= i >= _compatLimit ? 'ap-compat-extra' : '' %>" style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr 1fr; align-items: center; padding: 13px 0; border-top: 1px solid #F0F2F6;">
+                  <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= [v.make, v.model].filter(Boolean).join(' ') || '—' %></span>
+                  <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.engine || '—' %></span>
+                  <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.years || '—' %></span>
+                  <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= _rowRef %></span>
+                </div>
+              <% }) %>
+            </div>
+            <% if (_compatMore > 0) { %>
+              <button type="button" data-ap-compat-toggle style="margin-top: 12px; display: inline-flex; align-items: center; gap: 6px; background: #F5F6F8; border: 1px solid #E5E8EE; border-radius: 10px; padding: 9px 15px; font-family: inherit; font-size: 12.5px; font-weight: 800; color: #15213B; cursor: pointer; transition: background .15s;" onmouseover="this.style.background='#EEF0F4'" onmouseout="this.style.background='#F5F6F8'">
+                <span data-ap-compat-label data-more="<%= t('product.showMoreModels', { count: _compatMore }) %>" data-less="<%= t('product.showLessModels') %>"><%= t('product.showMoreModels', { count: _compatMore }) %></span>
+                <span class="material-symbols-outlined" data-ap-compat-caret style="font-size: 18px; transition: transform .2s;">expand_more</span>
+              </button>
+            <% } %>
           <% } %>
           <div style="display: flex; align-items: center; gap: 14px; margin-top: 20px; background: #F5F6F8; border-radius: 12px; padding: 14px 16px; flex-wrap: wrap;">
             <span style="width: 46px; height: 46px; border-radius: 999px; background: rgba(237,28,36,0.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><span class="material-symbols-outlined" style="font-size: 24px; color: #ED1C24;">support_agent</span></span>
@@ -1361,6 +1374,18 @@
           }
           if (stickyAdd && mainSubmit) {
             stickyAdd.addEventListener('click', function () { mainSubmit.click(); });
+          }
+
+          /* ── Compat : replier/déplier les modèles en trop ── */
+          var compatToggle = document.querySelector('[data-ap-compat-toggle]');
+          var compatWrap = document.querySelector('[data-ap-compat]');
+          if (compatToggle && compatWrap) {
+            compatToggle.addEventListener('click', function () {
+              var expanded = compatWrap.classList.toggle('is-expanded');
+              compatToggle.classList.toggle('is-open', expanded);
+              var lbl = compatToggle.querySelector('[data-ap-compat-label]');
+              if (lbl) lbl.textContent = expanded ? lbl.getAttribute('data-less') : lbl.getAttribute('data-more');
+            });
           }
 
           /* ── Favori (visuel) ── */
