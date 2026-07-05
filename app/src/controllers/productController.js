@@ -1187,17 +1187,19 @@ async function getProduct(req, res, next) {
       console.error('[product] internalLinking error :', err && err.message);
     }
 
-    /* Accessoires recommandés : SKU liés (product.accessorySkus) → produits réels,
-       dans l'ordre saisi. Alimente « Complétez votre montage » avec un vrai
+    /* Accessoires recommandés : produits du catalogue liés (product.accessories),
+       dans l'ordre choisi. Alimente « Complétez votre montage » avec un vrai
        ajout au panier. Section masquée si aucun accessoire lié/publié. */
     let productAccessories = [];
     try {
-      const accSkus = Array.isArray(product.accessorySkus) ? product.accessorySkus.filter(Boolean) : [];
-      if (dbConnected && accSkus.length) {
-        const accDocs = await Product.find({ sku: { $in: accSkus }, isPublished: true }).limit(8).lean();
-        const bySku = new Map(accDocs.map((p) => [String(p.sku), p]));
-        productAccessories = accSkus
-          .map((s) => bySku.get(String(s)))
+      const accIds = Array.isArray(product.accessories)
+        ? product.accessories.map((v) => String(v)).filter((v) => mongoose.Types.ObjectId.isValid(v))
+        : [];
+      if (dbConnected && accIds.length) {
+        const accDocs = await Product.find({ _id: { $in: accIds }, isPublished: true }).limit(8).lean();
+        const byId = new Map(accDocs.map((p) => [String(p._id), p]));
+        productAccessories = accIds
+          .map((accId) => byId.get(String(accId)))
           .filter(Boolean)
           .map((p) => {
             const rawImg = p.imageUrl

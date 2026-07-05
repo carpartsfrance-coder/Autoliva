@@ -113,9 +113,9 @@ const productSchema = new mongoose.Schema(
 
     compatibleReferences: { type: [String], default: [] },
 
-    // SKU des produits accessoires recommandés (kit embrayage, huile, butée…),
-    // résolus en produits réels au rendu de la fiche (section « Complétez votre montage »).
-    accessorySkus: { type: [String], default: [] },
+    // Produits accessoires recommandés (kit embrayage, huile, butée…) liés depuis
+    // le catalogue → affichés dans « Complétez votre montage » avec ajout au panier.
+    accessories: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }], default: [] },
 
     searchSynonyms: { type: [String], default: [] },
 
