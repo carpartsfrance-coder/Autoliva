@@ -627,5 +627,6 @@
   "product.callbackCta": "Être rappelé",
   "product.callbackOk": "Demande envoyée — on vous rappelle sous 1h ouvrée",
   "product.callbackMsg": "Demande de rappel — vérification compatibilité (fiche produit)",
-  "product.addedToCartShort": "ajouté au panier"
+  "product.addedToCartShort": "ajouté au panier",
+  "header.allCategories": "Toutes les catégories"
 }

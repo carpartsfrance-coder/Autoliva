@@ -40,7 +40,39 @@
 
 <nav class="hidden lg:flex items-center gap-6 text-sm font-semibold text-slate-600">
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/" <%= _navActive('/') ? 'aria-current="page"' : '' %>><%= t('nav.home') %></a>
-<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/produits" <%= _navActive('/produits') ? 'aria-current="page"' : '' %>><%= t('nav.catalog') %></a>
+<style>
+  .cat-nav { position: relative; }
+  .cat-nav__trigger { display: inline-flex; align-items: center; gap: 4px; }
+  .cat-nav__caret { font-size: 18px; transition: transform .18s; }
+  .cat-nav:hover .cat-nav__caret { transform: rotate(180deg); }
+  .cat-nav__panel { position: absolute; left: 0; top: 100%; padding-top: 12px; opacity: 0; visibility: hidden; transform: translateY(4px); transition: opacity .15s, transform .15s, visibility .15s; z-index: 60; }
+  .cat-nav:hover .cat-nav__panel, .cat-nav__panel:hover { opacity: 1; visibility: visible; transform: translateY(0); }
+  .cat-nav__card { width: min(92vw, 560px); background: #fff; border-radius: 18px; box-shadow: 0 20px 48px rgba(15,22,38,.14); border: 1px solid #EEF0F4; padding: 12px; }
+  .cat-nav__label { padding: 6px 12px 8px; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #99A1B0; }
+  .cat-nav__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+  .cat-nav__item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; font-size: 14px; font-weight: 600; color: #334155; text-decoration: none; transition: background .12s, color .12s; }
+  .cat-nav__item:hover { background: #F8FAFC; color: #ED1C24; }
+  .cat-nav__item .material-symbols-outlined { font-size: 18px; color: #CBD5E1; transition: color .12s; }
+  .cat-nav__item:hover .material-symbols-outlined { color: #ED1C24; }
+  .cat-nav__all { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 6px; padding: 11px; border-top: 1px solid #EEF0F4; border-radius: 12px; font-size: 14px; font-weight: 800; color: #ED1C24; text-decoration: none; }
+  .cat-nav__all:hover { background: rgba(237,28,36,.05); }
+</style>
+<div class="cat-nav">
+  <a class="cat-nav__trigger px-3 py-2 rounded-xl transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/produits" <%= _navActive('/produits') ? 'aria-current="page"' : '' %>><%= t('nav.catalog') %><span class="cat-nav__caret material-symbols-outlined">expand_more</span></a>
+  <% if (Array.isArray(navCategories) && navCategories.length) { %>
+  <div class="cat-nav__panel">
+    <div class="cat-nav__card">
+      <div class="cat-nav__label"><%= t('header.allCategories') %></div>
+      <div class="cat-nav__grid">
+        <% navCategories.forEach(function (cat) { %>
+          <a class="cat-nav__item" href="<%= _lp %>/categorie/<%= encodeURIComponent(cat.slug) %>"><span class="material-symbols-outlined">chevron_right</span><span><%= _isDe && cat.nameDe ? cat.nameDe : cat.name %></span></a>
+        <% }); %>
+      </div>
+      <a class="cat-nav__all" href="<%= _lp %>/produits"><%= t('header.viewCatalog') %><span class="material-symbols-outlined" style="font-size:18px;">arrow_forward</span></a>
+    </div>
+  </div>
+  <% } %>
+</div>
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/moteurs') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/moteurs" <%= _navActive('/moteurs') ? 'aria-current="page"' : '' %>><%= t('nav.engines') %></a>
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/blog') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/blog" <%= _navActive('/blog') ? 'aria-current="page"' : '' %>><%= t('nav.blog') %></a>
 <a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/contact') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/contact" <%= _navActive('/contact') ? 'aria-current="page"' : '' %>><%= t('nav.contact') %></a>
