@@ -87,8 +87,18 @@ async function syncShipmentTracking({ limit = 80, force = false } = {}) {
       await order.save();
 
       if (next === 'shipped') out.toShipped++;
-      else if (next === 'delivered') out.toDelivered++;
-      else if (next === 'label_created') out.revertedToLabel++;
+      else if (next === 'delivered') {
+        out.toDelivered++;
+        /* Livraison détectée automatiquement → mêmes notifications client que
+           le passage manuel : instructions de consigne (retour ancienne pièce)
+           + confirmation de livraison. Idempotent (anti-doublon en base). */
+        try {
+          const { sendDeliveredNotifications } = require('../services/orderDeliveredNotifications');
+          await sendDeliveredNotifications(order._id);
+        } catch (e) {
+          console.error('[jumingo-sync] notifications livraison', String(order._id), '→', e && e.message ? e.message : e);
+        }
+      } else if (next === 'label_created') out.revertedToLabel++;
     } catch (e) {
       out.errors++;
       console.error('[jumingo-sync] commande', String(order._id), '→', e && e.message ? e.message : e);
