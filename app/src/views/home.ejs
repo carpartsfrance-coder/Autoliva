@@ -16,17 +16,25 @@
             <span class="material-symbols-rounded">menu</span>
           </div>
           <nav class="p-2">
-            <% const categoriesForHome = Array.isArray(homeCategories) ? homeCategories : []; %>
+            <%# Catégories principales = même source que le méga-menu du header
+                (navCategories, configurées dans le back-office avec icônes) ;
+                fallback sur homeCategories si vide. %>
+            <% const _lpHome = typeof langPrefix !== 'undefined' ? langPrefix : ''; %>
+            <% const _isDeHome = typeof lang !== 'undefined' && lang === 'de'; %>
+            <% const categoriesForHome = (Array.isArray(navCategories) && navCategories.length)
+                 ? navCategories.slice(0, 8).map((c) => ({ label: (_isDeHome && c.nameDe ? c.nameDe : c.name), href: _lpHome + '/categorie/' + encodeURIComponent(c.slug), icon: c.icon || 'category' }))
+                 : (Array.isArray(homeCategories) ? homeCategories : []).map((c) => ({ label: c.label, href: c.publicPath, icon: c.icon || 'category' })); %>
             <% categoriesForHome.forEach((category) => { %>
-              <a class="flex items-center justify-between group p-3 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-all" href="<%= category.publicPath %>">
-                <div class="min-w-0 pr-3">
-                  <span class="text-sm font-medium truncate block"><%= category.label %></span>
-                </div>
-                <span class="material-symbols-rounded text-slate-300 text-sm">chevron_right</span>
+              <a class="flex items-center gap-3 group p-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-all" href="<%= category.href %>">
+                <span class="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10 text-primary flex-shrink-0 group-hover:bg-primary group-hover:text-white transition-colors">
+                  <span class="material-symbols-rounded text-[20px]"><%= category.icon %></span>
+                </span>
+                <span class="text-sm font-semibold truncate flex-1 min-w-0"><%= category.label %></span>
+                <span class="material-symbols-rounded text-slate-300 text-sm group-hover:text-primary transition-colors">chevron_right</span>
               </a>
             <% }) %>
             <div class="border-t border-slate-100 dark:border-slate-800 my-2"></div>
-            <a class="flex items-center gap-3 p-3 text-primary font-bold text-sm" href="/categorie">
+            <a class="flex items-center gap-3 p-3 text-primary font-bold text-sm hover:bg-primary/5 rounded-xl transition-colors" href="<%= _lpHome %>/categorie">
               <span class="material-symbols-rounded">grid_view</span>
               <%= t('home.allCategories') %>
             </a>
