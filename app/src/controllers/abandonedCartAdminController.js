@@ -102,6 +102,112 @@ const ENGINE_PIPELINE_SOURCES = ['landing_moteurs', 'landing_boites'];
  */
 const NON_CART_SOURCES = ['landing_moteurs', 'landing_boites', 'contact', 'devis', 'blog_cta'];
 
+/** Statuts de commande = vraie vente (exclut brouillons/annulées/remboursées). */
+const SALE_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
+
+/**
+ * « 360° client » : pour un lot de leads {id, email, phone}, retrouve en
+ * requêtes GROUPÉES (pas par lead) les commandes passées et les tickets SAV
+ * du même client — matché par email (compte User / client SAV) ET par
+ * téléphone (adresses de commande, regex tolérante aux formats).
+ * Retourne Map(leadId → { orders: [...], tickets: [...] }).
+ */
+async function buildClientHistoryMaps(leadsLite) {
+  const result = new Map();
+  try {
+    const User = require('../models/User');
+    const Order = require('../models/Order');
+    const SavTicket = require('../models/SavTicket');
+    const { phoneLooseRegex } = require('../services/leadCapture');
+
+    const items = (leadsLite || []).filter((l) => l && (l.email || l.phone));
+    if (!items.length) return result;
+
+    const emails = Array.from(new Set(items.map((l) => String(l.email || '').trim().toLowerCase()).filter(Boolean)));
+    const phoneE164ByLead = new Map();
+    items.forEach((l) => { const e = normalizePhoneFR(l.phone || ''); if (e) phoneE164ByLead.set(String(l.id), e); });
+    const uniquePhones = Array.from(new Set(Array.from(phoneE164ByLead.values())));
+    const phoneRegexes = uniquePhones.map((e) => phoneLooseRegex(e)).filter(Boolean);
+
+    /* Comptes clients par email → userIds */
+    const users = emails.length ? await User.find({ email: { $in: emails } }).select('_id email').lean() : [];
+    const emailByUserId = new Map(users.map((u) => [String(u._id), String(u.email || '').toLowerCase()]));
+    const userIds = users.map((u) => u._id);
+
+    /* Commandes (par compte OU par téléphone d'adresse) */
+    const orConds = [];
+    if (userIds.length) orConds.push({ userId: { $in: userIds } });
+    if (phoneRegexes.length) {
+      orConds.push({ 'shippingAddress.phone': { $in: phoneRegexes } });
+      orConds.push({ 'billingAddress.phone': { $in: phoneRegexes } });
+    }
+    const orders = orConds.length ? await Order.find({
+      $or: orConds,
+      status: { $in: SALE_STATUSES },
+      deletedAt: null,
+    })
+      .select('_id number status createdAt totalCents userId items.name shippingAddress.phone billingAddress.phone')
+      .sort({ createdAt: -1 })
+      .limit(300)
+      .lean() : [];
+
+    const ordersByEmail = new Map();
+    const ordersByPhone = new Map();
+    for (const o of orders) {
+      const em = emailByUserId.get(String(o.userId || ''));
+      if (em) { if (!ordersByEmail.has(em)) ordersByEmail.set(em, []); ordersByEmail.get(em).push(o); }
+      [o.shippingAddress && o.shippingAddress.phone, o.billingAddress && o.billingAddress.phone]
+        .filter(Boolean)
+        .forEach((p) => {
+          const e = normalizePhoneFR(p);
+          if (e) { if (!ordersByPhone.has(e)) ordersByPhone.set(e, []); ordersByPhone.get(e).push(o); }
+        });
+    }
+
+    /* Tickets SAV (par email OU téléphone client) */
+    const savOr = [];
+    if (emails.length) savOr.push({ 'client.email': { $in: emails } });
+    if (phoneRegexes.length) savOr.push({ 'client.telephone': { $in: phoneRegexes } });
+    const tickets = savOr.length ? await SavTicket.find({ $or: savOr })
+      .select('numero statut createdAt client.email client.telephone')
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .lean() : [];
+
+    const ticketsByEmail = new Map();
+    const ticketsByPhone = new Map();
+    for (const t of tickets) {
+      const em = String((t.client && t.client.email) || '').toLowerCase();
+      if (em) { if (!ticketsByEmail.has(em)) ticketsByEmail.set(em, []); ticketsByEmail.get(em).push(t); }
+      const e = normalizePhoneFR((t.client && t.client.telephone) || '');
+      if (e) { if (!ticketsByPhone.has(e)) ticketsByPhone.set(e, []); ticketsByPhone.get(e).push(t); }
+    }
+
+    /* Attribution par lead (dédup par _id, tri récent d'abord) */
+    for (const l of items) {
+      const em = String(l.email || '').trim().toLowerCase();
+      const pe = phoneE164ByLead.get(String(l.id)) || '';
+      const dedup = (lists) => {
+        const seen = new Set(); const out = [];
+        lists.forEach((arr) => (arr || []).forEach((x) => { const k = String(x._id); if (!seen.has(k)) { seen.add(k); out.push(x); } }));
+        out.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        return out;
+      };
+      const myOrders = dedup([em && ordersByEmail.get(em), pe && ordersByPhone.get(pe)]);
+      const myTickets = dedup([em && ticketsByEmail.get(em), pe && ticketsByPhone.get(pe)]);
+      if (myOrders.length || myTickets.length) result.set(String(l.id), { orders: myOrders, tickets: myTickets });
+    }
+  } catch (err) {
+    console.error('[leads] enrichissement 360° client échoué:', err && err.message ? err.message : err);
+  }
+  return result;
+}
+
+/** Un ticket SAV est « en cours » tant que son statut ne commence pas par clos/resolu/rembourse. */
+function isSavTicketOpen(statut) {
+  return !/^(clos|resolu|rembours)/.test(String(statut || ''));
+}
+
 /**
  * Badge de statut du pipeline devis moteur/boîte : sur ces leads, le statut
  * pertinent est engineQuote.status (pas le cycle « panier abandonné », qui
@@ -399,6 +505,36 @@ async function getAdminLeadsPage(req, res, next) {
       };
     });
 
+    /* ── 360° client : commandes passées + tickets SAV du même client
+       (email OU téléphone), en requêtes groupées pour toute la page ── */
+    const historyMap = await buildClientHistoryMaps(leads.map((l) => ({ id: l.id, email: l.email, phone: l.phone })));
+    leads.forEach((l) => {
+      const h = historyMap.get(l.id);
+      if (!h) return;
+      if (h.orders.length) {
+        const last = h.orders[0];
+        l.clientHistory = {
+          count: h.orders.length,
+          lastRel: formatRelative(last.createdAt),
+          lastUrl: '/admin/commandes/' + String(last._id),
+          title: h.orders.slice(0, 4).map((o) => 'n°' + (o.number || '?') + ' · ' + formatDateTimeFR(o.createdAt) + ' · ' + formatEuro(o.totalCents)).join('\n')
+            + (h.orders.length > 4 ? '\n… +' + (h.orders.length - 4) + ' autre(s)' : '')
+            + '\n(cliquer = ouvrir la dernière commande · le détail complet est dans « Détail & notes »)',
+        };
+      }
+      if (h.tickets.length) {
+        const open = h.tickets.filter((t) => isSavTicketOpen(t.statut));
+        const last = h.tickets[0];
+        l.savHistory = {
+          count: h.tickets.length,
+          openCount: open.length,
+          lastStatut: (last.statut || '').replace(/_/g, ' '),
+          url: '/admin/sav/tickets/' + encodeURIComponent(last.numero || ''),
+          title: h.tickets.slice(0, 4).map((t) => (t.numero || '?') + ' · ' + String(t.statut || '').replace(/_/g, ' ')).join('\n'),
+        };
+      }
+    });
+
     const pagination = {
       page: currentPage,
       perPage,
@@ -452,10 +588,31 @@ async function getAdminLeadDetail(req, res, next) {
     const cart = await AbandonedCart.findById(id).lean();
     if (!cart) return res.status(404).json({ ok: false, error: 'Lead non trouvé.' });
 
+    /* 360° client : commandes + SAV de ce client (email OU téléphone) */
+    const historyMap = await buildClientHistoryMaps([{ id: String(cart._id), email: cart.email, phone: cart.phone }]);
+    const hist = historyMap.get(String(cart._id)) || { orders: [], tickets: [] };
+    const ORDER_STATUS_FR = { paid: 'Payée', processing: 'En préparation', label_created: 'Étiquette créée', shipped: 'Expédiée', delivered: 'Livrée', completed: 'Terminée' };
+
     const requested = cart.requested || {};
     return res.json({
       ok: true,
       cart: {
+        clientOrders: hist.orders.map((o) => ({
+          number: o.number || '',
+          url: '/admin/commandes/' + String(o._id),
+          date: formatDateTimeFR(o.createdAt),
+          totalEuro: formatEuro(o.totalCents),
+          status: ORDER_STATUS_FR[o.status] || o.status || '',
+          products: (o.items || []).map((i) => i && i.name).filter(Boolean).slice(0, 3).join(', ')
+            + ((o.items || []).length > 3 ? ' +' + ((o.items || []).length - 3) : ''),
+        })),
+        savTickets: hist.tickets.map((t) => ({
+          numero: t.numero || '',
+          statut: String(t.statut || '').replace(/_/g, ' '),
+          open: isSavTicketOpen(t.statut),
+          date: formatDateTimeFR(t.createdAt),
+          url: '/admin/sav/tickets/' + encodeURIComponent(t.numero || ''),
+        })),
         id: String(cart._id),
         sessionId: cart.sessionId,
         email: cart.email,

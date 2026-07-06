@@ -267,6 +267,20 @@
                       </span>
                     <% } %>
 
+                    <%# 360° client : a-t-il DÉJÀ commandé chez nous ? A-t-il un SAV ? %>
+                    <% if (c.clientHistory) { %>
+                      <a href="<%= c.clientHistory.lastUrl %>" class="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-[5px] font-bold text-indigo-800 hover:bg-indigo-100 transition" title="<%= c.clientHistory.title %>">
+                        <span class="material-symbols-outlined text-[13px]">loyalty</span>
+                        Déjà client · <%= c.clientHistory.count %> commande<%= c.clientHistory.count > 1 ? 's' : '' %> · dern. <%= c.clientHistory.lastRel %>
+                      </a>
+                    <% } %>
+                    <% if (c.savHistory) { %>
+                      <a href="<%= c.savHistory.url %>" class="inline-flex items-center gap-1 rounded-lg border px-2 py-[5px] font-bold transition <%= c.savHistory.openCount ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100' %>" title="<%= c.savHistory.title %>">
+                        <span class="material-symbols-outlined text-[13px]">build_circle</span>
+                        <% if (c.savHistory.openCount) { %>SAV en cours (<%= c.savHistory.openCount %>) · <%= c.savHistory.lastStatut %><% } else { %>SAV : <%= c.savHistory.count %> clos<% } %>
+                      </a>
+                    <% } %>
+
                     <%# Dernière note interne (l'historique complet est dans Détail) %>
                     <% if (c.lastNote) { %>
                       <span class="inline-flex items-center gap-1 text-slate-500 min-w-0">
@@ -445,6 +459,7 @@
           <div><strong>« À traiter »</strong> = ta file de travail : jamais contactés, cycle en cours, sans les leads moteur/boîte. Objectif : la vider chaque jour.</div>
           <div><strong>« Tous »</strong> = l'historique complet (contactés, gagnés, perdus, devis…).</div>
           <div class="pt-1"><strong>Badges :</strong> <em>Abandonné</em> = panier laissé · <em>Relance 1/2/3</em> = position dans le cycle auto · <em>Récupéré</em> = a commandé · <em>Expiré</em> = cycle fini sans achat · <em>Devis envoyé / Acompte reçu</em> = pipeline devis moteur/boîte.</div>
+          <div><strong>🛍 Déjà client · N commandes</strong> = ce contact (même email ou téléphone) a déjà acheté chez nous — survole pour voir les numéros/montants, clique pour ouvrir la dernière commande, et « Détail &amp; notes » liste tout (produits, dates). <strong>🛠 SAV en cours</strong> = il a un ticket SAV ouvert : à savoir AVANT de l'appeler.</div>
           <div><strong>🛍 « A commandé — n°X · montant »</strong> (chip verte) = sa commande retrouvée automatiquement (paiement en ligne, virement encaissé, commande créée à la main…) — clique pour l'ouvrir. On ne le relance plus, mais on le GARDE : c'est un client, le meilleur prospect pour la vente suivante. « 🔁 Relance réachat » = email automatique « besoin d'autre chose ? » envoyé ~3 mois après l'achat (option, désactivée par défaut).</div>
           <div><strong>Sources :</strong> <em>Devis / Contact</em> = a rempli un formulaire (demande explicite en vert) · <em>Panier / Guest checkout / Compte</em> = panier abandonné · <em>Moteur / Boîte occasion</em> = tunnels de devis.</div>
         </div>
@@ -587,6 +602,37 @@
             if (c.requested.vin) html += '<div class="text-sm"><span class="text-slate-500">VIN : </span><span class="font-mono text-slate-900">' + escapeHtml(c.requested.vin) + '</span></div>';
             if (c.requested.plate) html += '<div class="text-sm"><span class="text-slate-500">Immat : </span><span class="font-mono text-slate-900">' + escapeHtml(c.requested.plate) + '</span></div>';
             if (c.requested.message) html += '<div class="mt-2 text-sm text-slate-700 italic">"' + escapeHtml(c.requested.message) + '"</div>';
+            html += '</div>';
+          }
+
+          // ─ 360° client : commandes passées ─
+          if (c.clientOrders && c.clientOrders.length) {
+            html += '<div class="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4">';
+            html += '<div class="text-xs font-semibold uppercase tracking-widest text-indigo-700 mb-3">🛍 Déjà client — ' + c.clientOrders.length + ' commande' + (c.clientOrders.length > 1 ? 's' : '') + '</div>';
+            c.clientOrders.forEach(function (o) {
+              html += '<div class="py-2 border-b border-indigo-100 last:border-0">';
+              html += '<div class="flex items-center justify-between gap-2 text-sm">';
+              html += '<a href="' + escapeHtml(o.url) + '" class="font-semibold text-indigo-800 hover:underline">n°' + escapeHtml(o.number) + '</a>';
+              html += '<span class="font-bold text-slate-900">' + escapeHtml(o.totalEuro) + '</span></div>';
+              html += '<div class="text-xs text-slate-600 mt-0.5">' + escapeHtml(o.date) + ' · <span class="font-medium">' + escapeHtml(o.status) + '</span></div>';
+              if (o.products) html += '<div class="text-xs text-slate-500 mt-0.5">' + escapeHtml(o.products) + '</div>';
+              html += '</div>';
+            });
+            html += '</div>';
+          } else if (c.clientOrders) {
+            html += '<div class="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">🆕 Jamais commandé chez nous (aucune commande trouvée avec cet email / ce téléphone).</div>';
+          }
+
+          // ─ 360° client : tickets SAV ─
+          if (c.savTickets && c.savTickets.length) {
+            html += '<div class="rounded-xl border border-amber-200 bg-amber-50/40 p-4">';
+            html += '<div class="text-xs font-semibold uppercase tracking-widest text-amber-700 mb-3">🛠 Tickets SAV (' + c.savTickets.length + ')</div>';
+            c.savTickets.forEach(function (t) {
+              html += '<div class="flex items-center justify-between gap-2 py-1.5 border-b border-amber-100 last:border-0 text-sm">';
+              html += '<a href="' + escapeHtml(t.url) + '" class="font-semibold text-amber-800 hover:underline">' + escapeHtml(t.numero) + '</a>';
+              html += '<span class="text-xs ' + (t.open ? 'font-bold text-amber-700' : 'text-slate-500') + '">' + escapeHtml(t.statut) + (t.open ? ' · en cours' : '') + '</span>';
+              html += '<span class="text-xs text-slate-400">' + escapeHtml(t.date) + '</span></div>';
+            });
             html += '</div>';
           }
 
