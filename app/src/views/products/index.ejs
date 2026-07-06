@@ -347,6 +347,27 @@
           </form>
         </div>
 
+        <%# ═══ Filtre rapide par ÉTAT — pills en haut des résultats (occasion / reconditionné / neuf).
+            Le backend gère déjà ?condition= ; ici on l'expose en 1 clic. ═══ %>
+        <% var _condOpts = (typeof conditionOptions !== 'undefined' && Array.isArray(conditionOptions)) ? conditionOptions : []; %>
+        <% var _condCounts = (typeof conditionCounts !== 'undefined' && conditionCounts) ? conditionCounts : {}; %>
+        <% var _condAvail = _condOpts.filter((c) => Number(_condCounts[c.key]) > 0); %>
+        <% var _selConds = (typeof selectedConditions !== 'undefined' && Array.isArray(selectedConditions)) ? selectedConditions : []; %>
+        <% if (_condAvail.length >= 2) { %>
+          <div class="flex items-center gap-2 mb-5 overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap">
+            <span class="shrink-0 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 mr-1"><span class="material-symbols-outlined text-lg">tune</span>État</span>
+            <a href="<%= buildUrl({ condition: [], page: 1 }) %>" class="shrink-0 px-4 py-2 rounded-full text-sm font-bold border transition-all <%= _selConds.length === 0 ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:border-primary hover:text-primary' %>">Tous</a>
+            <% _condAvail.forEach((c) => { %>
+              <% var _on = _selConds.includes(c.key); %>
+              <% var _next = _on ? _selConds.filter((k) => k !== c.key) : _selConds.concat([c.key]); %>
+              <a href="<%= buildUrl({ condition: _next, page: 1 }) %>" class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border transition-all <%= _on ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:border-primary hover:text-primary' %>">
+                <%= c.label %>
+                <span class="text-xs font-semibold <%= _on ? 'text-white/75' : 'text-slate-400' %>"><%= _condCounts[c.key] %></span>
+              </a>
+            <% }) %>
+          </div>
+        <% } %>
+
         <div class="flex gap-2 mb-6 overflow-x-auto no-scrollbar -mx-4 px-4 md:flex-wrap md:overflow-visible md:mx-0 md:px-0">
           <% if (typeof selectedVehicleMake !== 'undefined' && selectedVehicleMake) { %>
             <a class="shrink-0 bg-primary/5 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2" href="<%= buildUrl({ vehicleMake: '', page: 1 }) %>">
