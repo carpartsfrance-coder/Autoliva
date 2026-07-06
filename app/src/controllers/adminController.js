@@ -3440,74 +3440,12 @@ async function postAdminUpdateOrderStatus(req, res, next) {
       }
 
       if (status === 'delivered') {
-        try {
-          const refreshed = await Order.findById(orderId)
-            .select('_id number userId consigne notifications')
-            .lean();
-
-          const alreadySent = refreshed
-            && refreshed.notifications
-            && refreshed.notifications.consigneStartSentAt;
-
-          const linesAfter = refreshed && refreshed.consigne && Array.isArray(refreshed.consigne.lines)
-            ? refreshed.consigne.lines
-            : [];
-
-          if (!alreadySent && linesAfter.length) {
-            const user = refreshed && refreshed.userId
-              ? await User.findById(refreshed.userId).select('_id email firstName').lean()
-              : null;
-
-            if (user && user.email) {
-              const sent = await emailService.sendConsigneStartEmail({ order: refreshed, user });
-              emailService.logEmailSent({ orderId: refreshed._id, emailType: 'consigne_start', recipientEmail: user.email, result: sent });
-              smsService.sendConsigneReminderSoonSms({ order: refreshed, user }).catch(() => {});
-              if (sent && sent.ok) {
-                await Order.updateOne(
-                  {
-                    _id: refreshed._id,
-                    $or: [
-                      { 'notifications.consigneStartSentAt': { $exists: false } },
-                      { 'notifications.consigneStartSentAt': null },
-                    ],
-                  },
-                  { $set: { 'notifications.consigneStartSentAt': new Date() } }
-                );
-              }
-            }
-          }
-
-          // Send delivery confirmed email
-          const deliveryAlreadySent = refreshed
-            && refreshed.notifications
-            && refreshed.notifications.deliveryConfirmedSentAt;
-
-          if (!deliveryAlreadySent) {
-            const user = refreshed && refreshed.userId
-              ? await User.findById(refreshed.userId).select('_id email firstName').lean()
-              : null;
-
-            if (user && user.email) {
-              const sent = await emailService.sendDeliveryConfirmedEmail({ order: refreshed, user });
-              emailService.logEmailSent({ orderId: refreshed._id, emailType: 'delivery_confirmed', recipientEmail: user.email, result: sent });
-              smsService.sendDeliveryConfirmedSms({ order: refreshed, user }).catch(() => {});
-              if (sent && sent.ok) {
-                await Order.updateOne(
-                  {
-                    _id: refreshed._id,
-                    $or: [
-                      { 'notifications.deliveryConfirmedSentAt': { $exists: false } },
-                      { 'notifications.deliveryConfirmedSentAt': null },
-                    ],
-                  },
-                  { $set: { 'notifications.deliveryConfirmedSentAt': new Date() } }
-                );
-              }
-            }
-          }
-        } catch (err) {
-          console.error('Erreur email consigne/livraison (admin) :', err && err.message ? err.message : err);
-        }
+        /* Consigne (retour ancienne pièce) + confirmation de livraison —
+           factorisé dans un service, aussi appelé par le robot de suivi
+           (jobs/syncShipmentTracking) quand la livraison est détectée
+           automatiquement. Idempotent (anti-doublon notifications.*SentAt). */
+        const { sendDeliveredNotifications } = require('../services/orderDeliveredNotifications');
+        await sendDeliveredNotifications(orderId);
       } else if (status === 'paid' || status === 'processing') {
         // Send status change notification for paid/processing orders
         try {
