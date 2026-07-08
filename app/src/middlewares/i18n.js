@@ -54,13 +54,21 @@ function i18nMiddleware(req, res, next) {
     res.locals.currentPathWithoutLang = rawPath;
   }
 
-  // Mémorise la langue de navigation pour le TUNNEL d'achat : le panier et le
-  // checkout restent sur des URLs FR (/panier, /commande/…) mais doivent
-  // s'afficher dans la langue où l'utilisateur navigue. On ne pose que 'de'
-  // (depuis une page /de/…) ; on ne réinitialise jamais en FR ici pour ne pas
-  // écraser le choix lors du POST add-to-cart (URL FR).
-  if (isGerman && req.session && req.session.preferredLang !== 'de') {
-    req.session.preferredLang = 'de';
+  // Mémorise la langue de la DERNIÈRE PAGE DE CONTENU visitée (GET), pour que le
+  // TUNNEL d'achat (panier + checkout, servis sur des URLs FR) s'affiche dans
+  // cette langue. Bidirectionnel : /de/… → 'de', page FR → 'fr'.
+  //   - On EXCLUT le tunnel lui-même (/panier, /commande) : il SUIT la
+  //     préférence, il ne la fixe pas (sinon on ne pourrait jamais la changer).
+  //   - On EXCLUT les POST (un add-to-cart en URL FR ne doit pas changer la langue).
+  // Avant, on ne posait que 'de' sans jamais réinitialiser : un visiteur FR ayant
+  // consulté une page /de restait bloqué en ALLEMAND au panier (bug corrigé ici).
+  if (req.session && req.method === 'GET') {
+    const inCheckoutTunnel = pathLower === '/panier' || pathLower.startsWith('/panier/')
+      || pathLower === '/commande' || pathLower.startsWith('/commande/');
+    if (!inCheckoutTunnel) {
+      if (isGerman) req.session.preferredLang = 'de';
+      else if (!isEnglish) req.session.preferredLang = 'fr';
+    }
   }
 
   // Bound translation function for EJS templates
