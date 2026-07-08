@@ -38,7 +38,7 @@ const COMMERCIAL_DIRECTORY = [
   { keys: ['killian'], name: 'Killian', phone: '04 65 84 54 88' },
   // Le compte back-office affiché « Fanir CPF » = Lucas → il signe « Lucas »
   // avec SA ligne directe (et non le nom brut du compte / la ligne par défaut).
-  { keys: ['lucas', 'fanir'], name: 'Lucas', phone: '04 65 84 76 78' },
+  { keys: ['lucas', 'fanir'], name: 'Lucas', phone: '04 65 84 85 39' },
 ];
 function resolveCommercial(admin) {
   if (!admin) return null;
