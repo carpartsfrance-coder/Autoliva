@@ -166,8 +166,11 @@ router.get('/sav/tickets/:numero', requireAdminAuth, savAdminController.getSavTi
 router.get('/parametres/sms', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.getSmsSettingsPage);
 router.post('/parametres/sms', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.postSmsSettings);
 router.post('/parametres/sms/test', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.postSmsTest);
-router.get('/parametres/modeles-messages', requireAdminAuth, requireAbility('settings.site'), leadTemplatesAdminController.getLeadTemplatesPage);
-router.post('/parametres/modeles-messages', requireAdminAuth, requireAbility('settings.site'), leadTemplatesAdminController.postLeadTemplates);
+// Éditables par TOUT admin (propriétaire + commerciaux « employe »), comme la
+// page « Leads à relancer » d'où viennent ces modèles — pas réservé au owner.
+// (Le comptable reste hors /admin.)
+router.get('/parametres/modeles-messages', requireAdminAuth, leadTemplatesAdminController.getLeadTemplatesPage);
+router.post('/parametres/modeles-messages', requireAdminAuth, leadTemplatesAdminController.postLeadTemplates);
 router.get('/parametres/sav', requireAdminAuth, savAdminController.getSavSettings);
 router.get('/parametres/audit', requireAdminAuth, savAdminController.getAuditLog);
 router.get('/parametres/integrations', requireAdminAuth, savAdminController.getIntegrations);
