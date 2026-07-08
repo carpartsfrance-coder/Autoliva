@@ -291,7 +291,7 @@ function renderEmailHtml({ subject, body, vars, ctaUrl }) {
 <!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body style="margin:0;padding:0;background:#ffffff;">
-  <div style="max-width:600px;margin:0 auto;padding:24px 24px 28px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.62;color:#1f2328;">
+  <div style="max-width:600px;margin:0;padding:16px 20px 22px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.62;color:#1f2328;text-align:left;">
     <p style="margin:0 0 14px;">${greeting}</p>
     <div style="margin:0 0 4px;">${safeBody}</div>
     ${ctaBlock}
