@@ -1,0 +1,109 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'settings' }) %>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8 max-w-5xl">
+
+    <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Paramètres', url: '/admin/parametres'}, {label: 'Modèles de messages'}] }) %>
+    <div class="text-2xl md:text-3xl font-semibold text-slate-900">Modèles de messages (leads)</div>
+    <div class="mt-1 text-sm text-slate-500"><%= total %> modèles. Personnalise le texte des SMS et emails envoyés depuis « Leads à relancer », active/désactive-les. Les variables comme <code class="font-mono text-slate-600">{prenom}</code> se remplissent toutes seules à l'envoi — <strong>{nom_commercial}</strong> et <strong>{telephone}</strong> s'adaptent au commercial connecté.</div>
+
+    <% if (successMessage) { %>
+      <div class="mt-6 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm font-medium"><%= successMessage %></div>
+    <% } %>
+
+    <div class="mt-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 text-xs">Rappel : <strong>jamais de lien dans un SMS</strong> (bloqué par les opérateurs sous « CarParts »). Le lien / devis part par email.</div>
+
+    <form method="POST" action="/admin/parametres/modeles-messages" class="mt-6" id="lt-form">
+
+      <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mt-6 mb-3">SMS · <%= sms.length %></h2>
+      <div class="space-y-4">
+        <% sms.forEach(function(it){ %>
+          <%- include('./partials/lead-template-card', { it: it, channel: 'sms', vars: vars }) %>
+        <% }) %>
+      </div>
+
+      <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mt-8 mb-3">Emails · <%= email.length %></h2>
+      <div class="space-y-4">
+        <% email.forEach(function(it){ %>
+          <%- include('./partials/lead-template-card', { it: it, channel: 'email', vars: vars }) %>
+        <% }) %>
+      </div>
+
+      <div class="sticky bottom-0 mt-8 -mx-6 lg:-mx-10 px-6 lg:px-10 py-4 bg-white/90 backdrop-blur border-t border-slate-200 flex items-center justify-end gap-3">
+        <span class="text-xs text-slate-400 hidden sm:inline">Les changements s'appliquent tout de suite aux envois depuis « Leads à relancer ».</span>
+        <a href="/admin/activite-panier" class="text-sm font-semibold text-slate-500 hover:text-slate-800">Retour aux leads</a>
+        <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script>
+(function(){
+  var EX = {
+    prenom: 'Julien', nom: 'Mercier', nom_complet: 'Julien Mercier',
+    nom_produit: 'Boîte 20DP98 — Citroën C3', prix_total: '890,00 €', prix_produit: '890,00 €',
+    telephone: '04 65 84 54 88', nom_commercial: 'Killian', brand: 'Autoliva',
+    vehicule: 'Citroën C3 1.6 HDi', immatriculation: 'GD-694-FM', vin: 'VF7SC8HZ...',
+    lien_panier: 'https://autoliva.com/panier/recuperer/xxxx', lien_produit: 'https://autoliva.com/product/xxxx'
+  };
+  function render(tpl){ return String(tpl || '').replace(/\{(\w+)\}/g, function(m, k){ return EX[k] != null ? EX[k] : m; }); }
+  function segInfo(text){
+    var u = /[^\r\n€ -ÿ]/.test(text); var single = u ? 70 : 160, multi = u ? 67 : 153, len = text.length;
+    return { len: len, seg: len === 0 ? 0 : (len <= single ? 1 : Math.ceil(len / multi)) };
+  }
+
+  document.querySelectorAll('[data-lt-card]').forEach(function(card){
+    var body = card.querySelector('[data-body]');
+    var subject = card.querySelector('[data-subject]');
+    var preview = card.querySelector('[data-preview]');
+    var previewSubject = card.querySelector('[data-preview-subject]');
+    var count = card.querySelector('[data-count]');
+    var seg = card.querySelector('[data-seg]');
+    var enable = card.querySelector('[data-enable]');
+    var enableLabel = card.querySelector('[data-enable-label]');
+    var defBody = decodeURIComponent(card.getAttribute('data-default-body') || '');
+    var defSubject = decodeURIComponent(card.getAttribute('data-default-subject') || '');
+    if (!body) return;
+
+    function refresh(){
+      preview.textContent = render(body.value);
+      if (previewSubject && subject) previewSubject.textContent = render(subject.value);
+      if (count) { var info = segInfo(render(body.value)); count.textContent = info.len; seg.textContent = info.seg; }
+      card.style.opacity = enable.checked ? '1' : '0.55';
+      if (enableLabel) enableLabel.textContent = enable.checked ? 'Activé' : 'Désactivé';
+    }
+    body.addEventListener('input', refresh);
+    if (subject) subject.addEventListener('input', refresh);
+    enable.addEventListener('change', refresh);
+
+    // Insertion de variable au curseur (dans le dernier champ focalisé).
+    var lastField = body;
+    body.addEventListener('focus', function(){ lastField = body; });
+    if (subject) subject.addEventListener('focus', function(){ lastField = subject; });
+    card.querySelectorAll('[data-var]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var v = '{' + btn.getAttribute('data-var') + '}';
+        var el = lastField || body;
+        var s = el.selectionStart != null ? el.selectionStart : el.value.length;
+        var e = el.selectionEnd != null ? el.selectionEnd : el.value.length;
+        el.value = el.value.slice(0, s) + v + el.value.slice(e);
+        el.focus(); el.selectionStart = el.selectionEnd = s + v.length;
+        refresh();
+      });
+    });
+
+    var resetBtn = card.querySelector('[data-reset]');
+    if (resetBtn) resetBtn.addEventListener('click', function(){
+      body.value = defBody;
+      if (subject) subject.value = defSubject;
+      enable.checked = true;
+      refresh();
+    });
+
+    refresh();
+  });
+})();
+</script>

@@ -49,7 +49,10 @@
       <div class="ml-2 text-xs text-slate-400 hidden md:block">
         <% if (view === 'todo') { %>Jamais contactés, cycle en cours — hors devis moteur/boîte (gérés dans « Devis moteurs &amp; boîtes »).<% } else { %>Historique complet, y compris contactés, convertis, perdus et leads devis.<% } %>
       </div>
-      <button type="button" id="leads-help-btn" class="ml-auto inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex-shrink-0">
+      <a href="/admin/parametres/modeles-messages" class="ml-auto inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex-shrink-0" title="Personnaliser les textes des SMS et emails envoyés depuis cette page">
+        <span class="material-symbols-outlined text-base text-primary">edit_note</span>Modifier les modèles
+      </a>
+      <button type="button" id="leads-help-btn" class="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex-shrink-0">
         <span class="material-symbols-outlined text-base text-primary">school</span>Comprendre cette page
       </button>
     </div>
