@@ -9536,6 +9536,41 @@ async function postAdminToggleBackofficeUser(req, res, next) {
   }
 }
 
+async function postAdminUpdateBackofficeUserName(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    if (!dbConnected) {
+      req.session.adminTeamError = "La base de données n'est pas disponible.";
+      return res.redirect('/admin/parametres');
+    }
+
+    if (!canManageAdminUsers(req)) {
+      req.session.adminTeamError = 'Seul le compte principal peut gérer les membres du back-office.';
+      return res.redirect('/admin/parametres');
+    }
+
+    const { adminUserId } = req.params;
+    const firstName = getTrimmedString(req.body && req.body.firstName);
+    const lastName = getTrimmedString(req.body && req.body.lastName);
+
+    if (!firstName || !lastName) {
+      req.session.adminTeamError = 'Le prénom et le nom sont obligatoires.';
+      return res.redirect('/admin/parametres');
+    }
+
+    const result = await adminUsers.updateAdminUserName({ adminUserId, firstName, lastName });
+    if (!result || !result.ok) {
+      req.session.adminTeamError = 'Impossible de renommer ce compte back-office.';
+      return res.redirect('/admin/parametres');
+    }
+
+    req.session.adminTeamSuccess = `Compte renommé en « ${firstName} ${lastName} ».`;
+    return res.redirect('/admin/parametres');
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function postAdminResetBackofficeUserPassword(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -12601,6 +12636,7 @@ module.exports = {
   getAdminSettingsPage,
   postAdminCreateBackofficeUser,
   postAdminToggleBackofficeUser,
+  postAdminUpdateBackofficeUserName,
   postAdminResetBackofficeUserPassword,
   postAdminChangeOwnPassword,
   getAdminInvoiceSettingsPage,

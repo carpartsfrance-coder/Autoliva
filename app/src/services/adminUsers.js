@@ -246,6 +246,26 @@ async function updateAdminUserPasswordByOwner({ adminUserId, nextPassword } = {}
   return { ok: true, adminUser };
 }
 
+/**
+ * Renomme un compte back-office (prénom + nom). Réservé au owner côté route.
+ * Le rôle owner n'est PAS verrouillé ici : renommer le compte principal
+ * (ex. « Admin Principal » → « Killian ») est sans risque.
+ */
+async function updateAdminUserName({ adminUserId, firstName, lastName } = {}) {
+  const safeId = getTrimmedString(adminUserId);
+  const safeFirst = getTrimmedString(firstName);
+  const safeLast = getTrimmedString(lastName);
+  if (!safeId || !safeFirst || !safeLast) return { ok: false, reason: 'invalid_input' };
+
+  const adminUser = await AdminUser.findById(safeId);
+  if (!adminUser) return { ok: false, reason: 'not_found' };
+
+  adminUser.firstName = safeFirst;
+  adminUser.lastName = safeLast;
+  await adminUser.save();
+  return { ok: true, adminUser };
+}
+
 module.exports = {
   normalizeEmail,
   getTrimmedString,
@@ -263,4 +283,5 @@ module.exports = {
   updatePrimaryAdminPassword,
   toggleAdminUserActive,
   updateAdminUserPasswordByOwner,
+  updateAdminUserName,
 };
