@@ -162,6 +162,14 @@ const EMAIL_TEMPLATES = [
     body: 'Vous avez consulté notre site sans valider votre commande.\n\nAvez-vous une question sur la compatibilité avec votre véhicule ? Pour vous garantir la bonne pièce, je peux vérifier votre VIN ou votre plaque d’immatriculation.\n\nRépondez simplement à cet email avec votre VIN ou votre immatriculation, je reviens vers vous très vite.',
   },
   {
+    key: 'reassurance',
+    label: 'Réassurance & garantie',
+    forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
+    defaultIncludeCta: false,
+    subject: 'Nos pièces : testées, garanties, facture à l’appui',
+    body: 'Je comprends qu’acheter une pièce reconditionnée demande de la confiance. Voici nos engagements :\n\n- Chaque pièce est testée sur banc avant expédition.\n- Garantie de 6 à 24 mois selon le produit, avec facture et garantie écrite.\n- Livraison sous 24/48h, paiement en 3x ou 4x sans frais possible.\n- Un interlocuteur dédié (moi) pour vous accompagner avant et après l’achat.\n\nJe reste à votre disposition pour toute question — vous pouvez me joindre au {telephone}.',
+  },
+  {
     key: 'discount_offer',
     label: '-10 % offerts pour finaliser',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
@@ -208,6 +216,12 @@ const SMS_TEMPLATES = [
     label: 'Vérifier la bonne pièce',
     forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
     body: '{prenom},\nPour être sûr à 100% de la bonne pièce pour votre véhicule, 2 minutes au téléphone suffisent.\nRappelez-moi au {telephone}, je m\'occupe de tout.\n{nom_commercial} – {brand}',
+  },
+  {
+    key: 'sms_reassurance',
+    label: 'Réassurance & garantie',
+    forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
+    body: '{prenom},\nToutes nos pièces sont testées sur banc et garanties, facture à l\'appui.\nJe réponds à toutes vos questions : rappelez-moi au {telephone}.\n{nom_commercial} – {brand}',
   },
   {
     key: 'sms_devis_ready',
