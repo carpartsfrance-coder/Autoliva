@@ -156,31 +156,63 @@ const EMAIL_TEMPLATES = [
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /*  TEMPLATES SMS (160 chars idéaux, on tolère plus si besoin)              */
+/*                                                                          */
+/*  RÈGLES (apprises à la dure) :                                           */
+/*   1. JAMAIS de lien dans un SMS : l'expéditeur est alphanumérique        */
+/*      (« CarParts »), les opérateurs FR jettent silencieusement les SMS   */
+/*      avec URL. Le lien / devis part TOUJOURS par email.                  */
+/*   2. Le client ne peut PAS répondre à un expéditeur alphanumérique →     */
+/*      le CTA est toujours « rappelez-moi au {telephone} », jamais         */
+/*      « répondez ».                                                       */
+/*   3. Certains leads n'ont QUE le téléphone (pas d'email) → chaque SMS    */
+/*      doit être auto-suffisant, sans dépendre d'un email.                 */
+/*   4. Compatibilité : on ne dit JAMAIS « votre {nom_produit} est          */
+/*      compatible » (le client a pu choisir la mauvaise réf sur le site).  */
+/*      On confirme la compat POUR SON VÉHICULE / « la bonne pièce ».       */
 /* ──────────────────────────────────────────────────────────────────────── */
 
 const SMS_TEMPLATES = [
   {
-    key: 'sms_cart_reminder',
-    label: '🛒 Panier en attente',
-    forSource: ['cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom}, votre panier {brand} ({prix_total}) vous attend. Reprendre en 1 clic : {lien_panier}',
+    key: 'sms_compat_ok',
+    label: '✅ Compatibilité vérifiée',
+    forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
+    body: '{prenom}, bonne nouvelle : compatibilité vérifiée pour votre véhicule ✅ La bonne pièce est dispo, livrable sous 24/48h. Je vous rappelle pour finaliser, ou rappelez-moi au {telephone}. {nom_commercial}',
   },
   {
-    key: 'sms_devis_followup',
-    label: '📨 Suite devis',
+    key: 'sms_compat_check',
+    label: '🔧 Vérifier la bonne pièce',
+    forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
+    body: '{prenom}, pour être sûr à 100% de LA bonne pièce pour votre véhicule, 2 min au téléphone suffisent. Rappelez-moi au {telephone}, je m\'occupe de tout. {nom_commercial}, {brand}',
+  },
+  {
+    key: 'sms_devis_ready',
+    label: '💼 Devis prêt',
     forSource: ['devis', 'contact'],
-    body: '{prenom}, suite à votre demande chez {brand}, j\'ai votre dossier sous les yeux. Pouvez-vous me confirmer votre VIN ? Vous pouvez aussi m\'appeler au {telephone}.',
+    body: '{prenom}, votre devis {brand} est prêt. Rappelez-moi au {telephone} pour le détail, le délai et le règlement. {nom_commercial}',
+  },
+  {
+    key: 'sms_tried_to_call',
+    label: '📞 J\'ai essayé de vous joindre',
+    forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
+    body: '{prenom}, j\'ai essayé de vous joindre au sujet de votre demande {brand}. Rappelez-moi au {telephone} ou dites-moi un créneau qui vous arrange. {nom_commercial}',
+  },
+  {
+    key: 'sms_still_available',
+    label: '📦 Encore dispo',
+    forSource: ['cart_activity', 'guest_checkout', 'user', 'devis', 'contact'],
+    body: '{prenom}, la pièce qui vous intéresse est encore en stock mais part vite. Je peux vous la réserver ? Rappelez-moi au {telephone}. {nom_commercial}, {brand}',
   },
   {
     key: 'sms_discount',
-    label: '💰 -10 %',
+    label: '💰 -10 % (code)',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom}, -10% sur votre panier {brand} avec RELANCE10 (7 jours). {lien_panier}',
+    body: '{prenom}, -10% sur votre commande {brand} avec le code RELANCE10 (valable 7j). Rappelez-moi au {telephone} pour en profiter. {nom_commercial}',
   },
   {
-    key: 'sms_callback',
-    label: '📞 Demande de rappel',
-    body: '{prenom}, je peux vous rappeler pour {nom_produit} ? Répondez avec un créneau qui vous arrange. {brand}',
+    key: 'sms_cart_reminder',
+    label: '🛒 Panier en attente',
+    forSource: ['cart_activity', 'guest_checkout', 'user'],
+    body: '{prenom}, votre panier {brand} ({prix_total}) est toujours là. Je peux le finaliser avec vous : rappelez-moi au {telephone}. {nom_commercial}',
   },
 ];
 
