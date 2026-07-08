@@ -36,7 +36,9 @@ function getBaseUrl(req) {
    l'expéditeur n'est pas reconnu (ex. envoi automatique). */
 const COMMERCIAL_DIRECTORY = [
   { keys: ['killian'], name: 'Killian', phone: '04 65 84 54 88' },
-  { keys: ['lucas'], name: 'Lucas', phone: '04 65 84 76 78' },
+  // Le compte back-office affiché « Fanir CPF » = Lucas → il signe « Lucas »
+  // avec SA ligne directe (et non le nom brut du compte / la ligne par défaut).
+  { keys: ['lucas', 'fanir'], name: 'Lucas', phone: '04 65 84 76 78' },
 ];
 function resolveCommercial(admin) {
   if (!admin) return null;
