@@ -197,6 +197,17 @@
                       · Dernière connexion <span class="font-semibold text-slate-500"><%= user.lastLoginAtLabel %></span>
                     </div>
 
+                    <% if (canManageAdminUsers) { %>
+                      <form action="/admin/parametres/equipe/<%= user.id %>/nom" class="mt-4" method="POST">
+                        <div class="text-xs font-semibold uppercase tracking-widest text-slate-500">Nom affiché <span class="normal-case font-normal text-slate-400">— utilisé dans les signatures SMS / email</span></div>
+                        <div class="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <input class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" name="firstName" value="<%= user.firstName %>" placeholder="Prénom" type="text" required />
+                          <input class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" name="lastName" value="<%= user.lastName %>" placeholder="Nom" type="text" required />
+                          <button class="inline-flex items-center justify-center rounded-xl bg-slate-900 text-white px-4 py-3 text-xs font-semibold uppercase tracking-wider hover:bg-slate-800 transition" type="submit">Enregistrer le nom</button>
+                        </div>
+                      </form>
+                    <% } %>
+
                     <% if (canManageAdminUsers && user.canToggle) { %>
                       <form action="/admin/parametres/equipe/<%= user.id %>/mot-de-passe" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3" method="POST">
                         <div>

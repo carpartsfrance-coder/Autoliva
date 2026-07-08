@@ -418,6 +418,7 @@ router.post('/pages-legales/:slug', requireAdminAuth, legalAdminController.postA
 router.get('/parametres', requireAdminAuth, requireAbility('team.manage'), adminController.getAdminSettingsPage);
 router.post('/parametres/equipe', requireAdminAuth, requireAbility('team.manage'), adminController.postAdminCreateBackofficeUser);
 router.post('/parametres/equipe/:adminUserId/toggle', requireAdminAuth, requireAbility('team.manage'), adminController.postAdminToggleBackofficeUser);
+router.post('/parametres/equipe/:adminUserId/nom', requireAdminAuth, requireAbility('team.manage'), adminController.postAdminUpdateBackofficeUserName);
 router.post('/parametres/equipe/:adminUserId/mot-de-passe', requireAdminAuth, requireAbility('team.manage'), adminController.postAdminResetBackofficeUserPassword);
 router.post('/parametres/mot-de-passe', requireAdminAuth, adminController.postAdminChangeOwnPassword);
 router.get('/parametres/facturation', requireAdminAuth, requireAbility('settings.billing'), adminController.getAdminInvoiceSettingsPage);
