@@ -676,6 +676,7 @@ function getAdminFromReq(req) {
     return {
       id: adminUserId && mongoose.Types.ObjectId.isValid(adminUserId) ? new mongoose.Types.ObjectId(adminUserId) : null,
       name: ((a.firstName || '') + ' ' + (a.lastName || '')).trim() || a.email || 'Admin',
+      firstName: (a.firstName || '').trim(),
       email: a.email || '',
     };
   }
@@ -774,7 +775,7 @@ async function postLeadSendEmail(req, res, next) {
     if (!rawSubject || !rawBody) return res.status(400).json({ ok: false, error: 'Sujet et message requis.' });
 
     const admin = getAdminFromReq(req);
-    const vars = buildLeadVariables({ lead: cart, req, adminName: admin.name });
+    const vars = buildLeadVariables({ lead: cart, req, admin });
 
     const finalSubject = applyVariables(rawSubject, vars);
     const finalBody = applyVariables(rawBody, vars);
@@ -830,7 +831,7 @@ async function postLeadEmailPreview(req, res, next) {
     const includeCartCta = req.body && req.body.includeCartCta === true;
 
     const admin = getAdminFromReq(req);
-    const vars = buildLeadVariables({ lead: cart, req, adminName: admin.name });
+    const vars = buildLeadVariables({ lead: cart, req, admin });
 
     const finalSubject = applyVariables(rawSubject, vars);
     const finalBody = applyVariables(rawBody, vars);
@@ -880,7 +881,7 @@ async function postLeadSendSms(req, res, next) {
     if (!rawText) return res.status(400).json({ ok: false, error: 'Message requis.' });
 
     const admin = getAdminFromReq(req);
-    const vars = buildLeadVariables({ lead: cart, req, adminName: admin.name });
+    const vars = buildLeadVariables({ lead: cart, req, admin });
     const finalText = applyVariables(rawText, vars).slice(0, 480);
 
     /* Garde-fou anti-lien : l'expéditeur SMS est alphanumérique (« CarParts »),

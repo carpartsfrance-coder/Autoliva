@@ -30,8 +30,25 @@ function getBaseUrl(req) {
   return `https://${trim(brand.DOMAIN) || 'autoliva.com'}`;
 }
 
-function buildLeadVariables({ lead, req, adminName }) {
+/* Annuaire des commerciaux : la signature ET la ligne directe injectées dans
+   les messages dépendent de QUI est connecté (le client rappelle une personne,
+   pas une entreprise → meilleure conversion). Repli sur la ligne de marque si
+   l'expéditeur n'est pas reconnu (ex. envoi automatique). */
+const COMMERCIAL_DIRECTORY = [
+  { keys: ['killian'], name: 'Killian', phone: '04 65 84 54 88' },
+  { keys: ['lucas'], name: 'Lucas', phone: '04 65 84 76 78' },
+];
+function resolveCommercial(admin) {
+  if (!admin) return null;
+  const hay = [admin.firstName, admin.name, admin.email].filter(Boolean).join(' ').toLowerCase();
+  return COMMERCIAL_DIRECTORY.find((c) => c.keys.some((k) => hay.includes(k))) || null;
+}
+
+function buildLeadVariables({ lead, req, adminName, admin }) {
   const baseUrl = getBaseUrl(req);
+  const commercial = resolveCommercial(admin);
+  const senderName = (commercial && commercial.name) || trim(adminName) || (admin && trim(admin.name)) || ('L’équipe ' + brand.NAME);
+  const senderPhone = (commercial && commercial.phone) || trim(brand.PHONE) || '';
   const items = Array.isArray(lead.items) ? lead.items : [];
   const firstItem = items[0] || null;
   const requested = lead.requested || {};
@@ -77,9 +94,9 @@ function buildLeadVariables({ lead, req, adminName }) {
     prix_produit: firstItem && Number.isFinite(firstItem.price) ? formatEuro(firstItem.price) : formatEuro(lead.totalAmountCents || 0),
     lien_panier: recoveryUrl,
     lien_produit: productUrl,
-    nom_commercial: trim(adminName) || 'L’équipe ' + brand.NAME,
+    nom_commercial: senderName,
     brand: brand.NAME,
-    telephone: trim(brand.PHONE) || '',
+    telephone: senderPhone,
     /* champs additionnels disponibles dans les templates */
     vin: trim(requested.vin),
     vehicule: trim(requested.vehicle),
@@ -174,45 +191,45 @@ const EMAIL_TEMPLATES = [
 const SMS_TEMPLATES = [
   {
     key: 'sms_compat_ok',
-    label: '✅ Compatibilité vérifiée',
+    label: 'Compatibilité vérifiée',
     forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom}, bonne nouvelle : compatibilité vérifiée pour votre véhicule ✅ La bonne pièce est dispo, livrable sous 24/48h. Je vous rappelle pour finaliser, ou rappelez-moi au {telephone}. {nom_commercial}',
+    body: '{prenom},\nCompatibilité vérifiée pour votre véhicule : la bonne pièce est disponible, livrable sous 24/48h.\nRappelez-moi au {telephone} pour finaliser.\n{nom_commercial} – {brand}',
   },
   {
     key: 'sms_compat_check',
-    label: '🔧 Vérifier la bonne pièce',
+    label: 'Vérifier la bonne pièce',
     forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom}, pour être sûr à 100% de LA bonne pièce pour votre véhicule, 2 min au téléphone suffisent. Rappelez-moi au {telephone}, je m\'occupe de tout. {nom_commercial}, {brand}',
+    body: '{prenom},\nPour être sûr à 100% de la bonne pièce pour votre véhicule, 2 minutes au téléphone suffisent.\nRappelez-moi au {telephone}, je m\'occupe de tout.\n{nom_commercial} – {brand}',
   },
   {
     key: 'sms_devis_ready',
-    label: '💼 Devis prêt',
+    label: 'Devis prêt',
     forSource: ['devis', 'contact'],
-    body: '{prenom}, votre devis {brand} est prêt. Rappelez-moi au {telephone} pour le détail, le délai et le règlement. {nom_commercial}',
+    body: '{prenom},\nVotre devis est prêt.\nRappelez-moi au {telephone} pour le détail, le délai et le règlement.\n{nom_commercial} – {brand}',
   },
   {
     key: 'sms_tried_to_call',
-    label: '📞 J\'ai essayé de vous joindre',
+    label: 'J\'ai essayé de vous joindre',
     forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom}, j\'ai essayé de vous joindre au sujet de votre demande {brand}. Rappelez-moi au {telephone} ou dites-moi un créneau qui vous arrange. {nom_commercial}',
+    body: '{prenom},\nJ\'ai essayé de vous joindre au sujet de votre demande.\nRappelez-moi au {telephone} ou dites-moi un créneau qui vous arrange.\n{nom_commercial} – {brand}',
   },
   {
     key: 'sms_still_available',
-    label: '📦 Encore dispo',
+    label: 'Encore disponible',
     forSource: ['cart_activity', 'guest_checkout', 'user', 'devis', 'contact'],
-    body: '{prenom}, la pièce qui vous intéresse est encore en stock mais part vite. Je peux vous la réserver ? Rappelez-moi au {telephone}. {nom_commercial}, {brand}',
+    body: '{prenom},\nLa pièce qui vous intéresse est encore en stock mais part vite.\nJe peux vous la réserver ? Rappelez-moi au {telephone}.\n{nom_commercial} – {brand}',
   },
   {
     key: 'sms_discount',
-    label: '💰 -10 % (code)',
+    label: '-10 % (code)',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom}, -10% sur votre commande {brand} avec le code RELANCE10 (valable 7j). Rappelez-moi au {telephone} pour en profiter. {nom_commercial}',
+    body: '{prenom},\n-10% sur votre commande avec le code RELANCE10 (valable 7 jours).\nRappelez-moi au {telephone} pour en profiter.\n{nom_commercial} – {brand}',
   },
   {
     key: 'sms_cart_reminder',
-    label: '🛒 Panier en attente',
+    label: 'Panier en attente',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom}, votre panier {brand} ({prix_total}) est toujours là. Je peux le finaliser avec vous : rappelez-moi au {telephone}. {nom_commercial}',
+    body: '{prenom},\nVotre panier ({prix_total}) est toujours là.\nJe peux le finaliser avec vous : rappelez-moi au {telephone}.\n{nom_commercial} – {brand}',
   },
 ];
 
