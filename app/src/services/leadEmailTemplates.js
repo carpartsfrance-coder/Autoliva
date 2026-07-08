@@ -124,7 +124,7 @@ function applyVariables(text, vars) {
 const EMAIL_TEMPLATES = [
   {
     key: 'devis_followup',
-    label: '📨 Suite à votre demande de devis',
+    label: 'Suite à votre demande de devis',
     forSource: ['devis', 'contact'],
     defaultIncludeCta: false, // pas de CTA panier : la demande n'est pas le panier
     subject: 'Suite à votre demande chez {brand}',
@@ -132,42 +132,50 @@ const EMAIL_TEMPLATES = [
   },
   {
     key: 'devis_quote_ready',
-    label: '💼 Envoyer un devis chiffré',
+    label: 'Envoyer un devis chiffré',
     forSource: ['devis', 'contact'],
     defaultIncludeCta: false,
     subject: 'Votre devis pour {nom_produit}',
     body: 'Suite à votre demande, voici ma proposition pour {nom_produit} :\n\n[Détailler ici : référence exacte, prix, délai de livraison, garantie]\n\nCe devis est valable 7 jours. Pour valider votre commande, répondez simplement à cet email ou appelez-moi au {telephone}.',
   },
   {
+    key: 'compat_confirmed',
+    label: 'Compatibilité confirmée',
+    forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
+    defaultIncludeCta: false,
+    subject: 'Compatibilité confirmée pour votre véhicule',
+    body: 'Après vérification, je vous confirme la bonne pièce pour votre véhicule.\n\n[Précisez ici : la référence exacte validée, le prix, le délai de livraison et la garantie]\n\nDès que vous me donnez le feu vert, je lance la préparation. Une question ? Vous pouvez me joindre au {telephone}.',
+  },
+  {
     key: 'cart_reminder',
-    label: '🛒 Votre panier vous attend',
+    label: 'Votre panier vous attend',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
     defaultIncludeCta: true,
     subject: 'Votre panier {brand} vous attend',
-    body: 'Vous avez sélectionné {nom_produit} sur notre site sans finaliser votre commande.\n\nMontant : {prix_total}\n\nPour reprendre votre commande en un clic, cliquez sur le bouton ci-dessous.\n\nSi vous avez la moindre question (compatibilité, délai de livraison, garantie…), je suis disponible pour vous aider.',
+    body: 'Vous avez sélectionné {nom_produit} sur notre site sans finaliser votre commande.\n\nMontant : {prix_total}\n\nPour reprendre votre commande, je vous mets le lien juste en dessous.\n\nSi vous avez la moindre question (compatibilité, délai de livraison, garantie…), je suis disponible pour vous aider.',
   },
   {
     key: 'compatibility_check',
-    label: '🔧 Question sur la compatibilité ?',
+    label: 'Question sur la compatibilité ?',
     defaultIncludeCta: false,
     subject: 'Compatibilité avec votre véhicule',
     body: 'Vous avez consulté notre site sans valider votre commande.\n\nAvez-vous une question sur la compatibilité avec votre véhicule ? Pour vous garantir la bonne pièce, je peux vérifier votre VIN ou votre plaque d’immatriculation.\n\nRépondez simplement à cet email avec votre VIN ou votre immatriculation, je reviens vers vous très vite.',
   },
   {
     key: 'discount_offer',
-    label: '💰 -10 % offerts pour finaliser',
+    label: '-10 % offerts pour finaliser',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
     defaultIncludeCta: true,
     subject: '-10 % pour finaliser votre commande chez {brand}',
-    body: 'Pour vous remercier de votre intérêt pour {nom_produit}, je vous offre 10 % de remise sur votre commande.\n\nMontant : {prix_total} → avec le code RELANCE10 valable 7 jours.\n\nIl vous suffit de cliquer sur le bouton ci-dessous pour reprendre votre panier et appliquer le code au moment du paiement.',
+    body: 'Pour vous remercier de votre intérêt pour {nom_produit}, je vous offre 10 % de remise sur votre commande.\n\nMontant : {prix_total} → avec le code RELANCE10 valable 7 jours.\n\nJe vous mets le lien ci-dessous : reprenez votre panier et appliquez le code RELANCE10 au moment du paiement.',
   },
   {
     key: 'availability_confirm',
-    label: '✅ Confirmation disponibilité',
+    label: 'Confirmation de disponibilité',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
     defaultIncludeCta: true,
     subject: '{nom_produit} est disponible',
-    body: '{nom_produit} est en stock et prêt à être expédié.\n\nMontant : {prix_total}\nLivraison sous 24/48h ouvrées.\n\nPour finaliser votre commande, cliquez sur le bouton ci-dessous.',
+    body: '{nom_produit} est en stock et prêt à être expédié.\n\nMontant : {prix_total}\nLivraison sous 24/48h ouvrées.\n\nPour finaliser, je vous mets le lien juste en dessous.',
   },
 ];
 
@@ -237,36 +245,56 @@ const SMS_TEMPLATES = [
 /*  WRAP HTML EMAIL — signature + footer pro                                */
 /* ──────────────────────────────────────────────────────────────────────── */
 
+/**
+ * Rendu « email personnel » : pas de carte marketing ni de gros bouton rouge,
+ * juste un message écrit à la main + une vraie signature avec le logo Autoliva.
+ * Le lien (quand il y en a un) est un lien texte discret, comme le mettrait un
+ * humain — pas un call-to-action de newsletter.
+ */
 function renderEmailHtml({ subject, body, vars, ctaUrl }) {
   const safeBody = escapeHtml(body || '').replace(/\r?\n/g, '<br/>');
   const greeting = vars.prenom && vars.prenom !== 'Bonjour' ? `Bonjour ${escapeHtml(vars.prenom)},` : 'Bonjour,';
+  const senderName = escapeHtml(vars.nom_commercial || ('L’équipe ' + brand.NAME));
+  const logoUrl = escapeHtml((brand.SITE_URL || '') + (brand.LOGO_URL || ''));
+  const siteUrl = escapeHtml(brand.SITE_URL || '');
+  const siteLabel = escapeHtml(brand.DOMAIN || 'autoliva.com');
+  const tel = escapeHtml(vars.telephone || brand.PHONE || '');
+  const contactEmail = escapeHtml(brand.EMAIL_CONTACT || '');
+  const RED = '#E10613';
 
   const ctaBlock = ctaUrl
-    ? `<div style="margin:24px 0;text-align:center;">
-        <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:14px;">Reprendre mon panier</a>
-      </div>`
+    ? `<p style="margin:16px 0;">Reprendre votre commande : <a href="${escapeHtml(ctaUrl)}" style="color:#1a56db;">${escapeHtml(ctaUrl)}</a></p>`
     : '';
 
-  const phoneBlock = vars.telephone
-    ? `<div style="font-size:13px;color:#6b7280;margin-top:8px;">Une question ? <a href="tel:${escapeHtml(vars.telephone)}" style="color:#dc2626;">${escapeHtml(vars.telephone)}</a></div>`
-    : '';
+  const contactParts = [];
+  if (tel) contactParts.push(`Tél. <a href="tel:${tel.replace(/\s+/g, '')}" style="color:#555;text-decoration:none;">${tel}</a>`);
+  if (contactEmail) contactParts.push(`<a href="mailto:${contactEmail}" style="color:#555;text-decoration:none;">${contactEmail}</a>`);
+  const contactLine = contactParts.join(' &nbsp;·&nbsp; ');
 
   return `
 <!DOCTYPE html>
-<html><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:24px;background:#f3f4f6;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
-  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:12px;padding:32px;color:#111827;line-height:1.6;">
-    <p style="margin:0 0 16px 0;font-size:15px;">${greeting}</p>
-    <div style="font-size:14px;color:#374151;">${safeBody}</div>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#ffffff;">
+  <div style="max-width:600px;margin:0 auto;padding:24px 24px 28px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.62;color:#1f2328;">
+    <p style="margin:0 0 14px;">${greeting}</p>
+    <div style="margin:0 0 4px;">${safeBody}</div>
     ${ctaBlock}
-    <p style="margin:24px 0 0 0;font-size:14px;color:#374151;">
-      Cordialement,<br/>
-      <strong>${escapeHtml(vars.nom_commercial || 'L’équipe ' + (vars.brand || 'Autoliva'))}</strong>
-    </p>
-    ${phoneBlock}
-  </div>
-  <div style="max-width:560px;margin:12px auto 0 auto;text-align:center;font-size:11px;color:#9ca3af;">
-    ${escapeHtml(vars.brand || 'Autoliva')} · cet email vous est envoyé suite à votre activité sur notre site.
+    <p style="margin:20px 0 2px;">Cordialement,</p>
+    <p style="margin:0 0 16px;font-weight:600;color:#111;">${senderName}</p>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px;">
+      <tr>
+        <td style="padding-right:14px;vertical-align:middle;">
+          <img src="${logoUrl}" alt="${escapeHtml(brand.NAME)}" height="42" style="display:block;height:42px;width:auto;border:0;outline:none;text-decoration:none;" />
+        </td>
+        <td style="padding-left:14px;border-left:3px solid ${RED};vertical-align:middle;font-size:12.5px;color:#555;line-height:1.55;">
+          <span style="font-weight:700;color:#111;font-size:14px;">${escapeHtml(brand.NAME)}</span><br/>
+          Pièces auto reconditionnées &amp; garanties<br/>
+          ${contactLine ? contactLine + '<br/>' : ''}
+          <a href="${siteUrl}" style="color:${RED};text-decoration:none;font-weight:600;">${siteLabel}</a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:20px 0 0;font-size:11px;color:#9ca3af;">Cet email fait suite à votre demande sur ${siteLabel}.</p>
   </div>
 </body></html>`.trim();
 }
@@ -279,9 +307,15 @@ function renderEmailText({ body, vars }) {
     body || '',
     '',
     'Cordialement,',
-    vars.nom_commercial || 'L’équipe ' + (vars.brand || 'Autoliva'),
+    vars.nom_commercial || ('L’équipe ' + brand.NAME),
+    '',
+    brand.NAME + ' — Pièces auto reconditionnées & garanties',
   ];
-  if (vars.telephone) lines.push(vars.telephone);
+  const contactBits = [];
+  if (vars.telephone) contactBits.push('Tél. ' + vars.telephone);
+  if (brand.EMAIL_CONTACT) contactBits.push(brand.EMAIL_CONTACT);
+  if (contactBits.length) lines.push(contactBits.join(' · '));
+  lines.push(brand.DOMAIN || 'autoliva.com');
   return lines.join('\n');
 }
 
