@@ -4,13 +4,12 @@ const AbandonedCart = require('../models/AbandonedCart');
 const { sendAbandonedCartReminder, sendEmail } = require('../services/emailService');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const {
-  EMAIL_TEMPLATES,
-  SMS_TEMPLATES,
   applyVariables,
   buildLeadVariables,
   renderEmailHtml,
   renderEmailText,
 } = require('../services/leadEmailTemplates');
+const { getMergedTemplates } = require('../services/leadTemplateSettings');
 const brand = require('../config/brand');
 
 function escapeRegExp(str) {
@@ -282,6 +281,9 @@ async function getAdminLeadsPage(req, res, next) {
     const todoQS = new URLSearchParams(todoParams).toString();
     const allQS = new URLSearchParams(Object.assign({}, qsParams, { view: 'all' })).toString();
 
+    // Modèles fusionnés (perso back-office > défaut du code), activés uniquement.
+    const mergedTemplates = await getMergedTemplates();
+
     const baseRender = (overrides = {}) => res.render('admin/cart-activity', Object.assign({
       title: 'Admin - Leads à relancer',
       dbConnected,
@@ -292,8 +294,8 @@ async function getAdminLeadsPage(req, res, next) {
       filtersQS,
       tabs: { todoCount: 0, allCount: 0, todoUrl: '/admin/activite-panier' + (todoQS ? '?' + todoQS : ''), allUrl: '/admin/activite-panier?' + allQS },
       pagination: { page: 1, perPage, totalItems: 0, totalPages: 1, from: 0, to: 0, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1 },
-      emailTemplates: EMAIL_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body, forSource: t.forSource || [], defaultIncludeCta: t.defaultIncludeCta !== false })),
-      smsTemplates: SMS_TEMPLATES.map((t) => ({ key: t.key, label: t.label, body: t.body, forSource: t.forSource || [] })),
+      emailTemplates: mergedTemplates.email,
+      smsTemplates: mergedTemplates.sms,
     }, overrides));
 
     if (!dbConnected) return baseRender();
@@ -676,6 +678,7 @@ function getAdminFromReq(req) {
     return {
       id: adminUserId && mongoose.Types.ObjectId.isValid(adminUserId) ? new mongoose.Types.ObjectId(adminUserId) : null,
       name: ((a.firstName || '') + ' ' + (a.lastName || '')).trim() || a.email || 'Admin',
+      firstName: (a.firstName || '').trim(),
       email: a.email || '',
     };
   }
@@ -774,7 +777,7 @@ async function postLeadSendEmail(req, res, next) {
     if (!rawSubject || !rawBody) return res.status(400).json({ ok: false, error: 'Sujet et message requis.' });
 
     const admin = getAdminFromReq(req);
-    const vars = buildLeadVariables({ lead: cart, req, adminName: admin.name });
+    const vars = buildLeadVariables({ lead: cart, req, admin });
 
     const finalSubject = applyVariables(rawSubject, vars);
     const finalBody = applyVariables(rawBody, vars);
@@ -830,7 +833,7 @@ async function postLeadEmailPreview(req, res, next) {
     const includeCartCta = req.body && req.body.includeCartCta === true;
 
     const admin = getAdminFromReq(req);
-    const vars = buildLeadVariables({ lead: cart, req, adminName: admin.name });
+    const vars = buildLeadVariables({ lead: cart, req, admin });
 
     const finalSubject = applyVariables(rawSubject, vars);
     const finalBody = applyVariables(rawBody, vars);
@@ -880,8 +883,16 @@ async function postLeadSendSms(req, res, next) {
     if (!rawText) return res.status(400).json({ ok: false, error: 'Message requis.' });
 
     const admin = getAdminFromReq(req);
-    const vars = buildLeadVariables({ lead: cart, req, adminName: admin.name });
+    const vars = buildLeadVariables({ lead: cart, req, admin });
     const finalText = applyVariables(rawText, vars).slice(0, 480);
+
+    /* Garde-fou anti-lien : l'expéditeur SMS est alphanumérique (« CarParts »),
+       et les opérateurs FR jettent SILENCIEUSEMENT les SMS contenant une URL.
+       Brevo répond 201 « envoyé » mais le client ne reçoit rien → on refuse
+       l'envoi plutôt que de logger un faux « SMS envoyé ». Le lien part par email. */
+    if (/https?:\/\/|www\.[a-z0-9-]+\.[a-z]{2,}|\b[a-z0-9-]{2,}\.(?:fr|com|net|org|eu|io|co|shop|store)\b/i.test(finalText)) {
+      return res.status(400).json({ ok: false, error: 'Un lien dans un SMS « CarParts » est bloqué par les opérateurs (le client ne le recevrait pas). Retire le lien — envoie-le plutôt par email.' });
+    }
 
     const sendResult = await sendSms({ to: phoneFR, text: finalText });
     if (!sendResult || !sendResult.ok) {
@@ -983,12 +994,9 @@ async function postLeadAddNote(req, res, next) {
 /**
  * GET /admin/api/leads/templates — retourne les templates email + SMS au front.
  */
-function getAdminLeadTemplates(req, res) {
-  return res.json({
-    ok: true,
-    email: EMAIL_TEMPLATES.map((t) => ({ key: t.key, label: t.label, subject: t.subject, body: t.body, forSource: t.forSource || [], defaultIncludeCta: t.defaultIncludeCta !== false })),
-    sms: SMS_TEMPLATES.map((t) => ({ key: t.key, label: t.label, body: t.body })),
-  });
+async function getAdminLeadTemplates(req, res) {
+  const merged = await getMergedTemplates();
+  return res.json({ ok: true, email: merged.email, sms: merged.sms });
 }
 
 module.exports = {
