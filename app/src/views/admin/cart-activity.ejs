@@ -311,6 +311,9 @@
                       <button type="button" class="btn btn-secondary text-xs flex-1 justify-center lead-action" data-action="sms" data-lead-id="<%= c.id %>" data-lead-phone="<%= c.phone %>" data-lead-name="<%= c.fullName %>">
                         <span class="material-symbols-outlined text-sm mr-1">sms</span>SMS
                       </button>
+                      <button type="button" class="lead-action flex-1 justify-center inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-2 transition" data-action="whatsapp" data-lead-id="<%= c.id %>" data-lead-phone="<%= c.phone %>" data-lead-name="<%= c.fullName %>" title="Ouvrir WhatsApp avec un message pré-rempli (envoi depuis ton WhatsApp)">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>WhatsApp
+                      </button>
                     <% } %>
                   </div>
                   <% if (c.phone && c.phoneCallable) { %>
@@ -1043,7 +1046,75 @@
     });
   }
 
-  // ─ Action: email ou sms ─
+  // ─ Modal WhatsApp (click-to-chat : ouvre wa.me pré-rempli, envoi depuis le WhatsApp du commercial) ─
+  function openWhatsAppModal(leadId, lead, presetTemplateKey) {
+    var c = lead || {};
+    openModal('Message WhatsApp');
+
+    var templatesOptions = '<option value="">— Choisir un modèle —</option>';
+    SMS_TEMPLATES.forEach(function (t) {
+      templatesOptions += '<option value="' + escapeHtml(t.key) + '">' + escapeHtml(t.label) + '</option>';
+    });
+
+    content.innerHTML = ''
+      + renderLeadHeader(c)
+      + '<form id="lead-wa-form" class="space-y-3">'
+      + '<div class="text-xs text-slate-500">Destinataire : <strong>' + escapeHtml(c.phone || '') + '</strong></div>'
+      + '<div class="rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-800 px-3 py-2">Ça ouvre WhatsApp (Web ou appli) avec le message pré-rempli — tu envoies depuis <strong>ton</strong> WhatsApp. Ici <strong>les liens passent</strong> : n\'hésite pas à joindre le lien du produit ou du devis.</div>'
+      + '<select id="lead-wa-template" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white">'
+      + templatesOptions + '</select>'
+      + buildVariablesToolbar('lead-wa-text')
+      + '<textarea id="lead-wa-text" name="text" rows="5" required maxlength="1000" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Message WhatsApp…"></textarea>'
+      + '<div class="flex items-center gap-2 pt-2">'
+      + '  <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 transition">Ouvrir WhatsApp</button>'
+      + '  <button type="button" onclick="document.getElementById(\'lead-modal\').classList.add(\'hidden\')" class="btn btn-ghost text-sm">Annuler</button>'
+      + '</div>'
+      + '<div id="lead-wa-result" class="text-sm"></div>'
+      + '</form>';
+
+    var form = document.getElementById('lead-wa-form');
+    var ta = document.getElementById('lead-wa-text');
+    var templateEl = document.getElementById('lead-wa-template');
+    attachVariableInserters(form);
+
+    function applyTemplate(tpl) { if (tpl) ta.value = tpl.body || ''; }
+    var presetWa = presetTemplateKey ? SMS_TEMPLATES.find(function (t) { return t.key === presetTemplateKey; }) : null;
+    var defaultWa = presetWa
+      || SMS_TEMPLATES.find(function (t) { return t.forSource && t.forSource.indexOf(c.captureSource) >= 0; })
+      || SMS_TEMPLATES.find(function (t) { return t.key === 'sms_tried_to_call'; });
+    if (defaultWa) { templateEl.value = defaultWa.key; applyTemplate(defaultWa); }
+    templateEl.addEventListener('change', function () {
+      var tpl = SMS_TEMPLATES.find(function (t) { return t.key === templateEl.value; });
+      if (tpl) applyTemplate(tpl);
+    });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var resultEl = document.getElementById('lead-wa-result');
+      // On pré-ouvre l'onglet DANS le clic (sinon bloqué par le navigateur), on le redirige après.
+      var waTab = window.open('', '_blank');
+      resultEl.textContent = 'Préparation…';
+      fetch('/admin/api/leads/' + leadId + '/whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: ta.value, templateKey: templateEl.value || '' }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d && d.ok && d.waUrl) {
+            if (waTab) waTab.location = d.waUrl; else window.open(d.waUrl, '_blank');
+            resultEl.innerHTML = '<span class="text-green-700 font-semibold">✓ WhatsApp ouvert pour ' + escapeHtml(d.sentTo) + '</span>';
+            setTimeout(refresh, 1500);
+          } else {
+            if (waTab) waTab.close();
+            resultEl.innerHTML = '<span class="text-red-700">Erreur : ' + escapeHtml(d && d.error ? d.error : '?') + '</span>';
+          }
+        })
+        .catch(function () { if (waTab) waTab.close(); resultEl.innerHTML = '<span class="text-red-700">Erreur réseau</span>'; });
+    });
+  }
+
+  // ─ Action: email / sms / whatsapp ─
   document.querySelectorAll('.lead-action').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var action = btn.dataset.action;
@@ -1059,6 +1130,7 @@
           }
           if (action === 'email') openEmailModal(leadId, data.cart);
           else if (action === 'sms') openSmsModal(leadId, data.cart, btn.dataset.smsTemplate || '');
+          else if (action === 'whatsapp') openWhatsAppModal(leadId, data.cart, btn.dataset.smsTemplate || '');
         })
         .catch(function () {
           content.innerHTML = '<div class="text-sm text-red-500">Erreur réseau.</div>';
