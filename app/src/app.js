@@ -48,6 +48,21 @@ app.use(cpfRedirects);
 // Canonical www redirect (301) — must be before all other routes
 app.use(wwwCanonical);
 
+// ── Anti-scraping : chemins bidons ─────────────────────────────────────────
+// URLs portugaises/espagnoles (« loja »/« tienda » = boutique, « marca » =
+// marque, « modelo » = modèle) que SEULS des bots/scrapers visitent — ce ne
+// sont pas des routes Autoliva. On rejette tôt (403, avant session / i18n /
+// analytics / rendu) pour économiser les ressources ET sortir ces hits des
+// statistiques visiteurs. NB : arrête ce pattern précis, pas un scraper qui
+// bascule sur de vraies URLs — pour ça, Cloudflare/WAF en amont.
+const BOT_PROBE_PATH = /^\/(loja|tienda|marca|modelo)(\/|$)/i;
+app.use((req, res, next) => {
+  if (BOT_PROBE_PATH.test(req.path)) {
+    return res.status(403).type('text/plain').send('Forbidden');
+  }
+  next();
+});
+
 function isSameOrigin(req) {
   const host = typeof req.headers.host === 'string' ? req.headers.host : '';
   if (!host) return true;
@@ -536,6 +551,28 @@ app.use(express.static(path.join(__dirname, '..', 'public'), staticOptions));
 // SAV : exposition statique des PDF de rapports et docs uploadés
 app.use('/uploads/sav-reports', express.static(path.join(__dirname, '..', '..', 'uploads', 'sav-reports')));
 app.use('/uploads/sav', express.static(path.join(__dirname, '..', '..', 'uploads', 'sav')));
+
+// ── Anti-scraping : limiteur de débit du site public ───────────────────────
+// Garde-fou anti-flood/abus par IP. Les assets statiques ci-dessus ne comptent
+// PAS (servis avant ce point) : seules les pages + API sont comptées, donc la
+// limite reflète des vraies pages vues. Volontairement GÉNÉREUX pour ne jamais
+// gêner un visiteur réel, même derrière un NAT d'entreprise/mobile. On épargne
+// le back-office (usage intensif) et les moteurs de recherche légitimes (SEO).
+// NB : coupe les bursts agressifs, pas un scraper LENT — pour ça, Cloudflare.
+const publicSiteLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    const p = (req.path || '').toLowerCase();
+    if (p.startsWith('/admin') || p.startsWith('/comptable') || p.startsWith('/media') || p.startsWith('/uploads')) return true;
+    const ua = (req.headers['user-agent'] || '').toLowerCase();
+    return /googlebot|bingbot|slurp|duckduckbot|applebot|yandexbot|facebookexternalhit|twitterbot|linkedinbot/.test(ua);
+  },
+  handler: (req, res) => res.status(429).type('text/plain').send('Trop de requêtes, réessayez dans une minute.'),
+});
+app.use(publicSiteLimiter);
 
 // WordPress -> Node.js 301 redirects (SEO migration)
 app.use(wpRedirects);
