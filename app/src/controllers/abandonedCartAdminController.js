@@ -914,6 +914,50 @@ async function postLeadSendSms(req, res, next) {
 }
 
 /**
+ * POST /admin/api/leads/:id/whatsapp — prépare un message WhatsApp « click-to-chat ».
+ * Remplit les variables côté serveur (nom du commercial connecté, sa ligne…) et
+ * renvoie l'URL wa.me ; le front l'ouvre → le commercial envoie depuis SON WhatsApp.
+ * Pas de garde-fou lien : sur WhatsApp les liens passent (contrairement au SMS
+ * alphanumérique). On journalise l'ouverture (intention), pas un envoi garanti.
+ * Body: { text, templateKey? }
+ */
+async function postLeadWhatsApp(req, res, next) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'DB indisponible.' });
+    const id = req.params.id;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ ok: false, error: 'ID invalide.' });
+
+    const cart = await AbandonedCart.findById(id).lean();
+    if (!cart) return res.status(404).json({ ok: false, error: 'Lead non trouvé.' });
+    if (!cart.phone) return res.status(400).json({ ok: false, error: 'Pas de téléphone enregistré.' });
+    const phoneFR = normalizePhoneFR(cart.phone);
+    if (!phoneFR) return res.status(400).json({ ok: false, error: 'Téléphone invalide ou non français.' });
+    const waNumber = phoneFR.replace(/\D/g, ''); // +33XXXXXXXXX → 33XXXXXXXXX (format wa.me)
+
+    const rawText = String((req.body && req.body.text) || '').trim().slice(0, 1000);
+    const templateKey = String((req.body && req.body.templateKey) || '').trim().slice(0, 60);
+    if (!rawText) return res.status(400).json({ ok: false, error: 'Message requis.' });
+
+    const admin = getAdminFromReq(req);
+    const vars = buildLeadVariables({ lead: cart, req, admin });
+    const finalText = applyVariables(rawText, vars).slice(0, 1000);
+
+    const waUrl = 'https://wa.me/' + waNumber + '?text=' + encodeURIComponent(finalText);
+
+    const now = new Date();
+    const noteLabel = templateKey ? ` [${templateKey}]` : '';
+    await AbandonedCart.updateOne({ _id: cart._id }, {
+      $set: { lastManualContactAt: now },
+      $push: { notes: { text: `📲 WhatsApp ouvert${noteLabel} : "${finalText.slice(0, 120)}${finalText.length > 120 ? '…' : ''}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
+    });
+
+    return res.json({ ok: true, waUrl, sentTo: phoneFR });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
  * POST /admin/api/leads/:id/status — set/clear manualStatus.
  * Body: { status: 'contacted' | 'converted' | 'lost' | null }
  */
@@ -1008,6 +1052,7 @@ module.exports = {
   postLeadSendEmail,
   postLeadEmailPreview,
   postLeadSendSms,
+  postLeadWhatsApp,
   postLeadSetStatus,
   postLeadAddNote,
   getAdminLeadTemplates,

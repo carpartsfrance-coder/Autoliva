@@ -345,6 +345,7 @@ router.get('/api/leads/templates', requireAdminAuth, abandonedCartAdminControlle
 router.post('/api/leads/:id/email', requireAdminAuth, abandonedCartAdminController.postLeadSendEmail);
 router.post('/api/leads/:id/email/preview', requireAdminAuth, abandonedCartAdminController.postLeadEmailPreview);
 router.post('/api/leads/:id/sms', requireAdminAuth, abandonedCartAdminController.postLeadSendSms);
+router.post('/api/leads/:id/whatsapp', requireAdminAuth, abandonedCartAdminController.postLeadWhatsApp);
 router.post('/api/leads/:id/status', requireAdminAuth, abandonedCartAdminController.postLeadSetStatus);
 router.post('/api/leads/:id/note', requireAdminAuth, abandonedCartAdminController.postLeadAddNote);
 
