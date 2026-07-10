@@ -91,6 +91,21 @@ async function listRecentSessions({ period = DEFAULT_PERIOD, source = '', campai
         lastPage: { $first: '$page' },
       },
     },
+    // Ne compte comme « converti » qu'une commande au statut PAYÉ (exclut annulée
+    // / remboursée) — cohérent avec le CA et la page détail. On joint la commande
+    // et on neutralise orderId si son statut n'est pas payé.
+    { $lookup: { from: 'orders', localField: 'orderId', foreignField: '_id', as: '_order' } },
+    { $addFields: {
+      orderStatus: { $arrayElemAt: ['$_order.status', 0] },
+      orderId: {
+        $cond: [
+          { $in: [{ $ifNull: [{ $arrayElemAt: ['$_order.status', 0] }, ''] }, PAID_ORDER_STATUSES] },
+          '$orderId',
+          null,
+        ],
+      },
+    } },
+    { $project: { _order: 0 } },
     { $match: convertedFilter(converted) },
     { $sort: { lastSeenAt: -1 } },
     { $limit: Math.min(Math.max(parseInt(limit, 10) || 50, 1), 200) },
@@ -170,7 +185,9 @@ async function getSessionTimeline(sessionId) {
     clickPhoneCount: events.filter((e) => e.type === 'click_phone').length,
     clickEmailCount: events.filter((e) => e.type === 'click_email').length,
     clickWhatsappCount: events.filter((e) => e.type === 'click_whatsapp').length,
-    converted: !!orders.length,
+    // « Converti » = au moins une commande au statut PAYÉ. Une commande annulée
+    // ou remboursée ne compte PAS comme conversion (cohérent avec le CA).
+    converted: orders.some((o) => PAID_ORDER_STATUSES.includes(o.status)),
     revenueCents: orders.reduce((sum, o) => {
       if (PAID_ORDER_STATUSES.includes(o.status)) return sum + (o.totalCents || 0);
       return sum;
