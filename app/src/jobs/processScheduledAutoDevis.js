@@ -31,7 +31,9 @@ async function processScheduledAutoDevis(now = new Date()) {
 
     const offers = (cart.engineQuote && cart.engineQuote.autoDevis && cart.engineQuote.autoDevis.offers) || [];
     try {
-      const r = await engineQuoteAdmin.sendInstantDevis(cart, { offers, dryRun: !live, sentByName: 'Devis automatique (différé)' });
+      // HAMEÇON « disponible » (et NON plus un devis ferme + paiement auto, qui
+      // ne convertit pas). Le close revient au conseiller.
+      const r = await engineQuoteAdmin.sendAvailabilityHook(cart, { offers, dryRun: !live });
       await AbandonedCart.updateOne(
         { _id: cart._id },
         { $set: {
@@ -40,7 +42,7 @@ async function processScheduledAutoDevis(now = new Date()) {
           'engineQuote.autoDevis.result': (r && r.ok) ? 'ok' : ((r && r.reason) || 'fail'),
         } }
       );
-      console.log(`[auto-devis-différé] ${live ? 'ENVOYÉ' : 'DRY-RUN'} → ${cart.email} · ${offers.length} devis · ok=${r && r.ok}`);
+      console.log(`[auto-hameçon] ${live ? 'ENVOYÉ' : 'DRY-RUN'} → ${cart.email} · moteur dispo · ok=${r && r.ok}`);
       processed += 1;
     } catch (err) {
       await AbandonedCart.updateOne(

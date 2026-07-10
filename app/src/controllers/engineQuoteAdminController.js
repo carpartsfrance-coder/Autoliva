@@ -1883,8 +1883,66 @@ async function getEngineQuoteFunnel(req, res, next) {
   }
 }
 
+/**
+ * Devis auto → HAMEÇON « disponible » (remplace le devis FERME auto qui ne
+ * convertit pas sur un achat moteur : prix froid + lien de paiement = le client
+ * price-shoppe et le commercial est sorti de la boucle). Ici on mène par la
+ * DISPONIBILITÉ, sans prix ni paiement, et on renvoie au conseiller → le close
+ * revient à l'humain. Le devis FERME reste dispo pour l'envoi MANUEL du
+ * commercial (sendInstantDevis), après qualification au téléphone.
+ */
+async function sendAvailabilityHook(cart, opts = {}) {
+  const dryRun = !!opts.dryRun;
+  if (!cart || (!cart.email && !cart.phone)) return { ok: false, reason: 'precondition' };
+  const firstName = String((cart.firstName || '')).trim();
+  const plate = String((cart.requested && cart.requested.plate) || '').replace(/[^A-Za-z0-9-]/g, '').toUpperCase();
+  const phone = brand.PHONE_MOTEUR;
+  const phoneTel = 'tel:' + String(brand.PHONE_MOTEUR_INTL || phone).replace(/\s+/g, '');
+  const greeting = firstName ? `Bonjour ${firstName},` : 'Bonjour,';
+  const plateBit = plate ? ` (plaque ${plate})` : '';
+  const logoUrl = String(brand.SITE_URL || 'https://autoliva.com') + String(brand.LOGO_URL || '/images/logo-autoliva.png');
+
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#ffffff;">
+  <div style="max-width:600px;margin:0;padding:20px 22px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;font-size:15px;line-height:1.6;color:#1f2328;text-align:left;">
+    <img src="${logoUrl}" alt="Autoliva" height="34" style="height:34px;width:auto;border:0;margin-bottom:16px;" />
+    <p style="margin:0 0 14px;">${greeting}</p>
+    <p style="margin:0 0 14px;font-size:16px;"><strong>Bonne nouvelle : le moteur pour votre véhicule${plateBit} est disponible chez nous.</strong></p>
+    <p style="margin:0 0 14px;">Un conseiller Autoliva vous <strong>recontacte sous 24h</strong> (par téléphone ou email) pour vous donner le prix exact, le délai et les conditions de garantie — et répondre à toutes vos questions (compatibilité, montage, livraison).</p>
+    <p style="margin:0 0 18px;">Vous ne voulez pas attendre ? Appelez-nous au <a href="${phoneTel}" style="color:#E10613;font-weight:700;text-decoration:none;">${phone}</a>.</p>
+    <p style="margin:0;">À très vite,<br/><strong>L'équipe Autoliva</strong></p>
+  </div>
+</body></html>`;
+  const text = `${greeting}\n\nBonne nouvelle : le moteur pour votre véhicule${plate ? ` (plaque ${plate})` : ''} est disponible chez nous.\n\nUn conseiller Autoliva vous recontacte sous 24h (par téléphone ou email) pour vous donner le prix exact, le délai et les conditions de garantie, et répondre à toutes vos questions.\n\nVous ne voulez pas attendre ? Appelez-nous au ${phone}.\n\nL'équipe Autoliva`;
+
+  if (dryRun) return { ok: true, dryRun: true, preview: text.slice(0, 160) };
+
+  let okAny = false;
+  if (cart.email) {
+    try {
+      const r = await emailService.sendEmail({ toEmail: cart.email, subject: 'Bonne nouvelle — votre moteur est disponible chez nous', html, text });
+      okAny = okAny || !!(r && r.ok);
+    } catch (err) { console.error('[availability-hook] email', err && err.message); }
+  }
+  if (cart.phone) {
+    try {
+      const smsText = `${firstName ? firstName + ', ' : ''}bonne nouvelle : votre moteur est disponible chez nous. Un conseiller Autoliva vous recontacte sous 24h. Ou appelez le ${phone}.`;
+      const r = await sendSms({ to: cart.phone, text: smsText });
+      okAny = okAny || !!(r && r.ok);
+    } catch (err) { console.error('[availability-hook] sms', err && err.message); }
+  }
+  // Le lead redevient « à rappeler » pour le commercial (le close est humain).
+  try {
+    await AbandonedCart.updateOne({ _id: cart._id }, {
+      $push: { notes: { text: '📞 À RAPPELER — moteur disponible : hameçon envoyé (email/SMS). Le client attend un rappel conseiller sous 24h.', addedByName: 'Devis automatique', addedAt: new Date() } },
+    });
+  } catch (err) { /* non bloquant */ }
+  return { ok: okAny };
+}
+
 module.exports = {
   sendInstantDevis,
+  sendAvailabilityHook,
   getEngineQuotesList,
   getEngineQuoteFunnel,
   getEngineQuoteNew,
