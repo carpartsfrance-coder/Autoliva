@@ -149,6 +149,14 @@ const EMAIL_TEMPLATES = [
     body: 'Après vérification, je vous confirme la bonne pièce pour votre véhicule.\n\n[Précisez ici : la référence exacte validée, le prix, le délai de livraison et la garantie]\n\nDès que vous me donnez le feu vert, je lance la préparation. Une question ? Vous pouvez me joindre au {telephone}.',
   },
   {
+    key: 'moteur_dispo',
+    label: 'Moteur disponible',
+    forSource: ['devis', 'contact'],
+    defaultIncludeCta: false,
+    subject: 'Votre moteur est disponible chez nous',
+    body: 'Bonne nouvelle : après vérification, votre moteur est disponible chez nous — testé sur banc, prêt à être expédié.\n\n[Précisez ici : la référence exacte, le prix, le délai de livraison et la garantie]\n\nOn peut lancer dès que vous êtes prêt. Une question (compatibilité, montage, livraison) ? Rappelez-moi au {telephone}, je m\'occupe de tout.',
+  },
+  {
     key: 'cart_reminder',
     label: 'Votre panier vous attend',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
@@ -212,6 +220,12 @@ const SMS_TEMPLATES = [
     label: 'Compatibilité vérifiée',
     forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
     body: '{prenom},\nCompatibilité vérifiée pour votre véhicule : la bonne pièce est disponible, livrable sous 24/48h.\nRappelez-moi au {telephone} pour finaliser.\n{nom_commercial} – {brand}',
+  },
+  {
+    key: 'sms_moteur_dispo',
+    label: 'Moteur disponible',
+    forSource: ['devis', 'contact'],
+    body: '{prenom},\nBonne nouvelle : votre moteur est disponible chez nous, testé sur banc et prêt à partir.\nRappelez-moi au {telephone} pour le prix, le délai et la garantie.\n{nom_commercial} – {brand}',
   },
   {
     key: 'sms_compat_check',
