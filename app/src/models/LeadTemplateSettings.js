@@ -25,10 +25,36 @@ const leadOverrideSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/**
+ * Modèles PERSONNALISÉS créés depuis le back-office (en plus des modèles
+ * d'origine définis dans leadEmailTemplates.js). Contrairement aux overrides,
+ * ils portent tout leur contenu et sont librement ajoutables / supprimables.
+ *   - id      : identifiant stable, sert de `key` dans le sélecteur (préfixé `custom_`)
+ *   - channel : sms | email
+ *   - label   : nom affiché dans le sélecteur
+ *   - subject : objet (email uniquement)
+ *   - body    : texte du message (peut contenir les variables {prenom}, {telephone}…)
+ *   - enabled : false → masqué du sélecteur (sans supprimer)
+ */
+const leadCustomTemplateSchema = new mongoose.Schema(
+  {
+    id: { type: String, required: true, trim: true },
+    channel: { type: String, enum: ['sms', 'email'], required: true },
+    label: { type: String, default: '', trim: true },
+    subject: { type: String, default: '' },
+    body: { type: String, default: '' },
+    enabled: { type: Boolean, default: true },
+    createdByName: { type: String, default: '', trim: true },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const leadTemplateSettingsSchema = new mongoose.Schema(
   {
     singleton: { type: String, default: 'lead', unique: true, index: true },
     overrides: { type: [leadOverrideSchema], default: [] },
+    custom: { type: [leadCustomTemplateSchema], default: [] },
     updatedAt: { type: Date, default: Date.now },
     updatedByName: { type: String, default: '', trim: true },
   },

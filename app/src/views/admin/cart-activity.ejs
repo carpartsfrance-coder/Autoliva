@@ -840,6 +840,30 @@
     });
   }
 
+  // ─ Reformulation IA (ChatGPT) d'un message du composer, avant envoi ─
+  function reformulateComposer(textarea, channel, btn, resultEl, clientName, onDone) {
+    var draft = (textarea.value || '').trim();
+    if (!draft) { if (resultEl) resultEl.innerHTML = '<span class="text-amber-600">Écris d\'abord un message à reformuler.</span>'; return; }
+    var prev = textarea.value;
+    var origHtml = btn.innerHTML;
+    btn.disabled = true; btn.innerHTML = '⏳ Reformulation…';
+    fetch('/admin/api/messages/reformulate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin',
+      body: JSON.stringify({ draft: draft, channel: channel, clientName: clientName || '' })
+    }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        btn.disabled = false; btn.innerHTML = origHtml;
+        if (!res.ok || !res.j || !res.j.ok) { if (resultEl) resultEl.innerHTML = '<span class="text-red-700">' + escapeHtml((res.j && res.j.error) || 'Erreur IA') + '</span>'; return; }
+        textarea.value = res.j.reformulated;
+        if (onDone) onDone();
+        if (resultEl) {
+          resultEl.innerHTML = '<span class="text-indigo-600">✨ Reformulé par l\'IA. </span><button type="button" id="' + textarea.id + '-undo" class="underline font-semibold text-indigo-600 text-sm">Annuler</button>';
+          var u = document.getElementById(textarea.id + '-undo');
+          if (u) u.addEventListener('click', function () { textarea.value = prev; if (onDone) onDone(); resultEl.textContent = ''; });
+        }
+      }).catch(function () { btn.disabled = false; btn.innerHTML = origHtml; if (resultEl) resultEl.innerHTML = '<span class="text-red-700">Erreur réseau — réessaie.</span>'; });
+  }
+
   // ─ Modal EMAIL ─
   function openEmailModal(leadId, lead) {
     var c = lead || {};
@@ -862,6 +886,7 @@
       + '<label class="flex items-center gap-2 text-sm"><input type="checkbox" id="lead-email-cta" checked /> Inclure un bouton "Reprendre mon panier"</label>'
       + '<div class="flex items-center gap-2 pt-2">'
       + '  <button type="submit" class="btn btn-primary text-sm">📧 Envoyer</button>'
+      + '  <button type="button" id="lead-email-ai" class="btn btn-secondary text-sm" style="color:#4f46e5;border-color:#c7d2fe" title="Reformuler le message avec l’IA">✨ Reformuler IA</button>'
       + '  <button type="button" id="lead-email-preview-btn" class="btn btn-secondary text-sm">👁 Aperçu</button>'
       + '  <button type="button" onclick="document.getElementById(\'lead-modal\').classList.add(\'hidden\')" class="btn btn-ghost text-sm">Annuler</button>'
       + '</div>'
@@ -880,6 +905,10 @@
     var previewBtn = document.getElementById('lead-email-preview-btn');
     var previewArea = document.getElementById('lead-email-preview-area');
     var previewFrame = document.getElementById('lead-email-preview-frame');
+    var aiBtn = document.getElementById('lead-email-ai');
+    if (aiBtn) aiBtn.addEventListener('click', function () {
+      reformulateComposer(bodyEl, 'email', aiBtn, document.getElementById('lead-email-result'), c.fullName, null);
+    });
 
     attachVariableInserters(form);
 
@@ -981,6 +1010,7 @@
       + '<div id="lead-sms-linkwarn" class="hidden rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs px-3 py-2">⚠️ Un lien dans un SMS « CarParts » est bloqué par les opérateurs — le client ne le recevra pas. Retire le lien, envoie-le par email.</div>'
       + '<div class="flex items-center gap-2 pt-2">'
       + '  <button type="submit" class="btn btn-primary text-sm">📱 Envoyer SMS</button>'
+      + '  <button type="button" id="lead-sms-ai" class="btn btn-secondary text-sm" style="color:#4f46e5;border-color:#c7d2fe" title="Reformuler le SMS avec l’IA">✨ Reformuler IA</button>'
       + '  <button type="button" onclick="document.getElementById(\'lead-modal\').classList.add(\'hidden\')" class="btn btn-ghost text-sm">Annuler</button>'
       + '</div>'
       + '<div id="lead-sms-result" class="text-sm"></div>'
@@ -1003,6 +1033,11 @@
       if (submitBtn) { submitBtn.disabled = bad; submitBtn.style.opacity = bad ? '0.4' : ''; submitBtn.style.cursor = bad ? 'not-allowed' : ''; }
     }
     ta.addEventListener('input', updateCount);
+
+    var smsAiBtn = document.getElementById('lead-sms-ai');
+    if (smsAiBtn) smsAiBtn.addEventListener('click', function () {
+      reformulateComposer(ta, 'sms', smsAiBtn, document.getElementById('lead-sms-result'), c.fullName, updateCount);
+    });
 
     function applyTemplate(tpl) {
       if (!tpl) return;

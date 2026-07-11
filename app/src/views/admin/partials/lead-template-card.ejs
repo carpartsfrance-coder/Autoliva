@@ -1,12 +1,21 @@
 <%
   var effectiveBody = it.body && it.body.trim() ? it.body : it.defaultBody;
   var effectiveSubject = channel === 'email' ? (it.subject && it.subject.trim() ? it.subject : it.defaultSubject) : '';
+  var isCustom = it.isCustom === true;
 %>
-<div class="bg-white rounded-2xl border border-slate-200 p-5" data-lt-card data-channel="<%= channel %>" data-key="<%= it.key %>" data-default-body="<%= encodeURIComponent(it.defaultBody) %>" data-default-subject="<%= channel === 'email' ? encodeURIComponent(it.defaultSubject) : '' %>">
+<div class="bg-white rounded-2xl border border-slate-200 p-5" data-lt-card data-channel="<%= channel %>" data-key="<%= it.key %>" data-custom="<%= isCustom ? '1' : '0' %>" data-default-body="<%= encodeURIComponent(it.defaultBody || '') %>" data-default-subject="<%= channel === 'email' ? encodeURIComponent(it.defaultSubject || '') : '' %>">
   <div class="flex items-start justify-between gap-4">
-    <div>
-      <div class="font-semibold text-slate-900"><%= it.label %></div>
-      <div class="text-[11px] font-mono text-slate-400 mt-0.5"><%= it.key %></div>
+    <div class="min-w-0 flex-1">
+      <% if (isCustom) { %>
+        <div class="flex items-center gap-2">
+          <input type="text" name="label_<%= channel %>_<%= it.key %>" value="<%= it.label %>" placeholder="Titre du modèle" data-label class="font-semibold text-slate-900 w-full max-w-xs rounded-lg border border-slate-200 px-2 py-1 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+          <span class="shrink-0 inline-flex items-center rounded-full bg-indigo-50 text-indigo-600 border border-indigo-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">Perso</span>
+        </div>
+        <div class="text-[11px] font-mono text-slate-400 mt-1"><%= it.key %></div>
+      <% } else { %>
+        <div class="font-semibold text-slate-900"><%= it.label %></div>
+        <div class="text-[11px] font-mono text-slate-400 mt-0.5"><%= it.key %></div>
+      <% } %>
     </div>
     <label class="inline-flex items-center gap-2 cursor-pointer shrink-0">
       <input type="checkbox" name="enabled_<%= channel %>_<%= it.key %>" <%= it.enabled ? 'checked' : '' %> data-enable class="sr-only peer">
@@ -20,8 +29,15 @@
     <input type="text" name="subject_email_<%= it.key %>" value="<%= effectiveSubject %>" data-subject class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
   <% } %>
 
-  <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mt-3 mb-1"><%= channel === 'email' ? 'Corps du message' : 'Message' %></label>
+  <div class="flex items-center justify-between mt-3 mb-1">
+    <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400"><%= channel === 'email' ? 'Corps du message' : 'Message' %></label>
+    <button type="button" data-reformulate class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-white hover:bg-indigo-600 border border-indigo-200 hover:border-indigo-600 rounded-full px-2.5 py-1 transition disabled:opacity-50" title="Reformuler ce message avec l'IA (ChatGPT)">
+      <span class="material-symbols-outlined text-[14px]" data-reformulate-icon>auto_awesome</span>
+      <span data-reformulate-label>Reformuler avec l'IA</span>
+    </button>
+  </div>
   <textarea name="body_<%= channel %>_<%= it.key %>" rows="<%= channel === 'email' ? 6 : 4 %>" data-body class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm leading-relaxed focus:ring-2 focus:ring-red-500 focus:border-red-500"><%= effectiveBody %></textarea>
+  <div class="mt-1 text-[11px] text-indigo-500 hidden" data-reformulate-msg></div>
 
   <div class="mt-2 flex flex-wrap items-center gap-1.5">
     <span class="text-[11px] text-slate-400 mr-1">Insérer :</span>
@@ -38,6 +54,10 @@
 
   <div class="mt-3 flex items-center justify-between gap-2">
     <% if (channel === 'sms') { %><div class="text-[11px] text-slate-400"><span data-count>0</span> caractères · <span data-seg>0</span> SMS</div><% } else { %><div></div><% } %>
-    <button type="button" data-reset class="text-xs font-semibold text-slate-500 hover:text-slate-800">↻ Réinitialiser au défaut</button>
+    <% if (isCustom) { %>
+      <button type="button" data-delete data-delete-url="/admin/parametres/modeles-messages/<%= encodeURIComponent(it.key) %>/supprimer" data-delete-label="<%= it.label %>" class="text-xs font-semibold text-rose-500 hover:text-rose-700">🗑 Supprimer ce modèle</button>
+    <% } else { %>
+      <button type="button" data-reset class="text-xs font-semibold text-slate-500 hover:text-slate-800">↻ Réinitialiser au défaut</button>
+    <% } %>
   </div>
 </div>
