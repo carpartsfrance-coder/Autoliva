@@ -24,6 +24,7 @@ const invoiceSettings = require('../services/invoiceSettings');
 const siteSettings = require('../services/siteSettings');
 const productOptions = require('../services/productOptions');
 const mediaStorage = require('../services/mediaStorage');
+const importImages = require('../services/importImages');
 const productDocStorage = require('../services/productDocStorage');
 const adminUsers = require('../services/adminUsers');
 const AdminUser = require('../models/AdminUser');
@@ -11053,6 +11054,32 @@ function resolveImportInfoBlocks(rawBlocs, bySlugMap) {
 // Mappe + valide un produit du JSON d'import (mode CRÉATION).
 // ctx = { categoryNames:Set<lower>, shippingByName:Map<lower,ObjectId>,
 //         existingSlugById:Map<slug,productId>, batchSlugs:Set<string> }
+// Parse le champ `stock` de l'import → { ok, value } où value = entier ≥ 0 ou null.
+function parseImportStock(v) {
+  if (v === null) return { ok: true, value: null };
+  if (typeof v === 'number' && Number.isInteger(v) && v >= 0) return { ok: true, value: v };
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (s === '') return { ok: true, value: null };
+    const n = Number(s);
+    if (Number.isInteger(n) && n >= 0) return { ok: true, value: n };
+  }
+  return { ok: false };
+}
+
+// Normalise les clés Mongoose écrites → noms « API » lisibles pour le champ
+// `fields` de la réponse d'import (imageUrl/galleryUrls/… → « images »).
+function normalizeImportFields(keys) {
+  const out = [];
+  let hasImages = false;
+  for (const k of keys) {
+    if (k === 'imageUrl' || k === 'galleryUrls' || k === 'galleryTypes') { hasImages = true; continue; }
+    out.push(k);
+  }
+  if (hasImages) out.push('images');
+  return out;
+}
+
 function mapAndValidateImportProduct(raw, ctx) {
   const errors = [];
   const warnings = [];
@@ -11103,6 +11130,14 @@ function mapAndValidateImportProduct(raw, ctx) {
     consigneRaw.delai_jours != null ? consigneRaw.delai_jours : 30,
     { min: 0, max: 3650, fallback: 30 }
   );
+
+  // Stock (optionnel) : entier ≥ 0 ou null (= stock non géré).
+  let stockQty = null;
+  if (importHas(raw, 'stock')) {
+    const parsed = parseImportStock(raw.stock);
+    if (!parsed.ok) errors.push('« stock » doit être un entier ≥ 0 ou null.');
+    else stockQty = parsed.value;
+  }
 
   const type = importStr(raw.type);
   const programmation = importStr(raw.programmation);
@@ -11216,7 +11251,7 @@ function mapAndValidateImportProduct(raw, ctx) {
       chargeUpfront: consigneRaw.encaissee === true,
     },
     inStock: true,
-    stockQty: null,
+    stockQty,
     imageUrl,
     badges: { topLeft: badgeTopLeft, condition: etat, cards },
     galleryUrls,
@@ -11276,6 +11311,11 @@ function buildImportUpdate(raw, ctx, existing) {
     else set.priceCents = c;
   }
   if (importHas(raw, 'tva_recuperable')) set.vatRecoverable = raw.tva_recuperable === true;
+  if (importHas(raw, 'stock')) {
+    const parsed = parseImportStock(raw.stock);
+    if (!parsed.ok) errors.push('« stock » doit être un entier ≥ 0 ou null.');
+    else set.stockQty = parsed.value;
+  }
   if (importHas(raw, 'categorie')) {
     const cat = importStr(raw.categorie);
     if (!cat) errors.push('« categorie » présente mais vide.');
@@ -11445,7 +11485,10 @@ function buildImportUpdate(raw, ctx, existing) {
       const mEtat = importHas(raw, 'etat_affiche') ? set['badges.condition'] : (existing.badges && existing.badges.condition);
       const mResume = importHas(raw, 'resume') ? set.shortDescription : existing.shortDescription;
       const mDesc = importHas(raw, 'description') ? set.description : existing.description;
-      const hasImage = !!(importStr(existing.imageUrl) || (Array.isArray(existing.galleryUrls) && existing.galleryUrls.some((u) => importStr(u))));
+      // Les images fournies dans CE POST (téléchargées après ce build) comptent
+      // pour le garde-fou publication, comme en création.
+      const willImport = importHas(raw, 'images') && Array.isArray(raw.images) && raw.images.some((u) => importStr(u));
+      const hasImage = !!(willImport || importStr(existing.imageUrl) || (Array.isArray(existing.galleryUrls) && existing.galleryUrls.some((u) => importStr(u))));
       const missing = [];
       if (!importStr(mType)) missing.push('type');
       if (!importStr(mEtat)) missing.push('etat_affiche');
@@ -11462,7 +11505,8 @@ function buildImportUpdate(raw, ctx, existing) {
     // statut inconnu → on ne change pas isPublished
   }
 
-  // IMAGES : volontairement ignorées en mise à jour (image_url / images).
+  // IMAGES : téléchargées et appliquées dans la boucle d'import (asynchrone),
+  // cf. postAdminImportProducts (champ `images` + `images_mode`).
 
   return { errors, warnings, set };
 }
@@ -11531,6 +11575,30 @@ async function postAdminImportProducts(req, res) {
           results.push({ index: i, nom: nom || importStr(existing.name), sku, status: 'error', errors, warnings });
           continue;
         }
+
+        // Images : téléchargées côté serveur → GridFS, appliquées selon images_mode
+        // ('replace' par défaut, 'append' pour ajouter à la galerie existante).
+        if (importHas(raw, 'images') && Array.isArray(raw.images)) {
+          const mode = importStr(raw.images_mode).toLowerCase() === 'append' ? 'append' : 'replace';
+          const dl = await importImages.downloadImportImages(raw.images, { label: nom || importStr(existing.name), sku });
+          if (dl.warnings.length) warnings.push(...dl.warnings);
+          if (mode === 'append') {
+            set.galleryUrls = [
+              ...(Array.isArray(existing.galleryUrls) ? existing.galleryUrls : []),
+              ...dl.galleryUrls,
+            ];
+            set.galleryTypes = [
+              ...(Array.isArray(existing.galleryTypes) ? existing.galleryTypes : []),
+              ...dl.galleryTypes,
+            ];
+            if (!importStr(existing.imageUrl) && dl.imageUrl) set.imageUrl = dl.imageUrl;
+          } else {
+            set.imageUrl = dl.imageUrl;
+            set.galleryUrls = dl.galleryUrls;
+            set.galleryTypes = dl.galleryTypes;
+          }
+        }
+
         try {
           if (Object.keys(set).length > 0) {
             await Product.updateOne({ _id: existing._id }, { $set: set });
@@ -11549,7 +11617,7 @@ async function postAdminImportProducts(req, res) {
             statut: isPub ? 'publie' : 'brouillon',
             slug: set.slug || importStr(existing.slug),
             id: String(existing._id),
-            fields: Object.keys(set),
+            fields: normalizeImportFields(Object.keys(set)),
             warnings,
           });
         } catch (e) {
@@ -11575,6 +11643,18 @@ async function postAdminImportProducts(req, res) {
         continue;
       }
 
+      // Images : téléchargées côté serveur → GridFS (remplacent d'éventuelles URLs brutes).
+      const importFieldsApplied = [];
+      if (importHas(raw, 'images') && Array.isArray(raw.images)) {
+        const dl = await importImages.downloadImportImages(raw.images, { label: nom, sku });
+        if (dl.warnings.length) warnings.push(...dl.warnings);
+        createData.imageUrl = dl.imageUrl;
+        createData.galleryUrls = dl.galleryUrls;
+        createData.galleryTypes = dl.galleryTypes;
+        importFieldsApplied.push('images');
+      }
+      if (importHas(raw, 'stock')) importFieldsApplied.push('stockQty');
+
       try {
         const doc = await Product.create(createData);
         created++;
@@ -11590,6 +11670,7 @@ async function postAdminImportProducts(req, res) {
           statut,
           slug: createData.slug,
           id: String(doc._id),
+          fields: importFieldsApplied,
           warnings,
         });
       } catch (e) {

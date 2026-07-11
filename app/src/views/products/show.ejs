@@ -616,7 +616,12 @@
 
           <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 16px; padding: 0 2px;">
             <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">local_shipping</span><%= t('product.trustDelivery') %></span>
-            <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">assignment_return</span><%= hasConsigne ? t('product.trustExchangeConsigne', { amount: consigneAmountEuro }) : t('product.trustExchange') %></span>
+            <%# Ligne « échange standard » : uniquement si consigne active. Une pièce
+                d'occasion (sans consigne) n'est pas en échange standard — pas d'ancienne
+                pièce à retourner → on masque la ligne. %>
+            <% if (hasConsigne) { %>
+            <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">assignment_return</span><%= t('product.trustExchangeConsigne', { amount: consigneAmountEuro }) %></span>
+            <% } %>
             <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">verified_user</span><%= t('product.trustPayment') %></span>
           </div>
         </form>
