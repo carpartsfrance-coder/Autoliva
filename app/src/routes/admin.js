@@ -171,6 +171,10 @@ router.post('/parametres/sms/test', requireAdminAuth, requireAbility('settings.s
 // (Le comptable reste hors /admin.)
 router.get('/parametres/modeles-messages', requireAdminAuth, leadTemplatesAdminController.getLeadTemplatesPage);
 router.post('/parametres/modeles-messages', requireAdminAuth, leadTemplatesAdminController.postLeadTemplates);
+router.post('/parametres/modeles-messages/nouveau', requireAdminAuth, leadTemplatesAdminController.postCreateLeadTemplate);
+router.post('/parametres/modeles-messages/:id/supprimer', requireAdminAuth, leadTemplatesAdminController.postDeleteLeadTemplate);
+// Reformulation IA (ChatGPT) — partagée : éditeur de modèles + composer leads.
+router.post('/api/messages/reformulate', requireAdminAuth, leadTemplatesAdminController.postReformulateMessage);
 router.get('/parametres/sav', requireAdminAuth, savAdminController.getSavSettings);
 router.get('/parametres/audit', requireAdminAuth, savAdminController.getAuditLog);
 router.get('/parametres/integrations', requireAdminAuth, savAdminController.getIntegrations);

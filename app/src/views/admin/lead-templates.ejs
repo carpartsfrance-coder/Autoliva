@@ -7,10 +7,13 @@
 
     <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Leads à relancer', url: '/admin/activite-panier'}, {label: 'Modèles de messages'}] }) %>
     <div class="text-2xl md:text-3xl font-semibold text-slate-900">Modèles de messages (leads)</div>
-    <div class="mt-1 text-sm text-slate-500"><%= total %> modèles. Personnalise le texte des SMS et emails envoyés depuis « Leads à relancer », active/désactive-les. Les variables comme <code class="font-mono text-slate-600">{prenom}</code> se remplissent toutes seules à l'envoi — <strong>{nom_commercial}</strong> et <strong>{telephone}</strong> s'adaptent au commercial connecté.</div>
+    <div class="mt-1 text-sm text-slate-500"><%= total %> modèles. Personnalise le texte des SMS et emails envoyés depuis « Leads à relancer », ajoute-en, supprime-les. Les variables comme <code class="font-mono text-slate-600">{prenom}</code> se remplissent toutes seules à l'envoi — <strong>{nom_commercial}</strong> et <strong>{telephone}</strong> s'adaptent au commercial connecté. Le bouton <strong class="text-indigo-600">Reformuler avec l'IA</strong> réécrit proprement un message via ChatGPT.</div>
 
     <% if (successMessage) { %>
       <div class="mt-6 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm font-medium"><%= successMessage %></div>
+    <% } %>
+    <% if (typeof errorMessage !== 'undefined' && errorMessage) { %>
+      <div class="mt-6 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 px-4 py-3 text-sm font-medium"><%= errorMessage %></div>
     <% } %>
 
     <div class="mt-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 text-xs">Rappel : <strong>jamais de lien dans un SMS</strong> (bloqué par les opérateurs sous « CarParts »). Le lien / devis part par email.</div>
@@ -33,10 +36,57 @@
 
       <div class="sticky bottom-0 mt-8 -mx-6 lg:-mx-10 px-6 lg:px-10 py-4 bg-white/90 backdrop-blur border-t border-slate-200 flex items-center justify-end gap-3">
         <span class="text-xs text-slate-400 hidden sm:inline">Les changements s'appliquent tout de suite aux envois depuis « Leads à relancer ».</span>
+        <a href="#ajouter" class="text-sm font-semibold text-indigo-600 hover:text-indigo-800">+ Ajouter un modèle</a>
         <a href="/admin/activite-panier" class="text-sm font-semibold text-slate-500 hover:text-slate-800">Retour aux leads</a>
         <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-2.5 rounded-xl text-sm">Enregistrer</button>
       </div>
     </form>
+
+    <!-- Ajouter un nouveau modèle (formulaire séparé) -->
+    <div id="ajouter" class="mt-12 pt-6 border-t border-slate-200">
+      <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">+ Ajouter un modèle personnalisé</h2>
+      <form method="POST" action="/admin/parametres/modeles-messages/nouveau" class="bg-white rounded-2xl border border-slate-200 p-5 space-y-3" id="add-form">
+        <div class="flex flex-col sm:flex-row gap-3">
+          <div>
+            <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Canal</label>
+            <select name="channel" id="add-channel" class="rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-red-500 focus:border-red-500">
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+            </select>
+          </div>
+          <div class="flex-1">
+            <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Titre du modèle</label>
+            <input type="text" name="label" required placeholder="Ex. Relance J+3 devis" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+          </div>
+        </div>
+
+        <div id="add-subject-wrap">
+          <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Sujet (email)</label>
+          <input type="text" name="subject" id="add-subject" placeholder="Ex. Votre devis pour {nom_produit}" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+        </div>
+
+        <div class="flex items-center justify-between">
+          <label class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">Message</label>
+          <button type="button" data-reformulate-add class="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-white hover:bg-indigo-600 border border-indigo-200 hover:border-indigo-600 rounded-full px-2.5 py-1 transition disabled:opacity-50" title="Reformuler avec l'IA">
+            <span class="material-symbols-outlined text-[14px]" data-reformulate-icon>auto_awesome</span>
+            <span data-reformulate-label>Reformuler avec l'IA</span>
+          </button>
+        </div>
+        <textarea name="body" id="add-body" required rows="5" placeholder="Bonjour {prenom},&#10;&#10;…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm leading-relaxed focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+        <div class="text-[11px] text-indigo-500 hidden" data-reformulate-msg></div>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+          <span class="text-[11px] text-slate-400 mr-1">Insérer :</span>
+          <% vars.forEach(function(v){ %>
+            <button type="button" data-add-var="<%= v[0] %>" title="<%= v[1] %>" class="text-[11px] font-mono text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded px-1.5 py-0.5">{<%= v[0] %>}</button>
+          <% }) %>
+        </div>
+
+        <div class="flex justify-end">
+          <button type="submit" class="bg-slate-900 hover:bg-slate-700 text-white font-bold px-5 py-2.5 rounded-xl text-sm">Ajouter le modèle</button>
+        </div>
+      </form>
+    </div>
   </div>
 </main>
 
@@ -55,6 +105,55 @@
     return { len: len, seg: len === 0 ? 0 : (len <= single ? 1 : Math.ceil(len / multi)) };
   }
 
+  // --- Reformulation IA partagée -------------------------------------------
+  function setBusy(btn, busy){
+    if (!btn) return;
+    var icon = btn.querySelector('[data-reformulate-icon]');
+    var label = btn.querySelector('[data-reformulate-label]');
+    btn.disabled = busy;
+    if (icon) icon.textContent = busy ? 'progress_activity' : 'auto_awesome';
+    if (icon) icon.classList.toggle('animate-spin', busy);
+    if (label) label.textContent = busy ? 'Reformulation…' : "Reformuler avec l'IA";
+  }
+  function reformulate(textarea, channel, btn, msgEl, onDone){
+    var draft = (textarea.value || '').trim();
+    if (msgEl){ msgEl.className = 'mt-1 text-[11px] text-indigo-500'; msgEl.textContent = ''; }
+    if (!draft){
+      if (msgEl){ msgEl.className = 'mt-1 text-[11px] text-rose-500'; msgEl.textContent = 'Écris d\'abord un message à reformuler.'; }
+      return;
+    }
+    var prev = textarea.value;
+    setBusy(btn, true);
+    fetch('/admin/api/messages/reformulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ draft: draft, channel: channel })
+    }).then(function(r){ return r.json().then(function(j){ return { ok: r.ok, j: j }; }); })
+      .then(function(res){
+        setBusy(btn, false);
+        if (!res.ok || !res.j || !res.j.ok){
+          var err = (res.j && res.j.error) || 'Erreur de reformulation.';
+          if (msgEl){ msgEl.className = 'mt-1 text-[11px] text-rose-500'; msgEl.textContent = err; }
+          return;
+        }
+        textarea.value = res.j.reformulated;
+        if (onDone) onDone();
+        if (msgEl){
+          msgEl.className = 'mt-1 text-[11px] text-indigo-500 flex items-center gap-2';
+          msgEl.innerHTML = '<span>✨ Reformulé par l\'IA.</span>';
+          var undo = document.createElement('button');
+          undo.type = 'button'; undo.textContent = 'Annuler'; undo.className = 'underline font-semibold hover:text-indigo-700';
+          undo.addEventListener('click', function(){ textarea.value = prev; if (onDone) onDone(); msgEl.className = 'mt-1 text-[11px] text-slate-400'; msgEl.textContent = 'Reformulation annulée.'; });
+          msgEl.appendChild(undo);
+        }
+      }).catch(function(){
+        setBusy(btn, false);
+        if (msgEl){ msgEl.className = 'mt-1 text-[11px] text-rose-500'; msgEl.textContent = 'Erreur réseau — réessaie.'; }
+      });
+  }
+
+  // --- Cartes de modèles ----------------------------------------------------
   document.querySelectorAll('[data-lt-card]').forEach(function(card){
     var body = card.querySelector('[data-body]');
     var subject = card.querySelector('[data-subject]');
@@ -64,6 +163,7 @@
     var seg = card.querySelector('[data-seg]');
     var enable = card.querySelector('[data-enable]');
     var enableLabel = card.querySelector('[data-enable-label]');
+    var channel = card.getAttribute('data-channel');
     var defBody = decodeURIComponent(card.getAttribute('data-default-body') || '');
     var defSubject = decodeURIComponent(card.getAttribute('data-default-subject') || '');
     if (!body) return;
@@ -79,7 +179,6 @@
     if (subject) subject.addEventListener('input', refresh);
     enable.addEventListener('change', refresh);
 
-    // Insertion de variable au curseur (dans le dernier champ focalisé).
     var lastField = body;
     body.addEventListener('focus', function(){ lastField = body; });
     if (subject) subject.addEventListener('focus', function(){ lastField = subject; });
@@ -95,6 +194,13 @@
       });
     });
 
+    var reformulateBtn = card.querySelector('[data-reformulate]');
+    var reformulateMsg = card.querySelector('[data-reformulate-msg]');
+    if (reformulateBtn) reformulateBtn.addEventListener('click', function(){
+      reformulateMsg.classList.remove('hidden');
+      reformulate(body, channel, reformulateBtn, reformulateMsg, refresh);
+    });
+
     var resetBtn = card.querySelector('[data-reset]');
     if (resetBtn) resetBtn.addEventListener('click', function(){
       body.value = defBody;
@@ -103,7 +209,40 @@
       refresh();
     });
 
+    var delBtn = card.querySelector('[data-delete]');
+    if (delBtn) delBtn.addEventListener('click', function(){
+      var name = delBtn.getAttribute('data-delete-label') || 'ce modèle';
+      if (!confirm('Supprimer définitivement le modèle « ' + name + ' » ?')) return;
+      var f = document.createElement('form');
+      f.method = 'POST'; f.action = delBtn.getAttribute('data-delete-url');
+      document.body.appendChild(f); f.submit();
+    });
+
     refresh();
   });
+
+  // --- Formulaire d'ajout ---------------------------------------------------
+  var addChannel = document.getElementById('add-channel');
+  var addSubjectWrap = document.getElementById('add-subject-wrap');
+  var addBody = document.getElementById('add-body');
+  function toggleAddSubject(){ if (addSubjectWrap) addSubjectWrap.style.display = (addChannel.value === 'sms') ? 'none' : ''; }
+  if (addChannel){ addChannel.addEventListener('change', toggleAddSubject); toggleAddSubject(); }
+  if (addBody){
+    document.querySelectorAll('[data-add-var]').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        var v = '{' + btn.getAttribute('data-add-var') + '}';
+        var s = addBody.selectionStart != null ? addBody.selectionStart : addBody.value.length;
+        var e = addBody.selectionEnd != null ? addBody.selectionEnd : addBody.value.length;
+        addBody.value = addBody.value.slice(0, s) + v + addBody.value.slice(e);
+        addBody.focus(); addBody.selectionStart = addBody.selectionEnd = s + v.length;
+      });
+    });
+    var addReformulateBtn = document.querySelector('[data-reformulate-add]');
+    var addReformulateMsg = document.querySelector('#add-form [data-reformulate-msg]');
+    if (addReformulateBtn) addReformulateBtn.addEventListener('click', function(){
+      addReformulateMsg.classList.remove('hidden');
+      reformulate(addBody, addChannel ? addChannel.value : 'email', addReformulateBtn, addReformulateMsg, null);
+    });
+  }
 })();
 </script>
