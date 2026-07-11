@@ -11606,9 +11606,15 @@ async function postAdminImportProducts(req, res) {
             if (set.slug) existingSlugById.set(set.slug, String(existing._id));
           }
           updated++;
+          // Statut RAPPORTÉ : si le POST n'a pas envoyé `statut`, on ne l'a pas
+          // touché → on rapporte l'état réel de façon STRICTE (publié seulement si
+          // isPublished === true). Un import de correction sur une fiche non
+          // strictement publiée rapporte « brouillon » et ne prétend jamais avoir
+          // mis en ligne (cf. bug : défaut modèle isPublished=true rend « publie »
+          // toute fiche dont le flag est absent).
           const isPub = (typeof set.isPublished === 'boolean')
             ? set.isPublished
-            : existing.isPublished !== false;
+            : existing.isPublished === true;
           results.push({
             index: i,
             nom: nom || importStr(existing.name),
