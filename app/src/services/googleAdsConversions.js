@@ -131,6 +131,9 @@ async function uploadConversion({ gclid, action, value, currency, dateTime, dryR
 
   const ev = {
     adIdentifiers: { gclid: g },
+    // Requis par events:ingest (REQUIRED_FIELD_MISSING sinon). Toutes nos
+    // conversions naissent d'un clic web (le gclid est web) → WEB.
+    eventSource: 'WEB',
     eventTimestamp: dateTime
       ? (typeof dateTime === 'string' ? dateTime : formatConversionDateTime(dateTime))
       : formatConversionDateTime(new Date()),
