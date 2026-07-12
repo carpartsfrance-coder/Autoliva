@@ -43,14 +43,17 @@ function config() {
     loginCustomerId: digitsOnly(env('GOOGLE_ADS_LOGIN_CUSTOMER_ID')),
     leadAction: env('GOOGLE_ADS_LEAD_ACTION'),
     saleAction: env('GOOGLE_ADS_SALE_ACTION'),
-    apiVersion: env('GOOGLE_ADS_API_VERSION') || 'v18',
+    purchaseAction: env('GOOGLE_ADS_PURCHASE_ACTION'),
+    // v18 est morte (404) — versions vivantes vérifiées le 11/07/2026 : v20 à v23.
+    apiVersion: env('GOOGLE_ADS_API_VERSION') || 'v23',
   };
 }
 
 /** Configuration minimale présente ? (sans ça, tout no-op). */
 function isConfigured() {
   const c = config();
-  return !!(c.devToken && c.clientId && c.clientSecret && c.refreshToken && c.customerId && (c.leadAction || c.saleAction));
+  return !!(c.devToken && c.clientId && c.clientSecret && c.refreshToken && c.customerId
+    && (c.leadAction || c.saleAction || c.purchaseAction));
 }
 
 /** Resource name complet de l'action de conversion (accepte id brut ou resource name). */
@@ -100,7 +103,7 @@ async function getAccessToken() {
  * Remonte UNE conversion clic (idempotence gérée par l'appelant).
  * @param {Object} p
  * @param {string} p.gclid       identifiant de clic Google Ads
- * @param {'lead'|'sale'} p.action  type → choisit l'action de conversion
+ * @param {'lead'|'sale'|'purchase'} p.action  type → choisit l'action de conversion
  * @param {number} [p.value]      valeur (€), omise/0 → conversion sans valeur
  * @param {string} [p.currency]   défaut 'EUR'
  * @param {Date|string} [p.dateTime]  date de la conversion (postérieure au clic)
@@ -113,7 +116,10 @@ async function uploadConversion({ gclid, action, value, currency, dateTime, dryR
   if (!g) return { ok: false, skipped: true, reason: 'no_gclid' };
 
   const c = config();
-  const resource = conversionActionResource(action === 'sale' ? c.saleAction : c.leadAction);
+  const actionEnv = action === 'sale' ? c.saleAction
+    : action === 'purchase' ? c.purchaseAction
+    : c.leadAction;
+  const resource = conversionActionResource(actionEnv);
   if (!resource) return { ok: false, skipped: true, reason: `no_action_for_${action}` };
 
   const conv = {

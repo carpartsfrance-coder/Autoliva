@@ -17,10 +17,13 @@
  */
 
 const AbandonedCart = require('../models/AbandonedCart');
+const Order = require('../models/Order');
 const gAds = require('./googleAdsConversions');
 
 const LEAD_WINDOW_DAYS = 80;            // marge sous la fenêtre gclid de 90 j
 const SALE_STATUSES = ['won', 'acompte_recu'];
+// Commandes considérées payées (aligné sur visitorTimeline.PAID_ORDER_STATUSES).
+const PAID_ORDER_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
 
 function num(v) { return (typeof v === 'number' && isFinite(v)) ? v : 0; }
 function leadValue() {
@@ -40,6 +43,7 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
     dryRun,
     leads: { eligible: 0, uploaded: 0, errors: 0 },
     sales: { eligible: 0, uploaded: 0, errors: 0 },
+    purchases: { eligible: 0, uploaded: 0, errors: 0 },
     details: [],
   };
   if (!report.configured) { report.reason = 'not_configured'; return report; }
@@ -79,13 +83,25 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
     'engineQuote.status': { $in: SALE_STATUSES },
     'attribution.gclid': { $nin: ['', null] },
     'googleAdsUpload.saleAt': { $in: [null, undefined] },
-  }).select('_id attribution lastActivityAt engineQuote.pricing.sellPrice').limit(limit).lean();
+  }).select('_id attribution lastActivityAt engineQuote requested').limit(limit).lean();
+
+  // Valeur remontée = MARGE NETTE (achat + frais + contrôle + TVA sur marge
+  // déduits), pas le prix de vente : le tROAS optimisera la vraie rentabilité.
+  // Repli si marge inconnue/négative : prix de vente (mieux qu'aucune valeur).
+  // Lazy require pour éviter tout cycle controller ↔ service.
+  const { calcMargin, leadIsReconditionne } = require('../controllers/engineQuoteAdminController');
 
   report.sales.eligible = saleCandidates.length;
   for (const c of saleCandidates) {
     const gclid = String((c.attribution && c.attribution.gclid) || '').trim();
     if (!gclid) continue;
-    const value = num(c.engineQuote && c.engineQuote.pricing && c.engineQuote.pricing.sellPrice);
+    const eq = c.engineQuote || {};
+    let value = 0;
+    try {
+      const m = calcMargin(eq.pricing, leadIsReconditionne(eq, c));
+      value = num(m && m.marginEur);
+    } catch (_) { /* marge incalculable → repli prix */ }
+    if (!(value > 0)) value = num(eq.pricing && eq.pricing.sellPrice);
     try {
       const r = await gAds.uploadConversion({ gclid, action: 'sale', value, dateTime: c.lastActivityAt || new Date(), dryRun });
       if (r.ok) {
@@ -98,6 +114,41 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
     } catch (e) {
       report.sales.errors += 1;
       report.details.push({ id: String(c._id), type: 'sale', error: String((e && e.message) || e) });
+    }
+  }
+
+  // ── ACHATS SITE : commandes payées avec gclid, jamais remontées ──
+  // Règle le « faux Achats » côté serveur : la VRAIE valeur (total TTC) part
+  // via l'API avec le gclid du dernier clic, indépendamment de GTM/du navigateur.
+  const purchaseCandidates = await Order.find({
+    status: { $in: PAID_ORDER_STATUSES },
+    'attribution.lastTouch.gclid': { $nin: ['', null] },
+    'attribution.uploadedToGoogleAdsAt': { $in: [null, undefined] },
+    createdAt: { $gte: since },
+  }).select('_id number totalCents createdAt attribution.lastTouch.gclid').sort({ createdAt: 1 }).limit(limit).lean();
+
+  report.purchases.eligible = purchaseCandidates.length;
+  for (const o of purchaseCandidates) {
+    const gclid = String((o.attribution && o.attribution.lastTouch && o.attribution.lastTouch.gclid) || '').trim();
+    if (!gclid) continue;
+    const value = num(o.totalCents) / 100;
+    try {
+      const r = await gAds.uploadConversion({ gclid, action: 'purchase', value, dateTime: o.createdAt, dryRun });
+      if (r.ok) {
+        if (!dryRun) await Order.updateOne({ _id: o._id }, { $set: { 'attribution.uploadedToGoogleAdsAt': new Date() } });
+        report.purchases.uploaded += 1;
+      } else if (r.skipped && r.reason === 'no_action_for_purchase') {
+        // GOOGLE_ADS_PURCHASE_ACTION absent → partie achats en veille, sans bruit.
+        report.purchases.eligible = 0;
+        report.purchases.skipped = 'no_purchase_action';
+        break;
+      } else {
+        report.purchases.errors += 1;
+        report.details.push({ id: String(o._id), type: 'purchase', error: r.error || r.partialFailureError || r.reason });
+      }
+    } catch (e) {
+      report.purchases.errors += 1;
+      report.details.push({ id: String(o._id), type: 'purchase', error: String((e && e.message) || e) });
     }
   }
 
