@@ -1,75 +1,82 @@
 'use strict';
 
 /**
- * Client minimal Google Ads API — Import de CONVERSIONS HORS-LIGNE
- * (offline click conversions) à partir du `gclid` déjà capté par
- * `captureAttribution.js` (→ AbandonedCart.attribution.gclid).
+ * Client CONVERSIONS HORS-LIGNE → Google Ads via la **Data Manager API**.
  *
- * But : remonter à Google Ads les VRAIES conversions de ton tunnel moteur
- * (demande de devis = lead, puis vente gagnée = sale avec sa valeur), pour que
- * l'algo optimise vers de vrais clients et plus vers le faux « Achats ».
+ * Contexte : depuis mi-2026 Google a FERMÉ l'ancienne
+ * `ConversionUploadService.UploadClickConversions` aux nouveaux comptes
+ * (erreur CUSTOMER_NOT_ALLOWLISTED_FOR_THIS_FEATURE). La voie officielle pour
+ * une nouvelle intégration est la Data Manager API :
+ *   POST https://datamanager.googleapis.com/v1/events:ingest
+ * cf. https://developers.google.com/data-manager/api/devguides/events/google-ads/offline
  *
- * Aucune dépendance lourde : `fetch` natif (Node 18+). OAuth2 refresh-token →
- * access token (mis en cache ~1h).
+ * But inchangé : remonter les VRAIES conversions du tunnel (lead devis, vente
+ * gagnée avec sa marge, achat e-commerce avec son panier) à partir du `gclid`
+ * déjà capté (AbandonedCart.attribution.gclid / Order.attribution.lastTouch.gclid),
+ * pour que l'algo optimise vers de vrais clients rentables.
  *
- * 100 % piloté par variables d'environnement. Si non configuré →
- * `isConfigured()` renvoie false et tout no-op → SÛR à déployer avant même
- * d'avoir l'accès API (le cron ne fait rien tant que les variables sont vides).
+ * Différences clés vs l'ancienne API :
+ *   - endpoint datamanager.googleapis.com/v1/events:ingest (et non googleads…:uploadClickConversions)
+ *   - scope OAuth `https://www.googleapis.com/auth/datamanager` (et NON `…/adwords`)
+ *     → le refresh token DOIT être généré avec ce scope.
+ *   - PAS de developer-token, PAS de login-customer-id.
+ *   - l'action de conversion (créée côté Ads) devient `productDestinationId`.
  *
- * Variables d'env (à poser dans Render une fois l'accès API obtenu) :
- *   GOOGLE_ADS_DEVELOPER_TOKEN     jeton développeur (Google Ads API Center)
- *   GOOGLE_ADS_CLIENT_ID           OAuth2 client id
- *   GOOGLE_ADS_CLIENT_SECRET       OAuth2 client secret
- *   GOOGLE_ADS_REFRESH_TOKEN       OAuth2 refresh token (accès "offline")
- *   GOOGLE_ADS_CUSTOMER_ID         id du compte Ads, chiffres sans tirets (ex 9562598225)
- *   GOOGLE_ADS_LOGIN_CUSTOMER_ID   (optionnel) id du compte manager/MCC si accès via manager
- *   GOOGLE_ADS_LEAD_ACTION         id (ou resource name) de l'action de conversion "Lead - Devis"
- *   GOOGLE_ADS_SALE_ACTION         id (ou resource name) de l'action de conversion "Vente moteur"
- *   GOOGLE_ADS_API_VERSION         (optionnel) défaut "v18"
+ * `fetch` natif (Node 18+). OAuth2 refresh-token → access token (cache ~1h).
+ * 100 % piloté par variables d'env : si non configuré → `isConfigured()` = false
+ * et tout no-op → SÛR à déployer avant d'avoir fini l'onboarding.
+ *
+ * Variables d'env (Render) :
+ *   GOOGLE_ADS_CLIENT_ID        OAuth2 client id
+ *   GOOGLE_ADS_CLIENT_SECRET    OAuth2 client secret
+ *   GOOGLE_ADS_REFRESH_TOKEN    OAuth2 refresh token — scope `datamanager` (à régénérer !)
+ *   GOOGLE_ADS_CUSTOMER_ID      id du compte Ads, chiffres sans tirets (ex 9562598225)
+ *   GOOGLE_ADS_LEAD_ACTION      id de l'action de conversion "Lead - Devis"
+ *   GOOGLE_ADS_SALE_ACTION      id de l'action de conversion "Vente devis"
+ *   GOOGLE_ADS_PURCHASE_ACTION  id de l'action de conversion "Achat site" (e-commerce)
+ *   GOOGLE_ADS_DEVELOPER_TOKEN  (héritage — plus utilisé par Data Manager, ignoré)
  */
 
 const OAUTH_URL = 'https://oauth2.googleapis.com/token';
+const INGEST_URL = 'https://datamanager.googleapis.com/v1/events:ingest';
 
 function env(k) { return typeof process.env[k] === 'string' ? process.env[k].trim() : ''; }
 function digitsOnly(s) { return String(s || '').replace(/\D/g, ''); }
 
 function config() {
   return {
-    devToken: env('GOOGLE_ADS_DEVELOPER_TOKEN'),
     clientId: env('GOOGLE_ADS_CLIENT_ID'),
     clientSecret: env('GOOGLE_ADS_CLIENT_SECRET'),
     refreshToken: env('GOOGLE_ADS_REFRESH_TOKEN'),
     customerId: digitsOnly(env('GOOGLE_ADS_CUSTOMER_ID')),
-    loginCustomerId: digitsOnly(env('GOOGLE_ADS_LOGIN_CUSTOMER_ID')),
     leadAction: env('GOOGLE_ADS_LEAD_ACTION'),
     saleAction: env('GOOGLE_ADS_SALE_ACTION'),
     purchaseAction: env('GOOGLE_ADS_PURCHASE_ACTION'),
-    // v18 est morte (404) — versions vivantes vérifiées le 11/07/2026 : v20 à v23.
-    apiVersion: env('GOOGLE_ADS_API_VERSION') || 'v23',
   };
 }
 
 /** Configuration minimale présente ? (sans ça, tout no-op). */
 function isConfigured() {
   const c = config();
-  return !!(c.devToken && c.clientId && c.clientSecret && c.refreshToken && c.customerId
+  return !!(c.clientId && c.clientSecret && c.refreshToken && c.customerId
     && (c.leadAction || c.saleAction || c.purchaseAction));
 }
 
-/** Resource name complet de l'action de conversion (accepte id brut ou resource name). */
-function conversionActionResource(actionEnv) {
-  if (!actionEnv) return '';
-  if (String(actionEnv).startsWith('customers/')) return String(actionEnv);
-  const c = config();
-  return `customers/${c.customerId}/conversionActions/${digitsOnly(actionEnv)}`;
+/** ID d'action de conversion (Data Manager `productDestinationId`) — accepte id brut ou resource name. */
+function conversionActionId(actionEnv) {
+  const s = String(actionEnv || '');
+  // Resource name "customers/123/conversionActions/456" → garder le dernier segment.
+  const m = s.match(/conversionActions\/(\d+)/);
+  if (m) return m[1];
+  return digitsOnly(s);
 }
 
-/** Format attendu par Google : "yyyy-MM-dd HH:mm:ss+00:00" (UTC). */
+/** Format Data Manager (Timestamp JSON) : RFC 3339 UTC "yyyy-MM-ddTHH:mm:ssZ". */
 function formatConversionDateTime(date) {
   const d = (date instanceof Date) ? date : new Date(date);
   const p = (n) => String(n).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} `
-    + `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}+00:00`;
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`
+    + `T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}Z`;
 }
 
 // Cache du token d'accès OAuth (valable ~1h).
@@ -100,7 +107,7 @@ async function getAccessToken() {
 }
 
 /**
- * Remonte UNE conversion clic (idempotence gérée par l'appelant).
+ * Remonte UNE conversion (idempotence gérée par l'appelant) via events:ingest.
  * @param {Object} p
  * @param {string} p.gclid       identifiant de clic Google Ads
  * @param {'lead'|'sale'|'purchase'} p.action  type → choisit l'action de conversion
@@ -108,7 +115,7 @@ async function getAccessToken() {
  * @param {string} [p.currency]   défaut 'EUR'
  * @param {Date|string} [p.dateTime]  date de la conversion (postérieure au clic)
  * @param {boolean} [p.dryRun]    true → validateOnly (Google valide sans enregistrer)
- * @returns {Promise<{ok:boolean, skipped?:boolean, reason?:string, status?:number, error?:any, partialFailureError?:any, validateOnly?:boolean}>}
+ * @returns {Promise<{ok:boolean, skipped?:boolean, reason?:string, status?:number, error?:any, validateOnly?:boolean, response?:any}>}
  */
 async function uploadConversion({ gclid, action, value, currency, dateTime, dryRun = false }) {
   if (!isConfigured()) return { ok: false, skipped: true, reason: 'not_configured' };
@@ -119,44 +126,41 @@ async function uploadConversion({ gclid, action, value, currency, dateTime, dryR
   const actionEnv = action === 'sale' ? c.saleAction
     : action === 'purchase' ? c.purchaseAction
     : c.leadAction;
-  const resource = conversionActionResource(actionEnv);
-  if (!resource) return { ok: false, skipped: true, reason: `no_action_for_${action}` };
+  const destId = conversionActionId(actionEnv);
+  if (!destId) return { ok: false, skipped: true, reason: `no_action_for_${action}` };
 
-  const conv = {
-    gclid: g,
-    conversionAction: resource,
-    conversionDateTime: dateTime
+  const ev = {
+    adIdentifiers: { gclid: g },
+    eventTimestamp: dateTime
       ? (typeof dateTime === 'string' ? dateTime : formatConversionDateTime(dateTime))
       : formatConversionDateTime(new Date()),
   };
   if (typeof value === 'number' && isFinite(value) && value > 0) {
-    conv.conversionValue = value;
-    conv.currencyCode = currency || 'EUR';
+    ev.conversionValue = value;
+    ev.currency = currency || 'EUR';
   }
 
-  const token = await getAccessToken();
-  const url = `https://googleads.googleapis.com/${c.apiVersion}/customers/${c.customerId}:uploadClickConversions`;
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'developer-token': c.devToken,
-    'Content-Type': 'application/json',
+  const payload = {
+    destinations: [{
+      reference: 'gads',
+      operatingAccount: { accountType: 'GOOGLE_ADS', accountId: c.customerId },
+      productDestinationId: destId,
+    }],
+    events: [ev],
+    validateOnly: !!dryRun,
   };
-  if (c.loginCustomerId) headers['login-customer-id'] = c.loginCustomerId;
 
-  const res = await fetch(url, {
+  const token = await getAccessToken();
+  const res = await fetch(INGEST_URL, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({ conversions: [conv], partialFailure: true, validateOnly: !!dryRun }),
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
   const raw = await res.json().catch(() => ({}));
   if (!res.ok) {
     return { ok: false, status: res.status, error: raw };
   }
-  // En partial-failure, une conversion rejetée apparaît dans partialFailureError.
-  if (raw.partialFailureError) {
-    return { ok: false, partialFailureError: raw.partialFailureError };
-  }
-  return { ok: true, validateOnly: !!dryRun };
+  return { ok: true, validateOnly: !!dryRun, response: raw };
 }
 
 module.exports = {
@@ -164,6 +168,6 @@ module.exports = {
   config,
   uploadConversion,
   getAccessToken,
-  conversionActionResource,
+  conversionActionId,
   formatConversionDateTime,
 };
