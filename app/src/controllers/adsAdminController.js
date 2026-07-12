@@ -18,16 +18,16 @@ const { syncConversions } = require('../services/googleAdsConversionSync');
 async function getAdsDiagnostic(req, res) {
   const c = gAds.config();
   const out = {
+    api: 'data-manager',                      // events:ingest (l'ancienne UploadClickConversions est fermée aux nouveaux comptes)
     configured: gAds.isConfigured(),
     env: {
-      devToken: !!c.devToken,
       clientId: !!c.clientId,
       clientSecret: !!c.clientSecret,
       refreshToken: !!c.refreshToken,
       customerId: c.customerId || null,       // identifiant de compte, pas un secret
       leadAction: c.leadAction || null,       // id d'action de conversion, pas un secret
       saleAction: c.saleAction || null,
-      apiVersion: c.apiVersion,
+      purchaseAction: c.purchaseAction || null,
     },
     auth: { ok: false },
     dryRun: null,
