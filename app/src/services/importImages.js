@@ -26,8 +26,8 @@ const MAX_REDIRECTS = 3;
 
 const CT_TO_EXT = { 'image/jpeg': 'jpeg', 'image/jpg': 'jpeg', 'image/png': 'png', 'image/webp': 'webp' };
 const EXT_RE = /\.(jpe?g|png|webp)(?:[?#].*)?$/i;
-// Domaines "maison" : leurs URLs sont déjà hébergées → pas de re-téléchargement.
-const OWN_HOSTS = new Set(['autoliva.com', 'www.autoliva.com', 'carpartsfrance.fr', 'www.carpartsfrance.fr']);
+// Base publique pour résoudre les URLs relatives (/media/… , /images/…).
+const SITE_BASE = 'https://autoliva.com';
 
 function isPrivateIp(ip) {
   if (net.isIPv4(ip)) {
@@ -78,14 +78,27 @@ function pickExt(contentType, url) {
   return e === 'jpg' ? 'jpeg' : e;
 }
 
-/** Une URL déjà hébergée chez nous (relative, ou /media//images d'un domaine maison) ? */
-function isAlreadyHosted(url) {
-  if (url.startsWith('/')) return true; // chemin relatif → servi tel quel
+/** Résout une URL éventuellement relative (/media/…, /images/…) en URL absolue. */
+function toAbsolute(url) {
+  if (/^https?:\/\//i.test(url)) return url;
+  if (url.startsWith('/')) { try { return new URL(url, SITE_BASE).toString(); } catch (_) { return url; } }
+  return url;
+}
+
+/**
+ * Si l'URL désigne un média DÉJÀ stocké chez nous (/media/{id}) ET qu'il existe,
+ * on le référence tel quel (inutile de re-télécharger nos propres octets).
+ * Un /media/... qui n'est PAS un id valide ou qui n'existe pas → null (sera
+ * traité comme une URL normale → tentative de download → 404 → warning).
+ */
+async function existingMediaRef(absUrl) {
+  const id = mediaStorage.extractMediaIdFromUrl(absUrl);
+  if (!id) return null;
   try {
-    const u = new URL(url);
-    if (OWN_HOSTS.has(u.hostname.toLowerCase()) && /^\/(media|images|uploads)\//.test(u.pathname)) return true;
+    const f = await mediaStorage.findFileById(id);
+    if (f && f._id) return `/media/${String(id)}`;
   } catch (_) { /* ignore */ }
-  return false;
+  return null;
 }
 
 /** Télécharge une URL https en buffer image (redirections manuelles, SSRF revérifié à chaque saut). */
@@ -168,19 +181,27 @@ async function downloadImportImages(urls, opts = {}) {
   for (let i = 0; i < capped.length; i += 1) {
     const u = capped[i];
     try {
-      if (isAlreadyHosted(u)) { out.push(u); continue; }
-      if (!/^https:\/\//i.test(u)) { warnings.push(`images[${i}]: schéma non https`); continue; }
+      const abs = toAbsolute(u);
 
-      const reuse = await findExistingMediaUrl(u);
+      // Déjà l'un de NOS médias existants (/media/{id}) → on le référence (pas de re-download).
+      const ownRef = await existingMediaRef(abs);
+      if (ownRef) { out.push(ownRef); continue; }
+
+      if (!/^https:\/\//i.test(abs)) { warnings.push(`images[${i}]: schéma non https`); continue; }
+
+      // Idempotence : URL source déjà téléchargée → réutilise le média.
+      const reuse = await findExistingMediaUrl(abs);
       if (reuse) { out.push(reuse); continue; }
 
-      const { buffer, contentType, ext } = await fetchImageBuffer(u);
+      // Sinon : téléchargement + validation + stockage GridFS (TOUTES les URLs,
+      // y compris nos propres /images/… : on ne référence jamais une URL distante).
+      const { buffer, contentType, ext } = await fetchImageBuffer(abs);
       const base = mediaStorage.slugifyForMedia(opts.label || 'produit') || 'image';
       const saved = await mediaStorage.saveBuffer({
         buffer,
         filename: `${base}-${i + 1}.${ext}`,
         mimeType: contentType,
-        metadata: { scope: 'product-import', sourceUrl: u, sku: opts.sku || '' },
+        metadata: { scope: 'product-import', sourceUrl: abs, sku: opts.sku || '' },
       });
       out.push(saved.url);
     } catch (e) {
@@ -197,4 +218,4 @@ async function downloadImportImages(urls, opts = {}) {
   };
 }
 
-module.exports = { downloadImportImages, MAX_IMAGES, MAX_BYTES, isPrivateIp, isAlreadyHosted };
+module.exports = { downloadImportImages, MAX_IMAGES, MAX_BYTES, isPrivateIp };
