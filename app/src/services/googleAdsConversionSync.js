@@ -79,13 +79,25 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
     'engineQuote.status': { $in: SALE_STATUSES },
     'attribution.gclid': { $nin: ['', null] },
     'googleAdsUpload.saleAt': { $in: [null, undefined] },
-  }).select('_id attribution lastActivityAt engineQuote.pricing.sellPrice').limit(limit).lean();
+  }).select('_id attribution lastActivityAt engineQuote requested').limit(limit).lean();
+
+  // Valeur remontée = MARGE NETTE (achat + frais + contrôle + TVA sur marge
+  // déduits), pas le prix de vente : le tROAS optimisera la vraie rentabilité.
+  // Repli si marge inconnue/négative : prix de vente (mieux qu'aucune valeur).
+  // Lazy require pour éviter tout cycle controller ↔ service.
+  const { calcMargin, leadIsReconditionne } = require('../controllers/engineQuoteAdminController');
 
   report.sales.eligible = saleCandidates.length;
   for (const c of saleCandidates) {
     const gclid = String((c.attribution && c.attribution.gclid) || '').trim();
     if (!gclid) continue;
-    const value = num(c.engineQuote && c.engineQuote.pricing && c.engineQuote.pricing.sellPrice);
+    const eq = c.engineQuote || {};
+    let value = 0;
+    try {
+      const m = calcMargin(eq.pricing, leadIsReconditionne(eq, c));
+      value = num(m && m.marginEur);
+    } catch (_) { /* marge incalculable → repli prix */ }
+    if (!(value > 0)) value = num(eq.pricing && eq.pricing.sellPrice);
     try {
       const r = await gAds.uploadConversion({ gclid, action: 'sale', value, dateTime: c.lastActivityAt || new Date(), dryRun });
       if (r.ok) {

@@ -1943,6 +1943,9 @@ async function sendAvailabilityHook(cart, opts = {}) {
 module.exports = {
   sendInstantDevis,
   sendAvailabilityHook,
+  // Réutilisés par googleAdsConversionSync (valeur de conversion = marge nette).
+  calcMargin,
+  leadIsReconditionne,
   getEngineQuotesList,
   getEngineQuoteFunnel,
   getEngineQuoteNew,

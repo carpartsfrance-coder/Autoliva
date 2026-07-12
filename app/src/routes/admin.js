@@ -175,6 +175,8 @@ router.post('/parametres/modeles-messages/nouveau', requireAdminAuth, leadTempla
 router.post('/parametres/modeles-messages/:id/supprimer', requireAdminAuth, leadTemplatesAdminController.postDeleteLeadTemplate);
 // Reformulation IA (ChatGPT) — partagée : éditeur de modèles + composer leads.
 router.post('/api/messages/reformulate', requireAdminAuth, leadTemplatesAdminController.postReformulateMessage);
+// Diagnostic import conversions Google Ads (lecture seule, dry-run).
+router.get('/api/ads/diagnostic', requireAdminAuth, require('../controllers/adsAdminController').getAdsDiagnostic);
 router.get('/parametres/sav', requireAdminAuth, savAdminController.getSavSettings);
 router.get('/parametres/audit', requireAdminAuth, savAdminController.getAuditLog);
 router.get('/parametres/integrations', requireAdminAuth, savAdminController.getIntegrations);

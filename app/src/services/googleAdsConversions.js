@@ -43,7 +43,8 @@ function config() {
     loginCustomerId: digitsOnly(env('GOOGLE_ADS_LOGIN_CUSTOMER_ID')),
     leadAction: env('GOOGLE_ADS_LEAD_ACTION'),
     saleAction: env('GOOGLE_ADS_SALE_ACTION'),
-    apiVersion: env('GOOGLE_ADS_API_VERSION') || 'v18',
+    // v18 est morte (404) — versions vivantes vérifiées le 11/07/2026 : v20 à v23.
+    apiVersion: env('GOOGLE_ADS_API_VERSION') || 'v23',
   };
 }
 
