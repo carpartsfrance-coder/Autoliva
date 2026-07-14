@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const AbandonedCart = require('../models/AbandonedCart');
+const Product = require('../models/Product');
 const { sendAbandonedCartReminder, sendEmail } = require('../services/emailService');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const {
@@ -8,7 +9,23 @@ const {
   buildLeadVariables,
   renderEmailHtml,
   renderEmailText,
+  getBaseUrl,
+  extractArticleSkus,
+  replaceArticleTokensPlain,
 } = require('../services/leadEmailTemplates');
+
+/* Charge en base les produits (slug + nom) référencés par les tokens
+   [[article|sku|prix|libellé]] d'un message, pour résoudre les liens côté
+   serveur (l'URL vient TOUJOURS du catalogue, jamais du front). Aucune requête
+   si le message ne contient pas de token. */
+async function loadArticlesForBody(text) {
+  const skus = extractArticleSkus(text);
+  if (!skus.length) return {};
+  const rows = await Product.find({ sku: { $in: skus } }).select('sku slug name').lean();
+  const map = {};
+  rows.forEach((r) => { if (r && r.sku) map[String(r.sku)] = { slug: r.slug, name: r.name }; });
+  return map;
+}
 const { getMergedTemplates } = require('../services/leadTemplateSettings');
 const brand = require('../config/brand');
 
@@ -781,14 +798,18 @@ async function postLeadSendEmail(req, res, next) {
 
     const finalSubject = applyVariables(rawSubject, vars);
     const finalBody = applyVariables(rawBody, vars);
+    const baseUrl = getBaseUrl(req);
+    const articles = await loadArticlesForBody(finalBody);
 
     const html = renderEmailHtml({
       subject: finalSubject,
       body: finalBody,
       vars,
       ctaUrl: includeCartCta ? vars.lien_panier : '',
+      articles,
+      baseUrl,
     });
-    const text = renderEmailText({ body: finalBody, vars });
+    const text = renderEmailText({ body: finalBody, vars, articles, baseUrl });
 
     const sendResult = await sendEmail({
       toEmail: cart.email,
@@ -837,7 +858,9 @@ async function postLeadEmailPreview(req, res, next) {
 
     const finalSubject = applyVariables(rawSubject, vars);
     const finalBody = applyVariables(rawBody, vars);
-    const previewHtml = renderEmailHtml({ subject: finalSubject, body: finalBody, vars, ctaUrl: includeCartCta ? vars.lien_panier : '' });
+    const baseUrl = getBaseUrl(req);
+    const articles = await loadArticlesForBody(finalBody);
+    const previewHtml = renderEmailHtml({ subject: finalSubject, body: finalBody, vars, ctaUrl: includeCartCta ? vars.lien_panier : '', articles, baseUrl });
 
     return res.json({
       ok: true,
@@ -884,7 +907,13 @@ async function postLeadSendSms(req, res, next) {
 
     const admin = getAdminFromReq(req);
     const vars = buildLeadVariables({ lead: cart, req, admin });
-    const finalText = applyVariables(rawText, vars).slice(0, 480);
+    const baseUrl = getBaseUrl(req);
+    const withVars = applyVariables(rawText, vars);
+    // Le picker d'article n'est pas proposé en SMS, mais si un token traîne on le
+    // dégrade en « nom (prix) » SANS URL (un lien en SMS alphanumérique est jeté
+    // par les opérateurs — cf. garde-fou ci-dessous).
+    const smsArticles = await loadArticlesForBody(withVars);
+    const finalText = replaceArticleTokensPlain(withVars, smsArticles, baseUrl, { includeUrl: false }).slice(0, 480);
 
     /* Garde-fou anti-lien : l'expéditeur SMS est alphanumérique (« CarParts »),
        et les opérateurs FR jettent SILENCIEUSEMENT les SMS contenant une URL.
@@ -940,7 +969,11 @@ async function postLeadWhatsApp(req, res, next) {
 
     const admin = getAdminFromReq(req);
     const vars = buildLeadVariables({ lead: cart, req, admin });
-    const finalText = applyVariables(rawText, vars).slice(0, 1000);
+    const baseUrl = getBaseUrl(req);
+    const withVars = applyVariables(rawText, vars);
+    const articles = await loadArticlesForBody(withVars);
+    // Sur WhatsApp les liens passent → on résout les articles en « nom (prix) : lien ».
+    const finalText = replaceArticleTokensPlain(withVars, articles, baseUrl).slice(0, 1000);
 
     const waUrl = 'https://wa.me/' + waNumber + '?text=' + encodeURIComponent(finalText);
 

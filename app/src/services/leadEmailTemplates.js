@@ -120,6 +120,61 @@ function applyVariables(text, vars) {
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
+/*  ARTICLES INSÉRÉS — token [[article|sku|prix|libellé]]                    */
+/*                                                                           */
+/*  Le composer (page Leads) insère ce token au curseur quand le commercial  */
+/*  ajoute un produit du catalogue. Il est résolu ICI, côté serveur :        */
+/*   - l'URL vient du SKU (source = catalogue, jamais le front → pas          */
+/*     d'injection de lien arbitraire) ;                                      */
+/*   - le prix vient du token (modifiable par le commercial), validé number ; */
+/*   - rendu « naturel » : lien texte sur le nom + prix entre parenthèses,    */
+/*     PAS de carte ni de bouton (meilleure délivrabilité, et ça ressemble    */
+/*     à un mail écrit à la main).                                            */
+/* ──────────────────────────────────────────────────────────────────────── */
+const ARTICLE_TOKEN_RE = /\[\[article\|([^|\]]*)\|([^|\]]*)\|([^\]]*)\]\]/g;
+
+/* SKUs uniques présents dans un texte (pour la requête Product côté controller). */
+function extractArticleSkus(text) {
+  const skus = [];
+  if (typeof text !== 'string' || !text) return skus;
+  let m;
+  ARTICLE_TOKEN_RE.lastIndex = 0;
+  while ((m = ARTICLE_TOKEN_RE.exec(text)) !== null) {
+    const sku = trim(m[1]);
+    if (sku && skus.indexOf(sku) === -1) skus.push(sku);
+  }
+  return skus;
+}
+
+function articleBaseUrl(baseUrl) {
+  return String(baseUrl || brand.SITE_URL || ('https://' + (trim(brand.DOMAIN) || 'autoliva.com'))).replace(/\/$/, '');
+}
+
+/* Décompose un token en { name, url, priceStr } prêts à afficher.
+   `articles` = map { [sku]: { slug, name } } résolue en base par le controller. */
+function resolveArticleParts(sku, priceRaw, label, articles, baseUrl) {
+  const product = (articles || {})[trim(sku)] || null;
+  const price = parseFloat(String(priceRaw || '').replace(',', '.'));
+  const hasPrice = Number.isFinite(price) && price > 0;
+  const name = trim(label) || (product && trim(product.name)) || 'la pièce';
+  const url = product && product.slug ? `${articleBaseUrl(baseUrl)}/product/${product.slug}` : '';
+  const priceStr = hasPrice
+    ? ` (${Number.isInteger(price) ? String(price) : price.toFixed(2).replace('.', ',')} €)`
+    : '';
+  return { name, url, priceStr };
+}
+
+/* Rendu texte brut (WhatsApp, version texte de l'email, dégradé SMS sans URL). */
+function replaceArticleTokensPlain(text, articles, baseUrl, opts) {
+  if (typeof text !== 'string' || !text) return text || '';
+  const includeUrl = !opts || opts.includeUrl !== false;
+  return text.replace(ARTICLE_TOKEN_RE, (match, sku, priceRaw, label) => {
+    const { name, url, priceStr } = resolveArticleParts(sku, priceRaw, label, articles, baseUrl);
+    return url && includeUrl ? `${name}${priceStr} : ${url}` : `${name}${priceStr}`;
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
 /*  TEMPLATES EMAIL                                                         */
 /* ──────────────────────────────────────────────────────────────────────── */
 
@@ -281,8 +336,23 @@ const SMS_TEMPLATES = [
  * Le lien (quand il y en a un) est un lien texte discret, comme le mettrait un
  * humain — pas un call-to-action de newsletter.
  */
-function renderEmailHtml({ subject, body, vars, ctaUrl }) {
-  const safeBody = escapeHtml(body || '').replace(/\r?\n/g, '<br/>');
+function renderEmailHtml({ subject, body, vars, ctaUrl, articles, baseUrl }) {
+  /* Les articles insérés deviennent des liens texte inline. On remplace chaque
+     token par une sentinelle AVANT d'échapper le corps (pour que le nom du
+     produit soit échappé par nous, pas par l'échappeur du corps), puis on
+     réinjecte le <a> après échappement. */
+  const linkFrags = [];
+  const preBody = String(body || '').replace(ARTICLE_TOKEN_RE, (match, sku, priceRaw, label) => {
+    const { name, url, priceStr } = resolveArticleParts(sku, priceRaw, label, articles, baseUrl);
+    const frag = url
+      ? `<a href="${escapeHtml(url)}" style="color:#1a56db;text-decoration:underline;">${escapeHtml(name)}</a>${escapeHtml(priceStr)}`
+      : `${escapeHtml(name)}${escapeHtml(priceStr)}`;
+    linkFrags.push(frag);
+    return ` A${linkFrags.length - 1} `;
+  });
+  const safeBody = escapeHtml(preBody)
+    .replace(/\r?\n/g, '<br/>')
+    .replace(/ A(\d+) /g, (m, i) => linkFrags[Number(i)] || '');
   const greeting = vars.prenom && vars.prenom !== 'Bonjour' ? `Bonjour ${escapeHtml(vars.prenom)},` : 'Bonjour,';
   const senderName = escapeHtml(vars.nom_commercial || ('L’équipe ' + brand.NAME));
   const logoUrl = escapeHtml((brand.SITE_URL || '') + (brand.LOGO_URL || ''));
@@ -329,12 +399,13 @@ function renderEmailHtml({ subject, body, vars, ctaUrl }) {
 </body></html>`.trim();
 }
 
-function renderEmailText({ body, vars }) {
+function renderEmailText({ body, vars, articles, baseUrl }) {
+  const resolvedBody = replaceArticleTokensPlain(body || '', articles, baseUrl);
   const greeting = vars.prenom && vars.prenom !== 'Bonjour' ? `Bonjour ${vars.prenom},` : 'Bonjour,';
   const lines = [
     greeting,
     '',
-    body || '',
+    resolvedBody,
     '',
     'Cordialement,',
     vars.nom_commercial || ('L’équipe ' + brand.NAME),
@@ -357,4 +428,6 @@ module.exports = {
   renderEmailHtml,
   renderEmailText,
   getBaseUrl,
+  extractArticleSkus,
+  replaceArticleTokensPlain,
 };
