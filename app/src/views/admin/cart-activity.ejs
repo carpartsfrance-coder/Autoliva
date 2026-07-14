@@ -840,6 +840,86 @@
     });
   }
 
+  function insertAtCursor(target, token) {
+    if (!target) return;
+    var start = target.selectionStart || 0;
+    var end = target.selectionEnd || 0;
+    target.value = target.value.slice(0, start) + token + target.value.slice(end);
+    target.focus();
+    target.selectionStart = target.selectionEnd = start + token.length;
+    target.dispatchEvent(new Event('input'));
+  }
+
+  // ─ Picker « Ajouter un article » : recherche le catalogue et insère au
+  //   curseur un token [[article|sku|prix|libellé]] → rendu en lien naturel
+  //   côté serveur (le prix affiché est modifiable dans le token). ─
+  function buildArticlePicker(targetId) {
+    return '<div class="mb-2">'
+      + '<button type="button" id="' + targetId + '-artbtn" class="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold">'
+      + '<span class="material-symbols-outlined text-sm">add_shopping_cart</span>Ajouter un article</button>'
+      + '<span class="text-[11px] text-slate-400 ml-2">→ insère un lien naturel dans ton message</span>'
+      + '<div id="' + targetId + '-artbox" class="hidden mt-2 rounded-lg border border-slate-200 bg-white p-2">'
+      + '<input type="text" id="' + targetId + '-artq" placeholder="Réf, modèle, moteur… (ex : Z20DMH, DSG, culasse Opel)" autocomplete="off" class="w-full rounded-md border border-slate-200 px-2 py-1.5 text-sm mb-1" />'
+      + '<div id="' + targetId + '-artres" class="max-h-56 overflow-auto"></div>'
+      + '</div></div>';
+  }
+
+  function attachArticlePicker(scope, targetId) {
+    var toggle = scope.querySelector('#' + targetId + '-artbtn');
+    var box = scope.querySelector('#' + targetId + '-artbox');
+    var input = scope.querySelector('#' + targetId + '-artq');
+    var results = scope.querySelector('#' + targetId + '-artres');
+    var target = document.getElementById(targetId);
+    if (!toggle || !box || !input || !results || !target) return;
+    var timer = null, lastQ = null, reqSeq = 0;
+
+    toggle.addEventListener('click', function () {
+      box.classList.toggle('hidden');
+      if (!box.classList.contains('hidden')) { input.focus(); if (lastQ === null) doSearch(''); }
+    });
+    input.addEventListener('input', function () {
+      var q = input.value.trim();
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () { doSearch(q); }, 250);
+    });
+
+    function doSearch(q) {
+      lastQ = q;
+      var seq = ++reqSeq;
+      results.innerHTML = '<div class="px-2 py-2 text-xs text-slate-400">Recherche…</div>';
+      fetch('/admin/api/products/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (seq === reqSeq) renderResults((d && d.items) || []); })
+        .catch(function () { if (seq === reqSeq) results.innerHTML = '<div class="px-2 py-2 text-xs text-red-600">Erreur de recherche</div>'; });
+    }
+
+    function renderResults(items) {
+      if (!items.length) { results.innerHTML = '<div class="px-2 py-3 text-xs text-slate-400">Aucun article trouvé.</div>'; return; }
+      results.innerHTML = '';
+      items.slice(0, 12).forEach(function (p) {
+        var price = Math.round((p.priceCents || 0) / 100);
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-blue-50';
+        row.innerHTML = '<span class="material-symbols-outlined text-slate-400 text-base flex-shrink-0">description</span>'
+          + '<span class="flex-1 min-w-0"><span class="block text-xs text-slate-800 truncate">' + escapeHtml(p.name || '') + '</span>'
+          + '<span class="block text-[11px] text-slate-400 truncate">' + escapeHtml((p.sku || '') + (p.brand ? ' · ' + p.brand : '')) + '</span></span>'
+          + '<span class="text-xs font-semibold text-slate-700 whitespace-nowrap">' + price.toLocaleString('fr-FR') + ' €</span>'
+          + '<span class="text-[11px] text-blue-600 font-semibold whitespace-nowrap">+ insérer</span>';
+        row.addEventListener('click', function () {
+          var label = String(p.name || '').replace(/[|\]]/g, ' ').replace(/\s+/g, ' ').trim();
+          var sku = String(p.sku || '').replace(/[|\]]/g, '');
+          insertAtCursor(target, '[[article|' + sku + '|' + price + '|' + label + ']]');
+          box.classList.add('hidden');
+          input.value = '';
+          lastQ = null;
+          results.innerHTML = '';
+        });
+        results.appendChild(row);
+      });
+    }
+  }
+
   // ─ Reformulation IA (ChatGPT) d'un message du composer, avant envoi ─
   function reformulateComposer(textarea, channel, btn, resultEl, clientName, onDone) {
     var draft = (textarea.value || '').trim();
@@ -882,6 +962,7 @@
       + templatesOptions + '</select>'
       + '<input type="text" id="lead-email-subject" name="subject" placeholder="Sujet" required maxlength="200" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />'
       + buildVariablesToolbar('lead-email-body')
+      + buildArticlePicker('lead-email-body')
       + '<textarea id="lead-email-body" name="body" rows="10" required maxlength="8000" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Bonjour {prenom},&#10;&#10;Suite à votre passage sur notre site…"></textarea>'
       + '<label class="flex items-center gap-2 text-sm"><input type="checkbox" id="lead-email-cta" checked /> Inclure un bouton "Reprendre mon panier"</label>'
       + '<div class="flex items-center gap-2 pt-2">'
@@ -911,6 +992,7 @@
     });
 
     attachVariableInserters(form);
+    attachArticlePicker(form, 'lead-email-body');
 
     // Sélectionne automatiquement le template le plus pertinent selon la source
     var defaultTpl = EMAIL_TEMPLATES.find(function (t) {
@@ -1099,6 +1181,7 @@
       + '<select id="lead-wa-template" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white">'
       + templatesOptions + '</select>'
       + buildVariablesToolbar('lead-wa-text')
+      + buildArticlePicker('lead-wa-text')
       + '<textarea id="lead-wa-text" name="text" rows="5" required maxlength="1000" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Message WhatsApp…"></textarea>'
       + '<div class="flex items-center gap-2 pt-2">'
       + '  <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 transition">Ouvrir WhatsApp</button>'
@@ -1111,6 +1194,7 @@
     var ta = document.getElementById('lead-wa-text');
     var templateEl = document.getElementById('lead-wa-template');
     attachVariableInserters(form);
+    attachArticlePicker(form, 'lead-wa-text');
 
     function applyTemplate(tpl) { if (tpl) ta.value = tpl.body || ''; }
     var presetWa = presetTemplateKey ? SMS_TEMPLATES.find(function (t) { return t.key === presetTemplateKey; }) : null;
