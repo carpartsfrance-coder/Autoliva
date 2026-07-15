@@ -101,6 +101,8 @@ function readAttribution(req) {
     campaign: trim(last.utmCampaign),
     referrer: trim(last.referrer),
     gclid: trim(last.gclid),
+    gbraid: trim(last.gbraid),
+    wbraid: trim(last.wbraid),
   };
 }
 

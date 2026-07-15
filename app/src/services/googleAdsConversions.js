@@ -37,11 +37,38 @@
  *   GOOGLE_ADS_DEVELOPER_TOKEN  (héritage — plus utilisé par Data Manager, ignoré)
  */
 
+const crypto = require('crypto');
+const { normalizeEmail, normalizePhone } = require('./enhancedConversionData');
+
 const OAUTH_URL = 'https://oauth2.googleapis.com/token';
 const INGEST_URL = 'https://datamanager.googleapis.com/v1/events:ingest';
 
 function env(k) { return typeof process.env[k] === 'string' ? process.env[k].trim() : ''; }
 function digitsOnly(s) { return String(s || '').replace(/\D/g, ''); }
+
+function sha256Hex(s) { return crypto.createHash('sha256').update(s, 'utf8').digest('hex'); }
+
+/**
+ * userIdentifiers Data Manager (Enhanced Conversions) : email/téléphone
+ * normalisés puis hashés SHA-256 (hex — le payload porte `encoding: 'HEX'`).
+ * Normalisation documentée par Google : email lowercase/trim (+ points du
+ * local-part retirés pour gmail/googlemail), téléphone E.164.
+ * Sans identifiant exploitable → [] (le matching reste 100 % click-id).
+ */
+function buildUserIdentifiers({ email, phone }) {
+  const ids = [];
+  let em = normalizeEmail(email);
+  if (em) {
+    const [local, domain] = em.split('@');
+    if (domain === 'gmail.com' || domain === 'googlemail.com') {
+      em = `${local.replace(/\./g, '')}@${domain}`;
+    }
+    ids.push({ emailAddress: sha256Hex(em) });
+  }
+  const ph = normalizePhone(phone);
+  if (ph) ids.push({ phoneNumber: sha256Hex(ph) });
+  return ids;
+}
 
 function config() {
   return {
@@ -109,7 +136,11 @@ async function getAccessToken() {
 /**
  * Remonte UNE conversion (idempotence gérée par l'appelant) via events:ingest.
  * @param {Object} p
- * @param {string} p.gclid       identifiant de clic Google Ads
+ * @param {string} [p.gclid]      identifiant de clic Google Ads (web)
+ * @param {string} [p.gbraid]     identifiant de clic iOS14+ (app→web) — au moins
+ * @param {string} [p.wbraid]     identifiant de clic iOS14+ (web) — un des trois requis
+ * @param {string} [p.email]      email client (clair) → hashé SHA-256 ici (Enhanced Conversions)
+ * @param {string} [p.phone]      téléphone client (clair) → E.164 + SHA-256 ici
  * @param {'lead'|'sale'|'purchase'} p.action  type → choisit l'action de conversion
  * @param {number} [p.value]      valeur (€), omise/0 → conversion sans valeur
  * @param {string} [p.currency]   défaut 'EUR'
@@ -117,10 +148,12 @@ async function getAccessToken() {
  * @param {boolean} [p.dryRun]    true → validateOnly (Google valide sans enregistrer)
  * @returns {Promise<{ok:boolean, skipped?:boolean, reason?:string, status?:number, error?:any, validateOnly?:boolean, response?:any}>}
  */
-async function uploadConversion({ gclid, action, value, currency, dateTime, dryRun = false }) {
+async function uploadConversion({ gclid, gbraid, wbraid, email, phone, action, value, currency, dateTime, dryRun = false }) {
   if (!isConfigured()) return { ok: false, skipped: true, reason: 'not_configured' };
   const g = String(gclid || '').trim();
-  if (!g) return { ok: false, skipped: true, reason: 'no_gclid' };
+  const gb = String(gbraid || '').trim();
+  const wb = String(wbraid || '').trim();
+  if (!g && !gb && !wb) return { ok: false, skipped: true, reason: 'no_click_id' };
 
   const c = config();
   const actionEnv = action === 'sale' ? c.saleAction
@@ -129,10 +162,16 @@ async function uploadConversion({ gclid, action, value, currency, dateTime, dryR
   const destId = conversionActionId(actionEnv);
   if (!destId) return { ok: false, skipped: true, reason: `no_action_for_${action}` };
 
+  // Un clic porte l'un OU l'autre : gclid (web classique), gbraid/wbraid (iOS14+).
+  const adIdentifiers = {};
+  if (g) adIdentifiers.gclid = g;
+  if (gb) adIdentifiers.gbraid = gb;
+  if (wb) adIdentifiers.wbraid = wb;
+
   const ev = {
-    adIdentifiers: { gclid: g },
+    adIdentifiers,
     // Requis par events:ingest (REQUIRED_FIELD_MISSING sinon). Toutes nos
-    // conversions naissent d'un clic web (le gclid est web) → WEB.
+    // conversions naissent d'un clic web (le click id est web) → WEB.
     eventSource: 'WEB',
     eventTimestamp: dateTime
       ? (typeof dateTime === 'string' ? dateTime : formatConversionDateTime(dateTime))
@@ -143,6 +182,11 @@ async function uploadConversion({ gclid, action, value, currency, dateTime, dryR
     ev.currency = currency || 'EUR';
   }
 
+  // Enhanced Conversions : email/tél hashés en repli/renfort du click id —
+  // augmente le taux de match quand le gclid seul ne suffit plus (ITP, etc.).
+  const userIdentifiers = buildUserIdentifiers({ email, phone });
+  if (userIdentifiers.length) ev.userData = { userIdentifiers };
+
   const payload = {
     destinations: [{
       reference: 'gads',
@@ -152,6 +196,8 @@ async function uploadConversion({ gclid, action, value, currency, dateTime, dryR
     events: [ev],
     validateOnly: !!dryRun,
   };
+  // `encoding` est REQUIS par l'API dès qu'un événement porte du userData.
+  if (userIdentifiers.length) payload.encoding = 'HEX';
 
   const token = await getAccessToken();
   const res = await fetch(INGEST_URL, {
@@ -173,4 +219,5 @@ module.exports = {
   getAccessToken,
   conversionActionId,
   formatConversionDateTime,
+  buildUserIdentifiers,
 };
