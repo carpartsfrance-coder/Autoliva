@@ -8,6 +8,11 @@
 
 const brand = require('../config/brand');
 
+/* Horaires téléphoniques affichés dans la signature de TOUS les emails, pour
+   que le client sache quand nous joindre (évite les appels hors horaires).
+   Surchargeable via la variable d'env BUSINESS_HOURS. */
+const BUSINESS_HOURS = (process.env.BUSINESS_HOURS || '').trim() || 'du lundi au vendredi, 9h–12h et 14h–18h';
+
 function trim(v) { return typeof v === 'string' ? v.trim() : ''; }
 
 function escapeHtml(value) {
@@ -390,6 +395,7 @@ function renderEmailHtml({ subject, body, vars, ctaUrl, articles, baseUrl }) {
           <span style="font-weight:700;color:#111;font-size:14px;">${escapeHtml(brand.NAME)}</span><br/>
           Pièces auto reconditionnées &amp; garanties<br/>
           ${contactLine ? contactLine + '<br/>' : ''}
+          Horaires : ${BUSINESS_HOURS}<br/>
           <a href="${siteUrl}" style="color:${RED};text-decoration:none;font-weight:600;">${siteLabel}</a>
         </td>
       </tr>
@@ -416,6 +422,7 @@ function renderEmailText({ body, vars, articles, baseUrl }) {
   if (vars.telephone) contactBits.push('Tél. ' + vars.telephone);
   if (brand.EMAIL_CONTACT) contactBits.push(brand.EMAIL_CONTACT);
   if (contactBits.length) lines.push(contactBits.join(' · '));
+  lines.push('Horaires : ' + BUSINESS_HOURS);
   lines.push(brand.DOMAIN || 'autoliva.com');
   return lines.join('\n');
 }
