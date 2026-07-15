@@ -265,6 +265,10 @@ const abandonedCartSchema = new mongoose.Schema(
       campaign: { type: String, default: '' },
       referrer: { type: String, default: '' },
       gclid: { type: String, default: '' },
+      // Identifiants de clic iOS14+ (Google Ads) — un clic porte gclid OU
+      // gbraid/wbraid ; nécessaires pour remonter les conversions des clics iOS.
+      gbraid: { type: String, default: '' },
+      wbraid: { type: String, default: '' },
     },
 
     /**

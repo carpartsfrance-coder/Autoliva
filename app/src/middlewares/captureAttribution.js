@@ -161,18 +161,30 @@ async function captureAttribution(req, res, next) {
       console.warn('[captureAttribution] mongo insert failed:', err && err.message);
     });
 
-    // 2. Session : firstTouch immuable, lastTouch écrasé.
+    // 2. Session : firstTouch immuable, lastTouch écrasé — SAUF si le nouveau
+    //    touch n'a AUCUN identifiant de clic publicitaire alors que l'actuel en
+    //    a un. Cas réel : clic Google Ads (gclid) puis retour via un lien
+    //    email/newsletter (utm_source seul) → sans ce garde-fou le gclid était
+    //    remis à '' et la commande devenait invisible pour l'import Ads.
+    //    (L'audit AttributionTouch, lui, enregistre TOUS les touches.)
+    const hasClickId = (t) => !!(t && (t.gclid || t.gbraid || t.wbraid || t.fbclid || t.msclkid));
+    const sessionLast = req.session && req.session.attribution && req.session.attribution.lastTouch;
+    const cookieLast = readCookie(req, COOKIE_LAST);
+    // Le cookie compte aussi : un gclid d'une session précédente (fenêtre 90 j)
+    // reste attribuable — un touch sans clic ne doit pas l'effacer non plus.
+    const preserveLast = !hasClickId(norm) && (hasClickId(sessionLast) || hasClickId(cookieLast));
+
     if (req.session) {
       if (!req.session.attribution) req.session.attribution = {};
       if (!req.session.attribution.firstTouch) {
         req.session.attribution.firstTouch = touch;
       }
-      req.session.attribution.lastTouch = touch;
+      if (!preserveLast) req.session.attribution.lastTouch = touch;
     }
 
     // 3. Cookies first-party (90j) — backup si la session expire.
     const cookiePayload = buildCookiePayload(touch);
-    writeCookie(res, COOKIE_LAST, cookiePayload);
+    if (!preserveLast) writeCookie(res, COOKIE_LAST, cookiePayload);
     if (!readCookie(req, COOKIE_FIRST)) {
       writeCookie(res, COOKIE_FIRST, cookiePayload);
     }
@@ -194,7 +206,15 @@ function buildOrderAttribution(req) {
   const cookieLast = readCookie(req, COOKIE_LAST);
 
   const firstTouch = session.firstTouch || cookieFirst || null;
-  const lastTouch = session.lastTouch || cookieLast || firstTouch || null;
+  let lastTouch = session.lastTouch || cookieLast || firstTouch || null;
+  // Si le lastTouch retenu ne porte aucun identifiant de clic mais que le
+  // cookie (ou le firstTouch) en a un encore valable (90 j), on préfère
+  // celui-là : c'est lui qui rend la commande attribuable côté Google Ads.
+  const hasClick = (t) => !!(t && (t.gclid || t.gbraid || t.wbraid || t.fbclid || t.msclkid));
+  if (!hasClick(lastTouch)) {
+    if (hasClick(cookieLast)) lastTouch = cookieLast;
+    else if (hasClick(firstTouch)) lastTouch = firstTouch;
+  }
 
   if (!firstTouch && !lastTouch) {
     return undefined;

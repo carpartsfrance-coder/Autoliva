@@ -52,6 +52,36 @@ async function getAdsDiagnostic(req, res) {
     out.dryRunError = String((e && e.message) || e).slice(0, 300);
   }
 
+  // Dénominateur réel : ce qui a été ENVOYÉ à Google sur 30 j — à comparer au
+  // compteur « conversions » de l'interface Ads pour mesurer le taux de match.
+  try {
+    const AbandonedCart = require('../models/AbandonedCart');
+    const Order = require('../models/Order');
+    const since30 = new Date(Date.now() - 30 * 86400000);
+    const [leads30, sales30, purchases30, purchasesClickIdTotal30] = await Promise.all([
+      AbandonedCart.countDocuments({ 'googleAdsUpload.leadAt': { $gte: since30 } }),
+      AbandonedCart.countDocuments({ 'googleAdsUpload.saleAt': { $gte: since30 } }),
+      Order.countDocuments({ 'attribution.uploadedToGoogleAdsAt': { $gte: since30 } }),
+      Order.countDocuments({
+        createdAt: { $gte: since30 },
+        $or: [
+          { 'attribution.lastTouch.gclid': { $nin: ['', null] } },
+          { 'attribution.lastTouch.gbraid': { $nin: ['', null] } },
+          { 'attribution.lastTouch.wbraid': { $nin: ['', null] } },
+        ],
+      }),
+    ]);
+    out.uploaded30d = {
+      leads: leads30,
+      sales: sales30,
+      purchases: purchases30,
+      note: 'comparer purchases au compteur « Achat site » de Google Ads (30 j) pour le taux de match',
+      ordersWithClickId30d: purchasesClickIdTotal30,
+    };
+  } catch (e) {
+    out.uploaded30dError = String((e && e.message) || e).slice(0, 300);
+  }
+
   return res.json(out);
 }
 
