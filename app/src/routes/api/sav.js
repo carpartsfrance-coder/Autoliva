@@ -14,6 +14,18 @@ const brand = require('../../config/brand');
 
 const router = express.Router();
 
+// ---------- Protocole réconciliation : verrou « appel avant refus » ----------
+// Un refus écrit ne part JAMAIS sans appel préalable : un refus expliqué de
+// vive voix préserve la relation (et la note Google). Le verrou exige un
+// message canal 'tel' avec callOutcome 'joint', ou 2 tentatives 'echec'.
+function refusCallGateError(ticket) {
+  const calls = (ticket.messages || []).filter((m) => m && m.canal === 'tel');
+  const joint = calls.some((m) => m.callOutcome === 'joint');
+  const echecs = calls.filter((m) => m.callOutcome === 'echec').length;
+  if (joint || echecs >= 2) return null;
+  return 'Refus bloqué : appelez d\'abord le client et loguez l\'appel (canal « tel », résultat « joint » — ou 2 tentatives « échec »). Un refus expliqué de vive voix passe infiniment mieux qu\'un email sec, et c\'est le moment de proposer le geste commercial.';
+}
+
 // ---------- Logger ----------
 
 const LOG_DIR = path.join(__dirname, '..', '..', '..', '..', 'logs');
@@ -1274,6 +1286,11 @@ adminRouter.patch('/tickets/:numero/statut', async (req, res) => {
     if (!statut) return fail(res, 'statut requis');
     const ticket = await SavTicket.findOne({ numero: req.params.numero });
     if (!ticket) return fail(res, 'Ticket introuvable', 404);
+    // Verrou réconciliation : pas de passage en refus sans appel logué.
+    if (statut === 'refuse') {
+      const gateErr = refusCallGateError(ticket);
+      if (gateErr) return fail(res, gateErr, 409);
+    }
     const before = { statut: ticket.statut };
     try {
       ticket.changerStatut(statut, auteur || 'admin', { force: !!force });
@@ -1455,6 +1472,25 @@ adminRouter.post('/tickets/:numero/close', async (req, res) => {
     }
     const ticket = await SavTicket.findOne({ numero: req.params.numero });
     if (!ticket) return fail(res, 'Ticket introuvable', 404);
+
+    // Verrou réconciliation : une clôture en refus exige un appel logué.
+    if (targetStatut === 'refuse') {
+      const gateErr = refusCallGateError(ticket);
+      if (gateErr) return fail(res, gateErr, 409);
+    }
+
+    // Geste commercial de réconciliation (optionnel, posé à la clôture).
+    const g = req.body && req.body.gesteCommercial;
+    if (g && g.type) {
+      ticket.resolution = ticket.resolution || {};
+      ticket.resolution.gesteCommercial = {
+        type: String(g.type),
+        montant: Number(g.montant) || 0,
+        code: String(g.code || '').trim(),
+        motif: String(g.motif || '').trim(),
+        offertLe: new Date(),
+      };
+    }
 
     const before = { statut: ticket.statut };
     ticket.closure = ticket.closure || {};
@@ -1677,11 +1713,17 @@ adminRouter.post('/tickets/:numero/messages', async (req, res) => {
   try {
     const ticket = await SavTicket.findOne({ numero: req.params.numero });
     if (!ticket) return fail(res, 'Ticket introuvable', 404);
-    const { auteur, canal: canalRaw, contenu } = req.body || {};
+    const { auteur, canal: canalRaw, contenu, callOutcome } = req.body || {};
     if (!canalRaw || !contenu) return fail(res, 'canal et contenu requis');
     // Doctrine : tout passe par l'app — l'ancien canal "email" est traité comme "inapp".
     const canal = canalRaw === 'email' ? 'inapp' : canalRaw;
     ticket.addMessage(auteur || 'admin', canal, contenu);
+    // Log d'appel (canal tel) : outcome = 'joint' | 'vocal' | 'echec'.
+    // Alimente le verrou « appel obligatoire avant refus ».
+    if (canal === 'tel' && ['joint', 'vocal', 'echec'].includes(String(callOutcome || ''))) {
+      const lastMsg = ticket.messages[ticket.messages.length - 1];
+      if (lastMsg) lastMsg.callOutcome = String(callOutcome);
+    }
     await ticket.save();
 
     // Notifie le client par email à chaque message public d'un agent (notification only,
