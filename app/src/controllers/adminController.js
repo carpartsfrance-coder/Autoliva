@@ -8056,53 +8056,70 @@ async function postAdminUpdateProduct(req, res, next) {
       });
       savedUploads.push(saved);
     }
-
-    // Sélectionne la première IMAGE uploadée pour l'image principale (jamais une vidéo).
-    // Les vidéos restent dans la galerie. Si aucune image n'est uploadée, garde l'image existante.
-    let mainUploadIdx = -1;
-    for (let i = 0; i < uploadedFiles.length; i++) {
-      const f = uploadedFiles[i];
-      if (f && f.mimetype && f.mimetype.startsWith('image/')) {
-        mainUploadIdx = i;
-        break;
-      }
-    }
-    const uploadedImageUrl = (mainUploadIdx >= 0 && savedUploads[mainUploadIdx]) ? savedUploads[mainUploadIdx].url : '';
-    const shouldRemoveMain = removeMainImage && !uploadedImageUrl;
-    let nextImageUrl = uploadedImageUrl || (shouldRemoveMain ? '' : (form.imageUrl || existing.imageUrl || ''));
-
-    /* ── Auto-promote first gallery image when main is removed ── */
-    if (!nextImageUrl && autoPromotedMainFromGallery) {
-      nextImageUrl = autoPromotedMainFromGallery;
-    }
+    const uploadIsVideo = (k) => !!(uploadedFiles[k] && uploadedFiles[k].mimetype && uploadedFiles[k].mimetype.startsWith('video/'));
 
     const stockQty = parsedStock.qty;
     const inStock = stockQty !== null ? stockQty > 0 : form.inStock;
 
     const galleryUrlsFromForm = parseLinesToArray(form.galleryUrls);
     const galleryTypesFromForm = parseLinesToArray(form.galleryTypes);
-    // Tous les uploads sauf celui promu en image principale vont dans la galerie.
-    // Les vidéos sont taggées 'video' via leur mimetype.
-    const extraGalleryUrls = savedUploads
-      .filter((_, i) => i !== mainUploadIdx)
-      .map((s) => s.url);
-    const extraGalleryTypes = uploadedFiles
-      .filter((_, i) => i !== mainUploadIdx)
-      .map((f) => (f && f.mimetype && f.mimetype.startsWith('video/')) ? 'video' : 'image');
-    let galleryUrls = [...galleryUrlsFromForm, ...extraGalleryUrls];
-    // Construit galleryTypes parallèlement, en respectant l'ordre du formulaire et en complétant
-    // par les nouveaux uploads. Toute valeur manquante = 'image' (rétrocompat).
-    let galleryTypes = galleryUrlsFromForm.map((_, i) => (galleryTypesFromForm[i] === 'video' ? 'video' : 'image'))
-      .concat(extraGalleryTypes);
 
-    /* Remove promoted image from gallery to avoid duplicate */
-    if (autoPromotedMainFromGallery && nextImageUrl === autoPromotedMainFromGallery) {
-      const removeIdx = galleryUrls.indexOf(autoPromotedMainFromGallery);
-      if (removeIdx >= 0) {
-        galleryUrls.splice(removeIdx, 1);
-        galleryTypes.splice(removeIdx, 1);
+    /* ──────────────────────────────────────────────────────────────────
+     * MÉDIAS — modèle unique, ordonné et NON DESTRUCTIF.
+     * Le client envoie `mediaOrder` : la liste ORDONNÉE de toutes les tuiles
+     * (index 0 = tête), chaque item = URL existante { u, t } OU upload
+     * { i, t } (i = index dans les fichiers uploadés). Image principale =
+     * 1re IMAGE de la liste ; le reste = galerie, dans l'ordre.
+     * Repli si `mediaOrder` absent (JS off, autre client) : principale
+     * conservée + galerie du formulaire + uploads en fin → un upload
+     * n'écrase JAMAIS la principale, et rien n'est supprimé par erreur.
+     * ────────────────────────────────────────────────────────────────── */
+    let orderItems = [];
+    let mediaOrderProvided = false;
+    if (typeof form.mediaOrder === 'string' && form.mediaOrder.trim()) {
+      try {
+        const parsed = JSON.parse(form.mediaOrder);
+        if (Array.isArray(parsed)) { orderItems = parsed; mediaOrderProvided = true; }
+      } catch (_) { orderItems = []; }
+    }
+    if (!mediaOrderProvided) {
+      const keptMain = removeMainImage ? '' : getTrimmedString(form.imageUrl);
+      if (keptMain) orderItems.push({ u: keptMain, t: 'image' });
+      galleryUrlsFromForm.forEach((u, i) => orderItems.push({ u, t: galleryTypesFromForm[i] === 'video' ? 'video' : 'image' }));
+      savedUploads.forEach((_, k) => orderItems.push({ i: k, t: uploadIsVideo(k) ? 'video' : 'image' }));
+    }
+
+    const resolvedMedia = [];
+    const referencedUploads = new Set();
+    for (const it of orderItems) {
+      if (!it || typeof it !== 'object') continue;
+      if (typeof it.u === 'string' && it.u.trim()) {
+        resolvedMedia.push({ url: it.u.trim(), type: it.t === 'video' ? 'video' : 'image' });
+      } else if (Number.isInteger(it.i) && savedUploads[it.i]) {
+        referencedUploads.add(it.i);
+        resolvedMedia.push({ url: savedUploads[it.i].url, type: uploadIsVideo(it.i) ? 'video' : 'image' });
       }
     }
+    // Filet de sécurité : un upload non listé dans mediaOrder est ajouté en
+    // fin de galerie plutôt que perdu.
+    savedUploads.forEach((s, k) => {
+      if (!referencedUploads.has(k)) resolvedMedia.push({ url: s.url, type: uploadIsVideo(k) ? 'video' : 'image' });
+    });
+    // Dédoublonnage en gardant la 1re occurrence (respecte l'ordre choisi).
+    const seenMediaUrls = new Set();
+    const orderedMedia = resolvedMedia.filter((m) => {
+      if (!m.url || seenMediaUrls.has(m.url)) return false;
+      seenMediaUrls.add(m.url);
+      return true;
+    });
+
+    // Image principale = 1re IMAGE (jamais une vidéo) ; le reste = galerie.
+    const mainMediaIdx = orderedMedia.findIndex((m) => m.type !== 'video');
+    let nextImageUrl = mainMediaIdx >= 0 ? orderedMedia[mainMediaIdx].url : '';
+    if (!nextImageUrl && !removeMainImage) nextImageUrl = getTrimmedString(existing.imageUrl);
+    const galleryMedia = orderedMedia.filter((_, i) => i !== mainMediaIdx);
+    let galleryUrls = galleryMedia.map((m) => m.url);
+    let galleryTypes = galleryMedia.map((m) => m.type);
     const keyPoints = hasKeyPoints ? parseLinesToArray(form.keyPoints) : null;
     const specs = hasSpecs ? parsePairsFromLines(form.specs) : null;
     if (hasSpecs && specs) {
@@ -8170,15 +8187,13 @@ async function postAdminUpdateProduct(req, res, next) {
       }
     }
 
-    if (uploadedImageUrl || shouldRemoveMain) {
-      await mediaStorage.deleteFromUrl(existing.imageUrl);
-    }
-
-    const existingGalleryUrls = Array.isArray(existing.galleryUrls) ? existing.galleryUrls.filter(Boolean) : [];
-    const nextGallerySet = new Set(galleryUrls.filter(Boolean));
-    const removedGalleryUrls = existingGalleryUrls.filter((u) => !nextGallerySet.has(u));
-    for (const url of removedGalleryUrls) {
-      await mediaStorage.deleteFromUrl(url);
+    // Suppression NON destructive : on ne retire du stockage QUE les médias
+    // qui ne sont plus référencés (ni comme principale, ni dans la galerie).
+    // Une image simplement promue/rétrogradée ou réordonnée est conservée.
+    const keptUrlSet = new Set([nextImageUrl, ...galleryUrls].filter(Boolean));
+    const previousUrls = [existing.imageUrl, ...(Array.isArray(existing.galleryUrls) ? existing.galleryUrls : [])].filter(Boolean);
+    for (const url of previousUrls) {
+      if (!keptUrlSet.has(url)) await mediaStorage.deleteFromUrl(url);
     }
 
     const resolvedInfoBlockIds = await resolveInfoBlockIds(req.body.infoBlockIds);
