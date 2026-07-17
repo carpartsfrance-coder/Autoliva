@@ -69,6 +69,11 @@
                 Créer un retour
               </button>
             </form>
+
+            <button id="reviewRequestBtn" class="btn btn-secondary text-amber-600 hover:bg-amber-50 hover:border-amber-200" type="button" data-order-id="<%= order.id %>">
+              <span class="material-symbols-outlined mr-2 text-base">reviews</span>
+              Demander un avis
+            </button>
           <% } %>
 
           <% const _detailReturn = '/admin/commandes/' + order.id; %>
@@ -2195,5 +2200,26 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 <% } %>
+
+<script>
+  /* Demande d'avis Skeepers sur cette commande (POST same-origin JSON, pas de CSRF). */
+  (function () {
+    var btn = document.getElementById('reviewRequestBtn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var id = btn.getAttribute('data-order-id');
+      if (!id) return;
+      if (!confirm("Envoyer une demande d'avis à ce client via Avis Vérifiés ?")) return;
+      btn.disabled = true;
+      fetch('/admin/commandes/' + encodeURIComponent(id) + '/demande-avis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      }).then(function (r) { return r.json().catch(function () { return {}; }); }).then(function (j) {
+        if (j && j.ok) { alert(j.message || "Demande d'avis envoyée."); }
+        else { alert('Échec : ' + ((j && j.error) || 'erreur inconnue')); }
+      }).catch(function () { alert('Erreur réseau.'); }).then(function () { btn.disabled = false; });
+    });
+  })();
+</script>
 
 <%- include('./partials/footer') %>

@@ -177,6 +177,8 @@ router.post('/parametres/modeles-messages/:id/supprimer', requireAdminAuth, lead
 router.post('/api/messages/reformulate', requireAdminAuth, leadTemplatesAdminController.postReformulateMessage);
 // Diagnostic import conversions Google Ads (lecture seule, dry-run).
 router.get('/api/ads/diagnostic', requireAdminAuth, require('../controllers/adsAdminController').getAdsDiagnostic);
+// Diagnostic demandes d'avis Skeepers / Avis Vérifiés (config + auth, lecture seule).
+router.get('/api/reviews/diagnostic', requireAdminAuth, require('../controllers/reviewsAdminController').getReviewsDiagnostic);
 router.get('/parametres/sav', requireAdminAuth, savAdminController.getSavSettings);
 router.get('/parametres/audit', requireAdminAuth, savAdminController.getAuditLog);
 router.get('/parametres/integrations', requireAdminAuth, savAdminController.getIntegrations);
@@ -218,12 +220,16 @@ router.get('/preparation', requireAdminAuth, adminController.getAdminPreparation
 router.get('/consignes', requireAdminAuth, adminController.getAdminConsignes);
 router.get('/commandes', requireAdminAuth, adminController.getAdminOrdersPage);
 router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteOrders);
+// Demande d'avis Skeepers sur une sélection de commandes (≤ 50).
+router.post('/commandes/demande-avis-multi', requireAdminAuth, require('../controllers/reviewsAdminController').postRequestReviewBulk);
 router.post('/commandes/sync-suivi', requireAdminAuth, adminController.postAdminSyncShipmentTracking);
 router.get('/commandes/jumingo-debug', requireAdminAuth, adminController.getAdminJumingoDebug);
 router.get('/commandes/nouvelle', requireAdminAuth, adminController.getAdminNewOrderPage);
 router.get('/commandes/:orderId', requireAdminAuth, adminController.getAdminOrderDetailPage);
 router.post('/commandes/:orderId/statut', requireAdminAuth, adminController.postAdminUpdateOrderStatus);
 router.post('/commandes/:orderId/type', requireAdminAuth, adminController.postAdminUpdateOrderType);
+// Demande d'avis Skeepers sur UNE commande (bouton du détail).
+router.post('/commandes/:orderId/demande-avis', requireAdminAuth, require('../controllers/reviewsAdminController').postRequestReviewSingle);
 // Approvisionnement de la pièce (édition inline depuis la liste + form détail)
 router.post('/commandes/:orderId/sourcing', requireAdminAuth, adminController.postAdminUpdateOrderSourcing);
 router.post('/commandes/:orderId/consigne/recu', requireAdminAuth, adminController.postAdminMarkOrderConsigneReceived);
