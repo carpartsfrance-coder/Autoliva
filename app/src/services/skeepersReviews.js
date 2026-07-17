@@ -110,6 +110,12 @@ function buildPurchaseEvent(order, user) {
       return p;
     });
 
+  // Avis produit ET marque si des produits sont liés ; sinon avis marque seul
+  // (demander un avis PRODUIT sans produit = payload incohérent → rejeté par Skeepers).
+  const purchaseEventType = products.length ? 'BRAND_AND_PRODUCT' : 'BRAND';
+  const solicitation = { delay: c.delay, purchase_event_type: purchaseEventType };
+  if (products.length) solicitation.delay_product = c.delayProduct;
+
   return {
     purchase_reference: trimStr(order.number, 50),
     purchase_date: toIso(order.createdAt),
@@ -123,11 +129,7 @@ function buildPurchaseEvent(order, user) {
     },
     products,
     sales_channel: { channel: 'online', website_id: c.websiteId },
-    solicitation_parameters: {
-      delay: c.delay,
-      delay_product: c.delayProduct,
-      purchase_event_type: 'BRAND_AND_PRODUCT',
-    },
+    solicitation_parameters: solicitation,
   };
 }
 
@@ -151,7 +153,11 @@ async function pushPurchaseEvents(events) {
     body: JSON.stringify(list),
   });
   const raw = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, status: res.status, error: raw };
+  if (!res.ok) {
+    // Log serveur (Render) : le corps d'erreur Skeepers est indispensable au diagnostic.
+    try { console.error('[skeepers] push HTTP ' + res.status + ' — ' + JSON.stringify(raw).slice(0, 800)); } catch (_) {}
+    return { ok: false, status: res.status, error: raw };
+  }
   return { ok: true, response: raw, count: list.length };
 }
 
