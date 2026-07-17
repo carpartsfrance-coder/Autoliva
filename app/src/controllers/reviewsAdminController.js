@@ -60,7 +60,10 @@ async function processOrders(orders, userMap) {
 
   const r = await skeepers.pushPurchaseEvents(events);
   if (!r.ok) {
-    return { ok: false, sent: 0, skipped, error: r.reason || (r.status ? `HTTP ${r.status}` : 'échec Skeepers') };
+    // Surface le corps d'erreur Skeepers (et pas seulement le code HTTP) pour diagnostic.
+    const detail = r.error == null ? '' : (typeof r.error === 'string' ? r.error : JSON.stringify(r.error));
+    const base = r.reason || (r.status ? `Skeepers a répondu HTTP ${r.status}` : 'échec Skeepers');
+    return { ok: false, sent: 0, skipped, error: base + (detail && detail !== '{}' ? ` — ${detail.slice(0, 400)}` : '') };
   }
 
   await Order.updateMany(

@@ -151,7 +151,11 @@ async function pushPurchaseEvents(events) {
     body: JSON.stringify(list),
   });
   const raw = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, status: res.status, error: raw };
+  if (!res.ok) {
+    // Log serveur (Render) : le corps d'erreur Skeepers est indispensable au diagnostic.
+    try { console.error('[skeepers] push HTTP ' + res.status + ' — ' + JSON.stringify(raw).slice(0, 800)); } catch (_) {}
+    return { ok: false, status: res.status, error: raw };
+  }
   return { ok: true, response: raw, count: list.length };
 }
 
