@@ -26,6 +26,9 @@
  *   SKEEPERS_WEBSITE_ID                uuid du site (ID du site)
  *   SKEEPERS_SOLICITATION_DELAY        jours avant l'email d'avis site (défaut 7)
  *   SKEEPERS_SOLICITATION_DELAY_PRODUCT  idem pour l'avis produit (défaut = DELAY)
+ *   SKEEPERS_SHOP_ID                   clé de la boutique (Gestion du compte > Boutiques).
+ *                                      Sans elle, Skeepers tente de résoudre la boutique du
+ *                                      site lui-même et peut échouer en « fetch Shop of website ».
  */
 
 const OAUTH_URL = 'https://auth.skeepers.io/realms/skeepers/protocol/openid-connect/token';
@@ -42,6 +45,7 @@ function config() {
     clientId: env('SKEEPERS_CLIENT_ID'),
     clientSecret: env('SKEEPERS_CLIENT_SECRET'),
     websiteId: env('SKEEPERS_WEBSITE_ID'),
+    shopId: env('SKEEPERS_SHOP_ID'),
     delay,
     delayProduct: intEnv('SKEEPERS_SOLICITATION_DELAY_PRODUCT', delay),
   };
@@ -116,6 +120,12 @@ function buildPurchaseEvent(order, user) {
   const solicitation = { delay: c.delay, purchase_event_type: purchaseEventType };
   if (products.length) solicitation.delay_product = c.delayProduct;
 
+  // Désigne explicitement la boutique : sans shop_id, le service de validation
+  // Skeepers résout la boutique du site lui-même (« fetch Shop of website »), ce
+  // qui échoue tant que l'association site↔boutique n'est pas provisionnée chez eux.
+  const salesChannel = { channel: 'online', website_id: c.websiteId };
+  if (c.shopId) salesChannel.shop_id = c.shopId;
+
   return {
     purchase_reference: trimStr(order.number, 50),
     purchase_date: toIso(order.createdAt),
@@ -128,7 +138,7 @@ function buildPurchaseEvent(order, user) {
       country: 'FR',
     },
     products,
-    sales_channel: { channel: 'online', website_id: c.websiteId },
+    sales_channel: salesChannel,
     solicitation_parameters: solicitation,
   };
 }
