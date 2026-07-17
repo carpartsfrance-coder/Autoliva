@@ -493,6 +493,10 @@
             <span class="material-symbols-outlined mr-2 text-base">delete</span>
             Supprimer la sélection
           </button>
+          <button id="bulkReviewRequestBtn" class="btn btn-secondary text-amber-600 hover:bg-amber-50 hover:border-amber-200 disabled:opacity-50" type="button" disabled>
+            <span class="material-symbols-outlined mr-2 text-base">reviews</span>
+            Demander un avis
+          </button>
           <div id="selectedOrdersCount" class="text-xs font-bold text-slate-500">0 sélectionné</div>
         </div>
         <%/* ── Mobile : cards stack ─────────────────────────────────── */%>
@@ -925,6 +929,7 @@
     // Bulk select for orders
     var selectAllOrders = document.getElementById('selectAllOrders');
     var bulkDeleteOrdersBtn = document.getElementById('bulkDeleteOrdersBtn');
+    var bulkReviewRequestBtn = document.getElementById('bulkReviewRequestBtn');
     var selectedOrdersCount = document.getElementById('selectedOrdersCount');
     var orderCheckboxes = Array.prototype.slice.call(document.querySelectorAll('.rowSelectOrder'));
 
@@ -936,6 +941,7 @@
       var count = orderCheckboxes.filter(function (c) { return c && c.checked; }).length;
       if (selectedOrdersCount) selectedOrdersCount.textContent = count + ' sélectionné' + (count > 1 ? 's' : '');
       if (bulkDeleteOrdersBtn) bulkDeleteOrdersBtn.disabled = count === 0;
+      if (bulkReviewRequestBtn) bulkReviewRequestBtn.disabled = count === 0;
       if (selectAllOrders) {
         selectAllOrders.checked = count > 0 && count === orderCheckboxes.length;
         selectAllOrders.indeterminate = count > 0 && count < orderCheckboxes.length;
@@ -953,6 +959,35 @@
     orderCheckboxes.forEach(function (c) {
       c.addEventListener('change', updateOrdersSelectionState);
     });
+
+    // Envoi groupé de demandes d'avis Skeepers sur la sélection (POST same-origin, pas de CSRF).
+    if (bulkReviewRequestBtn) {
+      bulkReviewRequestBtn.addEventListener('click', function () {
+        var ids = orderCheckboxes.filter(function (c) { return c && c.checked; }).map(function (c) { return c.value; });
+        if (!ids.length) return;
+        if (ids.length > 50) { alert('Skeepers accepte 50 commandes maximum par envoi. Sélectionnez-en 50 ou moins.'); return; }
+        if (!confirm('Envoyer une demande d\'avis à ' + ids.length + ' client' + (ids.length > 1 ? 's' : '') + ' via Avis Vérifiés ?')) return;
+        bulkReviewRequestBtn.disabled = true;
+        fetch('/admin/commandes/demande-avis-multi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ orderIds: ids }),
+        }).then(function (r) { return r.json().catch(function () { return {}; }); }).then(function (j) {
+          if (j && j.ok) {
+            var msg = (j.sent || 0) + " demande(s) d'avis envoyée(s).";
+            if (j.skipped && j.skipped.length) {
+              msg += '\n\n' + j.skipped.length + ' ignorée(s) :\n' + j.skipped.map(function (s) { return '• ' + s.number + ' — ' + s.reason; }).join('\n');
+            }
+            alert(msg);
+          } else {
+            alert('Échec : ' + ((j && j.error) || 'erreur inconnue'));
+          }
+        }).catch(function () { alert('Erreur réseau.'); }).then(function () {
+          bulkReviewRequestBtn.disabled = false;
+          updateOrdersSelectionState();
+        });
+      });
+    }
 
     updateOrdersSelectionState();
   })();

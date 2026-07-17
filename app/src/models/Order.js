@@ -364,6 +364,8 @@ const orderSchema = new mongoose.Schema(
       shipmentTrackingNumbersSent: { type: [String], default: [] },
       deliveryConfirmedSentAt: { type: Date, default: null },
       statusChangeSentAt: { type: Date, default: null },
+      // Demande d'avis Skeepers/Avis Vérifiés poussée (posé uniquement après succès).
+      skeepersReviewRequestedAt: { type: Date, default: null },
     },
     emailsSent: { type: [emailSentSchema], default: [] },
     smsSent: { type: [smsSentSchema], default: [] },
