@@ -10,6 +10,7 @@ const legacyRedirectController = require('../controllers/legacyRedirectControlle
 const leadCaptureController = require('../controllers/leadCaptureController');
 const moteurOccasionController = require('../controllers/moteurOccasionController');
 const boiteOccasionController = require('../controllers/boiteOccasionController');
+const pontTransfertController = require('../controllers/pontTransfertController');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const brand = require('../config/brand');
 
@@ -56,6 +57,14 @@ router.get('/boites-vitesse', boiteOccasionController.getLanding);
 router.post('/boites-vitesse/devis', boiteOccasionController.postDevis);
 router.get('/boites-vitesse-reconditionnees', boiteOccasionController.getLanding);
 router.post('/boites-vitesse-reconditionnees/devis', boiteOccasionController.postDevis);
+
+// Landing « Pont / différentiel / boîte de transfert » : même machine que
+// /moteurs (capture leads + gclid), captureSource = 'landing_ponts'.
+// Deux URLs pour le message match Ads : ponts-différentiels vs boîtes de transfert.
+router.get('/ponts-differentiels', pontTransfertController.getLanding);
+router.post('/ponts-differentiels/devis', pontTransfertController.postDevis);
+router.get('/boites-de-transfert', pontTransfertController.getLanding);
+router.post('/boites-de-transfert/devis', pontTransfertController.postDevis);
 
 // Entrée principale : sélection du motif SAV
 router.get('/sav', savController.getMotifSelect);

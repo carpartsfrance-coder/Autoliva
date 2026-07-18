@@ -95,6 +95,13 @@ async function buildPagesUrls(baseUrl, dbConnected) {
     { loc: resolveUrl('/faq'), lastmod: '' },
     { loc: resolveUrl('/notre-histoire'), lastmod: '' },
     { loc: resolveUrl('/legal'), lastmod: '' },
+    // Landings devis (capture leads) — indexables, porteuses des requêtes money.
+    { loc: resolveUrl('/moteurs'), lastmod: '' },
+    { loc: resolveUrl('/moteurs-reconditionnes'), lastmod: '' },
+    { loc: resolveUrl('/boites-vitesse'), lastmod: '' },
+    { loc: resolveUrl('/boites-vitesse-reconditionnees'), lastmod: '' },
+    { loc: resolveUrl('/ponts-differentiels'), lastmod: '' },
+    { loc: resolveUrl('/boites-de-transfert'), lastmod: '' },
   ];
 
   let legalPages = [];

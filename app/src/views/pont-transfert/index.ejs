@@ -5,8 +5,7 @@
   html { scroll-behavior: smooth; }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-  /* Anti-zoom iOS Safari : un champ < 16px déclenche un zoom auto au focus.
-     On force 16px sur mobile/tablette uniquement (desktop garde le rendu actuel). */
+  /* Anti-zoom iOS Safari : un champ < 16px déclenche un zoom auto au focus. */
   @media (max-width: 1023px) {
     input:not([type="radio"]):not([type="checkbox"]),
     select,
@@ -14,8 +13,7 @@
       font-size: 16px !important;
     }
   }
-  /* Bande de logos partenaires : défilement auto en boucle infinie (marquee).
-     Les logos sont dupliqués 2× dans le HTML ; on translate de -50% → boucle parfaite. */
+  /* Bande de logos partenaires : défilement auto en boucle infinie (marquee). */
   @keyframes brand-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
   .brand-marquee-track { animation: brand-marquee 28s linear infinite; will-change: transform; }
   .brand-marquee:hover .brand-marquee-track { animation-play-state: paused; }
@@ -33,22 +31,21 @@
 <p class="text-brand-textgray text-base lg:text-lg max-w-xl"><%= copy.sub %></p>
 </div>
 
-<!-- PREUVES : sous le formulaire sur mobile (order-3), sous l'accroche sur desktop (colonne gauche, ligne 2) -->
+<!-- PREUVES : sous le formulaire sur mobile (order-3), sous l'accroche sur desktop -->
 <div class="order-3 lg:col-span-7 lg:col-start-1 lg:row-start-2">
-<!-- Mobile : liste verticale icône+texte (lisible, alignée) · Desktop : grille 3 colonnes -->
 <div class="flex flex-col divide-y divide-gray-800 md:grid md:grid-cols-3 md:gap-6 md:divide-y-0 mb-8 border-t border-gray-800 pt-2 md:pt-8">
 <div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
 <svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
-<h3 class="font-bold text-sm mb-0.5 md:mb-1">Boîtes testées et certifiées</h3>
+<h3 class="font-bold text-sm mb-0.5 md:mb-1">Pièces testées et certifiées</h3>
 <p class="text-xs text-brand-textgray">Contrôlées avant expédition</p>
 </div>
 </div>
 <div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
 <svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
-<h3 class="font-bold text-sm mb-0.5 md:mb-1">Livraison rapide sous 48 à 72h</h3>
-<p class="text-xs text-brand-textgray">Partout en Europe</p>
+<h3 class="font-bold text-sm mb-0.5 md:mb-1">Échange standard simple</h3>
+<p class="text-xs text-brand-textgray">Consigne remboursée au retour de l'ancienne pièce</p>
 </div>
 </div>
 <div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
@@ -102,7 +99,7 @@
 <form id="quote-multistep" class="space-y-6" action="<%= copy.formAction %>" method="post" novalidate>
 <input type="text" name="website" value="" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
 
-<!-- ─────── ÉTAPE 1 : VÉHICULE + TYPE DE MOTEUR ─────── -->
+<!-- ─────── ÉTAPE 1 : VÉHICULE + TYPE DE PIÈCE ─────── -->
 <div data-step="1" class="space-y-6">
 
 <!-- Plaque / châssis -->
@@ -115,19 +112,32 @@
 <input type="text" name="plate" required value="<%= form.plate || '' %>" data-step1-field class="w-full border-0 p-0 text-sm focus:ring-0 placeholder-gray-300" placeholder="">
 </div>
 </fieldset>
-<p class="text-xs text-gray-400 mt-2">Ex: AB-123-CD ou VF1XXXXXXXXXXXXX ou M48.50</p>
+<p class="text-xs text-gray-400 mt-2">Ex: AB-123-CD ou VF1XXXXXXXXXXXXX ou 0AY341010A</p>
+</div>
+
+<!-- Type de pièce -->
+<div>
+<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Pièce recherchée</p>
+<div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Type de pièce">
+<% Object.keys(partTypes).forEach(function (key) { %>
+<label class="cursor-pointer">
+<input type="radio" name="partType" value="<%= key %>" class="peer sr-only" <%= form.partType === key ? 'checked' : '' %>>
+<span class="block text-center text-xs font-semibold border border-gray-300 rounded-lg py-2.5 px-1 text-gray-600 peer-checked:border-brand-red peer-checked:bg-brand-red/5 peer-checked:text-brand-red transition"><%= partTypes[key] %></span>
+</label>
+<% }) %>
+</div>
 </div>
 
 <% if (copy.showStateField) { %>
-<!-- État du moteur souhaité -->
+<!-- État souhaité -->
 <div>
 <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">État souhaité</p>
-<div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="État de la boîte">
+<div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="État de la pièce">
 <%
   var etatOptions = [
-    ['reconditionne', 'Reconditionné', 'Remise à neuf (pièces d\'usure remplacées), garantie 1 an — la plus fiable.'],
-    ['occasion', 'Occasion', 'Testée sur banc, km certifiés, garantie 6 mois — meilleur rapport qualité/prix.'],
-    ['je_sais_pas', 'Peu importe', 'Pas de préférence : on vous propose la meilleure boîte disponible pour votre véhicule.'],
+    ['reconditionne', 'Reconditionné', 'Remise à neuf (roulements, joints et pièces d\'usure remplacés) — la plus fiable.'],
+    ['occasion', 'Occasion', 'Contrôlée (jeu, denture, étanchéité), garantie 6 mois — meilleur rapport qualité/prix.'],
+    ['je_sais_pas', 'Peu importe', 'Pas de préférence : on vous propose la meilleure pièce disponible pour votre véhicule.'],
   ];
   etatOptions.forEach(function (opt) {
 %>
@@ -260,7 +270,6 @@ Envoyer ma demande
       if (counter) counter.textContent = '2 / 2';
       if (subtitle) subtitle.textContent = 'Étape 2 — Comment vous joindre';
       track('funnel_step2_view');
-      // Récap pour rappel + bouton modifier
       var plate = plateInput ? plateInput.value.trim() : '';
       if (recap) recap.textContent = plate || 'Véhicule renseigné';
       setTimeout(function(){ phoneInput && phoneInput.focus(); }, 50);
@@ -312,12 +321,9 @@ Envoyer ma demande
 <!-- END: Hero Section -->
 
 <script>
-  /* Champ « État » → masque « Complet / Nu » quand le moteur est reconditionné
-     (un moteur reconditionné est toujours complet). Self-guarding : ne fait rien
-     si le champ État n'est pas présent (landing /moteurs-reconditionnes). */
+  /* Champ « État » → info-bulle descriptive au survol/choix. */
   (function () {
     var etatInputs = document.querySelectorAll('[data-etat-input]');
-    var etBlock = document.querySelector('[data-enginetype-block]');
     if (!etatInputs.length) return;
     var hint = document.querySelector('[data-etat-hint]');
     var defaultHint = hint ? hint.textContent : '';
@@ -326,34 +332,22 @@ Envoyer ma demande
       var sel = document.querySelector('[data-etat-input]:checked');
       return sel ? sel.getAttribute('data-etat-desc') : '';
     }
-    function sync() {
-      var sel = document.querySelector('[data-etat-input]:checked');
-      var isRecond = !!(sel && sel.value === 'reconditionne');
-      if (etBlock) {
-        etBlock.classList.toggle('hidden', isRecond);
-        if (isRecond) document.querySelectorAll('[data-enginetype-input]').forEach(function (r) { r.checked = false; });
-      }
-      setHint(selectedDesc());
-    }
     etatInputs.forEach(function (r) {
-      r.addEventListener('change', sync);
+      r.addEventListener('change', function () { setHint(selectedDesc()); });
       var lbl = r.closest('label');
       if (lbl) {
-        // Aperçu au survol (desktop) : on montre le détail sans avoir à cliquer.
         lbl.addEventListener('mouseenter', function () { setHint(r.getAttribute('data-etat-desc')); });
         lbl.addEventListener('mouseleave', function () { setHint(selectedDesc()); });
       }
     });
-    sync();
+    setHint(selectedDesc());
   })();
 </script>
 
 <!-- BEGIN: Brands Section -->
 <section class="border-b border-gray-100 py-10">
 <div class="max-w-[1400px] mx-auto px-6">
-<p class="text-center text-xs font-bold text-gray-400 uppercase tracking-widest mb-8">Nos boîtes ont été montées par</p>
-<!-- Bande de logos en défilement auto infini. Masques dégradés sur les bords.
-     Les logos sont listés 2× (la piste fait 200% de large, on translate de -50%). -->
+<p class="text-center text-xs font-bold text-gray-400 uppercase tracking-widest mb-8">Nos pièces ont été montées par</p>
 <div class="brand-marquee relative overflow-hidden" style="-webkit-mask-image:linear-gradient(to right,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(to right,transparent,#000 8%,#000 92%,transparent);">
 <div class="brand-marquee-track flex items-center gap-12 w-max">
 <% var _brands = [
@@ -433,7 +427,7 @@ Envoyer ma demande
 </div>
 <div>
 <h4 class="font-bold mb-1"><%= copy.warrantyLabel %></h4>
-<p class="text-xs text-gray-400">Boîte complète, prête à monter.</p>
+<p class="text-xs text-gray-400">Pièce complète, prête à monter.</p>
 </div>
 </div>
 <div class="flex items-start gap-4">
@@ -450,8 +444,8 @@ Envoyer ma demande
 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </div>
 <div>
-<h4 class="font-bold mb-1">Boîtes testées</h4>
-<p class="text-xs text-gray-400">Chaque boîte est contrôlée avant expédition.</p>
+<h4 class="font-bold mb-1">Pièces testées</h4>
+<p class="text-xs text-gray-400">Chaque pièce est contrôlée avant expédition.</p>
 </div>
 </div>
 <div class="flex items-start gap-4">
@@ -472,8 +466,8 @@ Envoyer ma demande
 <!-- BEGIN: CTA Sourcing -->
 <section class="bg-brand-gray py-16 px-6">
 <div class="max-w-[1100px] mx-auto rounded-3xl bg-brand-dark text-white px-8 py-12 md:px-14 md:py-14 text-center shadow-xl">
-<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-3">Vous ne trouvez pas votre boîte ?</p>
-<h2 class="text-3xl md:text-4xl font-bold mb-4">On source votre boîte, même hors catalogue</h2>
+<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-3">Vous ne trouvez pas votre pièce ?</p>
+<h2 class="text-3xl md:text-4xl font-bold mb-4">On source votre pont ou votre boîte de transfert, même hors catalogue</h2>
 <p class="text-brand-textgray text-lg mb-9 max-w-2xl mx-auto">Donnez-nous votre plaque ou votre référence : on la trouve dans notre réseau et on vous envoie un devis personnalisé sous 24&nbsp;h.</p>
 <div class="flex flex-col sm:flex-row gap-4 justify-center">
 <a href="#quote-form" data-cta="sourcing" class="inline-flex items-center justify-center gap-2 bg-brand-red hover:bg-brand-redhover text-white font-bold py-4 px-8 rounded-lg transition shadow-lg shadow-brand-red/30">
@@ -496,18 +490,8 @@ Demander mon devis gratuit
 <div class="relative z-10">
 <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10">
 <div>
-<p class="text-brand-red font-bold text-xs uppercase tracking-wider mb-2">Ils nous font confiance ?</p>
+<p class="text-brand-red font-bold text-xs uppercase tracking-wider mb-2">Ils nous font confiance</p>
 <h2 class="text-3xl font-bold">Des clients satisfaits partout en Europe.</h2>
-</div>
-<div class="mt-4 md:mt-0 flex items-center gap-3">
-<span class="text-lg font-bold">Excellent</span>
-<div class="flex gap-1">
-<div class="w-6 h-6 bg-green-500 flex items-center justify-center"><svg class="w-4 h-4 fill-white" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg></div>
-<div class="w-6 h-6 bg-green-500 flex items-center justify-center"><svg class="w-4 h-4 fill-white" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg></div>
-<div class="w-6 h-6 bg-green-500 flex items-center justify-center"><svg class="w-4 h-4 fill-white" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg></div>
-<div class="w-6 h-6 bg-green-500 flex items-center justify-center"><svg class="w-4 h-4 fill-white" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg></div>
-<div class="w-6 h-6 bg-green-500 flex items-center justify-center"><svg class="w-4 h-4 fill-white" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg></div>
-</div>
 </div>
 </div>
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -519,7 +503,7 @@ Demander mon devis gratuit
 </div>
 </div>
 <div class="bg-brand-card rounded-xl border border-gray-800 overflow-hidden shadow-lg transition hover:shadow-2xl hover:border-gray-700 relative group">
-<img alt="Boîte de vitesse installée chez le partenaire Sun Motors" class="w-full h-64 object-cover" src="/images/temoignages/installation-sun-motors.png" loading="lazy">
+<img alt="Pièce installée chez le partenaire Sun Motors" class="w-full h-64 object-cover" src="/images/temoignages/installation-sun-motors.png" loading="lazy">
 <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-5 pt-14">
 <h3 class="text-base sm:text-lg font-bold text-white leading-snug mb-1">Installé chez Sun Motors</h3>
 <p class="text-xs sm:text-sm text-slate-300">Atelier partenaire · Validé par les pros</p>
@@ -552,38 +536,38 @@ Demander mon devis gratuit
 <div class="space-y-4">
 <details class="border-b border-gray-100 pb-4 group">
 <summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
-<span class="text-sm font-semibold text-gray-700">Les boîtes sont-elles vraiment testées ?</span>
+<span class="text-sm font-semibold text-gray-700">Comment fonctionne l'échange standard ?</span>
 <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </summary>
-<p class="text-xs text-gray-500 mt-3">Oui — chaque boîte est contrôlée (passage des rapports, mécatronique, étanchéité) avant expédition.</p>
+<p class="text-xs text-gray-500 mt-3">Vous recevez la pièce reconditionnée, vous nous renvoyez l'ancienne (l'étiquette de retour est fournie). La consigne éventuelle est remboursée à réception de votre ancienne pièce.</p>
+</details>
+<details class="border-b border-gray-100 pb-4 group">
+<summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
+<span class="text-sm font-semibold text-gray-700">Les pièces sont-elles vraiment contrôlées ?</span>
+<svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</summary>
+<p class="text-xs text-gray-500 mt-3">Oui — chaque pont, différentiel ou boîte de transfert est contrôlé (jeu, denture, étanchéité, rotation) avant expédition.</p>
 </details>
 <details class="border-b border-gray-100 pb-4 group">
 <summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
 <span class="text-sm font-semibold text-gray-700">Quels sont les délais de livraison ?</span>
 <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </summary>
-<p class="text-xs text-gray-500 mt-3">Expédition sous 48 à 72h partout en Europe une fois la boîte prête et le paiement validé.</p>
+<p class="text-xs text-gray-500 mt-3">Expédition sous 48 à 72h partout en Europe une fois la pièce prête et le paiement validé.</p>
 </details>
 <details class="border-b border-gray-100 pb-4 group">
 <summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
 <span class="text-sm font-semibold text-gray-700">La garantie est-elle incluse ?</span>
 <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </summary>
-<p class="text-xs text-gray-500 mt-3"><%= copy.warrantyLabel %> incluse — sans franchise kilométrique et transférable à la revente.</p>
-</details>
-<details class="border-b border-gray-100 pb-4 group">
-<summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
-<span class="text-sm font-semibold text-gray-700">Comment se passe le retour si besoin ?</span>
-<svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
-</summary>
-<p class="text-xs text-gray-500 mt-3">Procédure SAV simplifiée — déclaration en ligne, prise en charge logistique et remplacement ou remboursement selon le cas.</p>
+<p class="text-xs text-gray-500 mt-3"><%= copy.warrantyLabel %> incluse — sans franchise kilométrique. La durée exacte (6 mois à 2 ans) est confirmée sur votre devis selon la pièce.</p>
 </details>
 <details class="group">
 <summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
-<span class="text-sm font-semibold text-gray-700">Livrez-vous dans toute l'Europe ?</span>
+<span class="text-sm font-semibold text-gray-700">Quelles marques couvrez-vous ?</span>
 <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </summary>
-<p class="text-xs text-gray-500 mt-3">Oui — France, Belgique, Luxembourg, Allemagne, Espagne, Italie et toute l'Union Européenne.</p>
+<p class="text-xs text-gray-500 mt-3">BMW (xDrive ATC), Mercedes (4MATIC), Audi, Volkswagen, Renault/Nissan (Koleos, Kadjar, Qashqai, X-Trail), Kia/Hyundai, Toyota, Land Rover, Porsche… Donnez-nous votre plaque : on vérifie la compatibilité exacte.</p>
 </details>
 </div>
 </div>
@@ -592,7 +576,7 @@ Demander mon devis gratuit
 <div class="bg-brand-red text-white p-8 rounded-xl relative overflow-hidden flex flex-col justify-center">
 <div class="absolute inset-0 opacity-10 bg-[url('https://placehold.co/500x500?text=Engine+Pattern')] bg-cover bg-center mix-blend-multiply"></div>
 <div class="relative z-10">
-<h2 class="text-2xl font-bold mb-4 leading-tight">Besoin d'aide pour<br>trouver la bonne boîte ?</h2>
+<h2 class="text-2xl font-bold mb-4 leading-tight">Besoin d'aide pour<br>identifier la bonne pièce ?</h2>
 <p class="text-sm mb-8 text-white/90">Notre équipe est là pour vous<br>accompagner.</p>
 <a class="inline-flex w-full sm:w-auto justify-center bg-white text-brand-red font-bold py-3 px-6 rounded-lg hover:bg-gray-100 transition items-center gap-2" href="/contact">
             Nous contacter <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
@@ -607,7 +591,7 @@ Demander mon devis gratuit
 <section class="bg-white pt-4 pb-16 px-6">
 <div class="max-w-[1100px] mx-auto rounded-3xl border border-gray-200 bg-brand-gray px-8 py-12 md:px-14 md:py-14 text-center">
 <h2 class="text-3xl md:text-4xl font-bold mb-4 text-gray-900">Une question sans réponse ?</h2>
-<p class="text-gray-600 text-lg mb-9 max-w-2xl mx-auto">Demandez votre devis gratuit : notre équipe technique vous répond sous 24&nbsp;h, par mail ou par téléphone, avec le prix, les photos et la disponibilité de votre boîte.</p>
+<p class="text-gray-600 text-lg mb-9 max-w-2xl mx-auto">Demandez votre devis gratuit : notre équipe technique vous répond sous 24&nbsp;h, par mail ou par téléphone, avec le prix, les photos et la disponibilité de votre pièce.</p>
 <div class="flex flex-col sm:flex-row gap-4 justify-center">
 <a href="#quote-form" data-cta="final-faq" class="inline-flex items-center justify-center gap-2 bg-brand-red hover:bg-brand-redhover text-white font-bold py-4 px-8 rounded-lg transition shadow-lg shadow-brand-red/30">
 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
@@ -672,9 +656,8 @@ Demander mon devis gratuit
   var form = document.getElementById('quote-form');
   if (!sticky || !form) return;
   function onScroll() {
-    // Affiche le CTA dès qu'on a scrollé au-delà du hero/formulaire
     var heroBottom = form.getBoundingClientRect().bottom;
-    var show = heroBottom < 0; // le formulaire du hero est passé au-dessus du viewport
+    var show = heroBottom < 0;
     sticky.classList.toggle('opacity-0', !show);
     sticky.classList.toggle('pointer-events-none', !show);
   }
@@ -713,7 +696,7 @@ Demander mon devis gratuit
   window.dataLayer.push({
     event: 'lead_submitted',
     lead_source: '<%= copy.funnelName %>',
-    lead_category: 'boite',
+    lead_category: 'pont',
     lead_ref: (c && c.ref) || '',
     page_path: window.location.pathname
   });

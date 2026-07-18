@@ -1,18 +1,20 @@
 'use strict';
 
 /**
- * Landing « Moteur d'occasion » : page publique de capture leads.
+ * Landing « Pont / différentiel / boîte de transfert » : page publique de capture leads.
  *
- *   GET  /moteurs           → page de vente (form hero + final CTA)
- *   POST /moteurs/devis     → traitement du formulaire (sync, sans JS)
+ *   GET  /ponts-differentiels          → page de vente (variante ponts & différentiels)
+ *   POST /ponts-differentiels/devis    → traitement du formulaire (sync, sans JS)
+ *   GET  /boites-de-transfert          → même page, copy « boîte de transfert » (message match Ads)
+ *   POST /boites-de-transfert/devis    → traitement du formulaire
  *
  * Le lead est upserté dans AbandonedCart (= Lead) via le service
- * `leadCapture.captureContactLead` avec captureSource = 'landing_moteurs'.
+ * `leadCapture.captureContactLead` avec captureSource = 'landing_ponts'.
  * L'attribution UTM/gclid est lue depuis `req.session.attribution`
  * (alimenté par le middleware `captureAttribution`).
  *
- * Le commercial voit les leads dans /admin/activite-panier (filtré sur
- * captureSource=landing_moteurs).
+ * Le commercial voit les leads dans /admin/devis-moteurs (badge Pont/Transfert)
+ * et /admin/activite-panier (filtre captureSource=landing_ponts).
  */
 
 const mongoose = require('mongoose');
@@ -28,80 +30,88 @@ const { buildHreflangSet } = require('../services/i18n');
 const { getLandingArticles } = require('../services/landingArticles');
 const brand = require('../config/brand');
 
-const LANDING_PATH = '/boites-vitesse';
-const RECOND_PATH = '/boites-vitesse-reconditionnees';
-const CAPTURE_SOURCE = 'landing_boites';
+const LANDING_PATH = '/ponts-differentiels';
+const TRANSFERT_PATH = '/boites-de-transfert';
+const CAPTURE_SOURCE = 'landing_ponts';
+
+/* Types de pièce proposés dans le formulaire (remplace « complet/nu » des moteurs).
+ * La valeur remonte dans requested.vehicle → visible directement par le commercial. */
+const PART_TYPES = {
+  pont_avant: 'Pont avant',
+  pont_arriere: 'Pont arrière',
+  differentiel: 'Différentiel',
+  boite_transfert: 'Boîte de transfert',
+};
 
 /* Deux landing pages partagent la MÊME vue + le MÊME tunnel de devis, avec une
  * "copy" (message) adaptée à l'intention de recherche (message match Google Ads) :
- *  - /moteurs                → occasion (garantie 6 mois)
- *  - /moteurs-reconditionnes → reconditionné (garantie 1 an)
+ *  - /ponts-differentiels → ponts & différentiels (campagne « Ponts & Différentiels »)
+ *  - /boites-de-transfert → boîtes de transfert  (campagne « Boîtes de Transfert »)
  * La variante est déduite de l'URL → tous les renderPage existants s'adaptent. */
 function getVariant(req) {
   const p = String((req && (req.path || req.originalUrl)) || '');
-  return p.indexOf('reconditionne') !== -1 ? 'reconditionne' : 'occasion';
+  return p.indexOf('transfert') !== -1 ? 'transfert' : 'ponts';
 }
 
 const VARIANTS = {
-  occasion: {
+  ponts: {
     path: LANDING_PATH,
-    view: 'boite-occasion/index',
-    conditionLabel: "Boîte d'occasion",
-    title: `Boîte de vitesse d'occasion testée, garantie 6 mois — ${brand.NAME}`,
+    view: 'pont-transfert/index',
+    conditionLabel: 'Pont / différentiel',
+    title: `Pont & différentiel reconditionnés, échange standard garanti — ${brand.NAME}`,
     metaDescription:
-      "Boîtes de vitesse d'occasion (automatique, DSG, manuelle) testées et contrôlées, kilométrage certifié, garantie 6 mois sans franchise. Mécatronique, échange standard. Devis sous 24h.",
-    jsonLdServiceType: "Vente de boîtes de vitesse d'occasion testées et garanties",
+      'Ponts avant/arrière et différentiels reconditionnés en échange standard : roulements et joints neufs, contrôle jeu/denture, garantie jusqu’à 2 ans. Devis sous 24h, livraison rapide.',
+    jsonLdServiceType: 'Vente de ponts et différentiels reconditionnés en échange standard',
     jsonLdDescription:
-      "Boîtes de vitesse d'occasion (automatique, DSG, manuelle) testées et contrôlées, kilométrage certifié, garantie 6 mois sans franchise transférable à la revente. Devis personnalisé sous 24h.",
+      'Ponts avant/arrière et différentiels reconditionnés (roulements, joints et pièces d’usure remplacés), contrôlés avant expédition, garantie jusqu’à 2 ans. Échange standard. Devis personnalisé sous 24h.',
     copy: {
-      formAction: '/boites-vitesse/devis',
-      funnelName: 'boite-occasion',
-      // Affiche le champ « État » (recond / occasion / je ne sais pas) — la
-      // landing /boites-vitesse est généraliste. Sur /boites-vitesse-reconditionnees
-      // l'état est implicite (reconditionné) → champ masqué.
+      formAction: '/ponts-differentiels/devis',
+      funnelName: 'pont-differentiel',
       showStateField: true,
-      eyebrow: "Boîtes de vitesse d'occasion premium",
-      h1Html: 'Des boîtes testées,<br>garanties,<br><span class="text-brand-red">prêtes à embrayer.</span>',
-      sub: 'Boîtes automatiques, DSG et manuelles testées, contrôlées et prêtes à être expédiées rapidement partout en Europe.',
-      warrantyLabel: "Garantie 6 mois",
-      qualitySubtitle: 'Un protocole de contrôle en 7 étapes, pour une fiabilité maximale.',
+      defaultPartType: '',
+      eyebrow: 'Ponts & différentiels reconditionnés',
+      h1Html: 'Des ponts et différentiels<br>reconditionnés,<br><span class="text-brand-red">prêts à reprendre la route.</span>',
+      sub: 'Ponts avant/arrière et différentiels reconditionnés en échange standard : roulements et joints neufs, contrôle complet, expédition rapide partout en Europe.',
+      warrantyLabel: 'Garantie jusqu’à 2 ans',
+      qualitySubtitle: 'Un reconditionnement en 7 étapes, pour une fiabilité maximale.',
       steps: [
         { n: '01', icon: 'doc', title: 'Identification', desc: 'Vérification de la référence et compatibilité' },
-        { n: '02', icon: 'wrench', title: 'Démontage partiel', desc: 'Dépose réalisée avec soin par nos experts' },
-        { n: '03', icon: 'clean', title: 'Nettoyage', desc: 'Nettoyage complet et dégraissage' },
-        { n: '04', icon: 'gear', title: 'Tests & Contrôles', desc: 'Passage des rapports, mécatronique, étanchéité…', highlight: true },
-        { n: '05', icon: 'cog', title: 'Remontage', desc: 'Remontage des éléments (cas échéant)' },
-        { n: '06', icon: 'shield', title: 'Édition du rapport', desc: 'Rapport de test + attestation de conformité' },
+        { n: '02', icon: 'wrench', title: 'Démontage complet', desc: 'Ouverture et inspection du carter' },
+        { n: '03', icon: 'clean', title: 'Nettoyage & contrôle', desc: 'Dégraissage et métrologie des pièces' },
+        { n: '04', icon: 'gear', title: 'Remise à neuf', desc: 'Roulements, joints et pièces d’usure remplacés', highlight: true },
+        { n: '05', icon: 'cog', title: 'Réglages', desc: 'Précharge et jeu de denture aux tolérances constructeur' },
+        { n: '06', icon: 'shield', title: 'Tests & rapport', desc: 'Contrôle jeu/denture/étanchéité + attestation' },
         { n: '07', icon: 'truck', title: 'Expédition', desc: 'Emballage sécurisé et expédition rapide' },
       ],
     },
   },
-  reconditionne: {
-    path: RECOND_PATH,
-    view: 'boite-occasion/index',
-    conditionLabel: 'Boîte reconditionnée',
-    title: `Boîte de vitesse reconditionnée, comme neuve, garantie 1 an — ${brand.NAME}`,
+  transfert: {
+    path: TRANSFERT_PATH,
+    view: 'pont-transfert/index',
+    conditionLabel: 'Boîte de transfert',
+    title: `Boîte de transfert reconditionnée, échange standard garanti — ${brand.NAME}`,
     metaDescription:
-      "Boîtes de vitesse reconditionnées (automatique, DSG, mécatronique) : pièces d'usure remplacées, contrôles complets, garantie 1 an. Échange standard. Devis sous 24h, livraison partout en Europe.",
-    jsonLdServiceType: 'Vente de boîtes de vitesse reconditionnées garanties 1 an',
+      'Boîtes de transfert reconditionnées en échange standard (BMW xDrive ATC, Mercedes 4MATIC, 4x4 & SUV) : chaîne, roulements et joints contrôlés, garantie jusqu’à 2 ans. Devis sous 24h.',
+    jsonLdServiceType: 'Vente de boîtes de transfert reconditionnées en échange standard',
     jsonLdDescription:
-      "Boîtes de vitesse reconditionnées : remise à neuf (pièces d'usure remplacées, mécatronique contrôlée), garantie 1 an. Devis personnalisé sous 24h.",
+      'Boîtes de transfert reconditionnées (chaîne, roulements, actuateur et pièces d’usure contrôlés ou remplacés), testées avant expédition, garantie jusqu’à 2 ans. Échange standard. Devis personnalisé sous 24h.',
     copy: {
-      formAction: '/boites-vitesse-reconditionnees/devis',
-      funnelName: 'boite-reconditionne',
-      showStateField: false,
-      eyebrow: 'Boîtes de vitesse reconditionnées premium',
-      h1Html: 'Des boîtes reconditionnées,<br>comme neuves,<br><span class="text-brand-red">garanties 1 an.</span>',
-      sub: "Pièces d'usure remplacées, mécatronique contrôlée, testées — prêtes à rouler, expédiées rapidement partout en Europe.",
-      warrantyLabel: 'Garantie 1 an',
-      qualitySubtitle: 'Une remise à neuf en 7 étapes, pour une fiabilité maximale.',
+      formAction: '/boites-de-transfert/devis',
+      funnelName: 'boite-transfert',
+      showStateField: true,
+      defaultPartType: 'boite_transfert',
+      eyebrow: 'Boîtes de transfert reconditionnées',
+      h1Html: 'Des boîtes de transfert<br>reconditionnées,<br><span class="text-brand-red">testées et garanties.</span>',
+      sub: 'BMW xDrive (ATC), Mercedes 4MATIC, 4x4 et SUV : boîtes de transfert reconditionnées en échange standard, contrôlées avant expédition, livrées rapidement partout en Europe.',
+      warrantyLabel: 'Garantie jusqu’à 2 ans',
+      qualitySubtitle: 'Un reconditionnement en 7 étapes, pour une fiabilité maximale.',
       steps: [
         { n: '01', icon: 'doc', title: 'Identification', desc: 'Vérification de la référence et compatibilité' },
-        { n: '02', icon: 'wrench', title: 'Démontage complet', desc: 'Dépose intégrale de la boîte par nos experts' },
-        { n: '03', icon: 'clean', title: 'Nettoyage & contrôle', desc: 'Dégraissage et métrologie des pièces' },
-        { n: '04', icon: 'gear', title: 'Remise à neuf', desc: "Remplacement des pièces d'usure + mécatronique", highlight: true },
+        { n: '02', icon: 'wrench', title: 'Démontage complet', desc: 'Ouverture et inspection du carter' },
+        { n: '03', icon: 'clean', title: 'Nettoyage & contrôle', desc: 'Chaîne, pignons et actuateur inspectés' },
+        { n: '04', icon: 'gear', title: 'Remise à neuf', desc: 'Chaîne, roulements et joints remplacés si usés', highlight: true },
         { n: '05', icon: 'cog', title: 'Remontage', desc: 'Remontage aux couples constructeur' },
-        { n: '06', icon: 'shield', title: 'Tests & rapport', desc: 'Passage des rapports + attestation de conformité' },
+        { n: '06', icon: 'shield', title: 'Tests & rapport', desc: 'Contrôle rotation/étanchéité + attestation' },
         { n: '07', icon: 'truck', title: 'Expédition', desc: 'Emballage sécurisé et expédition rapide' },
       ],
     },
@@ -120,14 +130,13 @@ function generateQuoteRef() {
 
 /* Template HTML brandé pour l'accusé réception client.
  * Utilise des tables inline (compat email client maximale). */
-function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUrl, brandObj }) {
+function buildAckEmailHtml({ firstName, quoteRef, plate, partTypeLabel, brandObj }) {
   const safeFirstName = firstName ? String(firstName).replace(/[<>&"]/g, '') : '';
   const safePlate = plate ? String(plate).replace(/[<>&"]/g, '') : '';
-  const safeEngineType = engineTypeLabel || '—';
+  const safePartType = partTypeLabel || '—';
   const dateOnly = new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
   const timeOnly = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
   // L'URL du logo et du site doivent être absolues (publiques) pour s'afficher dans les emails.
-  // En dev local, baseUrl pointe sur localhost → on force autoliva.com pour les assets email.
   const publicSite = 'https://autoliva.com';
   const logoUrl = publicSite + '/images/logo-autoliva.png';
   const phoneIntl = brandObj.PHONE_MOTEUR_INTL || '+33465848539';
@@ -185,8 +194,8 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
           </tr>
           <tr>
             <td style="padding:18px 20px;width:50%;border-right:1px solid #eef0f3;">
-              <p style="margin:0 0 4px;font-size:11px;color:#94a3b8;font-weight:500;">Type demandé</p>
-              <p style="margin:0;font-size:14px;color:#0f172a;">${safeEngineType}</p>
+              <p style="margin:0 0 4px;font-size:11px;color:#94a3b8;font-weight:500;">Pièce demandée</p>
+              <p style="margin:0;font-size:14px;color:#0f172a;">${safePartType}</p>
             </td>
             <td style="padding:18px 20px;width:50%;">
               <p style="margin:0 0 4px;font-size:11px;color:#94a3b8;font-weight:500;">Délai de retour</p>
@@ -207,7 +216,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
               <div style="width:24px;height:24px;border-radius:50%;background:#0f172a;color:#ffffff;text-align:center;line-height:24px;font-weight:700;font-size:12px;">1</div>
             </td>
             <td valign="top">
-              <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.6;"><strong style="color:#0f172a;">Analyse de votre demande.</strong> On vérifie la disponibilité de la boîte et on prépare votre devis personnalisé.</p>
+              <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.6;"><strong style="color:#0f172a;">Analyse de votre demande.</strong> On vérifie la disponibilité de la pièce et on prépare votre devis personnalisé.</p>
             </td>
           </tr>
         </table>
@@ -224,7 +233,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:6px;">
                 <tr>
                   <td style="padding:11px 14px;background:#fafbfc;border-left:3px solid #10b981;border-radius:4px;">
-                    <p style="margin:0;font-size:13px;color:#1f2937;line-height:1.55;"><strong style="color:#047857;">En stock atelier —</strong> boîte déjà testée, expédition sous <strong>48 à 72h</strong> après accord.</p>
+                    <p style="margin:0;font-size:13px;color:#1f2937;line-height:1.55;"><strong style="color:#047857;">En stock atelier —</strong> pièce déjà contrôlée, expédition sous <strong>48 à 72h</strong> après accord.</p>
                   </td>
                 </tr>
               </table>
@@ -232,7 +241,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:6px;">
                 <tr>
                   <td style="padding:11px 14px;background:#fafbfc;border-left:3px solid #3b82f6;border-radius:4px;">
-                    <p style="margin:0;font-size:13px;color:#1f2937;line-height:1.55;"><strong style="color:#1d4ed8;">Sourcing réseau —</strong> on trouve la boîte, on la réceptionne, contrôle obligatoire, puis expédition. <strong>Délai confirmé dans votre devis</strong>.</p>
+                    <p style="margin:0;font-size:13px;color:#1f2937;line-height:1.55;"><strong style="color:#1d4ed8;">Sourcing réseau —</strong> on trouve la pièce, on la réceptionne, contrôle obligatoire, puis expédition. <strong>Délai confirmé dans votre devis</strong>.</p>
                   </td>
                 </tr>
               </table>
@@ -247,7 +256,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
               <div style="width:24px;height:24px;border-radius:50%;background:#0f172a;color:#ffffff;text-align:center;line-height:24px;font-weight:700;font-size:12px;">3</div>
             </td>
             <td valign="top">
-              <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.6;"><strong style="color:#0f172a;">Aucune boîte n'est expédiée sans contrôle.</strong> Passage des rapports, étanchéité, mécatronique — même quand on doit sourcer la boîte pour vous.</p>
+              <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.6;"><strong style="color:#0f172a;">Aucune pièce n'est expédiée sans contrôle.</strong> Jeu, denture, étanchéité — même quand on doit sourcer la pièce pour vous.</p>
             </td>
           </tr>
         </table>
@@ -256,7 +265,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
       <!-- TRUST STRIP : une ligne discrète au lieu d'un gros bloc -->
       <tr><td style="padding:24px 32px 8px;">
         <p style="margin:0;padding:14px 18px;background:#fafbfc;border:1px solid #eef0f3;border-radius:8px;font-size:13px;color:#475569;text-align:center;line-height:1.5;">
-          Contrôle complet · Kilométrage certifié · Garantie incluse sans franchise
+          Contrôle complet · Échange standard · Garantie incluse sans franchise
         </p>
       </td></tr>
 
@@ -275,7 +284,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
       <!-- FOOTER -->
       <tr><td style="padding:18px 32px 28px;">
         <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.5;">
-          Autoliva — Spécialiste boîtes de vitesse testées et garanties.<br>
+          Autoliva — Spécialiste transmission : ponts, différentiels et boîtes de transfert testés et garantis.<br>
           <a href="mailto:contact@autoliva.com" style="color:#94a3b8;text-decoration:underline;">contact@autoliva.com</a> · <a href="tel:${phoneIntl}" style="color:#94a3b8;text-decoration:none;">${phoneDisplay}</a> · <a href="${publicSite}" style="color:#94a3b8;text-decoration:underline;">autoliva.com</a><br>
           Vos données sont confidentielles et traitées conformément au RGPD. Référence à conserver : <strong style="color:#475569;font-family:'SF Mono',monospace;">${quoteRef}</strong>
         </p>
@@ -290,40 +299,17 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, engineTypeLabel, baseUr
 }
 
 /* Données paramétriques affichées dans la vue.
- * Centralisé ici pour pouvoir ajuster sans toucher l'EJS.
- *
- * Stats marketing : « Plus de 1 000 moteurs livrés depuis 2019 » a été
- * validé par carparts.france@gmail.com (mai 2026). Les autres valeurs
- * sont à confirmer (marqueurs TODO ci-dessous). */
+ * Réutilise les mêmes preuves/partenaires que les landings moteurs & boîtes
+ * (mêmes photos réelles, mêmes partenaires — l'atelier est le même). */
 const LANDING_DATA = {
-  stockReady: 247,         // TODO confirmer
-  networkRefs: 2000,       // TODO confirmer
-  deliveredSince2019: 1000, // validé
-  workshop: {
-    city: 'Lille',
-    department: '59',
-    surfaceM2: 480,        // TODO confirmer
-    benchCount: 3,         // TODO confirmer
-    technicianCount: 7,    // TODO confirmer
-    sinceYear: 2019,
-  },
-  garages: 247,            // TODO confirmer
+  deliveredSince2019: 1000, // validé (toutes pièces confondues)
   installers: [
-    // TODO remplacer par les vrais partenaires
     { mono: 'PO', name: 'Centre Porsche', cat: 'Concessionnaire' },
     { mono: 'ME', name: 'Concession Mercedes', cat: 'Concessionnaire' },
     { mono: 'VW', name: 'Centre Volkswagen', cat: 'Concessionnaire' },
     { mono: 'RE', name: 'Concession Renault', cat: 'Concessionnaire' },
     { mono: 'MA', name: 'Mougins Auto Sport', cat: 'Spécialiste Porsche' },
     { mono: 'F44', name: 'Flat 44', cat: 'Indépendant Porsche' },
-  ],
-  recentDeliveries: [
-    { brand: 'Volkswagen', model: 'Golf V · 1.9 TDI', power: '105 ch', code: 'BKD' },
-    { brand: 'Peugeot', model: '308 · 2.0 HDi', power: '136 ch', code: 'DW10' },
-    { brand: 'Audi', model: 'A6 · 3.0 V6 TDI', power: '218 ch', code: 'BMK' },
-    { brand: 'Volkswagen', model: 'Polo · 1.6 TDI', power: '90 ch', code: 'CAYC' },
-    { brand: 'Audi', model: 'A3 · 2.0 TSI', power: '200 ch', code: 'CAVB' },
-    { brand: 'BMW', model: 'Série 3 · 2.0d', power: '177 ch', code: 'N47' },
   ],
 };
 
@@ -345,8 +331,7 @@ function normalizePhone(value) {
 }
 
 function normalizePlate(value) {
-  // Le champ accepte plaque (~9), code moteur (~10) OU VIN/n° de châssis (17 car.).
-  // L'ancienne limite à 16 tronquait le 17ᵉ caractère des VIN → on élargit à 32.
+  // Le champ accepte plaque (~9), référence OEM (~12) OU VIN/n° de châssis (17 car.).
   return trim(value).toUpperCase().replace(/\s+/g, '').slice(0, 32);
 }
 
@@ -409,23 +394,25 @@ function buildServiceJsonLd({ baseUrl, v }) {
   });
 }
 
-function buildInitialForm(req) {
+function buildInitialForm(req, variant) {
   const q = (req && req.query && typeof req.query === 'object') ? req.query : {};
-  const engineTypeRaw = trim(q.engineType).toLowerCase();
+  const v = VARIANTS[variant] || VARIANTS.ponts;
+  const partTypeRaw = trim(q.partType).toLowerCase();
   return {
     plate: trim(q.plate || q.immat),
     fullName: trim(q.fullName),
     email: trim(q.email),
     phone: trim(q.phone),
     message: '',
-    engineType: engineTypeRaw === 'complet' || engineTypeRaw === 'nu' ? engineTypeRaw : '',
+    partType: PART_TYPES[partTypeRaw] ? partTypeRaw : (v.copy.defaultPartType || ''),
+    etat: '',
     website: '', // honeypot
   };
 }
 
 async function renderPage(res, req, opts) {
   const variant = opts.variant || getVariant(req);
-  const v = VARIANTS[variant] || VARIANTS.occasion;
+  const v = VARIANTS[variant] || VARIANTS.ponts;
   const baseUrl = getPublicBaseUrlFromReq(req);
   const langPrefix = req.lang === 'en' ? '/en' : '';
   const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
@@ -436,7 +423,7 @@ async function renderPage(res, req, opts) {
   const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}${v.path}` : `${langPrefix}${v.path}`;
 
   // Vrais articles blog pertinents (ne throw jamais → [] en repli).
-  const articles = await getLandingArticles('boite', 3);
+  const articles = await getLandingArticles(variant === 'transfert' ? 'transfert' : 'pont', 3);
 
   return res.status(opts.statusCode || 200).render(v.view, {
     articles,
@@ -451,6 +438,7 @@ async function renderPage(res, req, opts) {
     jsonLd: buildServiceJsonLd({ baseUrl, v }),
     landing: LANDING_DATA,
     copy: v.copy,
+    partTypes: PART_TYPES,
     form: opts.form,
     errorMessage: opts.errorMessage || null,
     successMessage: opts.successMessage || null,
@@ -466,7 +454,7 @@ async function getLanding(req, res, next) {
     if (req.session && typeof req.session === 'object') {
       req.session.moteurFormTs = Date.now();
     }
-    return await renderPage(res, req, { form: buildInitialForm(req) });
+    return await renderPage(res, req, { form: buildInitialForm(req, getVariant(req)) });
   } catch (err) {
     return next(err);
   }
@@ -475,31 +463,26 @@ async function getLanding(req, res, next) {
 async function postDevis(req, res, next) {
   try {
     const variant = getVariant(req);
-    const isReconVariant = variant === 'reconditionne';
+    const v = VARIANTS[variant] || VARIANTS.ponts;
     const body = (req.body && typeof req.body === 'object') ? req.body : {};
 
-    // État choisi par le client (champ « État » sur /moteurs). Sur la landing
-    // /moteurs-reconditionnes, l'état est implicite → forcé à reconditionné.
+    // État choisi par le client (reconditionné / occasion / je ne sais pas).
     const etatRaw = trim(body.etat).toLowerCase();
-    let etat;
-    if (isReconVariant) etat = 'reconditionne';
-    else if (etatRaw === 'reconditionne' || etatRaw === 'occasion' || etatRaw === 'je_sais_pas') etat = etatRaw;
-    else etat = '';
-    // Libellé condition → requested.vehicle → deriveCondition côté back-office
-    // (reconditionné / occasion / « à préciser » = à vérifier par le commercial).
-    const conditionLabel = etat === 'reconditionne' ? 'Boîte reconditionnée'
-      : etat === 'occasion' ? "Boîte d'occasion"
-      : etat === 'je_sais_pas' ? 'Boîte (état à préciser)'
-      : (VARIANTS[variant] || VARIANTS.occasion).conditionLabel;
+    const etat = (etatRaw === 'reconditionne' || etatRaw === 'occasion' || etatRaw === 'je_sais_pas') ? etatRaw : '';
 
-    // Complet / Nu : sans objet pour un moteur reconditionné (toujours complet) →
-    // ignoré dans ce cas, même si le champ est transmis.
-    const engineTypeRaw = trim(body.engineType).toLowerCase();
-    const engineType = (etat !== 'reconditionne' && (engineTypeRaw === 'complet' || engineTypeRaw === 'nu')) ? engineTypeRaw : '';
-    const engineTypeLabel = engineType === 'complet'
-      ? 'Boîte complète (avec périphériques)'
-      : engineType === 'nu' ? 'Boîte nue (carter seul)' : '';
-    const composedMessage = engineTypeLabel ? `Type demandé : ${engineTypeLabel}` : '';
+    // Type de pièce (pont AV / pont AR / différentiel / boîte de transfert).
+    const partTypeRaw = trim(body.partType).toLowerCase();
+    const partType = PART_TYPES[partTypeRaw] ? partTypeRaw : '';
+    const partTypeLabel = partType ? PART_TYPES[partType] : '';
+
+    // Libellé condition → requested.vehicle → deriveCondition côté back-office.
+    const baseLabel = partTypeLabel || v.conditionLabel;
+    const conditionLabel = etat === 'reconditionne' ? `${baseLabel} reconditionné(e)`
+      : etat === 'occasion' ? `${baseLabel} d'occasion`
+      : etat === 'je_sais_pas' ? `${baseLabel} (état à préciser)`
+      : baseLabel;
+
+    const composedMessage = partTypeLabel ? `Pièce demandée : ${partTypeLabel}` : '';
 
     const form = {
       plate: normalizePlate(body.plate || body.immat),
@@ -507,7 +490,7 @@ async function postDevis(req, res, next) {
       email: trim(body.email).slice(0, 160),
       phone: trim(body.phone).slice(0, 24),
       message: composedMessage,
-      engineType,
+      partType,
       etat,
       website: trim(body.website), // honeypot
     };
@@ -515,7 +498,7 @@ async function postDevis(req, res, next) {
     // Honeypot : faux succès silencieux
     if (form.website) {
       return await renderPage(res, req, {
-        form: buildInitialForm({ query: {} }),
+        form: buildInitialForm({ query: {} }, variant),
         successMessage: 'Merci ! Votre demande a bien été envoyée. Un technicien vous recontacte sous 24h.',
       });
     }
@@ -538,11 +521,10 @@ async function postDevis(req, res, next) {
       });
     }
 
-    // Validation : plaque/châssis/code moteur + téléphone obligatoires
+    // Validation : plaque/châssis/référence + téléphone obligatoires
     const cleanEmail = normalizeEmail(form.email);
     // Stocke le numéro au format canonique E.164 (+33…) dès la capture : garantit
     // que TOUS les SMS ultérieurs (accusé + devis) partent (Brevo exige E.164).
-    // Si le numéro n'est pas normalisable, on garde la saisie nettoyée (lead non perdu).
     const cleanPhone = normalizePhoneFR(form.phone) || normalizePhone(form.phone);
 
     if (!form.plate) {
@@ -568,12 +550,10 @@ async function postDevis(req, res, next) {
     }
 
     // Split nom complet → firstName / lastName
-    // Important : si le client n'a saisi qu'un mot court (probablement un nom seul),
-    // on évite l'effet "Bonjour belabbes" en utilisant seulement les prénoms plausibles.
     const nameParts = form.fullName.split(/\s+/).filter(Boolean);
     const firstNameRaw = nameParts.shift() || '';
     const lastName = nameParts.join(' ');
-    // Si le client tape un seul mot, on ne sait pas si c'est prénom ou nom → on n'utilise PAS comme prénom dans le ACK
+    // Si le client tape un seul mot, on ne sait pas si c'est prénom ou nom → pas de « Bonjour <nom> »
     const firstName = (firstNameRaw && lastName) ? firstNameRaw : '';
     const displayName = form.fullName || cleanEmail || cleanPhone;
 
@@ -581,30 +561,30 @@ async function postDevis(req, res, next) {
     const quoteRef = generateQuoteRef();
 
     // 1) Email interne (notification commercial)
-    const internalSubject = `[Boîte de vitesse] ${quoteRef} — ${displayName}${form.plate ? ` — ${form.plate}` : ''}`.slice(0, 180);
+    const internalSubject = `[Pont/Transfert] ${quoteRef} — ${displayName}${form.plate ? ` — ${form.plate}` : ''}`.slice(0, 180);
     const internalHtml = `
       <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
-        <h2 style="margin:0 0 8px 0;">Nouveau lead — Boîte de vitesse (${escapeHtml(conditionLabel)})</h2>
+        <h2 style="margin:0 0 8px 0;">Nouveau lead — Pont / Transfert (${escapeHtml(conditionLabel)})</h2>
         <p style="margin:0 0 12px 0;"><strong>N° de dossier :</strong> <code style="background:#f3f4f6;padding:2px 6px;border-radius:4px;">${escapeHtml(quoteRef)}</code></p>
-        <p style="margin:0 0 12px 0;"><strong>Source :</strong> ${CAPTURE_SOURCE} (landing /boites-vitesse)</p>
+        <p style="margin:0 0 12px 0;"><strong>Source :</strong> ${CAPTURE_SOURCE} (landing ${escapeHtml(v.path)})</p>
         <p style="margin:0 0 12px 0;"><strong>Nom :</strong> ${escapeHtml(displayName)}</p>
         ${cleanEmail ? `<p style="margin:0 0 12px 0;"><strong>Email :</strong> <a href="mailto:${escapeHtml(cleanEmail)}">${escapeHtml(cleanEmail)}</a></p>` : ''}
         ${cleanPhone ? `<p style="margin:0 0 12px 0;"><strong>Téléphone :</strong> <a href="tel:${escapeHtml(cleanPhone)}">${escapeHtml(cleanPhone)}</a></p>` : ''}
-        ${form.plate ? `<p style="margin:0 0 12px 0;"><strong>Immat/châssis/code :</strong> ${escapeHtml(form.plate)}</p>` : ''}
-        ${engineTypeLabel ? `<p style="margin:0 0 12px 0;"><strong>Type demandé :</strong> ${escapeHtml(engineTypeLabel)}</p>` : ''}
+        ${form.plate ? `<p style="margin:0 0 12px 0;"><strong>Immat/châssis/réf :</strong> ${escapeHtml(form.plate)}</p>` : ''}
+        ${partTypeLabel ? `<p style="margin:0 0 12px 0;"><strong>Pièce demandée :</strong> ${escapeHtml(partTypeLabel)}</p>` : ''}
         ${form.message ? `<hr/><p style="margin:0 0 8px 0;"><strong>Message :</strong></p><div style="font-size:14px;">${escapeHtml(form.message).replace(/\r?\n/g, '<br/>')}</div>` : ''}
-        <p style="margin-top:16px;color:#6b7280;font-size:12px;">Détails complets dans /admin/devis-moteurs (filtre: Boîte).</p>
+        <p style="margin-top:16px;color:#6b7280;font-size:12px;">Détails complets dans /admin/devis-moteurs (badge : Pont/Transfert).</p>
       </div>`.trim();
 
     const internalText = [
-      `Nouveau lead — Boîte de vitesse (${conditionLabel})`,
+      `Nouveau lead — Pont / Transfert (${conditionLabel})`,
       `N° de dossier: ${quoteRef}`,
-      `Source: ${CAPTURE_SOURCE} (landing /boites-vitesse)`,
+      `Source: ${CAPTURE_SOURCE} (landing ${v.path})`,
       `Nom: ${displayName}`,
       cleanEmail ? `Email: ${cleanEmail}` : '',
       cleanPhone ? `Téléphone: ${cleanPhone}` : '',
-      form.plate ? `Immat/châssis/code: ${form.plate}` : '',
-      engineTypeLabel ? `Type demandé: ${engineTypeLabel}` : '',
+      form.plate ? `Immat/châssis/réf: ${form.plate}` : '',
+      partTypeLabel ? `Pièce demandée: ${partTypeLabel}` : '',
       form.message ? `\nMessage:\n${form.message}` : '',
     ].filter(Boolean).join('\n');
 
@@ -617,19 +597,17 @@ async function postDevis(req, res, next) {
         replyTo: cleanEmail || undefined,
       });
     } catch (err) {
-      console.error('[moteur-occasion] internal email failed:', err && err.message);
+      console.error('[pont-transfert] internal email failed:', err && err.message);
     }
 
     // 2) ACK utilisateur (best-effort) — template HTML brandé Autoliva
     if (cleanEmail) {
       try {
-        const baseUrl = getPublicBaseUrlFromReq(req);
         const ackHtml = buildAckEmailHtml({
           firstName,
           quoteRef,
           plate: form.plate,
-          engineTypeLabel,
-          baseUrl,
+          partTypeLabel,
           brandObj: brand,
         });
         const ackText = [
@@ -637,15 +615,15 @@ async function postDevis(req, res, next) {
           ``,
           `N° de dossier : ${quoteRef}`,
           form.plate ? `Véhicule : ${form.plate}` : '',
-          engineTypeLabel ? `Type demandé : ${engineTypeLabel}` : '',
+          partTypeLabel ? `Pièce demandée : ${partTypeLabel}` : '',
           ``,
           `Un technicien vous recontacte sous 24h ouvrées par email ou téléphone.`,
           ``,
           `Selon le stock :`,
           `• En stock atelier → expédition 48-72h après accord`,
-          `• Sourcing réseau → réception atelier, banc d'essai obligatoire, expédition. Délai confirmé dans votre devis.`,
+          `• Sourcing réseau → réception atelier, contrôle obligatoire, expédition. Délai confirmé dans votre devis.`,
           ``,
-          `Aucune boîte n'est expédiée sans contrôle complet.`,
+          `Aucune pièce n'est expédiée sans contrôle complet.`,
           ``,
           `Besoin urgent ? ${brand.PHONE_MOTEUR}`,
           ``,
@@ -658,12 +636,12 @@ async function postDevis(req, res, next) {
           text: ackText,
         });
       } catch (err) {
-        console.error('[moteur-occasion] ack email failed:', err && err.message);
+        console.error('[pont-transfert] ack email failed:', err && err.message);
       }
     }
 
-    // 2b) SMS de confirmation immédiat (best-effort) — le client vient de donner
-    // son numéro, un SMS instantané rassure fortement et réduit l'anxiété d'attente.
+    // 2b) SMS de confirmation immédiat (best-effort) — même template générique
+    // « moteur_ack » que les autres landings (texte neutre : « demande de devis »).
     let ackSmsResult = null;
     if (cleanPhone) {
       try {
@@ -671,13 +649,13 @@ async function postDevis(req, res, next) {
         if (smsOn && smsText) {
           const r = await sendSms({ to: cleanPhone, text: smsText });
           ackSmsResult = { status: r && r.ok ? 'sent' : 'failed', reason: (r && r.reason) || '', message: (r && r.message) || '', at: new Date(), phone: cleanPhone };
-          if (r && r.ok === false) console.warn('[moteur-ack] SMS non envoyé à', cleanPhone, '→', r.reason, r.message || '');
+          if (r && r.ok === false) console.warn('[pont-ack] SMS non envoyé à', cleanPhone, '→', r.reason, r.message || '');
         } else {
           ackSmsResult = { status: 'disabled', reason: 'disabled', message: 'Template SMS « accusé de réception » désactivé.', at: new Date(), phone: cleanPhone };
         }
       } catch (err) {
         ackSmsResult = { status: 'failed', reason: 'exception', message: (err && err.message) || 'Erreur', at: new Date(), phone: cleanPhone };
-        console.error('[moteur-occasion] ack SMS failed:', err && err.message);
+        console.error('[pont-transfert] ack SMS failed:', err && err.message);
       }
     }
 
@@ -700,17 +678,15 @@ async function postDevis(req, res, next) {
         Immat: form.plate,
         // requested.ref = numéro de devis unique (visible en back office)
         Reference: quoteRef,
-        // requested.vehicle = libellé moteur (occasion + type complet/nu)
-        Vehicule: `${conditionLabel}${engineTypeLabel ? ' · ' + engineTypeLabel : ''}`,
+        // requested.vehicle = libellé pièce (type + état)
+        Vehicule: conditionLabel,
       },
     }).then((result) => {
-      // Override captureSource → 'landing_moteurs' pour la segmentation admin.
+      // Override captureSource → 'landing_ponts' pour la segmentation admin.
       // captureContactLead met 'devis' par défaut ; on bump si on a un leadId.
       if (result && result.leadId && mongoose.connection.readyState === 1) {
         const AbandonedCart = require('../models/AbandonedCart');
         // engineQuote a `default: null` → on l'initialise AVANT d'y écrire ackSms
-        // (sinon « Cannot create field 'ackSms' in element {engineQuote:null} »,
-        // ce qui ferait aussi échouer le captureSource — flux cassé).
         return AbandonedCart.updateOne(
           { _id: result.leadId, engineQuote: null },
           { $set: { engineQuote: {} } },
@@ -727,7 +703,7 @@ async function postDevis(req, res, next) {
     }
 
     return await renderPage(res, req, {
-      form: buildInitialForm({ query: {} }),
+      form: buildInitialForm({ query: {} }, variant),
       successMessage: `Merci ${firstName || ''} ! Votre demande est bien reçue. Un technicien ${brand.NAME} vous recontacte sous 24h.`,
       // Conversion Google Ads (lead) — déclenchée sur la page de succès. ref = dédoublonnage,
       // email/phone (E.164) = suivi avancé des conversions (matching sans cookie).
@@ -742,5 +718,5 @@ module.exports = {
   getLanding,
   postDevis,
   buildAckEmailHtml,
-  _internal: { LANDING_DATA, CAPTURE_SOURCE, LANDING_PATH },
+  _internal: { LANDING_DATA, CAPTURE_SOURCE, LANDING_PATH, TRANSFERT_PATH, PART_TYPES },
 };

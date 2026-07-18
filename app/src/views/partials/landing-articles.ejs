@@ -1,0 +1,21 @@
+<%/* Bloc « Derniers articles » des landings devis — VRAIS articles blog liés à la
+     catégorie (passés par le contrôleur via getLandingArticles). Rien si vide. */%>
+<% if (typeof articles !== 'undefined' && articles && articles.length) { %>
+<div class="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
+<div class="flex justify-between items-center mb-6">
+<h2 class="text-xl font-bold">Derniers articles</h2>
+<a class="text-brand-red text-xs font-bold flex items-center gap-1 hover:underline" href="/blog">Voir tous les articles <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></a>
+</div>
+<div class="space-y-6">
+<% articles.forEach(function (a) { %>
+<a href="<%= a.url %>" class="flex gap-4 group">
+<img alt="<%= a.title %>" class="w-20 h-16 object-cover rounded shrink-0 bg-gray-100" src="<%= a.image %>" loading="lazy" width="80" height="64">
+<div>
+<h3 class="text-sm font-bold leading-tight mb-2 group-hover:text-brand-red transition line-clamp-2"><%= a.title %></h3>
+<span class="text-xs text-brand-red font-semibold inline-flex items-center gap-1">Lire l'article <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></span>
+</div>
+</a>
+<% }) %>
+</div>
+</div>
+<% } %>

@@ -34,7 +34,7 @@ async function brochureAttachment() {
   return null;
 }
 const { buildQuoteEmailHtml, buildBundleQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
-const { partLexicon } = require('../services/partLexicon');
+const { partLexicon, leadCategoryFromSource, LEAD_SOURCES: LEXICON_LEAD_SOURCES } = require('../services/partLexicon');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
 const { compressImage } = require('../services/imageCompress');
@@ -97,6 +97,14 @@ const CONDITION_LABELS = {
 // Libellé client de l'état, accordé au genre (moteur masc. / boîte fém.). Rendu
 // sur le PDF + l'email du devis : ne doit JAMAIS imprimer « Moteur » pour une boîte.
 function conditionClientLabel(conditionKey, category) {
+  if (category === 'pont') {
+    switch (conditionKey) {
+      case 'occasion': return "Pièce d'occasion contrôlée";
+      case 'reconditionne_complet': return 'Pièce reconditionnée à neuf';
+      case 'reconditionne_chemise_fonte': return 'Pièce reconditionnée';
+      default: return '';
+    }
+  }
   const b = category === 'boite';
   switch (conditionKey) {
     case 'occasion':
@@ -350,6 +358,7 @@ async function getEngineQuotesList(req, res, next) {
         source: classifyLeadSource(c.attribution),
         category: leadCategoryLabel(c.captureSource),
         isBoite: c.captureSource === 'landing_boites',
+        isPont: c.captureSource === 'landing_ponts',
         ref: (c.requested && c.requested.ref) || '',
         plate: (c.requested && c.requested.plate) || '',
         vehicle: (c.requested && c.requested.vehicle) || '',
@@ -430,9 +439,9 @@ async function getEngineQuotesList(req, res, next) {
 
 /* ─── PAGE DÉTAIL ─────────────────────────────────────────────────────── */
 
-const LEAD_SOURCES = ['landing_moteurs', 'landing_boites'];
+const LEAD_SOURCES = LEXICON_LEAD_SOURCES;
 const LEAD_SOURCE_FILTER = { $in: LEAD_SOURCES };
-function leadCategoryLabel(src) { return src === 'landing_boites' ? 'Boîte' : 'Moteur'; }
+function leadCategoryLabel(src) { return src === 'landing_boites' ? 'Boîte' : src === 'landing_ponts' ? 'Pont/Transfert' : 'Moteur'; }
 
 async function getEngineQuoteDetail(req, res, next) {
   try {
@@ -461,6 +470,7 @@ async function getEngineQuoteDetail(req, res, next) {
         displayName,
         // Catégorie du lead → accorde le message commercial pré-rempli (boîte fém.)
         isBoite: cart.captureSource === 'landing_boites',
+        isPont: cart.captureSource === 'landing_ponts',
         email: cart.email,
         phone: cart.phone,
         firstName: cart.firstName,
@@ -505,7 +515,7 @@ async function getEngineQuoteDetail(req, res, next) {
       stockLabels: STOCK_LABELS,
       conditionLabels: CONDITION_LABELS,
       // Lexique genré → libellés de la fiche accordés (boîte fém. / moteur masc.)
-      lex: partLexicon(cart.captureSource === 'landing_boites' ? 'boite' : 'moteur'),
+      lex: partLexicon(leadCategoryFromSource(cart.captureSource)),
       fmt,
     });
   } catch (err) {
@@ -940,7 +950,7 @@ async function postShipment(req, res, next) {
     const plate = (cart.requested && cart.requested.plate) || '';
 
     // Email client (best-effort)
-    const cat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+    const cat = leadCategoryFromSource(cart.captureSource);
     const lex = partLexicon(cat);
     let emailSentAt = null;
     if (cart.email) {
@@ -966,7 +976,7 @@ async function postShipment(req, res, next) {
       try {
         const trackingPart = `${trackingNumber ? ' Suivi ' + carrier + ' : ' + trackingNumber : ''}${trackingUrl ? ' ' + trackingUrl : ''}`;
         // SMS d'expédition accordé au genre : template dédié pour les boîtes.
-        const expeditionKey = cat === 'boite' ? 'boite_expedition' : 'moteur_expedition';
+        const expeditionKey = cat === 'boite' ? 'boite_expedition' : cat === 'pont' ? 'pont_expedition' : 'moteur_expedition';
         const { enabled: smsOn, text: smsBody } = await resolveSms(expeditionKey, { quoteRef, trackingPart, phoneMoteur: brand.PHONE_MOTEUR });
         if (smsOn && smsBody) await sendSms({ to: cart.phone, text: smsBody.slice(0, 320) });
       } catch (err) { console.warn('[engine-quote] shipment SMS failed:', err && err.message); }
@@ -1159,9 +1169,9 @@ async function prepareQuoteData(req, opts) {
     conditionKey, conditionInfo,
     allPhotos, pdfPhotos, firstNameForEmail,
     // Catégorie du lead (moteur/boîte) → vocabulaire du devis PDF/email
-    category: cart.captureSource === 'landing_boites' ? 'boite' : 'moteur',
+    category: leadCategoryFromSource(cart.captureSource),
     // Libellé d'état accordé au genre, imprimé sur le devis (PDF + email)
-    conditionLabelClient: conditionClientLabel(conditionKey, cart.captureSource === 'landing_boites' ? 'boite' : 'moteur'),
+    conditionLabelClient: conditionClientLabel(conditionKey, leadCategoryFromSource(cart.captureSource)),
     // Consigne / échange standard (caution remboursable hors-TVA) — bloc affiché si > 0
     consigne: { amount: (eq.consigne && eq.consigne.amount) || 0, delayDays: (eq.consigne && eq.consigne.delayDays) || 30 },
   };
@@ -1278,7 +1288,7 @@ async function getPreviewMail(req, res, next) {
     const pricing = eq.pricing || {};
     const sellTtc = computeQuoteTotals(pricing, leadIsReconditionne(eq, cart)).clientTotal;
     const lastSent = (eq.sentQuotes || []).slice().sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))[0] || null;
-    const cat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+    const cat = leadCategoryFromSource(cart.captureSource);
     const phoneOpts = { category: cat, brandPhone: brand.PHONE_MOTEUR, brandPhoneIntl: brand.PHONE_MOTEUR_INTL };
     const base = (process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
 
@@ -1357,7 +1367,7 @@ async function postSendQuote(req, res, next) {
     // l'état : garantit recond → devis recond, occasion → devis occasion.
     const conditionKey = (eq.identifiedEngine && eq.identifiedEngine.condition) || defaultConditionFromLead(cart);
     const conditionInfo = CONDITION_LABELS[conditionKey] || CONDITION_LABELS[''];
-    const sendCat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+    const sendCat = leadCategoryFromSource(cart.captureSource);
     const conditionLabelClient = conditionClientLabel(conditionKey, sendCat);
     const sendConsigne = { amount: (eq.consigne && eq.consigne.amount) || 0, delayDays: (eq.consigne && eq.consigne.delayDays) || 30 };
 
@@ -1495,7 +1505,7 @@ async function postSendQuote(req, res, next) {
       payTrackUrl,
       pdfTrackUrl,
     });
-    const textLex = partLexicon(cart.captureSource === 'landing_boites' ? 'boite' : 'moteur');
+    const textLex = partLexicon(leadCategoryFromSource(cart.captureSource));
     const text = [
       `Bonjour,`,
       ``,
@@ -1625,7 +1635,7 @@ async function sendInstantDevis(cart, opts = {}) {
   if (!cart || !cart.email || !offersIn.length) return { ok: false, reason: 'precondition' };
 
   const eq = cart.engineQuote || {};
-  const sendCat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+  const sendCat = leadCategoryFromSource(cart.captureSource);
   const quoteRef = (cart.requested && cart.requested.ref) || '';
   const plate = (cart.requested && cart.requested.plate) || '';
   let publicBase = String(process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').trim().replace(/\/+$/, '');

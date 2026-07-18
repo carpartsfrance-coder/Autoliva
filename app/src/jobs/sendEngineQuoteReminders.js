@@ -20,7 +20,7 @@ const emailService = require('../services/emailService');
 const { sendSms } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
 const { buildReminderEmailHtml } = require('../services/engineQuoteEmail');
-const { partLexicon } = require('../services/partLexicon');
+const { partLexicon, leadCategoryFromSource } = require('../services/partLexicon');
 const brand = require('../config/brand');
 
 const MS_DAY = 24 * 60 * 60 * 1000;
@@ -139,7 +139,7 @@ async function sendReminder(cart, type) {
     ? (publicBase() + '/api/devis-moteurs/track-pay/' + cart._id + '/' + lastSent._id)
     : '';
 
-  const cat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+  const cat = leadCategoryFromSource(cart.captureSource);
   const lex = partLexicon(cat);
 
   const html = buildReminderEmailHtml({

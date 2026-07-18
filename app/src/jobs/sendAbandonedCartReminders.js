@@ -82,7 +82,7 @@ async function sendAbandonedCartReminders() {
       // client qui demande un devis recevait des relances "votre panier vous
       // attend" EN PLUS des relances devis (double-relance). On exige aussi
       // au moins un article (un rappel de panier vide n'a aucun sens).
-      captureSource: { $nin: ['landing_moteurs', 'landing_boites', 'contact', 'devis', 'blog_cta'] },
+      captureSource: { $nin: ['landing_moteurs', 'landing_boites', 'landing_ponts', 'contact', 'devis', 'blog_cta'] },
       'items.0': { $exists: true },
       $or: [
         // Abandoned for > 1h but < 24h (eligible for reminder 1)
