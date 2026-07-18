@@ -132,6 +132,46 @@
       </div>
     </div>
 
+    <%# ═══ Comment nous reconditionnons — vidéo « test sur banc » (levier de conversion,
+            reprise de la fiche produit : même Short YouTube + mêmes clés de traduction) ═══ %>
+    <div class="mb-10 sm:mb-16">
+      <div class="rounded-2xl bg-[#15213B] border border-white/10 text-white overflow-hidden shadow-xl">
+        <div class="grid gap-8 lg:gap-12 md:grid-cols-[1.1fr_0.9fr] items-center p-6 sm:p-10">
+          <div>
+            <div class="flex items-center gap-2.5 mb-4">
+              <div class="flex gap-0.5">
+                <% for (var _homeStar = 0; _homeStar < 5; _homeStar++) { %><span class="w-5 h-5 bg-[#00B67A] flex items-center justify-center"><span class="material-symbols-rounded text-white text-[13px]" style="font-variation-settings:'FILL' 1;">star</span></span><% } %>
+              </div>
+              <span class="text-xs font-extrabold tracking-wide"><%= t('product.qualityPremiumIso') %></span>
+            </div>
+            <h2 class="text-2xl sm:text-3xl home-display font-bold leading-tight mb-3"><%= t('product.howWeRecond') %></h2>
+            <p class="text-sm text-white/70 leading-relaxed mb-7 max-w-xl"><%= t('product.recondIntro') %></p>
+            <div class="flex flex-col gap-4">
+              <% var _homeRecondSteps = [
+                   { t: t('product.recStep1Title'), d: t('product.recStep1Text') },
+                   { t: t('product.recStep2Title'), d: t('product.recStep2Text') },
+                   { t: t('product.recStep3Title', { months: 24 }), d: t('product.recStep3Text') }
+                 ]; %>
+              <% _homeRecondSteps.forEach(function (st, i) { %>
+                <div class="flex items-start gap-3.5">
+                  <span class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-extrabold flex-shrink-0"><%= i + 1 %></span>
+                  <div>
+                    <div class="text-sm font-extrabold"><%= st.t %></div>
+                    <div class="text-xs text-white/60 mt-0.5"><%= st.d %></div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          </div>
+          <div class="flex items-center justify-center">
+            <div class="relative w-full max-w-[250px] rounded-2xl overflow-hidden bg-[#1A2233] shadow-2xl" style="aspect-ratio:9/16;">
+              <iframe class="absolute inset-0 w-full h-full border-0" src="https://www.youtube-nocookie.com/embed/EyZbdJosmr0?rel=0" title="<%= t('product.howWeRecond') %>" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="mb-10 sm:mb-16">
       <h2 class="text-xl sm:text-2xl home-display font-bold mb-4 sm:mb-8"><%= t('home.shopByBrand') %></h2>
       <div class="flex gap-4 overflow-x-auto no-scrollbar -mx-4 px-4 sm:flex-wrap sm:justify-center sm:gap-6 sm:mx-0 sm:px-0">
