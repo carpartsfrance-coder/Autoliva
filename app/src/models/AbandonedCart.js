@@ -210,7 +210,7 @@ const abandonedCartSchema = new mongoose.Schema(
      */
     captureSource: {
       type: String,
-      enum: ['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'cart_activity', 'blog_cta', 'landing_moteurs', 'landing_boites', 'manual', ''],
+      enum: ['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'cart_activity', 'blog_cta', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'manual', ''],
       default: '',
       index: true,
     },

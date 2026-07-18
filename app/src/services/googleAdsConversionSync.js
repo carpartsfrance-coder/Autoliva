@@ -72,7 +72,7 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
 
   // ── LEADS : devis moteur avec click id Ads, jamais remontés, dans la fenêtre ──
   const leadCandidates = await AbandonedCart.find({
-    captureSource: { $in: ['landing_moteurs', 'landing_boites'] },
+    captureSource: { $in: ['landing_moteurs', 'landing_boites', 'landing_ponts'] },
     ...HAS_CLICK_ID('attribution.'),
     'googleAdsUpload.leadAt': { $in: [null, undefined] },
     createdAt: { $gte: since },
@@ -99,7 +99,7 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
 
   // ── VENTES : devis gagnés avec click id Ads, jamais remontés ──
   const saleCandidates = await AbandonedCart.find({
-    captureSource: { $in: ['landing_moteurs', 'landing_boites'] },
+    captureSource: { $in: ['landing_moteurs', 'landing_boites', 'landing_ponts'] },
     'engineQuote.status': { $in: SALE_STATUSES },
     ...HAS_CLICK_ID('attribution.'),
     'googleAdsUpload.saleAt': { $in: [null, undefined] },

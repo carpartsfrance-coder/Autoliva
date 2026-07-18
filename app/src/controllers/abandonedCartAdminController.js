@@ -95,6 +95,7 @@ function getCaptureSourceLabel(captureSource) {
     devis: { label: 'Devis', className: 'bg-teal-50 text-teal-700' },
     landing_moteurs: { label: 'Moteur occasion', className: 'bg-red-50 text-red-700' },
     landing_boites: { label: 'Boîte occasion', className: 'bg-red-50 text-red-700' },
+    landing_ponts: { label: 'Pont / Transfert', className: 'bg-amber-50 text-amber-700' },
     cart_activity: { label: 'Panier', className: 'bg-slate-100 text-slate-700' },
     blog_cta: { label: 'Article blog', className: 'bg-emerald-50 text-emerald-700' },
     manual: { label: 'Manuel', className: 'bg-yellow-50 text-yellow-700' },
@@ -108,7 +109,7 @@ function getCaptureSourceLabel(captureSource) {
  * acompte…). La vue « À traiter » de la page leads les exclut pour ne pas
  * traiter deux fois le même client dans deux écrans.
  */
-const ENGINE_PIPELINE_SOURCES = ['landing_moteurs', 'landing_boites'];
+const ENGINE_PIPELINE_SOURCES = ['landing_moteurs', 'landing_boites', 'landing_ponts'];
 
 /**
  * Sources qui ne représentent PAS un panier : la relance « votre commande en
@@ -116,7 +117,7 @@ const ENGINE_PIPELINE_SOURCES = ['landing_moteurs', 'landing_boites'];
  * demandes de devis/contact, déjà suivies par leur propre canal.
  * Doit rester aligné avec l'exclusion du cron (sendAbandonedCartReminders).
  */
-const NON_CART_SOURCES = ['landing_moteurs', 'landing_boites', 'contact', 'devis', 'blog_cta'];
+const NON_CART_SOURCES = ['landing_moteurs', 'landing_boites', 'landing_ponts', 'contact', 'devis', 'blog_cta'];
 
 /** Statuts de commande = vraie vente (exclut brouillons/annulées/remboursées). */
 const SALE_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
@@ -326,7 +327,7 @@ async function getAdminLeadsPage(req, res, next) {
     if (manualStatusFilter === 'none') query.manualStatus = null;
     else if (['contacted', 'converted', 'lost'].includes(manualStatusFilter)) query.manualStatus = manualStatusFilter;
 
-    const allowedSources = new Set(['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'landing_moteurs', 'landing_boites', 'cart_activity', 'blog_cta', 'manual']);
+    const allowedSources = new Set(['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'cart_activity', 'blog_cta', 'manual']);
     if (captureSource && allowedSources.has(captureSource)) query.captureSource = captureSource;
 
     if (channel === 'email') query.email = { $ne: '' };
@@ -411,7 +412,7 @@ async function getAdminLeadsPage(req, res, next) {
       /* Demande explicite = formulaires devis/contact ET tunnels moteur/boîte
          (leur `requested` est l'info primaire ; sans ça un lead moteur sans
          panier affichait « 0,00 € » au lieu de sa demande) */
-      const isExplicitRequest = ['devis', 'contact', 'landing_moteurs', 'landing_boites'].includes(c.captureSource || '');
+      const isExplicitRequest = ['devis', 'contact', 'landing_moteurs', 'landing_boites', 'landing_ponts'].includes(c.captureSource || '');
       const hasRequested = !!(requested.vehicle || requested.vin || requested.plate || requested.ref || requested.message);
 
       /* ── Données « suivi commercial » (timeline de la carte) ── */

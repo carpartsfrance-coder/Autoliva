@@ -128,6 +128,16 @@ const CATALOG = [
     example: { quoteRef: 'AUT-2026-06-7AB12', trackingPart: ' Suivi DPD : XYZ789', phoneMoteur: '04 65 84 85 39' },
   },
 
+  // ─────────── PONT / TRANSFERT ───────────
+  // Variante générique « pièce » du SMS d'expédition pour les leads pont /
+  // différentiel / boîte de transfert. Choisie au call-site via la catégorie.
+  {
+    key: 'pont_expedition', category: 'Devis', label: 'Expédition pont / transfert',
+    defaultTemplate: "Autoliva : votre pièce ({quoteRef}) est expédiée !{trackingPart}\nQuestion ? {phoneMoteur}",
+    vars: [['quoteRef', 'N° de dossier devis'], ['trackingPart', 'Suivi (transporteur + n° + lien)'], ['phoneMoteur', 'Téléphone commercial']],
+    example: { quoteRef: 'AUT-2026-07-7AB12', trackingPart: ' Suivi DPD : XYZ789', phoneMoteur: '04 65 84 85 39' },
+  },
+
   // ─────────── BOÎTE ───────────
   // Variante genrée du SMS d'expédition pour les leads boîte (féminin). Choisie
   // au call-site via cart.isBoite (engineQuoteAdminController.postShipment).
