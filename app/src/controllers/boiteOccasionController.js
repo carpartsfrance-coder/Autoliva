@@ -25,6 +25,7 @@ const { captureContactLead } = require('../services/leadCapture');
 const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildHreflangSet } = require('../services/i18n');
+const { getLandingArticles } = require('../services/landingArticles');
 const brand = require('../config/brand');
 
 const LANDING_PATH = '/boites-vitesse';
@@ -422,7 +423,7 @@ function buildInitialForm(req) {
   };
 }
 
-function renderPage(res, req, opts) {
+async function renderPage(res, req, opts) {
   const variant = opts.variant || getVariant(req);
   const v = VARIANTS[variant] || VARIANTS.occasion;
   const baseUrl = getPublicBaseUrlFromReq(req);
@@ -434,7 +435,11 @@ function renderPage(res, req, opts) {
   const metaDescription = v.metaDescription;
   const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}${v.path}` : `${langPrefix}${v.path}`;
 
+  // Vrais articles blog pertinents (ne throw jamais → [] en repli).
+  const articles = await getLandingArticles('boite', 3);
+
   return res.status(opts.statusCode || 200).render(v.view, {
+    articles,
     title,
     metaDescription,
     canonicalUrl,
@@ -461,7 +466,7 @@ async function getLanding(req, res, next) {
     if (req.session && typeof req.session === 'object') {
       req.session.moteurFormTs = Date.now();
     }
-    return renderPage(res, req, { form: buildInitialForm(req) });
+    return await renderPage(res, req, { form: buildInitialForm(req) });
   } catch (err) {
     return next(err);
   }
@@ -509,14 +514,14 @@ async function postDevis(req, res, next) {
 
     // Honeypot : faux succès silencieux
     if (form.website) {
-      return renderPage(res, req, {
+      return await renderPage(res, req, {
         form: buildInitialForm({ query: {} }),
         successMessage: 'Merci ! Votre demande a bien été envoyée. Un technicien vous recontacte sous 24h.',
       });
     }
 
     if (isRateLimited(req)) {
-      return renderPage(res, req, {
+      return await renderPage(res, req, {
         form,
         statusCode: 429,
         errorMessage: 'Trop de tentatives. Merci de réessayer dans quelques minutes.',
@@ -526,7 +531,7 @@ async function postDevis(req, res, next) {
     // Anti double-submit session (800ms)
     const sessionTs = req.session && typeof req.session.moteurFormTs === 'number' ? req.session.moteurFormTs : 0;
     if (sessionTs && Date.now() - sessionTs < 800) {
-      return renderPage(res, req, {
+      return await renderPage(res, req, {
         form,
         statusCode: 400,
         errorMessage: 'Merci de patienter une seconde puis de renvoyer le formulaire.',
@@ -541,21 +546,21 @@ async function postDevis(req, res, next) {
     const cleanPhone = normalizePhoneFR(form.phone) || normalizePhone(form.phone);
 
     if (!form.plate) {
-      return renderPage(res, req, {
+      return await renderPage(res, req, {
         form,
         statusCode: 400,
         errorMessage: 'Merci d’indiquer votre plaque, N° de châssis ou référence.',
       });
     }
     if (!cleanPhone) {
-      return renderPage(res, req, {
+      return await renderPage(res, req, {
         form,
         statusCode: 400,
         errorMessage: 'Merci d’indiquer un numéro de téléphone pour qu’on puisse vous rappeler.',
       });
     }
     if (form.email && !cleanEmail) {
-      return renderPage(res, req, {
+      return await renderPage(res, req, {
         form,
         statusCode: 400,
         errorMessage: 'L’email ne semble pas valide.',
@@ -721,7 +726,7 @@ async function postDevis(req, res, next) {
       req.session.moteurFormTs = Date.now();
     }
 
-    return renderPage(res, req, {
+    return await renderPage(res, req, {
       form: buildInitialForm({ query: {} }),
       successMessage: `Merci ${firstName || ''} ! Votre demande est bien reçue. Un technicien ${brand.NAME} vous recontacte sous 24h.`,
       // Conversion Google Ads (lead) — déclenchée sur la page de succès. ref = dédoublonnage,

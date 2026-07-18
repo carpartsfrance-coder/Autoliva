@@ -811,35 +811,7 @@ Demander mon devis gratuit
 <!-- BEGIN: Content & FAQ Section -->
 <section class="bg-brand-gray py-20 px-6">
 <div class="max-w-[1400px] mx-auto grid grid-cols-1 lg:grid-cols-3 gap-12">
-<div class="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
-<div class="flex justify-between items-center mb-6">
-<h2 class="text-xl font-bold">Derniers Articles</h2>
-<a class="text-brand-red text-xs font-bold flex items-center gap-1 hover:underline" href="/blog">Voir tous les articles <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></a>
-</div>
-<div class="space-y-6">
-<article class="flex gap-4 group cursor-pointer">
-<img alt="Article 1" class="w-20 h-16 object-cover rounded" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDGb-TQ0NXAufQixqtbCUEm9AmZkIi0jfsL5KoE_fzPl3Dyj4M1ic7gqxNBxfIIyYLcCIASnCehx2z4yVPfzyZVuJqKeClghJC7FHVVBA1DV2lGaWYFizicKYXVNSQ4u64Vq9Xf6MXt_fJJ50YEgf48jZLQAkuApIuwFIAfogh8inSj0OJCdrHzG0JZ4TbAqUTr6duOkBdfdPb79ILXnGvORIq4XoS1wxJhJkhT5vVGZnbw1ghTNXLOhlqVrlVPCWqBwitjarJ1ZoU">
-<div>
-<h3 class="text-sm font-bold leading-tight mb-2 group-hover:text-brand-red transition">Comment bien choisir son moteur d'occasion ?</h3>
-<a class="text-xs text-brand-red font-semibold flex items-center gap-1" href="/blog">Lire l'article <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></a>
-</div>
-</article>
-<article class="flex gap-4 group cursor-pointer">
-<img alt="Article 2" class="w-20 h-16 object-cover rounded" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAAoASeQi-y13AAZvMipfyPXNYhcCUp9KCs-yRHerwo1Jmo3cQpJK49nlnkfqKIlpC4MdltC3-z9oISxUUy1-gTKgQI1juYzz5xwOAdEiaw4WXUaP3lH93Yod2tVb4aes7EOWyMSZ1pNEV5qO6ZXzmdXY-4RH88MWREU1xwCxi-_ac9TyG0fsbijBmPn2yh1QuIvhuAoB4-s2kF4yWsGajdATYNvUVXOp_lNnNICToCX9mk3Jg7lZiKX3l_al0OXqtQjkEpTRNWSZA">
-<div>
-<h3 class="text-sm font-bold leading-tight mb-2 group-hover:text-brand-red transition">Les avantages d'un moteur testé sur banc</h3>
-<a class="text-xs text-brand-red font-semibold flex items-center gap-1" href="/blog">Lire l'article <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></a>
-</div>
-</article>
-<article class="flex gap-4 group cursor-pointer">
-<img alt="Article 3" class="w-20 h-16 object-cover rounded" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCWSDROayls46pRZTXyUeUmNV3K6C4v46HxAbFvL1nQjdByaxbDSBkXPSVTHB4DrM-z02NPSPH_7X8REw_8_ezqHUAYRWCkKNQDTt2gqFIJkFpEftHfmI5Yn8HVfxu6NvFoXuL8O04xzYsBJX7MPq-oNSdZ8tGUdwkUJVK7zRSx8AzUuVSbmwA-K7x_yp297RgNH3JY6BmaioxM7ioMkVSzdq0GgyKFud9VgK5iVhzcry0r-o1IDqPpFNh4DWpVCKr0tcthV6rA_FA">
-<div>
-<h3 class="text-sm font-bold leading-tight mb-2 group-hover:text-brand-red transition">Entretien : les bons réflexes pour prolonger la durée de vie</h3>
-<a class="text-xs text-brand-red font-semibold flex items-center gap-1" href="/blog">Lire l'article <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg></a>
-</div>
-</article>
-</div>
-</div>
+<%- include('../partials/landing-articles') %>
 
 <!-- FAQ -->
 <div class="bg-white p-8 rounded-xl shadow-sm border border-gray-100">
