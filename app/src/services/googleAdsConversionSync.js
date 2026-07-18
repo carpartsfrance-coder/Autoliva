@@ -6,6 +6,9 @@
  * Parcourt les leads moteur (captureSource='landing_moteurs') porteurs d'un
  * `gclid` et remonte :
  *   - LEAD  : à la création du lead (demande de devis)  → action "Lead - Devis"
+ *   - DEVIS : quand un devis a été envoyé au client     → action "Devis envoyé"
+ *             (étage qualité intermédiaire lead → devis → vente : assez de
+ *             volume pour le smart bidding, bien plus qualifié qu'un formulaire)
  *   - VENTE : quand le lead passe 'won'/'acompte_recu' → action "Vente moteur"
  *             avec la valeur réelle (engineQuote.pricing.sellPrice)
  *
@@ -21,7 +24,11 @@ const Order = require('../models/Order');
 const gAds = require('./googleAdsConversions');
 
 const LEAD_WINDOW_DAYS = 80;            // marge sous la fenêtre gclid de 90 j
+const LEAD_SOURCES = ['landing_moteurs', 'landing_boites', 'landing_ponts'];
 const SALE_STATUSES = ['won', 'acompte_recu'];
+// Un devis a été envoyé : statut courant OU trace d'envoi dans l'historique
+// (les statuts avals 'acompte_recu'/'won' impliquent que le lead a été qualifié).
+const QUOTE_SENT_STATUSES = ['quote_sent', 'acompte_recu', 'won'];
 // Commandes considérées payées (aligné sur visitorTimeline.PAID_ORDER_STATUSES).
 const PAID_ORDER_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
 
@@ -29,6 +36,10 @@ function num(v) { return (typeof v === 'number' && isFinite(v)) ? v : 0; }
 function leadValue() {
   const v = Number(process.env.GOOGLE_ADS_LEAD_VALUE);
   return isFinite(v) && v > 0 ? v : 0;   // 0 par défaut → conversion "lead" sans valeur (volume)
+}
+function quoteValue() {
+  const v = Number(process.env.GOOGLE_ADS_QUOTE_VALUE);
+  return isFinite(v) && v > 0 ? v : 0;   // 0 par défaut → conversion "devis" sans valeur (signal qualité)
 }
 
 /* Un clic Google Ads porte gclid (web) OU gbraid/wbraid (iOS14+) : une
@@ -62,6 +73,7 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
     configured: gAds.isConfigured(),
     dryRun,
     leads: { eligible: 0, uploaded: 0, errors: 0 },
+    quotes: { eligible: 0, uploaded: 0, errors: 0 },
     sales: { eligible: 0, uploaded: 0, errors: 0 },
     purchases: { eligible: 0, uploaded: 0, errors: 0 },
     details: [],
@@ -72,7 +84,7 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
 
   // ── LEADS : devis moteur avec click id Ads, jamais remontés, dans la fenêtre ──
   const leadCandidates = await AbandonedCart.find({
-    captureSource: { $in: ['landing_moteurs', 'landing_boites', 'landing_ponts'] },
+    captureSource: { $in: LEAD_SOURCES },
     ...HAS_CLICK_ID('attribution.'),
     'googleAdsUpload.leadAt': { $in: [null, undefined] },
     createdAt: { $gte: since },
@@ -97,9 +109,55 @@ async function syncConversions({ dryRun = true, limit = 200 } = {}) {
     }
   }
 
+  // ── DEVIS ENVOYÉS : étage qualité intermédiaire (≈ dizaines/mois là où les
+  // ventes se comptent en unités) — apprend au smart bidding à viser les leads
+  // qui décrochent, pas juste ceux qui remplissent le formulaire.
+  // ⚠️ HAS_CLICK_ID renvoie déjà un $or → $and obligatoire pour composer avec
+  // le $or « trace d'envoi » (deux clés $or au même niveau s'écraseraient).
+  const quoteCandidates = await AbandonedCart.find({
+    captureSource: { $in: LEAD_SOURCES },
+    $and: [
+      HAS_CLICK_ID('attribution.'),
+      { $or: [
+        { 'engineQuote.sentQuotes.0': { $exists: true } },
+        { 'engineQuote.status': { $in: QUOTE_SENT_STATUSES } },
+      ] },
+    ],
+    'googleAdsUpload.quoteAt': { $in: [null, undefined] },
+    createdAt: { $gte: since },
+  }).select('_id attribution createdAt lastActivityAt email phone engineQuote.sentQuotes engineQuote.updatedAt').sort({ createdAt: 1 }).limit(limit).lean();
+
+  report.quotes.eligible = quoteCandidates.length;
+  for (const c of quoteCandidates) {
+    const ids = clickIds(c.attribution);
+    if (!hasAnyClickId(ids)) continue;
+    // Horodatage = dernier envoi de devis (postérieur au clic), replis prudents.
+    const sq = (c.engineQuote && Array.isArray(c.engineQuote.sentQuotes) && c.engineQuote.sentQuotes.length)
+      ? c.engineQuote.sentQuotes[c.engineQuote.sentQuotes.length - 1] : null;
+    const when = (sq && sq.sentAt) || (c.engineQuote && c.engineQuote.updatedAt) || c.lastActivityAt || new Date();
+    try {
+      const r = await gAds.uploadConversion({ ...ids, email: c.email, phone: c.phone, action: 'quote', value: quoteValue(), dateTime: when, dryRun });
+      if (r.ok) {
+        if (!dryRun) await AbandonedCart.updateOne({ _id: c._id }, { $set: { 'googleAdsUpload.quoteAt': new Date() } });
+        report.quotes.uploaded += 1;
+      } else if (r.skipped && r.reason === 'no_action_for_quote') {
+        // GOOGLE_ADS_QUOTE_ACTION absent → étage devis en veille, sans bruit.
+        report.quotes.eligible = 0;
+        report.quotes.skipped = 'no_quote_action';
+        break;
+      } else {
+        report.quotes.errors += 1;
+        report.details.push({ id: String(c._id), type: 'quote', error: r.error || r.partialFailureError || r.reason });
+      }
+    } catch (e) {
+      report.quotes.errors += 1;
+      report.details.push({ id: String(c._id), type: 'quote', error: String((e && e.message) || e) });
+    }
+  }
+
   // ── VENTES : devis gagnés avec click id Ads, jamais remontés ──
   const saleCandidates = await AbandonedCart.find({
-    captureSource: { $in: ['landing_moteurs', 'landing_boites', 'landing_ponts'] },
+    captureSource: { $in: LEAD_SOURCES },
     'engineQuote.status': { $in: SALE_STATUSES },
     ...HAS_CLICK_ID('attribution.'),
     'googleAdsUpload.saleAt': { $in: [null, undefined] },

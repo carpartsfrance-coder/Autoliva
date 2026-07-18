@@ -32,6 +32,7 @@
  *   GOOGLE_ADS_REFRESH_TOKEN    OAuth2 refresh token — scope `datamanager` (à régénérer !)
  *   GOOGLE_ADS_CUSTOMER_ID      id du compte Ads, chiffres sans tirets (ex 9562598225)
  *   GOOGLE_ADS_LEAD_ACTION      id de l'action de conversion "Lead - Devis"
+ *   GOOGLE_ADS_QUOTE_ACTION     id de l'action "Devis envoyé" (étage qualité — absent = en veille)
  *   GOOGLE_ADS_SALE_ACTION      id de l'action de conversion "Vente devis"
  *   GOOGLE_ADS_PURCHASE_ACTION  id de l'action de conversion "Achat site" (e-commerce)
  *   GOOGLE_ADS_DEVELOPER_TOKEN  (héritage — plus utilisé par Data Manager, ignoré)
@@ -77,6 +78,7 @@ function config() {
     refreshToken: env('GOOGLE_ADS_REFRESH_TOKEN'),
     customerId: digitsOnly(env('GOOGLE_ADS_CUSTOMER_ID')),
     leadAction: env('GOOGLE_ADS_LEAD_ACTION'),
+    quoteAction: env('GOOGLE_ADS_QUOTE_ACTION'),
     saleAction: env('GOOGLE_ADS_SALE_ACTION'),
     purchaseAction: env('GOOGLE_ADS_PURCHASE_ACTION'),
   };
@@ -86,7 +88,7 @@ function config() {
 function isConfigured() {
   const c = config();
   return !!(c.clientId && c.clientSecret && c.refreshToken && c.customerId
-    && (c.leadAction || c.saleAction || c.purchaseAction));
+    && (c.leadAction || c.quoteAction || c.saleAction || c.purchaseAction));
 }
 
 /** ID d'action de conversion (Data Manager `productDestinationId`) — accepte id brut ou resource name. */
@@ -141,7 +143,7 @@ async function getAccessToken() {
  * @param {string} [p.wbraid]     identifiant de clic iOS14+ (web) — un des trois requis
  * @param {string} [p.email]      email client (clair) → hashé SHA-256 ici (Enhanced Conversions)
  * @param {string} [p.phone]      téléphone client (clair) → E.164 + SHA-256 ici
- * @param {'lead'|'sale'|'purchase'} p.action  type → choisit l'action de conversion
+ * @param {'lead'|'quote'|'sale'|'purchase'} p.action  type → choisit l'action de conversion
  * @param {number} [p.value]      valeur (€), omise/0 → conversion sans valeur
  * @param {string} [p.currency]   défaut 'EUR'
  * @param {Date|string} [p.dateTime]  date de la conversion (postérieure au clic)
@@ -158,6 +160,7 @@ async function uploadConversion({ gclid, gbraid, wbraid, email, phone, action, v
   const c = config();
   const actionEnv = action === 'sale' ? c.saleAction
     : action === 'purchase' ? c.purchaseAction
+    : action === 'quote' ? c.quoteAction
     : c.leadAction;
   const destId = conversionActionId(actionEnv);
   if (!destId) return { ok: false, skipped: true, reason: `no_action_for_${action}` };

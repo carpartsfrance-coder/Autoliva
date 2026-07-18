@@ -26,6 +26,7 @@ async function getAdsDiagnostic(req, res) {
       refreshToken: !!c.refreshToken,
       customerId: c.customerId || null,       // identifiant de compte, pas un secret
       leadAction: c.leadAction || null,       // id d'action de conversion, pas un secret
+      quoteAction: c.quoteAction || null,     // absent → étage « Devis envoyé » en veille
       saleAction: c.saleAction || null,
       purchaseAction: c.purchaseAction || null,
     },
@@ -58,8 +59,9 @@ async function getAdsDiagnostic(req, res) {
     const AbandonedCart = require('../models/AbandonedCart');
     const Order = require('../models/Order');
     const since30 = new Date(Date.now() - 30 * 86400000);
-    const [leads30, sales30, purchases30, purchasesClickIdTotal30] = await Promise.all([
+    const [leads30, quotes30, sales30, purchases30, purchasesClickIdTotal30] = await Promise.all([
       AbandonedCart.countDocuments({ 'googleAdsUpload.leadAt': { $gte: since30 } }),
+      AbandonedCart.countDocuments({ 'googleAdsUpload.quoteAt': { $gte: since30 } }),
       AbandonedCart.countDocuments({ 'googleAdsUpload.saleAt': { $gte: since30 } }),
       Order.countDocuments({ 'attribution.uploadedToGoogleAdsAt': { $gte: since30 } }),
       Order.countDocuments({
@@ -73,6 +75,7 @@ async function getAdsDiagnostic(req, res) {
     ]);
     out.uploaded30d = {
       leads: leads30,
+      quotes: quotes30,
       sales: sales30,
       purchases: purchases30,
       note: 'comparer purchases au compteur « Achat site » de Google Ads (30 j) pour le taux de match',
