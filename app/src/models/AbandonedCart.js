@@ -278,6 +278,7 @@ const abandonedCartSchema = new mongoose.Schema(
      */
     googleAdsUpload: {
       leadAt: { type: Date, default: null },   // conversion "Lead - Devis" remontée
+      quoteAt: { type: Date, default: null },  // conversion "Devis envoyé" remontée (étage qualité intermédiaire)
       saleAt: { type: Date, default: null },   // conversion "Vente moteur" remontée
     },
 
