@@ -324,6 +324,35 @@ Envoyer ma demande
 </section>
 <!-- END: Brands Section -->
 
+<!-- BEGIN: Bench Video Section -->
+<%# Vidéo atelier « test sur banc » (levier de conversion, reprise de la fiche
+    produit : même Short YouTube). Styles inline pour le cadre 9:16 → aucune
+    classe Tailwind arbitraire nouvelle (pas de rebuild CSS requis). %>
+<section class="bg-brand-dark py-16 px-6 text-white">
+<div class="max-w-[1100px] mx-auto grid gap-10 md:gap-12 md:grid-cols-2 items-center">
+<div>
+<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-3">Reconditionnement &amp; test sur banc</p>
+<h2 class="text-2xl md:text-3xl font-bold leading-tight mb-4">Chaque pièce passe sur notre banc d'essai avant expédition</h2>
+<p class="text-sm text-gray-300 leading-relaxed mb-6 max-w-xl">Démontage complet, remplacement des pièces d'usure, puis contrôle du fonctionnement, de l'étanchéité et du bruit sous charge — le certificat de test au banc est joint à chaque pièce.</p>
+<ul class="space-y-3">
+<% var _benchPoints = ['Contrôle du jeu, de la denture et de l\'étanchéité', 'Roulements et joints d\'usure remplacés', 'Certificat de test au banc joint à la pièce']; %>
+<% _benchPoints.forEach(function (pt) { %>
+<li class="flex items-center gap-3 text-sm text-gray-200">
+<svg class="w-4 h-4 text-brand-red shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path></svg>
+<%= pt %>
+</li>
+<% }) %>
+</ul>
+</div>
+<div class="flex justify-center">
+<div class="relative w-full rounded-2xl overflow-hidden bg-brand-darker shadow-2xl" style="max-width:250px; aspect-ratio:9/16;">
+<iframe class="absolute inset-0 w-full h-full" style="border:0;" src="https://www.youtube-nocookie.com/embed/EyZbdJosmr0?rel=0" title="Reconditionnement et test sur banc — Autoliva" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+</div>
+</div>
+</div>
+</section>
+<!-- END: Bench Video Section -->
+
 <!-- BEGIN: Quality Promise Section -->
 <section class="py-20 bg-white text-center">
 <div class="max-w-[1400px] mx-auto px-6">
