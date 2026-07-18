@@ -119,38 +119,15 @@
 <div>
 <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Pièce recherchée</p>
 <div class="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Type de pièce">
-<% Object.keys(partTypes).forEach(function (key) { %>
-<label class="cursor-pointer">
+<% var ptKeys = Object.keys(partTypes); %>
+<% ptKeys.forEach(function (key, i) { %>
+<label class="cursor-pointer<%= (i === ptKeys.length - 1 && ptKeys.length % 2 === 1) ? ' col-span-2' : '' %>">
 <input type="radio" name="partType" value="<%= key %>" class="peer sr-only" <%= form.partType === key ? 'checked' : '' %>>
 <span class="block text-center text-xs font-semibold border border-gray-300 rounded-lg py-2.5 px-1 text-gray-600 peer-checked:border-brand-red peer-checked:bg-brand-red/5 peer-checked:text-brand-red transition"><%= partTypes[key] %></span>
 </label>
 <% }) %>
 </div>
 </div>
-
-<% if (copy.showStateField) { %>
-<!-- État souhaité -->
-<div>
-<p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">État souhaité</p>
-<div class="grid grid-cols-3 gap-2" role="radiogroup" aria-label="État de la pièce">
-<%
-  var etatOptions = [
-    ['reconditionne', 'Reconditionné', 'Remise à neuf (roulements, joints et pièces d\'usure remplacés) — la plus fiable.'],
-    ['occasion', 'Occasion', 'Contrôlée (jeu, denture, étanchéité), garantie 6 mois — meilleur rapport qualité/prix.'],
-    ['je_sais_pas', 'Peu importe', 'Pas de préférence : on vous propose la meilleure pièce disponible pour votre véhicule.'],
-  ];
-  etatOptions.forEach(function (opt) {
-%>
-<label class="cursor-pointer">
-<input type="radio" name="etat" value="<%= opt[0] %>" class="peer sr-only" <%= form.etat === opt[0] ? 'checked' : '' %> data-etat-input data-etat-desc="<%= opt[2] %>">
-<span class="block text-center text-xs font-semibold border border-gray-300 rounded-lg py-2.5 px-1 text-gray-600 peer-checked:border-brand-red peer-checked:bg-brand-red/5 peer-checked:text-brand-red transition"><%= opt[1] %></span>
-</label>
-<% }) %>
-</div>
-<p data-etat-hint class="text-xs text-gray-500 mt-2 leading-snug min-h-[2rem]">Touchez un état pour voir le détail — ou « Peu importe », on vous propose le mieux.</p>
-</div>
-
-<% } %>
 
 <!-- CTA étape 1 -->
 <button type="button" data-step1-next class="w-full bg-brand-red hover:bg-brand-redhover text-white font-bold py-3.5 rounded-lg flex justify-center items-center gap-2 transition">
@@ -319,30 +296,6 @@ Envoyer ma demande
 </div>
 </section>
 <!-- END: Hero Section -->
-
-<script>
-  /* Champ « État » → info-bulle descriptive au survol/choix. */
-  (function () {
-    var etatInputs = document.querySelectorAll('[data-etat-input]');
-    if (!etatInputs.length) return;
-    var hint = document.querySelector('[data-etat-hint]');
-    var defaultHint = hint ? hint.textContent : '';
-    function setHint(txt) { if (hint) hint.textContent = txt || defaultHint; }
-    function selectedDesc() {
-      var sel = document.querySelector('[data-etat-input]:checked');
-      return sel ? sel.getAttribute('data-etat-desc') : '';
-    }
-    etatInputs.forEach(function (r) {
-      r.addEventListener('change', function () { setHint(selectedDesc()); });
-      var lbl = r.closest('label');
-      if (lbl) {
-        lbl.addEventListener('mouseenter', function () { setHint(r.getAttribute('data-etat-desc')); });
-        lbl.addEventListener('mouseleave', function () { setHint(selectedDesc()); });
-      }
-    });
-    setHint(selectedDesc());
-  })();
-</script>
 
 <!-- BEGIN: Brands Section -->
 <section class="border-b border-gray-100 py-10">

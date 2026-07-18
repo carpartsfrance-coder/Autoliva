@@ -37,9 +37,8 @@ const CAPTURE_SOURCE = 'landing_ponts';
 /* Types de pièce proposés dans le formulaire (remplace « complet/nu » des moteurs).
  * La valeur remonte dans requested.vehicle → visible directement par le commercial. */
 const PART_TYPES = {
-  pont_avant: 'Pont avant',
-  pont_arriere: 'Pont arrière',
-  differentiel: 'Différentiel',
+  pont_avant: 'Pont / différentiel avant',
+  pont_arriere: 'Pont / différentiel arrière',
   boite_transfert: 'Boîte de transfert',
 };
 
@@ -67,7 +66,6 @@ const VARIANTS = {
     copy: {
       formAction: '/ponts-differentiels/devis',
       funnelName: 'pont-differentiel',
-      showStateField: true,
       defaultPartType: '',
       eyebrow: 'Ponts & différentiels reconditionnés',
       h1Html: 'Des ponts et différentiels<br>reconditionnés,<br><span class="text-brand-red">prêts à reprendre la route.</span>',
@@ -98,7 +96,6 @@ const VARIANTS = {
     copy: {
       formAction: '/boites-de-transfert/devis',
       funnelName: 'boite-transfert',
-      showStateField: true,
       defaultPartType: 'boite_transfert',
       eyebrow: 'Boîtes de transfert reconditionnées',
       h1Html: 'Des boîtes de transfert<br>reconditionnées,<br><span class="text-brand-red">testées et garanties.</span>',
@@ -405,7 +402,6 @@ function buildInitialForm(req, variant) {
     phone: trim(q.phone),
     message: '',
     partType: PART_TYPES[partTypeRaw] ? partTypeRaw : (v.copy.defaultPartType || ''),
-    etat: '',
     website: '', // honeypot
   };
 }
@@ -466,21 +462,15 @@ async function postDevis(req, res, next) {
     const v = VARIANTS[variant] || VARIANTS.ponts;
     const body = (req.body && typeof req.body === 'object') ? req.body : {};
 
-    // État choisi par le client (reconditionné / occasion / je ne sais pas).
-    const etatRaw = trim(body.etat).toLowerCase();
-    const etat = (etatRaw === 'reconditionne' || etatRaw === 'occasion' || etatRaw === 'je_sais_pas') ? etatRaw : '';
-
-    // Type de pièce (pont AV / pont AR / différentiel / boîte de transfert).
+    // Type de pièce (pont/diff avant, pont/diff arrière, boîte de transfert).
     const partTypeRaw = trim(body.partType).toLowerCase();
     const partType = PART_TYPES[partTypeRaw] ? partTypeRaw : '';
     const partTypeLabel = partType ? PART_TYPES[partType] : '';
 
-    // Libellé condition → requested.vehicle → deriveCondition côté back-office.
+    // On ne propose QUE du reconditionné en échange standard → condition figée
+    // (pas de champ « état » côté client). → requested.vehicle → deriveCondition.
     const baseLabel = partTypeLabel || v.conditionLabel;
-    const conditionLabel = etat === 'reconditionne' ? `${baseLabel} reconditionné(e)`
-      : etat === 'occasion' ? `${baseLabel} d'occasion`
-      : etat === 'je_sais_pas' ? `${baseLabel} (état à préciser)`
-      : baseLabel;
+    const conditionLabel = `${baseLabel} reconditionné(e) — échange standard`;
 
     const composedMessage = partTypeLabel ? `Pièce demandée : ${partTypeLabel}` : '';
 
@@ -491,7 +481,6 @@ async function postDevis(req, res, next) {
       phone: trim(body.phone).slice(0, 24),
       message: composedMessage,
       partType,
-      etat,
       website: trim(body.website), // honeypot
     };
 
