@@ -159,6 +159,12 @@
         <option value="">Assigné : tous</option>
         <option value="__none__">Non assigné</option>
       </select>
+      <select name="clientType" id="sav-filter-client-type" class="rounded-xl border border-slate-300 px-3 py-2 text-sm" title="Type de compte client">
+        <option value="">Pro et particuliers</option>
+        <option value="B2B">🏢 Pros uniquement</option>
+        <option value="B2C">👤 Particuliers uniquement</option>
+        <option value="inconnu">❔ Type inconnu</option>
+      </select>
       <label class="sav-filter-pill" title="Afficher uniquement les tickets dont l'échéance SLA est dépassée">
         <input type="checkbox" name="sla_depasse" value="true" class="peer sr-only">
         <span class="sav-filter-pill__dot sav-filter-pill__dot--late" aria-hidden="true"></span>

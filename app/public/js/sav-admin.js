@@ -560,10 +560,20 @@
           };
           var mInfo = MOTIF_LABELS[t.motifSav] || MOTIF_LABELS.piece_defectueuse;
           var motifBadge = '<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-medium ' + mInfo.cls + '" title="' + escapeHtml(t.motifSav || '') + '">' + mInfo.icon + ' ' + mInfo.label + '</span>';
+          // Type de compte : seuls PRO et « inconnu » sont signalés. Un badge sur chaque
+          // ligne particulier (62 % des tickets) serait du bruit visuel.
+          var CLIENT_TYPE_BADGES = {
+            B2B:     { icon: '🏢', label: 'PRO',     cls: 'bg-indigo-50 text-indigo-700 border-indigo-200', title: 'Compte professionnel — SLA raccourci' },
+            inconnu: { icon: '❔', label: 'Type ?',  cls: 'bg-slate-50 text-slate-500 border-slate-200',     title: 'Compte non rapproché (invité, ou email différent de celui du compte)' },
+          };
+          var ctInfo = CLIENT_TYPE_BADGES[(t.client && t.client.type) || ''];
+          var clientTypeBadge = ctInfo
+            ? '<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-semibold ' + ctInfo.cls + '" title="' + escapeHtml(ctInfo.title) + '">' + ctInfo.icon + ' ' + ctInfo.label + '</span>'
+            : '';
           return '<tr class="hover:bg-slate-50 cursor-pointer ' + rowPulse + ' ' + rowTint + '" data-row="' + i + '" data-numero="' + escapeHtml(t.numero) + '">' +
             '<td class="px-3 py-2 sav-col-sticky-l"><input type="checkbox" class="rounded sav-row-cb" data-numero="' + escapeHtml(t.numero) + '" ' + (selected.has(t.numero) ? 'checked' : '') + '></td>' +
             '<td class="px-3 py-2 font-mono text-xs font-semibold sav-col-sticky-l2">' + pinDot + escapeHtml(t.numero) + '</td>' +
-            '<td class="px-3 py-2"><div class="text-xs font-medium">' + escapeHtml((t.client && t.client.nom) || '') + '</div><div class="text-[10px] text-slate-500">' + escapeHtml((t.client && t.client.email) || '') + '</div>' + (convBadgeHtml ? '<div class="mt-1">' + convBadgeHtml + '</div>' : '') + '</td>' +
+            '<td class="px-3 py-2"><div class="flex items-center gap-1 flex-wrap"><span class="text-xs font-medium">' + escapeHtml((t.client && t.client.nom) || '') + '</span>' + clientTypeBadge + '</div><div class="text-[10px] text-slate-500">' + escapeHtml((t.client && t.client.email) || '') + '</div>' + (convBadgeHtml ? '<div class="mt-1">' + convBadgeHtml + '</div>' : '') + '</td>' +
             '<td class="px-3 py-2"><div class="flex flex-col gap-0.5">' + motifBadge + (t.pieceType ? pieceBadge(t.pieceType) : '') + '</div></td>' +
             '<td class="px-3 py-2 text-xs">' + (vstr ? escapeHtml(vstr) : '<span class="text-slate-400">—</span>') + (v.vin ? '<div class="text-[10px] font-mono text-slate-400">' + escapeHtml(v.vin) + '</div>' : '') + '</td>' +
             '<td class="px-3 py-2">' + assignHtml + '</td>' +

@@ -431,6 +431,11 @@ adminRouter.get('/tickets', async (req, res) => {
     if (req.query.assignedTeam) {
       q.assignedTeam = req.query.assignedTeam;
     }
+    // Type de client : B2B (pro), B2C (particulier) ou inconnu (rapprochement échoué).
+    if (req.query.clientType) {
+      const arr = String(req.query.clientType).split(',').filter(Boolean);
+      q['client.type'] = arr.length > 1 ? { $in: arr } : arr[0];
+    }
     if (req.query.assignedToUserId) {
       if (req.query.assignedToUserId === '__none__') {
         q.assignedToUserId = { $in: [null, undefined] };
