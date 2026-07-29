@@ -52,6 +52,10 @@ const savSettingsSchema = new mongoose.Schema(
       { key: 'clos_sans_reponse', enabled: true, daysThreshold: 7, description: "Si statut = relance_2 sans réponse depuis N jours → clôture automatique avec email final" },
       { key: 'echange_auto', enabled: false, daysThreshold: 0, description: "Si analyse confirme défaut produit → créer une commande de remplacement avec remise 100% (désactivé par défaut)" },
     ] },
+    // Coefficient appliqué au SLA des tickets de comptes PRO (B2B) : un garage a un
+    // véhicule client immobilisé. 0,5 = deux fois plus rapide qu'un particulier,
+    // 1 = pas de différence. Plancher appliqué à la pose : 1 h ou 1 jour ouvré.
+    proSlaFactor: { type: Number, default: 0.5, min: 0.1, max: 1 },
   },
   { timestamps: true }
 );
@@ -66,6 +70,17 @@ savSettingsSchema.statics.getSlaForPiece = async function (pieceType) {
   const s = await this.getSingleton();
   const found = (s.slaPerPiece || []).find((p) => p.pieceType === pieceType);
   return found ? found.days : 5;
+};
+
+/** Coefficient SLA des comptes pro. Tolérant : renvoie 0,5 si le réglage est absent/illisible. */
+savSettingsSchema.statics.getProSlaFactor = async function () {
+  try {
+    const s = await this.getSingleton();
+    const f = Number(s && s.proSlaFactor);
+    return Number.isFinite(f) && f > 0 && f <= 1 ? f : 0.5;
+  } catch (_) {
+    return 0.5;
+  }
 };
 
 module.exports = mongoose.model('SavSettings', savSettingsSchema);

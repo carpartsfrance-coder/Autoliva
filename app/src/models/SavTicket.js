@@ -135,7 +135,11 @@ const savTicketSchema = new mongoose.Schema(
       email: { type: String, trim: true, lowercase: true, required: true, index: true },
       telephone: { type: String, trim: true },
       adresse: { type: String, trim: true },
-      type: { type: String, enum: ['B2C', 'B2B'], default: 'B2C' },
+      // Pro (B2B) ou particulier (B2C). Résolu automatiquement à la création via
+      // savClientType (email → User, puis commande). 'inconnu' quand le rapprochement
+      // échoue : on préfère l'assumer plutôt que de masquer un pro derrière un défaut.
+      type: { type: String, enum: ['B2C', 'B2B', 'inconnu'], default: 'inconnu', index: true },
+      typeSource: { type: String, trim: true, default: '' }, // email | reverseCharge | commande | non_resolu
     },
 
     garage: {
@@ -513,14 +517,44 @@ savTicketSchema.pre('save', async function preSave(next) {
     if (this.isNew && !this.numero) {
       this.numero = await this.constructor.generateNumero();
     }
+
+    // Type de client (pro/particulier) : résolu une seule fois, à la création.
+    // Non bloquant — un échec de résolution laisse 'inconnu' et n'empêche pas la
+    // création du ticket (le client ne doit jamais être pénalisé par ce rapprochement).
+    if (this.isNew && (!this.client.type || this.client.type === 'inconnu')) {
+      try {
+        const { resolveClientType } = require('../services/savClientType');
+        const r = await resolveClientType({
+          email: this.client && this.client.email,
+          numeroCommande: this.numeroCommande,
+        });
+        this.client.type = r.type;
+        this.client.typeSource = r.source;
+      } catch (_) {
+        this.client.type = 'inconnu';
+        this.client.typeSource = 'erreur';
+      }
+    }
+
     if (!this.sla) this.sla = {};
     if (!this.sla.dateOuverture) this.sla.dateOuverture = new Date();
     if (!this.sla.dateLimite) {
       const cfg = MOTIF_CONFIG[this.motifSav] || MOTIF_CONFIG.piece_defectueuse;
+      // SLA raccourci pour les pros : un garage a un véhicule client immobilisé.
+      // Facteur configurable dans SavSettings (défaut 0,5). Jamais < 1 h / 1 jour ouvré.
+      let factor = 1;
+      if (this.client && this.client.type === 'B2B') {
+        try {
+          const SavSettings = require('./SavSettings');
+          factor = await SavSettings.getProSlaFactor();
+        } catch (_) { factor = 0.5; }
+      }
       if (cfg.slaHours) {
-        this.sla.dateLimite = new Date(this.sla.dateOuverture.getTime() + cfg.slaHours * 3600 * 1000);
+        const hours = Math.max(1, Math.round(cfg.slaHours * factor));
+        this.sla.dateLimite = new Date(this.sla.dateOuverture.getTime() + hours * 3600 * 1000);
       } else {
-        this.sla.dateLimite = addBusinessDays(this.sla.dateOuverture, cfg.slaDays || 5);
+        const days = Math.max(1, Math.ceil((cfg.slaDays || 5) * factor));
+        this.sla.dateLimite = addBusinessDays(this.sla.dateOuverture, days);
       }
     }
     if (this.isNew && !this.assignedTeam) {
