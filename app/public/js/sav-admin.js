@@ -185,6 +185,20 @@
     return '<span class="px-2 py-0.5 rounded-full text-[11px] font-semibold ' + classStatut(s) + '">' + escapeHtml(labelStatut(s)) + '</span>';
   }
 
+  // Type de compte (client.type). On ne badge QUE les pros et les non-rapprochés :
+  // les particuliers représentent ~62 % des tickets, les signaler serait du bruit.
+  var CLIENT_TYPE_BADGES = {
+    B2B:     { icon: '🏢', label: 'PRO',    cls: 'bg-indigo-50 text-indigo-700 border-indigo-200', title: 'Compte professionnel — SLA raccourci' },
+    inconnu: { icon: '❔', label: 'Type ?', cls: 'bg-slate-50 text-slate-500 border-slate-200',     title: 'Compte non rapproché (invité, ou email différent de celui du compte)' },
+  };
+  function clientTypeBadge(type, size) {
+    var info = CLIENT_TYPE_BADGES[type || ''];
+    if (!info) return '';
+    var px = size === 'lg' ? 'px-2 py-0.5 text-[11px]' : 'px-1.5 py-0.5 text-[10px]';
+    return '<span class="inline-flex items-center gap-0.5 rounded border font-semibold ' + px + ' ' + info.cls +
+      '" title="' + escapeHtml(info.title) + '">' + info.icon + ' ' + info.label + '</span>';
+  }
+
   function avatar(name) {
     var n = (name || '').trim();
     if (!n) return '<span class="inline-flex w-6 h-6 rounded-full bg-slate-200 text-slate-400 items-center justify-center text-[10px]">·</span>';
@@ -510,6 +524,7 @@
                   '>' + sla2.label + '</span>' +
               '</div>' +
               '<div class="text-xs text-slate-700 truncate">' + escapeHtml((t.client && t.client.email) || '') + '</div>' +
+              (clientTypeBadge(t.client && t.client.type) ? '<div class="mt-1">' + clientTypeBadge(t.client && t.client.type) + '</div>' : '') +
               (convBadge(convState(t)) ? '<div class="mt-1">' + convBadge(convState(t)) + '</div>' : '') +
               '<div class="mt-1 flex items-center gap-2 flex-wrap">' + pieceBadge(t.pieceType) +
                 statutBadge(t.statut) +
@@ -560,20 +575,11 @@
           };
           var mInfo = MOTIF_LABELS[t.motifSav] || MOTIF_LABELS.piece_defectueuse;
           var motifBadge = '<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-medium ' + mInfo.cls + '" title="' + escapeHtml(t.motifSav || '') + '">' + mInfo.icon + ' ' + mInfo.label + '</span>';
-          // Type de compte : seuls PRO et « inconnu » sont signalés. Un badge sur chaque
-          // ligne particulier (62 % des tickets) serait du bruit visuel.
-          var CLIENT_TYPE_BADGES = {
-            B2B:     { icon: '🏢', label: 'PRO',     cls: 'bg-indigo-50 text-indigo-700 border-indigo-200', title: 'Compte professionnel — SLA raccourci' },
-            inconnu: { icon: '❔', label: 'Type ?',  cls: 'bg-slate-50 text-slate-500 border-slate-200',     title: 'Compte non rapproché (invité, ou email différent de celui du compte)' },
-          };
-          var ctInfo = CLIENT_TYPE_BADGES[(t.client && t.client.type) || ''];
-          var clientTypeBadge = ctInfo
-            ? '<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[10px] font-semibold ' + ctInfo.cls + '" title="' + escapeHtml(ctInfo.title) + '">' + ctInfo.icon + ' ' + ctInfo.label + '</span>'
-            : '';
+          var rowClientBadge = clientTypeBadge(t.client && t.client.type);
           return '<tr class="hover:bg-slate-50 cursor-pointer ' + rowPulse + ' ' + rowTint + '" data-row="' + i + '" data-numero="' + escapeHtml(t.numero) + '">' +
             '<td class="px-3 py-2 sav-col-sticky-l"><input type="checkbox" class="rounded sav-row-cb" data-numero="' + escapeHtml(t.numero) + '" ' + (selected.has(t.numero) ? 'checked' : '') + '></td>' +
             '<td class="px-3 py-2 font-mono text-xs font-semibold sav-col-sticky-l2">' + pinDot + escapeHtml(t.numero) + '</td>' +
-            '<td class="px-3 py-2"><div class="flex items-center gap-1 flex-wrap"><span class="text-xs font-medium">' + escapeHtml((t.client && t.client.nom) || '') + '</span>' + clientTypeBadge + '</div><div class="text-[10px] text-slate-500">' + escapeHtml((t.client && t.client.email) || '') + '</div>' + (convBadgeHtml ? '<div class="mt-1">' + convBadgeHtml + '</div>' : '') + '</td>' +
+            '<td class="px-3 py-2"><div class="flex items-center gap-1 flex-wrap"><span class="text-xs font-medium">' + escapeHtml((t.client && t.client.nom) || '') + '</span>' + rowClientBadge + '</div><div class="text-[10px] text-slate-500">' + escapeHtml((t.client && t.client.email) || '') + '</div>' + (convBadgeHtml ? '<div class="mt-1">' + convBadgeHtml + '</div>' : '') + '</td>' +
             '<td class="px-3 py-2"><div class="flex flex-col gap-0.5">' + motifBadge + (t.pieceType ? pieceBadge(t.pieceType) : '') + '</div></td>' +
             '<td class="px-3 py-2 text-xs">' + (vstr ? escapeHtml(vstr) : '<span class="text-slate-400">—</span>') + (v.vin ? '<div class="text-[10px] font-mono text-slate-400">' + escapeHtml(v.vin) + '</div>' : '') + '</td>' +
             '<td class="px-3 py-2">' + assignHtml + '</td>' +
@@ -903,7 +909,7 @@
             return '<a href="/admin/sav/tickets/' + encodeURIComponent(t.numero) + '" class="block rounded-xl border border-slate-200 bg-white hover:border-primary hover:shadow-sm p-3 text-xs ' + pulse + '">' +
               '<div class="flex items-center justify-between gap-1 mb-1"><span class="font-mono font-bold text-[11px]">' + escapeHtml(t.numero) + '</span>' +
               '<span class="sav-sla-badge sav-sla-badge--' + sla2.cls + '">' + sla2.label + '</span></div>' +
-              '<div class="truncate font-medium">' + escapeHtml((t.client && t.client.nom) || (t.client && t.client.email) || '—') + '</div>' +
+              '<div class="flex items-center gap-1 flex-wrap"><span class="truncate font-medium">' + escapeHtml((t.client && t.client.nom) || (t.client && t.client.email) || '—') + '</span>' + clientTypeBadge(t.client && t.client.type) + '</div>' +
               (convBadge(convState(t)) ? '<div class="mt-1">' + convBadge(convState(t)) + '</div>' : '') +
               '<div class="mt-1">' + pieceBadge(t.pieceType) + '</div>' +
               (t.assignedToName ? '<div class="mt-1 flex items-center gap-1 text-slate-500">' + avatar(t.assignedToName) + '<span>' + escapeHtml(t.assignedToName) + '</span></div>' : '<div class="mt-1 text-slate-400 italic">Non assigné</div>') +
@@ -2688,7 +2694,9 @@
       // --- Card 1 : Client ---
       var clientHref = c.email ? '/admin/clients?q=' + encodeURIComponent(c.email) : '#';
       var clientBody = [
-        c.nom ? '<div class="font-medium text-slate-900">' + escapeHtml(c.nom) + '</div>' : '',
+        (c.nom || clientTypeBadge(c.type))
+          ? '<div class="flex items-center gap-1.5 flex-wrap"><span class="font-medium text-slate-900">' + escapeHtml(c.nom || '—') + '</span>' + clientTypeBadge(c.type, 'lg') + '</div>'
+          : '',
         c.email ? '<div><a href="mailto:' + escapeHtml(c.email) + '" class="text-primary hover:underline">' + escapeHtml(c.email) + '</a></div>' : '',
         c.telephone ? '<div><a href="tel:' + escapeHtml(c.telephone) + '" class="text-primary hover:underline">' + escapeHtml(c.telephone) + '</a></div>' : '',
         '<div class="pt-2"><a href="' + clientHref + '" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 text-xs hover:border-primary hover:text-primary">Voir fiche client</a></div>',
