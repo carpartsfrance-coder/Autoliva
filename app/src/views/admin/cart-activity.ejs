@@ -729,6 +729,24 @@
   var EMAIL_TEMPLATES = <%- JSON.stringify(emailTemplates || []) %>;
   var SMS_TEMPLATES = <%- JSON.stringify(smsTemplates || []) %>;
 
+  /* La même liste alimente le composeur SMS et le composeur WhatsApp, mais les
+     deux canaux n'ont pas les mêmes règles (en SMS le client ne peut pas
+     répondre et les liens sont jetés). Un modèle peut donc déclarer
+     `channels: ['whatsapp']` ; sans ce champ il reste proposé partout. */
+  function smsTemplatesFor(channel) {
+    return SMS_TEMPLATES.filter(function (t) {
+      return !t.channels || t.channels.indexOf(channel) >= 0;
+    });
+  }
+
+  /* Le lead n'a ni plaque ni VIN → on ne peut rien lui confirmer. Le composeur
+     préselectionne alors le modèle qui réclame l'info plutôt qu'un modèle de
+     relance commerciale qui tomberait à plat. Concerne 45 % des leads. */
+  function leadMissesPlate(c) {
+    var r = (c && c.requested) || {};
+    return !String(r.plate || '').trim() && !String(r.vin || '').trim();
+  }
+
   var EMAIL_VARIABLES = [
     { key: 'prenom', label: 'Prénom' },
     { key: 'nom', label: 'Nom' },
@@ -1075,8 +1093,9 @@
     var c = lead || {};
     openModal('Envoyer un SMS');
 
+    var smsList = smsTemplatesFor('sms');
     var templatesOptions = '<option value="">— Choisir un template —</option>';
-    SMS_TEMPLATES.forEach(function (t) {
+    smsList.forEach(function (t) {
       templatesOptions += '<option value="' + escapeHtml(t.key) + '">' + escapeHtml(t.label) + '</option>';
     });
 
@@ -1128,14 +1147,16 @@
       updateCount();
     }
 
-    var presetSms = presetTemplateKey ? SMS_TEMPLATES.find(function (t) { return t.key === presetTemplateKey; }) : null;
-    var defaultSms = presetSms || SMS_TEMPLATES.find(function (t) {
-      return t.forSource && t.forSource.indexOf(c.captureSource) >= 0;
-    }) || SMS_TEMPLATES.find(function (t) { return t.key === 'sms_tried_to_call'; });
+    var presetSms = presetTemplateKey ? smsList.find(function (t) { return t.key === presetTemplateKey; }) : null;
+    var defaultSms = presetSms
+      || (leadMissesPlate(c) && smsList.find(function (t) { return t.key === 'sms_need_plate'; }))
+      || smsList.find(function (t) {
+        return t.forSource && t.forSource.indexOf(c.captureSource) >= 0;
+      }) || smsList.find(function (t) { return t.key === 'sms_tried_to_call'; });
     if (defaultSms) { templateEl.value = defaultSms.key; applyTemplate(defaultSms); }
 
     templateEl.addEventListener('change', function () {
-      var tpl = SMS_TEMPLATES.find(function (t) { return t.key === templateEl.value; });
+      var tpl = smsList.find(function (t) { return t.key === templateEl.value; });
       if (tpl) applyTemplate(tpl);
     });
 
@@ -1169,8 +1190,9 @@
     var c = lead || {};
     openModal('Message WhatsApp');
 
+    var waList = smsTemplatesFor('whatsapp');
     var templatesOptions = '<option value="">— Choisir un modèle —</option>';
-    SMS_TEMPLATES.forEach(function (t) {
+    waList.forEach(function (t) {
       templatesOptions += '<option value="' + escapeHtml(t.key) + '">' + escapeHtml(t.label) + '</option>';
     });
 
@@ -1198,13 +1220,16 @@
     attachArticlePicker(form, 'lead-wa-text');
 
     function applyTemplate(tpl) { if (tpl) ta.value = tpl.body || ''; }
-    var presetWa = presetTemplateKey ? SMS_TEMPLATES.find(function (t) { return t.key === presetTemplateKey; }) : null;
+    var presetWa = presetTemplateKey ? waList.find(function (t) { return t.key === presetTemplateKey; }) : null;
+    /* Pas de plaque → en WhatsApp on demande la photo de la carte grise :
+       elle donne l'immat ET le VIN d'un coup, ce que le SMS ne permet pas. */
     var defaultWa = presetWa
-      || SMS_TEMPLATES.find(function (t) { return t.forSource && t.forSource.indexOf(c.captureSource) >= 0; })
-      || SMS_TEMPLATES.find(function (t) { return t.key === 'sms_tried_to_call'; });
+      || (leadMissesPlate(c) && waList.find(function (t) { return t.key === 'wa_need_plate_photo'; }))
+      || waList.find(function (t) { return t.forSource && t.forSource.indexOf(c.captureSource) >= 0; })
+      || waList.find(function (t) { return t.key === 'sms_tried_to_call'; });
     if (defaultWa) { templateEl.value = defaultWa.key; applyTemplate(defaultWa); }
     templateEl.addEventListener('change', function () {
-      var tpl = SMS_TEMPLATES.find(function (t) { return t.key === templateEl.value; });
+      var tpl = waList.find(function (t) { return t.key === templateEl.value; });
       if (tpl) applyTemplate(tpl);
     });
 
