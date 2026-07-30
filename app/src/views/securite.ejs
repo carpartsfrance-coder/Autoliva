@@ -1,0 +1,99 @@
+<%- include('./partials/head') %>
+<%- include('./partials/header') %>
+
+<%/*
+  Page « Comment nous reconnaître » — l'URL qu'on envoie à quelqu'un qui vient
+  de nous signaler un faux compte. Un bandeau n'est pas partageable ; celle-ci
+  l'est, en message privé comme en réponse publique sous une fausse annonce.
+
+  Tout est tiré de brand.js : l'adresse, le domaine et le téléphone affichés ici
+  ne peuvent pas diverger de ceux réellement utilisés par le site.
+  On ne liste volontairement AUCUN compte de réseau social : affirmer qu'un
+  compte est officiel n'a de valeur que si la liste est exacte et tenue à jour.
+*/%>
+
+<main class="flex-1 bg-slate-50">
+
+  <section style="background:#0B1220;">
+    <div class="mx-auto max-w-4xl px-4 sm:px-6 py-12 sm:py-16">
+      <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(239,159,39,.14);border:1px solid rgba(239,159,39,.35);border-radius:999px;padding:5px 14px;">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#FAC775" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 4v5c0 4.4-3 8.3-7 9-4-.7-7-4.6-7-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
+        <span style="color:#FAC775;font-size:12px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;">Alerte usurpation d'identité</span>
+      </div>
+      <h1 class="mt-5 text-3xl sm:text-4xl font-bold tracking-tight" style="color:#fff;">Comment nous reconnaître</h1>
+      <p class="mt-4 text-base sm:text-lg" style="color:#C9CFDA;max-width:44rem;">
+        Des personnes se font passer pour <%= brand.NAME %> sur les réseaux sociaux et par messagerie.
+        Elles utilisent notre nom, nos photos et parfois nos annonces. Voici comment vérifier
+        que vous parlez bien à nous — et pas à elles.
+      </p>
+    </div>
+  </section>
+
+  <section class="mx-auto max-w-4xl px-4 sm:px-6 py-10 sm:py-14">
+
+    <div class="rounded-2xl bg-white border border-slate-200 p-6 sm:p-8">
+      <h2 class="text-xl font-bold text-slate-900">Nos seuls moyens de contact</h2>
+      <p class="mt-2 text-sm text-slate-600">Tout message qui ne passe pas par l'un de ces canaux ne vient pas de nous.</p>
+      <dl class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div>
+          <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Site</dt>
+          <dd class="mt-1 text-sm font-semibold text-slate-900"><%= brand.DOMAIN %></dd>
+        </div>
+        <div>
+          <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">E-mail</dt>
+          <dd class="mt-1 text-sm font-semibold"><a class="text-primary hover:underline" href="mailto:<%= brand.EMAIL_CONTACT %>"><%= brand.EMAIL_CONTACT %></a></dd>
+        </div>
+        <div>
+          <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Téléphone</dt>
+          <dd class="mt-1 text-sm font-semibold"><a class="text-primary hover:underline" href="tel:<%= brand.PHONE_INTL %>"><%= brand.PHONE %></a></dd>
+        </div>
+      </dl>
+      <p class="mt-5 text-sm text-slate-600">
+        Nos e-mails partent toujours d'une adresse en <strong>@<%= brand.DOMAIN %></strong>.
+        Une adresse en gmail, outlook ou hotmail, même si elle contient « <%= brand.NAME_SHORT.toLowerCase() %> », n'est pas la nôtre.
+      </p>
+    </div>
+
+    <div class="mt-6 rounded-2xl border p-6 sm:p-8" style="background:#FCEBEB;border-color:#F09595;">
+      <h2 class="text-xl font-bold" style="color:#501313;">Ce que nous ne faisons jamais</h2>
+      <ul class="mt-4 space-y-3 text-sm" style="color:#501313;">
+        <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous demander un <strong>virement vers un compte personnel</strong>. Nos règlements passent par le site ou par une facture à notre nom commercial.</span></li>
+        <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous vendre une pièce et l'encaisser <strong>via une messagerie privée</strong> (Messenger, WhatsApp, Instagram) sans commande sur <%= brand.DOMAIN %>.</span></li>
+        <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous réclamer un acompte par un <strong>lien de paiement extérieur</strong> à notre site.</span></li>
+        <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous demander vos <strong>codes bancaires</strong>, un code reçu par SMS, ou une recharge type coupon.</span></li>
+        <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous mettre la pression pour payer <strong>dans l'heure</strong> sous peine de perdre la pièce.</span></li>
+      </ul>
+    </div>
+
+    <div class="mt-6 rounded-2xl bg-white border border-slate-200 p-6 sm:p-8">
+      <h2 class="text-xl font-bold text-slate-900">Un doute sur un message ?</h2>
+      <ol class="mt-4 space-y-3 text-sm text-slate-700 list-decimal list-inside">
+        <li><strong>Ne payez rien.</strong> Aucune offre légitime ne disparaît le temps d'un appel.</li>
+        <li><strong>Appelez-nous au <a class="text-primary hover:underline" href="tel:<%= brand.PHONE_INTL %>"><%= brand.PHONE %></a></strong> ou écrivez à <a class="text-primary hover:underline" href="mailto:<%= brand.EMAIL_CONTACT %>"><%= brand.EMAIL_CONTACT %></a>. Nous vous dirons en une minute si le message vient de nous.</li>
+        <li><strong>Envoyez-nous une capture d'écran</strong> du profil ou de l'annonce : cela nous aide à le faire fermer.</li>
+      </ol>
+    </div>
+
+    <div class="mt-6 rounded-2xl bg-white border border-slate-200 p-6 sm:p-8">
+      <h2 class="text-xl font-bold text-slate-900">Vous avez déjà payé</h2>
+      <p class="mt-3 text-sm text-slate-700">
+        Contactez immédiatement votre banque pour tenter de faire opposition — les premières heures comptent.
+        Vous pouvez ensuite déposer plainte en gendarmerie ou au commissariat, et signaler les faits sur
+        <a class="text-primary hover:underline" href="https://www.internet-signalement.gouv.fr" rel="noopener">internet-signalement.gouv.fr</a>
+        (plateforme officielle du ministère de l'Intérieur).
+        Le service public <a class="text-primary hover:underline" href="https://www.cybermalveillance.gouv.fr" rel="noopener">cybermalveillance.gouv.fr</a>
+        vous accompagne gratuitement dans les démarches.
+      </p>
+      <p class="mt-3 text-sm text-slate-600">
+        Prévenez-nous aussi : même si la transaction ne nous concerne pas, chaque signalement nous sert à faire supprimer les faux comptes.
+      </p>
+    </div>
+
+    <div class="mt-8 text-center">
+      <a href="/" class="inline-flex items-center gap-2 rounded-xl bg-primary hover:bg-primary-hover text-white font-semibold px-6 py-3 min-h-[48px]">Retour à la boutique</a>
+    </div>
+
+  </section>
+</main>
+
+<%- include('./partials/footer') %>

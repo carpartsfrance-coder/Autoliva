@@ -16,6 +16,11 @@
 <% const _frHref = (_frTag && _frTag.href) ? _frTag.href : (_curPathClean === '/' ? '/' : _curPathClean); %>
 <% const _deHref = (_deTag && _deTag.href) ? _deTag.href : ('/de' + (_curPathClean === '/' ? '' : _curPathClean)); %>
 
+<%/* Avertissement usurpation d'identité — AVANT le <header>, donc hors du sticky :
+     il défile avec la page au lieu d'occuper l'écran en permanence. Placé ici
+     pour couvrir les 49 gabarits d'un coup, tunnel de commande compris. */%>
+<%- include('./security-banner') %>
+
 <header class="sticky top-0 z-50 w-full border-b border-slate-200 bg-white">
 
 <%/* Barre utilitaire (desktop md+) : téléphone + langue. Sortis de la rangée

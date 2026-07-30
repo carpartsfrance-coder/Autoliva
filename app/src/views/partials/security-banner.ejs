@@ -1,0 +1,104 @@
+<%/*
+  Bandeau d'alerte « usurpation d'identité ».
+
+  Affiché AU-DESSUS du <header> (donc hors du sticky) : il défile avec la page
+  au lieu de manger la hauteur d'écran en permanence.
+
+  Trois partis pris :
+   1. Visible par défaut, masquable depuis l'admin (Paramètres du site). Une
+      alerte de sécurité qui exige un déploiement pour être retirée finit par
+      rester en place des mois — et un bandeau permanent n'alerte plus personne.
+   2. Ambre, pas rouge : le rouge de la marque (#E10613) est la couleur des CTA,
+      un bandeau rouge se lit comme une promo et l'œil l'ignore.
+   3. Fermeture mémorisée 7 JOURS et pas définitivement : la cible d'une arnaque
+      est souvent un premier visiteur, mais on ne harcèle pas les habitués.
+
+  Le repli est natif (<details>) : il fonctionne sans JS et reste accessible.
+  Couleurs en style inline volontairement — le CSS Tailwind est précompilé au
+  déploiement, une classe arbitraire resterait sans effet en local.
+*/%>
+<%
+  var _sbS = (typeof siteSettings !== 'undefined' && siteSettings && typeof siteSettings === 'object') ? siteSettings : {};
+  var _sbHidden = _sbS.securityAlertHidden === true;
+  var _sbText = (typeof _sbS.securityAlertText === 'string' && _sbS.securityAlertText.trim())
+    ? _sbS.securityAlertText.trim()
+    : 'Des faux comptes usurpent notre identité sur les réseaux sociaux.';
+%>
+<% if (!_sbHidden) { %>
+<div id="security-alert" style="background:#161F30;border-left:3px solid #EF9F27;">
+  <details style="max-width:1440px;margin:0 auto;">
+    <summary style="list-style:none;cursor:pointer;padding:9px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="#FAC775" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0" aria-hidden="true"><path d="M12 3l7 4v5c0 4.4-3 8.3-7 9-4-0.7-7-4.6-7-9V7z"/><path d="M9 12l2 2 4-4"/></svg>
+      <%/* Deux formulations : la phrase complète en desktop, une version courte en
+           mobile. Sans ça la bande repliée prend 133 px sur un écran de 375 px —
+           un quart de l'écran pour un message qu'on veut discret mais permanent. */%>
+      <span class="sa-full" style="font-size:13px;color:#E4E7ED;line-height:1.5;">
+        <%= _sbText %> Nous n'écrivons que depuis <strong style="color:#fff;font-weight:600;"><%= brand.EMAIL_CONTACT %></strong>
+      </span>
+      <span class="sa-short" style="font-size:12.5px;color:#E4E7ED;line-height:1.4;">
+        Attention aux faux comptes — <strong style="color:#fff;font-weight:600;"><%= brand.EMAIL_CONTACT %></strong>
+      </span>
+      <span style="font-size:13px;color:#FAC775;text-decoration:underline;margin-left:auto;white-space:nowrap;">Vérifier</span>
+    </summary>
+
+    <div style="padding:4px 16px 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px;">
+      <div>
+        <div style="font-size:11px;color:#FAC775;text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px;font-weight:600;">Nos seuls canaux</div>
+        <div style="font-size:12.5px;color:#C9CFDA;line-height:1.9;">
+          <%= brand.DOMAIN %><br>
+          <a href="mailto:<%= brand.EMAIL_CONTACT %>" style="color:#C9CFDA;text-decoration:underline;"><%= brand.EMAIL_CONTACT %></a><br>
+          <a href="tel:<%= brand.PHONE_INTL %>" style="color:#C9CFDA;text-decoration:underline;"><%= brand.PHONE %></a>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#F09595;text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px;font-weight:600;">Ce que nous ne faisons jamais</div>
+        <div style="font-size:12.5px;color:#C9CFDA;line-height:1.9;">
+          Demander un virement vers un compte personnel<br>
+          Encaisser via une messagerie privée<br>
+          Réclamer un acompte par un lien externe<br>
+          Demander vos codes bancaires
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:#FAC775;text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px;font-weight:600;">Un doute ?</div>
+        <div style="font-size:12.5px;color:#C9CFDA;line-height:1.9;">
+          Appelez-nous avant tout paiement.<br>
+          <a href="/securite" style="color:#FAC775;text-decoration:underline;">Comment nous reconnaître</a>
+        </div>
+        <button type="button" id="security-alert-close" style="margin-top:10px;background:none;border:1px solid #3A465C;color:#8A93A5;font-size:11.5px;padding:4px 10px;border-radius:4px;cursor:pointer;">Masquer 7 jours</button>
+      </div>
+    </div>
+  </details>
+</div>
+<script>
+/* Exécuté immédiatement après le bandeau : il disparaît avant que la suite de
+   la page ne soit peinte, donc pas de clignotement ni de saut de mise en page. */
+(function () {
+  var K = 'autoliva_security_alert_hidden_until';
+  var el = document.getElementById('security-alert');
+  if (!el) return;
+  try {
+    var until = parseInt(window.localStorage.getItem(K) || '0', 10);
+    if (until && Date.now() < until) { el.style.display = 'none'; return; }
+  } catch (e) { /* mode privé / stockage bloqué : on garde le bandeau visible */ }
+  var btn = document.getElementById('security-alert-close');
+  if (btn) btn.addEventListener('click', function () {
+    try { window.localStorage.setItem(K, String(Date.now() + 7 * 24 * 60 * 60 * 1000)); } catch (e) {}
+    el.style.display = 'none';
+  });
+})();
+</script>
+<style>
+#security-alert summary::-webkit-details-marker{display:none}
+#security-alert .sa-short{display:none}
+@media (max-width:639px){
+  #security-alert .sa-full{display:none}
+  /* Un enfant de flex est toujours blockifié : sans `flex:1 1 0` + `min-width:0`
+     le texte réclame sa largeur intrinsèque et se met sur sa propre ligne,
+     ce qui fait passer la bande repliée de 50 à 110 px. */
+  #security-alert .sa-short{display:block;flex:1 1 0;min-width:0}
+  #security-alert summary{padding:8px 12px;gap:8px;flex-wrap:nowrap}
+  #security-alert > details > div{padding:4px 12px 16px;gap:14px}
+}
+</style>
+<% } %>
