@@ -23,6 +23,15 @@ const siteSettingsSchema = new mongoose.Schema(
 
     promoBannerText: { type: String, default: '', trim: true },
     promoBannerCode: { type: String, default: '', trim: true },
+
+    /* Bandeau d'alerte « usurpation d'identité ».
+       Le drapeau est NÉGATIF à dessein : le bandeau est visible par défaut et
+       il faut une action explicite pour le masquer. Une alerte de sécurité doit
+       tomber du bon côté quand la valeur est absente (documents déjà en base)
+       ou que la base est indisponible. */
+    securityAlertHidden: { type: Boolean, default: false },
+    securityAlertText: { type: String, default: '', trim: true },
+
     aboutTitle: { type: String, default: '', trim: true },
     aboutText: { type: String, default: '', trim: true },
     facebookUrl: { type: String, default: '', trim: true },

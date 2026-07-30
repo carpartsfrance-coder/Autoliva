@@ -39,6 +39,22 @@
         </div>
       </div>
 
+      <div class="border-t border-slate-100 pt-6">
+        <div class="text-sm font-semibold uppercase tracking-widest text-slate-400">Alerte sécurité (usurpation d'identité)</div>
+        <div class="mt-2 text-xs text-slate-500">Bandeau affiché en haut de <strong>toutes</strong> les pages du site. Il est <strong>visible par défaut</strong> : décoche pour le retirer quand la vague de faux comptes sera passée. Le visiteur peut le masquer 7 jours de son côté.</div>
+        <div class="mt-4 grid grid-cols-1 gap-4">
+          <label class="inline-flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" name="securityAlertHidden" value="on" <%= form && form.securityAlertHidden ? 'checked' : '' %> class="h-4 w-4 rounded border-slate-300 text-red-600 focus:ring-red-500">
+            <span class="text-sm font-medium text-slate-700">Masquer le bandeau d'alerte</span>
+          </label>
+          <div>
+            <label class="block text-sm font-medium text-slate-500" for="securityAlertText">Phrase d'accroche (optionnel)</label>
+            <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="securityAlertText" name="securityAlertText" type="text" value="<%= form && form.securityAlertText ? form.securityAlertText : '' %>" placeholder="Des faux comptes usurpent notre identité sur les réseaux sociaux." />
+            <div class="mt-2 text-xs text-slate-500">L'adresse <strong><%= brand.EMAIL_CONTACT %></strong>, le téléphone et le rappel « ce que nous ne faisons jamais » sont ajoutés automatiquement — pas besoin de les réécrire ici.</div>
+          </div>
+        </div>
+      </div>
+
       <div>
         <div class="text-sm font-semibold uppercase tracking-widest text-slate-400">Accueil - Notre histoire</div>
         <div class="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">

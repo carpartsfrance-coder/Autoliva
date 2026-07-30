@@ -20,6 +20,10 @@ function buildEnvFallback() {
   return {
     promoBannerText: getTrimmedString(process.env.PROMO_BANNER_TEXT) || '',
     promoBannerCode: getTrimmedString(process.env.PROMO_BANNER_CODE) || '',
+    // Alerte sécurité : visible tant qu'on ne l'a pas explicitement masquée,
+    // y compris quand la base est injoignable (ce fallback sert aussi dans ce cas).
+    securityAlertHidden: false,
+    securityAlertText: '',
     aboutTitle: getTrimmedString(process.env.HOME_ABOUT_TITLE) || 'Notre histoire',
     aboutText:
       getTrimmedString(process.env.HOME_ABOUT_TEXT)
@@ -58,6 +62,8 @@ async function getSiteSettingsMergedWithFallback({ bypassCache = false } = {}) {
     const merged = {
       promoBannerText: saved.promoBannerText || '',
       promoBannerCode: saved.promoBannerCode || '',
+      securityAlertHidden: saved.securityAlertHidden === true,
+      securityAlertText: saved.securityAlertText || '',
       aboutTitle: saved.aboutTitle || fallback.aboutTitle,
       aboutText: saved.aboutText || fallback.aboutText,
       facebookUrl: getSafeUrl(saved.facebookUrl) || fallback.facebookUrl,
@@ -80,6 +86,9 @@ function sanitizeForm(body) {
   return {
     promoBannerText: getTrimmedString(b.promoBannerText),
     promoBannerCode: getTrimmedString(b.promoBannerCode),
+    // Case décochée = champ absent du POST → false, donc bandeau visible.
+    securityAlertHidden: b.securityAlertHidden === 'on' || b.securityAlertHidden === true || b.securityAlertHidden === 'true',
+    securityAlertText: getTrimmedString(b.securityAlertText),
     aboutTitle: getTrimmedString(b.aboutTitle),
     aboutText: getTrimmedString(b.aboutText),
     facebookUrl: getSafeUrl(b.facebookUrl),
@@ -100,6 +109,8 @@ async function updateSiteSettingsFromForm(body) {
   cached = {
     promoBannerText: updated && updated.promoBannerText ? updated.promoBannerText : '',
     promoBannerCode: updated && updated.promoBannerCode ? updated.promoBannerCode : '',
+    securityAlertHidden: !!(updated && updated.securityAlertHidden),
+    securityAlertText: updated && updated.securityAlertText ? updated.securityAlertText : '',
     aboutTitle: updated && updated.aboutTitle ? updated.aboutTitle : buildEnvFallback().aboutTitle,
     aboutText: updated && updated.aboutText ? updated.aboutText : buildEnvFallback().aboutText,
     facebookUrl: updated && updated.facebookUrl ? getSafeUrl(updated.facebookUrl) : '',

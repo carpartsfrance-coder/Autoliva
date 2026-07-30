@@ -93,6 +93,16 @@ router.get('/sav/notre-engagement', (req, res) => {
     canonicalUrl: `${getSiteUrlFromReq(req)}/sav/notre-engagement`,
   });
 });
+/* Page de vérification anti-usurpation. L'URL est courte et mémorisable à
+   dessein : elle est faite pour être dictée au téléphone et collée en réponse
+   sous une fausse annonce. */
+router.get('/securite', (req, res) => {
+  res.render('securite', {
+    title: `Comment nous reconnaître — ${brand.NAME}`,
+    metaDescription: `Des faux comptes usurpent l'identité de ${brand.NAME}. Nos seuls moyens de contact, ce que nous ne faisons jamais, et quoi faire en cas de doute.`,
+    canonicalUrl: `${getSiteUrlFromReq(req)}/securite`,
+  });
+});
 router.get('/legal/cgv-sav', (req, res) => {
   res.render('legal/cgv-sav', {
     title: `CGV SAV — ${brand.NAME}`,
