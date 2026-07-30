@@ -32,8 +32,11 @@
       <%/* Deux formulations : la phrase complète en desktop, une version courte en
            mobile. Sans ça la bande repliée prend 133 px sur un écran de 375 px —
            un quart de l'écran pour un message qu'on veut discret mais permanent. */%>
+      <%/* Formulé côté RÉCEPTION (« notre adresse de contact ») et non côté envoi :
+           nos mails partent aussi de sav@ et noreply@. Écrire « nous n'écrivons
+           que depuis contact@ » ferait douter d'un vrai message du SAV. */%>
       <span class="sa-full" style="font-size:13px;color:#E4E7ED;line-height:1.5;">
-        <%= _sbText %> Nous n'écrivons que depuis <strong style="color:#fff;font-weight:600;"><%= brand.EMAIL_CONTACT %></strong>
+        <%= _sbText %> Notre seule adresse de contact : <strong style="color:#fff;font-weight:600;"><%= brand.EMAIL_CONTACT %></strong>
       </span>
       <span class="sa-short" style="font-size:12.5px;color:#E4E7ED;line-height:1.4;">
         Attention aux faux comptes — <strong style="color:#fff;font-weight:600;"><%= brand.EMAIL_CONTACT %></strong>
@@ -43,11 +46,13 @@
 
     <div style="padding:4px 16px 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px;">
       <div>
-        <div style="font-size:11px;color:#FAC775;text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px;font-weight:600;">Nos seuls canaux</div>
+        <%/* « officiels » et pas « seuls » : nos conseillers appellent depuis des
+             lignes directes qui ne figurent pas ici et qu'on ne publie pas. */%>
+        <div style="font-size:11px;color:#FAC775;text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px;font-weight:600;">Nos canaux officiels</div>
         <div style="font-size:12.5px;color:#C9CFDA;line-height:1.9;">
           <%= brand.DOMAIN %><br>
           <a href="mailto:<%= brand.EMAIL_CONTACT %>" style="color:#C9CFDA;text-decoration:underline;"><%= brand.EMAIL_CONTACT %></a><br>
-          <a href="tel:<%= brand.PHONE_INTL %>" style="color:#C9CFDA;text-decoration:underline;"><%= brand.PHONE %></a>
+          <a href="tel:<%= brand.PHONE_INTL %>" style="color:#C9CFDA;text-decoration:underline;"><%= brand.PHONE %></a> (standard)
         </div>
       </div>
       <div>

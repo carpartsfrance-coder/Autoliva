@@ -99,7 +99,11 @@ router.get('/sav/notre-engagement', (req, res) => {
 router.get('/securite', (req, res) => {
   res.render('securite', {
     title: `Comment nous reconnaître — ${brand.NAME}`,
-    metaDescription: `Des faux comptes usurpent l'identité de ${brand.NAME}. Nos seuls moyens de contact, ce que nous ne faisons jamais, et quoi faire en cas de doute.`,
+    /* Pas de « nos seuls moyens de contact » ici non plus : cette description
+       s'affiche dans Google et doit dire la même chose que la page. */
+    /* Nom de marque en apposition (« les canaux officiels Autoliva ») et non
+       après « de » : brand.NAME est variable, l'élision ne peut pas être codée. */
+    metaDescription: `Des faux comptes usurpent notre identité. Les canaux officiels ${brand.NAME}, comment reconnaître nos liens de paiement, et quoi faire en cas de doute.`,
     canonicalUrl: `${getSiteUrlFromReq(req)}/securite`,
   });
 });

@@ -32,8 +32,14 @@
   <section class="mx-auto max-w-4xl px-4 sm:px-6 py-10 sm:py-14">
 
     <div class="rounded-2xl bg-white border border-slate-200 p-6 sm:p-8">
-      <h2 class="text-xl font-bold text-slate-900">Nos seuls moyens de contact</h2>
-      <p class="mt-2 text-sm text-slate-600">Tout message qui ne passe pas par l'un de ces canaux ne vient pas de nous.</p>
+      <%/* Pas de « nos SEULS moyens de contact » : nos conseillers appellent depuis
+           des lignes directes qui ne sont pas le standard. Un client qui vérifie
+           un appel légitime ici et ne trouve pas le numéro conclurait à une
+           arnaque — même piège que « nous n'envoyons jamais de lien de paiement ».
+           On donne les canaux de référence, et on explique le cas des lignes
+           directes plus bas SANS les publier. */%>
+      <h2 class="text-xl font-bold text-slate-900">Nos moyens de contact officiels</h2>
+      <p class="mt-2 text-sm text-slate-600">C'est par là que nous vous écrivons, et c'est là que vous pouvez nous joindre à coup sûr.</p>
       <dl class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-5">
         <div>
           <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Site</dt>
@@ -44,13 +50,21 @@
           <dd class="mt-1 text-sm font-semibold"><a class="text-primary hover:underline" href="mailto:<%= brand.EMAIL_CONTACT %>"><%= brand.EMAIL_CONTACT %></a></dd>
         </div>
         <div>
-          <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Téléphone</dt>
+          <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Téléphone (standard)</dt>
           <dd class="mt-1 text-sm font-semibold"><a class="text-primary hover:underline" href="tel:<%= brand.PHONE_INTL %>"><%= brand.PHONE %></a></dd>
         </div>
       </dl>
       <p class="mt-5 text-sm text-slate-600">
         Nos e-mails partent toujours d'une adresse en <strong>@<%= brand.DOMAIN %></strong>.
         Une adresse en gmail, outlook ou hotmail, même si elle contient « <%= brand.NAME_SHORT.toLowerCase() %> », n'est pas la nôtre.
+      </p>
+      <%/* Le conseil « raccrochez et rappelez le numéro officiel » est de toute
+           façon LA bonne réponse face à un appel douteux : on protège la ligne
+           directe du conseiller tout en donnant au client un réflexe utile. */%>
+      <p class="mt-3 text-sm text-slate-600">
+        <strong>Un conseiller peut vous rappeler depuis sa ligne directe</strong>, qui n'est pas le numéro du standard : c'est normal.
+        En cas de doute sur un appel, ne communiquez rien, raccrochez et rappelez le <a class="text-primary hover:underline" href="tel:<%= brand.PHONE_INTL %>"><%= brand.PHONE %></a> —
+        nous vous confirmerons en une minute si l'appel venait bien de nous.
       </p>
     </div>
 
