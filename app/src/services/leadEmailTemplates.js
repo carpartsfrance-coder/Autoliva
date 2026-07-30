@@ -272,6 +272,19 @@ const EMAIL_TEMPLATES = [
 /*   4. Compatibilité : on ne dit JAMAIS « votre {nom_produit} est          */
 /*      compatible » (le client a pu choisir la mauvaise réf sur le site).  */
 /*      On confirme la compat POUR SON VÉHICULE / « la bonne pièce ».       */
+/*   5. Signature en tiret SIMPLE « - » et pas en tiret cadratin « – » :    */
+/*      un seul caractère hors Latin-1 bascule TOUT le SMS en UCS-2, soit   */
+/*      67 caractères par segment au lieu de 153 (~2,3x le coût).           */
+/*                                                                          */
+/*  CANAL — cette liste alimente DEUX composeurs : le SMS (Brevo) et le     */
+/*  WhatsApp click-to-chat. Le champ optionnel `channels` restreint un      */
+/*  modèle à l'un des deux ; absent = les deux (cas par défaut, et donc     */
+/*  comportement inchangé pour tous les modèles historiques).               */
+/*  C'est nécessaire parce que les deux canaux n'ont PAS les mêmes règles : */
+/*  en SMS le client ne peut pas répondre et les liens sont jetés ; en      */
+/*  WhatsApp il répond, envoie des photos, et les liens passent. Un         */
+/*  « envoyez-moi votre carte grise en photo » n'a donc de sens qu'en       */
+/*  WhatsApp → `channels: ['whatsapp']`.                                    */
 /* ──────────────────────────────────────────────────────────────────────── */
 
 const SMS_TEMPLATES = [
@@ -328,6 +341,45 @@ const SMS_TEMPLATES = [
     label: 'Panier en attente',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
     body: '{prenom},\nVotre panier ({prix_total}) est toujours là.\nJe peux le finaliser avec vous : rappelez-moi au {telephone}.\n{nom_commercial} – {brand}',
+  },
+
+  /* ── Immatriculation / VIN manquants ────────────────────────────────────
+     45 % des leads n'ont ni plaque ni VIN, et ça se concentre exactement là
+     où le tunnel ne les demande pas : panier (99 %), formulaire contact
+     (83 %), leads sans source (96 %). Les tunnels devis/landing, eux, sont
+     à 0-3 % — inutile de leur proposer ces modèles.
+     Sans plaque on ne peut RIEN valider : on ne relance donc pas sur le
+     prix ou la dispo, on relance sur l'information qui débloque tout. */
+  {
+    key: 'sms_need_plate',
+    label: 'Immat ou VIN manquant',
+    forSource: ['cart_activity', 'guest_checkout', 'user', 'contact'],
+    body: '{prenom},\nIl me manque votre immatriculation ou votre VIN pour vérifier la compatibilité.\nRappelez-moi au {telephone} avec votre carte grise, 2 min suffisent.\n{nom_commercial} - {brand}',
+  },
+  {
+    /* WhatsApp uniquement : la photo de carte grise donne plaque ET VIN d'un
+       coup, c'est le chemin le plus court. Impossible en SMS — le client ne
+       peut pas répondre à un expéditeur alphanumérique. */
+    key: 'wa_need_plate_photo',
+    label: 'Immat/VIN : photo de la carte grise',
+    channels: ['whatsapp'],
+    forSource: ['cart_activity', 'guest_checkout', 'user', 'contact', 'devis'],
+    body: '{prenom},\nPour vérifier que la pièce correspond bien à votre véhicule, il me faut votre immatriculation ou votre VIN.\nLe plus simple : envoyez-moi ici une photo de votre carte grise, je vous confirme la bonne référence dans la foulée.\n{nom_commercial} - {brand}',
+  },
+  {
+    key: 'sms_need_plate_cart',
+    label: 'Panier : vérifier avant de valider',
+    forSource: ['cart_activity', 'guest_checkout', 'user'],
+    /* {prix_total} plutôt que {nom_produit} : les noms de pièces du catalogue
+       font souvent 60+ caractères et feraient sauter un segment de SMS.
+       Même arbitrage que sms_cart_reminder. */
+    body: '{prenom},\nVotre panier ({prix_total}) est en attente. Avant de valider, je préfère vérifier que la référence correspond bien à votre véhicule.\nRappelez-moi au {telephone} avec votre immatriculation.\n{nom_commercial} - {brand}',
+  },
+  {
+    key: 'sms_need_plate_last',
+    label: 'Immat/VIN : dernière relance',
+    forSource: ['cart_activity', 'guest_checkout', 'user', 'contact'],
+    body: '{prenom},\nSans votre immatriculation ou votre VIN je ne peux pas vous garantir la bonne pièce, je vais donc clôturer votre demande.\nUn appel au {telephone} suffit à la rouvrir.\n{nom_commercial} - {brand}',
   },
 ];
 

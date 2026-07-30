@@ -20,7 +20,8 @@
 
     <form method="POST" action="/admin/parametres/modeles-messages" class="mt-6" id="lt-form">
 
-      <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mt-6 mb-3">SMS · <%= sms.length %></h2>
+      <h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 mt-6 mb-3">SMS &amp; WhatsApp · <%= sms.length %></h2>
+      <div class="mb-3 text-[11px] text-slate-400">Ces modèles alimentent les deux composeurs. Ceux marqués <span class="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 text-[9px] font-bold uppercase">WhatsApp seul</span> ne sont proposés qu'en WhatsApp : ils demandent une réponse du client, ce qu'un SMS « CarParts » ne permet pas.</div>
       <div class="space-y-4">
         <% sms.forEach(function(it){ %>
           <%- include('./partials/lead-template-card', { it: it, channel: 'sms', vars: vars }) %>
