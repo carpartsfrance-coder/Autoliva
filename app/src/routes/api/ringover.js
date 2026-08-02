@@ -119,6 +119,17 @@ router.post('/webhook/:secret',
     const ressource = String(b.resource || '').toLowerCase();
     const d = (b.data && typeof b.data === 'object') ? b.data : b;
 
+    /* On trace TOUT ce qui entre, y compris ce qu'on ignore. Sans ça, un
+       événement qu'on ne reconnaît pas disparaît sans laisser de trace, et il
+       devient impossible de savoir si Ringover nous a appelés — c'est
+       exactement ce qui a bloqué la première mise en service. Numéro tronqué :
+       les 4 derniers chiffres suffisent à corréler avec un appel de test. */
+    {
+      const t = String(d.from_number || d.caller_number || d.from || '');
+      console.log('[ringover] recu event=' + (evt || '?') + ' resource=' + (ressource || '?')
+        + ' de=…' + (t ? t.slice(-4) : '?') + ' sig=' + (sig.version || 'aucune'));
+    }
+
     try {
       /* Réponse du client par SMS. On écarte `sent` : notre propre envoi
          déclenche aussi un événement, le réinjecter ferait une boucle. */
