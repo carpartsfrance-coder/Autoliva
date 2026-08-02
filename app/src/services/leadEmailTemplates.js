@@ -292,55 +292,55 @@ const SMS_TEMPLATES = [
     key: 'sms_compat_ok',
     label: 'Compatibilité vérifiée',
     forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom},\nCompatibilité vérifiée pour votre véhicule : la bonne pièce est disponible, livrable sous 24/48h.\nRappelez-moi au {telephone} pour finaliser.\n{nom_commercial} – {brand}',
+    body: '{prenom},\nCompatibilité vérifiée pour votre véhicule : la bonne pièce est disponible, livrable sous 24/48h.\nRappelez-moi au {telephone} pour finaliser.\n{nom_commercial} - {brand}',
   },
   {
     key: 'sms_moteur_dispo',
     label: 'Moteur disponible',
     forSource: ['devis', 'contact'],
-    body: '{prenom},\nBonne nouvelle : votre moteur est disponible chez nous, testé sur banc et prêt à partir.\nRappelez-moi au {telephone} pour le prix, le délai et la garantie.\n{nom_commercial} – {brand}',
+    body: '{prenom},\nBonne nouvelle : votre moteur est disponible chez nous, testé sur banc, il peut partir sous 24h.\nRappelez-moi au {telephone} pour le prix, le délai et la garantie.\n{nom_commercial} - {brand}',
   },
   {
     key: 'sms_compat_check',
     label: 'Vérifier la bonne pièce',
     forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom},\nPour être sûr à 100% de la bonne pièce pour votre véhicule, 2 minutes au téléphone suffisent.\nRappelez-moi au {telephone}, je m\'occupe de tout.\n{nom_commercial} – {brand}',
+    body: '{prenom},\nPour valider la bonne pièce pour votre véhicule, 2 minutes au téléphone suffisent.\nRappelez-moi au {telephone}, je m\'occupe de tout.\n{nom_commercial} - {brand}',
   },
   {
     key: 'sms_reassurance',
     label: 'Réassurance & garantie',
     forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom},\nToutes nos pièces sont testées sur banc et garanties, facture à l\'appui.\nJe réponds à toutes vos questions : rappelez-moi au {telephone}.\n{nom_commercial} – {brand}',
+    body: '{prenom},\nToutes nos pièces sont testées sur banc et garanties, facture à l\'appui.\nJe réponds à toutes vos questions : rappelez-moi au {telephone}.\n{nom_commercial} - {brand}',
   },
   {
     key: 'sms_devis_ready',
     label: 'Devis prêt',
     forSource: ['devis', 'contact'],
-    body: '{prenom},\nVotre devis est prêt.\nRappelez-moi au {telephone} pour le détail, le délai et le règlement.\n{nom_commercial} – {brand}',
+    body: '{prenom},\nVotre devis vous attend.\nRappelez-moi au {telephone} pour le détail, le délai et le règlement.\n{nom_commercial} - {brand}',
   },
   {
     key: 'sms_tried_to_call',
     label: 'J\'ai essayé de vous joindre',
     forSource: ['devis', 'contact', 'cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom},\nJ\'ai essayé de vous joindre au sujet de votre demande.\nRappelez-moi au {telephone} ou dites-moi un créneau qui vous arrange.\n{nom_commercial} – {brand}',
+    body: '{prenom},\nJ\'ai essayé de vous joindre au sujet de votre demande.\nRappelez-moi au {telephone} ou dites-moi un créneau qui vous arrange.\n{nom_commercial} - {brand}',
   },
   {
     key: 'sms_still_available',
     label: 'Encore disponible',
     forSource: ['cart_activity', 'guest_checkout', 'user', 'devis', 'contact'],
-    body: '{prenom},\nLa pièce qui vous intéresse est encore en stock mais part vite.\nJe peux vous la réserver ? Rappelez-moi au {telephone}.\n{nom_commercial} – {brand}',
+    body: '{prenom},\nLa pièce qui vous intéresse est encore en stock mais part vite.\nJe peux vous la réserver ? Rappelez-moi au {telephone}.\n{nom_commercial} - {brand}',
   },
   {
     key: 'sms_discount',
     label: '-10 % (code)',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom},\n-10% sur votre commande avec le code RELANCE10 (valable 7 jours).\nRappelez-moi au {telephone} pour en profiter.\n{nom_commercial} – {brand}',
+    body: '{prenom},\n-10% sur votre commande avec le code RELANCE10 (valable 7 jours).\nRappelez-moi au {telephone} pour en profiter.\n{nom_commercial} - {brand}',
   },
   {
     key: 'sms_cart_reminder',
     label: 'Panier en attente',
     forSource: ['cart_activity', 'guest_checkout', 'user'],
-    body: '{prenom},\nVotre panier ({prix_total}) est toujours là.\nJe peux le finaliser avec vous : rappelez-moi au {telephone}.\n{nom_commercial} – {brand}',
+    body: '{prenom},\nVotre panier ({prix_total}) est toujours là.\nJe peux le finaliser avec vous : rappelez-moi au {telephone}.\n{nom_commercial} - {brand}',
   },
 
   /* ── Immatriculation / VIN manquants ────────────────────────────────────
@@ -379,7 +379,7 @@ const SMS_TEMPLATES = [
     key: 'sms_need_plate_last',
     label: 'Immat/VIN : dernière relance',
     forSource: ['cart_activity', 'guest_checkout', 'user', 'contact'],
-    body: '{prenom},\nSans votre immatriculation ou votre VIN je ne peux pas vous garantir la bonne pièce, je vais donc clôturer votre demande.\nUn appel au {telephone} suffit à la rouvrir.\n{nom_commercial} - {brand}',
+    body: '{prenom},\nSans votre immatriculation ou votre VIN je ne peux pas vous garantir la bonne pièce, je vais donc archiver votre demande.\nUn appel au {telephone} suffit à la rouvrir.\n{nom_commercial} - {brand}',
   },
 ];
 
