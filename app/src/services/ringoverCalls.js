@@ -117,6 +117,12 @@ async function findContext(e164) {
 
   const bits = [];
   let leadId = null;
+  /* `sujet` sert à PERSONNALISER le SMS : plutôt que « dites-nous ce qu'il vous
+     faut », on propose ce qu'on sait déjà. `savId` permet de recopier une
+     éventuelle réponse dans le ticket. */
+  let savId = null;
+  let sujet = '';
+  let prenom = '';
 
   try {
     const lead = await AbandonedCart.findOne({ phone: rx })
@@ -125,11 +131,12 @@ async function findContext(e164) {
       .lean();
     if (lead) {
       leadId = String(lead._id);
+      prenom = String(lead.firstName || '').trim();
       const nom = [lead.firstName, lead.lastName].filter(Boolean).join(' ').trim();
       if (nom) bits.push(nom);
       const eq = lead.engineQuote && lead.engineQuote.status;
-      if (eq === 'new') bits.push('devis moteur EN ATTENTE de chiffrage');
-      else if (eq === 'quote_sent') bits.push('devis moteur envoyé, sans réponse');
+      if (eq === 'new') { bits.push('devis moteur EN ATTENTE de chiffrage'); sujet = sujet || 'devis'; }
+      else if (eq === 'quote_sent') { bits.push('devis moteur envoyé, sans réponse'); sujet = sujet || 'devis'; }
       else if (eq) bits.push('devis moteur : ' + eq);
     }
   } catch (_) { /* le rapprochement est un bonus, jamais bloquant */ }
@@ -143,6 +150,7 @@ async function findContext(e164) {
     if (order) {
       bits.push('commande ' + order.number + ' (' + order.status + ', '
         + (order.totalCents / 100).toFixed(0) + ' €) NON LIVRÉE');
+      if (!sujet) sujet = 'commande';
     }
   } catch (_) { /* idem */ }
 
@@ -150,11 +158,20 @@ async function findContext(e164) {
     const sav = await SavTicket.findOne({
       'client.telephone': rx,
       statut: { $nin: ['clos', 'cloture', 'resolu'] },
-    }).sort({ createdAt: -1 }).select('numero motif statut').lean();
-    if (sav) bits.push('SAV ' + sav.numero + ' ouvert (' + sav.motif + ')');
+    }).sort({ createdAt: -1 }).select('_id numero motifSav statut').lean();
+    if (sav) {
+      /* Le champ est `motifSav`, pas `motif` — `motif` renvoyait undefined et
+         affichait « SAV-2026-0001 ouvert (undefined) » sur la fiche.
+         Le numéro contient déjà « SAV », inutile de le préfixer. */
+      bits.push(sav.numero + ' ouvert' + (sav.motifSav ? ' (' + sav.motifSav + ')' : ''));
+      savId = String(sav._id);
+      /* Un SAV ouvert prime : quelqu'un qui a un litige en cours n'appelle
+         quasiment jamais pour autre chose. */
+      sujet = 'sav';
+    }
   } catch (_) { /* idem */ }
 
-  return { resume: bits.join(' · '), leadId };
+  return { resume: bits.join(' · '), leadId, savId, sujet, prenom };
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
@@ -170,14 +187,18 @@ async function findContext(e164) {
  *
  * @returns {Promise<string>} libellé de ce qui s'est passé, pour la note
  */
-async function accuserReception(leadId, e164) {
+async function accuserReception(leadId, e164, ctx) {
   if (!ringoverSms.estActif()) return '';
   try {
     const lead = await AbandonedCart.findById(leadId).select('ringoverSmsSentAt').lean();
     const dernier = lead && lead.ringoverSmsSentAt ? new Date(lead.ringoverSmsSentAt) : null;
     if (dernier && Date.now() - dernier.getTime() < 24 * 3600 * 1000) return 'SMS déjà envoyé aujourd\'hui';
 
-    const r = await ringoverSms.envoyer({ to: e164 });
+    const r = await ringoverSms.envoyer({
+      to: e164,
+      sujet: (ctx && ctx.sujet) || '',
+      prenom: (ctx && ctx.prenom) || '',
+    });
     if (!r.ok) return 'SMS non envoyé (' + r.raison + ')';
     await AbandonedCart.updateOne({ _id: leadId }, { $set: { ringoverSmsSentAt: new Date() } });
     return 'SMS de rappel envoyé';
@@ -218,7 +239,8 @@ async function recordMissedCall({ callId, callerNumber, receiverNumber, at } = {
   if (deja) return { ok: true, action: 'deja_enregistre', leadId: String(deja._id) };
 
   const motif = motifFromReceiver(receiverNumber);
-  const { resume, leadId } = await findContext(e164);
+  const ctx = await findContext(e164);
+  const { resume, leadId } = ctx;
 
   const ligne = 'Appel manqué le ' + horodatage.toLocaleString('fr-FR')
     + (motif ? ' (' + motif + ')' : '')
@@ -238,7 +260,7 @@ async function recordMissedCall({ callId, callerNumber, receiverNumber, at } = {
     if (ref) maj.$addToSet = { ringoverCallIds: ref };
     const r = await AbandonedCart.updateOne(filtre, maj);
     if (!r.modifiedCount) return { ok: true, action: 'deja_enregistre', leadId };
-    const sms = await accuserReception(leadId, e164);
+    const sms = await accuserReception(leadId, e164, ctx);
     return { ok: true, action: 'lead_enrichi', leadId, resume, sms };
   }
 
@@ -255,7 +277,7 @@ async function recordMissedCall({ callId, callerNumber, receiverNumber, at } = {
     lastActivityAt: horodatage,
   });
 
-  const sms = await accuserReception(cree._id, e164);
+  const sms = await accuserReception(cree._id, e164, ctx);
   return { ok: true, action: 'lead_cree', leadId: String(cree._id), resume, sms };
 }
 
@@ -282,9 +304,13 @@ async function recordSmsReply({ from, body, at, conversationId } = {}) {
 
   const quand = at ? new Date(at) : new Date();
   const horodatage = Number.isNaN(quand.getTime()) ? new Date() : quand;
-  const ligne = 'RÉPONSE SMS du client : « ' + texte.slice(0, 500) + ' »';
+  const { leadId, resume, savId } = await findContext(e164);
 
-  const { leadId } = await findContext(e164);
+  /* Le contexte est ACCOLÉ à la réponse : sans lui, celui qui lit « ma boite
+     fait du bruit » ne sait pas s'il s'agit d'une vente ou d'un SAV, et doit
+     aller chercher. Avec, le tri prend une seconde. */
+  const ligne = 'RÉPONSE SMS du client : « ' + texte.slice(0, 500) + ' »'
+    + (resume ? ' — ' + resume : '');
 
   /* Numéro inconnu : on crée quand même une fiche. Quelqu'un qui répond à un
      SMS est un contact vivant — le perdre serait pire que d'avoir un doublon. */
@@ -308,7 +334,24 @@ async function recordSmsReply({ from, body, at, conversationId } = {}) {
     $set: { lastActivityAt: horodatage },
     $push: { notes: { text: ligne, addedByName: 'Ringover SMS', addedAt: horodatage } },
   });
-  return { ok: true, action: 'reponse_enregistree', leadId };
+
+  /* Ticket SAV ouvert : on RECOPIE la réponse dedans, EN PLUS du lead. Le SAV
+     travaille depuis /admin/sav/tickets et ne regarde pas la liste des leads —
+     sans ça, un message de litige resterait invisible pour l'équipe concernée.
+     On ne DÉPLACE pas : deviner qu'un message est du SAV plutôt qu'une vente
+     n'est pas fiable, et un dossier mal aiguillé attend dans la mauvaise file. */
+  let versSav = false;
+  if (savId) {
+    try {
+      await SavTicket.updateOne({ _id: savId }, {
+        $push: { messages: { date: horodatage, auteur: 'Client (SMS)', canal: 'tel', contenu: texte.slice(0, 2000) } },
+      });
+      versSav = true;
+    } catch (err) {
+      console.error('[ringover] recopie vers le ticket SAV :', err && err.message ? err.message : err);
+    }
+  }
+  return { ok: true, action: 'reponse_enregistree', leadId, versSav };
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
