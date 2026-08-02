@@ -143,7 +143,7 @@ const CATALOG = [
   // au call-site via cart.isBoite (engineQuoteAdminController.postShipment).
   {
     key: 'boite_expedition', category: 'Devis', label: 'Expédition boîte',
-    defaultTemplate: "Autoliva : votre boîte ({quoteRef}) est expédiée !{trackingPart}\nQuestion ? {phoneMoteur}",
+    defaultTemplate: "Autoliva : votre commande ({quoteRef}) est expédiée !{trackingPart}\nQuestion ? {phoneMoteur}",
     vars: [['quoteRef', 'N° de dossier devis'], ['trackingPart', 'Suivi (transporteur + n° + lien)'], ['phoneMoteur', 'Téléphone commercial']],
     example: { quoteRef: 'AUT-2026-06-7AB12', trackingPart: ' Suivi DPD : XYZ789', phoneMoteur: '04 65 84 85 39' },
   },
