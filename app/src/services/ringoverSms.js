@@ -33,7 +33,11 @@ const TEXTE_DEFAUT = "Bonjour, nous n'avons pas pu prendre votre appel. "
   + "Dites-nous en deux mots ce qu'il vous faut, on vous rappelle. Autoliva";
 
 const TEXTES = {
-  devis:    "{prenom}nous n'avons pas pu prendre votre appel. C'est au sujet de votre devis moteur ? "
+  /* {piece} vaut « moteur », « boite » ou « piece » selon la landing d'origine.
+     Le sous-document s'appelle `engineQuote` par héritage, mais il porte les
+     trois familles : dire « devis moteur » à quelqu'un qui a demandé un pont
+     serait faux, et se verrait immédiatement. */
+  devis:    "{prenom}nous n'avons pas pu prendre votre appel. C'est au sujet du devis pour votre {piece} ? "
             + "Repondez a ce message, on revient vers vous. Autoliva",
   commande: "{prenom}nous n'avons pas pu prendre votre appel. C'est au sujet de votre commande ? "
             + "Repondez a ce message, on revient vers vous. Autoliva",
@@ -46,14 +50,19 @@ const TEXTES = {
  * @param {string} sujet   'devis' | 'commande' | 'sav' | '' (inconnu)
  * @param {string} prenom  prénom si connu, sinon message impersonnel
  */
-function texteSelonContexte(sujet, prenom) {
+function texteSelonContexte(sujet, prenom, piece) {
   const perso = String(process.env['RINGOVER_SMS_TEXT_' + String(sujet || '').toUpperCase()] || '').trim();
   const modele = perso || TEXTES[sujet];
   if (!modele) return String(process.env.RINGOVER_SMS_TEXT || '').trim() || TEXTE_DEFAUT;
   /* Le prénom est optionnel : sans lui la phrase commence par une majuscule et
      reste correcte, plutôt que « Bonjour , nous n'avons… ». */
   const p = String(prenom || '').trim();
-  return modele.replace('{prenom}', p ? p + ', ' : 'Bonjour, ');
+  /* Sans accent dans le SMS : « boîte » ferait basculer le message en UCS-2 et
+     doublerait son coût. Le lexique renvoie l'accent, on le retire ici. */
+  const pi = String(piece || 'piece').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  return modele
+    .replace('{prenom}', p ? p + ', ' : 'Bonjour, ')
+    .replace('{piece}', pi);
 }
 
 function conf() {
@@ -71,7 +80,7 @@ function estActif() { return conf().actif; }
  *
  * @returns {Promise<{ ok:boolean, raison?:string, messageId?:number, convId?:number }>}
  */
-async function envoyer({ to, content, sujet, prenom } = {}) {
+async function envoyer({ to, content, sujet, prenom, piece } = {}) {
   const { cle, from, texte, actif } = conf();
   if (!actif) return { ok: false, raison: 'non_configure' };
 
@@ -82,7 +91,7 @@ async function envoyer({ to, content, sujet, prenom } = {}) {
   if (dest === from) return { ok: false, raison: 'destinataire_est_expediteur' };
 
   const message = String(content || '').trim()
-    || (sujet ? texteSelonContexte(sujet, prenom) : texte);
+    || (sujet ? texteSelonContexte(sujet, prenom, piece) : texte);
   const corps = JSON.stringify({
     from_number: from,
     to_number: dest,

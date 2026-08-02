@@ -40,6 +40,7 @@ const AbandonedCart = require('../models/AbandonedCart');
 const Order = require('../models/Order');
 const SavTicket = require('../models/SavTicket');
 const ringoverSms = require('./ringoverSms');
+const { partLexicon, leadCategoryFromSource } = require('./partLexicon');
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /*  Téléphone                                                               */
@@ -123,6 +124,7 @@ async function findContext(e164) {
   let savId = null;
   let sujet = '';
   let prenom = '';
+  let piece = '';
 
   try {
     const lead = await AbandonedCart.findOne({ phone: rx })
@@ -134,10 +136,18 @@ async function findContext(e164) {
       prenom = String(lead.firstName || '').trim();
       const nom = [lead.firstName, lead.lastName].filter(Boolean).join(' ').trim();
       if (nom) bits.push(nom);
+      /* Le sous-document s'appelle `engineQuote` pour des raisons historiques,
+         mais il porte AUSSI les boîtes et les ponts. Écrire « devis moteur »
+         partout serait faux pour 62 des 449 devis en base. La catégorie se
+         dérive du captureSource via le lexique déjà utilisé par les PDF et les
+         emails de devis — un seul point de vérité. */
+      const cat = leadCategoryFromSource(lead.captureSource);
+      const lex = partLexicon(cat);
+      piece = lex.noun;                       // moteur / boîte / pièce
       const eq = lead.engineQuote && lead.engineQuote.status;
-      if (eq === 'new') { bits.push('devis moteur EN ATTENTE de chiffrage'); sujet = sujet || 'devis'; }
-      else if (eq === 'quote_sent') { bits.push('devis moteur envoyé, sans réponse'); sujet = sujet || 'devis'; }
-      else if (eq) bits.push('devis moteur : ' + eq);
+      if (eq === 'new') { bits.push('devis ' + lex.noun + ' EN ATTENTE de chiffrage'); sujet = sujet || 'devis'; }
+      else if (eq === 'quote_sent') { bits.push('devis ' + lex.noun + ' envoyé, sans réponse'); sujet = sujet || 'devis'; }
+      else if (eq) bits.push('devis ' + lex.noun + ' : ' + eq);
     }
   } catch (_) { /* le rapprochement est un bonus, jamais bloquant */ }
 
@@ -171,7 +181,7 @@ async function findContext(e164) {
     }
   } catch (_) { /* idem */ }
 
-  return { resume: bits.join(' · '), leadId, savId, sujet, prenom };
+  return { resume: bits.join(' · '), leadId, savId, sujet, prenom, piece };
 }
 
 /* ──────────────────────────────────────────────────────────────────────── */
@@ -198,6 +208,7 @@ async function accuserReception(leadId, e164, ctx) {
       to: e164,
       sujet: (ctx && ctx.sujet) || '',
       prenom: (ctx && ctx.prenom) || '',
+      piece: (ctx && ctx.piece) || '',
     });
     if (!r.ok) return 'SMS non envoyé (' + r.raison + ')';
     await AbandonedCart.updateOne({ _id: leadId }, { $set: { ringoverSmsSentAt: new Date() } });
