@@ -603,6 +603,9 @@ app.use('/api/devis-moteurs', require('./routes/api/engineQuote'));
 
 // Devis instantané : plaque -> code moteur (API) -> offres occasion + reman
 app.use('/api/devis-instantane', require('./routes/api/instantQuote'));
+/* Webhook Ringover : un appel manqué devient un lead à rappeler.
+   Route protégée par un secret dans l'URL — Ringover ne signe pas ses webhooks. */
+app.use('/api/ringover', require('./routes/api/ringover'));
 
 // Lien court de marque pour le SMS de devis : /d/<shortCode> → vue trackée + PDF
 app.get('/d/:code', require('./controllers/engineQuotePublicController').getShortDevisLink);

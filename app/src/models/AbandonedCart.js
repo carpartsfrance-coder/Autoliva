@@ -210,7 +210,7 @@ const abandonedCartSchema = new mongoose.Schema(
      */
     captureSource: {
       type: String,
-      enum: ['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'cart_activity', 'blog_cta', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'manual', ''],
+      enum: ['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'cart_activity', 'blog_cta', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'appel_manque', 'manual', ''],
       default: '',
       index: true,
     },
@@ -240,6 +240,13 @@ const abandonedCartSchema = new mongoose.Schema(
 
     /** Notes internes admin (chronologique) */
     notes: { type: [abandonedCartNoteSchema], default: [] },
+
+    /* Appels Ringover déjà traités sur cette fiche. Ringover réémet ses
+       webhooks en cas d'échec : sans cette liste, chaque rejeu ajoute une note
+       identique. La garde est posée dans la requête de mise à jour elle-même
+       (`ringoverCallIds: { $ne: callId }`), donc elle résiste aussi à deux
+       webhooks reçus en parallèle. */
+    ringoverCallIds: { type: [String], default: [], index: true },
 
     /** Workflow devis moteur (rempli par commercial dans /admin/devis-moteurs) */
     engineQuote: { type: engineQuoteSchema, default: null },
