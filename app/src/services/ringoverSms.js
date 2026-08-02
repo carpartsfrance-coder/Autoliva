@@ -1,0 +1,91 @@
+'use strict';
+
+/**
+ * Envoi de SMS via Ringover.
+ *
+ * POURQUOI RINGOVER ET PAS BREVO — Brevo envoie depuis un expéditeur
+ * alphanumérique (« AUTOLIVA ») : le client NE PEUT PAS répondre, et les
+ * opérateurs français jettent les SMS contenant un lien. Ringover envoie depuis
+ * un vrai numéro mobile, donc la réponse arrive — dans le fil de conversation
+ * que le standardiste a déjà sous les yeux.
+ *
+ * ENDPOINT — `POST /push/sms` (et surtout PAS `/push/sms/v1`, qui est un
+ * « one-way SMS » dont la documentation dit explicitement : « Recipients cannot
+ * reply ». Tout l'intérêt ici est justement la réponse).
+ * Permission requise : `Conversations W`.
+ *
+ * INERTE PAR DÉFAUT : sans `RINGOVER_API_KEY` ni `RINGOVER_SMS_FROM`, rien
+ * n'est envoyé et rien n'échoue. C'est voulu — un canal sortant automatique ne
+ * doit jamais s'activer par accident.
+ */
+
+const API = 'https://public-api.ringover.com/v2/push/sms';
+
+/* Message par défaut, surchargeable sans déploiement via RINGOVER_SMS_TEXT.
+   Écrit pour tenir en UN segment : 137 caractères, aucun accent hors GSM-7,
+   aucun lien (les opérateurs les filtrent, et il n'y en a pas besoin ici). */
+const TEXTE_DEFAUT = "Bonjour, nous n'avons pas pu prendre votre appel. "
+  + "Dites-nous en deux mots ce qu'il vous faut, on vous rappelle. Autoliva";
+
+function conf() {
+  const cle = String(process.env.RINGOVER_API_KEY || '').trim();
+  const from = String(process.env.RINGOVER_SMS_FROM || '').trim();
+  const texte = String(process.env.RINGOVER_SMS_TEXT || '').trim() || TEXTE_DEFAUT;
+  return { cle, from, texte, actif: !!(cle && from) };
+}
+
+function estActif() { return conf().actif; }
+
+/**
+ * Envoie un SMS. Ne lève jamais : un échec d'envoi ne doit pas faire perdre la
+ * capture de l'appel, qui est le vrai enjeu.
+ *
+ * @returns {Promise<{ ok:boolean, raison?:string, messageId?:number, convId?:number }>}
+ */
+async function envoyer({ to, content } = {}) {
+  const { cle, from, texte, actif } = conf();
+  if (!actif) return { ok: false, raison: 'non_configure' };
+
+  const dest = String(to || '').trim();
+  if (!/^\+\d{8,15}$/.test(dest)) return { ok: false, raison: 'destinataire_invalide' };
+  /* Ne jamais s'écrire à soi-même : un renvoi interne ou une erreur de
+     configuration produirait une boucle. */
+  if (dest === from) return { ok: false, raison: 'destinataire_est_expediteur' };
+
+  const corps = JSON.stringify({
+    from_number: from,
+    to_number: dest,
+    content: String(content || texte).slice(0, 600),
+  });
+
+  try {
+    const ctl = new AbortController();
+    const minuteur = setTimeout(() => ctl.abort(), 12000);
+    const r = await fetch(API, {
+      method: 'POST',
+      headers: { Authorization: cle, 'Content-Type': 'application/json' },
+      body: corps,
+      signal: ctl.signal,
+    });
+    clearTimeout(minuteur);
+
+    /* 202 = accepté et mis en file. 402 = crédits SMS épuisés : à remonter
+       clairement, c'est la panne silencieuse la plus probable en production. */
+    if (r.status === 402) {
+      console.error('[ringover-sms] CRÉDITS SMS ÉPUISÉS — aucun SMS ne partira');
+      return { ok: false, raison: 'credits_epuises' };
+    }
+    if (r.status !== 202 && r.status !== 200) {
+      const t = await r.text().catch(() => '');
+      console.error('[ringover-sms] échec', r.status, t.slice(0, 200));
+      return { ok: false, raison: 'http_' + r.status };
+    }
+    const d = await r.json().catch(() => ({}));
+    return { ok: true, messageId: d.message_id, convId: d.conv_id };
+  } catch (err) {
+    console.error('[ringover-sms] erreur réseau :', err && err.message ? err.message : err);
+    return { ok: false, raison: 'reseau' };
+  }
+}
+
+module.exports = { envoyer, estActif, TEXTE_DEFAUT };

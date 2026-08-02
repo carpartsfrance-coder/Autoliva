@@ -39,6 +39,7 @@ const mongoose = require('mongoose');
 const AbandonedCart = require('../models/AbandonedCart');
 const Order = require('../models/Order');
 const SavTicket = require('../models/SavTicket');
+const ringoverSms = require('./ringoverSms');
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /*  Téléphone                                                               */
@@ -161,6 +162,32 @@ async function findContext(e164) {
 /* ──────────────────────────────────────────────────────────────────────── */
 
 /**
+ * Envoie l'accusé de réception au client, au plus une fois par 24 h et par
+ * numéro. Ne lève jamais : la capture de l'appel prime sur l'envoi.
+ *
+ * Pas de restriction horaire — choix explicite de Killian : quelqu'un qui
+ * appelle à 22 h est réveillé et attend une réponse.
+ *
+ * @returns {Promise<string>} libellé de ce qui s'est passé, pour la note
+ */
+async function accuserReception(leadId, e164) {
+  if (!ringoverSms.estActif()) return '';
+  try {
+    const lead = await AbandonedCart.findById(leadId).select('ringoverSmsSentAt').lean();
+    const dernier = lead && lead.ringoverSmsSentAt ? new Date(lead.ringoverSmsSentAt) : null;
+    if (dernier && Date.now() - dernier.getTime() < 24 * 3600 * 1000) return 'SMS déjà envoyé aujourd\'hui';
+
+    const r = await ringoverSms.envoyer({ to: e164 });
+    if (!r.ok) return 'SMS non envoyé (' + r.raison + ')';
+    await AbandonedCart.updateOne({ _id: leadId }, { $set: { ringoverSmsSentAt: new Date() } });
+    return 'SMS de rappel envoyé';
+  } catch (err) {
+    console.error('[ringover] accusé de réception :', err && err.message ? err.message : err);
+    return 'SMS non envoyé (erreur)';
+  }
+}
+
+/**
  * Enregistre un appel manqué comme lead à rappeler.
  *
  * IDEMPOTENT sur `callId` : Ringover réémet ses webhooks en cas d'échec, et on
@@ -211,7 +238,8 @@ async function recordMissedCall({ callId, callerNumber, receiverNumber, at } = {
     if (ref) maj.$addToSet = { ringoverCallIds: ref };
     const r = await AbandonedCart.updateOne(filtre, maj);
     if (!r.modifiedCount) return { ok: true, action: 'deja_enregistre', leadId };
-    return { ok: true, action: 'lead_enrichi', leadId, resume };
+    const sms = await accuserReception(leadId, e164);
+    return { ok: true, action: 'lead_enrichi', leadId, resume, sms };
   }
 
   /* Numéro inconnu : nouveau lead, sans email — on n'en a pas. */
@@ -227,7 +255,8 @@ async function recordMissedCall({ callId, callerNumber, receiverNumber, at } = {
     lastActivityAt: horodatage,
   });
 
-  return { ok: true, action: 'lead_cree', leadId: String(cree._id), resume };
+  const sms = await accuserReception(cree._id, e164);
+  return { ok: true, action: 'lead_cree', leadId: String(cree._id), resume, sms };
 }
 
 module.exports = { toE164, phoneKey, motifFromReceiver, findContext, recordMissedCall };
