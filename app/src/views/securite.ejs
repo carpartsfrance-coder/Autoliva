@@ -32,8 +32,14 @@
   <section class="mx-auto max-w-4xl px-4 sm:px-6 py-10 sm:py-14">
 
     <div class="rounded-2xl bg-white border border-slate-200 p-6 sm:p-8">
-      <h2 class="text-xl font-bold text-slate-900">Nos seuls moyens de contact</h2>
-      <p class="mt-2 text-sm text-slate-600">Tout message qui ne passe pas par l'un de ces canaux ne vient pas de nous.</p>
+      <%/* Pas de « nos SEULS moyens de contact » : nos conseillers appellent depuis
+           des lignes directes qui ne sont pas le standard. Un client qui vérifie
+           un appel légitime ici et ne trouve pas le numéro conclurait à une
+           arnaque — même piège que « nous n'envoyons jamais de lien de paiement ».
+           On donne les canaux de référence, et on explique le cas des lignes
+           directes plus bas SANS les publier. */%>
+      <h2 class="text-xl font-bold text-slate-900">Nos moyens de contact officiels</h2>
+      <p class="mt-2 text-sm text-slate-600">C'est par là que nous vous écrivons, et c'est là que vous pouvez nous joindre à coup sûr.</p>
       <dl class="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-5">
         <div>
           <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Site</dt>
@@ -44,7 +50,7 @@
           <dd class="mt-1 text-sm font-semibold"><a class="text-primary hover:underline" href="mailto:<%= brand.EMAIL_CONTACT %>"><%= brand.EMAIL_CONTACT %></a></dd>
         </div>
         <div>
-          <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Téléphone</dt>
+          <dt class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Téléphone (standard)</dt>
           <dd class="mt-1 text-sm font-semibold"><a class="text-primary hover:underline" href="tel:<%= brand.PHONE_INTL %>"><%= brand.PHONE %></a></dd>
         </div>
       </dl>
@@ -52,14 +58,50 @@
         Nos e-mails partent toujours d'une adresse en <strong>@<%= brand.DOMAIN %></strong>.
         Une adresse en gmail, outlook ou hotmail, même si elle contient « <%= brand.NAME_SHORT.toLowerCase() %> », n'est pas la nôtre.
       </p>
+      <%/* Le conseil « raccrochez et rappelez le numéro officiel » est de toute
+           façon LA bonne réponse face à un appel douteux : on protège la ligne
+           directe du conseiller tout en donnant au client un réflexe utile. */%>
+      <p class="mt-3 text-sm text-slate-600">
+        <strong>Un conseiller peut vous rappeler depuis sa ligne directe</strong>, qui n'est pas le numéro du standard : c'est normal.
+        En cas de doute sur un appel, ne communiquez rien, raccrochez et rappelez le <a class="text-primary hover:underline" href="tel:<%= brand.PHONE_INTL %>"><%= brand.PHONE %></a> —
+        nous vous confirmerons en une minute si l'appel venait bien de nous.
+      </p>
+    </div>
+
+    <%/* Bloc « nos liens de paiement » AVANT la liste des interdits.
+         Nous envoyons de VRAIS liens de paiement (Mollie) : écrire « nous
+         n'envoyons jamais de lien » ferait refuser un règlement légitime, ce qui
+         coûte une vente au lieu d'éviter une arnaque. Le critère qui distingue
+         un vrai lien d'un faux n'est pas le lien lui-même, mais le canal par
+         lequel il arrive et le bénéficiaire affiché sur la page de paiement. */%>
+    <div class="mt-6 rounded-2xl bg-white border border-slate-200 p-6 sm:p-8">
+      <h2 class="text-xl font-bold text-slate-900">Nos liens de paiement</h2>
+      <p class="mt-3 text-sm text-slate-700">
+        Oui, il nous arrive de vous envoyer un lien de paiement — pour un devis, un acompte, ou une commande passée par téléphone.
+        C'est normal. Voici comment reconnaître les nôtres :
+      </p>
+      <ul class="mt-4 space-y-3 text-sm text-slate-700">
+        <li class="flex gap-3"><span class="text-emerald-600 font-bold shrink-0" aria-hidden="true">✓</span><span>Ils arrivent <strong>par e-mail depuis une adresse en @<%= brand.DOMAIN %></strong>, ou après un échange téléphonique avec un conseiller qui s'est présenté par son nom.</span></li>
+        <%/* On cite les DEUX noms : la marque affichée (brand.NAME) diffère de la
+             raison sociale (brand.LEGAL_NAME). Un client qui voit un bénéficiaire
+             différent du nom du site peut croire à une fraude — l'expliquer ici
+             évite un abandon de paiement de plus. */%>
+        <% var _legal = brand.COMPANY && brand.COMPANY.LEGAL_NAME ? brand.COMPANY.LEGAL_NAME : ''; %>
+        <li class="flex gap-3"><span class="text-emerald-600 font-bold shrink-0" aria-hidden="true">✓</span><span>Ils passent par <strong>Mollie</strong>, notre prestataire de paiement. La page affiche comme bénéficiaire <strong><%= brand.NAME %></strong><% if (_legal && _legal !== brand.NAME) { %> ou <strong><%= _legal %></strong>, notre raison sociale — les deux sont bien nous<% } %>.</span></li>
+        <li class="flex gap-3"><span class="text-emerald-600 font-bold shrink-0" aria-hidden="true">✓</span><span>Ils correspondent à un devis ou une commande <strong>dont vous avez déjà discuté avec nous</strong>. Jamais une sollicitation surprise.</span></li>
+        <li class="flex gap-3"><span class="text-rose-600 font-bold shrink-0" aria-hidden="true">✕</span><span>Nous n'en envoyons <strong>jamais par Messenger, WhatsApp ou Instagram</strong>. Un lien de paiement reçu en messagerie privée ne vient pas de nous.</span></li>
+      </ul>
+      <p class="mt-4 text-sm text-slate-600">
+        Le montant ne correspond pas, le bénéficiaire n'est pas le nôtre, ou vous n'attendiez aucun paiement&nbsp;?
+        Ne réglez rien et appelez-nous au <a class="text-primary hover:underline" href="tel:<%= brand.PHONE_INTL %>"><%= brand.PHONE %></a>.
+      </p>
     </div>
 
     <div class="mt-6 rounded-2xl border p-6 sm:p-8" style="background:#FCEBEB;border-color:#F09595;">
       <h2 class="text-xl font-bold" style="color:#501313;">Ce que nous ne faisons jamais</h2>
       <ul class="mt-4 space-y-3 text-sm" style="color:#501313;">
-        <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous demander un <strong>virement vers un compte personnel</strong>. Nos règlements passent par le site ou par une facture à notre nom commercial.</span></li>
-        <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous vendre une pièce et l'encaisser <strong>via une messagerie privée</strong> (Messenger, WhatsApp, Instagram) sans commande sur <%= brand.DOMAIN %>.</span></li>
-        <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous réclamer un acompte par un <strong>lien de paiement extérieur</strong> à notre site.</span></li>
+        <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous demander un <strong>virement vers un compte personnel</strong>. Un virement se fait sur le compte de la société, dont l'IBAN figure sur une facture à notre nom.</span></li>
+        <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous vendre une pièce et l'encaisser <strong>via une messagerie privée</strong> (Messenger, WhatsApp, Instagram), sans devis ni commande de notre part.</span></li>
         <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous demander vos <strong>codes bancaires</strong>, un code reçu par SMS, ou une recharge type coupon.</span></li>
         <li class="flex gap-3"><span aria-hidden="true">✕</span><span>Vous mettre la pression pour payer <strong>dans l'heure</strong> sous peine de perdre la pièce.</span></li>
       </ul>
