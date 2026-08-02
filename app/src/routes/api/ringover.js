@@ -37,13 +37,48 @@ const { verifier } = require('../../services/ringoverSignature');
 
 const router = express.Router();
 
+/* Avertissement au démarrage : sans cette variable la route est inerte, et
+   rien dans le comportement observable ne le dit. Autant l'écrire une fois
+   dans les logs plutôt que de laisser chercher. */
+{
+  const s = String(process.env.RINGOVER_WEBHOOK_SECRET || '').trim();
+  if (!s) console.warn('[ringover] RINGOVER_WEBHOOK_SECRET absent — webhooks desactives');
+  else if (s.length < 16) console.warn('[ringover] RINGOVER_WEBHOOK_SECRET trop court ('
+    + s.length + ') — webhooks desactives, minimum 16 caracteres');
+  else console.log('[ringover] webhooks actifs (secret de ' + s.length + ' caracteres)');
+}
+
+/* `trim()` OBLIGATOIRE : Render (comme la plupart des hébergeurs) conserve les
+   espaces et retours à la ligne collés par erreur dans une variable. Sans ça,
+   un secret parfaitement correct échoue en silence — c'est exactement ce qui
+   s'est produit à la première mise en service. */
+function secretAttendu() {
+  return String(process.env.RINGOVER_WEBHOOK_SECRET || '').trim();
+}
+
+/* Un webhook qui refuse tout sans rien dire est indéfendable : on ne peut pas
+   le diagnostiquer depuis l'extérieur. On trace donc chaque rejet — LONGUEURS
+   seulement, jamais les valeurs. */
 function secretOk(recu) {
-  const attendu = String(process.env.RINGOVER_WEBHOOK_SECRET || '');
-  if (attendu.length < 16) return false;              // non configuré / trop faible
-  const a = Buffer.from(String(recu || ''), 'utf8');
+  const attendu = secretAttendu();
+  const donne = String(recu || '').trim();
+  if (attendu.length < 16) {
+    console.error('[ringover] RINGOVER_WEBHOOK_SECRET absent ou trop court ('
+      + attendu.length + ' caracteres, minimum 16) — tous les webhooks sont refuses');
+    return false;
+  }
+  const a = Buffer.from(donne, 'utf8');
   const b = Buffer.from(attendu, 'utf8');
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+  if (a.length !== b.length) {
+    console.error('[ringover] secret refuse : longueur recue ' + a.length
+      + ', attendue ' + b.length);
+    return false;
+  }
+  if (!crypto.timingSafeEqual(a, b)) {
+    console.error('[ringover] secret refuse : meme longueur (' + a.length + ') mais valeur differente');
+    return false;
+  }
+  return true;
 }
 
 /* Ringover nomme les événements différemment selon la ressource :
