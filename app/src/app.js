@@ -290,6 +290,12 @@ const siteSettings = require('./services/siteSettings');
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+/* Webhooks Ringover — monté AVANT express.json() à dessein : la vérification
+   de signature porte sur les OCTETS REÇUS, et un parseur JSON global les aurait
+   déjà consommés. `JSON.stringify(JSON.parse(x))` ne redonne pas `x` (ordre des
+   clés, espaces, flottants), ce qui invaliderait toute signature. */
+app.use('/api/ringover', require('./routes/api/ringover'));
+
 // Limite relevée à 2 Mo : l'import produits par JSON (/admin/api/products/import)
 // peut envoyer un lot de plusieurs centaines de fiches.
 app.use(express.json({ limit: '2mb' }));
@@ -603,9 +609,6 @@ app.use('/api/devis-moteurs', require('./routes/api/engineQuote'));
 
 // Devis instantané : plaque -> code moteur (API) -> offres occasion + reman
 app.use('/api/devis-instantane', require('./routes/api/instantQuote'));
-/* Webhook Ringover : un appel manqué devient un lead à rappeler.
-   Route protégée par un secret dans l'URL — Ringover ne signe pas ses webhooks. */
-app.use('/api/ringover', require('./routes/api/ringover'));
 
 // Lien court de marque pour le SMS de devis : /d/<shortCode> → vue trackée + PDF
 app.get('/d/:code', require('./controllers/engineQuotePublicController').getShortDevisLink);

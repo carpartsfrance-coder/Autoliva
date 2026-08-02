@@ -39,6 +39,7 @@ const mongoose = require('mongoose');
 const AbandonedCart = require('../models/AbandonedCart');
 const Order = require('../models/Order');
 const SavTicket = require('../models/SavTicket');
+const ringoverSms = require('./ringoverSms');
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /*  Téléphone                                                               */
@@ -161,6 +162,32 @@ async function findContext(e164) {
 /* ──────────────────────────────────────────────────────────────────────── */
 
 /**
+ * Envoie l'accusé de réception au client, au plus une fois par 24 h et par
+ * numéro. Ne lève jamais : la capture de l'appel prime sur l'envoi.
+ *
+ * Pas de restriction horaire — choix explicite de Killian : quelqu'un qui
+ * appelle à 22 h est réveillé et attend une réponse.
+ *
+ * @returns {Promise<string>} libellé de ce qui s'est passé, pour la note
+ */
+async function accuserReception(leadId, e164) {
+  if (!ringoverSms.estActif()) return '';
+  try {
+    const lead = await AbandonedCart.findById(leadId).select('ringoverSmsSentAt').lean();
+    const dernier = lead && lead.ringoverSmsSentAt ? new Date(lead.ringoverSmsSentAt) : null;
+    if (dernier && Date.now() - dernier.getTime() < 24 * 3600 * 1000) return 'SMS déjà envoyé aujourd\'hui';
+
+    const r = await ringoverSms.envoyer({ to: e164 });
+    if (!r.ok) return 'SMS non envoyé (' + r.raison + ')';
+    await AbandonedCart.updateOne({ _id: leadId }, { $set: { ringoverSmsSentAt: new Date() } });
+    return 'SMS de rappel envoyé';
+  } catch (err) {
+    console.error('[ringover] accusé de réception :', err && err.message ? err.message : err);
+    return 'SMS non envoyé (erreur)';
+  }
+}
+
+/**
  * Enregistre un appel manqué comme lead à rappeler.
  *
  * IDEMPOTENT sur `callId` : Ringover réémet ses webhooks en cas d'échec, et on
@@ -211,7 +238,8 @@ async function recordMissedCall({ callId, callerNumber, receiverNumber, at } = {
     if (ref) maj.$addToSet = { ringoverCallIds: ref };
     const r = await AbandonedCart.updateOne(filtre, maj);
     if (!r.modifiedCount) return { ok: true, action: 'deja_enregistre', leadId };
-    return { ok: true, action: 'lead_enrichi', leadId, resume };
+    const sms = await accuserReception(leadId, e164);
+    return { ok: true, action: 'lead_enrichi', leadId, resume, sms };
   }
 
   /* Numéro inconnu : nouveau lead, sans email — on n'en a pas. */
@@ -227,7 +255,109 @@ async function recordMissedCall({ callId, callerNumber, receiverNumber, at } = {
     lastActivityAt: horodatage,
   });
 
-  return { ok: true, action: 'lead_cree', leadId: String(cree._id), resume };
+  const sms = await accuserReception(cree._id, e164);
+  return { ok: true, action: 'lead_cree', leadId: String(cree._id), resume, sms };
 }
 
-module.exports = { toE164, phoneKey, motifFromReceiver, findContext, recordMissedCall };
+/* ──────────────────────────────────────────────────────────────────────── */
+/*  Réponse du client par SMS                                               */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Le client répond à notre accusé de réception. La réponse arrive dans Ringover
+ * (où le standardiste la voit), et on la recopie ICI sur la fiche du lead pour
+ * que l'historique reste complet — sinon la conversation se coupe en deux entre
+ * les deux outils.
+ *
+ * On ne traite QUE les messages entrants : notre propre envoi déclenche aussi
+ * un événement (`event: 'sent'`) qu'il ne faut pas réinjecter.
+ */
+async function recordSmsReply({ from, body, at, conversationId } = {}) {
+  if (mongoose.connection.readyState !== 1) return { ok: false, action: 'db_down' };
+
+  const e164 = toE164(from);
+  const texte = String(body || '').trim();
+  if (!phoneKey(e164)) return { ok: false, action: 'numero_invalide' };
+  if (!texte) return { ok: false, action: 'message_vide' };
+
+  const quand = at ? new Date(at) : new Date();
+  const horodatage = Number.isNaN(quand.getTime()) ? new Date() : quand;
+  const ligne = 'RÉPONSE SMS du client : « ' + texte.slice(0, 500) + ' »';
+
+  const { leadId } = await findContext(e164);
+
+  /* Numéro inconnu : on crée quand même une fiche. Quelqu'un qui répond à un
+     SMS est un contact vivant — le perdre serait pire que d'avoir un doublon. */
+  if (!leadId) {
+    const cree = await AbandonedCart.create({
+      sessionId: 'ringover-sms:' + (conversationId || horodatage.getTime()),
+      phone: e164,
+      isGuest: true,
+      captureSource: 'appel_manque',
+      contextMessage: ligne,
+      status: 'abandoned',
+      abandonedAt: horodatage,
+      lastActivityAt: horodatage,
+    });
+    return { ok: true, action: 'lead_cree', leadId: String(cree._id) };
+  }
+
+  await AbandonedCart.updateOne({ _id: leadId }, {
+    /* lastActivityAt remonte la fiche en tête de liste : une réponse est le
+       signal le plus chaud qu'on puisse recevoir. */
+    $set: { lastActivityAt: horodatage },
+    $push: { notes: { text: ligne, addedByName: 'Ringover SMS', addedAt: horodatage } },
+  });
+  return { ok: true, action: 'reponse_enregistree', leadId };
+}
+
+/* ──────────────────────────────────────────────────────────────────────── */
+/*  Code saisi dans le menu vocal                                           */
+/* ──────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Événement `ivr_response_code` : le client a saisi un code dans un scénario
+ * « Demander un code ». C'est le SEUL signal de motif que Ringover expose —
+ * mais il suppose que le SVI soit configuré en scénario de saisie, pas en
+ * simple menu « tapez 1 ou 2 ».
+ *
+ * RINGOVER_IVR_CODES traduit le code en libellé : "1=commercial,2=sav".
+ *
+ * Cet événement peut arriver AVANT l'appel manqué (le client tape son choix
+ * puis attend). Si aucune fiche n'existe encore, on n'en crée pas : l'appel
+ * manqué s'en chargera, et un code sans appel n'a pas d'intérêt commercial.
+ */
+async function recordIvrCode({ code, from, callId, at } = {}) {
+  if (mongoose.connection.readyState !== 1) return { ok: false, action: 'db_down' };
+
+  const e164 = toE164(from);
+  if (!phoneKey(e164)) return { ok: false, action: 'numero_invalide' };
+  const brut = String(code == null ? '' : code).trim();
+  if (!brut) return { ok: false, action: 'code_absent' };
+
+  const table = new Map();
+  String(process.env.RINGOVER_IVR_CODES || '').split(',').forEach((p) => {
+    const [k, v] = p.split('=');
+    if (k && v) table.set(k.trim(), v.trim().slice(0, 40));
+  });
+  const libelle = table.get(brut) || '';
+
+  const quand = at ? new Date(at) : new Date();
+  const horodatage = Number.isNaN(quand.getTime()) ? new Date() : quand;
+  const ligne = 'Menu vocal : le client a saisi « ' + brut + ' »'
+    + (libelle ? ' (' + libelle + ')' : '');
+
+  const { leadId } = await findContext(e164);
+  if (!leadId) return { ok: true, action: 'aucune_fiche', motif: libelle };
+
+  await AbandonedCart.updateOne({ _id: leadId }, {
+    $set: { lastActivityAt: horodatage },
+    $push: { notes: { text: ligne, addedByName: 'Ringover SVI', addedAt: horodatage } },
+  });
+  return { ok: true, action: 'code_enregistre', leadId, motif: libelle };
+}
+
+module.exports = {
+  toE164, phoneKey, motifFromReceiver, findContext,
+  recordMissedCall, recordSmsReply, recordIvrCode,
+};

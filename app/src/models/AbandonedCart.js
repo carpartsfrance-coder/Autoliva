@@ -248,6 +248,12 @@ const abandonedCartSchema = new mongoose.Schema(
        webhooks reçus en parallèle. */
     ringoverCallIds: { type: [String], default: [], index: true },
 
+    /* Dernier SMS d'appel manqué envoyé à ce numéro. Sert de plafond : on
+       n'écrit qu'une fois par jour, même si la personne appelle cinq fois.
+       Trois SMS d'affilée donneraient l'impression d'un robot, pas d'un
+       accusé de réception. */
+    ringoverSmsSentAt: { type: Date, default: null },
+
     /** Workflow devis moteur (rempli par commercial dans /admin/devis-moteurs) */
     engineQuote: { type: engineQuoteSchema, default: null },
 
