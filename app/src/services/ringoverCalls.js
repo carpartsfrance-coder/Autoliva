@@ -12,9 +12,18 @@
  *
  *  1. Le payload documenté (`event`, `call_id`, `caller_number`,
  *     `receiver_number`, `timestamp`) NE CONTIENT PAS le choix du menu vocal.
- *     On déduit donc le motif du NUMÉRO APPELÉ : si le SVI route « 1 » et « 2 »
- *     vers deux numéros distincts, `RINGOVER_NUMBER_MAP` les traduit en motif.
- *     Sans cette carte, le motif reste inconnu — jamais deviné.
+ *
+ *     ⚠ CHEZ AUTOLIVA, le SVI route « 1 » (commercial) et « 2 » (SAV) vers LE
+ *     MÊME numéro. `RINGOVER_NUMBER_MAP` est donc INOPÉRANT en l'état : le
+ *     motif restera vide. La carte est conservée car elle deviendra utile le
+ *     jour où les deux branches auront des numéros distincts — c'est une
+ *     configuration à faire côté Ringover, pas côté code.
+ *
+ *     Ce n'est pas une perte importante : le RAPPROCHEMENT EN BASE ci-dessous
+ *     est un meilleur signal. Mesuré sur la prod, 82 % des numéros connus
+ *     (686 sur 835) ont au moins un dossier ouvert — devis moteur en attente,
+ *     commande non livrée, panier, SAV. Savoir que Marc a un devis moteur non
+ *     chiffré depuis 11 jours en dit plus que « il a tapé 1 ».
  *
  *  2. Ringover ne signe pas ses webhooks. La route porte donc un secret dans
  *     l'URL (voir routes/api/ringover.js) : c'est la seule barrière, elle doit
@@ -65,8 +74,10 @@ function phoneKey(raw) {
 
 /**
  * RINGOVER_NUMBER_MAP : "+33465845488=commercial,+33465848539=sav"
- * Le SVI de Ringover route le choix « 1 » / « 2 » vers des numéros différents ;
- * c'est le seul signal de motif présent dans le webhook.
+ *
+ * Ne sert QUE si les branches du SVI aboutissent à des numéros distincts.
+ * Ce n'est pas le cas aujourd'hui chez Autoliva (une seule ligne pour le
+ * commercial et le SAV) : la variable reste donc vide et le motif aussi.
  */
 function numberMap() {
   const raw = String(process.env.RINGOVER_NUMBER_MAP || '').trim();
