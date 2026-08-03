@@ -41,6 +41,7 @@ const Order = require('../models/Order');
 const SavTicket = require('../models/SavTicket');
 const ringoverSms = require('./ringoverSms');
 const { partLexicon, leadCategoryFromSource } = require('./partLexicon');
+const { journaliser } = require('./leadCommunications');
 
 /* ──────────────────────────────────────────────────────────────────────── */
 /*  Téléphone                                                               */
@@ -210,8 +211,19 @@ async function accuserReception(leadId, e164, ctx) {
       prenom: (ctx && ctx.prenom) || '',
       piece: (ctx && ctx.piece) || '',
     });
-    if (!r.ok) return 'SMS non envoyé (' + r.raison + ')';
+    if (!r.ok) {
+      await journaliser(leadId, {
+        canal: 'sms', auto: true, gabarit: 'ringover_accuse',
+        ok: false, motif: r.raison || 'inconnu',
+      });
+      return 'SMS non envoyé (' + r.raison + ')';
+    }
     await AbandonedCart.updateOne({ _id: leadId }, { $set: { ringoverSmsSentAt: new Date() } });
+    /* `ringoverSmsSentAt` ne retient QUE le dernier envoi — c'est un plafond
+       journalier, pas un historique. Le journal, lui, les garde tous. */
+    await journaliser(leadId, {
+      canal: 'sms', auto: true, corps: r.texte || '', gabarit: 'ringover_accuse',
+    });
     return 'SMS de rappel envoyé';
   } catch (err) {
     console.error('[ringover] accusé de réception :', err && err.message ? err.message : err);
@@ -336,6 +348,9 @@ async function recordSmsReply({ from, body, at, conversationId } = {}) {
       abandonedAt: horodatage,
       lastActivityAt: horodatage,
     });
+    await journaliser(cree._id, {
+      canal: 'sms', sens: 'entrant', corps: texte, par: 'Client', at: horodatage,
+    });
     return { ok: true, action: 'lead_cree', leadId: String(cree._id) };
   }
 
@@ -344,6 +359,12 @@ async function recordSmsReply({ from, body, at, conversationId } = {}) {
        signal le plus chaud qu'on puisse recevoir. */
     $set: { lastActivityAt: horodatage },
     $push: { notes: { text: ligne, addedByName: 'Ringover SMS', addedAt: horodatage } },
+  });
+  /* La réponse du client entre au journal AU MÊME TITRE que nos envois : un
+     historique qui ne montre que ce qu'on a émis donne l'illusion d'un client
+     muet alors qu'il a peut-être répondu trois fois. */
+  await journaliser(leadId, {
+    canal: 'sms', sens: 'entrant', corps: texte, par: 'Client', at: horodatage,
   });
 
   /* Ticket SAV ouvert : on RECOPIE la réponse dedans, EN PLUS du lead. Le SAV

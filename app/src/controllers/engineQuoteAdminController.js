@@ -45,6 +45,7 @@ const { buildQuoteEmailHtml, buildBundleQuoteEmailHtml, buildShipmentEmailHtml }
 const { partLexicon, leadCategoryFromSource, LEAD_SOURCES: LEXICON_LEAD_SOURCES } = require('../services/partLexicon');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
+const { journaliser } = require('../services/leadCommunications');
 const { compressImage } = require('../services/imageCompress');
 const mollie = require('../services/mollie');
 const brand = require('../config/brand');
@@ -627,14 +628,23 @@ async function postCreateEngineQuote(req, res, next) {
             ``,
             `L'équipe Autoliva`,
           ].filter(Boolean).join('\n');
-          await emailService.sendEmail({
+          const r = await emailService.sendEmail({
             toEmail: email,
             subject: `Votre dossier ${ref} bien reçu — Autoliva`,
             html: ackHtml,
             text: ackText,
           });
+          await journaliser(created._id, {
+            canal: 'email', auto: true, objet: `Votre dossier ${ref} bien reçu`,
+            corps: ackText, gabarit: 'accuse_dossier',
+            ok: !!(r && r.ok), motif: (r && !r.ok) ? (r.reason || 'inconnu') : '',
+          });
         } catch (err) {
           console.error('[devis-manuel] ack email failed:', err && err.message);
+          await journaliser(created._id, {
+            canal: 'email', auto: true, objet: `Votre dossier ${ref} bien reçu`,
+            gabarit: 'accuse_dossier', ok: false, motif: (err && err.message) || 'exception',
+          });
         }
       }
 
@@ -643,8 +653,10 @@ async function postCreateEngineQuote(req, res, next) {
       // dans la fiche détail, comme pour un lead venu du formulaire.
       if (phone) {
         let ackSmsResult;
+        let ackSmsTexte = '';
         try {
           const { enabled: smsOn, text: smsText } = await resolveSms('moteur_ack', { quoteRef: ref, phoneMoteur: brand.PHONE_MOTEUR });
+          ackSmsTexte = smsText || '';
           if (smsOn && smsText) {
             const r = await sendSms({ to: phone, text: smsText });
             ackSmsResult = { status: r && r.ok ? 'sent' : 'failed', reason: (r && r.reason) || '', message: (r && r.message) || '', at: new Date(), phone };
@@ -659,6 +671,16 @@ async function postCreateEngineQuote(req, res, next) {
         try {
           await AbandonedCart.updateOne({ _id: created._id }, { $set: { 'engineQuote.ackSms': ackSmsResult } });
         } catch (e) { /* persistance non bloquante */ }
+        /* `disabled` n'est pas un échec d'envoi mais une absence d'envoi : on
+           ne l'inscrit pas au journal, qui ne recense que ce qui est parti. */
+        if (ackSmsResult && ackSmsResult.status !== 'disabled') {
+          await journaliser(created._id, {
+            canal: 'sms', auto: true, corps: ackSmsTexte, gabarit: 'moteur_ack',
+            ok: ackSmsResult.status === 'sent',
+            motif: ackSmsResult.message || ackSmsResult.reason || '',
+            at: ackSmsResult.at,
+          });
+        }
       }
     }
 
@@ -976,7 +998,20 @@ async function postShipment(req, res, next) {
           replyTo: { email: brand.EMAIL_CONTACT, name: brand.NAME },
         });
         if (r && r.ok !== false) emailSentAt = new Date();
-      } catch (err) { console.error('[engine-quote] shipment email failed:', err && err.message); }
+        await journaliser(cart._id, {
+          canal: 'email', auto: true,
+          objet: `Votre ${lex.noun} ${quoteRef} est ${lex.expedie}`,
+          corps: text, gabarit: 'expedition',
+          ok: !(r && r.ok === false), motif: (r && r.ok === false) ? (r.reason || 'inconnu') : '',
+          meta: { carrier, trackingNumber },
+        });
+      } catch (err) {
+        console.error('[engine-quote] shipment email failed:', err && err.message);
+        await journaliser(cart._id, {
+          canal: 'email', auto: true, objet: `Votre ${lex.noun} ${quoteRef} est ${lex.expedie}`,
+          gabarit: 'expedition', ok: false, motif: (err && err.message) || 'exception',
+        });
+      }
     }
 
     // SMS client (best-effort)
@@ -986,7 +1021,13 @@ async function postShipment(req, res, next) {
         // SMS d'expédition accordé au genre : template dédié pour les boîtes.
         const expeditionKey = cat === 'boite' ? 'boite_expedition' : cat === 'pont' ? 'pont_expedition' : 'moteur_expedition';
         const { enabled: smsOn, text: smsBody } = await resolveSms(expeditionKey, { quoteRef, trackingPart, phoneMoteur: brand.PHONE_MOTEUR });
-        if (smsOn && smsBody) await sendSms({ to: cart.phone, text: smsBody.slice(0, 320) });
+        if (smsOn && smsBody) {
+          const r = await sendSms({ to: cart.phone, text: smsBody.slice(0, 320) });
+          await journaliser(cart._id, {
+            canal: 'sms', auto: true, corps: smsBody.slice(0, 320), gabarit: expeditionKey,
+            ok: !!(r && r.ok), motif: (r && !r.ok) ? (r.reason || 'inconnu') : '',
+          });
+        }
       } catch (err) { console.warn('[engine-quote] shipment SMS failed:', err && err.message); }
     }
 
@@ -1940,6 +1981,11 @@ async function sendAvailabilityHook(cart, opts = {}) {
     try {
       const r = await emailService.sendEmail({ toEmail: cart.email, subject: 'Bonne nouvelle — votre moteur est disponible chez nous', html, text });
       okAny = okAny || !!(r && r.ok);
+      await journaliser(cart._id, {
+        canal: 'email', auto: true, objet: 'Bonne nouvelle — votre moteur est disponible chez nous',
+        corps: text, gabarit: 'moteur_disponible',
+        ok: !!(r && r.ok), motif: (r && !r.ok) ? (r.reason || 'inconnu') : '',
+      });
     } catch (err) { console.error('[availability-hook] email', err && err.message); }
   }
   if (cart.phone) {
@@ -1947,6 +1993,10 @@ async function sendAvailabilityHook(cart, opts = {}) {
       const smsText = `${firstName ? firstName + ', ' : ''}bonne nouvelle : votre moteur est disponible chez nous. Un conseiller Autoliva vous recontacte sous 24h. Ou appelez le ${phone}.`;
       const r = await sendSms({ to: cart.phone, text: smsText });
       okAny = okAny || !!(r && r.ok);
+      await journaliser(cart._id, {
+        canal: 'sms', auto: true, corps: smsText, gabarit: 'moteur_disponible',
+        ok: !!(r && r.ok), motif: (r && !r.ok) ? (r.reason || 'inconnu') : '',
+      });
     } catch (err) { console.error('[availability-hook] sms', err && err.message); }
   }
   // Le lead redevient « à rappeler » pour le commercial (le close est humain).
