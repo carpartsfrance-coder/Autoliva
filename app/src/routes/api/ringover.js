@@ -1,11 +1,22 @@
 'use strict';
 
 /**
- * Webhooks Ringover — trois événements.
+ * Webhooks Ringover — cinq événements, deux natures.
+ *
+ * ON ENREGISTRE (Ringover nous notifie, seul le code HTTP compte) :
  *
  *   `missed_call`         un appel manqué devient un lead à rappeler
  *   `sms` / `received`    la réponse du client revient sur sa fiche
  *   `ivr_response_code`   le code saisi dans le menu vocal donne le motif
+ *
+ * ON RÉPOND (Ringover nous INTERROGE et affiche notre réponse) :
+ *
+ *   `contact` / `call`    la fiche du client, pendant que le téléphone sonne
+ *   `contact` / `search`  une recherche tapée dans l'interface Ringover
+ *
+ * Ces deux-là sont les seuls dont le CORPS de réponse est lu. Ils viennent des
+ * blocs « Contact Call » et « Contact search » du dashboard, qui ont chacun
+ * leur propre URL et leur propre clé — voir `cleContact()`.
  *
  * ── SÉCURITÉ, DEUX BARRIÈRES ────────────────────────────────────────────────
  *
@@ -33,6 +44,7 @@ const express = require('express');
 const crypto = require('crypto');
 
 const { recordMissedCall, recordSmsReply, recordIvrCode } = require('../../services/ringoverCalls');
+const { carteAppelantBornee, rechercherContacts } = require('../../services/ringoverContact');
 const { verifier } = require('../../services/ringoverSignature');
 
 const router = express.Router();
@@ -87,6 +99,35 @@ function secretOk(recu) {
 const APPEL_MANQUE = new Set(['missed_call', 'missed', 'call_missed', 'voicemail']);
 const SMS_ENTRANT = new Set(['received', 'sms_received', 'message_received']);
 
+/* Les blocs « Contact Call » et « Contact search » du dashboard Ringover ont
+   LEUR PROPRE clé de signature, distincte de celle du bloc « Call Event ».
+   Utiliser la mauvaise fait échouer une signature pourtant valide. */
+function cleContact() {
+  return String(process.env.RINGOVER_WEBHOOK_KEY_CONTACT
+    || process.env.RINGOVER_WEBHOOK_KEY || '').trim();
+}
+
+/**
+ * « Contact search » n'est pas signé par JWT : Ringover met simplement la clé
+ * du webhook dans l'en-tête `Authorization`. On l'accepte si elle correspond à
+ * l'une des deux clés du compte — les deux sont des secrets légitimes, et
+ * exiger la bonne des deux ne protégerait de rien de plus.
+ *
+ * En-tête absent → on s'en remet au secret de l'URL, comme pour le SVI.
+ */
+function autorisationContactOk(entete) {
+  const recu = String(entete || '').trim();
+  if (!recu) return true;
+  const candidates = [cleContact(), String(process.env.RINGOVER_WEBHOOK_KEY || '').trim()]
+    .filter((c) => c.length >= 8);
+  if (!candidates.length) return true;
+  return candidates.some((c) => {
+    const a = Buffer.from(recu, 'utf8');
+    const b = Buffer.from(c, 'utf8');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  });
+}
+
 function urlPublique(req) {
   const base = String(process.env.PUBLIC_BASE_URL || 'https://autoliva.com').replace(/\/$/, '');
   return base + req.originalUrl.split('?')[0];
@@ -99,25 +140,39 @@ router.post('/webhook/:secret',
 
     const corpsBrut = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : String(req.body || '');
 
+    /* On lit le corps AVANT de vérifier la signature — non pour lui faire
+       confiance, mais parce que la clé à utiliser dépend de l'événement (les
+       webhooks « contact » sont signés avec une autre clé que les appels). Le
+       corps reste borné à 512 ko par `express.raw`, et rien n'en est fait
+       tant que la barrière suivante n'est pas franchie. */
+    let b;
+    try { b = JSON.parse(corpsBrut); } catch (_) { return res.json({ ok: true, ignore: 'corps_illisible' }); }
+    if (!b || typeof b !== 'object') return res.json({ ok: true, ignore: 'corps_vide' });
+
+    const evt = String(b.event || b.type || '').toLowerCase();
+    /* Ringover écrit `ressource` (deux s) dans le schéma de Contact search et
+       `resource` partout ailleurs. On lit les deux plutôt que de parier. */
+    const ressource = String(b.resource || b.ressource || '').toLowerCase();
+    const d = (b.data && typeof b.data === 'object') ? b.data : b;
+    const estContact = evt === 'contact';
+
     /* Barrière 2 : si une signature accompagne la requête, elle doit tenir. */
     const sig = verifier({
       headers: req.headers,
       corpsBrut,
       url: urlPublique(req),
       methode: req.method,
+      cle: estContact ? cleContact() : undefined,
     });
     if (sig.version && !sig.verifiee) {
-      console.error('[ringover] signature refusée :', sig.version, sig.raison);
+      console.error('[ringover] signature refusée :', sig.version, sig.raison,
+        estContact ? '(clé contact)' : '');
       return res.status(401).json({ ok: false, error: 'signature_invalide' });
     }
-
-    let b;
-    try { b = JSON.parse(corpsBrut); } catch (_) { return res.json({ ok: true, ignore: 'corps_illisible' }); }
-    if (!b || typeof b !== 'object') return res.json({ ok: true, ignore: 'corps_vide' });
-
-    const evt = String(b.event || b.type || '').toLowerCase();
-    const ressource = String(b.resource || '').toLowerCase();
-    const d = (b.data && typeof b.data === 'object') ? b.data : b;
+    if (estContact && !autorisationContactOk(req.headers.authorization)) {
+      console.error('[ringover] en-tête Authorization refusé sur un webhook contact');
+      return res.status(401).json({ ok: false, error: 'authorization_invalide' });
+    }
 
     /* On trace TOUT ce qui entre, y compris ce qu'on ignore. Sans ça, un
        événement qu'on ne reconnaît pas disparaît sans laisser de trace, et il
@@ -131,6 +186,36 @@ router.post('/webhook/:secret',
     }
 
     try {
+      /* ── Fiche appelant ────────────────────────────────────────────────
+         Ringover nous interroge PENDANT que le téléphone sonne et affiche
+         notre réponse dans la fenêtre d'appel. C'est le seul endpoint où
+         notre corps de réponse est lu : ailleurs, seul le code HTTP compte.
+
+         Sur un appel SORTANT, le client est le DESTINATAIRE — lire
+         `from_number` afficherait notre propre fiche au commercial. */
+      if (estContact && ressource === 'call') {
+        const sortant = String(d.direction || 'inbound').toLowerCase() === 'outbound';
+        const numeroClient = sortant ? (d.to_number || d.to) : (d.from_number || d.from);
+        const carte = await carteAppelantBornee(numeroClient);
+        if (!carte) {
+          /* 204 plutôt qu'un objet vide : Ringover ignore les réponses qu'il
+             ne sait pas lire, et affiche le numéro comme aujourd'hui. Un objet
+             vide risquerait d'écraser la fiche par une fiche sans nom. */
+          console.log('[ringover] fiche appelant : inconnu');
+          return res.status(204).end();
+        }
+        console.log('[ringover] fiche appelant : ' + (carte.company || (carte.firstname + ' ' + carte.lastname).trim() || 'sans nom')
+          + ' · ' + Object.keys(carte.data).join(', '));
+        return res.json(carte);
+      }
+
+      /* Recherche depuis la barre de recherche de Ringover. */
+      if (estContact && ressource === 'search') {
+        const resultats = await rechercherContacts(d.query_search || d.query || '');
+        console.log('[ringover] recherche contacts : ' + resultats.length + ' résultat(s)');
+        return res.json(resultats);
+      }
+
       /* Réponse du client par SMS. On écarte `sent` : notre propre envoi
          déclenche aussi un événement, le réinjecter ferait une boucle. */
       if (ressource === 'sms' || SMS_ENTRANT.has(evt)) {

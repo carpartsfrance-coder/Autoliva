@@ -94,12 +94,17 @@ function verifieV3(sig, horodatage, cle, url, corpsBrut, methode) {
 }
 
 /**
+ * @param {string} [opts.cle] Clé à utiliser. Par défaut `RINGOVER_WEBHOOK_KEY`,
+ *   celle de la section « Call Event ». Les sections « Contact Call » et
+ *   « Contact search » de Ringover ont CHACUNE leur propre clé, affichée sous
+ *   leur propre bloc — d'où ce paramètre.
+ *
  * @returns {{ verifiee: boolean, version: string, raison?: string }}
  *   verifiee=false avec version='' signifie « aucune signature présente » —
  *   c'est le cas normal pour `ivr_response_code`, pas une erreur.
  */
-function verifier({ headers, corpsBrut, url, methode } = {}) {
-  const cle = String(process.env.RINGOVER_WEBHOOK_KEY || '').trim();
+function verifier({ headers, corpsBrut, url, methode, cle: cleFournie } = {}) {
+  const cle = String(cleFournie || process.env.RINGOVER_WEBHOOK_KEY || '').trim();
   const h = headers || {};
   const v1 = h['x-ringover-webhook-signature'];
   const v3 = h['x-ringover-webhook-signature-v3'];
