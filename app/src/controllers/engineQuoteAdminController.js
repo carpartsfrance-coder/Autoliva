@@ -21,10 +21,18 @@ const emailService = require('../services/emailService');
 const { buildQuotePdf } = require('../services/engineQuotePdf');
 const { getCompanyBrochureBuffer } = require('../services/companyBrochurePdf');
 
-// Pièce jointe « brochure de présentation » (statique, mise en cache) ajoutée à
-// chaque devis envoyé au client (auto + manuel). Échec silencieux = on envoie
-// quand même le devis.
+/* Pièce jointe « brochure de présentation » (statique, mise en cache).
+ *
+ * DÉSACTIVÉE PAR DÉFAUT depuis le 02/08/2026 : Killian la juge trop laide pour
+ * accompagner un devis. Un devis à plusieurs milliers d'euros se juge aussi sur
+ * sa présentation — une plaquette bâclée dessert le document qu'elle escorte.
+ *
+ * Le code de génération est CONSERVÉ (services/companyBrochurePdf.js) : la
+ * remettre le jour où elle sera refaite ne demandera qu'une variable, pas un
+ * développement. Poser DEVIS_BROCHURE=on pour la réactiver.
+ */
 async function brochureAttachment() {
+  if (String(process.env.DEVIS_BROCHURE || '').trim().toLowerCase() !== 'on') return null;
   try {
     const buf = await getCompanyBrochureBuffer();
     if (buf && buf.length) {
