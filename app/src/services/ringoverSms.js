@@ -21,11 +21,49 @@
 
 const API = 'https://public-api.ringover.com/v2/push/sms';
 
-/* Message par défaut, surchargeable sans déploiement via RINGOVER_SMS_TEXT.
-   Écrit pour tenir en UN segment : 137 caractères, aucun accent hors GSM-7,
-   aucun lien (les opérateurs les filtrent, et il n'y en a pas besoin ici). */
+/* Messages calibrés pour UN segment : aucun accent hors GSM-7, aucun lien
+   (les opérateurs français filtrent les liens venant d'un expéditeur inconnu).
+   Tous surchargeables par variable d'environnement, sans déploiement.
+
+   PRINCIPE : ne jamais poser une question dont on connaît la réponse. Quand la
+   personne a un dossier en cours, on le lui PROPOSE — c'est la différence entre
+   un formulaire et quelqu'un qui la reconnaît. Sur 942 numéros connus, 82 % ont
+   un dossier ouvert : la version générique reste minoritaire. */
 const TEXTE_DEFAUT = "Bonjour, nous n'avons pas pu prendre votre appel. "
   + "Dites-nous en deux mots ce qu'il vous faut, on vous rappelle. Autoliva";
+
+const TEXTES = {
+  /* {piece} vaut « moteur », « boite » ou « piece » selon la landing d'origine.
+     Le sous-document s'appelle `engineQuote` par héritage, mais il porte les
+     trois familles : dire « devis moteur » à quelqu'un qui a demandé un pont
+     serait faux, et se verrait immédiatement. */
+  devis:    "{prenom}nous n'avons pas pu prendre votre appel. C'est au sujet du devis pour votre {piece} ? "
+            + "Repondez a ce message, on revient vers vous. Autoliva",
+  commande: "{prenom}nous n'avons pas pu prendre votre appel. C'est au sujet de votre commande ? "
+            + "Repondez a ce message, on revient vers vous. Autoliva",
+  sav:      "{prenom}nous n'avons pas pu prendre votre appel. C'est au sujet de votre dossier SAV ? "
+            + "Repondez a ce message, on vous rappelle. Autoliva",
+};
+
+/**
+ * Choisit le message selon ce qu'on sait du client.
+ * @param {string} sujet   'devis' | 'commande' | 'sav' | '' (inconnu)
+ * @param {string} prenom  prénom si connu, sinon message impersonnel
+ */
+function texteSelonContexte(sujet, prenom, piece) {
+  const perso = String(process.env['RINGOVER_SMS_TEXT_' + String(sujet || '').toUpperCase()] || '').trim();
+  const modele = perso || TEXTES[sujet];
+  if (!modele) return String(process.env.RINGOVER_SMS_TEXT || '').trim() || TEXTE_DEFAUT;
+  /* Le prénom est optionnel : sans lui la phrase commence par une majuscule et
+     reste correcte, plutôt que « Bonjour , nous n'avons… ». */
+  const p = String(prenom || '').trim();
+  /* Sans accent dans le SMS : « boîte » ferait basculer le message en UCS-2 et
+     doublerait son coût. Le lexique renvoie l'accent, on le retire ici. */
+  const pi = String(piece || 'piece').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  return modele
+    .replace('{prenom}', p ? p + ', ' : 'Bonjour, ')
+    .replace('{piece}', pi);
+}
 
 function conf() {
   const cle = String(process.env.RINGOVER_API_KEY || '').trim();
@@ -42,7 +80,7 @@ function estActif() { return conf().actif; }
  *
  * @returns {Promise<{ ok:boolean, raison?:string, messageId?:number, convId?:number }>}
  */
-async function envoyer({ to, content } = {}) {
+async function envoyer({ to, content, sujet, prenom, piece } = {}) {
   const { cle, from, texte, actif } = conf();
   if (!actif) return { ok: false, raison: 'non_configure' };
 
@@ -52,10 +90,12 @@ async function envoyer({ to, content } = {}) {
      configuration produirait une boucle. */
   if (dest === from) return { ok: false, raison: 'destinataire_est_expediteur' };
 
+  const message = String(content || '').trim()
+    || (sujet ? texteSelonContexte(sujet, prenom, piece) : texte);
   const corps = JSON.stringify({
     from_number: from,
     to_number: dest,
-    content: String(content || texte).slice(0, 600),
+    content: message.slice(0, 600),
   });
 
   try {
@@ -88,4 +128,4 @@ async function envoyer({ to, content } = {}) {
   }
 }
 
-module.exports = { envoyer, estActif, TEXTE_DEFAUT };
+module.exports = { envoyer, estActif, texteSelonContexte, TEXTE_DEFAUT, TEXTES };
