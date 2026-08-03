@@ -669,8 +669,81 @@
             html += '<div class="pt-3 flex justify-between items-center"><div class="font-semibold text-slate-900">Total</div><div class="font-bold text-slate-900">' + escapeHtml(c.totalAmount) + '</div></div></div>';
           }
 
+          /* ── Messages échangés ──────────────────────────────────────────
+             Tous canaux, envois automatiques compris. Séparé des notes : une
+             note est ce qu'un commercial a ÉCRIT POUR LUI, un message est ce
+             que le CLIENT a reçu. Les mélanger empêchait de répondre à
+             « qu'est-ce qu'on lui a envoyé ». */
+          if (c.communications && c.communications.length) {
+            var r = c.commResume || {};
+            html += '<div class="rounded-xl border border-slate-200 p-4">';
+            html += '<div class="flex items-baseline justify-between mb-3 gap-2 flex-wrap">';
+            html += '<div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Messages échangés (' + c.communications.length + ')</div>';
+            var compteurs = [];
+            if (r.email) compteurs.push(r.email + ' email' + (r.email > 1 ? 's' : ''));
+            if (r.sms) compteurs.push(r.sms + ' SMS');
+            if (r.whatsapp) compteurs.push(r.whatsapp + ' WhatsApp');
+            if (r.manuel) compteurs.push(r.manuel + ' manuel' + (r.manuel > 1 ? 's' : ''));
+            if (r.auto) compteurs.push(r.auto + ' auto');
+            html += '<div class="text-xs text-slate-500">' + escapeHtml(compteurs.join(' · ')) + '</div>';
+            html += '</div>';
+            /* Les échecs remontent en tête : un message non délivré explique un
+               silence client qu'on prendrait sinon pour un désintérêt. */
+            if (r.echecs) {
+              html += '<div class="rounded-lg bg-red-50 text-red-700 text-xs px-3 py-2 mb-3">'
+                + '<strong>' + r.echecs + ' message' + (r.echecs > 1 ? 's' : '') + ' non délivré' + (r.echecs > 1 ? 's' : '')
+                + '</strong> — le client ne les a jamais reçus.</div>';
+            }
+
+            var ICONES = { email: 'mail', sms: 'sms', whatsapp: 'chat', appel: 'call' };
+            c.communications.forEach(function (m) {
+              var entrant = !!m.entrant;
+              html += '<div class="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">';
+              html += '<span class="material-symbols-outlined text-base flex-shrink-0 '
+                + (m.echec ? 'text-red-500' : entrant ? 'text-emerald-600' : 'text-slate-400') + '">'
+                + (ICONES[m.canal] || 'mail') + '</span>';
+              html += '<div class="flex-1 min-w-0">';
+
+              html += '<div class="flex items-center gap-1.5 flex-wrap">';
+              if (entrant) html += '<span class="text-xs font-semibold text-emerald-700">Reçu du client</span>';
+              if (m.echec) html += '<span class="rounded bg-red-50 text-red-700 text-xs px-1.5 py-0.5 font-semibold">Non délivré</span>';
+              if (m.auto && !entrant) html += '<span class="rounded bg-slate-100 text-slate-500 text-xs px-1.5 py-0.5">Auto</span>';
+              if (m.reconstitue) {
+                html += '<span class="rounded bg-amber-50 text-amber-700 text-xs px-1.5 py-0.5" '
+                  + 'title="Reconstitué depuis les anciennes traces : le contenu exact n\'a pas été conservé à l\'époque.">Reconstitué</span>';
+              }
+              if (m.meta && m.meta.envoiNonGaranti) {
+                html += '<span class="rounded bg-amber-50 text-amber-700 text-xs px-1.5 py-0.5" '
+                  + 'title="Ouvert dans WhatsApp depuis le poste du commercial : rien ne prouve que le message a bien été envoyé.">Envoi non confirmé</span>';
+              }
+              html += '</div>';
+
+              if (m.objet) {
+                html += '<div class="text-sm font-semibold text-slate-900">' + escapeHtml(m.objet);
+                /* Le montant d'un devis fait partie de ce qu'on a envoyé : sans
+                   lui, deux révisions successives sont indiscernables. */
+                if (m.meta && m.meta.montant) {
+                  html += ' <span class="text-slate-500 font-normal">· '
+                    + escapeHtml(String(Math.round(m.meta.montant)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')) + ' €</span>';
+                }
+                html += '</div>';
+              }
+              if (m.corps) html += '<div class="text-sm text-slate-700 whitespace-pre-line">' + escapeHtml(m.corps) + '</div>';
+              if (m.echec && m.motif) html += '<div class="text-xs text-red-600">Motif : ' + escapeHtml(m.motif) + '</div>';
+
+              var pied = [m.par || (m.auto ? 'Système' : ''), m.at].filter(Boolean).join(' · ');
+              if (m.gabarit) pied += ' · modèle « ' + m.gabarit + ' »';
+              html += '<div class="text-xs text-slate-400">' + escapeHtml(pied) + '</div>';
+              html += '</div></div>';
+            });
+            html += '</div>';
+          } else {
+            html += '<div class="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">'
+              + 'Aucun message envoyé à ce contact.</div>';
+          }
+
           if (c.notes && c.notes.length) {
-            html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Historique (' + c.notes.length + ')</div>';
+            html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Notes internes (' + c.notes.length + ')</div>';
             c.notes.slice().reverse().forEach(function (n) {
               html += '<div class="text-sm text-slate-700 py-1.5 border-b border-slate-100 last:border-0">' + escapeHtml(n.text);
               html += '<div class="text-xs text-slate-400">' + escapeHtml(n.addedByName || 'Admin') + ' · ' + escapeHtml(n.addedAt) + '</div></div>';

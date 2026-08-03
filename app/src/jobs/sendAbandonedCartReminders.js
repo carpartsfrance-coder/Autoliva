@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const { sendAbandonedCartReminder } = require('../services/emailService');
 const smsService = require('../services/smsService');
+const { journaliser } = require('../services/leadCommunications');
 
 const MAX_EMAILS_PER_RUN = 50;
 const RATE_LIMIT_MS = 200; // 200ms between each email
@@ -193,12 +194,33 @@ async function sendAbandonedCartReminders() {
         });
 
         if (result && result.ok) {
+          await journaliser(cart._id, {
+            canal: 'email', auto: true,
+            objet: `Relance panier abandonné n°${reminderNumber}`,
+            gabarit: `relance_panier_${reminderNumber}`,
+            meta: reminderNumber === 3 && promoCode ? { promoCode } : {},
+            at: now,
+          });
+
           // Send SMS only on first reminder (avoid spam)
           if (reminderNumber === 1 && cart.userId) {
             try {
               const smsUser = await User.findById(cart.userId).select('_id smsOptIn addresses').lean();
               if (smsUser) {
-                smsService.sendAbandonedCartSms({ cart, user: smsUser }).catch(() => {});
+                /* Ce SMS partait en `.catch(() => {})` : ni son succès ni son
+                   échec n'étaient écrits nulle part. On le journalise sans
+                   pour autant le rendre bloquant — une relance email réussie
+                   ne doit pas être comptée en échec parce que le SMS a raté. */
+                smsService.sendAbandonedCartSms({ cart, user: smsUser })
+                  .then((r) => journaliser(cart._id, {
+                    canal: 'sms', auto: true, gabarit: 'relance_panier_1',
+                    ok: !!(r && r.ok),
+                    motif: (r && !r.ok) ? (r.reason || 'inconnu') : '',
+                  }))
+                  .catch((e) => journaliser(cart._id, {
+                    canal: 'sms', auto: true, gabarit: 'relance_panier_1',
+                    ok: false, motif: (e && e.message) ? e.message : 'erreur',
+                  }));
               }
             } catch (_) { /* non-blocking */ }
           }
@@ -215,6 +237,12 @@ async function sendAbandonedCartReminders() {
           report.sent += 1;
           console.log(`[cart-reminders] Relance ${reminderNumber} envoyée à ${cart.email} (panier ${cart._id})`);
         } else {
+          await journaliser(cart._id, {
+            canal: 'email', auto: true,
+            objet: `Relance panier abandonné n°${reminderNumber}`,
+            gabarit: `relance_panier_${reminderNumber}`,
+            ok: false, motif: (result && result.reason) || 'inconnu', at: now,
+          });
           report.errors += 1;
           console.error(
             `[cart-reminders] Échec envoi relance ${reminderNumber} à ${cart.email}:`,

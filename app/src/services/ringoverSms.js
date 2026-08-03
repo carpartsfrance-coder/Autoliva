@@ -121,7 +121,10 @@ async function envoyer({ to, content, sujet, prenom, piece } = {}) {
       return { ok: false, raison: 'http_' + r.status };
     }
     const d = await r.json().catch(() => ({}));
-    return { ok: true, messageId: d.message_id, convId: d.conv_id };
+    /* `texte` est renvoyé pour que l'appelant puisse journaliser CE QUI est
+       parti : le message est choisi ici, selon le contexte du dossier, et
+       l'appelant ne le connaît pas autrement. */
+    return { ok: true, messageId: d.message_id, convId: d.conv_id, texte: message.slice(0, 600) };
   } catch (err) {
     console.error('[ringover-sms] erreur réseau :', err && err.message ? err.message : err);
     return { ok: false, raison: 'reseau' };

@@ -27,6 +27,7 @@ async function loadArticlesForBody(text) {
   return map;
 }
 const { getMergedTemplates } = require('../services/leadTemplateSettings');
+const { journaliser, historique, resume } = require('../services/leadCommunications');
 const brand = require('../config/brand');
 
 function escapeRegExp(str) {
@@ -615,6 +616,8 @@ async function getAdminLeadDetail(req, res, next) {
     const ORDER_STATUS_FR = { paid: 'Payée', processing: 'En préparation', label_created: 'Étiquette créée', shipped: 'Expédiée', delivered: 'Livrée', completed: 'Terminée' };
 
     const requested = cart.requested || {};
+    const lignesComm = historique(cart);
+    const resumeComm = resume(lignesComm);
     return res.json({
       ok: true,
       cart: {
@@ -677,6 +680,27 @@ async function getAdminLeadDetail(req, res, next) {
           addedByName: n.addedByName || 'Admin',
           addedAt: formatDateTimeFR(n.addedAt),
         })),
+        /* Historique des messages : le journal des envois récents, complété par
+           tout ce qui est reconstituable des traces antérieures. */
+        communications: lignesComm.map((l) => ({
+          canal: l.canal,
+          entrant: l.sens === 'entrant',
+          auto: !!l.auto,
+          objet: l.objet || '',
+          corps: l.corps || '',
+          gabarit: l.gabarit || '',
+          echec: l.statut === 'echec',
+          motif: l.motif || '',
+          par: l.par || '',
+          at: formatDateTimeFR(l.at),
+          /* Trié côté serveur, mais l'ordre d'un tableau JSON n'est pas une
+             garantie que le front doit deviner : on donne aussi le brut. */
+          atIso: l.at ? new Date(l.at).toISOString() : '',
+          reconstitue: !!l.reconstitue,
+          partiel: !!l.partiel,
+          meta: l.meta || {},
+        })),
+        commResume: resumeComm,
         recoveryToken: cart.recoveryToken,
         createdAt: formatDateTimeFR(cart.createdAt),
       },
@@ -822,6 +846,13 @@ async function postLeadSendEmail(req, res, next) {
     });
 
     if (!sendResult || !sendResult.ok) {
+      /* L'échec est journalisé AVANT d'être renvoyé. Un email qui n'est pas
+         parti est précisément ce qu'il faut voir sur la fiche : sans ça, le
+         client passe pour quelqu'un qui ne répond jamais. */
+      await journaliser(cart._id, {
+        canal: 'email', objet: finalSubject, corps: finalBody, gabarit: templateKey,
+        ok: false, motif: (sendResult && sendResult.reason) || 'inconnu', par: admin.name,
+      });
       return res.status(502).json({ ok: false, error: `Échec envoi email: ${sendResult && sendResult.reason ? sendResult.reason : 'inconnu'}` });
     }
 
@@ -831,6 +862,10 @@ async function postLeadSendEmail(req, res, next) {
       $set: { lastManualContactAt: now },
       $inc: { manualEmailsSent: 1 },
       $push: { notes: { text: `📧 Email envoyé${noteLabel} : "${finalSubject}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
+    });
+    await journaliser(cart._id, {
+      canal: 'email', objet: finalSubject, corps: finalBody,
+      gabarit: templateKey, par: admin.name, at: now,
     });
 
     return res.json({ ok: true, sentTo: cart.email });
@@ -927,6 +962,10 @@ async function postLeadSendSms(req, res, next) {
 
     const sendResult = await sendSms({ to: phoneFR, text: finalText });
     if (!sendResult || !sendResult.ok) {
+      await journaliser(cart._id, {
+        canal: 'sms', corps: finalText, gabarit: templateKey, ok: false,
+        motif: (sendResult && sendResult.reason) || 'inconnu', par: admin.name,
+      });
       return res.status(502).json({ ok: false, error: `Échec envoi SMS: ${sendResult && sendResult.reason ? sendResult.reason : 'inconnu'}` });
     }
 
@@ -936,6 +975,12 @@ async function postLeadSendSms(req, res, next) {
       $set: { lastManualContactAt: now },
       $inc: { manualSmsSent: 1 },
       $push: { notes: { text: `📱 SMS envoyé${noteLabel} : "${finalText.slice(0, 120)}${finalText.length > 120 ? '…' : ''}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
+    });
+    /* Le journal garde le texte ENTIER (à 600 caractères près), là où la note
+       s'arrête à 120 : relire un SMS tronqué au milieu d'une phrase ne dit pas
+       ce qu'on a promis au client. */
+    await journaliser(cart._id, {
+      canal: 'sms', corps: finalText, gabarit: templateKey, par: admin.name, at: now,
     });
 
     return res.json({ ok: true, sentTo: phoneFR });
@@ -984,6 +1029,13 @@ async function postLeadWhatsApp(req, res, next) {
     await AbandonedCart.updateOne({ _id: cart._id }, {
       $set: { lastManualContactAt: now },
       $push: { notes: { text: `📲 WhatsApp ouvert${noteLabel} : "${finalText.slice(0, 120)}${finalText.length > 120 ? '…' : ''}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
+    });
+    /* WhatsApp part depuis le téléphone du commercial : on enregistre une
+       INTENTION d'envoi, pas une remise. `meta.envoiNonGaranti` le dit, pour
+       qu'une absence de réponse ne soit pas imputée au client. */
+    await journaliser(cart._id, {
+      canal: 'whatsapp', corps: finalText, gabarit: templateKey, par: admin.name,
+      at: now, meta: { envoiNonGaranti: true },
     });
 
     return res.json({ ok: true, waUrl, sentTo: phoneFR });
