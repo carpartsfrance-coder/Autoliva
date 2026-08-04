@@ -670,35 +670,49 @@
           }
 
           /* ── Demande fournisseur ────────────────────────────────────────
-             Le commercial doit interroger Asysum avant de chiffrer. Le message
-             est prérédigé côté serveur pour les quatre interlocuteurs, avec le
-             bon destinataire présélectionné : il ne reste qu'à compléter et
-             copier. */
+             Le commercial doit interroger Asysum avant de chiffrer.
+
+             RIEN N'EST PRÉSÉLECTIONNÉ. Une version précédente devinait le
+             destinataire et le nom de la pièce : elle s'est trompée deux fois
+             en production. Le commercial choisit, le code rédige. Les libellés
+             connus (formulaire de devis, articles du panier) sont offerts en
+             raccourcis de saisie — proposer un texte qu'on lit avant de le
+             valider n'engage rien ; présélectionner un destinataire qu'on ne
+             relit pas envoie un e-mail au mauvais fournisseur. */
           if (c.fournisseur && c.fournisseur.demandes) {
             var F = c.fournisseur;
-            var choix = F.suggere || 'moteurs';
             html += '<div class="rounded-xl border border-slate-200 p-4" id="lead-fournisseur">';
             html += '<div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Demande fournisseur</div>';
 
             html += '<div class="flex items-center gap-2 flex-wrap mb-2">';
             html += '<select id="fourn-cible" class="rounded-lg border border-slate-200 px-2 py-1.5 text-sm">';
+            html += '<option value="" selected>— choisir le destinataire —</option>';
             ['moteurs', 'boites', 'injection', 'ponts'].forEach(function (k) {
               var d = F.demandes[k];
               if (!d) return;
-              html += '<option value="' + k + '"' + (k === choix ? ' selected' : '') + '>'
+              html += '<option value="' + k + '">'
                 + escapeHtml(d.libelle + ' — ' + d.contact) + '</option>';
             });
             html += '</select>';
             html += '<span id="fourn-mail" class="text-xs text-slate-500"></span>';
             html += '</div>';
 
-            /* Une catégorie déduite de la provenance du lead est une
-               SUPPOSITION : le client avait tapé sa voiture, pas la pièce.
-               Le dire évite un e-mail au mauvais fournisseur. */
-            if (F.suggereSur === 'provenance') {
-              html += '<div class="rounded-lg bg-amber-50 text-amber-700 text-xs px-3 py-2 mb-2">'
-                + 'Destinataire <strong>déduit de la provenance du lead</strong>, pas de la pièce demandée — vérifie avant d\'envoyer.</div>';
+            /* Pièce saisie à la main. Les raccourcis en dessous remplissent le
+               champ d'un clic, mais restent modifiables : le libellé catalogue
+               n'est pas toujours ce qu'il faut écrire au fournisseur. */
+            html += '<div class="mb-2">';
+            html += '<input id="fourn-piece" type="text" maxlength="200" placeholder="Pièce demandée (ex. culasse Mazda CX-5 2.2D)" '
+              + 'class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />';
+            if (F.suggestions && F.suggestions.length) {
+              html += '<div class="flex items-start gap-2 flex-wrap mt-1.5">';
+              html += '<span class="text-xs text-slate-400 pt-0.5">Demandé par le client :</span>';
+              F.suggestions.forEach(function (s, i) {
+                html += '<button type="button" class="fourn-sugg rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2 py-1 text-left" '
+                  + 'data-i="' + i + '">' + escapeHtml(s.length > 70 ? s.slice(0, 69) + '…' : s) + '</button>';
+              });
+              html += '</div>';
             }
+            html += '</div>';
 
             /* Le VIN n'est réclamé que par Jose Angel. On ne l'a quasiment
                jamais : le commercial le convertit depuis la plaque. */
@@ -813,14 +827,16 @@
           content.innerHTML = html;
 
           /* Demande fournisseur : un seul texte, celui du serveur. Le front ne
-             fait qu'échanger de destinataire et injecter le VIN — réécrire la
-             formulation ici créerait une seconde version à maintenir. */
+             fait qu'échanger de destinataire et remplir les blancs (pièce,
+             VIN) — réécrire la formulation ici créerait une seconde version à
+             maintenir, qui divergerait à la première retouche. */
           (function () {
             var bloc = document.getElementById('lead-fournisseur');
             if (!bloc || !c.fournisseur) return;
             var F = c.fournisseur;
             var cible = document.getElementById('fourn-cible');
             var corps = document.getElementById('fourn-corps');
+            var piece = document.getElementById('fourn-piece');
             var vin = document.getElementById('fourn-vin');
             var vinBloc = document.getElementById('fourn-vin-bloc');
             var mailto = document.getElementById('fourn-mailto');
@@ -829,36 +845,74 @@
 
             function courant() { return F.demandes[cible.value]; }
 
-            function avecVin(texte) {
+            /* Les deux blancs du message sont remplis ici, à l'identique de ce
+               que le serveur aurait écrit s'il avait connu les valeurs. */
+            function remplir(texte) {
+              var p = (piece.value || '').trim();
               var v = (vin.value || '').trim().toUpperCase();
-              if (!v) return texte;
-              return texte.split('VIN : ' + F.aRemplir).join('VIN : ' + v);
+              if (p) texte = texte.split('Demande client : ' + F.aRemplir).join('Demande client : ' + p);
+              if (v) texte = texte.split('VIN : ' + F.aRemplir).join('VIN : ' + v);
+              return texte;
+            }
+
+            /* L'objet reprend la pièce saisie, sinon il annoncerait un blanc. */
+            function objetCourant(d) {
+              var p = (piece.value || '').trim();
+              if (!p) return d.objet;
+              var court = p.length > 60 ? p.slice(0, 59).trim() + '…' : p;
+              return d.objet.split(F.aRemplir).join(court);
+            }
+
+            function majMailto() {
+              var d = courant();
+              if (!d) { mailto.removeAttribute('href'); return; }
+              mailto.href = 'mailto:' + d.email
+                + '?subject=' + encodeURIComponent(objetCourant(d))
+                + '&body=' + encodeURIComponent(corps.value);
             }
 
             function rendre() {
               var d = courant();
-              if (!d) return;
-              corps.value = avecVin(d.corps);
+              if (!d) {
+                /* Aucun destinataire choisi : pas de message tout prêt qu'on
+                   pourrait copier sans savoir à qui l'envoyer. */
+                corps.value = '';
+                corps.placeholder = 'Choisis d\'abord un destinataire ci-dessus.';
+                mail.textContent = '';
+                vinBloc.className = 'mb-2 hidden';
+                mailto.removeAttribute('href');
+                return;
+              }
+              corps.value = remplir(d.corps);
               mail.textContent = d.email;
               vinBloc.className = d.vinRequis ? 'mb-2' : 'mb-2 hidden';
               /* On reconstruit le mailto à partir du texte AFFICHÉ : sinon les
-                 retouches du commercial (VIN, précisions) seraient perdues à
-                 l'ouverture du client de messagerie. */
-              mailto.href = 'mailto:' + d.email
-                + '?subject=' + encodeURIComponent(d.objet)
-                + '&body=' + encodeURIComponent(corps.value);
+                 retouches du commercial seraient perdues à l'ouverture du
+                 client de messagerie. */
+              majMailto();
             }
 
             cible.addEventListener('change', rendre);
+            piece.addEventListener('input', rendre);
             vin.addEventListener('input', rendre);
-            corps.addEventListener('input', function () {
-              var d = courant();
-              if (d) mailto.href = 'mailto:' + d.email
-                + '?subject=' + encodeURIComponent(d.objet)
-                + '&body=' + encodeURIComponent(corps.value);
+            /* Une retouche directe du message ne doit pas être écrasée : on ne
+               met à jour que le lien, pas le corps. */
+            corps.addEventListener('input', majMailto);
+
+            Array.prototype.forEach.call(bloc.querySelectorAll('.fourn-sugg'), function (b) {
+              b.addEventListener('click', function () {
+                piece.value = F.suggestions[Number(b.dataset.i)] || '';
+                rendre();
+                piece.focus();
+              });
             });
 
             document.getElementById('fourn-copier').addEventListener('click', function () {
+              if (!corps.value.trim()) {
+                retour.textContent = 'Choisis un destinataire';
+                setTimeout(function () { retour.textContent = ''; }, 2500);
+                return;
+              }
               corps.select();
               var ok = false;
               try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
