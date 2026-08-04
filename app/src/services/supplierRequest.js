@@ -88,14 +88,36 @@ function sansAccent(s) {
 }
 
 /**
- * ⚠ L'ORDRE EST SIGNIFIANT. « Boîte de transfert » doit tomber dans `ponts`,
- * pas dans `boites` : la règle des transferts passe donc en premier.
+ * Prestations réalisées EN INTERNE : aucune demande fournisseur n'a de sens.
+ * Le clonage de mécatronique est un service Autoliva — sans cette exception il
+ * partirait chez Jose Florin, puisque son libellé contient « mécatronique ».
+ */
+const SERVICE_MAISON = /^clonage/;
+
+/**
+ * ⚠ L'ORDRE EST SIGNIFIANT, et chaque règle a été confrontée aux 347 articles
+ * réellement présents dans les paniers.
+ *
+ *  1. Les transferts D'ABORD : « boîte de transfert » et « actionneur de boîte
+ *     de transfert » contiennent « boîte » mais relèvent de Jose Angel.
+ *  2. L'injection avant les boîtes : « CITROEN 1,9 TD Rotodiesel — Pompe à
+ *     injection » ne doit pas être happé par une autre famille.
+ *  3. Les boîtes couvrent tout l'univers DSG — mécatronique, TCU, calculateur
+ *     de boîte, S tronic, Multitronic. Avec 348 mécatroniques DSG7, c'est la
+ *     famille la plus demandée du catalogue.
+ *  4. Les moteurs en dernier, et « turbo » y est volontairement STRICT :
+ *     « Kit démarrage Porsche Cayenne Turbo » n'est pas une demande de
+ *     turbocompresseur, c'est un nom de modèle. Seul un libellé qui COMMENCE
+ *     par « turbo » compte.
+ *
+ * `\bpont\b` et non `pont` : sans les limites de mot, « ponts » attraperait
+ * aussi « composant », « répondant »…
  */
 const REGLES = [
-  { cle: 'ponts', rx: /transfert|haldex|pont|differentiel/ },
-  { cle: 'injection', rx: /inject|pompe a injection|diesel/ },
-  { cle: 'boites', rx: /boite|vidange/ },
-  { cle: 'moteurs', rx: /moteur|culasse|turbo/ },
+  { cle: 'ponts', rx: /transfert|renvoi d'angle|haldex|\bpont\b|\bponts\b|differentiel/ },
+  { cle: 'injection', rx: /injection|injecteur|rotodiesel|roto diesel/ },
+  { cle: 'boites', rx: /mecatronique|\bdsg\b|s.?tronic|multitronic|\btcu\b|\btcm\b|boite|vidange/ },
+  { cle: 'moteurs', rx: /moteur|culasse|^turbo\b|turbocompresseur/ },
 ];
 
 const PAR_SOURCE = {
@@ -105,22 +127,59 @@ const PAR_SOURCE = {
 };
 
 /**
+ * Tout ce que le client demande : le champ du formulaire ET les articles du
+ * panier. Les DEUX, jamais l'un à la place de l'autre.
+ *
+ * Deux erreurs de la première version, corrigées ici, tenaient à ce choix :
+ *
+ *   • Les articles du panier étaient ignorés. 1 006 leads sur 1 568 n'ont que
+ *     ça — des mécatroniques et des ponts en majorité — et tous retombaient
+ *     silencieusement chez Agnès (moteurs).
+ *
+ *   • `requested.vehicle` primait ABSOLUMENT et masquait le panier. Or sur
+ *     48 leads le client y a tapé sa VOITURE (« NISSAN QASHQAI », « BMW X3 »)
+ *     pendant que le panier contenait la vraie pièce. Le message annonçait donc
+ *     un modèle de voiture en guise de demande.
+ *
+ * @returns {string[]} sans doublon, le champ du formulaire d'abord
+ */
+function piecesDemandees(lead) {
+  const v = String((lead && lead.requested && lead.requested.vehicle) || '').trim();
+  const articles = ((lead && lead.items) || []).map((i) => i && i.name)
+    .filter(Boolean).map((n) => String(n).trim());
+  const tout = (v ? [v] : []).concat(articles);
+  return Array.from(new Set(tout.filter(Boolean)));
+}
+
+function familleDe(libelle) {
+  const t = sansAccent(libelle);
+  if (!t || SERVICE_MAISON.test(t)) return null;
+  const regle = REGLES.find((r) => r.rx.test(t));
+  return regle ? regle.cle : null;
+}
+
+/**
  * Classe le lead, ET DIT SUR QUOI il a été classé.
  *
- * La distinction n'est pas cosmétique. Reconnue dans la pièce demandée, la
- * catégorie est SÛRE — le client a choisi dans un menu. Déduite de la
- * provenance du lead, elle n'est qu'une supposition : c'est le cas des demandes
- * où l'internaute a tapé sa voiture (« Bmw 330 xd ») au lieu de la pièce, et
- * la provenance ment parfois. Le commercial doit voir la différence avant
- * d'envoyer un e-mail au mauvais fournisseur.
+ * La distinction n'est pas cosmétique :
  *
- * @returns {{ cle: string|null, sur: 'piece'|'provenance'|'' }}
+ *   `piece`      reconnu dans ce que le client demande — sûr.
+ *   `provenance` déduit de la landing d'origine — SUPPOSITION. Le client avait
+ *                tapé sa voiture (« Bmw 330 xd ») au lieu de la pièce, et la
+ *                provenance ment parfois.
+ *   `mixte`      le panier mélange des familles (une mécatronique ET un pont) :
+ *                deux fournisseurs différents, le commercial doit trancher.
+ *   ''           rien de reconnaissable. On n'invente pas : des phares, un
+ *                accoudoir ou un PCM Porsche ne relèvent d'AUCUN des quatre
+ *                contacts Asysum.
+ *
+ * @returns {{ cle: string|null, sur: 'piece'|'provenance'|'mixte'|'' }}
  */
 function categoriser(lead) {
-  const piece = sansAccent(lead && lead.requested && lead.requested.vehicle);
-  if (piece) {
-    const regle = REGLES.find((r) => r.rx.test(piece));
-    if (regle) return { cle: regle.cle, sur: 'piece' };
+  const familles = piecesDemandees(lead).map(familleDe).filter(Boolean);
+  if (familles.length) {
+    const distinctes = Array.from(new Set(familles));
+    return { cle: distinctes[0], sur: distinctes.length > 1 ? 'mixte' : 'piece' };
   }
   const parSource = PAR_SOURCE[lead && lead.captureSource];
   if (parSource) return { cle: parSource, sur: 'provenance' };
@@ -131,12 +190,20 @@ function categoriser(lead) {
 /*  Rédaction                                                               */
 /* ──────────────────────────────────────────────────────────────────────── */
 
-/** Le libellé choisi par le client, sinon une désignation neutre. */
-function libellePiece(lead, cleFournisseur) {
-  const v = String((lead && lead.requested && lead.requested.vehicle) || '').trim();
-  if (v) return v;
-  const f = FOURNISSEURS[cleFournisseur];
-  return f ? f.libelle : 'Pièce';
+/**
+ * Ce qu'on écrit dans « Demande client : … ».
+ *
+ * JAMAIS le libellé de la catégorie fournisseur. La première version le faisait
+ * en repli et annonçait « Moteurs, culasses, turbos » à un client qui voulait
+ * une seule culasse : Agnès aurait cru qu'on demandait trois pièces.
+ *
+ * Un panier peut contenir plusieurs articles ; on les liste tous, sinon la
+ * demande porterait sur une partie de la commande.
+ */
+function libellePiece(lead) {
+  const pieces = piecesDemandees(lead);
+  if (!pieces.length) return A_REMPLIR;
+  return pieces.map((p) => p.trim()).join(' + ');
 }
 
 /**
@@ -154,7 +221,7 @@ function redigerDemande(lead, cleFournisseur, opts = {}) {
   const f = FOURNISSEURS[cleFournisseur];
   if (!f) return null;
 
-  const piece = libellePiece(lead, cleFournisseur);
+  const piece = libellePiece(lead);
   const plaque = String((lead && lead.requested && lead.requested.plate) || '').trim().toUpperCase();
   const vinLead = String((lead && lead.requested && lead.requested.vin) || '').trim().toUpperCase();
   const vin = String(opts.vin || vinLead || '').trim().toUpperCase();
@@ -176,7 +243,12 @@ function redigerDemande(lead, cleFournisseur, opts = {}) {
   if (String(opts.auteur || '').trim()) lignes.push(brand.NAME || 'Autoliva');
 
   const corps = lignes.join('\n');
-  const objet = 'Demande de tarif - ' + piece + (plaque ? ' - ' + plaque : '');
+  /* Objet raccourci : les libellés du catalogue montent à 100 caractères
+     (« Mécatronique DSG6 DQ250 reconditionnée 02E927770AD / AQ / AJ… »), et un
+     objet à rallonge est tronqué par les messageries au pire endroit. Le libellé
+     complet reste dans le corps. */
+  const pieceCourte = piece.length > 60 ? piece.slice(0, 59).trim() + '…' : piece;
+  const objet = 'Demande de tarif - ' + pieceCourte + (plaque ? ' - ' + plaque : '');
 
   return {
     cle: f.cle,
