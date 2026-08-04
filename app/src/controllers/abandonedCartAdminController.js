@@ -28,6 +28,7 @@ async function loadArticlesForBody(text) {
 }
 const { getMergedTemplates } = require('../services/leadTemplateSettings');
 const { journaliser, historique, resume } = require('../services/leadCommunications');
+const { demandesFournisseur } = require('../services/supplierRequest');
 const brand = require('../config/brand');
 
 function escapeRegExp(str) {
@@ -618,6 +619,10 @@ async function getAdminLeadDetail(req, res, next) {
     const requested = cart.requested || {};
     const lignesComm = historique(cart);
     const resumeComm = resume(lignesComm);
+    /* Demandes fournisseur prêtes à copier. Les quatre destinataires sont
+       calculés d'un coup : le commercial peut changer d'interlocuteur sans
+       aller-retour serveur, et la formulation n'a qu'une seule source. */
+    const fournisseur = demandesFournisseur(cart, { auteur: getAdminFromReq(req).firstName });
     return res.json({
       ok: true,
       cart: {
@@ -701,6 +706,7 @@ async function getAdminLeadDetail(req, res, next) {
           meta: l.meta || {},
         })),
         commResume: resumeComm,
+        fournisseur,
         recoveryToken: cart.recoveryToken,
         createdAt: formatDateTimeFR(cart.createdAt),
       },

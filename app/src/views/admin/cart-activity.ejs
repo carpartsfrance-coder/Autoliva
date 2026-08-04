@@ -669,6 +669,59 @@
             html += '<div class="pt-3 flex justify-between items-center"><div class="font-semibold text-slate-900">Total</div><div class="font-bold text-slate-900">' + escapeHtml(c.totalAmount) + '</div></div></div>';
           }
 
+          /* ── Demande fournisseur ────────────────────────────────────────
+             Le commercial doit interroger Asysum avant de chiffrer. Le message
+             est prérédigé côté serveur pour les quatre interlocuteurs, avec le
+             bon destinataire présélectionné : il ne reste qu'à compléter et
+             copier. */
+          if (c.fournisseur && c.fournisseur.demandes) {
+            var F = c.fournisseur;
+            var choix = F.suggere || 'moteurs';
+            html += '<div class="rounded-xl border border-slate-200 p-4" id="lead-fournisseur">';
+            html += '<div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Demande fournisseur</div>';
+
+            html += '<div class="flex items-center gap-2 flex-wrap mb-2">';
+            html += '<select id="fourn-cible" class="rounded-lg border border-slate-200 px-2 py-1.5 text-sm">';
+            ['moteurs', 'boites', 'injection', 'ponts'].forEach(function (k) {
+              var d = F.demandes[k];
+              if (!d) return;
+              html += '<option value="' + k + '"' + (k === choix ? ' selected' : '') + '>'
+                + escapeHtml(d.libelle + ' — ' + d.contact) + '</option>';
+            });
+            html += '</select>';
+            html += '<span id="fourn-mail" class="text-xs text-slate-500"></span>';
+            html += '</div>';
+
+            /* Une catégorie déduite de la provenance du lead est une
+               SUPPOSITION : le client avait tapé sa voiture, pas la pièce.
+               Le dire évite un e-mail au mauvais fournisseur. */
+            if (F.suggereSur === 'provenance') {
+              html += '<div class="rounded-lg bg-amber-50 text-amber-700 text-xs px-3 py-2 mb-2">'
+                + 'Destinataire <strong>déduit de la provenance du lead</strong>, pas de la pièce demandée — vérifie avant d\'envoyer.</div>';
+            }
+
+            /* Le VIN n'est réclamé que par Jose Angel. On ne l'a quasiment
+               jamais : le commercial le convertit depuis la plaque. */
+            html += '<div id="fourn-vin-bloc" class="mb-2 hidden">';
+            html += '<div class="flex items-center gap-2 flex-wrap">';
+            html += '<input id="fourn-vin" type="text" maxlength="20" placeholder="VIN (17 caractères)" '
+              + 'class="rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-mono uppercase" />';
+            html += '<a href="' + escapeHtml(F.lienVin) + '" target="_blank" rel="noopener" '
+              + 'class="text-xs text-primary hover:underline">convertir la plaque en VIN ↗</a>';
+            html += '</div>';
+            html += '<div class="text-xs text-slate-400 mt-1">Ce fournisseur demande le VIN. Sans lui, la demande part incomplète.</div>';
+            html += '</div>';
+
+            html += '<textarea id="fourn-corps" rows="10" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono"></textarea>';
+            html += '<div class="flex items-center gap-2 flex-wrap mt-2">';
+            html += '<button type="button" id="fourn-copier" class="btn btn-primary text-xs">Copier</button>';
+            html += '<a id="fourn-mailto" href="#" class="btn btn-ghost text-xs">Ouvrir dans mon mail</a>';
+            html += '<button type="button" id="fourn-fait" class="btn btn-ghost text-xs">Demande envoyée</button>';
+            html += '<span id="fourn-retour" class="text-xs text-emerald-700"></span>';
+            html += '</div>';
+            html += '</div>';
+          }
+
           /* ── Messages échangés ──────────────────────────────────────────
              Tous canaux, envois automatiques compris. Séparé des notes : une
              note est ce qu'un commercial a ÉCRIT POUR LUI, un message est ce
@@ -758,6 +811,84 @@
 
           html += '</div>';
           content.innerHTML = html;
+
+          /* Demande fournisseur : un seul texte, celui du serveur. Le front ne
+             fait qu'échanger de destinataire et injecter le VIN — réécrire la
+             formulation ici créerait une seconde version à maintenir. */
+          (function () {
+            var bloc = document.getElementById('lead-fournisseur');
+            if (!bloc || !c.fournisseur) return;
+            var F = c.fournisseur;
+            var cible = document.getElementById('fourn-cible');
+            var corps = document.getElementById('fourn-corps');
+            var vin = document.getElementById('fourn-vin');
+            var vinBloc = document.getElementById('fourn-vin-bloc');
+            var mailto = document.getElementById('fourn-mailto');
+            var mail = document.getElementById('fourn-mail');
+            var retour = document.getElementById('fourn-retour');
+
+            function courant() { return F.demandes[cible.value]; }
+
+            function avecVin(texte) {
+              var v = (vin.value || '').trim().toUpperCase();
+              if (!v) return texte;
+              return texte.split('VIN : ' + F.aRemplir).join('VIN : ' + v);
+            }
+
+            function rendre() {
+              var d = courant();
+              if (!d) return;
+              corps.value = avecVin(d.corps);
+              mail.textContent = d.email;
+              vinBloc.className = d.vinRequis ? 'mb-2' : 'mb-2 hidden';
+              /* On reconstruit le mailto à partir du texte AFFICHÉ : sinon les
+                 retouches du commercial (VIN, précisions) seraient perdues à
+                 l'ouverture du client de messagerie. */
+              mailto.href = 'mailto:' + d.email
+                + '?subject=' + encodeURIComponent(d.objet)
+                + '&body=' + encodeURIComponent(corps.value);
+            }
+
+            cible.addEventListener('change', rendre);
+            vin.addEventListener('input', rendre);
+            corps.addEventListener('input', function () {
+              var d = courant();
+              if (d) mailto.href = 'mailto:' + d.email
+                + '?subject=' + encodeURIComponent(d.objet)
+                + '&body=' + encodeURIComponent(corps.value);
+            });
+
+            document.getElementById('fourn-copier').addEventListener('click', function () {
+              corps.select();
+              var ok = false;
+              try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(corps.value).then(function () {
+                  retour.textContent = 'Copié';
+                }, function () { retour.textContent = ok ? 'Copié' : 'Copie impossible — Ctrl+C'; });
+              } else {
+                retour.textContent = ok ? 'Copié' : 'Copie impossible — Ctrl+C';
+              }
+              setTimeout(function () { retour.textContent = ''; }, 2500);
+            });
+
+            /* Trace la démarche sur la fiche : sans elle, personne ne sait si
+               le fournisseur a été relancé ou si le dossier dort. */
+            document.getElementById('fourn-fait').addEventListener('click', function () {
+              var d = courant();
+              if (!d) return;
+              fetch('/admin/api/leads/' + leadId + '/note', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: 'Demande de tarif envoyée à ' + d.contact + ' (' + d.email + ')' }),
+              }).then(function (r) { return r.json(); }).then(function (j) {
+                retour.textContent = j && j.ok ? 'Noté sur la fiche' : 'Échec de l\'enregistrement';
+                setTimeout(function () { retour.textContent = ''; }, 2500);
+              }).catch(function () { retour.textContent = 'Échec de l\'enregistrement'; });
+            });
+
+            rendre();
+          })();
 
           var noteForm = document.getElementById('lead-note-form');
           if (noteForm) {
