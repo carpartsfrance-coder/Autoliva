@@ -53,6 +53,7 @@ const TEL_LEAD = '+33639980001';
 const TEL_CMD = '+33639980002';
 const TEL_INCONNU = '+33639980003';
 const TEL_MANQUE = '+33639980004';
+const TEL_NU = '+33639980005';
 
 let serveur = null;
 const aSupprimer = { leads: [], orders: [], savs: [], users: [] };
@@ -135,6 +136,44 @@ test('fiche appelant Ringover', { skip: URI ? false : 'TEST_MONGODB_URI absent' 
   await t.test('un numéro inconnu ne renvoie aucune fiche', async () => {
     const r = await appel({ direction: 'inbound', from_number: TEL_INCONNU });
     assert.equal(r.status, 204, 'Ringover doit afficher le numéro comme avant');
+  });
+
+  await t.test('un appelant sans nom ni dossier est quand même reconnu', async () => {
+    /* 181 des 839 leads qui portent un téléphone n'ont ni nom ni devis —
+       typiquement un appel manqué déjà enregistré. Une première version les
+       traitait comme des inconnus, alors que c'est justement là que le
+       standardiste a le plus besoin de savoir qu'on a déjà parlé à la personne. */
+    const nu = await AbandonedCart.create({
+      sessionId: 'test-ringover-nu', phone: TEL_NU, isGuest: true,
+      captureSource: 'appel_manque', status: 'abandoned',
+      abandonedAt: new Date(), lastActivityAt: new Date(), createdAt: new Date(),
+      notes: [
+        { text: 'RÉPONSE SMS du client : « Bonjour je veux un pont de GLE 63 »', addedByName: 'Ringover SMS', addedAt: new Date(Date.now() - 60000) },
+        /* La note la PLUS RÉCENTE est administrative : c'est le piège rencontré
+           en conditions réelles, où la fiche affichait « Statut → Contacté ». */
+        { text: 'Statut → Contacté', addedByName: 'Killian', addedAt: new Date() },
+      ],
+    });
+    aSupprimer.leads.push(nu._id);
+
+    const r = await appel({ direction: 'inbound', from_number: TEL_NU });
+    assert.equal(r.status, 200, 'un contact connu ne doit pas passer pour un inconnu');
+    assert.equal(r.json.lastname, 'Contact connu', 'étiquette, jamais un nom inventé');
+    assert.equal(r.json.firstname, '');
+    assert.match(r.json.data['Dernier échange'], /pont de GLE 63/,
+      'ce que le client a demandé prime sur le changement de statut');
+    assert.doesNotMatch(JSON.stringify(r.json.data), /Statut/);
+    assert.match(r.json.data['Contact'], /Déjà en base.*appel manqué/);
+    assert.ok(r.json.url.endsWith('/admin/activite-panier/' + nu._id));
+  });
+
+  await t.test('un dossier ouvert prend la place du contexte de repli', async () => {
+    /* Quand il y a un devis ou une commande, la bulle doit montrer ÇA — pas
+       « déjà en base », qui n'apprendrait rien. */
+    const r = await appel({ direction: 'inbound', from_number: TEL_LEAD });
+    assert.ok(r.json.data['Devis']);
+    assert.equal(r.json.data['Contact'], undefined);
+    assert.equal(r.json.data['Dernier échange'], undefined);
   });
 
   await t.test('un lead avec devis en attente remonte le dossier', async () => {

@@ -101,10 +101,17 @@ function sansEchec(promesse) {
 function dossiers(rx) {
   const lead = AbandonedCart.findOne({ phone: rx })
     .sort({ lastActivityAt: -1 })
-    .select('_id firstName lastName email captureSource lastActivityAt'
+    .select('_id firstName lastName email captureSource lastActivityAt createdAt'
       + ' engineQuote.status engineQuote.pricing.sellPrice engineQuote.identifiedEngine'
       + ' engineQuote.updatedAt engineQuote.sentQuotes.sentAt engineQuote.sentQuotes.sellPriceTtc'
       + ' requested.plate requested.vehicle')
+    /* Seulement la QUEUE de chaque fil : ces tableaux grossissent sans limite
+       et les rapatrier entiers coûterait plus cher que tout le reste de la
+       requête. Plusieurs entrées, pas une seule : la dernière est souvent un
+       changement de statut, et il faut pouvoir remonter jusqu'à un vrai
+       échange. */
+    .slice('notes', -6)
+    .slice('communications', -4)
     .maxTimeMS(DELAI_REQUETE_MS)
     .lean();
 
@@ -216,6 +223,52 @@ function notesSav(sav) {
     + (ilYA(sav.createdAt) ? ' · ' + ilYA(sav.createdAt) : ''), 90);
 }
 
+/* Libellés d'origine, pour dire d'où vient un contact qu'on ne sait pas nommer. */
+const SOURCES = {
+  appel_manque: 'appel manqué',
+  landing_moteurs: 'demande moteur',
+  landing_boites: 'demande boîte',
+  landing_ponts: 'demande pont',
+  contact: 'formulaire de contact',
+  devis: 'demande de devis',
+  panier: 'panier abandonné',
+};
+
+/* Notes purement administratives : elles datent un changement d'état, elles ne
+   disent rien de ce que le client veut. « Statut → Contacté » affiché comme
+   dernier échange serait pire que rien — c'est le cas qu'on a rencontré au
+   premier essai en conditions réelles. */
+const NOTES_ADMIN = /^(Statut\s*→|Appel manqué le|📞 À RAPPELER)/u;
+const REPONSE_CLIENT = /^RÉPONSE SMS du client\s*:\s*«\s*([\s\S]*?)\s*»/u;
+
+/**
+ * Dernier échange utile avec ce contact — sa demande, le plus souvent.
+ *
+ * L'ordre de préférence répond à la question du standardiste qui décroche :
+ * « qu'est-ce que cette personne veut ? » Ce que le CLIENT a dit passe donc
+ * avant ce qu'on lui a envoyé, qui passe avant une note interne.
+ */
+function dernierEchange(lead) {
+  const comms = (lead.communications || []).slice().reverse();
+
+  const entrant = comms.find((c) => c.sens === 'entrant' && c.corps);
+  if (entrant) return court('Il nous a écrit : ' + entrant.corps, 90);
+
+  /* Avant le journal des communications, la réponse du client n'existait que
+     sous forme de note formatée par le webhook Ringover. */
+  const notes = (lead.notes || []).slice().reverse();
+  for (const n of notes) {
+    const m = String(n.text || '').match(REPONSE_CLIENT);
+    if (m) return court('Il nous a écrit : ' + m[1], 90);
+  }
+
+  const sortant = comms.find((c) => c.corps);
+  if (sortant) return court('On lui a écrit : ' + sortant.corps, 90);
+
+  const utile = notes.find((n) => n.text && !NOTES_ADMIN.test(String(n.text).trim()));
+  return utile ? court(utile.text, 90) : '';
+}
+
 /** Découpe « Jean Dupont » en prénom / nom, quand on n'a qu'un nom complet. */
 function decouper(complet) {
   const p = String(complet || '').trim().split(/\s+/).filter(Boolean);
@@ -279,9 +332,28 @@ async function carteAppelant(numero) {
     data['Véhicule'] = court([vehicule, plaque].filter(Boolean).join(' · '), 60);
   }
 
-  /* Aucun dossier lisible : mieux vaut ne rien renvoyer qu'une fiche vide, qui
-     ferait croire au standardiste qu'il n'y a rien à savoir. */
+  /* Numéro connu mais sans dossier ni nom : 181 des 839 leads qui portent un
+     téléphone sont dans ce cas — typiquement un appel manqué déjà enregistré.
+     Une première version les traitait comme des inconnus. C'était l'inverse de
+     ce qu'il faut : c'est précisément quand on n'a pas de nom que le
+     standardiste a besoin de savoir qu'on a déjà parlé à cette personne, et
+     de pouvoir ouvrir sa fiche. On affiche donc ce qu'on a — le dernier
+     échange, qui est souvent la demande elle-même. */
+  const aDossier = !!(data['Devis'] || data['Commande'] || data['SAV']);
+  if (lead && !aDossier) {
+    const dernier = dernierEchange(lead);
+    if (dernier) data['Dernier échange'] = dernier;
+    data['Contact'] = 'Déjà en base'
+      + (lead.createdAt ? ' depuis ' + ilYA(lead.createdAt) : '')
+      + (SOURCES[lead.captureSource] ? ' · ' + SOURCES[lead.captureSource] : '');
+  }
+
   if (!Object.keys(data).length && !firstname && !lastname && !company) return null;
+
+  /* Sans nom, Ringover n'aurait qu'un numéro à afficher et la fiche passerait
+     inaperçue. « Contact connu » se lit comme une étiquette, pas comme une
+     identité : on ne fabrique jamais un nom de personne. */
+  if (!firstname && !lastname && !company) lastname = 'Contact connu';
 
   let url = lien('/admin/activite-panier');
   if (sav) url = lien('/admin/sav/tickets/' + encodeURIComponent(sav.numero));
