@@ -37,6 +37,55 @@ test('les quatre interlocuteurs Asysum', async (t) => {
     assert.equal(FOURNISSEURS.ponts.vin, true);
     ['moteurs', 'boites', 'injection'].forEach((k) => assert.ok(!FOURNISSEURS[k].vin, k));
   });
+
+  await t.test('seul le contact « injection » réclame les références', () => {
+    assert.ok(FOURNISSEURS.injection.refs);
+    ['moteurs', 'boites', 'ponts'].forEach((k) => assert.ok(!FOURNISSEURS[k].refs, k));
+  });
+});
+
+test('références pompe et injecteurs (exigence de Sergi)', async (t) => {
+  await t.test('la demande d’injection réclame les références', () => {
+    const d = redigerDemande(lead(), 'injection', { piece: 'Pompe à injection Bosch' });
+    assert.match(d.corps, new RegExp('Références pompe et/ou injecteurs : ' + A_REMPLIR));
+    assert.equal(d.refsRequises, true);
+    assert.equal(d.refsLibelle, 'Références pompe et/ou injecteurs');
+  });
+
+  await t.test('les autres fournisseurs n’en parlent pas', () => {
+    ['moteurs', 'boites', 'ponts'].forEach((k) => {
+      const d = redigerDemande(lead(), k, { piece: 'X' });
+      assert.doesNotMatch(d.corps, /Références/, k);
+      assert.equal(d.refsRequises, false, k);
+    });
+  });
+
+  await t.test('la référence saisie par le commercial remplace le blanc', () => {
+    const d = redigerDemande(lead(), 'injection', { piece: 'Pompe', refs: '0445010225' });
+    assert.match(d.corps, /Références pompe et\/ou injecteurs : 0445010225/);
+  });
+
+  await t.test('la référence du client n’est JAMAIS reprise automatiquement', () => {
+    /* L'exception de Sergi ne contredit pas la règle : ce qu'on refuse
+       d'envoyer, c'est la référence dont le client n'est pas sûr — c'est
+       justement ce qu'il fait confirmer. Seule une saisie du commercial part. */
+    const l = lead({
+      requested: { plate: 'AB-123-CD', ref: 'AUT-2026-08-AF3B67', message: 'je crois que c\'est la ref 0445010225' },
+      items: [{ name: 'Pompe à injection', sku: 'PI-9988' }],
+    });
+    const d = redigerDemande(l, 'injection', { piece: 'Pompe à injection' });
+    assert.match(d.corps, new RegExp('Références pompe et/ou injecteurs : ' + A_REMPLIR),
+      'le blanc reste à remplir par le commercial');
+    assert.doesNotMatch(d.corps, /AUT-2026-08-AF3B67/);
+    assert.doesNotMatch(d.corps, /0445010225/);
+    assert.doesNotMatch(d.corps, /PI-9988/);
+  });
+
+  await t.test('même avec les deux champs, la demande reste courte', () => {
+    const d = redigerDemande(lead(), 'injection', { piece: 'Pompe à injection Bosch', refs: '0445010225', auteur: 'Charles' });
+    assert.ok(d.corps.split('\n').length <= 12, 'corps de ' + d.corps.split('\n').length + ' lignes');
+    assert.ok(d.corps.length < 400, 'corps de ' + d.corps.length + ' caractères');
+  });
 });
 
 test('aucune présélection', async (t) => {

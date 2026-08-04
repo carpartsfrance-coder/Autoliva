@@ -63,6 +63,13 @@ const FOURNISSEURS = {
     libelle: 'Systèmes d\'injection',
     contact: 'Sergi',
     email: 'serviciodiesel@asysum.com',
+    /* Sergi RÉCLAME les références. C'est la seule exception à la règle
+       « aucune référence transmise » — et elle ne la contredit pas : ce qu'on
+       refuse d'envoyer, c'est la référence INCERTAINE que le client a citée et
+       qu'il fait justement confirmer. Ici c'est le commercial qui saisit une
+       référence vérifiée, exactement comme il convertit la plaque en VIN pour
+       Jose Angel. Rien n'est repris automatiquement du dossier. */
+    refs: 'Références pompe et/ou injecteurs',
   },
   ponts: {
     cle: 'ponts',
@@ -117,6 +124,7 @@ function piecesDemandees(lead) {
  * @param {string} [opts.piece]  pièce saisie par le commercial
  * @param {string} [opts.auteur] prénom du commercial, pour la signature
  * @param {string} [opts.vin]    VIN converti depuis la plaque
+ * @param {string} [opts.refs]   références pompe / injecteurs, saisies à la main
  */
 function redigerDemande(lead, cleFournisseur, opts = {}) {
   const f = FOURNISSEURS[cleFournisseur];
@@ -129,15 +137,20 @@ function redigerDemande(lead, cleFournisseur, opts = {}) {
   const plaque = String((lead && lead.requested && lead.requested.plate) || '').trim().toUpperCase();
   const vinLead = String((lead && lead.requested && lead.requested.vin) || '').trim().toUpperCase();
   const vin = String(opts.vin || vinLead || '').trim().toUpperCase();
+  /* Volontairement SANS repli sur `requested.ref` : ce champ porte la référence
+     du dossier Autoliva, et le message du client une référence dont il doute.
+     Ni l'une ni l'autre n'a sa place dans une demande de tarif. */
+  const refs = String(opts.refs || '').trim();
 
   const lignes = [];
   lignes.push('Bonjour ' + f.contact + ',');
   lignes.push('');
   lignes.push('Demande client : ' + piece + '.');
   lignes.push('Immatriculation : ' + (plaque || A_REMPLIR));
-  /* Le VIN n'apparaît que pour le destinataire qui le réclame : l'ajouter
-     partout allongerait le message sans rien apporter. */
+  /* VIN et références n'apparaissent que chez le destinataire qui les réclame :
+     les ajouter partout allongerait le message sans rien apporter. */
   if (f.vin) lignes.push('VIN : ' + (vin || A_REMPLIR));
+  if (f.refs) lignes.push(f.refs + ' : ' + (refs || A_REMPLIR));
   if (f.compte) lignes.push('E-mail compte client : ' + f.compte);
   lignes.push('');
   lignes.push('Pouvez-vous m\'indiquer tarif, disponibilité, délai, consigne et garantie ?');
@@ -159,8 +172,10 @@ function redigerDemande(lead, cleFournisseur, opts = {}) {
     libelle: f.libelle,
     contact: f.contact,
     email: f.email,
-    /* `vinRequis` pilote l'affichage du champ VIN et du lien de conversion. */
+    /* Pilotent l'affichage des champs à compléter dans l'interface. */
     vinRequis: !!f.vin,
+    refsRequises: !!f.refs,
+    refsLibelle: f.refs || '',
     objet,
     corps,
     /* L'adresse n'est PAS encodée : `@` deviendrait `%40` et certains clients

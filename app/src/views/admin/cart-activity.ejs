@@ -726,6 +726,15 @@
             html += '<div class="text-xs text-slate-400 mt-1">Ce fournisseur demande le VIN. Sans lui, la demande part incomplète.</div>';
             html += '</div>';
 
+            /* Références pompe / injecteurs : réclamées par Sergi seulement.
+               Saisie manuelle, jamais reprise du dossier — la référence citée
+               par le client est précisément celle dont il n'est pas sûr. */
+            html += '<div id="fourn-refs-bloc" class="mb-2 hidden">';
+            html += '<input id="fourn-refs" type="text" maxlength="120" placeholder="Références pompe et/ou injecteurs" '
+              + 'class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono" />';
+            html += '<div class="text-xs text-slate-400 mt-1">Ce fournisseur demande les références. Ne reprends pas celle du client sans l\'avoir vérifiée.</div>';
+            html += '</div>';
+
             html += '<textarea id="fourn-corps" rows="10" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono"></textarea>';
             html += '<div class="flex items-center gap-2 flex-wrap mt-2">';
             html += '<button type="button" id="fourn-copier" class="btn btn-primary text-xs">Copier</button>';
@@ -839,19 +848,25 @@
             var piece = document.getElementById('fourn-piece');
             var vin = document.getElementById('fourn-vin');
             var vinBloc = document.getElementById('fourn-vin-bloc');
+            var refs = document.getElementById('fourn-refs');
+            var refsBloc = document.getElementById('fourn-refs-bloc');
             var mailto = document.getElementById('fourn-mailto');
             var mail = document.getElementById('fourn-mail');
             var retour = document.getElementById('fourn-retour');
 
             function courant() { return F.demandes[cible.value]; }
 
-            /* Les deux blancs du message sont remplis ici, à l'identique de ce
-               que le serveur aurait écrit s'il avait connu les valeurs. */
-            function remplir(texte) {
+            /* Les blancs du message sont remplis ici, à l'identique de ce que
+               le serveur aurait écrit s'il avait connu les valeurs. */
+            function remplir(texte, d) {
               var p = (piece.value || '').trim();
               var v = (vin.value || '').trim().toUpperCase();
+              var r = (refs.value || '').trim();
               if (p) texte = texte.split('Demande client : ' + F.aRemplir).join('Demande client : ' + p);
               if (v) texte = texte.split('VIN : ' + F.aRemplir).join('VIN : ' + v);
+              if (r && d && d.refsLibelle) {
+                texte = texte.split(d.refsLibelle + ' : ' + F.aRemplir).join(d.refsLibelle + ' : ' + r);
+              }
               return texte;
             }
 
@@ -880,12 +895,14 @@
                 corps.placeholder = 'Choisis d\'abord un destinataire ci-dessus.';
                 mail.textContent = '';
                 vinBloc.className = 'mb-2 hidden';
+                refsBloc.className = 'mb-2 hidden';
                 mailto.removeAttribute('href');
                 return;
               }
-              corps.value = remplir(d.corps);
+              corps.value = remplir(d.corps, d);
               mail.textContent = d.email;
               vinBloc.className = d.vinRequis ? 'mb-2' : 'mb-2 hidden';
+              refsBloc.className = d.refsRequises ? 'mb-2' : 'mb-2 hidden';
               /* On reconstruit le mailto à partir du texte AFFICHÉ : sinon les
                  retouches du commercial seraient perdues à l'ouverture du
                  client de messagerie. */
@@ -895,6 +912,7 @@
             cible.addEventListener('change', rendre);
             piece.addEventListener('input', rendre);
             vin.addEventListener('input', rendre);
+            refs.addEventListener('input', rendre);
             /* Une retouche directe du message ne doit pas être écrasée : on ne
                met à jour que le lien, pas le corps. */
             corps.addEventListener('input', majMailto);
