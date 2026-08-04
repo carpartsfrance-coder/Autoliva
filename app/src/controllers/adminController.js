@@ -2875,7 +2875,21 @@ async function getAdminOrderDetailPage(req, res, next) {
       });
     }
 
+    /* La fiche accepte AUSSI un numéro de commande (« CP2026-000446 »), pas
+       seulement un ObjectId, et redirige vers l'URL canonique.
+
+       Plusieurs écrans ne disposent que du numéro — l'encart « Commande liée »
+       d'un ticket SAV, l'en-tête du ticket, la fiche imprimable — et
+       fabriquaient des liens qui tombaient tous en 404. Corriger chaque appel
+       aurait demandé de faire remonter l'identifiant jusqu'à eux ; l'accepter
+       ici règle le cas une fois pour toutes, y compris pour un numéro tapé à
+       la main dans la barre d'adresse.
+
+       Aucune ambiguïté possible : un numéro de commande ne ressemble jamais à
+       un ObjectId (24 caractères hexadécimaux). */
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      const parNumero = await Order.findOne({ number: String(orderId).trim() }).select('_id').lean();
+      if (parNumero) return res.redirect(302, '/admin/commandes/' + parNumero._id);
       return res.status(404).render('errors/404', {
         title: `Page introuvable - ${brand.NAME}`,
       });
