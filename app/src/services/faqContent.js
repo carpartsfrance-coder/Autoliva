@@ -31,7 +31,11 @@ const FAQ_ITEMS = [
   },
   {
     question: "Quels moyens de paiement acceptez-vous ?",
-    answer: "Nous acceptons les cartes bancaires (Visa, Mastercard) via Mollie, ainsi que le paiement en 3 ou 4 fois sans frais via Scalapay. Tous les paiements sont sécurisés et chiffrés.",
+    /* `%scalapay%` est remplacé au rendu selon que le paiement en plusieurs
+       fois est proposé ou non. Une FAQ qui promet le 3x alors qu'il a disparu
+       du tunnel fait abandonner le client au moment de payer — et cette page
+       est indexée, donc elle survivrait longtemps à la coupure. */
+    answer: "Nous acceptons les cartes bancaires (Visa, Mastercard) via Mollie%scalapay%. Tous les paiements sont sécurisés et chiffrés.",
   },
   {
     question: "Quelle est la durée de la garantie ?",
@@ -54,10 +58,14 @@ const FAQ_ITEMS = [
  * @returns {Array<{question:string, answer:string, answerPlain:string}>}
  */
 function getFaqItems({ phone = '', phoneIntl = '' } = {}) {
+  const scalapay = require('./scalapay').estActif()
+    ? ', ainsi que le paiement en 3 ou 4 fois sans frais via Scalapay'
+    : '';
   return FAQ_ITEMS.map((item) => {
     const replace = (s) => String(s || '')
       .replace(/%phone%/g, phone)
-      .replace(/%phoneIntl%/g, phoneIntl);
+      .replace(/%phoneIntl%/g, phoneIntl)
+      .replace(/%scalapay%/g, scalapay);
     return {
       question: item.question,
       answer: replace(item.answer),

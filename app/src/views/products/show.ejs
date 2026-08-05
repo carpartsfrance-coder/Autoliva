@@ -142,7 +142,10 @@
       <% const installmentCount = 3; %>
       <% const installmentMinPriceCents = 10000; %>
       <% const installmentMaxPriceCents = 200000; %>
-      <% const installmentEligible = basePriceCents >= installmentMinPriceCents && basePriceCents <= installmentMaxPriceCents; %>
+      <%# `scalapayActif` d'abord : promettre « 3x sans frais » sur une fiche
+          alors que le moyen de paiement a disparu du tunnel ferait abandonner
+          au moment de payer. Un seul drapeau coupe les deux mentions ci-dessous. %>
+      <% const installmentEligible = scalapayActif && basePriceCents >= installmentMinPriceCents && basePriceCents <= installmentMaxPriceCents; %>
       <% const installmentAmountCents = installmentEligible ? Math.round(basePriceCents / installmentCount) : 0; %>
       <%# ── Design Autoparts v3 : prix HT (TVA 20 %), échéance 4×, réfs alternatives, nb rapports ── %>
       <% const priceHTcents = Math.round(basePriceCents / 1.2); %>
@@ -622,7 +625,7 @@
             <% if (hasConsigne) { %>
             <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">assignment_return</span><%= t('product.trustExchangeConsigne', { amount: consigneAmountEuro }) %></span>
             <% } %>
-            <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">verified_user</span><%= t('product.trustPayment') %></span>
+            <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">verified_user</span><%= t(scalapayActif ? 'product.trustPayment' : 'product.trustPaymentNoScalapay') %></span>
           </div>
         </form>
       </div>
@@ -968,7 +971,7 @@
 
       <%# ═══ Bandeau réassurance (4 items) ═══ %>
       <div class="ap-4col" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px; margin-top: 72px; padding: 32px 0 38px 0; border-top: 1px solid #F0F2F6;">
-        <% var _reass = [ {icon:'verified_user', t: _garLabel, s: t('product.reassure1Sub')}, {icon:'credit_card', t: t('product.reassure2Title'), s: t('product.reassure2Sub')}, {icon:'local_shipping', t: t('product.reassure3Title'), s: t('product.reassure3Sub')}, {icon:'support_agent', t: t('product.reassure4Title'), s: t('product.reassure4Sub')} ]; %>
+        <% var _reass = [ {icon:'verified_user', t: _garLabel, s: t('product.reassure1Sub')}, {icon:'credit_card', t: t('product.reassure2Title'), s: t(scalapayActif ? 'product.reassure2Sub' : 'product.reassure2SubNoScalapay')}, {icon:'local_shipping', t: t('product.reassure3Title'), s: t('product.reassure3Sub')}, {icon:'support_agent', t: t('product.reassure4Title'), s: t('product.reassure4Sub')} ]; %>
         <% _reass.forEach((it) => { %>
           <div style="display: flex; align-items: center; gap: 13px;">
             <span class="material-symbols-outlined" style="font-size: 27px; color: #1A2233; font-variation-settings: 'wght' 300; flex-shrink: 0;"><%= it.icon %></span>
