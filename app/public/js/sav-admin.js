@@ -1320,11 +1320,17 @@
         var statusHtml = o.status
           ? '<span class="sav-order-status">' + escapeHtml(o.status) + '</span>'
           : '';
-        html += '<a href="/admin/orders/' + encodeURIComponent(o.number) + '" target="_blank" class="sav-order-link">'
-              + '<span class="sav-order-num">' + escapeHtml(o.number) + '</span>'
-              + '<span class="material-symbols-outlined" style="font-size:11px;">open_in_new</span>'
-              + statusHtml
-              + '</a>';
+        /* La fiche commande vit sur /admin/commandes/<ObjectId>. Le lien
+           pointait sur /admin/orders/<numéro> : route inexistante ET mauvais
+           identifiant — le contrôleur exige un ObjectId valide, un numéro de
+           commande n'aurait de toute façon pas fonctionné.
+           Sans `_id`, on affiche le numéro sans lien plutôt qu'un lien mort. */
+        var interieur = '<span class="sav-order-num">' + escapeHtml(o.number) + '</span>'
+              + (o._id ? '<span class="material-symbols-outlined" style="font-size:11px;">open_in_new</span>' : '')
+              + statusHtml;
+        html += o._id
+          ? '<a href="/admin/commandes/' + encodeURIComponent(o._id) + '" target="_blank" class="sav-order-link">' + interieur + '</a>'
+          : '<div class="sav-order-link">' + interieur + '</div>';
         // Items
         if (o.items && o.items.length) {
           html += '<div class="sav-order-items">';
