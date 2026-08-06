@@ -259,6 +259,13 @@ function getTrimmedString(value) {
 }
 
 function parseScalapayProductFromPaymentMethod(paymentMethod) {
+  /* Barrière SERVEUR. Masquer les boutons dans le tunnel ne suffit pas : le
+     moyen de paiement voyage dans un champ de formulaire, qu'une requête forgée
+     ou un onglet resté ouvert depuis avant la coupure peut renvoyer. Sans ce
+     garde-fou, une commande Scalapay serait encore créée alors que le moyen de
+     paiement est retiré de la boutique — et il faudrait la rembourser à la main.
+     Retomber sur '' renvoie le client vers le paiement par carte. */
+  if (!scalapay.estActif()) return '';
   const pm = getTrimmedString(paymentMethod).toLowerCase();
   if (pm === 'scalapay_pay_in_3') return 'pay-in-3';
   if (pm === 'scalapay_pay_in_4') return 'pay-in-4';

@@ -306,6 +306,7 @@
   "checkout.protectedPayment": "Protected payment",
   "checkout.qualityChecked": "Quality checked",
   "checkout.securePayProviders": "Secure payment (Mollie / Scalapay)",
+  "checkout.securePayProvidersNoScalapay": "Secure payment (Mollie)",
   "checkout.easyReturns": "Easy returns",
   "home.allCategories": "All categories",
   "home.findPart": "Find the part for your vehicle",

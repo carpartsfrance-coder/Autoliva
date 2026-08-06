@@ -452,6 +452,11 @@ app.use((req, res, next) => {
   // produit sans stocker la vidéo en base.
   res.locals.parseVideoEmbed = require('./services/videoEmbed').parseVideoEmbed;
   res.locals.shippingCountryOptions = require('./config/shippingZones').COUNTRY_OPTIONS;
+  /* Le paiement en plusieurs fois est-il proposé ? Exposé à TOUTES les vues :
+     les mentions « 3x sans frais » vivent aussi bien sur les fiches produit que
+     sur les pages véhicule, et une seule d'entre elles laissée en place
+     promettrait un moyen de paiement qui n'existe plus au moment de payer. */
+  res.locals.scalapayActif = require('./services/scalapay').estActif();
   next();
 });
 

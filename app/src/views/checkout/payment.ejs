@@ -119,6 +119,9 @@
                 </div>
               </label>
 
+              <%# Paiement en plusieurs fois — retiré de la boutique le 03/08/2026.
+                  Réactivable par SCALAPAY_ENABLED=on, sans redéploiement. %>
+              <% if (scalapayActif) { %>
               <label class="block">
                 <input class="peer sr-only" type="radio" name="paymentMethod" value="scalapay_pay_in_3" />
                 <div class="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 peer-checked:border-primary peer-checked:ring-2 peer-checked:ring-primary/20">
@@ -162,6 +165,7 @@
                   </div>
                 </div>
               </label>
+              <% } %>
 
               <% const _veh = (typeof vehicle !== 'undefined' && vehicle) ? vehicle : null; %>
               <% const _vehType = _veh && _veh.identifierType === 'vin' ? 'vin' : 'plate'; %>
@@ -330,7 +334,7 @@
             </div>
             <div class="flex items-center gap-2 text-xs font-black text-slate-700">
               <span class="material-symbols-outlined text-base text-slate-400">lock</span>
-              <%= t('checkout.securePayProviders') %>
+              <%= t(scalapayActif ? 'checkout.securePayProviders' : 'checkout.securePayProvidersNoScalapay') %>
             </div>
             <div class="flex items-center gap-2 text-xs font-black text-slate-700">
               <span class="material-symbols-outlined text-base text-slate-400">autorenew</span>
