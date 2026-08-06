@@ -113,14 +113,38 @@ async function postRequestReviewSingle(req, res) {
 }
 
 /** Diagnostic lecture seule : config présente ? auth Skeepers OK ? (jamais les secrets). */
+/**
+ * Masque une valeur sensible en gardant de quoi la RECONNAÎTRE.
+ * Une clé secrète ne doit pas s'afficher, mais un simple `true` ne permet pas
+ * de repérer une valeur tronquée au copier-coller ou un espace parasite — la
+ * panne la plus banale sur une variable d'environnement.
+ */
+function empreinte(v) {
+  const s = String(v || '');
+  if (!s) return null;
+  return { longueur: s.length, debut: s.slice(0, 4) + '…', fin: '…' + s.slice(-2) };
+}
+
 async function getReviewsDiagnostic(req, res) {
   const c = skeepers.config();
   const out = {
     configured: skeepers.isConfigured(),
+    /* `websiteId` et `shopId` ne sont PAS des secrets : le premier est affiché
+       en clair sur la page « Accès API » de Skeepers, le second est la clé de
+       boutique choisie par nous. Les montrer en entier permet de les comparer
+       d'un coup d'œil au dashboard — c'est tout l'intérêt de ce diagnostic. */
+    websiteId: c.websiteId || null,
+    shopId: c.shopId || null,
+    clientId: empreinte(c.clientId),
+    clientSecret: empreinte(c.clientSecret),
     env: { clientId: !!c.clientId, clientSecret: !!c.clientSecret, websiteId: !!c.websiteId },
     solicitationDelayDays: c.delay,
     auth: { ok: false },
   };
+  if (!c.shopId) {
+    out.avertissement = 'SKEEPERS_SHOP_ID absent : Skeepers devra résoudre la boutique lui-même '
+      + '(« fetch Shop of website »), ce qui a déjà échoué par le passé.';
+  }
   if (!out.configured) {
     out.reason = 'Variables SKEEPERS_* incomplètes — les boutons « Demander un avis » restent inertes.';
     return res.json(out);
