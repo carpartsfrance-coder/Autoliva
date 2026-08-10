@@ -110,6 +110,9 @@ const brand = {
   // URLs
   DOMAIN: env('BRAND_DOMAIN', preset.DOMAIN),
   SITE_URL: env('SITE_URL', preset.SITE_URL),
+  // Lien « laisser un avis Google » (fiche Business Profile). Vide = les CTA
+  // avis Google ne s'affichent pas dans les emails SAV.
+  GOOGLE_REVIEW_URL: env('GOOGLE_REVIEW_URL', ''),
 
   // Contacts
   EMAIL_CONTACT: env('BRAND_EMAIL_CONTACT', preset.EMAIL_CONTACT),

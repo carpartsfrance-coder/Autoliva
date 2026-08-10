@@ -188,6 +188,12 @@ const MACRO = {
     ].join('<br>'),
   }),
 
+  /** Refus « réconciliateur » : jamais un non sec.
+   *  ⚠ Verrou serveur : cet email ne peut partir qu'après un APPEL logué
+   *  (canal « tel », résultat « joint » — ou 2 tentatives « échec »).
+   *  Structure : résultat d'expertise pédagogique → ce qu'on offre quand même
+   *  (geste commercial + analyse offerte si rachat) → médiation. Le mot
+   *  « refus » n'apparaît pas côté client. */
   refuse: (reason, forSteps) => ({
     id: `refuse_${reason.slug}`,
     label: `Refuser : ${reason.label}`,
@@ -195,17 +201,27 @@ const MACRO = {
     action: 'email',
     nextStatut: 'refuse',
     forSteps: forSteps || [],
-    subject: `Votre demande SAV {numero}`,
+    subject: `Résultat de l'expertise de votre pièce — dossier {numero}`,
     body: [
       'Bonjour {nom},',
       '',
-      `Après étude attentive de votre dossier <strong>{numero}</strong>, nous ne pouvons malheureusement pas donner une suite favorable : <strong>${reason.label}</strong>.`,
+      'Comme évoqué ensemble au téléphone, voici le résultat de l\'expertise de votre pièce ({piece}) — dossier <strong>{numero}</strong>.',
+      '',
+      `<strong>Conclusion technique :</strong> ${reason.label}.`,
       '',
       reason.detail || '',
       '',
-      'Nous vous rappelons que vous disposez de la possibilité de saisir gratuitement le <strong>médiateur de la consommation</strong> dont les coordonnées figurent dans nos Conditions Générales de Vente.',
+      'Concrètement, cela signifie que la cause identifiée est <strong>extérieure à la pièce</strong> : la garantie ne peut donc pas s\'appliquer sur ce dossier. Le rapport d\'expertise détaillé (photos et constats à l\'appui) est disponible sur demande — il vous sera utile, notamment vis-à-vis de l\'atelier qui a réalisé le montage.',
       '',
-      'Restant à votre disposition pour toute question.',
+      '<strong>Ce que nous faisons quand même pour vous :</strong>',
+      '<ul>',
+      '<li>le <strong>geste commercial</strong> convenu lors de notre échange téléphonique (bon d\'achat ou remise sur la pièce de remplacement, selon votre profil) ;</li>',
+      '<li>si vous repartez avec une <strong>pièce de remplacement</strong> chez nous, le <strong>forfait d\'analyse vous est intégralement offert</strong> ;</li>',
+      '<li>nos <strong>conseils de montage</strong> pour éviter que le problème ne se reproduise (dans le rapport).</li>',
+      '</ul>',
+      'Vous n\'êtes pas laissé seul avec le problème : répondez à cet email ou rappelez-nous, on vous trouve la solution la plus économique.',
+      '',
+      'Conformément à la réglementation, vous disposez par ailleurs de la possibilité de saisir gratuitement le <strong>médiateur de la consommation</strong> dont les coordonnées figurent dans nos Conditions Générales de Vente.',
       '',
       'Cordialement,',
       `Service SAV ${brand.NAME}`,
