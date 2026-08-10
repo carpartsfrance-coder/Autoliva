@@ -141,10 +141,18 @@ async function getReviewsDiagnostic(req, res) {
     solicitationDelayDays: c.delay,
     auth: { ok: false },
   };
-  if (!c.shopId) {
-    out.avertissement = 'SKEEPERS_SHOP_ID absent : Skeepers devra résoudre la boutique lui-même '
-      + '(« fetch Shop of website »), ce qui a déjà échoué par le passé.';
+  const alertes = [];
+  if (c.websiteIdCorrige) {
+    alertes.push('SKEEPERS_WEBSITE_ID contient une URL entière au lieu de l\'identifiant seul. '
+      + 'L\'identifiant a été extrait automatiquement (' + c.websiteId + ') et les envois fonctionnent, '
+      + 'mais corrige la variable sur Render : c\'est cette valeur brute qui provoquait la 500 '
+      + '« fetch Shop of website ».');
   }
+  if (!c.shopId) {
+    alertes.push('SKEEPERS_SHOP_ID absent : Skeepers devra résoudre la boutique lui-même '
+      + '(« fetch Shop of website »), ce qui a déjà échoué par le passé.');
+  }
+  if (alertes.length) out.avertissements = alertes;
   if (!out.configured) {
     out.reason = 'Variables SKEEPERS_* incomplètes — les boutons « Demander un avis » restent inertes.';
     return res.json(out);

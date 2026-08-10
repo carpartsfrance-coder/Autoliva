@@ -39,12 +39,52 @@ function env(k) { return typeof process.env[k] === 'string' ? process.env[k].tri
 function intEnv(k, d) { const n = parseInt(env(k), 10); return Number.isFinite(n) && n >= 0 ? n : d; }
 function trimStr(s, max) { const v = String(s == null ? '' : s).trim(); return max ? v.slice(0, max) : v; }
 
+const UUID_RX = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/**
+ * Extrait l'identifiant de site, même si une URL entière a été collée.
+ *
+ * ⚠ VÉCU. `SKEEPERS_WEBSITE_ID` a contenu pendant des semaines
+ * `https://apis.cxr.skeepers.io/certificate-api/certificates/websites/<uuid>/link`
+ * au lieu du seul `<uuid>`.
+ *
+ * Le symptôme était indéchiffrable : Skeepers répondait 500
+ * « [VALIDATION SERVICE]: An error occurred on fetch Shop of website: … » en
+ * citant cette URL. On y a lu un défaut de provisionnement CHEZ EUX pendant
+ * deux semaines — alors que l'URL du message était simplement la valeur qu'on
+ * leur envoyait.
+ *
+ * On récupère donc l'UUID où qu'il se trouve, et on le signale une fois au
+ * démarrage : la variable reste à corriger proprement, mais les demandes
+ * d'avis repartent sans attendre.
+ */
+let _urlSignalee = false;
+function normaliserWebsiteId(brut) {
+  const v = trimStr(brut);
+  const m = v.match(UUID_RX);
+  if (!m) return v;              // vide, ou format inattendu : on ne touche à rien
+  if (m[0] === v) return v;      // déjà un identifiant nu
+  if (!_urlSignalee) {
+    _urlSignalee = true;
+    console.warn('[skeepers] SKEEPERS_WEBSITE_ID contient une URL entière au lieu de l\'identifiant. '
+      + 'Identifiant extrait : ' + m[0] + '. À corriger sur Render — envoyée telle quelle, '
+      + 'Skeepers rejette la valeur avec une 500 « fetch Shop of website ».');
+  }
+  return m[0];
+}
+
 function config() {
   const delay = intEnv('SKEEPERS_SOLICITATION_DELAY', 7);
+  const websiteIdBrut = env('SKEEPERS_WEBSITE_ID');
+  const websiteId = normaliserWebsiteId(websiteIdBrut);
   return {
     clientId: env('SKEEPERS_CLIENT_ID'),
     clientSecret: env('SKEEPERS_CLIENT_SECRET'),
-    websiteId: env('SKEEPERS_WEBSITE_ID'),
+    websiteId,
+    /* Conservé pour que le diagnostic puisse signaler la variable mal remplie
+       même si l'envoi, lui, fonctionne grâce à l'extraction ci-dessus. */
+    websiteIdBrut,
+    websiteIdCorrige: !!websiteIdBrut && websiteId !== websiteIdBrut,
     shopId: env('SKEEPERS_SHOP_ID'),
     delay,
     delayProduct: intEnv('SKEEPERS_SOLICITATION_DELAY_PRODUCT', delay),
