@@ -23,6 +23,14 @@ function eligibilityReason(order) {
   if (order.archived === true) return 'archivée';
   if (order.deletedAt) return 'corbeille';
   if (!PAID_STATUSES.has(order.status)) return `statut « ${order.status} »`;
+  /* Skeepers ne sollicite pas au-delà de 6 mois après l'achat. On le dit ICI
+     plutôt que de laisser partir la requête : l'API accepte l'événement sans
+     broncher et n'envoie jamais l'e-mail — une panne silencieuse qui nous a
+     déjà coûté du temps sur CP2026-000199. */
+  const age = skeepers.ageEnJours(order);
+  if (age > skeepers.AGE_MAX_JOURS) {
+    return `commande de ${age} jours — Skeepers ne sollicite pas au-delà de 6 mois`;
+  }
   return null;
 }
 
@@ -104,7 +112,25 @@ async function postRequestReviewSingle(req, res) {
   try {
     const { orders, userMap } = await loadOrdersWithUsers([id]);
     const result = await processOrders(orders, userMap);
-    if (result.ok) return res.json({ ok: true, message: "Demande d'avis envoyée." });
+    if (result.ok) {
+      /* On annonce la date d'envoi CALCULÉE et le destinataire. Sans ça,
+         « Demande d'avis envoyée » laisse croire que le client reçoit un e-mail
+         dans la seconde — alors que c'est Skeepers qui l'expédie, à la date
+         programmée. C'est cette confusion qui a fait chercher une panne
+         inexistante. Et c'est le seul moyen de comparer avec la date affichée
+         dans leur dashboard. */
+      const o = orders[0];
+      const u = o && userMap[String(o.userId)];
+      const quand = skeepers.dateEnvoiPrevue(o);
+      const jour = quand.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
+      const imminent = skeepers.delaiPourCommande(o) - skeepers.ageEnJours(o) === 0;
+      return res.json({
+        ok: true,
+        message: 'Transmise à Skeepers. Envoi au client ' + (imminent ? "aujourd'hui" : 'le ' + jour)
+          + (u && u.email ? ' — ' + u.email : '') + '.',
+        envoiPrevu: quand.toISOString(),
+      });
+    }
     const why = (result.skipped && result.skipped[0] && result.skipped[0].reason) || result.error || result.reason;
     return res.status(400).json({ ok: false, error: why || 'Échec.' });
   } catch (e) {
@@ -141,10 +167,18 @@ async function getReviewsDiagnostic(req, res) {
     solicitationDelayDays: c.delay,
     auth: { ok: false },
   };
-  if (!c.shopId) {
-    out.avertissement = 'SKEEPERS_SHOP_ID absent : Skeepers devra résoudre la boutique lui-même '
-      + '(« fetch Shop of website »), ce qui a déjà échoué par le passé.';
+  const alertes = [];
+  if (c.websiteIdCorrige) {
+    alertes.push('SKEEPERS_WEBSITE_ID contient une URL entière au lieu de l\'identifiant seul. '
+      + 'L\'identifiant a été extrait automatiquement (' + c.websiteId + ') et les envois fonctionnent, '
+      + 'mais corrige la variable sur Render : c\'est cette valeur brute qui provoquait la 500 '
+      + '« fetch Shop of website ».');
   }
+  if (!c.shopId) {
+    alertes.push('SKEEPERS_SHOP_ID absent : Skeepers devra résoudre la boutique lui-même '
+      + '(« fetch Shop of website »), ce qui a déjà échoué par le passé.');
+  }
+  if (alertes.length) out.avertissements = alertes;
   if (!out.configured) {
     out.reason = 'Variables SKEEPERS_* incomplètes — les boutons « Demander un avis » restent inertes.';
     return res.json(out);
