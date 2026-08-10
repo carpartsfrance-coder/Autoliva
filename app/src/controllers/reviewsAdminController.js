@@ -78,7 +78,19 @@ async function processOrders(orders, userMap) {
     { _id: { $in: acceptedIds } },
     { $set: { 'notifications.skeepersReviewRequestedAt': new Date() } }
   );
-  return { ok: true, sent: events.length, skipped };
+
+  /* La réponse de Skeepers était jetée. C'est pourtant LA SEULE chose qu'ils
+     nous disent de ce qu'ils vont faire de l'événement — un endpoint de bulk
+     rapporte en général ce qui a été retenu et ce qui a été écarté.
+     Sans elle, « envoyé » ne prouve que le HTTP 200, et on se retrouve à
+     chercher pourquoi aucun e-mail n'arrive sans le moindre indice.
+     Journalisée côté serveur ET renvoyée à l'admin. */
+  try {
+    console.log('[skeepers] push OK (' + events.length + ' évènement(s)) — réponse : '
+      + JSON.stringify(r.response).slice(0, 1000));
+  } catch (_) { /* la journalisation ne doit jamais faire échouer l'envoi */ }
+
+  return { ok: true, sent: events.length, skipped, reponseSkeepers: r.response };
 }
 
 async function postRequestReviewBulk(req, res) {
@@ -126,9 +138,16 @@ async function postRequestReviewSingle(req, res) {
       const imminent = skeepers.delaiPourCommande(o) - skeepers.ageEnJours(o) === 0;
       return res.json({
         ok: true,
-        message: 'Transmise à Skeepers. Envoi au client ' + (imminent ? "aujourd'hui" : 'le ' + jour)
-          + (u && u.email ? ' — ' + u.email : '') + '.',
+        /* « Acceptée par Skeepers » et non « envoyée » : on ne constate qu'un
+           HTTP 200 sur l'événement d'achat. L'e-mail part de chez eux, à la
+           date programmée, et rien de notre côté ne peut le confirmer. Dire
+           « envoyée » a déjà fait chercher une panne inexistante. */
+        message: 'Acceptée par Skeepers. Envoi prévu ' + (imminent ? "aujourd'hui" : 'le ' + jour)
+          + (u && u.email ? ' à ' + u.email : '') + '.',
         envoiPrevu: quand.toISOString(),
+        /* Ce que Skeepers a répondu, mot pour mot : la seule information dont
+           on dispose sur ce qu'ils comptent faire de l'événement. */
+        reponseSkeepers: result.reponseSkeepers,
       });
     }
     const why = (result.skipped && result.skipped[0] && result.skipped[0].reason) || result.error || result.reason;
