@@ -1,5 +1,7 @@
 'use strict';
 
+const legacySlugRedirects = require('./legacySlugRedirects');
+
 /**
  * WordPress -> Node.js 301 redirect middleware.
  *
@@ -63,6 +65,24 @@ const EXACT_REDIRECTS = {
   '/mecatronique-dsg-6/':                              '/blog/mecatronique-dsg6-dq250-diagnostic-prix-remplacement',
   '/product/mecatronique-dsg-7-dq200-pour-volskwagen-audi-seat-et-skoda':   '/product/mecatronique-dsg-7-dq200-pour-volkswagen-audi-seat-et-skoda/',
   '/product/mecatronique-dsg-7-dq200-pour-volskwagen-audi-seat-et-skoda/':  '/product/mecatronique-dsg-7-dq200-pour-volkswagen-audi-seat-et-skoda/',
+
+  // Hub legacy "Boite de transfert ATC 400" — page Car Parts France toujours
+  // indexée par Google (résultat page 1 FR) qui retournait 404 sur autoliva.
+  // Redirection vers la fiche produit FR pour récupérer le trafic perdu.
+  '/boite-de-transfert-atc-400':   '/product/boite-de-transfert-atc400-bmw-x3-e83-reconditionnee/',
+  '/boite-de-transfert-atc-400/':  '/product/boite-de-transfert-atc400-bmw-x3-e83-reconditionnee/',
+
+  // DQ500 — ancien slug avec faute "volskwagen" + format anglais ("for-...-and-")
+  // toujours référencé dans l'index Google. Sans cette 301, l'URL renvoyait vers
+  // /produits?q=... (page de recherche, mauvais signal SEO + UX).
+  '/product/mecatronique-dsg7-dq500-for-volskwagen-audi-seat-and-skoda-0bh':   '/product/mecatronique-dsg7-dq500-0bh-echange-standard-vw-audi-seat-skoda/',
+  '/product/mecatronique-dsg7-dq500-for-volskwagen-audi-seat-and-skoda-0bh/':  '/product/mecatronique-dsg7-dq500-0bh-echange-standard-vw-audi-seat-skoda/',
+
+  // Porsche Macan 95B 95B341010 — ancien slug long ("...reconditionnee-a-neuf-garantie-2-ans")
+  // toujours référencé dans l'index Google sur la requête référence 95B341010
+  // (top SERP). Sans cette 301, l'URL menait à /produits?q=... (page de recherche).
+  '/product/boite-de-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee-a-neuf-garantie-2-ans':   '/product/boite-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee/',
+  '/product/boite-de-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee-a-neuf-garantie-2-ans/':  '/product/boite-transfert-porsche-macan-95b-95b341010-echange-standard-reconditionnee/',
 
   // ─────────────────────────────────────────────────────────────────────
   // Récupération trafic SEO carpartsfrance.fr — ajouté le 2026-04-30
@@ -293,6 +313,15 @@ function wpRedirectsMiddleware(req, res, next) {
   if (exactTarget) {
     console.log(`[301] ${url} -> ${exactTarget}`);
     return res.redirect(301, exactTarget);
+  }
+
+  // 1b. Legacy slug redirects auto-générés (boite-de-transfert-X → boite-transfert-X
+  //     pour les fiches dont le slug canonique est sans "de", plus suffixes
+  //     historiques "a-neuf-garantie-2-ans" indexés par Google).
+  const legacyTarget = legacySlugRedirects[url] || legacySlugRedirects[url.toLowerCase()];
+  if (legacyTarget) {
+    console.log(`[301] ${url} -> ${legacyTarget} (legacy slug)`);
+    return res.redirect(301, legacyTarget);
   }
 
   // 2. WordPress artifacts -> 410 Gone
