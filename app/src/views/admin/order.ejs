@@ -2215,7 +2215,19 @@ document.addEventListener('DOMContentLoaded', function() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
       }).then(function (r) { return r.json().catch(function () { return {}; }); }).then(function (j) {
-        if (j && j.ok) { alert(j.message || "Demande d'avis envoyée."); }
+        if (j && j.ok) {
+          /* On montre AUSSI la réponse brute de Skeepers : c'est la seule
+             information dont on dispose sur ce qu'ils comptent faire de
+             l'événement, et elle est indispensable le jour où l'e-mail
+             n'arrive pas — la copier à leur support vaut mieux que de leur
+             décrire un symptôme. */
+          var txt = j.message || 'Demande transmise à Skeepers.';
+          try {
+            var brut = j.reponseSkeepers ? JSON.stringify(j.reponseSkeepers) : '';
+            if (brut && brut !== '{}' && brut !== 'null') txt += '\n\nRéponse Skeepers :\n' + brut.slice(0, 600);
+          } catch (e) { /* affichage seulement, jamais bloquant */ }
+          alert(txt);
+        }
         else { alert('Échec : ' + ((j && j.error) || 'erreur inconnue')); }
       }).catch(function () { alert('Erreur réseau.'); }).then(function () { btn.disabled = false; });
     });
