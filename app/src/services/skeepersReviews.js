@@ -24,7 +24,11 @@
  *   SKEEPERS_CLIENT_ID                 identifiant client API (onglet API du dashboard)
  *   SKEEPERS_CLIENT_SECRET             secret client API
  *   SKEEPERS_WEBSITE_ID                uuid du site (ID du site)
- *   SKEEPERS_SOLICITATION_DELAY        jours avant l'email d'avis site (défaut 7)
+ *   SKEEPERS_SOLICITATION_DELAY        jours d'attente APRÈS LE CLIC avant l'email
+ *                                      d'avis site (défaut 0 = tout de suite).
+ *                                      ⚠ Ce n'est PAS un délai après l'achat :
+ *                                      voir delaiPourCommande(), qui le recalcule
+ *                                      selon l'âge de la commande.
  *   SKEEPERS_SOLICITATION_DELAY_PRODUCT  idem pour l'avis produit (défaut = DELAY)
  *   SKEEPERS_SHOP_ID                   clé de la boutique (Gestion du compte > Boutiques).
  *                                      Sans elle, Skeepers tente de résoudre la boutique du
@@ -74,7 +78,11 @@ function normaliserWebsiteId(brut) {
 }
 
 function config() {
-  const delay = intEnv('SKEEPERS_SOLICITATION_DELAY', 7);
+  /* Défaut 0 : le délai se compte désormais après le CLIC, pas après l'achat
+     (voir delaiPourCommande). L'envoi étant manuel, « tout de suite » est le
+     comportement attendu — un défaut de 7 ferait patienter le client une
+     semaine après que Killian a décidé de le solliciter. */
+  const delay = intEnv('SKEEPERS_SOLICITATION_DELAY', 0);
   const websiteIdBrut = env('SKEEPERS_WEBSITE_ID');
   const websiteId = normaliserWebsiteId(websiteIdBrut);
   return {
@@ -127,6 +135,55 @@ function toIso(date) {
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z'); // "yyyy-MM-ddTHH:mm:ssZ"
 }
 
+/** Skeepers n'accepte pas de solliciter au-delà de 6 mois après l'achat. */
+const AGE_MAX_JOURS = 180;
+
+/** Âge de la commande en jours pleins. */
+function ageEnJours(order) {
+  const t = new Date((order && order.createdAt) || Date.now()).getTime();
+  if (!Number.isFinite(t)) return 0;
+  return Math.max(0, Math.floor((Date.now() - t) / 86400000));
+}
+
+/**
+ * Combien de jours après l'ACHAT Skeepers doit-il envoyer la sollicitation ?
+ *
+ * ── POURQUOI CE N'EST PAS UNE CONSTANTE ─────────────────────────────────────
+ *
+ * Skeepers programme l'envoi à `purchase_date + delay`. Avec un délai figé à 7
+ * jours, une commande vieille de 85 jours se voit programmer une date deux mois
+ * dans le PASSÉ : rien ne part, sans le moindre message d'erreur. C'est
+ * exactement ce qui s'est produit sur CP2026-000199.
+ *
+ * Or les demandes d'avis sont envoyées À LA MAIN, une par une, au moment où
+ * Killian sait que le client a reçu sa pièce. Le moment, c'est le clic — pas
+ * une date calculée depuis l'achat. On recalcule donc le délai pour que
+ * l'échéance tombe MAINTENANT, quel que soit l'âge de la commande.
+ *
+ * `SKEEPERS_SOLICITATION_DELAY` garde un sens, mais change de référentiel :
+ * c'est désormais le décalage APRÈS LE CLIC (0 = tout de suite, 2 = dans deux
+ * jours), et non plus après l'achat.
+ *
+ * ⚠ HYPOTHÈSE À CONFIRMER AU PREMIER ENVOI : que `delay` se compte bien depuis
+ * `purchase_date`. C'est la lecture cohérente avec le plafond de 6 mois annoncé
+ * par Skeepers, mais elle n'est pas écrite noir sur blanc. Le message de retour
+ * du bouton affiche la date d'envoi calculée : si le dashboard Skeepers annonce
+ * la même, la lecture est bonne ; s'il annonce une date bien plus lointaine,
+ * c'est que le délai part de la réception de l'événement et il faut alors
+ * renvoyer simplement `c.delay`.
+ */
+function delaiPourCommande(order) {
+  const c = config();
+  return ageEnJours(order) + c.delay;
+}
+
+/** Date à laquelle Skeepers enverra la sollicitation, pour l'afficher à l'admin. */
+function dateEnvoiPrevue(order) {
+  const d = new Date((order && order.createdAt) || Date.now());
+  d.setDate(d.getDate() + delaiPourCommande(order));
+  return d;
+}
+
 /**
  * Construit un purchase event Skeepers depuis une commande + son client.
  * L'email/nom vivent sur User (order.userId), PAS sur Order.
@@ -157,8 +214,12 @@ function buildPurchaseEvent(order, user) {
   // Avis produit ET marque si des produits sont liés ; sinon avis marque seul
   // (demander un avis PRODUIT sans produit = payload incohérent → rejeté par Skeepers).
   const purchaseEventType = products.length ? 'BRAND_AND_PRODUCT' : 'BRAND';
-  const solicitation = { delay: c.delay, purchase_event_type: purchaseEventType };
-  if (products.length) solicitation.delay_product = c.delayProduct;
+  /* Le délai est calculé À PARTIR DE L'ÂGE DE LA COMMANDE, pas figé.
+     Voir `delaiPourCommande()` : c'est ce qui rend l'envoi manuel utilisable
+     sur une commande ancienne. */
+  const delai = delaiPourCommande(order);
+  const solicitation = { delay: delai, purchase_event_type: purchaseEventType };
+  if (products.length) solicitation.delay_product = delai + (c.delayProduct - c.delay);
 
   // Désigne explicitement la boutique : sans shop_id, le service de validation
   // Skeepers résout la boutique du site lui-même (« fetch Shop of website »), ce
@@ -217,5 +278,9 @@ module.exports = {
   getAccessToken,
   buildPurchaseEvent,
   pushPurchaseEvents,
+  ageEnJours,
+  delaiPourCommande,
+  dateEnvoiPrevue,
+  AGE_MAX_JOURS,
   MAX_EVENTS_PER_REQUEST,
 };
