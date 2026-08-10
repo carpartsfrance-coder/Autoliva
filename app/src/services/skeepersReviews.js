@@ -211,9 +211,13 @@ function buildPurchaseEvent(order, user) {
       return p;
     });
 
-  // Avis produit ET marque si des produits sont liés ; sinon avis marque seul
-  // (demander un avis PRODUIT sans produit = payload incohérent → rejeté par Skeepers).
-  const purchaseEventType = products.length ? 'BRAND_AND_PRODUCT' : 'BRAND';
+  /* Avis marque ET produit quand des produits sont liés ; sinon avis marque seul.
+     ⚠ La valeur est `PURCHASE_ONLY`, PAS `BRAND` : l'énumération documentée est
+     BRAND_AND_PRODUCT | PURCHASE_ONLY | PRODUCT_ONLY (Swagger « Submit Purchase
+     Event »). On envoyait `BRAND`, qui n'existe pas — latent aujourd'hui
+     (aucune commande sans produit lié en base), mais qui aurait échoué sur la
+     première, typiquement une vente issue d'un devis moteur. */
+  const purchaseEventType = products.length ? 'BRAND_AND_PRODUCT' : 'PURCHASE_ONLY';
   /* Le délai est calculé À PARTIR DE L'ÂGE DE LA COMMANDE, pas figé.
      Voir `delaiPourCommande()` : c'est ce qui rend l'envoi manuel utilisable
      sur une commande ancienne. */
@@ -264,10 +268,29 @@ async function pushPurchaseEvents(events) {
     body: JSON.stringify(list),
   });
   const raw = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    // Log serveur (Render) : le corps d'erreur Skeepers est indispensable au diagnostic.
-    try { console.error('[skeepers] push HTTP ' + res.status + ' — ' + JSON.stringify(raw).slice(0, 800)); } catch (_) {}
-    return { ok: false, status: res.status, error: raw };
+
+  /* ⚠ HTTP 206 « Partial content » : Skeepers a retenu une partie du lot et
+     REJETÉ le reste, en détaillant dans `error_description`. `res.ok` est vrai
+     de 200 à 299 — on considérait donc un rejet partiel comme un succès plein,
+     on marquait la commande « demande envoyée » et on annonçait que tout allait
+     bien. Une commande écartée devenait invisible pour toujours.
+     Voir le Swagger « Submit Purchase Event », réponse 206. */
+  const rejets = (Array.isArray(raw) ? raw : [])
+    .filter((e) => e && (e.error_description || e.error))
+    .map((e) => (e.purchase_reference ? e.purchase_reference + ' : ' : '')
+      + (e.error_description || e.error));
+
+  if (!res.ok || res.status === 206 || rejets.length) {
+    const niveau = res.ok ? 'partiel' : 'HTTP ' + res.status;
+    try {
+      console.error('[skeepers] push ' + niveau + ' — ' + JSON.stringify(raw).slice(0, 800));
+    } catch (_) {}
+    return {
+      ok: false,
+      status: res.status,
+      error: rejets.length ? rejets.join(' · ') : raw,
+      partiel: res.ok,
+    };
   }
   return { ok: true, response: raw, count: list.length };
 }
