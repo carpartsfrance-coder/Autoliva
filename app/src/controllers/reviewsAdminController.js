@@ -199,9 +199,17 @@ async function getReviewsDiagnostic(req, res) {
       + 'mais corrige la variable sur Render : c\'est cette valeur brute qui provoquait la 500 '
       + '« fetch Shop of website ».');
   }
-  if (!c.shopId) {
-    alertes.push('SKEEPERS_SHOP_ID absent : Skeepers devra résoudre la boutique lui-même '
-      + '(« fetch Shop of website »), ce qui a déjà échoué par le passé.');
+  /* ⚠ NE PAS réintroduire d'avertissement « shop_id absent ». Constaté le
+     11/08/2026 : avec `SKEEPERS_SHOP_ID=autoliva`, Skeepers répondait 500
+     « fetch Shop of website » ; en RETIRANT la variable, l'appel passe. La clé
+     ne correspondait à aucune boutique chez eux, et sa présence faisait échouer
+     leur validation. L'absence de shop_id est donc l'état qui FONCTIONNE —
+     l'inverse de ce qu'on supposait en juillet. */
+  if (c.shopId) {
+    alertes.push('SKEEPERS_SHOP_ID est renseigné (« ' + c.shopId + ' »). En cas d\'échec 500 '
+      + '« fetch Shop of website », RETIRE la variable : une clé de boutique inconnue de Skeepers '
+      + 'fait échouer leur validation, alors que son absence les laisse résoudre la boutique '
+      + 'correctement. Ne la remets que si Skeepers confirme la clé exacte.');
   }
   if (alertes.length) out.avertissements = alertes;
   if (!out.configured) {

@@ -31,8 +31,12 @@
  *                                      selon l'âge de la commande.
  *   SKEEPERS_SOLICITATION_DELAY_PRODUCT  idem pour l'avis produit (défaut = DELAY)
  *   SKEEPERS_SHOP_ID                   clé de la boutique (Gestion du compte > Boutiques).
- *                                      Sans elle, Skeepers tente de résoudre la boutique du
- *                                      site lui-même et peut échouer en « fetch Shop of website ».
+ *                                      ⚠ LAISSER VIDE sauf si Skeepers confirme la clé exacte.
+ *                                      Constaté le 11/08/2026 : avec « autoliva », leur API
+ *                                      répondait 500 « fetch Shop of website » ; en RETIRANT la
+ *                                      variable, les envois passent. Une clé inconnue de leur
+ *                                      côté fait échouer leur validation — son absence les
+ *                                      laisse résoudre la boutique correctement.
  */
 
 const OAUTH_URL = 'https://auth.skeepers.io/realms/skeepers/protocol/openid-connect/token';
