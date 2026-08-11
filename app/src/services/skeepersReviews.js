@@ -174,7 +174,22 @@ function ageEnJours(order) {
  */
 function delaiPourCommande(order) {
   const c = config();
-  return ageEnJours(order) + c.delay;
+  const achat = new Date((order && order.createdAt) || Date.now()).getTime();
+  const maintenant = Date.now();
+
+  /* ⚠ ARRONDI VERS LE HAUT, et échéance vérifiée.
+     `ageEnJours` arrondit vers le BAS. Sur CP2026-000199, achetée à 19h22 et
+     poussée à 20h09, l'âge valait 85 jours pleins → échéance à achat + 85 j,
+     soit 19h22 le même jour : 47 MINUTES AVANT le clic. On reprogrammait donc
+     encore une fois dans le passé, en croyant viser « maintenant ». C'est ce
+     qui explique l'absence d'e-mail après le premier correctif.
+     Le délai étant un nombre entier de JOURS, on ne peut pas viser l'instant
+     présent : on prend la plus petite échéance strictement future. Elle tombe
+     à l'heure d'achat, dans les 24 heures. */
+  let jours = Math.max(0, Math.ceil((maintenant - achat) / 86400000));
+  while (achat + jours * 86400000 <= maintenant) jours += 1;
+
+  return jours + c.delay;
 }
 
 /** Date à laquelle Skeepers enverra la sollicitation, pour l'afficher à l'admin. */
