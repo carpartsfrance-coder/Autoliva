@@ -134,16 +134,22 @@ async function postRequestReviewSingle(req, res) {
       const o = orders[0];
       const u = o && userMap[String(o.userId)];
       const quand = skeepers.dateEnvoiPrevue(o);
-      const jour = quand.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' });
-      const imminent = skeepers.delaiPourCommande(o) - skeepers.ageEnJours(o) === 0;
+      /* AVEC L'HEURE, pas seulement le jour. `delay` s'exprime en jours entiers
+         et l'échéance tombe à l'heure d'achat : annoncer « aujourd'hui » sur une
+         échéance à 19h22 laisse croire à un envoi imminent alors qu'il reste
+         treize heures. C'est ce flou qui a fait conclure à une panne. */
+      const quandTxt = quand.toLocaleString('fr-FR', {
+        weekday: 'long', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit',
+      });
+      const heures = Math.max(0, Math.round((quand.getTime() - Date.now()) / 3600000));
       return res.json({
         ok: true,
         /* « Acceptée par Skeepers » et non « envoyée » : on ne constate qu'un
            HTTP 200 sur l'événement d'achat. L'e-mail part de chez eux, à la
            date programmée, et rien de notre côté ne peut le confirmer. Dire
            « envoyée » a déjà fait chercher une panne inexistante. */
-        message: 'Acceptée par Skeepers. Envoi prévu ' + (imminent ? "aujourd'hui" : 'le ' + jour)
-          + (u && u.email ? ' à ' + u.email : '') + '.',
+        message: 'Acceptée par Skeepers. Envoi programmé ' + quandTxt
+          + ' (dans ~' + heures + ' h)' + (u && u.email ? ' à ' + u.email : '') + '.',
         envoiPrevu: quand.toISOString(),
         /* Ce que Skeepers a répondu, mot pour mot : la seule information dont
            on dispose sur ce qu'ils comptent faire de l'événement. */
