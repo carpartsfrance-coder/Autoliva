@@ -277,16 +277,43 @@ async function sendOrderConfirmationEmail({ order, user } = {}) {
   let hasInvoice = false;
   let hasCgv = false;
 
-  try {
-    const invoiceBuffer = await buildOrderInvoicePdfBuffer({ order: orderWithImages, user: fullUser });
-    if (invoiceBuffer && Buffer.isBuffer(invoiceBuffer) && invoiceBuffer.length) {
-      const number = orderWithImages && orderWithImages.number ? String(orderWithImages.number).trim() : '';
-      const filename = number ? `Facture-${number}.pdf` : 'Facture.pdf';
-      attachments.push({ filename, content: invoiceBuffer.toString('base64'), disposition: 'attachment' });
-      hasInvoice = true;
+  /* ── Pourquoi le particulier ne reçoit PAS sa facture ici ────────────────
+   *
+   * La pièce est SOURCÉE APRÈS la vente : au moment du paiement, on ignore
+   * encore chez quel fournisseur on l'achètera, donc sous quel régime de TVA
+   * (normal 20 % ou marge, art. 297 A du CGI). Envoyer la facture maintenant,
+   * c'est graver un régime qu'on ne connaît pas — et le corriger ensuite
+   * imposerait un avoir, alors que le client a déjà le PDF dans sa boîte mail.
+   *
+   * Le mail d'EXPÉDITION joint déjà la même facture (sendShipmentTrackingEmail).
+   * Elle part donc après l'achat fournisseur, au bon régime du premier coup.
+   * Délai médian paiement → expédition mesuré : 5,7 jours.
+   *
+   * C'est légal parce qu'il n'y a AUCUNE obligation de facturer un particulier
+   * (BOI-TVA-DECLA-30-20-10-10 § 20) — 68 % du chiffre d'affaires.
+   *
+   * ⚠ Le PRO, lui, la reçoit immédiatement : la facture lui est obligatoire
+   * (art. 289 I-1-a CGI) et il en a besoin pour déduire sa TVA. Il est de toute
+   * façon toujours facturé au régime normal — la marge ne fait apparaître
+   * aucune TVA (art. 297 E) et lui retirerait sa déduction.
+   *
+   * La facture reste accessible à tout moment depuis l'espace client : elle est
+   * regénérée à la demande, jamais figée dans un fichier.
+   */
+  const estPro = String((orderWithImages && orderWithImages.accountType) || '').toLowerCase() === 'pro';
+
+  if (estPro) {
+    try {
+      const invoiceBuffer = await buildOrderInvoicePdfBuffer({ order: orderWithImages, user: fullUser });
+      if (invoiceBuffer && Buffer.isBuffer(invoiceBuffer) && invoiceBuffer.length) {
+        const number = orderWithImages && orderWithImages.number ? String(orderWithImages.number).trim() : '';
+        const filename = number ? `Facture-${number}.pdf` : 'Facture.pdf';
+        attachments.push({ filename, content: invoiceBuffer.toString('base64'), disposition: 'attachment' });
+        hasInvoice = true;
+      }
+    } catch (err) {
+      console.warn('Facture PDF: génération impossible');
     }
-  } catch (err) {
-    console.warn('Facture PDF: génération impossible');
   }
 
   const cgvBuffer = await getCgvPdfBuffer({ dbConnected: getDbConnected() });
