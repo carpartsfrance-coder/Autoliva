@@ -496,6 +496,10 @@ async function listInvoices({ from, to, page = 1, limit = 50, search = '' } = {}
       purchaseCents: order.purchase && Number.isFinite(order.purchase.priceCents) ? order.purchase.priceCents : null,
       supplier: (order.purchase && order.purchase.supplier) || '',
       supplierInvoiceRef: (order.purchase && order.purchase.invoiceRef) || '',
+      /* Le justificatif d'achat est-il joint ? Le comptable doit le voir d'un
+         coup d'œil : une vente sous marge sans facture d'achat est une ligne
+         qu'il ne pourra pas défendre. */
+      hasPurchaseInvoice: !!(order.purchase && order.purchase.invoiceFile && order.purchase.invoiceFile.uploadedAt),
       hasCreditNotes: Array.isArray(order.creditNotes) && order.creditNotes.length > 0,
       hasRefunds: Array.isArray(order.refunds) && order.refunds.length > 0,
     };
@@ -749,6 +753,7 @@ async function buildMonthlyCsv(year, month) {
     'BaseTVA',        // assiette réellement taxée (la marge, le cas échéant)
     'Fournisseur',
     'FactureFournisseur',
+    'JustificatifAchat', // oui | non — le PDF est-il dans le ZIP du mois ?
     'ModePaiement',
     'FactureLiee',    // pour les avoirs : n° de la facture initiale
     'Motif',          // pour les avoirs
@@ -781,6 +786,7 @@ async function buildMonthlyCsv(year, month) {
       baseTva(inv),
       inv.supplier || '',
       inv.supplierInvoiceRef || '',
+      inv.hasPurchaseInvoice ? 'oui' : 'non',
       inv.paymentMethod,
       '',
       '',
@@ -803,6 +809,7 @@ async function buildMonthlyCsv(year, month) {
       cn.regime,
       '',
       '-' + baseTva(cn),
+      '',
       '',
       '',
       '',
@@ -890,7 +897,14 @@ async function buildMonthlyPdfZipBuffer(year, month) {
     '',
     'Source : autoliva.com — Car Parts France',
     '',
-    'Voir aussi : export CSV du mois pour la saisie comptable.',
+    'Contenu :',
+    '  factures/        factures de VENTE émises sur la période',
+    '  avoirs/          avoirs émis sur la période',
+    '  factures-achat/  factures FOURNISSEUR, justificatifs du régime de la marge',
+    '                   (nommées par n° de commande, comme les factures de vente)',
+    '',
+    'Voir aussi : export CSV du mois pour la saisie comptable — colonnes',
+    'RegimeTVA, PrixAchat, BaseTVA et JustificatifAchat.',
   ].join('\r\n'), { name: 'README.txt' });
 
   /* Compteurs pour le SUMMARY final */
@@ -898,6 +912,8 @@ async function buildMonthlyPdfZipBuffer(year, month) {
   let creditNoteWritten = 0;
   let invoiceFailed = 0;
   let creditNoteFailed = 0;
+  let purchaseWritten = 0;
+  let margeSansJustificatif = [];
   let fatalError = null;
 
   try {
@@ -905,7 +921,14 @@ async function buildMonthlyPdfZipBuffer(year, month) {
       'invoice.number': { $nin: [null, ''] },
       'invoice.issuedAt': { $gte: from, $lt: to },
     })
-      .select('_id number invoice totalCents items billingAddress shippingAddress userId accountType currency shippingCostCents itemsSubtotalCents promoCode promoDiscountCents itemsTotalAfterDiscountCents clientDiscountCents createdAt')
+      /* `+purchase.invoiceFile.data` : la facture d'achat est en `select:false`
+         pour ne pas alourdir les listes, mais c'est exactement ce qu'on vient
+         chercher ici. `vatScheme`, `vat` et `consigne` servent au calcul de TVA
+         du PDF régénéré.
+         ⚠ Les sous-champs de `purchase.invoiceFile` sont listés un par un :
+         projeter `purchase` ET `purchase.invoiceFile.data` ensemble déclenche
+         une « path collision » Mongoose (parent + enfant). */
+      .select('_id number invoice totalCents items billingAddress shippingAddress userId accountType currency shippingCostCents itemsSubtotalCents promoCode promoDiscountCents itemsTotalAfterDiscountCents clientDiscountCents createdAt vatScheme vat consigne purchase.priceCents purchase.supplier purchase.invoiceRef purchase.invoiceFile.originalName +purchase.invoiceFile.data')
       .lean();
 
     /* Récupération des avoirs.
@@ -968,6 +991,26 @@ async function buildMonthlyPdfZipBuffer(year, month) {
         console.error('[accounting] PDF facture ratée pour', order.number, e && e.message);
         invoiceFailed++;
       }
+
+      /* La facture d'ACHAT, à côté de la facture de vente.
+         C'est ce qui manquait au comptable : la vente lui dit ce qu'on a
+         encaissé, l'achat lui donne la base de la marge et le droit à
+         déduction. Même nom de commande de part et d'autre → les deux
+         dossiers se lisent en parallèle. */
+      const f = order.purchase && order.purchase.invoiceFile;
+      const octets = f && f.data
+        ? (Buffer.isBuffer(f.data) ? f.data : (f.data.buffer ? Buffer.from(f.data.buffer) : null))
+        : null;
+      if (octets && octets.length) {
+        const ext = (f.originalName && f.originalName.match(/\.[a-z0-9]{1,5}$/i)) || ['.pdf'];
+        archive.append(octets, { name: `factures-achat/${order.number || order._id}${ext[0]}` });
+        purchaseWritten++;
+      } else if (String(order.vatScheme || '') === 'margin') {
+        /* Une vente sous marge sans justificatif d'achat ne doit pas passer
+           inaperçue : c'est la ligne que le comptable ne pourra pas défendre.
+           Silencieuse, elle ne se découvre qu'en contrôle. */
+        margeSansJustificatif.push(order.number || String(order._id));
+      }
     }
 
     /* Avoirs — lecture du Buffer si dispo, sinon regen */
@@ -1016,8 +1059,16 @@ async function buildMonthlyPdfZipBuffer(year, month) {
   archive.append([
     `Résumé de l'export — ${monthLabel}`,
     '',
-    `Factures incluses : ${invoiceWritten}${invoiceFailed > 0 ? ` (${invoiceFailed} en échec)` : ''}`,
-    `Avoirs incluses  : ${creditNoteWritten}${creditNoteFailed > 0 ? ` (${creditNoteFailed} en échec)` : ''}`,
+    `Factures incluses        : ${invoiceWritten}${invoiceFailed > 0 ? ` (${invoiceFailed} en échec)` : ''}`,
+    `Avoirs inclus            : ${creditNoteWritten}${creditNoteFailed > 0 ? ` (${creditNoteFailed} en échec)` : ''}`,
+    `Factures d'achat jointes : ${purchaseWritten}`,
+    '',
+    margeSansJustificatif.length
+      ? `⚠ ${margeSansJustificatif.length} vente(s) sous TVA sur marge SANS facture d'achat jointe :\r\n`
+        + margeSansJustificatif.map((n) => `   - ${n}`).join('\r\n')
+        + '\r\n   Sans justificatif, la base (prix de vente − prix d\'achat) n\'est pas\r\n'
+        + '   vérifiable : l\'administration reconstitue la TVA sur le prix entier.'
+      : '✓ Toutes les ventes sous marge ont leur facture d\'achat.',
     '',
     fatalError
       ? `⚠ ERREUR : ${fatalError.message || 'inconnue'} — l'export est probablement incomplet.`

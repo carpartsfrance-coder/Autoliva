@@ -466,6 +466,33 @@ const orderSchema = new mongoose.Schema(
       },
       decidedAt: { type: Date, default: null },
       decidedByName: { type: String, default: '', trim: true },
+
+      /* ── La facture du fournisseur, en pièce jointe ────────────────────────
+       *
+       * ⚠ VOLONTAIREMENT HORS DE `documents[]`.
+       *
+       * `GET /compte/commandes/:orderId/documents/:docId` sert au client
+       * n'importe quelle entrée de `documents[]` de SA commande, sans regarder
+       * le type. Une facture d'achat y révélerait le prix payé au fournisseur,
+       * donc la marge, à l'acheteur lui-même.
+       *
+       * Rangée ici, aucune route client ne peut la lire : la fuite n'est pas
+       * évitée par un filtre qu'on pourrait oublier, elle est impossible.
+       *
+       * C'est aussi la pièce qui JUSTIFIE la marge en cas de contrôle : sans
+       * facture d'achat, l'administration ne peut pas vérifier la base (PV − PA)
+       * et reconstitue la TVA sur le prix de vente entier.
+       */
+      invoiceFile: {
+        originalName: { type: String, default: '', trim: true },
+        mimeType: { type: String, default: 'application/pdf', trim: true },
+        sizeBytes: { type: Number, default: 0 },
+        /* select:false — un `Order.find()` de liste ne doit jamais charger
+           plusieurs mégaoctets de PDF sans l'avoir demandé. */
+        data: { type: Buffer, default: null, select: false },
+        uploadedAt: { type: Date, default: null },
+        uploadedByName: { type: String, default: '', trim: true },
+      },
     },
 
     items: { type: [orderItemSchema], required: true },

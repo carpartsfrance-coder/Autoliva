@@ -233,7 +233,11 @@ router.post('/commandes/:orderId/demande-avis', requireAdminAuth, require('../co
 // Approvisionnement de la pièce (édition inline depuis la liste + form détail)
 router.post('/commandes/:orderId/sourcing', requireAdminAuth, adminController.postAdminUpdateOrderSourcing);
 // Régime de TVA de la vente (normal 20 % par défaut, marge décidée au cas par cas)
-router.post('/commandes/:orderId/tva', requireAdminAuth, adminController.postAdminUpdateOrderVatScheme);
+// `handleShippingDocUpload` : le même formulaire porte la facture d'achat en
+// pièce jointe. Il laisse passer les requêtes non-multipart sans rien changer.
+router.post('/commandes/:orderId/tva', requireAdminAuth, handleShippingDocUpload, adminController.postAdminUpdateOrderVatScheme);
+router.get('/commandes/:orderId/facture-achat', requireAdminAuth, adminController.getAdminOrderPurchaseInvoice);
+router.post('/commandes/:orderId/facture-achat/supprimer', requireAdminAuth, adminController.postAdminDeleteOrderPurchaseInvoice);
 router.post('/commandes/:orderId/consigne/recu', requireAdminAuth, adminController.postAdminMarkOrderConsigneReceived);
 router.post('/commandes/:orderId/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundOrder);
 router.post('/commandes/:orderId/consigne/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundConsigne);

@@ -39,6 +39,7 @@ const { hasAbility, getRoleLabel, isComptable, defaultLandingForRole, ROLES } = 
 const brand = require('../config/brand');
 const sourcingStatus = require('../config/sourcingStatus');
 const vatScheme = require('../services/vatScheme');
+const purchaseInvoice = require('../services/purchaseInvoice');
 
 const ADMIN_LOGIN_BUCKETS = new Map();
 const ADMIN_RESET_BUCKETS = new Map();
@@ -3274,6 +3275,14 @@ async function getAdminOrderDetailPage(req, res, next) {
             invoiceRef: p.invoiceRef || '',
             supplierRegime: p.supplierRegime || '',
             purchaseInput: Number.isFinite(p.priceCents) ? (p.priceCents / 100).toFixed(2) : '',
+            factureAchat: (p.invoiceFile && p.invoiceFile.uploadedAt)
+              ? {
+                  nom: p.invoiceFile.originalName || 'facture-achat.pdf',
+                  taille: Math.max(1, Math.round((p.invoiceFile.sizeBytes || 0) / 1024)),
+                  deposeeLe: formatDateTimeFR(p.invoiceFile.uploadedAt),
+                  deposeePar: p.invoiceFile.uploadedByName || '',
+                }
+              : null,
             baseCents: a.baseCents,
             tvaNormaleCents: a.tvaNormaleCents,
             tvaMargeCents: a.tvaMargeCents,
@@ -3640,6 +3649,10 @@ async function postAdminUpdateOrderVatScheme(req, res) {
   try {
     if (mongoose.connection.readyState !== 1) return echec('Base indisponible.', 503);
     if (!mongoose.Types.ObjectId.isValid(orderId)) return echec('Commande introuvable.', 404);
+    /* L'upload est optionnel, mais un fichier refusé (trop gros, pas un PDF)
+       doit le dire — sinon on enregistrerait le régime en laissant croire que
+       le justificatif est joint. */
+    if (req.uploadError) return echec(req.uploadError);
 
     const order = await Order.findById(orderId)
       .select('totalCents consigne vat vatScheme purchase invoice number')
@@ -3678,6 +3691,22 @@ async function postAdminUpdateOrderVatScheme(req, res) {
        vente bascule plus tard. */
     if (purchaseCents != null) set['purchase.priceCents'] = purchaseCents;
 
+    /* Facture fournisseur jointe : elle remplace la précédente. Un seul
+       justificatif par vente — une commande = une pièce = une facture d'achat
+       (223 lignes sur 224 sont en quantité 1). */
+    let fichierJoint = false;
+    if (req.file && req.file.buffer && req.file.buffer.length) {
+      set['purchase.invoiceFile'] = {
+        originalName: String(req.file.originalname || 'facture-achat.pdf').slice(0, 200),
+        mimeType: req.file.mimetype || 'application/pdf',
+        sizeBytes: req.file.size || req.file.buffer.length,
+        data: req.file.buffer,
+        uploadedAt: new Date(),
+        uploadedByName: adminName,
+      };
+      fichierJoint = true;
+    }
+
     await Order.updateOne({ _id: orderId }, { $set: set });
 
     const apercu = vatScheme.apercu(
@@ -3686,7 +3715,7 @@ async function postAdminUpdateOrderVatScheme(req, res) {
     );
 
     if (wantsJsonResponse(req)) {
-      return res.json({ ok: true, vatScheme: scheme, apercu });
+      return res.json({ ok: true, vatScheme: scheme, apercu, factureAchatJointe: fichierJoint });
     }
 
     /* On annonce l'effet en euros, pas juste « enregistré » : c'est le seul
@@ -3702,12 +3731,52 @@ async function postAdminUpdateOrderVatScheme(req, res) {
     if (order.invoice && order.invoice.number) {
       msg += ' ⚠ La facture ' + order.invoice.number + ' était déjà émise : renvoie-la au client si elle est partie.';
     }
+    if (fichierJoint) msg += ' Facture d\'achat jointe.';
+    /* Réclamer la marge sans le justificatif, c'est tenir une position qu'on ne
+       peut pas défendre : en contrôle, l'administration qui ne peut pas
+       vérifier (PV − PA) reconstitue la TVA sur le prix de vente entier. On ne
+       bloque pas — le PDF n'est pas toujours sous la main — mais on le dit. */
+    const aDejaUnJustificatif = fichierJoint
+      || !!(order.purchase && order.purchase.invoiceFile && order.purchase.invoiceFile.uploadedAt);
+    if (scheme === 'margin' && !aDejaUnJustificatif) {
+      msg += ' ⚠ Aucune facture d\'achat jointe : sans elle, la marge est indéfendable en cas de contrôle.';
+    }
     req.session.adminOrderSuccess = msg;
     return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
   } catch (err) {
     console.error('[admin] postAdminUpdateOrderVatScheme failed:', err && err.message);
     return echec('Erreur lors de la mise à jour du régime de TVA.', 500);
   }
+}
+
+async function getAdminOrderPurchaseInvoice(req, res) {
+  try {
+    const found = await purchaseInvoice.charger(req.params.orderId);
+    if (!found) return res.status(404).send('Aucune facture d\'achat sur cette commande.');
+    res.setHeader('Content-Type', found.meta.mimeType || 'application/pdf');
+    res.setHeader('Content-Disposition',
+      `inline; filename="${purchaseInvoice.nomFichier(found.orderNumber, found.meta)}"`);
+    return res.send(found.bytes);
+  } catch (err) {
+    console.error('[admin] getAdminOrderPurchaseInvoice failed:', err && err.message);
+    return res.status(500).send('Erreur serveur.');
+  }
+}
+
+async function postAdminDeleteOrderPurchaseInvoice(req, res) {
+  const orderId = req.params.orderId;
+  try {
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      req.session.adminOrderError = 'Commande introuvable.';
+      return res.redirect('/admin/commandes');
+    }
+    await Order.updateOne({ _id: orderId }, { $unset: { 'purchase.invoiceFile': '' } });
+    req.session.adminOrderSuccess = 'Facture d\'achat supprimée.';
+  } catch (err) {
+    console.error('[admin] postAdminDeleteOrderPurchaseInvoice failed:', err && err.message);
+    req.session.adminOrderError = 'Suppression impossible.';
+  }
+  return res.redirect(`/admin/commandes/${encodeURIComponent(orderId || '')}`);
 }
 
 async function postAdminUpdateOrderType(req, res) {
@@ -12792,6 +12861,8 @@ module.exports = {
   postAdminUpdateOrderStatus,
   postAdminUpdateOrderSourcing,
   postAdminUpdateOrderVatScheme,
+  getAdminOrderPurchaseInvoice,
+  postAdminDeleteOrderPurchaseInvoice,
   postAdminUpdateOrderType,
   postAdminMarkOrderConsigneReceived,
   postAdminAddOrderShipment,
