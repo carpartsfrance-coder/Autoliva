@@ -82,11 +82,37 @@ function computeTotals(order) {
     : 0;
   const taxableCents = Math.max(0, totalCents - consigneChargedCents);
 
-  // Autoliquidation B2B UE : le total est DÉJÀ HT (TVA non facturée). Sinon, régime
-  // habituel (le prix TTC contient 20% de TVA → on décompose).
+  /* Trois régimes possibles, et ils s'excluent :
+   *
+   * 1. AUTOLIQUIDATION B2B UE — le total est DÉJÀ HT, la TVA est due par le
+   *    preneur (art. 283-1 CGI).
+   * 2. MARGE (art. 297 A) — la TVA porte sur (PV − PA) et NE DOIT PAS
+   *    apparaître sur la facture : l'article 297 E l'interdit explicitement,
+   *    parce que l'afficher permettrait à l'acheteur de la déduire alors
+   *    qu'elle n'est pas déductible. On ne décompose donc RIEN.
+   * 3. NORMAL — le prix TTC contient 20 % de TVA, on décompose.
+   *
+   * L'autoliquidation prime : une livraison intracommunautaire exonérée ne
+   * peut pas être simultanément soumise à la marge.
+   */
   const reverseCharge = !!(order && order.vat && order.vat.reverseCharge);
-  const htCents = reverseCharge ? taxableCents : Math.round(taxableCents / 1.2);
-  const vatCents = reverseCharge ? 0 : (taxableCents - htCents);
+  const margin = !reverseCharge && String((order && order.vatScheme) || 'normal') === 'margin';
+
+  let htCents;
+  let vatCents;
+  if (reverseCharge) {
+    htCents = taxableCents;
+    vatCents = 0;
+  } else if (margin) {
+    /* Volontairement nuls : rien ne doit être imprimé. La TVA due existe bien
+       — elle se calcule sur la marge — mais elle reste une affaire entre le
+       vendeur et l'administration, jamais une mention client. */
+    htCents = 0;
+    vatCents = 0;
+  } else {
+    htCents = Math.round(taxableCents / 1.2);
+    vatCents = taxableCents - htCents;
+  }
 
   return {
     itemsSubtotalCents,
@@ -99,6 +125,7 @@ function computeTotals(order) {
     htCents,
     vatCents,
     reverseCharge,
+    margin,
     vatLegalMention: reverseCharge ? ((order.vat && order.vat.legalMention) || '') : '',
     vatNumberEu: reverseCharge ? ((order.vat && order.vat.vatNumber) || '') : '',
   };
@@ -267,8 +294,13 @@ async function buildOrderInvoicePdfBuffer({ order, user } = {}) {
       doc.fontSize(10).font('Helvetica-Bold');
       doc.text('Produit', leftX, headerY, { width: colName });
       doc.text('Qté', leftX + colName, headerY, { width: colQty, align: 'right' });
-      doc.text('PU TTC', leftX + colName + colQty, headerY, { width: colPU, align: 'right' });
-      doc.text('Total TTC', leftX + colName + colQty + colPU, headerY, { width: colTotal, align: 'right' });
+      /* « TTC » n'a de sens qu'au régime normal. En autoliquidation les lignes
+         sont HT (la TVA est due par le preneur) et sous le régime de la marge
+         la décomposition n'existe pas : dans les deux cas la mention serait
+         fausse — et sur une facture, une mention de TVA fausse se paie. */
+      const suffixePrix = totals.reverseCharge ? ' HT' : (totals.margin ? '' : ' TTC');
+      doc.text('PU' + suffixePrix, leftX + colName + colQty, headerY, { width: colPU, align: 'right' });
+      doc.text('Total' + suffixePrix, leftX + colName + colQty + colPU, headerY, { width: colTotal, align: 'right' });
       doc.moveDown(0.4);
       doc.font('Helvetica');
 
@@ -319,6 +351,11 @@ async function buildOrderInvoicePdfBuffer({ order, user } = {}) {
         summaryLines.push({ label: 'Total HT (hors consigne)', value: formatEuro(totals.htCents) });
         summaryLines.push({ label: 'TVA — autoliquidation par le preneur', value: formatEuro(0) });
         summaryLines.push({ label: 'Net à payer', value: formatEuro(totals.totalCents) });
+      } else if (totals.margin) {
+        /* Ni ligne « HT », ni ligne « TVA » : l'article 297 E du CGI interdit
+           de faire apparaître la taxe sur une facture soumise au régime de la
+           marge. Un simple total, et la mention légale ci-dessous. */
+        summaryLines.push({ label: 'Total à payer', value: formatEuro(totals.totalCents) });
       } else {
         summaryLines.push({ label: 'Total TTC', value: formatEuro(totals.totalCents) });
         summaryLines.push({ label: 'Total HT (hors consigne)', value: formatEuro(totals.htCents) });
@@ -334,12 +371,29 @@ async function buildOrderInvoicePdfBuffer({ order, user } = {}) {
         doc.moveDown(0.2);
       }
 
+      /* La boucle ci-dessus laisse le curseur dans la colonne des montants
+         (largeur 150). Toute mention écrite ensuite sans position explicite
+         s'y replierait sur quatre lignes. D'où `leftX` et la pleine largeur. */
+      const mention = (txt) => doc.text(txt, leftX, doc.y, { width: tableW });
+
       // Autoliquidation : mention légale + n° TVA de l'acquéreur (obligatoire).
       if (totals.reverseCharge) {
         doc.moveDown(0.5);
         doc.fontSize(9).fillColor('#111827');
-        if (totals.vatNumberEu) doc.text(`N° TVA intracommunautaire de l'acquéreur : ${totals.vatNumberEu}`);
-        if (totals.vatLegalMention) doc.fillColor('#6b7280').text(totals.vatLegalMention);
+        if (totals.vatNumberEu) mention(`N° TVA intracommunautaire de l'acquéreur : ${totals.vatNumberEu}`);
+        if (totals.vatLegalMention) { doc.fillColor('#6b7280'); mention(totals.vatLegalMention); }
+      }
+
+      /* Marge : la mention n'est pas décorative, elle est OBLIGATOIRE. Sans
+         elle, une facture sans TVA apparente ressemble à un oubli ; avec elle,
+         elle justifie l'absence de taxe déductible pour l'acheteur.
+         (art. 297 E du CGI, art. 226-14 de la directive 2006/112/CE) */
+      if (totals.margin) {
+        doc.moveDown(0.5);
+        doc.fontSize(9).fillColor('#111827');
+        mention('Régime particulier — Biens d\'occasion. TVA non récupérable par l\'acquéreur.');
+        doc.fillColor('#6b7280');
+        mention('Article 297 E du CGI — la taxe sur la valeur ajoutée n\'est pas mentionnée séparément.');
       }
 
       doc.moveDown(1);

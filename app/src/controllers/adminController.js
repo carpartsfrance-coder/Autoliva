@@ -38,6 +38,7 @@ const { listRecentSessions, getSessionTimeline } = require('../services/visitorT
 const { hasAbility, getRoleLabel, isComptable, defaultLandingForRole, ROLES } = require('../permissions');
 const brand = require('../config/brand');
 const sourcingStatus = require('../config/sourcingStatus');
+const vatScheme = require('../services/vatScheme');
 
 const ADMIN_LOGIN_BUCKETS = new Map();
 const ADMIN_RESET_BUCKETS = new Map();
@@ -3254,6 +3255,33 @@ async function getAdminOrderDetailPage(req, res, next) {
             relevant: sourcingStatus.PRESHIP_STATUSES.indexOf(orderDoc.status) !== -1,
           };
         })(),
+        tva: (() => {
+          const p = orderDoc.purchase || {};
+          const scheme = String(orderDoc.vatScheme || 'normal');
+          const a = vatScheme.apercu(orderDoc, {});
+          const autoliquidee = !!(orderDoc.vat && orderDoc.vat.reverseCharge);
+          return {
+            scheme,
+            /* Le libellé dit le régime ET son fondement : sur une facture, un
+               régime sans texte n'aide personne à le vérifier plus tard. */
+            label: autoliquidee
+              ? 'Autoliquidation UE (art. 283-1)'
+              : (scheme === 'margin' ? 'TVA sur marge (art. 297 A)' : 'TVA 20 % (taux normal)'),
+            autoliquidee,
+            decidedAt: p.decidedAt ? formatDateTimeFR(p.decidedAt) : '',
+            decidedByName: p.decidedByName || '',
+            supplier: p.supplier || '',
+            invoiceRef: p.invoiceRef || '',
+            supplierRegime: p.supplierRegime || '',
+            purchaseInput: Number.isFinite(p.priceCents) ? (p.priceCents / 100).toFixed(2) : '',
+            baseCents: a.baseCents,
+            tvaNormaleCents: a.tvaNormaleCents,
+            tvaMargeCents: a.tvaMargeCents,
+            economieCents: a.economieCents,
+            margeCommercialeCents: a.margeCommercialeCents,
+            regimesFournisseur: vatScheme.REGIMES_FOURNISSEUR,
+          };
+        })(),
         statusHistory,
         customer,
         customerEmail: user && user.email ? user.email : '',
@@ -3579,6 +3607,106 @@ async function postAdminUpdateOrderSourcing(req, res) {
     if (wantsJsonResponse(req)) return res.status(500).json({ ok: false, error: 'Erreur serveur.' });
     req.session.adminOrderError = 'Erreur lors de la mise à jour de l\'approvisionnement.';
     return res.redirect(`/admin/commandes/${encodeURIComponent(req.params.orderId || '')}`);
+  }
+}
+
+/** Convertit un montant saisi (« 1 234,56 », « 1234.56 ») en centimes. null si vide/invalide. */
+function montantSaisiEnCentimes(valeur) {
+  if (valeur == null) return null;
+  const txt = String(valeur).replace(/\s/g, '').replace(',', '.').trim();
+  if (!txt) return null;
+  const n = Number.parseFloat(txt);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * 100);
+}
+
+/**
+ * Régime de TVA d'une vente — décision manuelle, après réception de la facture
+ * fournisseur.
+ *
+ * Le refus est volontairement bloquant quand la marge n'est pas justifiable :
+ * une facture émise sous marge à tort est un redressement, alors que rester à
+ * 20 % n'est jamais irrégulier (art. 297 C). Entre les deux erreurs possibles,
+ * on choisit toujours celle qui ne coûte que de l'argent.
+ */
+async function postAdminUpdateOrderVatScheme(req, res) {
+  const orderId = req.params.orderId;
+  const echec = (message, code) => {
+    if (wantsJsonResponse(req)) return res.status(code || 400).json({ ok: false, error: message });
+    req.session.adminOrderError = message;
+    return res.redirect(`/admin/commandes/${encodeURIComponent(orderId || '')}`);
+  };
+
+  try {
+    if (mongoose.connection.readyState !== 1) return echec('Base indisponible.', 503);
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return echec('Commande introuvable.', 404);
+
+    const order = await Order.findById(orderId)
+      .select('totalCents consigne vat vatScheme purchase invoice number')
+      .lean();
+    if (!order) return echec('Commande introuvable.', 404);
+
+    const b = req.body || {};
+    const scheme = String(b.vatScheme || '').trim() === 'margin' ? 'margin' : 'normal';
+    const purchaseCents = montantSaisiEnCentimes(b.purchasePrice);
+    const supplierRegime = vatScheme.REGIME_FOURNISSEUR_KEYS.indexOf(String(b.supplierRegime || '')) !== -1
+      ? String(b.supplierRegime)
+      : '';
+
+    if (scheme === 'margin') {
+      const verdict = vatScheme.verifierMarge(order, { purchaseCents, supplierRegime });
+      if (!verdict.ok) return echec(verdict.raison);
+    }
+
+    const adminName = (req.session && req.session.admin
+      && (req.session.admin.displayName || req.session.admin.email)) || 'Admin';
+
+    const set = {
+      vatScheme: scheme,
+      'purchase.decidedAt': new Date(),
+      'purchase.decidedByName': adminName,
+    };
+    /* Seuls les champs RÉELLEMENT envoyés sont écrits. Le formulaire les poste
+       tous, donc vider une case la vide bien ; mais un appel partiel n'efface
+       plus au passage le fournisseur ou la référence de facture — c'est la
+       trace qui justifie la marge en cas de contrôle. */
+    if (b.supplier !== undefined) set['purchase.supplier'] = String(b.supplier || '').trim().slice(0, 200);
+    if (b.invoiceRef !== undefined) set['purchase.invoiceRef'] = String(b.invoiceRef || '').trim().slice(0, 200);
+    if (b.supplierRegime !== undefined) set['purchase.supplierRegime'] = supplierRegime;
+    /* Le prix d'achat se conserve même en régime normal : c'est lui qui donne
+       la marge réelle, et il évite de rouvrir la facture fournisseur si la
+       vente bascule plus tard. */
+    if (purchaseCents != null) set['purchase.priceCents'] = purchaseCents;
+
+    await Order.updateOne({ _id: orderId }, { $set: set });
+
+    const apercu = vatScheme.apercu(
+      { ...order, vatScheme: scheme },
+      { purchaseCents: purchaseCents != null ? purchaseCents : undefined }
+    );
+
+    if (wantsJsonResponse(req)) {
+      return res.json({ ok: true, vatScheme: scheme, apercu });
+    }
+
+    /* On annonce l'effet en euros, pas juste « enregistré » : c'est le seul
+       retour qui permet de repérer une saisie à côté de la plaque (un prix
+       d'achat en HT au lieu de TTC, un zéro en trop). */
+    let msg = scheme === 'margin'
+      ? `TVA sur marge appliquée — TVA due ${(apercu.tvaMargeCents / 100).toFixed(2)} € `
+        + `au lieu de ${(apercu.tvaNormaleCents / 100).toFixed(2)} € `
+        + `(économie ${(apercu.economieCents / 100).toFixed(2)} €).`
+      : 'Vente au taux normal (20 %).';
+    /* Une facture déjà émise porte l'ancien régime : le PDF se régénère à la
+       volée, mais le client, lui, a peut-être déjà reçu l'ancienne version. */
+    if (order.invoice && order.invoice.number) {
+      msg += ' ⚠ La facture ' + order.invoice.number + ' était déjà émise : renvoie-la au client si elle est partie.';
+    }
+    req.session.adminOrderSuccess = msg;
+    return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+  } catch (err) {
+    console.error('[admin] postAdminUpdateOrderVatScheme failed:', err && err.message);
+    return echec('Erreur lors de la mise à jour du régime de TVA.', 500);
   }
 }
 
@@ -12663,6 +12791,7 @@ module.exports = {
   getAdminOrderDetailPage,
   postAdminUpdateOrderStatus,
   postAdminUpdateOrderSourcing,
+  postAdminUpdateOrderVatScheme,
   postAdminUpdateOrderType,
   postAdminMarkOrderConsigneReceived,
   postAdminAddOrderShipment,

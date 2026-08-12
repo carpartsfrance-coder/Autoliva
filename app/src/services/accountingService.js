@@ -29,17 +29,72 @@ function eur(cents) {
   return (n / 100).toFixed(2);
 }
 
+/* `splitVat(totalCents)` a été retiré : il appliquait 20 % à n'importe quel
+   montant, sans regarder le régime de la vente. C'est précisément l'hypothèse
+   qui envoyait au comptable une TVA collectée qui n'était pas due. Le laisser
+   exporté à côté de son remplaçant, c'est garantir qu'il resservira un jour.
+   → utiliser `splitVatCommande(order[, montant])`. */
+
+/** Le régime réellement appliqué à une vente, sous une forme stable pour la compta. */
+function regimeDeCommande(order) {
+  if (order && order.vat && order.vat.reverseCharge) return 'autoliquidation';
+  if (String((order && order.vatScheme) || 'normal') === 'margin') return 'marge';
+  return 'normal';
+}
+
 /**
- * Décompose un TTC en HT + TVA selon le taux par défaut.
- * On arrondit la TVA à 2 décimales puis on déduit HT pour garantir
- * que HT + TVA = TTC à l'euro près.
+ * Décompose une commande en HT + TVA — SELON SON RÉGIME.
+ *
+ * C'est le cœur du problème que ce module avait : il appliquait 20 % à tout,
+ * y compris aux ventes sous marge et aux livraisons autoliquidées. Le CSV
+ * partait donc chez le comptable avec une TVA collectée qui n'existait pas.
+ *
+ *  • normal            → 20 % sur le prix, consigne exclue de la base.
+ *  • marge (297 A)     → 20 % sur (prix de vente − prix d'achat) SEULEMENT.
+ *  • autoliquidation   → aucune TVA collectée, le preneur la déclare.
+ *
+ * `amountCents` permet de décomposer un AVOIR : la TVA à reverser suit la
+ * même proportion que celle qui avait été collectée sur la vente. Sur une
+ * vente sous marge, rembourser 50 % du prix ne reverse pas 50 % du prix en
+ * TVA, mais 50 % de la TVA sur la marge — d'où le prorata plutôt qu'un
+ * nouveau calcul sur le montant remboursé.
+ *
+ * Dans tous les cas HT + TVA = montant, pour que la balance du comptable tombe.
  */
-function splitVat(totalCents) {
-  const ttc = Number(totalCents) || 0;
-  if (ttc <= 0) return { htCents: 0, vatCents: 0, ttcCents: 0 };
-  const vatCents = Math.round(ttc - ttc / (1 + TVA_RATE));
-  const htCents = ttc - vatCents;
-  return { htCents, vatCents, ttcCents: ttc };
+function splitVatCommande(order, amountCents) {
+  const totalCents = Number(order && order.totalCents) || 0;
+  const montant = Number.isFinite(amountCents) ? Number(amountCents) : totalCents;
+  const regime = regimeDeCommande(order);
+
+  if (montant <= 0) return { htCents: 0, vatCents: 0, ttcCents: 0, regime, rate: 0 };
+
+  if (regime === 'autoliquidation') {
+    return { htCents: montant, vatCents: 0, ttcCents: montant, regime, rate: 0 };
+  }
+
+  /* Consigne = caution remboursable → hors base TVA. La facture PDF l'excluait
+     déjà ; l'export ne le faisait pas. Les deux documents décrivent la même
+     vente : ils ne peuvent pas annoncer deux TVA différentes. */
+  const consigneCents = order && order.consigne && Number.isFinite(order.consigne.chargedTotalCents)
+    ? order.consigne.chargedTotalCents
+    : 0;
+  const baseTotale = Math.max(0, totalCents - consigneCents);
+
+  if (regime === 'marge') {
+    const achatCents = order && order.purchase && Number.isFinite(order.purchase.priceCents)
+      ? order.purchase.priceCents
+      : 0;
+    const margeCents = Math.max(0, baseTotale - achatCents);
+    const tvaVente = Math.round(margeCents - margeCents / (1 + TVA_RATE));
+    /* Prorata pour les avoirs (sur la vente entière, `montant` vaut le total
+       et le ratio vaut 1). */
+    const vatCents = totalCents > 0 ? Math.round(tvaVente * (montant / totalCents)) : 0;
+    return { htCents: montant - vatCents, vatCents, ttcCents: montant, regime, rate: TVA_RATE };
+  }
+
+  const baseProratisee = totalCents > 0 ? baseTotale * (montant / totalCents) : 0;
+  const vatCents = Math.round(baseProratisee - baseProratisee / (1 + TVA_RATE));
+  return { htCents: montant - vatCents, vatCents, ttcCents: montant, regime, rate: TVA_RATE };
 }
 
 function getMonthRange(year, month) {
@@ -81,6 +136,60 @@ function refundMethodLabel(method) {
  * ════════════════════════════════════════════════════════════════ */
 
 /**
+ * Étapes d'agrégation qui posent `_tvaCents` sur chaque commande, selon son
+ * régime — la transposition Mongo de `splitVatCommande()`.
+ *
+ * Le tableau de bord additionnait 20 % de tout ce qui passait. Il annonçait
+ * donc une TVA collectée supérieure à la TVA réellement due dès qu'une vente
+ * relevait de la marge ou de l'autoliquidation : le chiffre le plus regardé
+ * du mois était le plus faux.
+ *
+ * TVA = base × 20/120, soit base ÷ 6.
+ */
+function etapesTvaParRegime() {
+  const baseHorsConsigne = {
+    $max: [0, { $subtract: [{ $ifNull: ['$totalCents', 0] }, { $ifNull: ['$consigne.chargedTotalCents', 0] }] }],
+  };
+  return [
+    {
+      $addFields: {
+        _regime: {
+          $cond: [
+            { $eq: ['$vat.reverseCharge', true] },
+            'autoliquidation',
+            { $cond: [{ $eq: ['$vatScheme', 'margin'] }, 'marge', 'normal'] },
+          ],
+        },
+        _baseCents: baseHorsConsigne,
+      },
+    },
+    {
+      $addFields: {
+        _tvaCents: {
+          $switch: {
+            branches: [
+              { case: { $eq: ['$_regime', 'autoliquidation'] }, then: 0 },
+              {
+                case: { $eq: ['$_regime', 'marge'] },
+                then: {
+                  $round: [{
+                    $divide: [
+                      { $max: [0, { $subtract: ['$_baseCents', { $ifNull: ['$purchase.priceCents', 0] }] }] },
+                      6,
+                    ],
+                  }, 0],
+                },
+              },
+            ],
+            default: { $round: [{ $divide: ['$_baseCents', 6] }, 0] },
+          },
+        },
+      },
+    },
+  ];
+}
+
+/**
  * Retourne les KPI principaux pour le mois donné.
  */
 async function getMonthSummary(year, month) {
@@ -89,34 +198,63 @@ async function getMonthSummary(year, month) {
   /* Factures émises sur la période */
   const invoiceAgg = await Order.aggregate([
     { $match: { 'invoice.issuedAt': { $gte: from, $lt: to } } },
+    ...etapesTvaParRegime(),
     {
       $group: {
         _id: null,
         count: { $sum: 1 },
         totalCents: { $sum: { $ifNull: ['$totalCents', 0] } },
+        vatCents: { $sum: '$_tvaCents' },
       },
     },
   ]);
   const invoiceCount = invoiceAgg[0] ? invoiceAgg[0].count : 0;
   const invoiceTtcCents = invoiceAgg[0] ? invoiceAgg[0].totalCents : 0;
-  const invoiceSplit = splitVat(invoiceTtcCents);
+  const invoiceVatCents = invoiceAgg[0] ? invoiceAgg[0].vatCents : 0;
+  const invoiceSplit = { ttcCents: invoiceTtcCents, vatCents: invoiceVatCents, htCents: invoiceTtcCents - invoiceVatCents };
 
   /* Avoirs émis sur la période */
   const creditNoteAgg = await Order.aggregate([
     { $match: { 'creditNotes.issuedAt': { $gte: from, $lt: to } } },
     { $unwind: '$creditNotes' },
     { $match: { 'creditNotes.issuedAt': { $gte: from, $lt: to } } },
+    ...etapesTvaParRegime(),
     {
       $group: {
         _id: null,
         count: { $sum: 1 },
         totalCents: { $sum: { $ifNull: ['$creditNotes.totalCents', 0] } },
+        /* La TVA à reverser suit la proportion de ce qui avait été collecté :
+           un avoir de la moitié du prix annule la moitié de la TVA de la
+           vente, pas 20 % du montant remboursé (faux sous le régime de la
+           marge, et faux aussi sur une vente autoliquidée). */
+        vatCents: {
+          $sum: {
+            $round: [{
+              $multiply: [
+                '$_tvaCents',
+                {
+                  $cond: [
+                    { $gt: [{ $ifNull: ['$totalCents', 0] }, 0] },
+                    { $divide: [{ $ifNull: ['$creditNotes.totalCents', 0] }, '$totalCents'] },
+                    0,
+                  ],
+                },
+              ],
+            }, 0],
+          },
+        },
       },
     },
   ]);
   const creditNoteCount = creditNoteAgg[0] ? creditNoteAgg[0].count : 0;
   const creditNoteTtcCents = creditNoteAgg[0] ? creditNoteAgg[0].totalCents : 0;
-  const creditNoteSplit = splitVat(creditNoteTtcCents);
+  const creditNoteVatCents = creditNoteAgg[0] ? creditNoteAgg[0].vatCents : 0;
+  const creditNoteSplit = {
+    ttcCents: creditNoteTtcCents,
+    vatCents: creditNoteVatCents,
+    htCents: creditNoteTtcCents - creditNoteVatCents,
+  };
 
   /* Remboursements émis sur la période */
   const refundAgg = await Order.aggregate([
@@ -134,9 +272,12 @@ async function getMonthSummary(year, month) {
   const refundCount = refundAgg[0] ? refundAgg[0].count : 0;
   const refundCents = refundAgg[0] ? refundAgg[0].totalCents : 0;
 
-  /* CA net = factures TTC - avoirs TTC */
+  /* CA net = factures TTC - avoirs TTC. La TVA nette se DÉDUIT des deux
+     agrégats ci-dessus : la recalculer sur le net appliquerait 20 % à un
+     montant dont on sait déjà qu'il mélange plusieurs régimes. */
   const netTtcCents = invoiceTtcCents - creditNoteTtcCents;
-  const netSplit = splitVat(netTtcCents);
+  const netVatCents = invoiceVatCents - creditNoteVatCents;
+  const netSplit = { ttcCents: netTtcCents, vatCents: netVatCents, htCents: netTtcCents - netVatCents };
 
   return {
     year: y,
@@ -332,13 +473,13 @@ async function listInvoices({ from, to, page = 1, limit = 50, search = '' } = {}
       .sort({ 'invoice.issuedAt': -1 })
       .skip(skip)
       .limit(safeLimit)
-      .select('_id number invoice totalCents accountType billingAddress molliePaymentId scalapayOrderToken paymentProvider creditNotes refunds')
+      .select('_id number invoice totalCents accountType billingAddress molliePaymentId scalapayOrderToken paymentProvider creditNotes refunds vatScheme purchase vat consigne')
       .lean(),
     Order.countDocuments(query),
   ]);
 
   const rows = docs.map((order) => {
-    const split = splitVat(order.totalCents);
+    const split = splitVatCommande(order);
     return {
       orderId: String(order._id),
       orderNumber: order.number,
@@ -351,6 +492,10 @@ async function listInvoices({ from, to, page = 1, limit = 50, search = '' } = {}
       ttcCents: order.totalCents || 0,
       htCents: split.htCents,
       vatCents: split.vatCents,
+      regime: split.regime,
+      purchaseCents: order.purchase && Number.isFinite(order.purchase.priceCents) ? order.purchase.priceCents : null,
+      supplier: (order.purchase && order.purchase.supplier) || '',
+      supplierInvoiceRef: (order.purchase && order.purchase.invoiceRef) || '',
       hasCreditNotes: Array.isArray(order.creditNotes) && order.creditNotes.length > 0,
       hasRefunds: Array.isArray(order.refunds) && order.refunds.length > 0,
     };
@@ -411,6 +556,13 @@ async function listCreditNotes({ from, to, page = 1, limit = 50, search = '' } =
           billingAddress: 1,
           invoice: 1,
           accountType: 1,
+          /* Le régime de l'avoir est celui de la vente d'origine : un avoir ne
+             requalifie pas l'opération, il l'annule en tout ou partie. */
+          totalCents: 1,
+          vatScheme: 1,
+          purchase: 1,
+          vat: 1,
+          consigne: 1,
           creditNote: '$creditNotes',
         },
       },
@@ -423,10 +575,11 @@ async function listCreditNotes({ from, to, page = 1, limit = 50, search = '' } =
 
   const total = totalArr[0] ? totalArr[0].count : 0;
   const rows = rowsRaw.map((r) => {
-    const split = splitVat(r.creditNote.totalCents);
+    const split = splitVatCommande(r, r.creditNote.totalCents);
     return {
       orderId: String(r._id),
       orderNumber: r.number,
+      regime: split.regime,
       creditNoteNumber: r.creditNote.number || '',
       issuedAt: r.creditNote.issuedAt || null,
       invoiceNumber: r.invoice && r.invoice.number ? r.invoice.number : '',
@@ -585,11 +738,30 @@ async function buildMonthlyCsv(year, month) {
     'TauxTVA',        // 20.00
     'TVA',
     'TTC',
+    /* ── Colonnes ajoutées pour le régime de TVA ────────────────────────────
+     * Sans elles, une vente sous marge et une vente au taux normal se
+     * ressemblaient trait pour trait dans le fichier : le comptable ne
+     * pouvait que supposer 20 % partout. Le régime est désormais explicite,
+     * et le prix d'achat l'accompagne — c'est la base de calcul de la marge
+     * (art. 297 A du CGI), donc la seule façon de vérifier le montant. */
+    'RegimeTVA',      // normal | marge | autoliquidation
+    'PrixAchat',      // renseigné sur les ventes sous marge
+    'BaseTVA',        // assiette réellement taxée (la marge, le cas échéant)
+    'Fournisseur',
+    'FactureFournisseur',
     'ModePaiement',
     'FactureLiee',    // pour les avoirs : n° de la facture initiale
     'Motif',          // pour les avoirs
   ];
   const lines = [csvRow(header)];
+
+  /* Le taux affiché n'est plus une constante : sur une livraison autoliquidée
+     il n'y a pas de taux du tout, et écrire « 20.00 » en face d'une TVA à
+     0,00 € donnait un fichier qui se contredisait lui-même. */
+  const tauxAffiche = (regime) => (regime === 'autoliquidation' ? '0.00' : (TVA_RATE * 100).toFixed(2));
+  /* Assiette réellement taxée : le prix pour une vente normale, la seule marge
+     pour une vente sous marge. C'est le chiffre que le comptable recalcule. */
+  const baseTva = (row) => eur(row.regime === 'autoliquidation' ? 0 : Math.round(row.vatCents / TVA_RATE));
 
   for (const inv of invoiceRows.rows) {
     lines.push(csvRow([
@@ -601,9 +773,14 @@ async function buildMonthlyCsv(year, month) {
       inv.accountType,
       inv.country,
       eur(inv.htCents),
-      (TVA_RATE * 100).toFixed(2),
+      tauxAffiche(inv.regime),
       eur(inv.vatCents),
       eur(inv.ttcCents),
+      inv.regime,
+      inv.purchaseCents == null ? '' : eur(inv.purchaseCents),
+      baseTva(inv),
+      inv.supplier || '',
+      inv.supplierInvoiceRef || '',
       inv.paymentMethod,
       '',
       '',
@@ -620,9 +797,14 @@ async function buildMonthlyCsv(year, month) {
       cn.accountType,
       cn.country,
       '-' + eur(cn.htCents),
-      (TVA_RATE * 100).toFixed(2),
+      tauxAffiche(cn.regime),
       '-' + eur(cn.vatCents),
       '-' + eur(cn.ttcCents),
+      cn.regime,
+      '',
+      '-' + baseTva(cn),
+      '',
+      '',
       '',
       cn.invoiceNumber,
       cn.reason,
@@ -915,7 +1097,8 @@ async function getCreditNotePdfBufferFor(orderId, creditNoteNumber) {
 module.exports = {
   TVA_RATE,
   eur,
-  splitVat,
+  splitVatCommande,
+  regimeDeCommande,
   getMonthRange,
   getMonthSummary,
   getTwelveMonthTrend,

@@ -232,6 +232,8 @@ router.post('/commandes/:orderId/type', requireAdminAuth, adminController.postAd
 router.post('/commandes/:orderId/demande-avis', requireAdminAuth, require('../controllers/reviewsAdminController').postRequestReviewSingle);
 // Approvisionnement de la pièce (édition inline depuis la liste + form détail)
 router.post('/commandes/:orderId/sourcing', requireAdminAuth, adminController.postAdminUpdateOrderSourcing);
+// Régime de TVA de la vente (normal 20 % par défaut, marge décidée au cas par cas)
+router.post('/commandes/:orderId/tva', requireAdminAuth, adminController.postAdminUpdateOrderVatScheme);
 router.post('/commandes/:orderId/consigne/recu', requireAdminAuth, adminController.postAdminMarkOrderConsigneReceived);
 router.post('/commandes/:orderId/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundOrder);
 router.post('/commandes/:orderId/consigne/rembourser', requireAdminAuth, requireAbility('orders.refund'), adminController.postAdminRefundConsigne);

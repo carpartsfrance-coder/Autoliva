@@ -422,6 +422,52 @@ const orderSchema = new mongoose.Schema(
       viesCheckedAt: { type: Date, default: null },
       legalMention: { type: String, default: '', trim: true },
     },
+    /**
+     * Régime de TVA de CETTE vente — décidé au cas par cas, après l'achat.
+     *
+     * ── POURQUOI SUR LA COMMANDE, ET PAS SUR LE PRODUIT ────────────────────
+     *
+     * L'article 297 A du CGI ne subordonne pas la marge au bien, mais au STATUT
+     * DU VENDEUR de la pièce. Or un même fournisseur facture tantôt sous marge,
+     * tantôt en autoliquidation intracommunautaire : le régime est donc une
+     * propriété de la FACTURE D'ACHAT, jamais de la fiche catalogue.
+     *
+     * Et la pièce est sourcée APRÈS la vente : au paiement, on ignore encore
+     * chez qui on achètera. Le régime ne peut donc se décider qu'ici, une fois
+     * la facture fournisseur en main — d'où le défaut `normal`.
+     *
+     * ⚠ NE PAS CONFONDRE avec `Product.vatRecoverable`, qui ne pilote que
+     * l'affichage du prix HT sur la fiche et l'éligibilité à l'autoliquidation.
+     * Ce champ-ci est le SEUL qui détermine la TVA facturée.
+     *
+     * `normal` est toujours défendable : l'article 297 C autorise expressément
+     * à renoncer à la marge, opération par opération et sans formalisme. Ne
+     * rien décider ne coûte qu'une économie manquée, jamais une irrégularité.
+     */
+    vatScheme: { type: String, enum: ['normal', 'margin'], default: 'normal', index: true },
+
+    /**
+     * L'achat correspondant, saisi au moment du règlement fournisseur.
+     *
+     * `priceCents` n'est pas un confort comptable : la marge se calcule sur
+     * (prix de vente − prix d'achat). Sans lui, le régime de la marge est
+     * mathématiquement inapplicable — d'où son caractère obligatoire dès que
+     * `vatScheme` vaut `margin`.
+     */
+    purchase: {
+      supplier: { type: String, default: '', trim: true },
+      priceCents: { type: Number, default: null, min: 0 },
+      invoiceRef: { type: String, default: '', trim: true },
+      /** Ce que porte la facture du fournisseur, tel quel. */
+      supplierRegime: {
+        type: String,
+        enum: ['', 'tva_deductible', 'marge', 'intracom_autoliquidation', 'non_assujetti'],
+        default: '',
+      },
+      decidedAt: { type: Date, default: null },
+      decidedByName: { type: String, default: '', trim: true },
+    },
+
     items: { type: [orderItemSchema], required: true },
     shippingAddress: { type: addressSnapshotSchema, required: true },
     billingAddress: { type: addressSnapshotSchema, required: true },
