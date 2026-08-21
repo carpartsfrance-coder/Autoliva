@@ -63,9 +63,103 @@ const PER_PAGE = 24;
  * le caller bascule alors sur le moteur de classement JS (repli sûr). */
 const ATLAS_SEARCH_INDEX = 'product_search';
 
+/* ── Pourquoi ce disjoncteur existe (panne du 21/08/2026) ────────────────────
+ *
+ * Atlas Search est servi par un processus séparé (`mongot`) du côté du cluster.
+ * Quand il devient injoignable, le `$search` ne renvoie pas une erreur : il
+ * ATTEND. L'erreur observée était « Timed out connecting to localhost:28000
+ * after 20000ms » — vingt secondes pendant lesquelles la requête retient une
+ * connexion du pool.
+ *
+ * Le repli, lui, chargeait le catalogue ENTIER en mémoire pour le classer en
+ * JS : 14 464 produits × ~5,5 Ko ≈ 80 Mo par recherche. Quelques recherches
+ * simultanées suffisaient à saturer le pool (« Couldn't get a connection
+ * within the time limit » sur TOUTES les requêtes du site, pas seulement les
+ * recherches), puis la mémoire — et Render redémarrait l'instance en boucle.
+ *
+ * Autrement dit : le filet de sécurité coûtait plus cher que ce qu'il
+ * remplaçait. Trois garde-fous, du plus grossier au plus fin :
+ *   1. un interrupteur (ATLAS_SEARCH=off) actionnable depuis Render, sans
+ *      déploiement, quand ça brûle ;
+ *   2. ce disjoncteur : après 2 échecs, on cesse d'appeler Atlas pendant
+ *      5 minutes — la casse est bornée à 2 requêtes lentes par fenêtre ;
+ *   3. un plafond sur le repli (voir REPLI_MAX_PRODUITS).
+ */
+const DISJONCTEUR_SEUIL_ECHECS = 2;
+const DISJONCTEUR_PAUSE_MS = 5 * 60 * 1000;
+/* Au-delà, `$search` est abandonné côté serveur. 3 s suffisent très largement :
+   la voie normale répond en quelques dizaines de ms. */
+const ATLAS_TIMEOUT_MS = 3000;
+
+/* Plafond du repli. 1 500 fiches ≈ 8 Mo : assez pour classer correctement une
+   recherche réelle, assez peu pour qu'une rafale ne fasse pas tomber
+   l'instance. */
+const REPLI_MAX_PRODUITS = 1500;
+
+/* Champs sur lesquels le classement JS travaille — donc les seuls qui valent
+   la peine d'être préfiltrés. */
+const REPLI_CHAMPS = ['name', 'sku', 'engineCode', 'brand', 'category', 'description'];
+
+/**
+ * Restreint le repli aux fiches contenant au moins un des mots cherchés.
+ *
+ * Les mots d'un seul caractère sont écartés : ils ne discriminent rien et
+ * ramèneraient tout le catalogue — exactement ce qu'on veut éviter. Si aucun
+ * mot n'est exploitable, on renvoie le filtre d'origine et c'est le plafond
+ * qui protège.
+ */
+function filtreTexteRepli(filter, searchQuery, escapeRegex) {
+  const mots = String(searchQuery || '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((m) => m.length >= 2)
+    .slice(0, 6);
+  if (!mots.length) return filter;
+
+  const ou = [];
+  for (const mot of mots) {
+    const rx = { $regex: escapeRegex(mot), $options: 'i' };
+    for (const champ of REPLI_CHAMPS) ou.push({ [champ]: rx });
+  }
+  /* $and pour ne pas écraser un éventuel $or déjà présent dans `filter`
+     (filtres véhicule, état…). */
+  return { $and: [filter, { $or: ou }] };
+}
+
+const disjoncteur = { echecs: 0, ouvertJusqua: 0 };
+
+function atlasSearchActif() {
+  /* Interrupteur d'exploitation : ATLAS_SEARCH=off sur Render coupe la voie
+     Atlas sans redéployer. Lu à chaque appel, donc effectif au redémarrage
+     de l'instance que Render fait de toute façon en changeant la variable. */
+  if (String(process.env.ATLAS_SEARCH || '').trim().toLowerCase() === 'off') return false;
+  return Date.now() >= disjoncteur.ouvertJusqua;
+}
+
+function signalerEchecAtlas() {
+  disjoncteur.echecs += 1;
+  if (disjoncteur.echecs >= DISJONCTEUR_SEUIL_ECHECS) {
+    disjoncteur.ouvertJusqua = Date.now() + DISJONCTEUR_PAUSE_MS;
+    disjoncteur.echecs = 0;
+    console.warn('[search] disjoncteur OUVERT : Atlas Search ignoré pendant '
+      + (DISJONCTEUR_PAUSE_MS / 60000) + ' min (repli JS plafonné).');
+  }
+}
+
+function signalerSuccesAtlas() {
+  if (disjoncteur.echecs) disjoncteur.echecs = 0;
+}
+
+/** Pour les tests : remet le disjoncteur à zéro. */
+function reinitialiserDisjoncteur() {
+  disjoncteur.echecs = 0;
+  disjoncteur.ouvertJusqua = 0;
+}
+
 async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, perPage }) {
   const q = String(searchQuery || '').trim();
   if (!q) return null;
+  /* Disjoncteur ouvert → on ne tente même pas : c'est tout l'intérêt. */
+  if (!atlasSearchActif()) return null;
 
   const searchStage = {
     $search: {
@@ -99,13 +193,17 @@ async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, per
   });
 
   try {
-    const out = await Product.aggregate(pipeline);
+    /* `maxTimeMS` : sans lui, une requête qui n'obtient pas `mongot` attend
+       vingt secondes en retenant une connexion du pool. */
+    const out = await Product.aggregate(pipeline).option({ maxTimeMS: ATLAS_TIMEOUT_MS });
     const facet = (out && out[0]) || {};
     const products = Array.isArray(facet.results) ? facet.results : [];
     const totalCount = (facet.total && facet.total[0] && facet.total[0].n) || 0;
+    signalerSuccesAtlas();
     return { products, totalCount };
   } catch (err) {
     console.warn('[search] Atlas Search indisponible, repli moteur JS :', err && err.message);
+    signalerEchecAtlas();
     return null;
   }
 }
@@ -494,8 +592,32 @@ async function prepareProductListingData(req, options = {}) {
           products = atlas.products.map(normalizeProduct);
         }
       } else {
-        // 2) Repli (Atlas indisponible) : moteur de classement JS sur scan complet.
-        const matchedProducts = await Product.find(filter).lean();
+        /* 2) Repli (Atlas indisponible) : classement JS.
+         *
+         * Ce chemin chargeait `Product.find(filter)` en ENTIER — 14 464 fiches
+         * à ~5,5 Ko, soit ~80 Mo transférés et gardés en mémoire À CHAQUE
+         * RECHERCHE, puisque le texte cherché n'est pas dans `filter` (il ne
+         * sert qu'au classement). C'est ce qui a mis le site à terre le
+         * 21/08/2026, pas la panne d'Atlas elle-même.
+         *
+         * Deux garde-fous :
+         *   — un préfiltre regex côté MongoDB : le tri se fait toujours en JS,
+         *     mais on ne rapatrie que les fiches qui contiennent au moins un
+         *     des mots cherchés. Le filtrage coûte un balayage côté serveur
+         *     (bon marché) au lieu d'un transfert de 80 Mo (ruineux) ;
+         *   — un plafond dur, pour qu'une requête d'un seul caractère ne
+         *     puisse pas contourner le préfiltre.
+         */
+        const filtreRepli = filtreTexteRepli(filter, searchQuery, escapeRegex);
+        const matchedProducts = await Product.find(filtreRepli)
+          .limit(REPLI_MAX_PRODUITS)
+          .lean();
+        if (matchedProducts.length >= REPLI_MAX_PRODUITS) {
+          /* Jamais silencieux : au plafond, le classement ne voit qu'une
+             partie du catalogue et les résultats sont incomplets. */
+          console.warn('[search] repli plafonné à ' + REPLI_MAX_PRODUITS
+            + ' fiches pour « ' + searchQuery + ' » — résultats potentiellement incomplets.');
+        }
         const rankedProducts = sortRankedProducts(rankProducts(matchedProducts, searchQuery), sort);
         totalCount = rankedProducts.length;
         const totalPagesRaw = Math.max(1, Math.ceil(totalCount / perPage));
@@ -832,5 +954,8 @@ module.exports = {
   prepareProductListingData,
   getVehicleTree,
   searchProductsViaAtlas,
+  filtreTexteRepli,
+  reinitialiserDisjoncteur,
+  REPLI_MAX_PRODUITS,
   PER_PAGE,
 };
