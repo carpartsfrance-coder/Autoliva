@@ -100,6 +100,47 @@ const REPLI_MAX_PRODUITS = 1500;
    la peine d'être préfiltrés. */
 const REPLI_CHAMPS = ['name', 'sku', 'engineCode', 'brand', 'category', 'description'];
 
+/* Mots vides français. Sans eux, « boîte de vitesses » remontait 13 094 fiches
+   sur 14 464 — le « de » matche à peu près toutes les descriptions, et le
+   plafond tronquait ensuite au hasard. Les retirer rend le préfiltre utile
+   plutôt que décoratif. */
+const MOTS_VIDES = new Set([
+  'de', 'du', 'des', 'la', 'le', 'les', 'un', 'une', 'et', 'ou', 'en',
+  'au', 'aux', 'pour', 'avec', 'sur', 'par', 'dans', 'sans',
+]);
+
+/* Variantes accentuées, par lettre de base. Le catalogue est écrit avec ses
+   accents (« Mécatronique », « Boîte de vitesses ») ; les clients tapent sans.
+   Sans cette table, « boite » ne trouvait AUCUNE des 3 293 boîtes — un préfiltre
+   qui exclut la première gamme du site est pire que pas de préfiltre. */
+const VARIANTES_ACCENTS = {
+  a: '[aàâäáã]', c: '[cç]', e: '[eéèêë]', i: '[iîïí]',
+  n: '[nñ]', o: '[oôöóõ]', u: '[uùûüú]', y: '[yÿ]',
+};
+
+/**
+ * Construit un motif insensible aux accents à partir d'un mot déjà nettoyé.
+ *
+ * MongoDB n'aide pas ici : la collation (`strength: 1`), qui rendrait la
+ * comparaison insensible aux accents, ne s'applique PAS à `$regex`. Il faut
+ * donc élargir le motif nous-mêmes, lettre par lettre.
+ *
+ * Le mot est d'abord décomposé en NFD puis débarrassé de ses diacritiques :
+ * « boîte » et « boite » produisent ainsi le même motif, et l'un comme l'autre
+ * trouvent les deux graphies.
+ */
+function motifSansAccent(mot) {
+  const base = String(mot).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  let out = '';
+  for (const c of base) {
+    if (Object.prototype.hasOwnProperty.call(VARIANTES_ACCENTS, c)) out += VARIANTES_ACCENTS[c];
+    else if (/[a-z0-9]/.test(c)) out += c;
+    /* Tout le reste est écarté : aucun métacaractère ne peut atteindre la
+       requête, donc aucun échappement à oublier. */
+  }
+  return out;
+}
+
 /**
  * Restreint le repli aux fiches contenant au moins un des mots cherchés.
  *
@@ -107,19 +148,31 @@ const REPLI_CHAMPS = ['name', 'sku', 'engineCode', 'brand', 'category', 'descrip
  * ramèneraient tout le catalogue — exactement ce qu'on veut éviter. Si aucun
  * mot n'est exploitable, on renvoie le filtre d'origine et c'est le plafond
  * qui protège.
+ *
+ * Aucun paramètre d'échappement : `motifSansAccent` ne laisse passer que
+ * [a-z0-9] et les classes qu'il fabrique lui-même. Un échappement en plus
+ * n'ajouterait rien et laisserait croire qu'il protège quelque chose.
  */
-function filtreTexteRepli(filter, searchQuery, escapeRegex) {
-  const mots = String(searchQuery || '')
+function filtreTexteRepli(filter, searchQuery) {
+  const tous = String(searchQuery || '')
     .split(/[^\p{L}\p{N}]+/u)
-    .filter((m) => m.length >= 2)
-    .slice(0, 6);
+    .filter((m) => m.length >= 2);
+  /* On écarte les mots vides — SAUF s'il ne reste rien : « le » seul doit
+     encore chercher quelque chose plutôt que de tout ramener. */
+  const utiles = tous.filter((m) => !MOTS_VIDES.has(m.toLowerCase()));
+  const mots = (utiles.length ? utiles : tous).slice(0, 6);
   if (!mots.length) return filter;
 
   const ou = [];
   for (const mot of mots) {
-    const rx = { $regex: escapeRegex(mot), $options: 'i' };
+    const motif = motifSansAccent(mot);
+    if (!motif) continue;
+    const rx = { $regex: motif, $options: 'i' };
     for (const champ of REPLI_CHAMPS) ou.push({ [champ]: rx });
   }
+  /* Aucun mot exploitable après nettoyage → on ne restreint rien, et c'est le
+     plafond qui protège. Mieux vaut un résultat large qu'un résultat vide. */
+  if (!ou.length) return filter;
   /* $and pour ne pas écraser un éventuel $or déjà présent dans `filter`
      (filtres véhicule, état…). */
   return { $and: [filter, { $or: ou }] };
@@ -608,7 +661,7 @@ async function prepareProductListingData(req, options = {}) {
          *   — un plafond dur, pour qu'une requête d'un seul caractère ne
          *     puisse pas contourner le préfiltre.
          */
-        const filtreRepli = filtreTexteRepli(filter, searchQuery, escapeRegex);
+        const filtreRepli = filtreTexteRepli(filter, searchQuery);
         const matchedProducts = await Product.find(filtreRepli)
           .limit(REPLI_MAX_PRODUITS)
           .lean();
@@ -955,6 +1008,7 @@ module.exports = {
   getVehicleTree,
   searchProductsViaAtlas,
   filtreTexteRepli,
+  motifSansAccent,
   reinitialiserDisjoncteur,
   REPLI_MAX_PRODUITS,
   PER_PAGE,

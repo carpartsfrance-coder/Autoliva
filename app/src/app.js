@@ -23,6 +23,33 @@ if (isProd && (!sessionSecret || sessionSecret === 'dev_secret_change_me')) {
   throw new Error('SESSION_SECRET manquant en production');
 }
 
+/* ── Sonde de santé — AVANT TOUT LE RESTE ────────────────────────────────────
+ *
+ * Volontairement en première position, et volontairement SANS accès à la base.
+ *
+ * Panne du 21/08/2026 : le port ne s'ouvrait qu'une fois MongoDB connectée.
+ * Render, ne recevant rien, concluait à une instance morte et redémarrait —
+ * ce qui relançait un démarrage qui attendait une base déjà surchargée. La
+ * boucle « ==> Instance restarted » s'auto-entretenait.
+ *
+ * Cette route répond tant que le processus Node est vivant. Elle renvoie
+ * l'état de la base à titre d'INFORMATION, jamais comme condition : un site
+ * dégradé doit rester joignable, sinon on perd aussi les pages statiques, le
+ * back-office et toute chance de diagnostiquer.
+ *
+ * ⚠ À pointer comme « Health Check Path » dans les réglages Render.
+ */
+app.get('/health', (req, res) => {
+  const etats = ['deconnectee', 'connectee', 'connexion', 'deconnexion'];
+  const readyState = require('mongoose').connection.readyState;
+  res.status(200).json({
+    ok: true,
+    base: etats[readyState] || String(readyState),
+    uptimeSec: Math.round(process.uptime()),
+    memoireMo: Math.round(process.memoryUsage().rss / 1048576),
+  });
+});
+
 app.use((req, res, next) => {
   if (isProd) {
     res.set('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');

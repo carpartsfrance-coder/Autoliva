@@ -4,7 +4,7 @@ const Product = require('../models/Product');
 const demoProducts = require('../demoProducts');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildSuggestPayload } = require('../services/search');
-const { searchProductsViaAtlas } = require('../services/productListingService');
+const { searchProductsViaAtlas, filtreTexteRepli } = require('../services/productListingService');
 const { buildHreflangSet } = require('../services/i18n');
 const brand = require('../config/brand');
 
@@ -43,6 +43,11 @@ async function getSearchPage(req, res, next) {
   }
 }
 
+/* Le menu déroulant montre 4 produits, 2 catégories, 2 marques. Classer 400
+   fiches est déjà large ; en classer 14 464 bloquait la boucle d'événements
+   plusieurs secondes par frappe — d'où les « [NODE-CRON] missed execution ». */
+const SUGGEST_MAX_PRODUITS = 400;
+
 async function getSuggest(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -72,11 +77,34 @@ async function getSuggest(req, res, next) {
       // atlas === null → Atlas indisponible : repli sur le moteur JS ci-dessous.
     }
 
-    // Repli moteur JS (Atlas indisponible OU base déconnectée / démo).
+    /* Repli moteur JS (Atlas indisponible OU base déconnectée / démo).
+     *
+     * ⚠ CE CHEMIN A ÉTÉ LA MOITIÉ OUBLIÉE DE LA PANNE DU 21/08/2026.
+     *
+     * Le correctif de /produits (productListingService) avait borné son propre
+     * repli, mais celui-ci — le plus sollicité du site — chargeait toujours
+     * les 14 464 fiches publiées, projection lourde comprise (description,
+     * compatibility, specs, keyPoints…), À CHAQUE FRAPPE : l'autocomplétion
+     * part toutes les 300 ms (public/js/search-autocomplete.js:224).
+     *
+     * Pire, le disjoncteur posé pour éteindre l'incendie ALIMENTAIT celui-ci :
+     * disjoncteur ouvert → `searchProductsViaAtlas` renvoie null immédiatement
+     * → on tombe ici sans même tenter Atlas. Le garde-fou d'un chemin était
+     * l'accélérateur de l'autre.
+     *
+     * Deux bornes, les mêmes qu'ailleurs :
+     *   — le préfiltre regex côté MongoDB (on ne rapatrie que les fiches
+     *     contenant un mot cherché) ;
+     *   — un plafond serré : le menu n'affiche que 4 produits, 2 catégories
+     *     et 2 marques. En classer 400 est déjà généreux ; en classer 14 464
+     *     bloquait la boucle d'événements plusieurs secondes.
+     */
     let products = [];
     if (dbConnected) {
-      products = await Product.find({ isPublished: { $ne: false } })
+      const filtreRepli = filtreTexteRepli({ isPublished: { $ne: false } }, q);
+      products = await Product.find(filtreRepli)
         .select('_id name sku engineCode brand priceCents imageUrl galleryUrls slug category shortDescription description compatibleReferences compatibility specs keyPoints tags')
+        .limit(SUGGEST_MAX_PRODUITS)
         .lean();
     } else {
       products = Array.isArray(demoProducts)
