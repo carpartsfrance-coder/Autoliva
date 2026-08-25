@@ -154,6 +154,11 @@
       <% const gearsVal = (findSpec('rapports') || findSpec('vitesses') || '').replace(/[^0-9]/g, ''); %>
       <% const shippingDelayText = product && product.shippingDelayText ? String(product.shippingDelayText).trim() : ''; %>
       <% const hasConsigne = product && product.consigne && product.consigne.enabled && product.consigne.amountCents > 0; %>
+      <%# hasConsigne  = la pièce est en ÉCHANGE STANDARD (il y a une ancienne pièce à renvoyer).
+          consigneUpfront = la caution est réellement ENCAISSÉE à la commande.
+          Les deux sont indépendants : « sans caution » veut dire échange standard SANS
+          argent avancé — le retour reste obligatoire. Toute phrase qui parle d'argent
+          encaissé ou remboursé doit se baser sur consigneUpfront, JAMAIS sur hasConsigne. %>
       <% const consigneUpfront = hasConsigne && product.consigne.chargeUpfront === true; %>
       <% const consigneAmountEuro = hasConsigne ? (product.consigne.amountCents / 100).toFixed(2).replace('.', ',') : ''; %>
       <% const consigneDelayDays = hasConsigne ? (product.consigne.delayDays || 30) : 30; %>
@@ -623,7 +628,7 @@
                 d'occasion (sans consigne) n'est pas en échange standard — pas d'ancienne
                 pièce à retourner → on masque la ligne. %>
             <% if (hasConsigne) { %>
-            <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">assignment_return</span><%= t('product.trustExchangeConsigne', { amount: consigneAmountEuro }) %></span>
+            <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">assignment_return</span><%= consigneUpfront ? t('product.trustExchangeConsigne', { amount: consigneAmountEuro }) : t('product.trustExchange') %></span>
             <% } %>
             <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">verified_user</span><%= t(scalapayActif ? 'product.trustPayment' : 'product.trustPaymentNoScalapay') %></span>
           </div>
@@ -811,12 +816,12 @@
       <% if (_showIso) { %>
       <div id="echange-standard" style="margin-top: 72px; background: #F7F8FA; border-radius: 20px; padding: 36px 44px;">
         <div style="margin-bottom: 24px;">
-          <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #ED1C24; margin-bottom: 8px;"><%= t('product.noDepositWord') %></div>
+          <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #ED1C24; margin-bottom: 8px;"><%= consigneUpfront ? t('product.consigneRefundable') : t('product.noDepositWord') %></div>
           <div style="font-size: 19px; font-weight: 800; color: #0F1626;"><%= t('product.exchangeHowTitle') %></div>
-          <div style="font-size: 12.5px; font-weight: 500; color: #6B7482; margin-top: 4px;"><%= hasConsigne ? t('product.exchangeHowSubConsigne', { amount: consigneAmountEuro }) : t('product.exchangeHowSub') %></div>
+          <div style="font-size: 12.5px; font-weight: 500; color: #6B7482; margin-top: 4px;"><%= consigneUpfront ? t('product.exchangeHowSubConsigne', { amount: consigneAmountEuro }) : t('product.exchangeHowSub') %></div>
         </div>
         <div class="ap-echange-steps" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px;">
-          <% var _exSteps = [ {t: t('product.exStep1Title'), d: (hasConsigne ? t('product.exStep1TextConsigne', { amount: consigneAmountEuro }) : t('product.exStep1Text'))}, {t: t('product.exStep2Title'), d: t('product.exStep2Text')}, {t: t('product.exStep3Title'), d: t('product.exStep3Text')}, {t: t('product.exStep4Title'), d: t('product.exStep4Text')} ]; %>
+          <% var _exSteps = [ {t: t('product.exStep1Title'), d: (consigneUpfront ? t('product.exStep1TextConsigne', { amount: consigneAmountEuro }) : t('product.exStep1Text'))}, {t: t('product.exStep2Title'), d: t('product.exStep2Text')}, {t: t('product.exStep3Title'), d: t('product.exStep3Text')}, {t: t('product.exStep4Title'), d: t('product.exStep4Text')} ]; %>
           <% _exSteps.forEach((st, i) => { %>
             <div style="display: flex; align-items: flex-start; gap: 13px;">
               <span style="width: 32px; height: 32px; border-radius: 999px; background: #15213B; color: #FFFFFF; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><%= i + 1 %></span>
@@ -826,7 +831,7 @@
         </div>
         <div style="display: inline-flex; align-items: center; gap: 8px; margin-top: 20px; background: #E4F5EC; border-radius: 10px; padding: 10px 14px;">
           <span class="material-symbols-outlined ap-fill" style="font-size: 16px; color: #128A52;">check_circle</span>
-          <span style="font-size: 12.5px; font-weight: 700; color: #128A52;"><%= hasConsigne ? t('product.depositNote', { amount: consigneAmountEuro, days: consigneDelayDays }) : t('product.noDepositNote') %></span>
+          <span style="font-size: 12.5px; font-weight: 700; color: #128A52;"><%= consigneUpfront ? t('product.depositNote', { amount: consigneAmountEuro, days: consigneDelayDays }) : t('product.noDepositNote') %></span>
         </div>
       </div>
       <% } %>
