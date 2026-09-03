@@ -257,20 +257,40 @@ function buildFeedXml(items) {
   return lines.join('\n');
 }
 
-// Cache mémoire process — 1h
+/* Cache mémoire process.
+ *
+ * Mesuré en production (08/2026) : 10 s et 28 Mo par reconstruction, les
+ * 14 464 fiches chargées avec leur description. Deux problèmes :
+ *   1. le cache d'une heure expirait ~24 fois par jour, chaque expiration
+ *      valant une reconstruction pendant laquelle tout le site ralentissait ;
+ *   2. aucun verrou : deux demandes pendant une reconstruction lançaient DEUX
+ *      reconstructions (58 Mo en mémoire, deux fois le travail).
+ * Google Merchant relit le flux selon SON calendrier (typiquement quelques fois
+ * par jour), pas selon notre cache : 3 h ne changent rien pour lui. Le stock
+ * du site n'est de toute façon pas le stock réel (sourcing à la commande). */
 let cache = { xml: null, builtAt: 0 };
-const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
+let constructionEnCours = null;
 
 async function buildFeedCached() {
   const now = Date.now();
   if (cache.xml && now - cache.builtAt < CACHE_TTL_MS) return cache.xml;
-  const products = await module.exports.loadProducts();
-  const items = products.map(productToFeedItem).filter(Boolean);
-  // Tri stable par id pour des diffs propres
-  items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-  const xml = buildFeedXml(items);
-  cache = { xml, builtAt: now };
-  return xml;
+  /* Verrou anti-ruée : les demandes concurrentes partagent UNE construction. */
+  if (constructionEnCours) return constructionEnCours;
+  constructionEnCours = (async () => {
+    const products = await module.exports.loadProducts();
+    const items = products.map(productToFeedItem).filter(Boolean);
+    // Tri stable par id pour des diffs propres
+    items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const xml = buildFeedXml(items);
+    cache = { xml, builtAt: Date.now() };
+    return xml;
+  })();
+  try {
+    return await constructionEnCours;
+  } finally {
+    constructionEnCours = null;
+  }
 }
 
 module.exports = async function googleMerchantFeed(req, res) {

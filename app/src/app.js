@@ -369,6 +369,30 @@ app.get('/favicon.ico', (req, res) => {
    "Impossible de lire le sitemap" et le CDN ne peut plus cacher la réponse.
    Ces handlers n'ont pas besoin de session, ni de cart, ni de res.locals
    applicatifs : ils interrogent directement les modèles Mongoose. */
+/* Limiteur dédié aux routes de crawl (sitemaps, flux Merchant).
+ *
+ * Pourquoi (diagnostic du 08/2026) : ces routes sont montées AVANT le
+ * limiteur général `publicSiteLimiter` (plus bas), donc aucun robot n'y était
+ * freiné. Or elles sont les plus coûteuses du site : /sitemap-vehicles.xml ne
+ * finissait pas (>120 s), le flux Merchant pèse 28 Mo, /sitemap-products.xml
+ * 11 Mo. Mesuré : un seul appel suffisait à faire passer /produits de 2 s à
+ * 8 s pour tous les visiteurs.
+ *
+ * Volontairement SANS exception par user-agent : n'importe qui peut se
+ * déclarer « Googlebot ». Google demande un sitemap quelques fois par jour,
+ * jamais vingt fois en dix minutes ; un vrai crawler n'est pas gêné, un
+ * scraper l'est. Les caches et verrous posés sur chaque route font le reste. */
+const crawlerRoutesLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  /* Une passe complète = l'index + ses 8 sous-sitemaps, soit ~9 requêtes.
+     30 par 10 min et par IP laisse trois passes à un crawler pressé. */
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => res.status(429).type('text/plain').send('Trop de requêtes sur cette ressource, réessayez dans quelques minutes.'),
+});
+app.use(['/sitemap.xml', /^\/sitemap-.*\.xml$/, '/google-merchant-feed.xml'], crawlerRoutesLimiter);
+
 app.get('/sitemap.xml', seoController.getSitemapXml);
 app.get('/sitemap-pages.xml', seoController.getSitemapPages);
 app.get('/sitemap-categories.xml', seoController.getSitemapCategories);
@@ -426,6 +450,11 @@ app.use(
       sessionOptions.store = MongoStore.create({
         mongoUrl,
         ttl: 30 * 24 * 60 * 60,
+        /* Avec `rolling: true`, express-session « touche » la session à
+           chaque réponse pour prolonger le cookie ; sans `touchAfter`,
+           connect-mongo réécrit alors le document Mongo à CHAQUE page vue.
+           Une fois par jour suffit largement pour un TTL de 30 jours. */
+        touchAfter: 24 * 60 * 60,
       });
     }
 
@@ -515,7 +544,25 @@ app.use((req, res, next) => {
   const accountTypeFromSession = req.session.accountType === 'pro' ? 'pro' : 'particulier';
   const accountType = accountTypeFromUser || accountTypeFromSession;
 
-  req.session.accountType = accountType;
+  /* N'écrire en session QUE si cela change quelque chose.
+   *
+   * Pourquoi (diagnostic du 08/2026) : cette ligne écrivait `accountType`
+   * à CHAQUE requête, y compris « particulier » (la valeur par défaut) dans
+   * une session encore vierge. Or `saveUninitialized: false` ne protège que
+   * les sessions dans lesquelles rien n'a été écrit : dès la première page,
+   * tout visiteur, robot compris, se retrouvait persisté 30 jours dans Mongo.
+   * Résultat mesuré : 1 897 283 sessions, dont 92 % vides, créées au rythme
+   * de 52 000 à 76 000 par jour ; et le cron horaire des paniers abandonnés
+   * devait toutes les relire.
+   *
+   * Le défaut « particulier » se déduit déjà à la lecture (ligne ci-dessus) :
+   * il n'a aucune raison d'exister en base. On n'écrit donc que « pro », ou
+   * un retour à « particulier » quand la session portait autre chose. */
+  if (accountType === 'pro') {
+    if (req.session.accountType !== 'pro') req.session.accountType = 'pro';
+  } else if (req.session.accountType !== undefined && req.session.accountType !== 'particulier') {
+    req.session.accountType = 'particulier';
+  }
 
   const cartItemCount = Object.values(cart.items).reduce(
     (sum, item) => sum + (Number(item && item.quantity) || 0),

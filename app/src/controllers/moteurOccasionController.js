@@ -15,6 +15,7 @@
  * captureSource=landing_moteurs).
  */
 
+const formTimestamp = require('../services/formTimestamp');
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 
@@ -470,9 +471,8 @@ async function renderPage(res, req, opts) {
 
 async function getLanding(req, res, next) {
   try {
-    if (req.session && typeof req.session === 'object') {
-      req.session.moteurFormTs = Date.now();
-    }
+    /* Cookie, pas session : voir services/formTimestamp.js */
+    formTimestamp.poser(res);
     return await renderPage(res, req, { form: buildInitialForm(req) });
   } catch (err) {
     return next(err);
@@ -536,7 +536,7 @@ async function postDevis(req, res, next) {
     }
 
     // Anti double-submit session (800ms)
-    const sessionTs = req.session && typeof req.session.moteurFormTs === 'number' ? req.session.moteurFormTs : 0;
+    const sessionTs = formTimestamp.lire(req);
     if (sessionTs && Date.now() - sessionTs < 800) {
       return await renderPage(res, req, {
         form,
@@ -799,9 +799,8 @@ async function postDevis(req, res, next) {
       }
     }).catch(() => {});
 
-    if (req.session && typeof req.session === 'object') {
-      req.session.moteurFormTs = Date.now();
-    }
+    /* Cookie, pas session : voir services/formTimestamp.js */
+    formTimestamp.poser(res);
 
     return await renderPage(res, req, {
       form: buildInitialForm({ query: {} }),

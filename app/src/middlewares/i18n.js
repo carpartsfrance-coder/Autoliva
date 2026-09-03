@@ -66,8 +66,19 @@ function i18nMiddleware(req, res, next) {
     const inCheckoutTunnel = pathLower === '/panier' || pathLower.startsWith('/panier/')
       || pathLower === '/commande' || pathLower.startsWith('/commande/');
     if (!inCheckoutTunnel) {
-      if (isGerman) req.session.preferredLang = 'de';
-      else if (!isEnglish) req.session.preferredLang = 'fr';
+      /* N'écrire QUE si la valeur change. Écrire « fr » (le défaut) dans une
+       * session vierge suffisait à la persister 30 jours en base pour chaque
+       * visiteur, robot compris : c'était, avec `accountType`, la cause des
+       * 1,9 million de sessions dont 92 % vides (diagnostic du 08/2026).
+       * Le tunnel lit déjà `preferredLang === 'de' ? 'de' : 'fr'`
+       * (services/i18n.js) : une valeur absente vaut « fr ». */
+      if (isGerman) {
+        if (req.session.preferredLang !== 'de') req.session.preferredLang = 'de';
+      } else if (!isEnglish) {
+        if (req.session.preferredLang !== undefined && req.session.preferredLang !== 'fr') {
+          req.session.preferredLang = 'fr';
+        }
+      }
     }
   }
 

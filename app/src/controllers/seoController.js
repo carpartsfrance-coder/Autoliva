@@ -156,7 +156,40 @@ async function buildCategoriesUrls(req, dbConnected) {
   return urls;
 }
 
+/* Cache + verrou pour le sitemap produits.
+   Mesuré en production : 4,7 s et 11 Mo par appel, reconstruit à CHAQUE
+   demande, et cette route est montée hors du limiteur de débit. Un crawler un
+   peu insistant la reconstruisait en boucle. 30 min de cache : une fiche
+   publiée apparaît dans le sitemap au plus une demi-heure plus tard, ce qui
+   ne change rien à son indexation. */
+const PRODUCTS_URLS_CACHE = { value: null, expiresAt: 0, baseUrl: null };
+const PRODUCTS_URLS_TTL_MS = 30 * 60 * 1000;
+let PRODUCTS_URLS_EN_COURS = null;
+
 async function buildProductsUrls(req, baseUrl, dbConnected) {
+  const now = Date.now();
+  if (dbConnected && PRODUCTS_URLS_CACHE.value && PRODUCTS_URLS_CACHE.expiresAt > now
+      && PRODUCTS_URLS_CACHE.baseUrl === baseUrl) {
+    return PRODUCTS_URLS_CACHE.value;
+  }
+  if (dbConnected && PRODUCTS_URLS_EN_COURS) return PRODUCTS_URLS_EN_COURS;
+  const construction = buildProductsUrlsSansCache(req, baseUrl, dbConnected).then((urls) => {
+    if (dbConnected) {
+      PRODUCTS_URLS_CACHE.value = urls;
+      PRODUCTS_URLS_CACHE.expiresAt = Date.now() + PRODUCTS_URLS_TTL_MS;
+      PRODUCTS_URLS_CACHE.baseUrl = baseUrl;
+    }
+    return urls;
+  });
+  if (dbConnected) PRODUCTS_URLS_EN_COURS = construction;
+  try {
+    return await construction;
+  } finally {
+    if (PRODUCTS_URLS_EN_COURS === construction) PRODUCTS_URLS_EN_COURS = null;
+  }
+}
+
+async function buildProductsUrlsSansCache(req, baseUrl, dbConnected) {
   let products = [];
   if (dbConnected) {
     products = await Product.find({ isPublished: { $ne: false } })
@@ -199,48 +232,121 @@ async function buildProductsUrls(req, baseUrl, dbConnected) {
 const VEHICLE_URLS_CACHE = { value: null, expiresAt: 0 };
 const VEHICLE_URLS_TTL_MS = 10 * 60 * 1000; // 10 min
 
+/* Verrou anti-ruée : plusieurs crawlers demandant le même sitemap pendant une
+   reconstruction partagent UNE promesse au lieu de lancer N reconstructions. */
+let VEHICLE_URLS_EN_COURS = null;
+
+/**
+ * Construit les URLs /pieces-auto/:marque[/:modele[/:categorie]] en UNE
+ * agrégation.
+ *
+ * Pourquoi (diagnostic du 08/2026) : l'ancienne version bouclait sur chaque
+ * marque puis chaque modèle et faisait un `countDocuments` par étape, soit
+ * ~2 000 requêtes séquentielles, chacune un balayage complet des 14 464 fiches
+ * (regex sur `compatibility`, non indexé). Mesuré en production : la route NE
+ * FINISSAIT PAS (coupée à 120 s), et pendant qu'elle tournait, /produits
+ * passait de 2 s à 8 s pour tout le monde. Google la redemande régulièrement ;
+ * chaque fois, le site ralentissait.
+ *
+ * Une seule agrégation `$unwind compatibility` + `$group (marque, modèle)`
+ * donne les mêmes informations (combien de fiches par couple, et quelles
+ * catégories) en 683 ms mesurés sur la même base.
+ *
+ * Équivalence avec l'ancien calcul : il comparait marque et modèle en regex
+ * exacte insensible à la casse (`^X$`, option i). On groupe donc sur les
+ * valeurs passées en minuscules et on les rapproche de `nameLower` renvoyé
+ * par listMakes().
+ */
 async function buildVehiclesUrls(req, baseUrl, dbConnected) {
   if (!dbConnected) return [];
-  const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
   const now = Date.now();
-  /* Cache hit : on retourne la liste précalculée si elle n'est pas expirée.
-   * NB : on cache par baseUrl (clé composite) pour gérer le cas où le
-   * site est servi depuis des hosts différents (rare mais possible). */
   if (VEHICLE_URLS_CACHE.value && VEHICLE_URLS_CACHE.expiresAt > now
       && VEHICLE_URLS_CACHE.baseUrl === baseUrl) {
     return VEHICLE_URLS_CACHE.value;
   }
-  const urls = [];
-  try {
-    const vehicleService = require('../services/vehicleLandingService');
-    const makes = await vehicleService.listMakes();
-    for (const make of makes) {
-      const makeCount = await vehicleService.countCompatibleProducts({ make: make.name });
-      if (makeCount === 0) continue;
-      urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}`), lastmod: '' });
-      for (const model of (make.models || [])) {
-        const modelCount = await vehicleService.countCompatibleProducts({ make: make.name, model: model.name });
-        if (modelCount === 0) continue;
-        urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}`), lastmod: '' });
-        const cats = await vehicleService.listCategorySlugsForVehicle({ make: make.name, model: model.name });
-        for (const cat of cats) {
-          urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}/${cat.slug}`), lastmod: '' });
+  if (VEHICLE_URLS_EN_COURS) return VEHICLE_URLS_EN_COURS;
+
+  VEHICLE_URLS_EN_COURS = (async () => {
+    const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
+    const urls = [];
+    try {
+      const vehicleService = require('../services/vehicleLandingService');
+      const Category = require('../models/Category');
+      const [makes, couples, categories] = await Promise.all([
+        vehicleService.listMakes(),
+        Product.aggregate([
+          { $match: { isPublished: { $ne: false } } },
+          { $unwind: '$compatibility' },
+          {
+            $project: {
+              make: { $toLower: { $trim: { input: { $ifNull: ['$compatibility.make', ''] } } } },
+              model: { $toLower: { $trim: { input: { $ifNull: ['$compatibility.model', ''] } } } },
+              category: { $ifNull: ['$category', ''] },
+            },
+          },
+          { $match: { make: { $ne: '' } } },
+          {
+            $group: {
+              _id: { make: '$make', model: '$model' },
+              n: { $sum: 1 },
+              cats: { $addToSet: '$category' },
+            },
+          },
+        ]),
+        Category.find({ isActive: { $ne: false } }).select('name slug').lean(),
+      ]);
+
+      /* Index (marque : total) et (marque|modèle : catégories) depuis le résultat. */
+      const parMarque = new Map();
+      const parCouple = new Map();
+      for (const row of couples) {
+        const make = row._id.make;
+        const model = row._id.model;
+        parMarque.set(make, (parMarque.get(make) || 0) + row.n);
+        if (model) parCouple.set(make + '|' + model, row.cats || []);
+      }
+      /* Nom exact de catégorie produit vers slug de Category, comme
+         listCategorySlugsForVehicle le faisait via `name: { $in }`. */
+      const slugParNomCategorie = new Map();
+      for (const c of categories) {
+        if (c.name && c.slug) slugParNomCategorie.set(c.name, { name: c.name, slug: c.slug });
+      }
+
+      for (const make of makes) {
+        if (!(parMarque.get(make.nameLower) > 0)) continue;
+        urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}`), lastmod: '' });
+        for (const model of (make.models || [])) {
+          const cats = parCouple.get(make.nameLower + '|' + model.nameLower);
+          if (!cats) continue;
+          urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}`), lastmod: '' });
+          const slugs = cats
+            .map((nom) => slugParNomCategorie.get(nom))
+            .filter(Boolean)
+            .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+          for (const cat of slugs) {
+            urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}/${cat.slug}`), lastmod: '' });
+          }
         }
       }
+    } catch (err) {
+      console.error('[sitemap] vehicle landings : erreur ignorée :', err && err.message ? err.message : err);
+      // Version cachée même expirée plutôt qu'un sitemap vide.
+      if (VEHICLE_URLS_CACHE.value && VEHICLE_URLS_CACHE.baseUrl === baseUrl) {
+        return VEHICLE_URLS_CACHE.value;
+      }
+      return [];
     }
-  } catch (err) {
-    console.error('[sitemap] vehicle landings : erreur ignorée :', err && err.message ? err.message : err);
-    // En cas d'erreur, si on a une version cachée même expirée, on la sert
-    // plutôt que de retourner un sitemap vide.
-    if (VEHICLE_URLS_CACHE.value && VEHICLE_URLS_CACHE.baseUrl === baseUrl) {
-      return VEHICLE_URLS_CACHE.value;
-    }
-    return [];
+    VEHICLE_URLS_CACHE.value = urls;
+    VEHICLE_URLS_CACHE.expiresAt = Date.now() + VEHICLE_URLS_TTL_MS;
+    VEHICLE_URLS_CACHE.baseUrl = baseUrl;
+    return urls;
+  })();
+
+  try {
+    return await VEHICLE_URLS_EN_COURS;
+  } finally {
+    VEHICLE_URLS_EN_COURS = null;
   }
-  VEHICLE_URLS_CACHE.value = urls;
-  VEHICLE_URLS_CACHE.expiresAt = now + VEHICLE_URLS_TTL_MS;
-  VEHICLE_URLS_CACHE.baseUrl = baseUrl;
-  return urls;
 }
 
 async function buildReferencesUrls(baseUrl, dbConnected) {
@@ -637,3 +743,7 @@ module.exports = {
   getSitemapBlog,
   getSitemapBlogDe,
 };
+
+/* Exposé pour les tests d'équivalence et de cache (pas une API). */
+module.exports.__test = { buildVehiclesUrls, buildProductsUrls };
+
