@@ -1,4 +1,8 @@
 'use strict';
+
+/* Charge .env comme les autres scripts du projet : sans ça il fallait
+   repasser OPENAI_API_KEY et MONGODB_URI à la main sur chaque appel. */
+require('dotenv').config();
 /* Traduction DE CIBLÉE des champs fiche ajoutés au calque en Phase B :
  *   - shippingDelayText  (ex. « Expédition sous 2 semaines »)
  *   - badges.topLeft / badges.condition / badges.cards (badges libres admin)

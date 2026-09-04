@@ -1,4 +1,8 @@
 'use strict';
+
+/* Charge .env comme les autres scripts du projet : sans ça il fallait
+   repasser OPENAI_API_KEY et MONGODB_URI à la main sur chaque appel. */
+require('dotenv').config();
 /* Job de traduction DE des fiches produit — remplit Product.localizations.de
  * via TA clé OpenAI. Reprend automatiquement (saute les fiches déjà traduites).
  *
