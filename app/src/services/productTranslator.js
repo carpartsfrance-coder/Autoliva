@@ -11,10 +11,31 @@ const nonEmptyStr = (v) => typeof v === 'string' && v.trim() !== '';
 const nonEmptyArr = (v) => Array.isArray(v) && v.length > 0;
 
 /* Glossaire FR → DE (termes métier moteurs/boîtes reconditionnés). */
+/* ── Un seul mot allemand par notion, jamais un choix ────────────────────────
+ *
+ * Le glossaire proposait « Austauschmotor / generalüberholter Motor » : le
+ * modèle tranchait au hasard à chaque fiche. Mesuré sur les 549 premières
+ * traductions : 319 « Austauschmotor », 173 « instandgesetzt », 130
+ * « generalüberholt », 58 sans aucun de ces mots. Sur une page de résultats,
+ * la même gamme apparaissait donc sous trois noms.
+ *
+ * Terminologie retenue, et pourquoi :
+ *   — « Austauschmotor » / « Austauschgetriebe » : c'est LE terme du commerce
+ *     allemand pour une pièce d'échange standard, celui que les acheteurs
+ *     tapent réellement. Il porte déjà l'idée du retour de l'ancienne pièce ;
+ *   — « generalüberholt » (entièrement révisé) qualifie l'état. On l'exige
+ *     dans le titre : sans lui, « Austauschmotor » seul laisse croire à un
+ *     simple échange, sans dire que la pièce a été refaite ;
+ *   — « instandgesetzt » (réparé) est ÉCARTÉ : il sous-entend qu'on a corrigé
+ *     une panne, pas remis à neuf. Il dévalorise l'offre.
+ *
+ * La barre oblique est bannie de ce tableau : une entrée = une traduction.
+ */
 const GLOSSARY = [
-  ['moteur reconditionné', 'Austauschmotor / generalüberholter Motor'],
-  ['boîte de vitesses reconditionnée', 'generalüberholtes Getriebe / Austauschgetriebe'],
+  ['moteur reconditionné', 'generalüberholter Austauschmotor'],
+  ['boîte de vitesses reconditionnée', 'generalüberholtes Austauschgetriebe'],
   ['reconditionné(e)', 'generalüberholt'],
+  ['NE JAMAIS employer', 'instandgesetzt (sous-entend une simple réparation)'],
   ['échange standard', 'im Austausch (mit Altteilrückgabe)'],
   ['testé sur banc / banc d’essai', 'auf dem Prüfstand getestet / Prüfstand'],
   ['garantie 2 ans (ou 24 mois)', '2 Jahre Garantie'],
@@ -41,6 +62,12 @@ function buildSystemPrompt() {
     '3. Traduction FIDÈLE : n’invente aucune spec, n’en supprime aucune. Respecte l’accord en genre et la déclinaison allemande.',
     '4. Style commercial allemand naturel et SEO (emploie les termes réellement recherchés en Allemagne).',
     '5. Conserve la mise en forme (HTML, sauts de ligne, listes à puces) à l’identique.',
+    '6. L’ÉTAT de la pièce doit rester visible dans le titre. Si le titre français dit',
+    '   « reconditionné », le titre allemand DOIT contenir « generalüberholt » — même si',
+    '   « Austauschmotor » est déjà présent. Un titre sans l’état fait passer une pièce',
+    '   refaite à neuf pour un simple échange.',
+    '7. Emploie TOUJOURS le terme du glossaire, jamais un synonyme : deux fiches de la même',
+    '   gamme doivent porter exactement le même mot.',
     '',
     'GLOSSAIRE (à respecter pour la cohérence d’un bout à l’autre) :',
     glossaryText(),

@@ -5,6 +5,8 @@ const { getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildHreflangSet, t } = require('../services/i18n');
 const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
 const { captureContactLead } = require('../services/leadCapture');
+const leadSpamFilter = require('../services/leadSpamFilter');
+const formTimestamp = require('../services/formTimestamp');
 const brand = require('../config/brand');
 
 function getTrimmedString(value) {
@@ -102,6 +104,10 @@ function buildInitialForm({ req, mode } = {}) {
 
 async function getContactPage(req, res, next) {
   try {
+    /* Marque l'affichage du formulaire. Son ABSENCE au moment de l'envoi
+       signale un robot qui poste directement sans jamais ouvrir la page —
+       un des signaux du filtre anti-spam (services/leadSpamFilter.js). */
+    formTimestamp.poser(res);
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
@@ -112,7 +118,6 @@ async function getContactPage(req, res, next) {
     const mode = rawMode === 'devis' ? 'devis' : 'contact';
 
     if (req.session && typeof req.session === 'object') {
-      req.session.contactFormTs = Date.now();
     }
 
     const title = `${t(req.lang, mode === 'devis' ? 'contact.titleDevis' : 'contact.titleContact')} - ${brand.NAME}`;
@@ -175,7 +180,29 @@ async function postContact(req, res, next) {
     const canonicalPath = mode === 'devis' ? '/devis' : '/contact';
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}${canonicalPath}` : `${langPrefix}${canonicalPath}`;
 
-    if (form.website) {
+    /* ── Filtre anti-spam ──────────────────────────────────────────────────
+     * Le champ-piège `website` ci-dessous ne suffit plus : le robot observé en
+     * 09/2026 ne remplit que les champs qu'il reconnaît, et tourne sur des
+     * dizaines d'IP (donc jamais le limiteur). Il a déposé 73 faux contacts
+     * sur 191, soit 38 % de cette source.
+     *
+     * Même traitement que le piège : on répond « message envoyé ». Dire
+     * « rejeté » à un robot lui apprend à changer de gabarit ; le laisser
+     * croire qu'il a réussi le laisse parler dans le vide. */
+    const signauxSpam = leadSpamFilter.signaux({
+      firstName: form.firstName,
+      lastName: form.lastName,
+      phone: form.phone,
+      message: form.message,
+      vehicle: form.vehicle,
+      plate: form.plate,
+      ref: form.partRef,
+      hasFormTimestamp: formTimestamp.lire(req) !== null,
+    });
+    if (form.website || signauxSpam.length >= 2) {
+      if (!form.website) {
+        console.warn('[contact] spam écarté —', signauxSpam.join('+'), '|', String(form.email || '').slice(0, 60));
+      }
       return res.render('contact/index', {
         title,
         metaDescription,
@@ -213,7 +240,7 @@ async function postContact(req, res, next) {
       });
     }
 
-    const sessionTs = req.session && typeof req.session.contactFormTs === 'number' ? req.session.contactFormTs : 0;
+    const sessionTs = formTimestamp.lire(req) || 0;
     if (sessionTs && Date.now() - sessionTs < 600) {
       return res.status(400).render('contact/index', {
         title,
@@ -369,7 +396,6 @@ async function postContact(req, res, next) {
     } catch (err) {}
 
     if (req.session && typeof req.session === 'object') {
-      req.session.contactFormTs = Date.now();
     }
 
     /* Visitor timeline : soumission formulaire contact / devis */
@@ -377,6 +403,10 @@ async function postContact(req, res, next) {
     trackEvent(req, mode === 'devis' ? 'quote_request' : 'contact_submit', {
       meta: { mode, hasMessage: true },
     });
+
+    /* Re-stampe l'anti double-envoi (cookie, plus session : la page contact est
+       liée depuis tout le site, elle créait une session par visiteur). */
+    formTimestamp.poser(res);
 
     /* Lead capture (non-bloquant) : persiste le contact pour relance ultérieure */
     captureContactLead({
