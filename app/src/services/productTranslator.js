@@ -35,10 +35,27 @@ const GLOSSARY = [
   ['moteur reconditionné', 'generalüberholter Austauschmotor'],
   ['boîte de vitesses reconditionnée', 'generalüberholtes Austauschgetriebe'],
   ['reconditionné(e)', 'generalüberholt'],
+  /* « occasion » est un ADJECTIF : il s'accorde à la pièce, il ne la nomme pas.
+     Sans cette précision, une boîte de vitesses d'occasion devenait un
+     « Gebrauchtmotor » — un moteur d'occasion. */
+  ["d'occasion (adjectif, toute pièce)", 'gebraucht'],
+  ["moteur d'occasion", 'Gebrauchtmotor'],
+  ["boîte (de vitesses) d'occasion", 'Gebrauchtgetriebe'],
+  ["d'occasion contrôlé(e) / testé(e)", 'geprüft gebraucht'],
+  ['neuf / neuve', 'neu'],
   ['NE JAMAIS employer', 'instandgesetzt (sous-entend une simple réparation)'],
   ['échange standard', 'im Austausch (mit Altteilrückgabe)'],
   ['testé sur banc / banc d’essai', 'auf dem Prüfstand getestet / Prüfstand'],
   ['garantie 2 ans (ou 24 mois)', '2 Jahre Garantie'],
+  /* Gammes principales d'Autoliva. Sans elles, le modele inventait :
+     « Transfergetriebe » au lieu de « Verteilergetriebe » (le terme reellement
+     employe et cherche en Allemagne) — c'est ce qui est arrive aux categories. */
+  ['boîte de transfert', 'Verteilergetriebe'],
+  ['boîte de vitesses', 'Getriebe'],
+  ['boîte automatique', 'Automatikgetriebe'],
+  ['boîte manuelle', 'Schaltgetriebe'],
+  ['boîte à double embrayage', 'Doppelkupplungsgetriebe'],
+  ['différentiel', 'Differenzial'],
   ['pont avant', 'Vorderachsdifferenzial'],
   ['pont arrière', 'Hinterachsdifferenzial'],
   ['mécatronique', 'Mechatronik'],
@@ -62,10 +79,15 @@ function buildSystemPrompt() {
     '3. Traduction FIDÈLE : n’invente aucune spec, n’en supprime aucune. Respecte l’accord en genre et la déclinaison allemande.',
     '4. Style commercial allemand naturel et SEO (emploie les termes réellement recherchés en Allemagne).',
     '5. Conserve la mise en forme (HTML, sauts de ligne, listes à puces) à l’identique.',
-    '6. L’ÉTAT de la pièce doit rester visible dans le titre. Si le titre français dit',
-    '   « reconditionné », le titre allemand DOIT contenir « generalüberholt » — même si',
-    '   « Austauschmotor » est déjà présent. Un titre sans l’état fait passer une pièce',
-    '   refaite à neuf pour un simple échange.',
+    '6. L’ÉTAT de la pièce doit être RESPECTÉ À LA LETTRE et rester visible dans le titre.',
+    '   Il n’y a jamais d’équivalence entre ces trois états :',
+    '     • le français dit « reconditionné » → le titre allemand DOIT contenir',
+    '       « generalüberholt » (même si « Austauschmotor » est déjà présent) ;',
+    '     • le français dit « occasion » → emploie « Gebrauchtmotor » /',
+    '       « geprüftes Gebrauchteil ». N’écris JAMAIS « generalüberholt » ni',
+    '       « Austausch- » : une pièce d’occasion n’a pas été refaite à neuf, et le',
+    '       prétendre serait un mensonge commercial ;',
+    '     • le français dit « neuf » → « neu », et rien d’autre.',
     '7. Emploie TOUJOURS le terme du glossaire, jamais un synonyme : deux fiches de la même',
     '   gamme doivent porter exactement le même mot.',
     '',
@@ -74,6 +96,10 @@ function buildSystemPrompt() {
     '',
     'SORTIE : réponds UNIQUEMENT par un JSON valide, avec EXACTEMENT les mêmes clés que l’entrée et la',
     'MÊME longueur pour chaque tableau ; valeurs traduites en allemand.',
+    'N’OMETS AUCUNE CLÉ, même courte ou imbriquée. En particulier `badges` (les pastilles',
+    'affichées sur la fiche : état, garantie) doit être présent avec ses sous-clés',
+    '`topLeft`, `condition` et `cards`, sinon la fiche allemande garde des pastilles',
+    'françaises sous un titre traduit.',
   ].join('\n');
 }
 
@@ -90,6 +116,20 @@ function collectFields(product) {
   if (nonEmptyArr(product.faqs)) out.faqs = product.faqs.map((f) => ({ question: (f && f.question) || '', answer: (f && f.answer) || '' }));
   if (product.seo && (nonEmptyStr(product.seo.metaTitle) || nonEmptyStr(product.seo.metaDescription))) {
     out.seo = { metaTitle: product.seo.metaTitle || '', metaDescription: product.seo.metaDescription || '' };
+  }
+  /* Les badges (« Reconditionné », « Échange standard »…) étaient le seul
+     champ prévu par le schéma ET repris par la surcouche allemande
+     (services/productI18n.js) sans jamais être ENVOYÉ à la traduction : la
+     pastille de la fiche restait donc en français sur les pages allemandes,
+     juste au-dessus d'un titre traduit. Plomberie posée des deux côtés, mais
+     débranchée au milieu. */
+  if (product.badges && (nonEmptyStr(product.badges.topLeft) || nonEmptyStr(product.badges.condition)
+      || nonEmptyArr(product.badges.cards))) {
+    out.badges = {
+      topLeft: product.badges.topLeft || '',
+      condition: product.badges.condition || '',
+      cards: nonEmptyArr(product.badges.cards) ? product.badges.cards.slice() : [],
+    };
   }
   return out;
 }
@@ -152,6 +192,23 @@ function reconcile(fr, de) {
     out.seo = {
       metaTitle: nonEmptyStr(de.seo.metaTitle) ? de.seo.metaTitle : (fr.seo ? fr.seo.metaTitle : ''),
       metaDescription: nonEmptyStr(de.seo.metaDescription) ? de.seo.metaDescription : (fr.seo ? fr.seo.metaDescription : ''),
+    };
+  }
+  /* Badges : chaque sous-champ retombe sur le français si la traduction est
+     vide. Un tableau `cards` de longueur différente est REFUSÉ en bloc —
+     mieux vaut des pastilles françaises que des pastilles décalées. */
+  /* `de.badges` peut manquer : le modèle omet parfois une clé courte malgré la
+     consigne. On émet quand même le bloc, en retombant sur le français — la
+     pastille reste juste, et la prochaine traduction l'améliorera. */
+  if (fr.badges) {
+    const db = (de.badges && typeof de.badges === 'object') ? de.badges : {};
+    out.badges = {
+      topLeft: nonEmptyStr(db.topLeft) ? db.topLeft : (fr.badges.topLeft || ''),
+      condition: nonEmptyStr(db.condition) ? db.condition : (fr.badges.condition || ''),
+      cards: (Array.isArray(fr.badges.cards) && Array.isArray(db.cards)
+        && db.cards.length === fr.badges.cards.length)
+        ? db.cards.map((c, k) => (nonEmptyStr(c) ? c : fr.badges.cards[k]))
+        : (fr.badges.cards || []),
     };
   }
   return out;
