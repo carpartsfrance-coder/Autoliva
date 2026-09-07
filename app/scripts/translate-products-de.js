@@ -48,7 +48,13 @@ function opt(name, def) {
   else if (!retranslate) filter['localizations.de.translatedAt'] = { $in: [null, undefined] };
 
   let query = Product.find(filter).select(
-    'name shortDescription description keyPoints inclusions exclusions specs reconditioningSteps faqs seo'
+    /* `badges` et `shippingDelayText` étaient absents de cette projection : le
+       traducteur ne pouvait donc PAS les traduire, et la fiche allemande
+       gardait une pastille « Reconditionné » en français sous un titre
+       traduit. Le schéma et la surcouche les prévoyaient pourtant tous les
+       deux — la chaîne était coupée ici, au chargement. */
+    'name shortDescription description keyPoints inclusions exclusions specs '
+    + 'reconditioningSteps faqs seo badges shippingDelayText'
   );
   if (limit) query = query.limit(limit);
   const products = await query.lean();

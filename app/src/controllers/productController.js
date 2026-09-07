@@ -19,6 +19,7 @@ const {
 } = require('../services/productPublic');
 const { buildHreflangSet, t } = require('../services/i18n');
 const productI18n = require('../services/productI18n');
+const categoryI18n = require('../services/categoryI18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const { sanitizeBrandLeak } = require('../services/brandSanitizer');
 
@@ -668,6 +669,12 @@ async function getProduct(req, res, next) {
         return res.redirect(301, buildProductPublicPath(product)); // → fiche FR
       }
       product = productI18n.localizeProduct(product, 'de'); // calque DE non destructif
+      /* La catégorie n'est PAS un champ traduisible de la fiche : elle est
+         recopiée en clair sur le produit. Les 67 catégories, elles, sont
+         traduites dans Category.localizations.de — on rapproche les deux ici,
+         sinon « Typ » et le fil d'Ariane restaient en français sous un titre
+         allemand. */
+      product.category = await categoryI18n.traduire(product.category, 'de');
       // Pas de fuite de contenu FR : les blocs info ne sont pas (encore) traduits.
       product.infoBlocksByPosition = INFO_BLOCK_EMPTY_GROUPS;
     }
