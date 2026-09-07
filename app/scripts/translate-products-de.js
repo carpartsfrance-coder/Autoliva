@@ -16,6 +16,9 @@ require('dotenv').config();
  *   --retranslate   retraduit aussi les fiches déjà traduites
  *   --model NAME    modèle OpenAI (défaut gpt-4o-mini ; gpt-4o pour +qualité)
  *   --ids a,b,c     ne traite que ces ObjectId
+ *   --ids-file F    idem, mais lit les ObjectId dans un fichier (un par ligne).
+ *                   Sert à ne repasser QUE les fiches abîmées plutôt que de
+ *                   refacturer le catalogue entier.
  * Env : CONCURRENCY (défaut 5).
  */
 const fs = require('fs');
@@ -37,7 +40,11 @@ function opt(name, def) {
   const limit = parseInt(opt('--limit', '0'), 10) || 0;
   const dryRun = flag('--dry-run');
   const retranslate = flag('--retranslate');
-  const idsArg = opt('--ids', '');
+  let idsArg = opt('--ids', '');
+  const idsFile = opt('--ids-file', '');
+  if (idsFile) {
+    idsArg = fs.readFileSync(idsFile, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean).join(',');
+  }
   const concurrency = Math.max(1, parseInt(process.env.CONCURRENCY || '5', 10));
 
   await mongoose.connect(process.env.MONGODB_URI);

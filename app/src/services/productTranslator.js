@@ -46,6 +46,12 @@ const GLOSSARY = [
   ['NE JAMAIS employer', 'instandgesetzt (sous-entend une simple réparation)'],
   ['échange standard', 'im Austausch (mit Altteilrückgabe)'],
   ['testé sur banc / banc d’essai', 'auf dem Prüfstand getestet / Prüfstand'],
+  /* « Livré nu » = moteur SANS ses périphériques (alternateur, injection…).
+     Traduit hors contexte, il devenait « unverpackt » — un colis sans
+     emballage. L'acheteur allemand comprenait qu'on lui envoyait un moteur
+     en vrac, pas un bloc nu. */
+  ['livré nu / livrée nue (sans accessoires)', 'ohne Anbauteile geliefert (JAMAIS « unverpackt »)'],
+  ['moteur nu', 'Nacktmotor'],
   ['garantie 2 ans (ou 24 mois)', '2 Jahre Garantie'],
   /* Gammes principales d'Autoliva. Sans elles, le modele inventait :
      « Transfergetriebe » au lieu de « Verteilergetriebe » (le terme reellement
