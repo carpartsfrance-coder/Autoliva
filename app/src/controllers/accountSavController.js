@@ -48,7 +48,11 @@ const STATUTS_LABELS = {
   resolu_garantie: ['Résolu (garantie)', 'bg-emerald-100 text-emerald-800'],
   resolu_facture: ['Résolu (facturé)', 'bg-emerald-100 text-emerald-800'],
   clos: ['Clos', 'bg-slate-100 text-slate-700'],
-  refuse: ['Refusé', 'bg-red-100 text-red-700'],
+  // Réconciliation : côté CLIENT on ne dit jamais « Refusé » (le mot braque).
+  // L'expertise a identifié une cause externe — c'est factuel, pas punitif.
+  // (L'admin, lui, garde le statut technique « refuse » dans son interface.)
+  refuse: ['Analyse terminée — cause externe identifiée', 'bg-slate-100 text-slate-700'],
+  clos_sans_reponse: ['En pause — réactivable sur simple demande', 'bg-amber-100 text-amber-800'],
 };
 
 exports.STATUTS_LABELS = STATUTS_LABELS;
