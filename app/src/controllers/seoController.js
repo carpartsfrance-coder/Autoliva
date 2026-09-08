@@ -503,6 +503,60 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
 
    Un sous-sitemap vide est valide pour Google (urlset vide accepté). On
    préfère sur-lister que sous-lister. */
+/* Dernière modification RÉELLE de chaque sous-sitemap.
+ *
+ * L'index annonçait `lastmod` = l'heure de la requête, identique pour les neuf
+ * enfants. Google documente qu'il IGNORE un lastmod jugé peu fiable, et « tous
+ * modifiés à la seconde près, à chaque visite » en est l'exemple type. Il
+ * n'avait donc aucun moyen de savoir que sitemap-products-de.xml avait
+ * vraiment changé le 4 septembre, quand 9 242 fiches allemandes sont nées.
+ *
+ * Contrainte héritée d'une panne : la version qui testait le CONTENU de chaque
+ * sous-sitemap faisait un Vehicle.find() sur 2 065 documents et mettait
+ * /sitemap.xml en timeout. On ne lit donc qu'UNE ligne par collection, sur un
+ * champ trié, et on garde le résultat en mémoire. En cas d'échec ou de base
+ * absente, on retombe sur `now` — un lastmod approximatif vaut mieux qu'un
+ * sitemap qui ne répond pas.
+ */
+const LASTMOD_TTL_MS = 10 * 60 * 1000;
+let lastmodCache = { at: 0, valeurs: null };
+
+async function datesDerniereModif() {
+  if (lastmodCache.valeurs && Date.now() - lastmodCache.at < LASTMOD_TTL_MS) return lastmodCache.valeurs;
+  const maintenant = new Date().toISOString();
+  if (mongoose.connection.readyState !== 1) return {};
+
+  const dernier = async (modele, champ, filtre) => {
+    try {
+      const d = await modele.findOne(filtre || {}).sort({ [champ]: -1 }).select(champ).lean()
+        .maxTimeMS(2000);
+      const v = champ.split('.').reduce((o, k) => (o == null ? undefined : o[k]), d);
+      return v ? new Date(v).toISOString() : null;
+    } catch (e) { return null; }
+  };
+
+  const BlogPost = require('../models/BlogPost');
+  const [produits, produitsDe, categories, categoriesDe, blog, blogDe] = await Promise.all([
+    dernier(Product, 'updatedAt', { isPublished: { $ne: false } }),
+    dernier(Product, 'localizations.de.translatedAt', { 'localizations.de.translatedAt': { $ne: null } }),
+    dernier(Category, 'updatedAt', { isActive: true }),
+    dernier(Category, 'localizations.de.translatedAt', { 'localizations.de.translatedAt': { $ne: null } }),
+    dernier(BlogPost, 'updatedAt', { isPublished: true }),
+    dernier(BlogPost, 'localizations.de.translatedAt', { 'localizations.de.translatedAt': { $ne: null } }),
+  ]);
+
+  const valeurs = {
+    produits: produits || maintenant,
+    produitsDe: produitsDe || maintenant,
+    categories: categories || maintenant,
+    categoriesDe: categoriesDe || maintenant,
+    blog: blog || maintenant,
+    blogDe: blogDe || maintenant,
+  };
+  lastmodCache = { at: Date.now(), valeurs };
+  return valeurs;
+}
+
 async function getSitemapXml(req, res, next) {
   try {
     const baseUrl = getPublicBaseUrlFromReq(req);
@@ -513,16 +567,17 @@ async function getSitemapXml(req, res, next) {
 
     const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
     const now = new Date().toISOString();
+    const d = await datesDerniereModif().catch(() => ({}));
     const sitemaps = [
-      { loc: resolveUrl('/sitemap-pages.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-categories.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-categories-de.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-products.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-products-de.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-references.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-blog.xml'), lastmod: now },
-      { loc: resolveUrl('/sitemap-blog-de.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-pages.xml'), lastmod: d.produits || now },
+      { loc: resolveUrl('/sitemap-categories.xml'), lastmod: d.categories || now },
+      { loc: resolveUrl('/sitemap-categories-de.xml'), lastmod: d.categoriesDe || now },
+      { loc: resolveUrl('/sitemap-products.xml'), lastmod: d.produits || now },
+      { loc: resolveUrl('/sitemap-products-de.xml'), lastmod: d.produitsDe || now },
+      { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: d.produits || now },
+      { loc: resolveUrl('/sitemap-references.xml'), lastmod: d.produits || now },
+      { loc: resolveUrl('/sitemap-blog.xml'), lastmod: d.blog || now },
+      { loc: resolveUrl('/sitemap-blog-de.xml'), lastmod: d.blogDe || now },
     ];
 
     return sendXml(res, renderSitemapIndex(sitemaps));
