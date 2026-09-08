@@ -41,6 +41,10 @@ const localizedProductSchema = new mongoose.Schema(
     /* Slug localisé (URL riche en mots-clés du pays). Optionnel : si vide, la
      * route réutilise le slug FR sous le préfixe de langue. */
     slug: { type: String, default: '', trim: true },
+    /* Empreinte du texte FRANÇAIS au moment de la traduction. Si elle diffère
+       de l'empreinte actuelle, la fiche a été réécrite depuis : la traduction
+       est périmée et le cron la reprend. Vide = jamais traduite. */
+    sourceHash: { type: String, default: '', trim: true },
     /* Gouvernance de traduction : qui/quand + relecture humaine. */
     translatedAt: { type: Date, default: null },
     translatedBy: { type: String, default: '', trim: true }, // ex: 'openai:gpt-4o-mini'

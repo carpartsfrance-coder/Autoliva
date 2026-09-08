@@ -64,6 +64,8 @@ const blogPostSchema = new mongoose.Schema(
           metaTitle: { type: String, default: '', trim: true },
           metaDescription: { type: String, default: '', trim: true },
         },
+        /* Voir Product : empreinte du texte source, pas `updatedAt`. */
+        sourceHash: { type: String, default: '', trim: true },
         translatedAt: { type: Date, default: null },
         translatedBy: { type: String, default: '', trim: true }, // ex: 'claude-sonnet-4-6'
         translationBucket: { type: String, default: '', trim: true }, // 'technical' | 'comparative' | 'simple'
