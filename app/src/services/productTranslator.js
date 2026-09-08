@@ -61,9 +61,15 @@ const GLOSSARY = [
   ['boîte automatique', 'Automatikgetriebe'],
   ['boîte manuelle', 'Schaltgetriebe'],
   ['boîte à double embrayage', 'Doppelkupplungsgetriebe'],
+  /* Une notion, un mot — y compris dans les composés. Ce glossaire disait
+     « Differential » seul mais « …differenzial » en composé, et il se
+     contredisait avec scripts/glossary-de.json qui tranchait pour « t ». Le
+     catalogue avait déjà tranché tout seul : 361 fiches en « Differential »,
+     zéro en « Differenzial ». C'est aussi la forme du métier en allemand
+     (Differentialsperre, Achsdifferential). */
   ['différentiel', 'Differential'],
-  ['pont avant', 'Vorderachsdifferenzial'],
-  ['pont arrière', 'Hinterachsdifferenzial'],
+  ['pont avant', 'Vorderachsdifferential'],
+  ['pont arrière', 'Hinterachsdifferential'],
   ['mécatronique', 'Mechatronik'],
   ['consigne (caution)', 'Pfand'],
   ['code boîte / code moteur', 'Getriebecode / Motorcode (laisser le CODE inchangé)'],
@@ -106,6 +112,14 @@ function buildSystemPrompt() {
     'affichées sur la fiche : état, garantie) doit être présent avec ses sous-clés',
     '`topLeft`, `condition` et `cards`, sinon la fiche allemande garde des pastilles',
     'françaises sous un titre traduit.',
+    '',
+    'LONGUEURS SEO — contrainte, pas préférence :',
+    '  • `seo.metaTitle` : 60 caractères MAXIMUM.',
+    '  • `seo.metaDescription` : 160 caractères MAXIMUM.',
+    'L’allemand est 7 à 12 % plus long que le français : une traduction fidèle dépasse la',
+    'limite et Google COUPE la fin — or c’est là que se trouve la référence OEM, seule chose',
+    'qui distingue deux fiches de la même gamme. Reformule plus court plutôt que de traduire',
+    'mot à mot, et place la RÉFÉRENCE et le VÉHICULE en premier, jamais à la fin.',
   ].join('\n');
 }
 
@@ -141,7 +155,10 @@ function collectFields(product) {
 }
 
 /** Appel OpenAI (indirection via `impl` pour la testabilité). */
-async function callOpenAI(fields, { apiKey, model }) {
+/* `systemPrompt` / `userPrompt` sont optionnels : ils permettent de réutiliser
+   ce transport pour une tâche voisine (recadrage des métas) sans dupliquer la
+   gestion d'erreur ni le mode JSON. Sans eux, comportement inchangé. */
+async function callOpenAI(fields, { apiKey, model, systemPrompt, userPrompt }) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -150,8 +167,13 @@ async function callOpenAI(fields, { apiKey, model }) {
       temperature: 0.2,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: buildSystemPrompt() },
-        { role: 'user', content: 'Traduis en allemand les valeurs de ce JSON (garde EXACTEMENT les clés et la longueur des tableaux) :\n' + JSON.stringify(fields) },
+        { role: 'system', content: systemPrompt || buildSystemPrompt() },
+        {
+          role: 'user',
+          content: userPrompt
+            || (fields && typeof fields.__raw === 'string' ? fields.__raw : null)
+            || ('Traduis en allemand les valeurs de ce JSON (garde EXACTEMENT les clés et la longueur des tableaux) :\n' + JSON.stringify(fields)),
+        },
       ],
     }),
   });
@@ -220,6 +242,18 @@ function reconcile(fr, de) {
   return out;
 }
 
+/* Coupe au dernier mot entier avant la limite. Google indexe le titre complet
+   mais n'AFFICHE que le début : mieux vaut une phrase qui se termine qu'une
+   coupure au milieu d'une référence. Filet de sécurité — la consigne de
+   longueur est dans le prompt, ceci rattrape ce qui passe au travers. */
+function clampSeo(texte, max) {
+  const t = String(texte || '').trim();
+  if (t.length <= max) return t;
+  const coupe = t.slice(0, max);
+  const espace = coupe.lastIndexOf(' ');
+  return (espace > max * 0.6 ? coupe.slice(0, espace) : coupe).replace(/[\s,;:–—-]+$/, '');
+}
+
 const UMLAUT = [[/ä/g, 'ae'], [/ö/g, 'oe'], [/ü/g, 'ue'], [/ß/g, 'ss'], [/Ä/g, 'ae'], [/Ö/g, 'oe'], [/Ü/g, 'ue']];
 
 /** Slug allemand : translittère les umlauts puis réutilise le slugify du site. */
@@ -240,6 +274,10 @@ async function translateProduct(product, { apiKey, model = 'gpt-4o-mini', now } 
   const deRaw = await impl.callOpenAI(fr, { apiKey, model });
   const de = reconcile(fr, deRaw);
   de.slug = germanSlug(de.name || product.name);
+  if (de.seo) {
+    de.seo.metaTitle = clampSeo(de.seo.metaTitle, 60);
+    de.seo.metaDescription = clampSeo(de.seo.metaDescription, 160);
+  }
   de.translatedAt = now || new Date();
   de.translatedBy = 'openai:' + model;
   return de;
@@ -262,6 +300,7 @@ module.exports = {
   sourceHash,
   buildSystemPrompt,
   collectFields,
+  clampSeo,
   reconcile,
   germanSlug,
   callOpenAI,

@@ -8,6 +8,12 @@ const localizedCategorySchema = new mongoose.Schema(
     name: { type: String, default: '', trim: true },
     seoText: { type: String, default: '' },
     slug: { type: String, default: '', trim: true },
+    /* Anciens slugs allemands, gardés pour les faire rediriger. Dix catégories
+       avaient un slug forgé avant la translittération des umlauts
+       (« ruckleuchten » au lieu de « rueckleuchten ») : ces URL sont dans le
+       sitemap et servent de canonical depuis des mois. Changer le slug sans
+       garder l'ancien les transformerait en 404. */
+    slugAliases: { type: [String], default: [] },
     translatedAt: { type: Date, default: null },
     translatedBy: { type: String, default: '', trim: true },
     reviewedAt: { type: Date, default: null },
