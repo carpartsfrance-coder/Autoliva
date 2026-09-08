@@ -1224,6 +1224,7 @@ async function ensureGuestCheckoutUser({ req, checkout } = {}) {
   const guestAddress = buildGuestAddressSnapshot(guest);
   const created = await User.create({
     accountType: 'particulier',
+    lang: (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr',
     firstName: guest.firstName,
     lastName: guest.lastName,
     email: guest.email,
@@ -2093,6 +2094,9 @@ async function postPayment(req, res, next) {
             },
           ],
           accountType: user.accountType,
+          /* La langue est figée ici : les e-mails de suivi partent des jours
+             plus tard, depuis un cron, sans session à interroger. */
+          lang: (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr',
           source: { channel: 'website' },
           paymentProvider,
           paymentStatus: 'pending',

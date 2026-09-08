@@ -130,6 +130,9 @@ const savTicketSchema = new mongoose.Schema(
       verifie: { type: Boolean, default: false },
     },
 
+    /* Langue du client, reprise de sa commande à l'ouverture du dossier :
+       un SAV se joue en semaines, bien après la session de navigation. */
+    lang: { type: String, enum: ['fr', 'de'], default: 'fr' },
     client: {
       nom: { type: String, trim: true, required: true },
       email: { type: String, trim: true, lowercase: true, required: true, index: true },

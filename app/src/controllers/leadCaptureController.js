@@ -184,6 +184,9 @@ async function upsertLead({ req, email, phone, firstName, captureSource, product
   const userId = getUserId(req);
   const now = new Date();
   const attribution = readAttribution(req);
+  /* Langue de navigation au moment de la capture : les relances partent
+     ensuite d'un cron, sans session. */
+  const lang = (req && req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
 
   /* Snapshot du panier en session si présent */
   let items = [];
@@ -266,6 +269,7 @@ async function upsertLead({ req, email, phone, firstName, captureSource, product
     email,
     firstName,
     phone,
+    lang,
     isGuest: !userId,
     captureSource,
     items,

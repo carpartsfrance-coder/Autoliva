@@ -848,6 +848,7 @@ async function postLeadSendEmail(req, res, next) {
       subject: finalSubject,
       html,
       text,
+      lang: cart.lang === 'de' ? 'de' : 'fr',
       replyTo: admin.email ? { email: admin.email, name: admin.name } : undefined,
     });
 
