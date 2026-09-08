@@ -10,6 +10,32 @@
 
 const SUPPORTED_LANGS = ['de'];
 
+/* Vocabulaire des OPTIONS produit (« Clonage », « Avec programmation »…).
+ *
+ * Les options ne sont pas dans `localizations` et ne peuvent pas y être : ce
+ * sont des objets imbriqués avec leurs choix et leurs prix, et une copie
+ * allemande parallèle dérive au premier choix ajouté — on afficherait le prix
+ * d'un choix sous le libellé d'un autre. La table indexe par TEXTE : elle ne
+ * peut pas se désaligner, et elle couvre gratuitement toute option future qui
+ * réemploie le même vocabulaire. Les références (« 927769D », « 0B5 ») n'y
+ * figurent pas et traversent intactes. */
+const OPTIONS_DE = require('../locales/optionsDe.json');
+
+function traduireOptions(options, lang) {
+  if (lang !== 'de' || !Array.isArray(options) || !options.length) return options;
+  const tr = (v) => (typeof v === 'string' && OPTIONS_DE[v.trim()]) || v;
+  return options.map((o) => {
+    if (!o || typeof o !== 'object') return o;
+    const copie = { ...o, label: tr(o.label), placeholder: tr(o.placeholder), helpText: tr(o.helpText) };
+    if (Array.isArray(o.choices)) {
+      /* `key`, les prix et `triggersCloning` ne bougent pas : seul l'affichage
+         change, la sélection reste celle du panier et du back-office. */
+      copie.choices = o.choices.map((c) => (c && typeof c === 'object' ? { ...c, label: tr(c.label) } : c));
+    }
+    return copie;
+  });
+}
+
 function isSupportedLang(lang) {
   return SUPPORTED_LANGS.indexOf(lang) >= 0;
 }
@@ -72,6 +98,12 @@ function localizeProduct(product, lang) {
       metaTitle: nonEmptyStr(loc.seo.metaTitle) ? loc.seo.metaTitle : ((out.seo && out.seo.metaTitle) || ''),
       metaDescription: nonEmptyStr(loc.seo.metaDescription) ? loc.seo.metaDescription : ((out.seo && out.seo.metaDescription) || ''),
     };
+  }
+
+  /* Les options restaient en français sous un titre allemand : « CLONAGE /
+     Avec programmation / Sans programmation ». */
+  if (Array.isArray(base.options) && base.options.length) {
+    out.options = traduireOptions(base.options, lang);
   }
 
   // Métadonnées utiles à la couche de rendu (canonical FR/DE, hreflang).
