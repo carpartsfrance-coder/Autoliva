@@ -258,7 +258,10 @@ function clampSeo(texte, max) {
   if (t.length <= max) return t;
   const coupe = t.slice(0, max);
   const espace = coupe.lastIndexOf(' ');
-  return (espace > max * 0.6 ? coupe.slice(0, espace) : coupe).replace(/[\s,;:–—-]+$/, '');
+  /* La barre verticale doit sauter comme les autres : le gabarit ajoute
+     « | Autoliva » ensuite, et un titre coupé sur un « | » donnait
+     « … generalüberholt | | Autoliva ». */
+  return (espace > max * 0.6 ? coupe.slice(0, espace) : coupe).replace(/[\s,;:|/·•–—-]+$/, '');
 }
 
 const UMLAUT = [[/ä/g, 'ae'], [/ö/g, 'oe'], [/ü/g, 'ue'], [/ß/g, 'ss'], [/Ä/g, 'ae'], [/Ö/g, 'oe'], [/Ü/g, 'ue']];
