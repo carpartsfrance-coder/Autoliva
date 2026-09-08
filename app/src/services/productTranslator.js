@@ -245,8 +245,21 @@ async function translateProduct(product, { apiKey, model = 'gpt-4o-mini', now } 
   return de;
 }
 
+/* Empreinte du contenu TRADUISIBLE d'une fiche.
+ *
+ * Sert à savoir si une traduction est encore à jour. On ne peut pas se fier à
+ * `updatedAt` : il bouge à chaque changement de stock ou de prix — et il bouge
+ * aussi quand on ÉCRIT la traduction, donc une fiche serait éternellement
+ * « périmée ». L'empreinte ne dépend que de ce qu'on envoie au modèle : elle
+ * ne change que si le texte français change. */
+function sourceHash(product) {
+  const payload = JSON.stringify(collectFields(product || {}));
+  return require('crypto').createHash('sha1').update(payload).digest('hex');
+}
+
 module.exports = {
   GLOSSARY,
+  sourceHash,
   buildSystemPrompt,
   collectFields,
   reconcile,

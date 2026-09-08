@@ -429,6 +429,39 @@ function sleep(ms) {
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
+/* Traduction d'UN article, sans rien écrire : le CLI et le cron horaire
+   passent tous les deux par ici, pour que le prompt, le glossaire et les
+   garde-fous SEO n'existent qu'à un seul endroit. */
+async function traduireArticle(post, options) {
+  const opts = options || {};
+  const bucket = classifyArticle(post);
+  const model = opts.model || (PROVIDER === 'openai' ? OPENAI_MODEL : modelForBucket(bucket));
+  const appel = PROVIDER === 'openai' ? callOpenAI : callAnthropic;
+
+  const result = await appel({ model, systemPrompt: buildSystemPrompt(), userPrompt: buildUserPrompt(post) });
+  const parsed = result.translation || {};
+
+  const required = ['title', 'excerpt', 'contentHtml', 'metaTitle', 'metaDescription'];
+  const missing = required.filter((k) => !parsed[k] || typeof parsed[k] !== 'string');
+  if (missing.length) throw new Error(`Réponse incomplète, champs manquants : ${missing.join(', ')}`);
+
+  return {
+    title: parsed.title,
+    excerpt: parsed.excerpt,
+    contentHtml: parsed.contentHtml,
+    contentMarkdown: '',
+    seo: {
+      primaryKeyword: parsed.primaryKeyword || '',
+      metaTitle: clampSeo(parsed.metaTitle, 60),
+      metaDescription: clampSeo(parsed.metaDescription, 160),
+    },
+    translatedAt: new Date(),
+    translatedBy: result.model,
+    translationBucket: bucket,
+    reviewedAt: null,
+  };
+}
+
 async function main() {
   if (!process.env.MONGODB_URI) {
     console.error('❌ MONGODB_URI non défini dans app/.env');
@@ -614,7 +647,13 @@ async function main() {
   process.exit(stats.failed > 0 ? 1 : 0);
 }
 
-main().catch((err) => {
-  console.error('Fatal:', err);
-  process.exit(1);
-});
+module.exports = { traduireArticle, classifyArticle, clampSeo };
+
+/* Le cron require ce fichier pour `traduireArticle` : sans ce garde, le simple
+   fait de le charger lancerait une traduction de tout le blog. */
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('Fatal:', err);
+    process.exit(1);
+  });
+}

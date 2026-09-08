@@ -9,6 +9,7 @@ const { sendConsigneReminders } = require('./sendConsigneReminders');
 const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations } = require('./savCronJobs');
 const { reconcileScalapayOrders } = require('./reconcileScalapayOrders');
 const { syncShipmentTracking } = require('./syncShipmentTracking');
+const { traduireNouveautesDe } = require('./traduireNouveautesDe');
 const { runEngineQuoteReminders } = require('./sendEngineQuoteReminders');
 const { sendRepurchaseReminders } = require('./sendRepurchaseReminders');
 const { processScheduledAutoDevis } = require('./processScheduledAutoDevis');
@@ -114,6 +115,22 @@ function startScheduler() {
       await reconcileScalapayOrders();
     } catch (err) {
       console.error('[scheduler] Erreur réconciliation Scalapay:', err.message || err);
+    }
+  });
+
+  // Traduction allemande du contenu neuf ou modifié, à la 42e minute.
+  //
+  // Sans ça, chaque fiche et chaque article publié repart en français sur le
+  // site allemand, et il faut y repenser à la main — ce qui, en pratique, veut
+  // dire que personne n'y repense : les 2 fiches du 07/09/2026 étaient en
+  // ligne depuis un jour, en français, sous une interface allemande.
+  //
+  // No-op tant que DE_AUTO_TRANSLATE=true n'est pas posé sur Render.
+  cron.schedule('42 * * * *', async () => {
+    try {
+      await traduireNouveautesDe();
+    } catch (err) {
+      console.error('[scheduler] Erreur traduction DE:', err.message || err);
     }
   });
 
