@@ -114,7 +114,8 @@ function buildSystemPrompt() {
     'françaises sous un titre traduit.',
     '',
     'LONGUEURS SEO — contrainte, pas préférence :',
-    '  • `seo.metaTitle` : 60 caractères MAXIMUM.',
+    '  • `seo.metaTitle` : 49 caractères MAXIMUM. (Le gabarit ajoute « | Autoliva »',
+    '    APRÈS coup : 49 + 11 = 60, la limite de Google. Viser 60 ici fait tronquer.)',
     '  • `seo.metaDescription` : 160 caractères MAXIMUM.',
     'L’allemand est 7 à 12 % plus long que le français : une traduction fidèle dépasse la',
     'limite et Google COUPE la fin — or c’est là que se trouve la référence OEM, seule chose',
@@ -246,6 +247,12 @@ function reconcile(fr, de) {
    mais n'AFFICHE que le début : mieux vaut une phrase qui se termine qu'une
    coupure au milieu d'une référence. Filet de sécurité — la consigne de
    longueur est dans le prompt, ceci rattrape ce qui passe au travers. */
+/* Le budget réel d'un metaTitle n'est pas 60 mais 60 moins le suffixe de
+   marque que le gabarit ajoute après coup (« | Autoliva », 11 caractères).
+   Viser 60 ici, c'est se faire tronquer par le gabarit lui-même, avec des
+   points de suspension — ce qui était le cas de 5 564 fiches allemandes. */
+const MAX_META_TITRE = 60 - ' | Autoliva'.length;
+
 function clampSeo(texte, max) {
   const t = String(texte || '').trim();
   if (t.length <= max) return t;
@@ -275,7 +282,7 @@ async function translateProduct(product, { apiKey, model = 'gpt-4o-mini', now } 
   const de = reconcile(fr, deRaw);
   de.slug = germanSlug(de.name || product.name);
   if (de.seo) {
-    de.seo.metaTitle = clampSeo(de.seo.metaTitle, 60);
+    de.seo.metaTitle = clampSeo(de.seo.metaTitle, MAX_META_TITRE);
     de.seo.metaDescription = clampSeo(de.seo.metaDescription, 160);
   }
   de.translatedAt = now || new Date();
@@ -301,6 +308,7 @@ module.exports = {
   buildSystemPrompt,
   collectFields,
   clampSeo,
+  MAX_META_TITRE,
   reconcile,
   germanSlug,
   callOpenAI,
