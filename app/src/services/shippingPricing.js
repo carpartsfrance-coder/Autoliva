@@ -187,7 +187,11 @@ async function computeShippingPricesCents(dbConnected, products, zoneOrAddress) 
   return { domicile };
 }
 
-async function getShippingMethods(dbConnected, products, zoneOrAddress) {
+/* Les libellés de livraison s'affichent dans le panier ET dans l'e-mail de
+   confirmation : « Livraison à domicile » restait français sur toute la
+   chaîne allemande. L'`id` ne bouge pas — c'est lui qui porte le tarif. */
+async function getShippingMethods(dbConnected, products, zoneOrAddress, lang) {
+  const { t } = require('./i18n');
   const list = Array.isArray(products) ? products : [];
   const onlyStandaloneCloning = list.length > 0 && list.every((p) => p && p.serviceType === 'standalone_cloning');
 
@@ -195,8 +199,8 @@ async function getShippingMethods(dbConnected, products, zoneOrAddress) {
     return [
       {
         id: 'domicile',
-        title: 'Expédition aller + retour incluse',
-        description: 'Étiquettes prépayées aller et retour comprises dans le service',
+        title: t(lang, 'shipping.cloningTitle'),
+        description: t(lang, 'shipping.cloningDesc'),
         priceCents: 0,
       },
     ];
@@ -207,15 +211,15 @@ async function getShippingMethods(dbConnected, products, zoneOrAddress) {
   return [
     {
       id: 'domicile',
-      title: 'Livraison à domicile',
-      description: 'Livré chez vous en 2-3 jours ouvrés',
+      title: t(lang, 'shipping.homeTitle'),
+      description: t(lang, 'shipping.homeDesc'),
       priceCents: prices.domicile,
       zone: toZone(zoneOrAddress),
     },
     {
       id: 'retrait',
-      title: 'Retrait magasin',
-      description: 'Retrait rapide (si disponible)',
+      title: t(lang, 'shipping.pickupTitle'),
+      description: t(lang, 'shipping.pickupDesc'),
       priceCents: 0,
     },
   ];

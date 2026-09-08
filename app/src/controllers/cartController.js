@@ -304,7 +304,9 @@ async function showCart(req, res, next) {
 
     const shippingMethods = await getShippingMethods(
       dbConnected,
-      viewItems.map((it) => it.product)
+      viewItems.map((it) => it.product),
+      undefined,
+      (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr'
     );
     const estimatedShippingMethod = shippingMethods.find((method) => method && method.id === 'domicile') || shippingMethods[0] || null;
     const shippingCostCents = estimatedShippingMethod && Number.isFinite(estimatedShippingMethod.priceCents)

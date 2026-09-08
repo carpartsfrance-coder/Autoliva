@@ -8,7 +8,7 @@
   <% const vatBaseCents = Math.max(0, (Number(totalCents) || 0) - consigneCents); %>
   <% const vatCents = Math.max(0, Math.round(vatBaseCents - vatBaseCents / 1.2)); %>
   <% const shippingCost = Number.isFinite(shippingCostCents) ? shippingCostCents : 0; %>
-  <% const shippingLabel = estimatedShippingMethod && estimatedShippingMethod.title ? estimatedShippingMethod.title : 'Livraison à domicile'; %>
+  <% const shippingLabel = estimatedShippingMethod && estimatedShippingMethod.title ? estimatedShippingMethod.title : t('shipping.homeTitle'); %>
 
   <% if (!dbConnected) { %>
     <div class="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900">

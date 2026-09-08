@@ -987,14 +987,16 @@ async function getProduct(req, res, next) {
       {
         '@type': 'ListItem',
         position: 1,
-        name: 'Accueil',
-        item: baseUrl ? `${baseUrl}/` : '/',
+        /* Le fil VISIBLE était traduit, celui des données structurées non —
+           et c'est celui-là que Google lit. */
+        name: t(req.lang, 'breadcrumb.homeLd'),
+        item: baseUrl ? `${baseUrl}${req.lang === 'de' ? '/de' : ''}/` : '/',
       },
       {
         '@type': 'ListItem',
         position: 2,
-        name: 'Catalogue',
-        item: baseUrl ? `${baseUrl}/produits` : '/produits',
+        name: t(req.lang, 'breadcrumb.catalogLd'),
+        item: baseUrl ? `${baseUrl}${req.lang === 'de' ? '/de' : ''}/produits` : '/produits',
       },
     ];
 

@@ -509,7 +509,12 @@ app.use((req, res, next) => {
   // services/videoEmbed.js. Permet d'afficher un lecteur intégré dans la galerie
   // produit sans stocker la vidéo en base.
   res.locals.parseVideoEmbed = require('./services/videoEmbed').parseVideoEmbed;
-  res.locals.shippingCountryOptions = require('./config/shippingZones').COUNTRY_OPTIONS;
+  /* Le tunnel vit sur des URLs FRANÇAISES (/panier, /commande) : `req.lang`
+     y vaut toujours 'fr'. On lit donc la langue mémorisée, comme le reste du
+     tunnel — sinon un acheteur allemand cherchait « Deutschland » dans une
+     liste en français. */
+  const _langPays = (req.lang === 'de' || (req.session && req.session.preferredLang === 'de')) ? 'de' : req.lang;
+  res.locals.shippingCountryOptions = require('./config/shippingZones').countryOptionsFor(_langPays);
   /* Le paiement en plusieurs fois est-il proposé ? Exposé à TOUTES les vues :
      les mentions « 3x sans frais » vivent aussi bien sur les fiches produit que
      sur les pages véhicule, et une seule d'entre elles laissée en place
@@ -767,6 +772,13 @@ app.use('/de/produits', require('./routes/productsDe'));
 
 /* Pages catégorie en allemand (détail) — calque sur getCategory. */
 app.use('/de/categorie', require('./routes/categoriesDe'));
+
+/* Pages légales allemandes — MÊME contrôleur, lang-aware : il sert la version
+ * traduite si elle existe, et redirige vers le français sinon. Le pied de page
+ * allemand pointait vers /de/legal/… depuis toujours ; ces URLs tombaient
+ * dans le catchall et renvoyaient un document français sous une étiquette
+ * allemande (« Impressum », « AGB »). */
+app.use('/de/legal', require('./routes/legal'));
 
 /* Accueil allemand (/de) — MÊME contrôleur que la home FR, lang-aware
  * (hero DE, produits vedette + catégories localisés, libellés via t()).

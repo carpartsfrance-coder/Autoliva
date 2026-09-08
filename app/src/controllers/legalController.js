@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
   
 const { getPublicBaseUrlFromReq } = require('../services/categoryPublic');
 const { listLegalPages, getLegalPageBySlug } = require('../services/legalPages');
-const { buildHreflangSet } = require('../services/i18n');
+const { buildHreflangSet, t } = require('../services/i18n');
 const brand = require('../config/brand');
 
 function getTrimmedString(value) {
@@ -62,8 +62,8 @@ async function getLegalIndex(req, res, next) {
             {
               '@type': 'ListItem',
               position: 1,
-              name: 'Accueil',
-              item: baseUrl ? `${baseUrl}/` : '/',
+              name: t(req.lang, 'breadcrumb.homeLd'),
+              item: baseUrl ? `${baseUrl}${langPrefix}/` : '/',
             },
             {
               '@type': 'ListItem',
@@ -99,17 +99,30 @@ async function getLegalPage(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
-    const langPrefix = req.lang === 'en' ? '/en' : '';
+    const isDe = req.lang === 'de';
+    const langPrefix = isDe ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
-    const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
     const slug = req.params && req.params.slug ? String(req.params.slug) : '';
 
-    const page = await getLegalPageBySlug({ slug, dbConnected });
-    if (!page) {
+    const pageBrute = await getLegalPageBySlug({ slug, dbConnected, lang: req.lang });
+    if (!pageBrute) {
       return res.status(404).render('errors/404', {
-        title: `Page introuvable - ${brand.NAME}`,
+        title: t(req.lang, 'error.404.title'),
       });
     }
+
+    /* Une page légale n'est servie en allemand que si elle EXISTE en allemand.
+       Le pied de page annonçait « Impressum » et « AGB » et menait vers du
+       français : promettre un document légal dans une langue et en servir une
+       autre est pire que d'assumer le français. */
+    if (isDe && !pageBrute.deTraduite) {
+      return res.redirect(301, '/legal/' + encodeURIComponent(pageBrute.slug));
+    }
+    const page = pageBrute;
+
+    const hreflang = buildHreflangSet(baseUrl, pathWithoutLang, pageBrute.deTraduite
+      ? { deHref: baseUrl ? `${baseUrl}/de/legal/${encodeURIComponent(pageBrute.slug)}` : `/de/legal/${pageBrute.slug}` }
+      : undefined);
 
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/legal/${encodeURIComponent(page.slug)}` : `${langPrefix}/legal/${encodeURIComponent(page.slug)}`;
     const contentText = stripHtml(page && page.contentHtml ? page.contentHtml : '');
@@ -134,14 +147,14 @@ async function getLegalPage(req, res, next) {
             {
               '@type': 'ListItem',
               position: 1,
-              name: 'Accueil',
-              item: baseUrl ? `${baseUrl}/` : '/',
+              name: t(req.lang, 'breadcrumb.homeLd'),
+              item: baseUrl ? `${baseUrl}${langPrefix}/` : '/',
             },
             {
               '@type': 'ListItem',
               position: 2,
-              name: 'Informations légales',
-              item: baseUrl ? `${baseUrl}/legal` : '/legal',
+              name: t(req.lang, 'breadcrumb.legal'),
+              item: baseUrl ? `${baseUrl}${langPrefix}/legal` : '/legal',
             },
             {
               '@type': 'ListItem',

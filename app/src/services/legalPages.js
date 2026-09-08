@@ -128,7 +128,11 @@ async function listLegalPages({ dbConnected, includeUnpublished = false } = {}) 
   }));
 }
 
-async function getLegalPageBySlug({ slug, dbConnected, includeUnpublished = false } = {}) {
+/* `lang` sert à servir la version traduite. Le champ `deTraduite` est renvoyé
+   à part : le contrôleur en a besoin pour décider entre servir l'allemand et
+   rediriger vers le français — il ne peut pas le déduire du contenu, qui
+   retombe sur le français quand la traduction manque. */
+async function getLegalPageBySlug({ slug, dbConnected, includeUnpublished = false, lang } = {}) {
   const key = getTrimmedString(slug).toLowerCase();
   if (!key) return null;
 
@@ -142,15 +146,21 @@ async function getLegalPageBySlug({ slug, dbConnected, includeUnpublished = fals
   if (!page) return null;
   if (!includeUnpublished && page.isPublished === false) return null;
 
+  const de = (page.localizations && page.localizations.de) || {};
+  const deTraduite = Boolean(de.translatedAt && String(de.content || '').trim());
+  const servirDe = lang === 'de' && deTraduite;
+  const contenu = servirDe ? de.content : (page.content || '');
+
   return {
     id: String(page._id),
     slug: page.slug,
-    title: page.title,
-    content: page.content || '',
-    contentHtml: renderContentHtml(page.content || ''),
+    title: servirDe ? (de.title || page.title) : page.title,
+    content: contenu,
+    contentHtml: renderContentHtml(contenu),
     isPublished: page.isPublished !== false,
     sortOrder: Number.isFinite(page.sortOrder) ? page.sortOrder : 0,
     updatedAt: page.updatedAt || null,
+    deTraduite,
   };
 }
 
