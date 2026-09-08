@@ -19,6 +19,7 @@ function getSafeUrl(value) {
 function buildEnvFallback() {
   return {
     promoBannerText: getTrimmedString(process.env.PROMO_BANNER_TEXT) || '',
+    promoBannerTextDe: getTrimmedString(process.env.PROMO_BANNER_TEXT_DE) || '',
     promoBannerCode: getTrimmedString(process.env.PROMO_BANNER_CODE) || '',
     // Alerte sécurité : visible tant qu'on ne l'a pas explicitement masquée,
     // y compris quand la base est injoignable (ce fallback sert aussi dans ce cas).
@@ -61,6 +62,7 @@ async function getSiteSettingsMergedWithFallback({ bypassCache = false } = {}) {
 
     const merged = {
       promoBannerText: saved.promoBannerText || '',
+      promoBannerTextDe: saved.promoBannerTextDe || '',
       promoBannerCode: saved.promoBannerCode || '',
       securityAlertHidden: saved.securityAlertHidden === true,
       securityAlertText: saved.securityAlertText || '',
@@ -85,6 +87,7 @@ function sanitizeForm(body) {
   const b = body && typeof body === 'object' ? body : {};
   return {
     promoBannerText: getTrimmedString(b.promoBannerText),
+    promoBannerTextDe: getTrimmedString(b.promoBannerTextDe),
     promoBannerCode: getTrimmedString(b.promoBannerCode),
     // Case décochée = champ absent du POST → false, donc bandeau visible.
     securityAlertHidden: b.securityAlertHidden === 'on' || b.securityAlertHidden === true || b.securityAlertHidden === 'true',
@@ -108,6 +111,7 @@ async function updateSiteSettingsFromForm(body) {
 
   cached = {
     promoBannerText: updated && updated.promoBannerText ? updated.promoBannerText : '',
+    promoBannerTextDe: updated && updated.promoBannerTextDe ? updated.promoBannerTextDe : '',
     promoBannerCode: updated && updated.promoBannerCode ? updated.promoBannerCode : '',
     securityAlertHidden: !!(updated && updated.securityAlertHidden),
     securityAlertText: updated && updated.securityAlertText ? updated.securityAlertText : '',

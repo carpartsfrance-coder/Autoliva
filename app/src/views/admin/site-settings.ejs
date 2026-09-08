@@ -33,6 +33,11 @@
             <div class="mt-2 text-xs text-slate-500">Astuce : laisse vide pour masquer la bannière.</div>
           </div>
           <div>
+            <label class="block text-sm font-medium text-slate-500" for="promoBannerTextDe">Texte allemand (/de)</label>
+            <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="promoBannerTextDe" name="promoBannerTextDe" rows="2" placeholder="Vide = pas de bandeau sur les pages allemandes"><%= form && form.promoBannerTextDe ? form.promoBannerTextDe : '' %></textarea>
+            <p class="mt-1 text-xs text-slate-400">Laissé vide, le bandeau est simplement masqué sur /de (jamais de texte français au-dessus d'une page allemande).</p>
+          </div>
+          <div>
             <label class="block text-sm font-medium text-slate-500" for="promoBannerCode">Code (optionnel)</label>
             <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold focus:ring-primary" id="promoBannerCode" name="promoBannerCode" type="text" value="<%= form && form.promoBannerCode ? form.promoBannerCode : '' %>" />
           </div>

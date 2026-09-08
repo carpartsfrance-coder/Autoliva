@@ -1,3 +1,7 @@
+<% /* Les catégories servent de valeur de filtre (nom FR stocké sur le produit)
+      ET de libellé. `categoryLabels` traduit l'affichage sans toucher au filtre. */ %>
+<% const _catLabels = (typeof categoryLabels !== 'undefined' && categoryLabels) ? categoryLabels : {}; %>
+<% const _catLabel = (x) => _catLabels[String(x || '').trim()] || x; %>
 <%- include('../partials/head') %>
 <%- include('../partials/promo-banner') %>
 
@@ -170,7 +174,7 @@
                 <% if (_categoryContext) { %>
                   <div class="rounded-lg bg-primary/5 border border-primary/20 p-3">
                     <div class="text-[10px] font-bold uppercase tracking-widest text-primary mb-1"><%= t('listing.activeCategory') %></div>
-                    <div class="text-sm font-semibold text-slate-800"><%= _categoryContext.name %></div>
+                    <div class="text-sm font-semibold text-slate-800"><%= _catLabel(_categoryContext.name) %></div>
                     <a class="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-primary" href="<%= (typeof langPrefix !== 'undefined' ? langPrefix : '') %>/produits">
                       <span class="material-symbols-outlined text-[14px]">arrow_back</span>
                       <%= t('listing.viewAllCatalog') %>
@@ -181,7 +185,7 @@
                     <select class="w-full bg-gray-50 border-gray-200 rounded-lg py-2 px-3 text-xs" name="subCategory" <%= selectedMainCategory ? '' : 'disabled' %>>
                       <option value="" <%= selectedMainCategory && !selectedSubCategory ? 'selected' : '' %>><%= selectedMainCategory ? t('listing.allF') : t('listing.chooseCategory') %></option>
                       <% (subOptions || []).forEach((s) => { %>
-                        <option value="<%= s %>" <%= selectedSubCategory === s ? 'selected' : '' %>><%= s %></option>
+                        <option value="<%= s %>" <%= selectedSubCategory === s ? 'selected' : '' %>><%= _catLabel(s) %></option>
                       <% }) %>
                     </select>
                   </div>
@@ -205,7 +209,7 @@
                           <% const _sc = (typeof categoryCounts !== 'undefined' && categoryCounts[_full]) ? categoryCounts[_full] : 0; %>
                           <a class="flex items-center gap-2.5 py-1.5 px-2 rounded-lg <%= _son ? 'bg-primary/10' : 'hover:bg-gray-50' %>" href="<%= buildUrl({ mainCategory: _son ? '' : m, subCategory: _son ? '' : s, page: 1 }) %>">
                             <span class="w-4 h-4 rounded border flex items-center justify-center shrink-0 <%= _son ? 'bg-primary border-primary text-white' : 'border-gray-300 text-transparent' %>"><span class="material-symbols-outlined text-[13px]">check</span></span>
-                            <span class="flex-1 truncate text-sm <%= _son ? 'font-semibold text-primary' : 'text-gray-700' %>"><%= s %></span>
+                            <span class="flex-1 truncate text-sm <%= _son ? 'font-semibold text-primary' : 'text-gray-700' %>"><%= _catLabel(s) %></span>
                             <% if (_sc) { %><span class="text-xs text-gray-400 shrink-0"><%= _sc %></span><% } %>
                           </a>
                         <% }) %>
@@ -214,7 +218,7 @@
                         <% const _mc = (typeof mainCategoryCounts !== 'undefined' && mainCategoryCounts[m]) ? mainCategoryCounts[m] : 0; %>
                         <a class="flex items-center gap-2.5 py-1.5 px-2 rounded-lg <%= _on ? 'bg-primary/10' : 'hover:bg-gray-50' %>" href="<%= buildUrl({ mainCategory: _on ? '' : m, subCategory: '', page: 1 }) %>">
                           <span class="w-4 h-4 rounded border flex items-center justify-center shrink-0 <%= _on ? 'bg-primary border-primary text-white' : 'border-gray-300 text-transparent' %>"><span class="material-symbols-outlined text-[13px]">check</span></span>
-                          <span class="flex-1 truncate text-sm <%= _on ? 'font-semibold text-primary' : 'text-gray-700' %>"><%= m %></span>
+                          <span class="flex-1 truncate text-sm <%= _on ? 'font-semibold text-primary' : 'text-gray-700' %>"><%= _catLabel(m) %></span>
                           <% if (_mc) { %><span class="text-xs text-gray-400 shrink-0"><%= _mc %></span><% } %>
                         </a>
                       <% } %>
@@ -234,7 +238,7 @@
 
             <% if (typeof conditionOptions !== 'undefined' && Array.isArray(conditionOptions) && conditionOptions.length) { %>
             <div class="filter-section">
-              <p class="font-semibold text-sm mb-4">État</p>
+              <p class="font-semibold text-sm mb-4"><%= t('listing.condition') %></p>
               <div class="space-y-3">
                 <% conditionOptions.forEach((c) => { %>
                   <label class="flex items-center gap-3 text-sm cursor-pointer">
@@ -291,7 +295,7 @@
                 <span class="text-gray-600 font-medium"><%= _categoryContext.name %></span>
               </nav>
               <h1 class="text-2xl sm:text-3xl font-black tracking-tight"><%= _categoryContext.name %></h1>
-              <p class="mt-1 text-sm text-gray-500"><%= typeof totalCount !== 'undefined' ? totalCount.toLocaleString('fr-FR') : products.length %> produits dans cette catégorie</p>
+              <p class="mt-1 text-sm text-gray-500"><%= t('listing.inCategory', { count: (typeof totalCount !== 'undefined' ? totalCount : products.length).toLocaleString(lang === 'de' ? 'de-DE' : 'fr-FR') }) %></p>
             <% } else { %>
               <%/* Catalogue global */%>
               <nav class="flex items-center gap-2 text-xs text-gray-400 mb-2">
@@ -355,8 +359,8 @@
         <% var _selConds = (typeof selectedConditions !== 'undefined' && Array.isArray(selectedConditions)) ? selectedConditions : []; %>
         <% if (_condAvail.length >= 2) { %>
           <div class="flex items-center gap-2 mb-5 overflow-x-auto no-scrollbar -mx-4 px-4 md:mx-0 md:px-0 md:flex-wrap">
-            <span class="shrink-0 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 mr-1"><span class="material-symbols-outlined text-lg">tune</span>État</span>
-            <a href="<%= buildUrl({ condition: [], page: 1 }) %>" class="shrink-0 px-4 py-2 rounded-full text-sm font-bold border transition-all <%= _selConds.length === 0 ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:border-primary hover:text-primary' %>">Tous</a>
+            <span class="shrink-0 inline-flex items-center gap-1 text-sm font-semibold text-slate-500 mr-1"><span class="material-symbols-outlined text-lg">tune</span><%= t('listing.condition') %></span>
+            <a href="<%= buildUrl({ condition: [], page: 1 }) %>" class="shrink-0 px-4 py-2 rounded-full text-sm font-bold border transition-all <%= _selConds.length === 0 ? 'bg-primary text-white border-primary shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:border-primary hover:text-primary' %>"><%= t('listing.allM') %></a>
             <% _condAvail.forEach((c) => { %>
               <% var _on = _selConds.includes(c.key); %>
               <% var _next = _on ? _selConds.filter((k) => k !== c.key) : _selConds.concat([c.key]); %>
@@ -476,7 +480,7 @@
 
                   <%# 4 · COMPATIBILITÉ (colonne dès xl, toujours rendue pour des lignes cohérentes) %>
                   <div class="hidden xl:flex flex-col justify-center gap-0.5 px-4 py-4 border-l border-gray-100 shrink-0 w-40">
-                    <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Compatible avec</p>
+                    <p class="text-[10px] text-gray-400 uppercase tracking-wider mb-1"><%= t('listing.compatibleWith') %></p>
                     <% if (_compat && (_compat.make || _compat.model)) { %>
                       <% if (_compat.make) { %><p class="text-sm font-bold text-gray-900 truncate" title="<%= _compat.make %>"><%= _compat.make %></p><% } %>
                       <% if (_compat.model) { %><p class="text-xs text-gray-600 truncate" title="<%= _compat.model %>"><%= _compat.model %></p><% } %>
@@ -484,7 +488,7 @@
                     <% } else { %>
                       <p class="text-sm text-gray-500">Plusieurs véhicules</p>
                     <% } %>
-                    <a href="<%= productUrl %>" class="mt-1 text-xs font-semibold text-primary hover:underline">Voir détails</a>
+                    <a href="<%= productUrl %>" class="mt-1 text-xs font-semibold text-primary hover:underline"><%= t('listing.viewDetails') %></a>
                   </div>
 
                   <%# 5 · PRIX + STOCK + PANIER + FAVORI %>

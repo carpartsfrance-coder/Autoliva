@@ -1,3 +1,4 @@
+<% const _ilLp = (typeof langPrefix !== 'undefined' && langPrefix) ? langPrefix : ''; %>
 <%/*
   Partial commun : blocs de maillage interne SEO réutilisables.
 
@@ -231,8 +232,8 @@
       <div>
         <div class="flex items-center justify-between mb-4 sm:mb-8">
           <div>
-            <h2 class="text-xl sm:text-3xl home-display font-bold">Autres catégories</h2>
-            <p class="text-slate-500 text-sm mt-1">Explorez tout le catalogue</p>
+            <h2 class="text-xl sm:text-3xl home-display font-bold"><%= t('linking.otherCategories') %></h2>
+            <p class="text-slate-500 text-sm mt-1"><%= t('linking.exploreCatalog') %></p>
           </div>
         </div>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
@@ -255,17 +256,17 @@
       <div>
         <div class="flex items-center justify-between mb-4 sm:mb-8">
           <div>
-            <h2 class="text-xl sm:text-3xl home-display font-bold">Conseils techniques liés</h2>
-            <p class="text-slate-500 text-sm mt-1">Diagnostic, prix, remplacement — par nos experts</p>
+            <h2 class="text-xl sm:text-3xl home-display font-bold"><%= t('linking.relatedAdvice') %></h2>
+            <p class="text-slate-500 text-sm mt-1"><%= t('linking.relatedAdviceSub') %></p>
           </div>
-          <a class="hidden sm:flex items-center gap-2 border border-slate-200 px-6 py-2 rounded-full font-bold hover:bg-slate-50 transition-all" href="/blog">
-            Tout le blog <span class="material-symbols-rounded text-lg">trending_up</span>
+          <a class="hidden sm:flex items-center gap-2 border border-slate-200 px-6 py-2 rounded-full font-bold hover:bg-slate-50 transition-all" href="<%= _ilLp %>/blog">
+            <%= t('linking.allBlog') %> <span class="material-symbols-rounded text-lg">trending_up</span>
           </a>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-8">
           <% for (const p of _relatedPosts.slice(0, 3)) { %>
             <article class="group">
-              <a href="/blog/<%= encodeURIComponent(p.slug) %>" class="block">
+              <a href="<%= p.url || (_ilLp + '/blog/' + encodeURIComponent(p.slug)) %>" class="block">
                 <div class="rounded-2xl overflow-hidden mb-4 relative aspect-[16/10]">
                   <% if (p.coverImageUrl) { %>
                     <img alt="<%= p.title %>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
@@ -277,9 +278,9 @@
                   <% } %>
                   <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                   <div class="absolute bottom-4 left-4 flex gap-2">
-                    <span class="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded">GUIDE</span>
+                    <span class="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded"><%= t('linking.guide') %></span>
                     <% if (p.readingTimeMinutes) { %>
-                      <span class="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded"><%= p.readingTimeMinutes %> MIN</span>
+                      <span class="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded"><%= p.readingTimeMinutes %> <%= t('linking.min') %></span>
                     <% } %>
                   </div>
                 </div>

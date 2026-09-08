@@ -19,6 +19,7 @@ const {
 } = require('../services/productPublic');
 const { buildHreflangSet, t } = require('../services/i18n');
 const productI18n = require('../services/productI18n');
+const blogI18n = require('../services/blogI18n');
 const categoryI18n = require('../services/categoryI18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const { sanitizeBrandLeak } = require('../services/brandSanitizer');
@@ -1056,30 +1057,35 @@ async function getProduct(req, res, next) {
         relatedProducts = relatedProducts.concat(fallback.map(normalizeProduct));
       }
 
+      /* Les articles liés d'une fiche allemande étaient servis en français,
+         titre et lien compris. */
+      const blogLang = req.lang === 'de' ? 'de' : 'fr';
       const mappedBlogCard = (b) => {
+        const f = blogI18n.blogFields(b, blogLang);
         const publishedAt = b.publishedAt || b.createdAt || null;
         const minutes = Number.isFinite(b.readingTimeMinutes) && b.readingTimeMinutes > 0
           ? b.readingTimeMinutes
-          : estimateReadingTimeMinutes(b.contentHtml || '');
-        const excerpt = (b.excerpt || '').trim() || truncateText(stripHtml(b.contentHtml || ''), 140);
-        const categoryLabel = b.category && b.category.label
-          ? String(b.category.label).trim()
-          : (b.category && b.category.slug ? String(b.category.slug).trim() : 'Blog');
+          : estimateReadingTimeMinutes(f.contentHtml);
+        const excerpt = (f.excerpt || '').trim() || truncateText(stripHtml(f.contentHtml), 140);
+        const categoryLabel = blogI18n.blogCategoryLabel(b.category, blogLang) || 'Blog';
 
         return {
           id: String(b._id),
           slug: String(b.slug),
-          title: b.title || '',
+          title: f.title,
           excerpt,
           imageUrl: b.coverImageUrl || '',
           categoryLabel,
           dateLabel: formatDateFRShort(publishedAt),
-          readTimeLabel: `${minutes} min`,
-          url: `/blog/${encodeURIComponent(String(b.slug))}`,
+          readTimeLabel: blogLang === 'de' ? `${minutes} Min.` : `${minutes} min`,
+          url: blogI18n.blogUrl(b.slug, blogLang),
         };
       };
 
-      const blogProjection = 'slug title excerpt coverImageUrl category publishedAt createdAt readingTimeMinutes contentHtml';
+      const blogProjection = `slug title excerpt coverImageUrl category publishedAt createdAt readingTimeMinutes contentHtml ${blogI18n.DE_PROJECTION}`;
+      /* Ne proposer que des articles traduits : sinon le lien allemand mène à
+         un article français. */
+      const blogFilterLang = blogI18n.blogLangFilter(blogLang);
 
       const chosenIds = Array.isArray(product.relatedBlogPostIds) ? product.relatedBlogPostIds : [];
       const chosenObjectIds = chosenIds
@@ -1087,7 +1093,7 @@ async function getProduct(req, res, next) {
         .map((v) => new mongoose.Types.ObjectId(v));
 
       const chosenDocs = chosenObjectIds.length
-        ? await BlogPost.find({ _id: { $in: chosenObjectIds }, isPublished: true })
+        ? await BlogPost.find({ _id: { $in: chosenObjectIds }, isPublished: true, ...blogFilterLang })
             .select(`_id ${blogProjection}`)
             .lean()
         : [];
@@ -1099,6 +1105,7 @@ async function getProduct(req, res, next) {
 
       const fromArticlesDocs = await BlogPost.find({
         isPublished: true,
+        ...blogFilterLang,
         relatedProductIds: new mongoose.Types.ObjectId(id),
       })
         .sort({ publishedAt: -1, createdAt: -1 })

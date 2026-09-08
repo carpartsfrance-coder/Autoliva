@@ -2,7 +2,7 @@
 
 require('dotenv').config();
 
-/* Traduit le VOCABULAIRE des pastilles, pas les fiches.
+/* Traduit le VOCABULAIRE des pastilles et des délais, pas les fiches.
  *
  * ── Pourquoi ce script (09/2026) ────────────────────────────────────────────
  *
@@ -36,6 +36,11 @@ const mongoose = require('mongoose');
 const translator = require('../src/services/productTranslator');
 
 const CACHE = path.join(__dirname, 'badges-de.json');
+/* Les délais d'expédition sont dans la même situation que les pastilles :
+   7 017 fiches allemandes affichaient « 3-5 jours » ou « Sur demande » en
+   français. 62 libellés distincts, courts et sans ambiguïté — écrits à la
+   main, ils ne coûtent pas un appel. */
+const CACHE_DELAIS = path.join(__dirname, 'delais-de.json');
 const LOT = 40;
 
 function flag(n) { return process.argv.includes(n); }
@@ -101,7 +106,9 @@ async function main() {
   const Product = require('../src/models/Product');
 
   /* ── 1. Le vocabulaire réellement employé ─────────────────────────────── */
-  const produits = await Product.find({}).select('badges localizations.de.badges').lean();
+  const produits = await Product.find({})
+    .select('badges shippingDelayText localizations.de.badges localizations.de.shippingDelayText')
+    .lean();
   const vocabulaire = new Set();
   for (const p of produits) {
     const b = p.badges || {};
@@ -153,23 +160,49 @@ async function main() {
   if (refuses) console.log(refuses + ' traduction(s) refusée(s) pour incohérence d’état — ces pastilles restent en français.');
 
   /* ── 3. Application au catalogue ──────────────────────────────────────── */
+  const delais = fs.existsSync(CACHE_DELAIS) ? JSON.parse(fs.readFileSync(CACHE_DELAIS, 'utf8')) : {};
+  const manqueDelai = new Set();
   const trad = (s) => (s && table[String(s).trim()]) || '';
+  const tradDelai = (s) => {
+    const k = String(s || '').trim();
+    if (!k) return '';
+    if (delais[k]) return delais[k];
+    manqueDelai.add(k);
+    return '';
+  };
   const ops = [];
   let inchangees = 0;
   for (const p of produits) {
     const b = p.badges || {};
+    const de = (p.localizations && p.localizations.de) || {};
+    const set = {};
+
     const cible = {};
     if (b.topLeft) cible.topLeft = trad(b.topLeft) || b.topLeft;
     if (b.condition) cible.condition = trad(b.condition) || b.condition;
     if (Array.isArray(b.cards) && b.cards.length) cible.cards = b.cards.map((c) => trad(c) || c);
-    if (!Object.keys(cible).length) { inchangees++; continue; }
+    if (Object.keys(cible).length) {
+      const actuel = de.badges || {};
+      const identique = JSON.stringify({ t: actuel.topLeft || '', c: actuel.condition || '', k: actuel.cards || [] })
+        === JSON.stringify({ t: cible.topLeft || '', c: cible.condition || '', k: cible.cards || [] });
+      if (!identique) set['localizations.de.badges'] = cible;
+    }
 
-    const actuel = (p.localizations && p.localizations.de && p.localizations.de.badges) || {};
-    const identique = JSON.stringify({ t: actuel.topLeft || '', c: actuel.condition || '', k: actuel.cards || [] })
-      === JSON.stringify({ t: cible.topLeft || '', c: cible.condition || '', k: cible.cards || [] });
-    if (identique) { inchangees++; continue; }
+    /* Délai d'expédition : on n'écrit QUE si on a une traduction. Laisser le
+       français serait moins visible qu'une case vide, mais ce serait mentir sur
+       la langue de la page — on préfère ne rien écrire et le signaler. */
+    const cibleDelai = tradDelai(p.shippingDelayText);
+    if (cibleDelai && cibleDelai !== (de.shippingDelayText || '')) {
+      set['localizations.de.shippingDelayText'] = cibleDelai;
+    }
 
-    ops.push({ updateOne: { filter: { _id: p._id }, update: { $set: { 'localizations.de.badges': cible } } } });
+    if (!Object.keys(set).length) { inchangees++; continue; }
+    ops.push({ updateOne: { filter: { _id: p._id }, update: { $set: set } } });
+  }
+
+  if (manqueDelai.size) {
+    console.log('\n' + manqueDelai.size + ' délai(s) absent(s) de ' + path.basename(CACHE_DELAIS) + ' — restés vides :');
+    for (const d of [...manqueDelai].slice(0, 20)) console.log('   ' + JSON.stringify(d));
   }
 
   console.log('\n' + ops.length + ' fiche(s) à mettre à jour, ' + inchangees + ' déjà correcte(s) ou sans pastille.');
@@ -177,7 +210,12 @@ async function main() {
   const apercu = ops.slice(0, 5);
   for (const o of apercu) {
     const p = produits.find((x) => String(x._id) === String(o.updateOne.filter._id));
-    console.log('  ' + JSON.stringify(p.badges.condition || '') + ' → ' + JSON.stringify(o.updateOne.update.$set['localizations.de.badges'].condition || ''));
+    const $set = o.updateOne.update.$set;
+    const badges = $set['localizations.de.badges'];
+    if (badges) console.log('  pastille  ' + JSON.stringify((p.badges || {}).condition || '') + ' → ' + JSON.stringify(badges.condition || ''));
+    if ($set['localizations.de.shippingDelayText']) {
+      console.log('  délai     ' + JSON.stringify(p.shippingDelayText || '') + ' → ' + JSON.stringify($set['localizations.de.shippingDelayText']));
+    }
   }
 
   if (!appliquer) {

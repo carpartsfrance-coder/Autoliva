@@ -1,8 +1,16 @@
 <% const settings = typeof siteSettings !== 'undefined' && siteSettings && typeof siteSettings === 'object' ? siteSettings : {}; %>
-<% const promoText = settings && typeof settings.promoBannerText === 'string' ? settings.promoBannerText.trim() : ''; %>
+<%/* Le texte du bandeau est saisi en français dans l'admin. Sur /de on sert la
+     version allemande si elle existe, sinon RIEN : afficher « Offre Spéciale :
+     -3% sur toute commande » au-dessus d'une page allemande faisait passer la
+     traduction pour un habillage. */%>
+<% const _pbDe = (typeof lang !== 'undefined' && lang === 'de'); %>
+<% const promoText = _pbDe
+     ? (settings && typeof settings.promoBannerTextDe === 'string' ? settings.promoBannerTextDe.trim() : '')
+     : (settings && typeof settings.promoBannerText === 'string' ? settings.promoBannerText.trim() : ''); %>
 <% const promoCode = settings && typeof settings.promoBannerCode === 'string' ? settings.promoBannerCode.trim() : ''; %>
 
-<% if (promoText || promoCode) { %>
+<%/* En DE, pas de texte allemand = pas de bandeau (même si un code existe). */%>
+<% if (promoText || (promoCode && !_pbDe)) { %>
   <div class="bg-primary text-white text-center py-2 text-xs sm:text-sm font-medium">
     <%= promoText %>
     <% if (promoCode) { %>

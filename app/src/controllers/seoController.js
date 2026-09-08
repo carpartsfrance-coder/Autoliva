@@ -428,6 +428,31 @@ async function buildBlogUrlsDe(baseUrl, dbConnected) {
  * publiée (localizations.de.translatedAt non null) → Google n'indexe jamais une
  * fiche DE en cours de traduction (qui ferait un 301 vers le FR). URL alignée
  * sur la canonique servie par getProduct : /de/produits/<slug-de>-<id>. */
+/* Catégories allemandes : elles existent (/de/categorie/<slug-de>) mais ne
+   figuraient dans AUCUN sitemap — Google n'avait aucun moyen de les découvrir
+   autrement qu'en suivant un lien depuis une page déjà connue. */
+async function buildCategoryUrlsDe(req, baseUrl, dbConnected) {
+  if (!dbConnected) return [];
+  const cats = await Category.find({
+    isActive: true,
+    'localizations.de.translatedAt': { $ne: null },
+  })
+    .select('_id slug updatedAt localizations.de.slug localizations.de.translatedAt')
+    .sort({ sortOrder: 1, name: 1 })
+    .lean();
+
+  const urls = [];
+  for (const c of cats) {
+    const deLoc = c && c.localizations && c.localizations.de;
+    if (!deLoc || !deLoc.translatedAt) continue;
+    const deSlug = (deLoc.slug && String(deLoc.slug).trim()) || c.slug;
+    if (!deSlug) continue;
+    const path = `/de/categorie/${encodeURIComponent(deSlug)}`;
+    urls.push({ loc: baseUrl ? `${baseUrl}${path}` : path, lastmod: toIsoDate(c.updatedAt) });
+  }
+  return urls;
+}
+
 async function buildProductUrlsDe(req, baseUrl, dbConnected) {
   if (!dbConnected) return [];
   const products = await Product.find({
@@ -491,6 +516,7 @@ async function getSitemapXml(req, res, next) {
     const sitemaps = [
       { loc: resolveUrl('/sitemap-pages.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-categories.xml'), lastmod: now },
+      { loc: resolveUrl('/sitemap-categories-de.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-products.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-products-de.xml'), lastmod: now },
       { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: now },
@@ -597,6 +623,17 @@ async function getSitemapBlogDe(req, res, next) {
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildBlogUrlsDe(baseUrl, dbConnected);
     return sendXml(res, renderUrlset(urls, { withImages: true }));
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function getSitemapCategoriesDe(req, res, next) {
+  try {
+    const dbConnected = mongoose.connection.readyState === 1;
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const urls = await buildCategoryUrlsDe(req, baseUrl, dbConnected);
+    return sendXml(res, renderUrlset(urls));
   } catch (err) {
     return next(err);
   }
@@ -717,6 +754,7 @@ function getRobotsTxt(req, res) {
     `Sitemap: ${abs('/sitemap.xml')}`,
     `Sitemap: ${abs('/sitemap-pages.xml')}`,
     `Sitemap: ${abs('/sitemap-categories.xml')}`,
+    `Sitemap: ${abs('/sitemap-categories-de.xml')}`,
     `Sitemap: ${abs('/sitemap-products.xml')}`,
     `Sitemap: ${abs('/sitemap-products-de.xml')}`,
     `Sitemap: ${abs('/sitemap-vehicles.xml')}`,
@@ -736,6 +774,7 @@ module.exports = {
   getRobotsTxt,
   getSitemapPages,
   getSitemapCategories,
+  getSitemapCategoriesDe,
   getSitemapProducts,
   getSitemapProductsDe,
   getSitemapVehicles,

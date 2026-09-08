@@ -22,6 +22,18 @@ const brand = require('../config/brand');
 
 const LANG_PREFIX = '/de';
 
+/* Les catégories du blog ne sont pas traduites en base : la liste allemande
+   affichait « Transmission > Boîte de transfert » sous des titres allemands.
+   19 valeurs distinctes, indexées par SLUG parce que les libellés stockés ont
+   des variantes d'encodage (« Différentiel », « DiffÃ©rentiel »). */
+const BLOG_CATEGORIES_DE = require('../locales/blogCategoriesDe.json');
+
+function blogCategoryLabelDe(category) {
+  if (!category) return '';
+  const slug = String(category.slug || '').trim().toLowerCase();
+  return BLOG_CATEGORIES_DE[slug] || String(category.label || slug || '');
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 function getTrimmedString(value) {
@@ -239,7 +251,7 @@ async function getBlogIndexDe(req, res) {
         title: de.title || d.title,
         excerpt: de.excerpt || d.excerpt,
         imageUrl: buildSeoMediaUrl(d.coverImageUrl, de.title || d.title),
-        category: d.category && d.category.slug ? { slug: d.category.slug, label: d.category.label || d.category.slug } : null,
+        category: d.category && d.category.slug ? { slug: d.category.slug, label: blogCategoryLabelDe(d.category) } : null,
         dateLabel: formatDateDE(publishedAt),
         readTimeLabel: `${estimateReadingTimeMinutes(de.contentHtml || '')} Min.`,
         featured: false,
@@ -255,7 +267,7 @@ async function getBlogIndexDe(req, res) {
     const popularArticles = popularDocs.map((p, idx) => ({
       rank: String(idx + 1).padStart(2, '0'),
       title: (p.localizations && p.localizations.de && p.localizations.de.title) || p.title,
-      meta: `${(p.category && p.category.label) ? p.category.label : 'Blog'} • aktuell`,
+      meta: `${blogCategoryLabelDe(p.category) || 'Blog'} • aktuell`,
       url: `/de/blog/${encodeURIComponent(p.slug)}`,
     }));
 
@@ -432,7 +444,7 @@ async function getBlogPostDe(req, res) {
         slug: post.slug,
         excerpt: de.excerpt || computedDesc,
         coverImageUrl: buildSeoMediaUrl(post.coverImageUrl, de.title),
-        category: post.category && post.category.slug ? { slug: post.category.slug, label: post.category.label || post.category.slug } : null,
+        category: post.category && post.category.slug ? { slug: post.category.slug, label: blogCategoryLabelDe(post.category) } : null,
         authorName: post.authorName || 'Autoliva-Experte',
         dateLabel: formatDateDE(publishedAt),
         readingTimeLabel: `${estimateReadingTimeMinutes(de.contentHtml)} Min. Lesezeit`,
