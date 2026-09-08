@@ -3,7 +3,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { aTraiter, blogSourceHash } = require('../../src/jobs/traduireNouveautesDe');
+const {
+  aTraiter, estPerime, estEnQuarantaine, blogSourceHash, MAX_ECHECS,
+} = require('../../src/jobs/traduireNouveautesDe');
 const { sourceHash } = require('../../src/services/productTranslator');
 
 /* Ce qui est vérifié ici tient en une phrase : le balayage doit voir le
@@ -65,4 +67,37 @@ test('le balayage ne fait rien tant qu’il n’est pas armé', async () => {
   delete process.env.DE_AUTO_TRANSLATE;
   assert.strictEqual(await traduireNouveautesDe(), null);
   if (avant !== undefined) process.env.DE_AUTO_TRANSLATE = avant;
+});
+
+/* ── Quarantaine ──────────────────────────────────────────────────────────
+   Une fiche que le modèle n'arrive pas à traduire consommait un créneau ET un
+   appel payant à chaque passage, pour toujours. */
+
+test('une fiche qui échoue trois fois sur le même texte est mise de côté', () => {
+  const p = fiche();
+  p.localizations = { de: { failedHash: sourceHash(p), failedCount: MAX_ECHECS } };
+  assert.strictEqual(estPerime(p, sourceHash), true, 'elle reste bien « à traduire »');
+  assert.strictEqual(estEnQuarantaine(p, sourceHash), true);
+  assert.strictEqual(aTraiter(p, sourceHash), false, 'mais le balayage ne la reprend plus');
+});
+
+test('deux échecs ne suffisent pas à la mettre de côté', () => {
+  const p = fiche();
+  p.localizations = { de: { failedHash: sourceHash(p), failedCount: MAX_ECHECS - 1 } };
+  assert.strictEqual(aTraiter(p, sourceHash), true);
+});
+
+test('une fiche en quarantaine repart si son texte change', () => {
+  const p = fiche();
+  p.localizations = { de: { failedHash: sourceHash(p), failedCount: 9 } };
+  p.description = 'Texte corrigé à la main après l’échec.';
+  assert.strictEqual(estEnQuarantaine(p, sourceHash), false);
+  assert.strictEqual(aTraiter(p, sourceHash), true);
+});
+
+test('les échecs d’une AUTRE version du texte ne bloquent pas', () => {
+  const p = traduite(fiche());
+  p.localizations.de.failedHash = 'empreinte-d-une-vieille-version';
+  p.localizations.de.failedCount = 12;
+  assert.strictEqual(estEnQuarantaine(p, sourceHash), false);
 });

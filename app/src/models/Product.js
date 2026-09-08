@@ -45,6 +45,13 @@ const localizedProductSchema = new mongoose.Schema(
        de l'empreinte actuelle, la fiche a été réécrite depuis : la traduction
        est périmée et le cron la reprend. Vide = jamais traduite. */
     sourceHash: { type: String, default: '', trim: true },
+    /* Mise de côté après plusieurs échecs sur le MÊME texte : sans ça, une
+       fiche que le modèle n'arrive pas à traduire consomme un créneau et un
+       appel payant à chaque passage, indéfiniment. Elle repart dès que son
+       texte français change. */
+    failedHash: { type: String, default: '', trim: true },
+    failedCount: { type: Number, default: 0 },
+    failedAt: { type: Date, default: null },
     /* Gouvernance de traduction : qui/quand + relecture humaine. */
     translatedAt: { type: Date, default: null },
     translatedBy: { type: String, default: '', trim: true }, // ex: 'openai:gpt-4o-mini'

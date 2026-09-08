@@ -22,14 +22,19 @@ async function main() {
   const Product = require('../src/models/Product');
   const BlogPost = require('../src/models/BlogPost');
 
+  /* `--reempreindre` recalcule AUSSI les empreintes déjà posées. Nécessaire si
+     une version antérieure du calcul a laissé des valeurs qui ne correspondent
+     plus : sans ça le balayage croit tout le contenu réécrit et le retraduit
+     en boucle, quelques articles par heure, indéfiniment. */
+  const reempreindre = process.argv.includes('--reempreindre');
   const fiches = await Product.find({ 'localizations.de.translatedAt': { $ne: null } }).lean();
   const opsP = fiches
-    .filter((p) => !(p.localizations.de.sourceHash))
+    .filter((p) => reempreindre || !(p.localizations.de.sourceHash))
     .map((p) => ({ updateOne: { filter: { _id: p._id }, update: { $set: { 'localizations.de.sourceHash': sourceHash(p) } } } }));
 
   const posts = await BlogPost.find({ 'localizations.de.translatedAt': { $ne: null } }).lean();
   const opsB = posts
-    .filter((b) => !(b.localizations.de.sourceHash))
+    .filter((b) => reempreindre || !(b.localizations.de.sourceHash))
     .map((b) => ({ updateOne: { filter: { _id: b._id }, update: { $set: { 'localizations.de.sourceHash': blogSourceHash(b) } } } }));
 
   console.log(fiches.length + ' fiche(s) traduite(s) -> ' + opsP.length + ' a empreindre');
@@ -47,7 +52,15 @@ async function main() {
       console.log('   ' + nom + ' ' + Math.min(i + 500, ops.length) + '/' + ops.length);
     }
   }
-  console.log('OK - empreintes posees, le cron ne verra plus que le NOUVEAU.');
+  /* Contrôle : on relit et on recompte. Une empreinte posee qui ne se relit
+     pas identique est un piege silencieux — autant le voir tout de suite. */
+  const { blogSourceHash: bh } = require('../src/jobs/traduireNouveautesDe');
+  const relusP = await Product.find({ 'localizations.de.sourceHash': { $exists: true, $ne: '' } }).lean();
+  const relusB = await BlogPost.find({ 'localizations.de.sourceHash': { $exists: true, $ne: '' } }).lean();
+  const faux = relusP.filter((p) => p.localizations.de.sourceHash !== sourceHash(p)).length
+    + relusB.filter((b) => b.localizations.de.sourceHash !== bh(b)).length;
+  console.log('OK - empreintes posees. Controle : ' + faux + ' incoherence(s).');
+  if (faux) console.log('   ATTENTION : le balayage retraduira ces ' + faux + ' element(s) en boucle.');
   await mongoose.disconnect();
 }
 
