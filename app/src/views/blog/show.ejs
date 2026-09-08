@@ -29,7 +29,7 @@
             <div class="flex items-center flex-wrap gap-4 text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-3">
               <span class="flex items-center gap-1">
                 <span class="material-symbols-outlined text-sm text-primary">person</span>
-                Par <%= post && post.authorName ? post.authorName : brand.NAME_SHORT %>
+                <%= t('blog.by') %> <%= post && post.authorName ? post.authorName : brand.NAME_SHORT %>
               </span>
               <span class="flex items-center gap-1">
                 <span class="material-symbols-outlined text-sm text-primary">calendar_today</span>
@@ -69,12 +69,12 @@
                   <% if (_ctaTopic) { %>
                     Besoin d'aide concernant <%= _ctaTopic %> ?
                   <% } else { %>
-                    Besoin d'un avis technique sur votre véhicule ?
+                    <%= t('blogCta.title') %>
                   <% } %>
                 </h2>
 
                 <p class="mt-2 text-slate-600 text-sm lg:text-base leading-relaxed max-w-2xl">
-                  Notre équipe technique vérifie gratuitement la compatibilité avec votre véhicule (VIN/immatriculation), vous envoie un devis personnalisé sous 24h et vous accompagne jusqu'au remontage. Garantie jusqu'à 2&nbsp;ans*.
+                  <%= t('blogCta.body') %>
                 </p>
 
                 <div class="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -88,11 +88,11 @@
                   </div>
                   <div class="bg-white rounded-lg border border-slate-100 p-3">
                     <span class="material-symbols-outlined text-green-600" style="font-size:20px">shield</span>
-                    <div class="text-[11px] font-bold text-slate-700 mt-1 leading-tight">Garantie 2 ans*</div>
+                    <div class="text-[11px] font-bold text-slate-700 mt-1 leading-tight"><%= t('blogCta.warranty2y') %></div>
                   </div>
                   <div class="bg-white rounded-lg border border-slate-100 p-3">
                     <span class="material-symbols-outlined text-green-600" style="font-size:20px">local_shipping</span>
-                    <div class="text-[11px] font-bold text-slate-700 mt-1 leading-tight">Livraison 24/48h</div>
+                    <div class="text-[11px] font-bold text-slate-700 mt-1 leading-tight"><%= t('blogCta.delivery') %></div>
                   </div>
                 </div>
 
@@ -104,28 +104,28 @@
                   <% } %>
 
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input type="text" name="firstName" placeholder="Prénom (optionnel)" maxlength="80"
+                    <input type="text" name="firstName" placeholder="<%= t('blogCta.phFirstName') %>" maxlength="80"
                            class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition" />
-                    <input type="tel" name="phone" placeholder="Téléphone (optionnel)" maxlength="24"
+                    <input type="tel" name="phone" placeholder="<%= t('blogCta.phPhone') %>" maxlength="24"
                            class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition" />
                   </div>
-                  <input type="email" name="email" required placeholder="votre@email.com *"
+                  <input type="email" name="email" required placeholder="<%= t('blogCta.phEmail') %>"
                          class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition" />
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input type="text" name="vin" placeholder="VIN (optionnel)" maxlength="32"
+                    <input type="text" name="vin" placeholder="<%= t('blogCta.phVin') %>" maxlength="32"
                            class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition" />
-                    <input type="text" name="vehicle" placeholder="Marque + modèle + année" maxlength="200"
+                    <input type="text" name="vehicle" placeholder="<%= t('blogCta.phVehicle') %>" maxlength="200"
                            class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition" />
                   </div>
-                  <textarea name="message" rows="2" maxlength="500" placeholder="Décrivez votre symptôme ou question (codes défaut, bruit, kilométrage…)"
+                  <textarea name="message" rows="2" maxlength="500" placeholder="<%= t('blogCta.phMessage') %>"
                             class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition resize-none"></textarea>
 
                   <button type="submit" class="w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white py-4 rounded-xl font-black text-base transition shadow-md hover:shadow-lg flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined" style="font-size:20px">send</span>
-                    Demander mon devis personnalisé
+                    <%= t('blogCta.submit') %>
                   </button>
 
-                  <p class="text-[11px] text-slate-500 text-center">Sans engagement · Réponse sous 24h ouvrées · <a href="/legal/confidentialite" target="_blank" class="underline hover:text-slate-700">Confidentialité</a></p>
+                  <p class="text-[11px] text-slate-500 text-center"><%= t('blogCta.legal') %> <a href="/legal/confidentialite" target="_blank" class="underline hover:text-slate-700"><%= t('exit.privacy') %></a></p>
                 </form>
 
                 <div id="blog-end-cta-result" class="mt-4 text-sm"></div>
@@ -186,15 +186,15 @@
               <span class="material-symbols-outlined" style="font-size:12px">support_agent</span>
               Conseil expert offert
             </div>
-            <h3 class="text-base font-bold mb-1.5 leading-tight">Une question sur cet article&nbsp;?</h3>
-            <p class="text-[11px] text-white/80 mb-3 leading-snug">Notre équipe technique répond gratuitement avec des conseils adaptés à votre véhicule.</p>
+            <h3 class="text-base font-bold mb-1.5 leading-tight"><%= t('blogCta.asideTitle') %></h3>
+            <p class="text-[11px] text-white/80 mb-3 leading-snug"><%= t('blogCta.asideBody') %></p>
             <form id="blog-sidebar-cta" class="space-y-2">
               <input type="hidden" name="articleSlug" value="<%= post && post.slug ? post.slug : '' %>" />
               <input type="hidden" name="articleTitle" value="<%= post && post.title ? post.title : '' %>" />
               <input class="w-full bg-white/15 backdrop-blur border border-white/20 rounded-lg py-2 px-3 text-xs text-white placeholder-white/60 focus:ring-2 focus:ring-amber-300/50 focus:border-amber-300 focus:outline-none"
                      placeholder="votre@email.com" name="email" type="email" required />
               <button class="w-full bg-amber-400 hover:bg-amber-300 text-red-900 font-black py-2 rounded-lg text-xs transition flex items-center justify-center gap-1" type="submit">
-                Recevoir un conseil
+                <%= t('blogCta.asideBtn') %>
                 <span class="material-symbols-outlined" style="font-size:14px">arrow_forward</span>
               </button>
             </form>
@@ -242,7 +242,7 @@
         <% if (relatedProducts && relatedProducts.length) { %>
           <div class="bg-white dark:bg-surface-dark p-4 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800">
             <h3 class="font-display font-bold text-sm uppercase tracking-widest text-slate-900 dark:text-white mb-4 flex items-center gap-2">
-              <span class="w-1.5 h-1.5 bg-primary rounded-full"></span> Produits Liés
+              <span class="w-1.5 h-1.5 bg-primary rounded-full"></span> <%= t('blog.relatedProductsTitle') %>
             </h3>
 
             <div class="space-y-4">
@@ -265,7 +265,7 @@
                     </div>
 
                     <form action="/panier/ajouter/<%= p.id %>" method="POST">
-                      <button class="bg-slate-900 text-white text-[9px] font-bold px-3 py-1 rounded hover:bg-primary transition-colors uppercase w-fit" type="submit">Ajouter</button>
+                      <button class="bg-slate-900 text-white text-[9px] font-bold px-3 py-1 rounded hover:bg-primary transition-colors uppercase w-fit" type="submit"><%= t('blog.addToCart') %></button>
                     </form>
                   </div>
                 </div>
@@ -413,17 +413,17 @@
         <% } %>
       </a>
       <a class="flex flex-col min-w-0 flex-1" href="<%= _stickyProduct.url %>">
-        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Pièce de l'article</span>
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider"><%= t('blog.articlePart') %></span>
         <span class="text-xs md:text-sm font-bold text-slate-900 truncate leading-tight"><%= _stickyProduct.name %></span>
         <% if (_stickyProduct.priceLabel) { %>
           <span class="text-primary font-black text-sm md:text-base"><%= _stickyProduct.priceLabel %></span>
         <% } %>
       </a>
       <a class="shrink-0 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 md:px-5 md:py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-lg shadow-primary/20 transition-all" href="<%= _stickyProduct.url %>">
-        Voir
+        <%= t('blog.view') %>
         <span class="material-symbols-outlined text-base">arrow_forward</span>
       </a>
-      <button type="button" id="blog-sticky-product-close" class="shrink-0 w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition" aria-label="Masquer">
+      <button type="button" id="blog-sticky-product-close" class="shrink-0 w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition" aria-label="<%= t('blog.hide') %>">
         <span class="material-symbols-outlined" style="font-size:18px">close</span>
       </button>
     </div>

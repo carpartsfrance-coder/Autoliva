@@ -32,7 +32,7 @@
             <% } %>
             <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
             <div class="absolute bottom-0 left-0 p-8 lg:p-12 w-full lg:w-3/4">
-              <span class="inline-block bg-primary text-white text-[10px] font-bold px-3 py-1 rounded mb-4 uppercase tracking-widest">À la une</span>
+              <span class="inline-block bg-primary text-white text-[10px] font-bold px-3 py-1 rounded mb-4 uppercase tracking-widest"><%= t('blog.featured') %></span>
               <h1 class="text-3xl lg:text-5xl font-display font-bold text-white mb-4 leading-tight"><%= featured.title %></h1>
               <p class="text-slate-300 text-sm lg:text-base mb-6 line-clamp-2 max-w-2xl"><%= featured.excerpt %></p>
               <div class="flex items-center gap-6 text-[11px] font-bold text-white/70 uppercase tracking-wider">
@@ -59,8 +59,8 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
           <% if (!articles || !articles.length) { %>
             <div class="md:col-span-2 bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 p-8 text-center">
-              <div class="text-sm font-bold text-slate-900 dark:text-white">Aucun article publié pour le moment.</div>
-              <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">Reviens bientôt, ou publie un article depuis l’admin.</div>
+              <div class="text-sm font-bold text-slate-900 dark:text-white"><%= t('blog.noneYet') %></div>
+              <div class="mt-2 text-xs text-slate-500 dark:text-slate-400"><%= t('blog.noneYetHint') %></div>
             </div>
           <% } %>
           <% (articles || []).forEach((a) => { %>

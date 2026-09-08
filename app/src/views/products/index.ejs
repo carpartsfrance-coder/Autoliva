@@ -473,9 +473,9 @@
 
                   <%# 3 · GARANTIES (colonne dès lg) %>
                   <div class="hidden lg:flex flex-col justify-center gap-2 px-4 py-4 border-l border-gray-100 shrink-0">
-                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">verified_user</span><%= _wMonths > 0 ? ('Garantie ' + _wMonths + ' mois') : 'Garantie incluse' %></span>
-                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">build</span>Contrôlé &amp; testé</span>
-                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">workspace_premium</span>Qualité premium</span>
+                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">verified_user</span><%= _wMonths > 0 ? t('product.warrantyMonths', { months: _wMonths }) : t('product.warrantyIncl') %></span>
+                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">build</span><%= t('listing.cardChecked') %></span>
+                    <span class="inline-flex items-center gap-2 text-xs font-medium text-gray-600"><span class="material-symbols-outlined text-emerald-600 text-[18px]">workspace_premium</span><%= t('listing.cardPremium') %></span>
                   </div>
 
                   <%# 4 · COMPATIBILITÉ (colonne dès xl, toujours rendue pour des lignes cohérentes) %>
