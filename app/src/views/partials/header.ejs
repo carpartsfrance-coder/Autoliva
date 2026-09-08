@@ -79,7 +79,7 @@
       </div>
       <div class="cat-nav__grid">
         <% navCategories.forEach(function (cat) { %>
-          <a class="cat-nav__item" href="<%= _lp %>/categorie/<%= encodeURIComponent(cat.slug) %>">
+          <a class="cat-nav__item" href="<%= _lp %>/categorie/<%= encodeURIComponent(_isDe && cat.slugDe ? cat.slugDe : cat.slug) %>">
             <span class="cat-nav__ic"><span class="material-symbols-outlined"><%= cat.icon || 'category' %></span></span>
             <span class="cat-nav__nm"><%= _isDe && cat.nameDe ? cat.nameDe : cat.name %></span>
           </a>

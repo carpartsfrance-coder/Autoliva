@@ -759,5 +759,8 @@
   "shipping.cloningTitle": "Expédition aller + retour incluse",
   "shipping.cloningDesc": "Étiquettes prépayées aller et retour comprises dans le service",
   "breadcrumb.legal": "Informations légales",
-  "legal.lastUpdate": "Dernière mise à jour :"
+  "legal.lastUpdate": "Dernière mise à jour :",
+  "categories.indexTitle": "Catégories - %brandName%",
+  "categories.indexMeta": "Découvre toutes nos catégories de pièces auto : moteur, freinage, carrosserie, électricité, entretien et plus.",
+  "breadcrumb.categoriesLd": "Catégories"
 }

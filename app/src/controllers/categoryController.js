@@ -66,15 +66,24 @@ async function listCategories(req, res, next) {
     if (dbConnected) {
       categories = await Category.find({ isActive: true })
         .sort({ sortOrder: 1, name: 1 })
-        .select('_id name slug')
+        .select('_id name slug localizations.de.name localizations.de.slug localizations.de.translatedAt')
         .lean();
 
-      categories = (categories || []).map((c) => ({
-        id: String(c._id),
-        name: c.name || '',
-        slug: c.slug || '',
-        publicPath: buildCategoryPublicPath(c),
-      }));
+      categories = (categories || []).map((c) => {
+        /* Sous /de : nom ET slug allemands. Le sommaire listait les 64
+           catégories avec leurs URL françaises — 64 liens qui partaient tous
+           en redirection depuis une page allemande. */
+        const de = (req.lang === 'de' && c.localizations && c.localizations.de
+          && c.localizations.de.translatedAt) ? c.localizations.de : null;
+        return {
+          id: String(c._id),
+          name: (de && de.name) ? de.name : (c.name || ''),
+          slug: c.slug || '',
+          publicPath: de
+            ? '/de/categorie/' + encodeURIComponent(de.slug || c.slug)
+            : buildCategoryPublicPath(c),
+        };
+      });
     } else {
       const used = new Set();
       const derived = [];
@@ -98,8 +107,8 @@ async function listCategories(req, res, next) {
         }));
     }
 
-    const title = clampSeoTitle(`Catégories - ${brand.NAME}`);
-    const metaDescription = 'Découvre toutes nos catégories de pièces auto : moteur, freinage, carrosserie, électricité, entretien et plus.';
+    const title = clampSeoTitle(t(req.lang, 'categories.indexTitle'));
+    const metaDescription = t(req.lang, 'categories.indexMeta');
     const baseUrl = getPublicBaseUrlFromReq(req);
     const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
@@ -110,7 +119,7 @@ async function listCategories(req, res, next) {
       '@graph': [
         {
           '@type': 'CollectionPage',
-          name: 'Catégories',
+          name: t(req.lang, 'breadcrumb.categoriesLd'),
           url: canonicalUrl,
           description: metaDescription,
         },
@@ -120,13 +129,13 @@ async function listCategories(req, res, next) {
             {
               '@type': 'ListItem',
               position: 1,
-              name: 'Accueil',
-              item: baseUrl ? `${baseUrl}/` : '/',
+              name: t(req.lang, 'breadcrumb.homeLd'),
+              item: baseUrl ? `${baseUrl}${langPrefix}/` : '/',
             },
             {
               '@type': 'ListItem',
               position: 2,
-              name: 'Catégories',
+              name: t(req.lang, 'breadcrumb.categoriesLd'),
               item: canonicalUrl,
             },
           ],
