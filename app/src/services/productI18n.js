@@ -20,10 +20,19 @@ const SUPPORTED_LANGS = ['de'];
  * réemploie le même vocabulaire. Les références (« 927769D », « 0B5 ») n'y
  * figurent pas et traversent intactes. */
 const OPTIONS_DE = require('../locales/optionsDe.json');
+/* Complément appris en base pour les libellés apparus APRÈS la construction du
+   fichier : celui-ci ne peut pas connaître un texte qui n'existe pas encore, et
+   une instance en production ne peut pas écrire dans le dépôt. Le fichier reste
+   prioritaire — il est relu et versionné. */
+const vocabulaireAppris = require('./vocabulaireDe');
 
 function traduireOptions(options, lang) {
   if (lang !== 'de' || !Array.isArray(options) || !options.length) return options;
-  const tr = (v) => (typeof v === 'string' && OPTIONS_DE[v.trim()]) || v;
+  const tr = (v) => {
+    if (typeof v !== 'string') return v;
+    const cle = v.trim();
+    return OPTIONS_DE[cle] || vocabulaireAppris.traduire(cle) || v;
+  };
   return options.map((o) => {
     if (!o || typeof o !== 'object') return o;
     const copie = { ...o, label: tr(o.label), placeholder: tr(o.placeholder), helpText: tr(o.helpText) };

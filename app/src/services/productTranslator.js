@@ -124,7 +124,13 @@ function buildSystemPrompt() {
   ].join('\n');
 }
 
-const STR_FIELDS = ['name', 'shortDescription', 'description'];
+/* `shippingDelayText` part au modèle depuis qu'on a constaté qu'un libellé
+   inédit (« Expédition sous 7 à 9 jours ouvrés hors août ») laissait le champ
+   allemand VIDE : la table `delais-de.json` ne peut pas connaître un texte qui
+   n'existe pas encore. La table reste prioritaire pour les 62 libellés connus
+   — c'est elle qui garantit qu'ils sont formulés pareil partout — et le modèle
+   ne sert que pour l'inédit. */
+const STR_FIELDS = ['name', 'shortDescription', 'description', 'shippingDelayText'];
 const STR_ARRAYS = ['keyPoints', 'inclusions', 'exclusions'];
 
 /** Extrait les champs FR traduisibles (en préservant la structure). */

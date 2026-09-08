@@ -89,6 +89,20 @@ const MAX_ECHECS = 3;
 /* Fenêtre de la passe B. Une réécriture bouge `updatedAt` : la fiche est donc
    en tête, et il n'y a pas de famine possible ici. */
 const FENETRE_REECRITS = 400;
+/* COUPE-CIRCUIT. Si une part anormale du catalogue devient « périmée » d'un
+   coup, ce n'est pas que le contenu a changé : c'est que le CALCUL de
+   l'empreinte a changé — un champ ajouté aux champs traduits, par exemple.
+   C'est arrivé, et ça retraduisait 13 348 fiches à 60 par heure sans que rien
+   ne le signale. On refuse de dépenser sur ce doute : le rattrapage
+   (`--reempreindre`) remet la référence à plat en quelques secondes, et
+   gratuitement. */
+const SEUIL_ANOMALIE = 0.15;
+
+/** Empreinte d'une catégorie (nom + texte SEO). */
+function categorieSourceHash(cat) {
+  const c = cat || {};
+  return crypto.createHash('sha1').update([c.name || '', c.seoText || ''].join(' ')).digest('hex');
+}
 
 /** Empreinte du contenu traduisible d'un article (pendant de sourceHash). */
 function blogSourceHash(post) {
@@ -216,6 +230,55 @@ async function traduireFiches({ apiKey, Product }) {
   return { traitees: ok, echecs: ko, quarantaine };
 }
 
+/* Les CATÉGORIES étaient absentes du balayage : une catégorie créée demain
+   serait restée en français dans le menu de toutes les pages allemandes, comme
+   l'étaient « Moteurs » et « Mécatroniques & calculateurs » avant qu'on les
+   traduise à la main. Elles sont peu nombreuses et changent rarement : pas de
+   plafond, pas de fenêtre. */
+async function traduireCategories({ apiKey, Category }) {
+  const aFaire = await Category.find({
+    isActive: true,
+    $or: [
+      { 'localizations.de.translatedAt': null },
+      { 'localizations.de.translatedAt': { $exists: false } },
+      { 'localizations.de': { $exists: false } },
+    ],
+  }).select('name slug seoText localizations').lean();
+
+  const utiles = aFaire.filter((c) => c.name && !estEnQuarantaine(c, categorieSourceHash));
+  if (!utiles.length) return { traitees: 0, echecs: 0 };
+
+  let ok = 0; let ko = 0;
+  for (const c of utiles) {
+    const empreinte = categorieSourceHash(c);
+    try {
+      const champs = { name: c.name };
+      if (typeof c.seoText === 'string' && c.seoText.trim()) champs.seoText = c.seoText;
+      const de = await translator.callOpenAI(champs, { apiKey, model: MODELE });
+      const nom = (typeof de.name === 'string' && de.name.trim()) ? de.name : c.name;
+      await Category.updateOne({ _id: c._id }, {
+        $set: {
+          'localizations.de': {
+            name: nom,
+            seoText: typeof de.seoText === 'string' ? de.seoText : (c.seoText || ''),
+            slug: translator.germanSlug(nom),
+            slugAliases: (c.localizations && c.localizations.de && c.localizations.de.slugAliases) || [],
+            sourceHash: empreinte,
+            translatedAt: new Date(),
+            translatedBy: 'openai:' + MODELE,
+          },
+        },
+      });
+      ok++;
+    } catch (err) {
+      ko++;
+      await noterEchec(Category, c._id, empreinte, (c.localizations && c.localizations.de) || {}).catch(() => {});
+      console.warn('[traduction DE] categorie ' + c.slug + ' : ' + (err && err.message ? err.message : err));
+    }
+  }
+  return { traitees: ok, echecs: ko };
+}
+
 async function traduireArticles({ BlogPost }) {
   const neufs = await BlogPost.find({
     isPublished: true,
@@ -280,6 +343,64 @@ async function traduireArticles({ BlogPost }) {
   return { traitees: ok, echecs: ko, quarantaine };
 }
 
+/* Apprend les libellés d'OPTION que le fichier ne connaît pas.
+ *
+ * Les options ne peuvent pas vivre dans `localizations` : ce sont des objets
+ * imbriqués portant leurs choix ET leurs prix, et une copie allemande
+ * parallèle dérive au premier choix ajouté. On traduit donc le VOCABULAIRE,
+ * indexé par texte — impossible à désaligner. Ce qui manquait, c'est que le
+ * fichier est figé au déploiement : ce passage complète en base. */
+async function apprendreOptions({ apiKey, Product }) {
+  const OPTIONS_FICHIER = require('../locales/optionsDe.json');
+  const vocab = require('../services/vocabulaireDe');
+
+  const docs = await Product.find({ isPublished: true, 'options.0': { $exists: true } })
+    .select('options').limit(4000).lean();
+
+  /* Une référence n'est pas du texte : « 927769D », « AWD » traversent
+     intactes — même filtre qu'à la construction du fichier. */
+  const traduisible = (t) => {
+    const v = String(t || '').trim();
+    return v.length >= 3 && v.length <= 400 && /[a-zà-ÿ]{3}/.test(v)
+      && !/^[A-Z0-9][A-Z0-9\s\-/.]*$/.test(v);
+  };
+
+  const inconnus = new Set();
+  for (const p of docs) {
+    for (const o of (p.options || [])) {
+      for (const champ of ['label', 'placeholder', 'helpText']) {
+        const v = String(o[champ] || '').trim();
+        if (traduisible(v) && !OPTIONS_FICHIER[v] && !vocab.traduire(v)) inconnus.add(v);
+      }
+      for (const c of (o.choices || [])) {
+        const v = String((c && c.label) || '').trim();
+        if (traduisible(v) && !OPTIONS_FICHIER[v] && !vocab.traduire(v)) inconnus.add(v);
+      }
+    }
+  }
+  if (!inconnus.size) return { apprises: 0 };
+
+  /* Plafonné comme le reste : un import qui ajoute mille options nouvelles se
+     rattrape en quelques heures, il ne part pas en une rafale d'appels. */
+  const lot = [...inconnus].slice(0, 40);
+  try {
+    const out = await translator._impl.callOpenAI({ libelles: lot }, { apiKey, model: MODELE });
+    const arr = out && Array.isArray(out.libelles) ? out.libelles : null;
+    if (!arr || arr.length !== lot.length) return { apprises: 0 };
+    const couples = {};
+    lot.forEach((fr, i) => {
+      const de = String(arr[i] || '').trim();
+      /* Un code cité dans le libellé doit survivre à la traduction. */
+      const codes = fr.match(/\b[A-Z0-9]{3,}\b/g) || [];
+      if (de && de !== fr && codes.every((c) => de.includes(c))) couples[fr] = de;
+    });
+    return { apprises: await vocab.enregistrer(couples, 'options') };
+  } catch (err) {
+    console.warn('[traduction DE] apprentissage options : ' + (err && err.message ? err.message : err));
+    return { apprises: 0 };
+  }
+}
+
 async function traduireNouveautesDe() {
   if (process.env.DE_AUTO_TRANSLATE !== 'true') return null;
   const apiKey = process.env.OPENAI_API_KEY;
@@ -300,16 +421,46 @@ async function traduireNouveautesDe() {
     const Product = require('../models/Product');
     const BlogPost = require('../models/BlogPost');
 
+    const Category = require('../models/Category');
+
+      const publiees = await Product.countDocuments({ isPublished: true });
+    const perimees = await Product.countDocuments({
+      isPublished: true,
+      'localizations.de.translatedAt': { $ne: null },
+      'localizations.de.sourceHash': { $exists: true, $ne: '' },
+      $expr: { $literal: true },
+    });
+    /* On ne compte pas en base (l'empreinte se calcule en JS) : on échantillonne
+       la fenêtre des récemment modifiés, qui suffit à repérer un basculement
+       global sans relire tout le catalogue. */
+    const echantillon = await Product.find({
+      isPublished: true,
+      'localizations.de.sourceHash': { $exists: true, $ne: '' },
+    }).sort({ updatedAt: -1 }).limit(300).lean();
+    const partPerimee = echantillon.length
+      ? echantillon.filter((p) => estPerime(p, translator.sourceHash)).length / echantillon.length
+      : 0;
+    if (partPerimee > SEUIL_ANOMALIE) {
+      console.error('[traduction DE] ARRÊT : ' + Math.round(partPerimee * 100) + ' % de l\'échantillon est vu comme réécrit. '
+        + 'Le calcul d\'empreinte a probablement changé. Lancer '
+        + '`node scripts/backfill-source-hash-de.js --reempreindre --appliquer` avant de relancer.');
+      return { arret: 'empreintes_incoherentes', partPerimee, publiees, perimees };
+    }
+
     const fiches = await traduireFiches({ apiKey, Product });
     const articles = await traduireArticles({ BlogPost });
+    const categories = await traduireCategories({ apiKey, Category });
+    const options = await apprendreOptions({ apiKey, Product });
 
-    if (fiches.traitees || fiches.echecs || articles.traitees || articles.echecs) {
+    if (fiches.traitees || fiches.echecs || articles.traitees || articles.echecs
+        || categories.traitees || categories.echecs || options.apprises) {
       console.log('[traduction DE] fiches ' + fiches.traitees + ' ok / ' + fiches.echecs + ' ko'
         + (fiches.quarantaine ? ' (' + fiches.quarantaine + ' en quarantaine)' : '')
         + ' — articles ' + articles.traitees + ' ok / ' + articles.echecs + ' ko'
-        + (articles.quarantaine ? ' (' + articles.quarantaine + ' en quarantaine)' : ''));
+        + ' — categories ' + categories.traitees + ' ok / ' + categories.echecs + ' ko'
+        + (options.apprises ? ' — ' + options.apprises + ' libelle(s) d\'option appris' : ''));
     }
-    return { fiches, articles };
+    return { fiches, articles, categories, options };
   } finally {
     await rendreVerrou('traduction-de');
   }
@@ -317,6 +468,7 @@ async function traduireNouveautesDe() {
 
 module.exports = {
   traduireNouveautesDe,
+  categorieSourceHash,
   blogSourceHash,
   aTraiter,
   estPerime,
