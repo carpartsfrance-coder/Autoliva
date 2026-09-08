@@ -435,8 +435,14 @@ function sleep(ms) {
 async function traduireArticle(post, options) {
   const opts = options || {};
   const bucket = classifyArticle(post);
-  const model = opts.model || (PROVIDER === 'openai' ? OPENAI_MODEL : modelForBucket(bucket));
-  const appel = PROVIDER === 'openai' ? callOpenAI : callAnthropic;
+  /* Le fournisseur doit pouvoir être IMPOSÉ par l'appelant. `PROVIDER` est lu
+     sur argv et vaut « anthropic » par défaut : appelé depuis le cron, qui n'a
+     pas d'argv, le blog partait chez Anthropic — sans clé — et échouait à
+     chaque passage. Le produit, lui, marchait : la panne serait restée
+     invisible jusqu'au premier article publié. */
+  const provider = opts.provider || PROVIDER;
+  const model = opts.model || (provider === 'openai' ? OPENAI_MODEL : modelForBucket(bucket));
+  const appel = provider === 'openai' ? callOpenAI : callAnthropic;
 
   const result = await appel({ model, systemPrompt: buildSystemPrompt(), userPrompt: buildUserPrompt(post) });
   const parsed = result.translation || {};

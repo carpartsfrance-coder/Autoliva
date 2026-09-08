@@ -125,6 +125,10 @@ async function main() {
       const p = products[cursor++];
       try {
         const de = appliquerTables(await translator.translateProduct(p, { apiKey, model }), p);
+        /* Empreinte du texte source : sans elle, une fiche traduite par ce
+           script reste invisible au balayage horaire, qui ne saura jamais
+           qu'elle a été réécrite depuis. */
+        de.sourceHash = translator.sourceHash(p);
         const conflit = etatIncoherent(de, p);
         if (conflit) {
           refusCount++;
