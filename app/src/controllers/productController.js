@@ -691,6 +691,20 @@ async function getProduct(req, res, next) {
       return res.redirect(301, canonicalPath);
     }
 
+    /* En allemand, l'URL porte l'_id : n'IMPORTE quel slug devant lui renvoyait
+       200. Une fiche était donc accessible sous une infinité d'adresses — et
+       depuis qu'on a corrigé 337 slugs, les anciennes continuaient de servir la
+       page au lieu de pointer vers la nouvelle. On renvoie vers l'adresse
+       canonique, celle que déclare déjà la balise. */
+    if (isLocalized && product._localizedSlug) {
+      const attendu = `/de/produits/${encodeURIComponent(product._localizedSlug)}-${id}`;
+      const demande = `${req.baseUrl || ''}${req.path || ''}`.replace(/\/+$/, '');
+      if (demande && demande !== attendu) {
+        const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+        return res.redirect(301, attendu + qs);
+      }
+    }
+
     const canonicalUrl = isLocalized
       ? `${getPublicBaseUrlFromReq(req)}/de/produits/${encodeURIComponent(product._localizedSlug || product.slug || id)}-${id}`
       : buildProductPublicUrl(product, { req });

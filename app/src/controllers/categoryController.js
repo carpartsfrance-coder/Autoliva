@@ -172,6 +172,13 @@ async function getCategory(req, res, next) {
         category = await Category.findOne({ 'localizations.de.slug': slug, isActive: { $ne: false } })
           .select(CAT_FIELDS)
           .lean();
+        /* Ancien slug (avant translittération des umlauts) : on le résout
+           quand même, et la redirection plus bas envoie vers le nouveau. */
+        if (!category) {
+          category = await Category.findOne({ 'localizations.de.slugAliases': slug, isActive: { $ne: false } })
+            .select(CAT_FIELDS)
+            .lean();
+        }
       }
       if (!category) {
         category = await Category.findOne({ slug, isActive: { $ne: false } })
