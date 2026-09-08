@@ -34,6 +34,20 @@ require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const mongoose = require('mongoose');
 const BlogPost = require('../src/models/BlogPost');
+const { markdownToHtml } = require('../src/services/blogContent');
+
+/* Le contenu d'un article vit dans `contentHtml` OU dans `contentMarkdown` :
+   la vue française résout les deux (getPostContentHtml), pas ce script. Sept
+   articles publiés n'ont que du markdown ; trois d'entre eux avaient donc une
+   version allemande réduite à quelques centaines de caractères, et deux
+   échouaient faute de contenu à traduire. On résout la source comme le fait
+   la page française. */
+function contenuSource(post) {
+  if (post && typeof post.contentMarkdown === 'string' && post.contentMarkdown.trim()) {
+    return markdownToHtml(post.contentMarkdown);
+  }
+  return (post && post.contentHtml) || '';
+}
 
 // ---------------------------------------------------------------------------
 // Config
@@ -183,7 +197,7 @@ function buildUserPrompt(post) {
     post.excerpt || '',
     '',
     'CONTENU HTML FR :',
-    post.contentHtml || '',
+    contenuSource(post),
     '',
     'META TITLE FR (référence) :',
     (post.seo && post.seo.metaTitle) || post.title || '',
