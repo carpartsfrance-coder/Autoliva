@@ -325,6 +325,11 @@ const orderSchema = new mongoose.Schema(
     deletedBy: { type: String, default: '', trim: true },
     deleteReason: { type: String, default: '', trim: true },
     accountType: { type: String, enum: ['particulier', 'pro'], required: true },
+    /* Langue du client, mémorisée à la création. Les e-mails partent bien
+       après la commande, souvent depuis un cron : la session n'existe plus,
+       et sans ce champ un acheteur allemand recevait tout en français. */
+    lang: { type: String, enum: ['fr', 'de'], default: 'fr' },
+
     paymentProvider: { type: String, default: 'mollie', trim: true },
     paymentStatus: { type: String, default: 'pending', trim: true },
     molliePaymentId: { type: String, default: '', trim: true, index: true },

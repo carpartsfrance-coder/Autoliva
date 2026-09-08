@@ -224,6 +224,10 @@ async function detectAbandonedCarts() {
           lastName,
           phone,
           isGuest,
+          /* La langue de navigation est dans la session que ce cron lit déjà :
+             une relance de panier partait en français vers un visiteur qui
+             n'avait vu que des pages allemandes. */
+          lang: sessionData && sessionData.preferredLang === 'de' ? 'de' : 'fr',
           items: abandonedItems,
           totalAmountCents,
           status: 'abandoned',

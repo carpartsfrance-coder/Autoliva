@@ -231,6 +231,11 @@ const abandonedCartSchema = new mongoose.Schema(
     sessionId: { type: String, required: true, trim: true, index: true },
     userId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     email: { type: String, default: '', trim: true, index: true },
+    /* Langue du client, mémorisée à la création. Les e-mails partent bien
+       après la commande, souvent depuis un cron : la session n'existe plus,
+       et sans ce champ un acheteur allemand recevait tout en français. */
+    lang: { type: String, enum: ['fr', 'de'], default: 'fr' },
+
     firstName: { type: String, default: '', trim: true },
     lastName: { type: String, default: '', trim: true },
     phone: { type: String, default: '', trim: true },

@@ -392,7 +392,9 @@ async function postContact(req, res, next) {
           <p style="margin:0;">${brand.NAME}</p>
         </div>
       `.trim();
-      await emailService.sendEmail({ toEmail: email, subject: ackSubject, html: ackHtml, text: `Merci pour votre message. Nous vous répondons rapidement. ${brand.NAME}.` });
+      /* L'accusé suit la langue de la page d'où part le formulaire
+         (/contact ou /de/contact). L'e-mail INTERNE reste en français. */
+      await emailService.sendEmail({ toEmail: email, subject: ackSubject, html: ackHtml, text: `Merci pour votre message. Nous vous répondons rapidement. ${brand.NAME}.`, lang: req.lang === 'de' ? 'de' : 'fr' });
     } catch (err) {}
 
     if (req.session && typeof req.session === 'object') {

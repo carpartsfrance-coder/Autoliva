@@ -212,7 +212,7 @@ async function sendForTicket(ticket, templateKey, extra) {
     const guestLink = buildGuestLink(ticket) || ((brand.SITE_URL).replace(/\/$/, '') + '/sav/suivi');
     const html = await renderTemplate(cfg.template, { ticket, guestLink, ...cfgExtra, ...(extra || {}) });
     const subject = typeof cfg.subject === 'function' ? cfg.subject(ticket) : cfg.subject;
-    const res = await sendEmail({ toEmail: ticket.client.email, subject, html, text: stripHtml(html), replyTo: savReplyTo() });
+    const res = await sendEmail({ toEmail: ticket.client.email, subject, html, text: stripHtml(html), replyTo: savReplyTo(), lang: ticket && ticket.lang === 'de' ? 'de' : 'fr' });
     log(`SEND ${cfg.template} → ${ticket.client.email} ticket=${ticket.numero} ok=${!!(res && res.ok)}`);
     return res;
   } catch (err) {
@@ -258,7 +258,7 @@ async function notifyStatusChange(ticket, nouveauStatut) {
         <p>Merci pour votre retour, il nous aide à progresser.</p>
         <p>L'équipe SAV ${brand.NAME}</p>
       `;
-      sendEmail({ toEmail: ticket.client && ticket.client.email, subject, html, text: stripHtml(html), replyTo: savReplyTo() }).catch(() => {});
+      sendEmail({ toEmail: ticket.client && ticket.client.email, subject, html, text: stripHtml(html), replyTo: savReplyTo(), lang: ticket && ticket.lang === 'de' ? 'de' : 'fr' }).catch(() => {});
       log(`SEND satisfaction → ${ticket.client && ticket.client.email} ticket=${ticket.numero}`);
     } catch (e) {
       log(`ERROR satisfaction ticket=${ticket && ticket.numero} ${e.message}`);
@@ -279,7 +279,7 @@ async function notifyRelancePaiement(ticket, jour) {
     const subject = jour === 15
       ? `Mise en demeure — Facture ${ticket.numero}`
       : `Relance — Facture analyse ${ticket.numero}`;
-    const res = await sendEmail({ toEmail: ticket.client.email, subject, html, text: stripHtml(html), replyTo: savReplyTo() });
+    const res = await sendEmail({ toEmail: ticket.client.email, subject, html, text: stripHtml(html), replyTo: savReplyTo(), lang: ticket && ticket.lang === 'de' ? 'de' : 'fr' });
     log(`SEND ${tpl} → ${ticket.client.email} ticket=${ticket.numero}`);
     return res;
   } catch (err) {
@@ -295,7 +295,7 @@ async function notifyRelanceDocuments(ticket) {
       toEmail: ticket.client.email,
       subject: `Documents manquants — Demande ${ticket.numero}`,
       html, text: stripHtml(html),
-      replyTo: savReplyTo(),
+      replyTo: savReplyTo(), lang: ticket && ticket.lang === 'de' ? 'de' : 'fr',
     });
     log(`SEND relance_documents → ${ticket.client.email} ticket=${ticket.numero}`);
     return res;
@@ -378,7 +378,7 @@ async function sendConfirmationToClient(ticket) {
       html,
       text: stripHtml(html),
       attachments,
-      replyTo: savReplyTo(),
+      replyTo: savReplyTo(), lang: ticket && ticket.lang === 'de' ? 'de' : 'fr',
     });
     log(`SEND confirmation_client → ${ticket.client.email} ticket=${ticket.numero} ok=${!!(res && res.ok)} attach=${attachments.length}`);
     return res;
