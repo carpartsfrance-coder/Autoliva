@@ -27,6 +27,7 @@ const demoProducts = require('../demoProducts');
 const { rankProducts, sortRankedProducts } = require('./search');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('./productPublic');
 const { buildHreflangSet, t } = require('./i18n');
+const productI18n = require('./productI18n');
 const { buildSeoMediaUrl } = require('./mediaStorage');
 const brand = require('../config/brand');
 
@@ -99,6 +100,10 @@ const REPLI_MAX_PRODUITS = 1500;
 /* Champs sur lesquels le classement JS travaille — donc les seuls qui valent
    la peine d'être préfiltrés. */
 const REPLI_CHAMPS = ['name', 'sku', 'engineCode', 'brand', 'category', 'description'];
+/* Sous /de, la recherche ne voyait que le français : « Getriebe » ne ramenait
+   rien alors que 3 327 fiches portent ce mot dans leur version allemande. Le
+   préfiltre interroge donc aussi les champs traduits. */
+const REPLI_CHAMPS_DE = ['localizations.de.name', 'localizations.de.shortDescription', 'localizations.de.description'];
 
 /* Mots vides français. Sans eux, « boîte de vitesses » remontait 13 094 fiches
    sur 14 464 — le « de » matche à peu près toutes les descriptions, et le
@@ -153,7 +158,7 @@ function motifSansAccent(mot) {
  * [a-z0-9] et les classes qu'il fabrique lui-même. Un échappement en plus
  * n'ajouterait rien et laisserait croire qu'il protège quelque chose.
  */
-function filtreTexteRepli(filter, searchQuery) {
+function filtreTexteRepli(filter, searchQuery, lang) {
   const tous = String(searchQuery || '')
     .split(/[^\p{L}\p{N}]+/u)
     .filter((m) => m.length >= 2);
@@ -169,6 +174,7 @@ function filtreTexteRepli(filter, searchQuery) {
     if (!motif) continue;
     const rx = { $regex: motif, $options: 'i' };
     for (const champ of REPLI_CHAMPS) ou.push({ [champ]: rx });
+    if (lang === 'de') for (const champ of REPLI_CHAMPS_DE) ou.push({ [champ]: rx });
   }
   /* Aucun mot exploitable après nettoyage → on ne restreint rien, et c'est le
      plafond qui protège. Mieux vaut un résultat large qu'un résultat vide. */
@@ -656,7 +662,14 @@ async function prepareProductListingData(req, options = {}) {
     if (searchQuery) {
       // 1) Atlas Search : page classée par pertinence, en ~dizaines de ms,
       //    quel que soit le volume du catalogue (voie normale).
-      const atlas = await searchProductsViaAtlas({ baseFilter: filter, searchQuery, sort, page, perPage });
+      /* L'index Atlas ne cartographie que les champs français : lui poser une
+         question allemande revient à chercher dans un dictionnaire qui ne
+         contient pas la langue. Sous /de on prend donc directement le repli,
+         qui, lui, sait lire `localizations.de`. À reconsidérer le jour où les
+         champs allemands seront ajoutés à l'index côté Atlas. */
+      const atlas = req.lang === 'de'
+        ? null
+        : await searchProductsViaAtlas({ baseFilter: filter, searchQuery, sort, page, perPage });
       if (atlas) {
         totalCount = atlas.totalCount;
         const totalPagesRaw = Math.max(1, Math.ceil(totalCount / perPage));
@@ -685,11 +698,17 @@ async function prepareProductListingData(req, options = {}) {
          *   — un plafond dur, pour qu'une requête d'un seul caractère ne
          *     puisse pas contourner le préfiltre.
          */
-        const filtreRepli = filtreTexteRepli(filter, searchQuery);
-        const matchedProducts = await Product.find(filtreRepli)
+        const filtreRepli = filtreTexteRepli(filter, searchQuery, req.lang);
+        const matchedProductsBruts = await Product.find(filtreRepli)
           .limit(REPLI_MAX_PRODUITS)
           .lean();
-        if (matchedProducts.length >= REPLI_MAX_PRODUITS) {
+        /* Le classement travaille sur `name`, `description`, `keyPoints`… : en
+           allemand il faut lui donner la fiche traduite, sinon il rejette une
+           fiche que le préfiltre venait de retenir sur son titre allemand. */
+        const matchedProducts = req.lang === 'de'
+          ? matchedProductsBruts.map((p) => productI18n.localizeProduct(p, 'de'))
+          : matchedProductsBruts;
+        if (matchedProductsBruts.length >= REPLI_MAX_PRODUITS) {
           /* Jamais silencieux : au plafond, le classement ne voit qu'une
              partie du catalogue et les résultats sont incomplets. */
           console.warn('[search] repli plafonné à ' + REPLI_MAX_PRODUITS

@@ -945,7 +945,8 @@ async function getShipping(req, res, next) {
     const shippingMethods = await getShippingMethods(
       dbConnected,
       viewItems.map((it) => it.product),
-      shipZoneAddr
+      shipZoneAddr,
+      (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr'
     );
 
     const selectedMethod =
@@ -1271,7 +1272,9 @@ async function postShipping(req, res, next) {
 
     const shippingMethods = await getShippingMethods(
       dbConnected,
-      viewItems.map((it) => it.product)
+      viewItems.map((it) => it.product),
+      undefined,
+      (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr'
     );
     const shippingMethodRaw = typeof req.body.shippingMethod === 'string' ? req.body.shippingMethod : '';
     const selectedMethod = shippingMethods.find((m) => m.id === shippingMethodRaw);
@@ -1457,7 +1460,9 @@ async function getPayment(req, res, next) {
 
     const shippingMethods = await getShippingMethods(
       dbConnected,
-      viewItems.map((it) => it.product)
+      viewItems.map((it) => it.product),
+      undefined,
+      (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr'
     );
 
     const localMolliePaymentSimulation = shouldSimulateMolliePayment();
@@ -1540,7 +1545,8 @@ async function getPayment(req, res, next) {
       const zonedMethods = await getShippingMethods(
         dbConnected,
         viewItems.map((it) => it.product),
-        { country: address.country, postalCode: address.postalCode }
+        { country: address.country, postalCode: address.postalCode },
+        (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr'
       );
       const zonedSelected = zonedMethods.find((m) => m.id === shippingMethodKey);
       if (zonedSelected) selectedMethod = zonedSelected;
@@ -1987,7 +1993,7 @@ async function postPayment(req, res, next) {
     const shippingMethods = await getShippingMethods(dbConnected, shippingProducts, {
       country: addressSnapshot.country,
       postalCode: addressSnapshot.postalCode,
-    });
+    }, (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr');
     const selectedMethod = shippingMethods.find((m) => m.id === shippingMethodKey) || null;
     if (!selectedMethod) {
       req.session.checkoutError = 'Merci de choisir un mode de livraison.';

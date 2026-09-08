@@ -168,7 +168,12 @@
               <% } %>
 
               <% const _veh = (typeof vehicle !== 'undefined' && vehicle) ? vehicle : null; %>
-              <% const _vehType = _veh && _veh.identifierType === 'vin' ? 'vin' : 'plate'; %>
+              <%/* La plaque passe par le SIV français : sous /de elle ne peut
+                   rien identifier. La FIN devient l'unique mode, et la bascule
+                   disparaît — proposer « revenir à la plaque française » à un
+                   Allemand n'a pas de sens. */%>
+              <% const _vehDe = (typeof lang !== 'undefined' && lang === 'de'); %>
+              <% const _vehType = (_vehDe || (_veh && _veh.identifierType === 'vin')) ? 'vin' : 'plate'; %>
               <% const _vehPlate = _veh && _veh.plate ? _veh.plate : ''; %>
               <% const _vehVin = _veh && _veh.vin ? _veh.vin : ''; %>
               <% const _vehConsentChecked = Boolean(_veh && _veh.consentAt); %>
@@ -186,16 +191,19 @@
 
                 <input name="vehicleIdentifierType" type="hidden" value="<%= _vehType %>" data-vehicle-type />
 
+                <% if (!_vehDe) { %>
                 <div class="mt-4 <%= _vehType === 'plate' ? '' : 'hidden' %>" data-vehicle-panel="plate">
                   <label class="block text-xs font-black uppercase tracking-widest text-slate-400" for="vehiclePlate"><%= t('checkout.plate') %></label>
                   <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="vehiclePlate" name="vehiclePlate" placeholder="Ex : AB-123-CD" type="text" value="<%= _vehPlate %>" data-vehicle-input="plate" <%= _vehType === 'plate' ? 'required' : '' %> />
                   <button class="mt-2 text-xs font-black text-primary hover:underline" data-vehicle-switch="vin" type="button"><%= t('checkout.useVin') %></button>
                 </div>
+                <% } %>
 
                 <div class="mt-4 <%= _vehType === 'vin' ? '' : 'hidden' %>" data-vehicle-panel="vin">
                   <label class="block text-xs font-black uppercase tracking-widest text-slate-400" for="vehicleVin"><%= t('checkout.vin') %></label>
-                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="vehicleVin" name="vehicleVin" placeholder="Ex : VF1..." type="text" value="<%= _vehVin %>" data-vehicle-input="vin" <%= _vehType === 'vin' ? 'required' : '' %> />
-                  <button class="mt-2 text-xs font-black text-primary hover:underline" data-vehicle-switch="plate" type="button"><%= t('checkout.backToPlate') %></button>
+                  <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="vehicleVin" name="vehicleVin" placeholder="<%= _vehDe ? 'WVWZZZ...' : 'Ex : VF1...' %>" maxlength="17" type="text" value="<%= _vehVin %>" data-vehicle-input="vin" <%= _vehType === 'vin' ? 'required' : '' %> />
+                  <% if (!_vehDe) { %><button class="mt-2 text-xs font-black text-primary hover:underline" data-vehicle-switch="plate" type="button"><%= t('checkout.backToPlate') %></button><% } %>
+                  <% if (_vehDe) { %><p class="mt-2 text-[11px] text-slate-500"><%= t('checkout.vinOnlyNote') %></p><% } %>
                 </div>
 
                 <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-3">
