@@ -58,9 +58,27 @@ const ANTHROPIC_API_VERSION = '2023-06-01';
 
 const MODEL_TECHNICAL = process.env.ANTHROPIC_BLOG_MODEL_TECHNICAL || 'claude-sonnet-4-6';
 const MODEL_SIMPLE    = process.env.ANTHROPIC_BLOG_MODEL_SIMPLE    || 'claude-haiku-4-5-20251001';
+/* --provider openai|anthropic (défaut anthropic, comme les 371 premiers). */
+const PROVIDER = (args.find((a) => a.startsWith('--provider=')) || '').split('=')[1] || 'anthropic';
+const OPENAI_MODEL = (args.find((a) => a.startsWith('--openai-model=')) || '').split('=')[1] || 'gpt-4o-mini';
 
 const MAX_TOKENS_OUT = 16000; // articles techniques peuvent générer 6-12k tokens DE
 const REQUEST_TIMEOUT_MS = 120_000;
+/* Le script traitait les articles un par un : 40 s pièce × 803 = 9 heures.
+   Rien ne l'imposait, les traductions sont indépendantes. */
+const CONCURRENCY = Math.max(1, parseInt(process.env.CONCURRENCY || '6', 10));
+
+/* Google coupe le title vers 60 caractères et la description vers 160. Le
+   modèle dépasse régulièrement malgré la consigne : on coupe nous-mêmes, au
+   mot, plutôt que de laisser Google trancher au milieu d'un mot composé. */
+function clampSeo(texte, max) {
+  const t = String(texte || '').trim();
+  if (t.length <= max) return t;
+  const coupe = t.slice(0, max);
+  const espace = coupe.lastIndexOf(' ');
+  return (espace > max * 0.6 ? coupe.slice(0, espace) : coupe).replace(/[\s,;:·|–-]+$/, '');
+}
+
 const RETRY_MAX = 3;
 const RETRY_BASE_MS = 2_000;
 const PACE_MS = 600; // pause entre requêtes pour ne pas saturer le rate limit
@@ -115,6 +133,9 @@ function classifyArticle(post) {
 }
 
 function modelForBucket(bucket) {
+  /* En OpenAI, la stratification Sonnet/Haiku n'a plus d'objet : un seul
+     modèle traite les deux familles. */
+  if (PROVIDER === 'openai') return OPENAI_MODEL;
   return bucket === 'technical' ? MODEL_TECHNICAL : MODEL_SIMPLE;
 }
 
@@ -196,6 +217,92 @@ const TRANSLATION_TOOL = {
     required: ['title', 'excerpt', 'contentHtml', 'metaTitle', 'metaDescription', 'primaryKeyword'],
   },
 };
+
+/* Backend OpenAI — MÊMES prompts et MÊME glossaire que la voie Anthropic.
+ *
+ * Pourquoi une seconde voie : traduire les 803 articles restants coûte ~61 $
+ * avec Sonnet contre ~2,70 $ avec gpt-4o-mini, pour du contenu dont la valeur
+ * est d'exister en allemand avant d'être ciselé. Le choix reste explicite
+ * (--provider), il n'y a pas de bascule silencieuse.
+ *
+ * L'appel d'outil forcé d'Anthropic a son équivalent ici : `json_schema` en
+ * mode strict, qui garantit les six champs plutôt que d'espérer un JSON
+ * bien formé au milieu de la prose. */
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+
+const TRANSLATION_JSON_SCHEMA = {
+  name: 'save_translation',
+  strict: true,
+  schema: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      title: { type: 'string' },
+      excerpt: { type: 'string' },
+      contentHtml: { type: 'string' },
+      metaTitle: { type: 'string' },
+      metaDescription: { type: 'string' },
+      primaryKeyword: { type: 'string' },
+    },
+    required: ['title', 'excerpt', 'contentHtml', 'metaTitle', 'metaDescription', 'primaryKeyword'],
+  },
+};
+
+async function callOpenAI({ model, systemPrompt, userPrompt }) {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error('OPENAI_API_KEY manquante.');
+
+  const body = {
+    model,
+    max_completion_tokens: MAX_TOKENS_OUT,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    response_format: { type: 'json_schema', json_schema: TRANSLATION_JSON_SCHEMA },
+  };
+
+  let lastErr = null;
+  for (let attempt = 1; attempt <= RETRY_MAX; attempt++) {
+    try {
+      const res = await fetch(OPENAI_API_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+        body: JSON.stringify(body),
+      });
+      if (res.status === 429 || res.status >= 500) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} (retryable) ${txt.slice(0, 200)}`);
+      }
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} ${txt.slice(0, 500)}`);
+      }
+      const data = await res.json();
+      const choice = (data.choices || [])[0] || {};
+      const content = choice.message && choice.message.content;
+      if (!content) throw new Error(`Réponse vide. finish_reason=${choice.finish_reason}`);
+      return {
+        translation: JSON.parse(content),
+        /* Normalisé sur la forme Anthropic pour que la boucle principale
+           n'ait pas à savoir quel fournisseur a répondu. */
+        usage: data.usage
+          ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens }
+          : null,
+        model: data.model || model,
+        stopReason: choice.finish_reason === 'length' ? 'max_tokens' : choice.finish_reason,
+      };
+    } catch (err) {
+      lastErr = err;
+      const retryable = /HTTP 429|HTTP 5\d\d|abort|fetch failed|network|Unexpected token/i.test(String(err && err.message));
+      if (!retryable || attempt === RETRY_MAX) break;
+      const delay = RETRY_BASE_MS * Math.pow(2, attempt - 1);
+      console.warn(`  ⚠️  attempt ${attempt}/${RETRY_MAX} failed (${err.message}). retry in ${delay}ms`);
+      await sleep(delay);
+    }
+  }
+  throw lastErr || new Error('OpenAI API call failed');
+}
 
 async function callAnthropic({ model, systemPrompt, userPrompt }) {
   if (!ANTHROPIC_API_KEY) {
@@ -313,7 +420,11 @@ async function main() {
     console.error('❌ MONGODB_URI non défini dans app/.env');
     process.exit(1);
   }
-  if (!ANTHROPIC_API_KEY) {
+  if (PROVIDER === 'openai' && !process.env.OPENAI_API_KEY) {
+    console.error('❌ OPENAI_API_KEY non défini dans app/.env');
+    process.exit(1);
+  }
+  if (PROVIDER !== 'openai' && !ANTHROPIC_API_KEY) {
     console.error('❌ ANTHROPIC_API_KEY non défini dans app/.env');
     console.error('   Crée la clé sur https://console.anthropic.com/settings/keys');
     console.error('   Ajoute la ligne: ANTHROPIC_API_KEY=sk-ant-...');
@@ -324,8 +435,14 @@ async function main() {
   if (LIMIT) console.log(`Limite : ${LIMIT} articles`);
   if (TARGET_SLUG) console.log(`Slug ciblé : ${TARGET_SLUG}`);
   if (RETRANSLATE) console.log('Retraduction forcée : oui');
-  console.log(`Modèle technical : ${MODEL_TECHNICAL}`);
-  console.log(`Modèle simple    : ${MODEL_SIMPLE}`);
+  console.log(`Fournisseur      : ${PROVIDER}`);
+  console.log(`Concurrence      : ${CONCURRENCY}`);
+  if (PROVIDER === 'openai') {
+    console.log(`Modèle           : ${OPENAI_MODEL}`);
+  } else {
+    console.log(`Modèle technical : ${MODEL_TECHNICAL}`);
+    console.log(`Modèle simple    : ${MODEL_SIMPLE}`);
+  }
   console.log('');
 
   await mongoose.connect(process.env.MONGODB_URI);
@@ -352,7 +469,10 @@ async function main() {
   };
   const failures = [];
 
-  for (let i = 0; i < posts.length; i++) {
+  let curseur = 0;
+  async function worker() {
+   while (curseur < posts.length) {
+    const i = curseur++;
     const post = posts[i];
     const bucket = classifyArticle(post);
     const model = modelForBucket(bucket);
@@ -363,7 +483,8 @@ async function main() {
 
     try {
       const t0 = Date.now();
-      const result = await callAnthropic({
+      const appel = PROVIDER === 'openai' ? callOpenAI : callAnthropic;
+      const result = await appel({
         model,
         systemPrompt: buildSystemPrompt(),
         userPrompt: buildUserPrompt(post),
@@ -391,10 +512,12 @@ async function main() {
       console.log(`    metaDescription (${parsed.metaDescription.length}c): ${parsed.metaDescription.slice(0, 100)}...`);
 
       if (parsed.metaTitle.length > 60) {
-        console.warn(`    ⚠️  metaTitle dépasse 60 caractères (${parsed.metaTitle.length})`);
+        console.warn(`    ✂︎ metaTitle ramené de ${parsed.metaTitle.length} à 60 caractères`);
+        parsed.metaTitle = clampSeo(parsed.metaTitle, 60);
       }
       if (parsed.metaDescription.length > 160) {
-        console.warn(`    ⚠️  metaDescription dépasse 160 caractères (${parsed.metaDescription.length})`);
+        console.warn(`    ✂︎ metaDescription ramenée de ${parsed.metaDescription.length} à 160 caractères`);
+        parsed.metaDescription = clampSeo(parsed.metaDescription, 160);
       }
 
       // En dry-run, on dump aussi le résultat sur disque pour relecture humaine.
@@ -456,8 +579,10 @@ async function main() {
       console.error(`  ❌ erreur : ${err.message}`);
     }
 
-    if (i < posts.length - 1) await sleep(PACE_MS);
+    if (PACE_MS) await sleep(PACE_MS);
+   }
   }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, posts.length) }, worker));
 
   console.log('\n--- RÉCAP ---');
   console.log(`Total       : ${stats.total}`);

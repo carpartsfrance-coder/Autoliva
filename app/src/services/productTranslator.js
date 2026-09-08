@@ -61,7 +61,7 @@ const GLOSSARY = [
   ['boîte automatique', 'Automatikgetriebe'],
   ['boîte manuelle', 'Schaltgetriebe'],
   ['boîte à double embrayage', 'Doppelkupplungsgetriebe'],
-  ['différentiel', 'Differenzial'],
+  ['différentiel', 'Differential'],
   ['pont avant', 'Vorderachsdifferenzial'],
   ['pont arrière', 'Hinterachsdifferenzial'],
   ['mécatronique', 'Mechatronik'],
