@@ -45,6 +45,22 @@ function estimateReadingTimeMinutes(text) {
   return Math.min(120, floored);
 }
 
+/* Le bloc blog de l'accueil sortait des articles FRANÇAIS sur /de : titres,
+   catégorie, date et « min de lecture », tous en français, sous un hero
+   allemand. On sert désormais les articles traduits, avec leurs libellés. */
+const BLOG_CATEGORIES_DE = require('../locales/blogCategoriesDe.json');
+
+function formatDateLang(value, lang) {
+  try {
+    if (!value) return '';
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat(lang === 'de' ? 'de-DE' : 'fr-FR', {
+      year: 'numeric', month: 'short', day: '2-digit',
+    }).format(d);
+  } catch (e) { return ''; }
+}
+
 function formatDateFR(value) {
   try {
     if (!value) return '';
@@ -241,7 +257,11 @@ async function getHome(req, res, next) {
 
     let homeBlogPosts = [];
     if (dbConnected) {
-      const pinned = await BlogPost.find({ isPublished: true, isHomeFeatured: true })
+      const isDeHome = req.lang === 'de';
+      /* En allemand on ne propose QUE des articles traduits : un lien vers un
+         article français depuis la home DE renvoyait le visiteur en français. */
+      const blogLangFilter = isDeHome ? { 'localizations.de.translatedAt': { $ne: null } } : {};
+      const pinned = await BlogPost.find({ isPublished: true, isHomeFeatured: true, ...blogLangFilter })
         .sort({ publishedAt: -1, createdAt: -1 })
         .limit(3)
         .lean();
@@ -251,6 +271,7 @@ async function getHome(req, res, next) {
       const fill = pinnedSlugs.size < 3
         ? await BlogPost.find({
             isPublished: true,
+            ...blogLangFilter,
             ...(pinnedSlugs.size ? { slug: { $nin: Array.from(pinnedSlugs) } } : {}),
           })
             .sort({ publishedAt: -1, createdAt: -1 })
@@ -264,27 +285,33 @@ async function getHome(req, res, next) {
         .slice(0, 3);
 
       homeBlogPosts = combined.map((d) => {
+        const deLoc = (d && d.localizations && d.localizations.de) || {};
+        const contentHtml = getTrimmedString(isDeHome ? (deLoc.contentHtml || d.contentHtml) : (d && d.contentHtml));
         const publishedAt = d && d.publishedAt ? d.publishedAt : d && d.createdAt ? d.createdAt : null;
         const minutes = Number.isFinite(d && d.readingTimeMinutes) && d.readingTimeMinutes > 0
           ? d.readingTimeMinutes
-          : estimateReadingTimeMinutes(getTrimmedString(d && d.contentHtml));
+          : estimateReadingTimeMinutes(contentHtml);
 
-        const excerpt = getTrimmedString(d && d.excerpt)
-          || truncateText(stripHtml(getTrimmedString(d && d.contentHtml)), 140);
+        const excerpt = getTrimmedString(isDeHome ? (deLoc.excerpt || d.excerpt) : (d && d.excerpt))
+          || truncateText(stripHtml(contentHtml), 140);
 
-        const categoryLabel = d && d.category && d.category.label
-          ? getTrimmedString(d.category.label)
-          : (d && d.category && d.category.slug ? getTrimmedString(d.category.slug) : 'Blog');
+        const catSlug = d && d.category && d.category.slug ? String(d.category.slug).trim().toLowerCase() : '';
+        const categoryLabel = (isDeHome && BLOG_CATEGORIES_DE[catSlug])
+          ? BLOG_CATEGORIES_DE[catSlug]
+          : (d && d.category && d.category.label
+            ? getTrimmedString(d.category.label)
+            : (catSlug ? getTrimmedString(d.category.slug) : 'Blog'));
 
+        const slug = getTrimmedString(d && d.slug);
         return {
-          slug: getTrimmedString(d && d.slug),
-          title: getTrimmedString(d && d.title),
+          slug,
+          title: getTrimmedString(isDeHome ? (deLoc.title || d.title) : (d && d.title)),
           excerpt,
           imageUrl: getTrimmedString(d && d.coverImageUrl),
           categoryLabel,
-          dateLabel: formatDateFR(publishedAt),
-          readTimeLabel: `${minutes} min de lecture`,
-          url: `/blog/${encodeURIComponent(getTrimmedString(d && d.slug))}`,
+          dateLabel: formatDateLang(publishedAt, req.lang),
+          readTimeLabel: isDeHome ? `${minutes} Min. Lesezeit` : `${minutes} min de lecture`,
+          url: `${isDeHome ? '/de' : ''}/blog/${encodeURIComponent(slug)}`,
         };
       });
     }
@@ -292,7 +319,11 @@ async function getHome(req, res, next) {
     const siteSettings = res && res.locals && res.locals.siteSettings ? res.locals.siteSettings : null;
     const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
-    const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
+    /* L'accueil existe vraiment en allemand (/de) : on le déclare des deux
+       côtés, sinon la home DE n'est jamais rattachée à la home FR. */
+    const hreflang = buildHreflangSet(baseUrl, pathWithoutLang, {
+      deHref: baseUrl ? `${baseUrl}/de` : '/de',
+    });
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/` : `${langPrefix}/`;
     const title = req.lang === 'de'
       ? `Aufbereitete, gebrauchte und geprüfte Autoteile | ${brand.NAME}`

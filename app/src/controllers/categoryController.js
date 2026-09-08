@@ -9,7 +9,7 @@ const {
   buildCategoryPublicUrl,
   getPublicBaseUrlFromReq,
 } = require('../services/categoryPublic');
-const { buildHreflangSet } = require('../services/i18n');
+const { buildHreflangSet, t } = require('../services/i18n');
 const { formatCategoryDisplayName } = require('../services/brandSanitizer');
 const internalLinking = require('../services/internalLinking');
 const productI18n = require('../services/productI18n');
@@ -101,7 +101,7 @@ async function listCategories(req, res, next) {
     const title = clampSeoTitle(`Catégories - ${brand.NAME}`);
     const metaDescription = 'Découvre toutes nos catégories de pièces auto : moteur, freinage, carrosserie, électricité, entretien et plus.';
     const baseUrl = getPublicBaseUrlFromReq(req);
-    const langPrefix = req.lang === 'en' ? '/en' : '';
+    const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/categorie` : `${langPrefix}/categorie`;
@@ -163,9 +163,21 @@ async function getCategory(req, res, next) {
 
     let category = null;
     if (dbConnected) {
-      category = await Category.findOne({ slug, isActive: { $ne: false } })
-        .select('_id name slug updatedAt seoText localizations')
-        .lean();
+      const CAT_FIELDS = '_id name slug updatedAt seoText localizations';
+      /* Sous /de, on cherche D'ABORD par le slug allemand : le canonical et le
+         hreflang de ces pages pointent depuis toujours vers /de/categorie/
+         <slug-de>, une URL que la route ne savait pas résoudre — Google se
+         voyait donc désigner une 404 comme page canonique. */
+      if (req.lang === 'de') {
+        category = await Category.findOne({ 'localizations.de.slug': slug, isActive: { $ne: false } })
+          .select(CAT_FIELDS)
+          .lean();
+      }
+      if (!category) {
+        category = await Category.findOne({ slug, isActive: { $ne: false } })
+          .select(CAT_FIELDS)
+          .lean();
+      }
     } else {
       const all = new Map();
       for (const p of demoProducts || []) {
@@ -196,6 +208,12 @@ async function getCategory(req, res, next) {
       return res.redirect(301, '/categorie/' + encodeURIComponent(category.slug));
     }
     const deCatSlug = (isDe && deLoc && deLoc.slug && deLoc.slug.trim()) ? deLoc.slug.trim() : category.slug;
+    /* Une catégorie allemande = UNE URL. Arrivé par le slug français sous /de,
+       on renvoie vers le slug allemand, celui que déclare le canonical. */
+    if (isDe && deCatSlug !== slug) {
+      const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+      return res.redirect(301, '/de/categorie/' + encodeURIComponent(deCatSlug) + qs);
+    }
 
     const { prepareProductListingData } = require('../services/productListingService');
     const data = await prepareProductListingData(req, { presetCategoryName: category.name });
@@ -222,8 +240,11 @@ async function getCategory(req, res, next) {
      * Si DB a un metaTitle custom, on respecte mais on clamp toujours. */
     const dbMetaTitle = category.seo && typeof category.seo.metaTitle === 'string'
       ? category.seo.metaTitle.trim() : '';
-    const title = clampSeoTitle(dbMetaTitle || `${name} - Pièces auto | ${brand.NAME}`);
-    const metaDescription = buildCategoryMetaDescription(name, data.totalCount);
+    /* `seo.metaTitle` en DB est saisi en français : on ne l'applique qu'au FR. */
+    const title = clampSeoTitle((!isDe && dbMetaTitle) || t(req.lang, 'category.metaTitle', { name }));
+    const metaDescription = isDe
+      ? buildCategoryMetaDescriptionDe(name, data.totalCount)
+      : buildCategoryMetaDescription(name, data.totalCount);
 
     const baseUrl = getPublicBaseUrlFromReq(req);
     const canonicalBase = isDe
@@ -233,7 +254,7 @@ async function getCategory(req, res, next) {
       ? `${canonicalBase}?page=${encodeURIComponent(String(data.page))}`
       : canonicalBase;
 
-    const langPrefix = req.lang === 'en' ? '/en' : '';
+    const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
     // hreflang FR↔DE dès qu'une traduction DE de la catégorie existe.
@@ -307,7 +328,7 @@ async function getCategory(req, res, next) {
     /* Maillage interne (sibling categories, sous-cat, top makes, related blog). */
     let linkingData = {};
     try {
-      linkingData = await internalLinking.getCategoryLinkingData(category);
+      linkingData = await internalLinking.getCategoryLinkingData(category, req.lang);
     } catch (err) {
       console.error('[category] internalLinking error :', err && err.message);
     }
@@ -340,6 +361,16 @@ async function getCategory(req, res, next) {
   } catch (err) {
     return next(err);
   }
+}
+
+/* Version allemande : le gabarit français produisait « Drehmomentwandler
+   reconditionnées et testées sur banc… » — un nom allemand dans une phrase
+   française, sur chacune des pages catégorie DE. */
+function buildCategoryMetaDescriptionDe(name, totalCount) {
+  const countText = totalCount > 0
+    ? t('de', 'category.countRefs', { count: totalCount })
+    : t('de', 'category.wideChoice');
+  return truncateText(normalizeMetaText(t('de', 'category.metaDescription', { name, countText })), 160);
 }
 
 function buildCategoryMetaDescription(name, totalCount) {

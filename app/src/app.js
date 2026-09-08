@@ -8,6 +8,7 @@ const wpRedirects = require('./middlewares/wpRedirects');
 const wwwCanonical = require('./middlewares/wwwCanonical');
 const cpfRedirects = require('./middlewares/cpfRedirects');
 const i18nMiddleware = require('./middlewares/i18n');
+const { t } = require('./services/i18n');
 const captureAttribution = require('./middlewares/captureAttribution');
 const brand = require('./config/brand');
 
@@ -396,6 +397,7 @@ app.use(['/sitemap.xml', /^\/sitemap-.*\.xml$/, '/google-merchant-feed.xml'], cr
 app.get('/sitemap.xml', seoController.getSitemapXml);
 app.get('/sitemap-pages.xml', seoController.getSitemapPages);
 app.get('/sitemap-categories.xml', seoController.getSitemapCategories);
+app.get('/sitemap-categories-de.xml', seoController.getSitemapCategoriesDe);
 app.get('/sitemap-products.xml', seoController.getSitemapProducts);
 app.get('/sitemap-products-de.xml', seoController.getSitemapProductsDe);
 app.get('/sitemap-vehicles.xml', seoController.getSitemapVehicles);
@@ -797,8 +799,10 @@ app.use('/de', (req, res) => {
 });
 
 app.use((req, res) => {
+  /* Le <title> doit suivre la langue de la page : une 404 servie sous /de
+     affichait un titre français au-dessus d'un corps allemand. */
   res.status(404).render('errors/404', {
-    title: `Page introuvable - ${brand.NAME}`,
+    title: t(req.lang || 'fr', 'error.404.title'),
   });
 });
 
@@ -806,7 +810,7 @@ app.use((err, req, res, next) => {
   console.error(err);
 
   res.status(500).render('errors/500', {
-    title: `Erreur - ${brand.NAME}`,
+    title: t(req.lang || 'fr', 'error.500.title'),
   });
 });
 

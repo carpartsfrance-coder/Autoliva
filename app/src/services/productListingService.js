@@ -26,7 +26,7 @@ const Category = require('../models/Category');
 const demoProducts = require('../demoProducts');
 const { rankProducts, sortRankedProducts } = require('./search');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('./productPublic');
-const { buildHreflangSet } = require('./i18n');
+const { buildHreflangSet, t } = require('./i18n');
 const { buildSeoMediaUrl } = require('./mediaStorage');
 const brand = require('../config/brand');
 
@@ -265,9 +265,11 @@ async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, per
  * sur le champ texte libre badges.condition. Permet de filtrer
  * occasion / reconditionné / neuf sans normaliser la donnée existante. */
 const CONDITION_FILTERS = [
-  { key: 'occasion', label: 'Occasion', rx: /occasion|used|utilis/i },
-  { key: 'reconditionne', label: 'Reconditionné', rx: /recondition|refurb|[ée]change\s*standard/i },
-  { key: 'neuf', label: 'Neuf', rx: /\bneuf\b|\bneuve\b|\bnew\b/i },
+  /* `label` est une CLÉ de traduction, pas un texte : ces trois pastilles
+     s'affichaient en français au-dessus d'un catalogue allemand. */
+  { key: 'occasion', label: 'filters.conditionUsed', rx: /occasion|used|utilis/i },
+  { key: 'reconditionne', label: 'filters.conditionRecond', rx: /recondition|refurb|[ée]change\s*standard/i },
+  { key: 'neuf', label: 'filters.conditionNew', rx: /\bneuf\b|\bneuve\b|\bnew\b/i },
 ];
 function parseConditionParam(raw) {
   const valid = new Set(CONDITION_FILTERS.map((c) => c.key));
@@ -373,12 +375,34 @@ async function prepareProductListingData(req, options = {}) {
 
   let mainCategories = categories.slice();
   let subCategoriesByMain = {};
+  const categoryLabels = {};
 
   if (dbConnected) {
     const dbCategories = await Category.find({ isActive: true })
       .sort({ sortOrder: 1, name: 1 })
-      .select('_id name sortOrder')
+      .select('_id name sortOrder localizations.de.name')
       .lean();
+
+    /* Les noms de catégorie servent DEUX rôles : valeur de filtre (elle doit
+       rester le nom français stocké sur les produits) et libellé affiché. On
+       ne traduit donc pas la valeur — on fournit à la vue une table
+       « nom FR → libellé DE », qu'elle applique au seul affichage. */
+    if (req.lang === 'de') {
+      for (const c of dbCategories) {
+        const frName = typeof c.name === 'string' ? c.name.trim() : '';
+        const deName = c.localizations && c.localizations.de && c.localizations.de.name
+          ? String(c.localizations.de.name).trim() : '';
+        if (!frName || !deName) continue;
+        categoryLabels[frName] = deName;
+        /* Aussi segment par segment : le filtre est aplati en « parent » et
+           « enfant », jamais en nom complet. */
+        const fr = frName.split('>').map((x) => x.trim()).filter(Boolean);
+        const de = deName.split('>').map((x) => x.trim()).filter(Boolean);
+        if (fr.length === de.length) {
+          fr.forEach((seg, i) => { if (seg && de[i] && !categoryLabels[seg]) categoryLabels[seg] = de[i]; });
+        }
+      }
+    }
 
     const productCategoryCounts = await Product.aggregate([
       { $match: { category: { $type: 'string', $ne: '' } } },
@@ -798,9 +822,13 @@ async function prepareProductListingData(req, options = {}) {
 
   // 9) SEO meta (canonical, hreflang, robots, title, description)
   const baseUrl = getPublicBaseUrlFromReq(req);
-  const langPrefix = req.lang === 'en' ? '/en' : '';
+  /* `de` manquait ici : le catalogue allemand se déclarait canonique vers la
+     version FRANÇAISE, donc /de/produits ne pouvait pas être indexé. */
+  const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
   const pathWithoutLang = (req.res && req.res.locals && req.res.locals.currentPathWithoutLang) || req.path;
-  const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
+  const hreflang = buildHreflangSet(baseUrl, pathWithoutLang, {
+    deHref: baseUrl ? `${baseUrl}/de/produits` : '/de/produits',
+  });
   // Note: le canonical par défaut pointe vers /produits. Les controllers
   // peuvent l'override (la page catégorie veut son propre canonical).
   const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/produits` : `${langPrefix}/produits`;
@@ -823,11 +851,11 @@ async function prepareProductListingData(req, options = {}) {
 
   const titleParts = [];
   if (selectedCategoryLabel) titleParts.push(String(selectedCategoryLabel));
-  if (searchQuery) titleParts.push(`Recherche: ${searchQuery}`);
+  if (searchQuery) titleParts.push(`${t(req.lang, 'catalog.searchPrefix')}: ${searchQuery}`);
   const titleSuffix = titleParts.length ? ` (${titleParts.join(' • ')})` : '';
-  const title = `Catalogue pièces auto${titleSuffix} - ${brand.NAME}`;
+  const title = t(req.lang, 'catalog.metaTitle', { suffix: titleSuffix });
 
-  const metaDescription = 'Catalogue de pièces auto : recherche par référence, marque et catégorie. Livraison rapide. Paiement sécurisé.';
+  const metaDescription = t(req.lang, 'catalog.metaDescription');
 
   // Compteurs de facettes CROISÉS : chaque facette est comptée en appliquant
   // tous les AUTRES filtres actifs (on clone `filter` en retirant la clé de la
@@ -899,7 +927,7 @@ async function prepareProductListingData(req, options = {}) {
     selectedCategoryLabel,
     selectedStock,
     selectedConditions,
-    conditionOptions: CONDITION_FILTERS.map((c) => ({ key: c.key, label: c.label })),
+    conditionOptions: CONDITION_FILTERS.map((c) => ({ key: c.key, label: t(req.lang, c.label) })),
     mainCategoryCounts,
     categoryCounts,
     conditionCounts,
@@ -910,6 +938,7 @@ async function prepareProductListingData(req, options = {}) {
     categories,
     mainCategories,
     subCategoriesByMain,
+    categoryLabels,
     returnTo: req.originalUrl,
     products: productsWithPublicPath,
     page,

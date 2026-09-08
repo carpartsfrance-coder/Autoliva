@@ -41,14 +41,17 @@ function wantsJsonResponse(req) {
   return acceptHeader.includes('application/json') || requestedWith.toLowerCase() === 'xmlhttprequest';
 }
 
-function buildCartProductPreview(product) {
+function buildCartProductPreview(product, lang) {
   if (!product || typeof product !== 'object') return null;
 
-  const gallery = Array.isArray(product.galleryUrls) ? product.galleryUrls.filter(Boolean) : [];
+  /* Le nom part dans la confirmation « ajouté au panier » : ajouté depuis une
+     fiche allemande, il revenait en français. */
+  const p = lang === 'de' ? productI18n.localizeProduct(product, 'de') : product;
+  const gallery = Array.isArray(p.galleryUrls) ? p.galleryUrls.filter(Boolean) : [];
   return {
-    id: product._id ? String(product._id) : '',
-    name: product.name ? String(product.name) : 'Produit',
-    imageUrl: product.imageUrl || gallery[0] || '',
+    id: p._id ? String(p._id) : '',
+    name: p.name ? String(p.name) : 'Produit',
+    imageUrl: p.imageUrl || gallery[0] || '',
   };
 }
 
@@ -202,16 +205,23 @@ async function showCart(req, res, next) {
     });
 
     if (items.length === 0) {
-      const suggestedProducts = dbConnected
+      /* Le panier VIDE renvoyait avant d'atteindre applyCheckoutLocale plus
+         bas : un visiteur allemand tombait sur une page entièrement française
+         dès qu'il cliquait sur le panier. */
+      const emptyLang = applyCheckoutLocale(req, res);
+      let suggestedProducts = dbConnected
         ? (await Product.find({})
             .sort({ createdAt: -1 })
             .limit(4)
             .lean())
             .map(normalizeProduct)
         : demoProducts.slice(0, 4).map(normalizeProduct);
+      if (emptyLang === 'de') {
+        suggestedProducts = suggestedProducts.map((p) => productI18n.localizeProduct(p, 'de'));
+      }
 
       return res.render('cart/index', {
-        title: `Panier - ${brand.NAME}`,
+        title: emptyLang === 'de' ? `Warenkorb - ${brand.NAME}` : `Panier - ${brand.NAME}`,
         dbConnected,
         cartItemCount,
         items: [],
@@ -469,7 +479,11 @@ async function addToCart(req, res, next) {
 
     let product = null;
     if (dbConnected) {
-      product = await Product.findById(id).select('_id name imageUrl galleryUrls inStock stockQty options').lean();
+      /* `localizations.de` fait partie de la sélection : sans lui, la pastille
+         « ajouté au panier » d'une fiche allemande affichait le nom français. */
+      product = await Product.findById(id)
+        .select('_id name imageUrl galleryUrls inStock stockQty options localizations.de.name localizations.de.translatedAt')
+        .lean();
     }
 
     if (!product) {
@@ -571,18 +585,22 @@ async function addToCart(req, res, next) {
       cartItemsCount: computeCartItemCount(cart),
     });
 
+    /* L'ajout se fait sur une URL FR (/panier/ajouter/:id) même depuis une
+       fiche DE : on lit la langue mémorisée, pas le chemin. */
+    const atcLang = (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
+
     if (jsonResponse) {
       return res.status(200).json({
         ok: true,
         cartItemCount: computeCartItemCount(cart),
-        product: buildCartProductPreview(product),
+        product: buildCartProductPreview(product, atcLang),
       });
     }
 
     storeCartFeedback(req, {
       type: 'success',
       cartItemCount: computeCartItemCount(cart),
-      product: buildCartProductPreview(product),
+      product: buildCartProductPreview(product, atcLang),
     });
 
     return res.redirect(returnTo || '/panier');

@@ -19,8 +19,8 @@
 
     <% if (!product) { %>
       <div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-8 refined-shadow">
-        <div class="font-bold text-slate-900 dark:text-white">Produit indisponible</div>
-        <div class="mt-1 text-sm text-slate-500">Ce produit ne peut pas être affiché pour le moment.</div>
+        <div class="font-bold text-slate-900 dark:text-white"><%= t('product.unavailableTitle') %></div>
+        <div class="mt-1 text-sm text-slate-500"><%= t('product.unavailableBody') %></div>
       </div>
     <% } else { %>
       <% const ref = product.sku || String(product._id).slice(-10).toUpperCase(); %>

@@ -6,14 +6,14 @@
 <% var _vsEngine = (typeof vsEngine !== 'undefined' && vsEngine) ? vsEngine : ''; %>
 <% var _vsBtn = (typeof vsButtonLabel !== 'undefined' && vsButtonLabel) ? vsButtonLabel : 'Voir les pièces'; %>
 <form action="/produits" method="GET" class="vehicle-selector flex flex-col sm:flex-row gap-2 w-full" data-vehicle-selector data-vs-make-sel="<%= _vsMake %>" data-vs-model-sel="<%= _vsModel %>" data-vs-engine-sel="<%= _vsEngine %>">
-  <select name="vehicleMake" data-vs-make required aria-label="Marque" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 focus:ring-primary focus:border-primary">
-    <option value="">Marque…</option>
+  <select name="vehicleMake" data-vs-make required aria-label="<%= t('listing.vehicleMake') %>" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 focus:ring-primary focus:border-primary">
+    <option value=""><%= t('vs.make') %></option>
   </select>
-  <select name="vehicleModel" data-vs-model disabled aria-label="Modèle" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 focus:ring-primary focus:border-primary disabled:opacity-50">
-    <option value="">Modèle…</option>
+  <select name="vehicleModel" data-vs-model disabled aria-label="<%= t('listing.vehicleModel') %>" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 focus:ring-primary focus:border-primary disabled:opacity-50">
+    <option value=""><%= t('vs.model') %></option>
   </select>
-  <select name="vehicleEngine" data-vs-engine disabled aria-label="Motorisation" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 focus:ring-primary focus:border-primary disabled:opacity-50">
-    <option value="">Motorisation (facultatif)…</option>
+  <select name="vehicleEngine" data-vs-engine disabled aria-label="<%= t('listing.engine') %>" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 focus:ring-primary focus:border-primary disabled:opacity-50">
+    <option value=""><%= t('vs.engine') %></option>
   </select>
   <button type="submit" class="shrink-0 inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white hover:bg-primary/90 transition">
     <span class="material-symbols-outlined text-lg">search</span>
@@ -46,14 +46,14 @@
 
         function fillModels(mk, selModel) {
           modelSel.innerHTML = '';
-          modelSel.appendChild(opt('', 'Modèle…', false));
+          modelSel.appendChild(opt('', '<%= t('vs.model') %>', false));
           var models = modelsByMake[mk] || [];
           models.forEach(function (md) { modelSel.appendChild(opt(md, md, md === selModel)); });
           modelSel.disabled = !models.length;
         }
         function fillEngines(mk, md, selEngine) {
           engSel.innerHTML = '';
-          engSel.appendChild(opt('', 'Motorisation (facultatif)…', false));
+          engSel.appendChild(opt('', '<%= t('vs.engine') %>', false));
           var engines = (mk && md) ? (enginesByMakeModel[mk + '|||' + md] || []) : [];
           engines.forEach(function (en) { engSel.appendChild(opt(en, en, en === selEngine)); });
           engSel.disabled = !engines.length;

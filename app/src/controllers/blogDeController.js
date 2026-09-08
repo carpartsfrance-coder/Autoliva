@@ -22,6 +22,32 @@ const brand = require('../config/brand');
 
 const LANG_PREFIX = '/de';
 
+/* Les catégories du blog ne sont pas traduites en base : la liste allemande
+   affichait « Transmission > Boîte de transfert » sous des titres allemands.
+   19 valeurs distinctes, indexées par SLUG parce que les libellés stockés ont
+   des variantes d'encodage (« Différentiel », « DiffÃ©rentiel »). */
+const BLOG_CATEGORIES_DE = require('../locales/blogCategoriesDe.json');
+
+/* Les fiches produit existent en allemand : un article allemand ne doit plus
+   renvoyer vers la fiche française, ni citer son titre français. */
+function produitNomDe(p) {
+  const de = (p && p.localizations && p.localizations.de) || {};
+  return (de.translatedAt && de.name) ? de.name : ((p && p.name) || '');
+}
+
+function produitUrlDe(p) {
+  const de = (p && p.localizations && p.localizations.de) || {};
+  if (!de.translatedAt) return buildProductPublicPath(p);
+  const slug = (de.slug && String(de.slug).trim()) || p.slug || String(p._id);
+  return `/de/produits/${encodeURIComponent(slug)}-${p._id}`;
+}
+
+function blogCategoryLabelDe(category) {
+  if (!category) return '';
+  const slug = String(category.slug || '').trim().toLowerCase();
+  return BLOG_CATEGORIES_DE[slug] || String(category.label || slug || '');
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────────
 
 function getTrimmedString(value) {
@@ -160,15 +186,19 @@ async function rewriteInternalBlogLinks(html, currentSlug) {
 function buildGermanProductCta(product) {
   const cents = Number.isFinite(product.priceCents) ? product.priceCents : 0;
   const priceEuros = (cents / 100).toFixed(2).replace('.', ',');
-  const dreiRaten = cents > 50000
+  /* Le paiement en 3 fois passait par Scalapay, coupé côté boutique en 08/2026.
+     Ce CTA continuait de le promettre sur chaque article allemand. Il suit
+     désormais le même interrupteur que le reste du site. */
+  const scalapayActif = require('../services/scalapay').estActif();
+  const dreiRaten = (scalapayActif && cents > 50000)
     ? `bzw. 3 Raten à ${(cents / 300).toFixed(2).replace('.', ',')} € ohne Aufpreis`
     : '';
-  const prodUrl = buildProductPublicPath(product); // FR pour l'instant (Phase 3 = produits DE)
-  const safeName = escapeHtml(product.name || '');
+  const prodUrl = produitUrlDe(product);
+  const safeName = escapeHtml(produitNomDe(product));
   const safeUrl = escapeHtml(prodUrl);
 
   return `<div class="blog-product-cta" data-product-cta="1">`
-    + `<span class="cta-eyebrow">Instandgesetztes Teil — 2 Jahre Garantie</span>`
+    + `<span class="cta-eyebrow">Generalüberholtes Teil — 2 Jahre Garantie</span>`
     + `<h3 class="cta-title">${safeName}</h3>`
     + `<span class="cta-price">${priceEuros} € inkl. MwSt.</span>`
     + (dreiRaten ? `<span class="cta-price-sub">${dreiRaten}</span>` : '')
@@ -176,7 +206,7 @@ function buildGermanProductCta(product) {
     + `<li>Geprüft, 24 Monate Garantie</li>`
     + `<li>Lieferung 3-5 Werktage</li>`
     + `<li>Dedizierter Technik-Support</li>`
-    + `<li>Sichere Zahlung in 3 Raten ohne Aufpreis</li>`
+    + (scalapayActif ? `<li>Sichere Zahlung in 3 Raten ohne Aufpreis</li>` : `<li>Sichere Zahlung</li>`)
     + `</ul>`
     + `<a class="cta-btn" href="${safeUrl}">Zum Produkt</a>`
     + `<a class="cta-btn-outline" href="/de/contact">Techniker kontaktieren</a>`
@@ -239,7 +269,7 @@ async function getBlogIndexDe(req, res) {
         title: de.title || d.title,
         excerpt: de.excerpt || d.excerpt,
         imageUrl: buildSeoMediaUrl(d.coverImageUrl, de.title || d.title),
-        category: d.category && d.category.slug ? { slug: d.category.slug, label: d.category.label || d.category.slug } : null,
+        category: d.category && d.category.slug ? { slug: d.category.slug, label: blogCategoryLabelDe(d.category) } : null,
         dateLabel: formatDateDE(publishedAt),
         readTimeLabel: `${estimateReadingTimeMinutes(de.contentHtml || '')} Min.`,
         featured: false,
@@ -255,7 +285,7 @@ async function getBlogIndexDe(req, res) {
     const popularArticles = popularDocs.map((p, idx) => ({
       rank: String(idx + 1).padStart(2, '0'),
       title: (p.localizations && p.localizations.de && p.localizations.de.title) || p.title,
-      meta: `${(p.category && p.category.label) ? p.category.label : 'Blog'} • aktuell`,
+      meta: `${blogCategoryLabelDe(p.category) || 'Blog'} • aktuell`,
       url: `/de/blog/${encodeURIComponent(p.slug)}`,
     }));
 
@@ -332,18 +362,19 @@ async function getBlogPostDe(req, res) {
     let related = [];
     if (Array.isArray(post.relatedProductIds) && post.relatedProductIds.length) {
       related = await Product.find({ _id: { $in: post.relatedProductIds } })
-        .select('_id name priceCents imageUrl slug')
+        .select('_id name priceCents imageUrl slug localizations.de.name localizations.de.slug localizations.de.translatedAt')
         .lean();
     }
 
     const relatedProducts = (related || []).map((p) => {
       const priceEuros = Number.isFinite(p.priceCents) ? (p.priceCents / 100).toFixed(2).replace('.', ',') : '';
+      const nom = produitNomDe(p);
       return {
         id: String(p._id),
-        name: p.name || '',
+        name: nom,
         priceLabel: priceEuros ? `${priceEuros} € inkl. MwSt.` : '',
-        imageUrl: buildSeoMediaUrl(p.imageUrl, p.name),
-        url: buildProductPublicPath(p), // /produits/<slug> FR — Phase 3 = produits DE
+        imageUrl: buildSeoMediaUrl(p.imageUrl, nom),
+        url: produitUrlDe(p),
       };
     });
 
@@ -432,7 +463,7 @@ async function getBlogPostDe(req, res) {
         slug: post.slug,
         excerpt: de.excerpt || computedDesc,
         coverImageUrl: buildSeoMediaUrl(post.coverImageUrl, de.title),
-        category: post.category && post.category.slug ? { slug: post.category.slug, label: post.category.label || post.category.slug } : null,
+        category: post.category && post.category.slug ? { slug: post.category.slug, label: blogCategoryLabelDe(post.category) } : null,
         authorName: post.authorName || 'Autoliva-Experte',
         dateLabel: formatDateDE(publishedAt),
         readingTimeLabel: `${estimateReadingTimeMinutes(de.contentHtml)} Min. Lesezeit`,

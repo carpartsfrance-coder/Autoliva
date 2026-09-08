@@ -144,7 +144,7 @@
 
 <%/* Téléphone : sur md+ il est dans la barre utilitaire en haut. Sous md, icône
      d'appel ici (tap-to-call, tracké via le listener tel: du footer). */%>
-<a class="flex md:hidden items-center justify-center rounded-lg h-9 w-9 text-primary hover:bg-slate-100 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %>" title="Appelez-nous">
+<a class="flex md:hidden items-center justify-center rounded-lg h-9 w-9 text-primary hover:bg-slate-100 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %>" title="<%= t('header.callUs') %>">
 <span class="material-symbols-outlined">call</span>
 </a>
 
@@ -172,7 +172,7 @@
 
       <div class="mt-4 grid gap-2">
         <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %> au <%= brand.PHONE %>">
-          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">call</span>Appelez-nous · <%= brand.PHONE %></span>
+          <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">call</span><%= t('header.callUs') %> · <%= brand.PHONE %></span>
           <span class="material-symbols-outlined">call</span>
         </a>
         <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/">

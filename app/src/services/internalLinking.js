@@ -392,13 +392,17 @@ async function getMoneyPageLinkingData(makeName, modelName, categorySlug) {
  *   - topMakesForCategory[] : top 8 marques avec produits dans cette catégorie
  *   - relatedBlogPosts[]    : 6 articles blog dont category.slug match
  */
-async function getCategoryLinkingData(category) {
+async function getCategoryLinkingData(category, lang) {
   if (!category || !dbReady()) {
     return { siblingCategories: [], subCategories: [], topMakesForCategory: [], relatedBlogPosts: [] };
   }
-  const cacheKey = `cat:${category.slug}`;
+  /* La langue fait partie de la clé : sans ça le maillage allemand et le
+     maillage français se seraient écrasés l'un l'autre dans le cache. */
+  const isDe = lang === 'de';
+  const cacheKey = `cat:${category.slug}:${isDe ? 'de' : 'fr'}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
+  const blogI18n = require('./blogI18n');
 
   const Product = require('../models/Product');
   const Category = require('../models/Category');
@@ -406,23 +410,31 @@ async function getCategoryLinkingData(category) {
 
   /* Sibling categories : autres catégories actives, sauf celle-ci. */
   const allCats = await Category.find({ isActive: { $ne: false } })
-    .select('name slug sortOrder')
+    .select('name slug sortOrder localizations.de.name localizations.de.slug localizations.de.translatedAt')
     .sort({ sortOrder: 1, name: 1 })
     .lean();
-  const siblingCategories = allCats
+  /* En allemand : nom et URL allemands, et on écarte les catégories non
+     traduites — leur page /de fait un 301 vers le français. */
+  const deOf = (c) => (c.localizations && c.localizations.de) || {};
+  const catName = (c) => (isDe && deOf(c).name) ? deOf(c).name : c.name;
+  const catUrl = (c) => (isDe
+    ? `/de/categorie/${(deOf(c).slug || c.slug)}`
+    : `/categorie/${c.slug}`);
+  const linkableCats = isDe ? allCats.filter((c) => deOf(c).translatedAt) : allCats;
+  const siblingCategories = linkableCats
     .filter((c) => c.slug !== category.slug && !c.name.includes('>'))
     .slice(0, 10)
-    .map((c) => ({ name: c.name, slug: c.slug, url: `/categorie/${c.slug}` }));
+    .map((c) => ({ name: catName(c), slug: c.slug, url: catUrl(c) }));
 
   /* Sub-categories : catégories dont le name commence par "{category.name} >". */
   const escName = safeRegexEscape(category.name);
-  const subCategories = allCats
+  const subCategories = linkableCats
     .filter((c) => new RegExp(`^${escName}\\s*>`, 'i').test(c.name))
     .map((c) => ({
-      name: c.name.split('>').pop().trim(),
-      fullName: c.name,
+      name: String(catName(c)).split('>').pop().trim(),
+      fullName: catName(c),
       slug: c.slug,
-      url: `/categorie/${c.slug}`,
+      url: catUrl(c),
     }));
 
   /* Top makes : 8 marques avec le plus de produits dans cette catégorie. */
@@ -445,7 +457,10 @@ async function getCategoryLinkingData(category) {
     { $sort: { productCount: -1 } },
     { $limit: 8 },
   ]);
-  const topMakesForCategory = makeRows.map((r) => ({
+  /* Les pages /pieces-auto n'existent qu'en français : sous /de, chaque lien
+     de ce bloc ferait sortir le visiteur de sa langue. On préfère ne pas
+     afficher le bloc plutôt que de le remplir de sorties. */
+  const topMakesForCategory = isDe ? [] : makeRows.map((r) => ({
     name: r._id,
     slug: slugify(r._id),
     url: `/pieces-auto/${slugify(r._id)}`,
@@ -457,17 +472,26 @@ async function getCategoryLinkingData(category) {
     ? category.name.split('>').pop().trim()
     : category.name;
   const escCatNameTop = safeRegexEscape(catNameTop);
-  const relatedBlogPosts = await BlogPost.find({
+  const relatedBlogPostsDocs = await BlogPost.find({
     isPublished: true,
+    ...blogI18n.blogLangFilter(isDe ? 'de' : 'fr'),
     $or: [
       { 'category.slug': category.slug },
       { title: { $regex: escCatNameTop, $options: 'i' } },
     ],
   })
-    .select('slug title coverImageUrl publishedAt readingTimeMinutes')
+    .select(`slug title coverImageUrl publishedAt readingTimeMinutes ${blogI18n.DE_PROJECTION}`)
     .sort({ publishedAt: -1 })
     .limit(6)
     .lean();
+  const relatedBlogPosts = relatedBlogPostsDocs.map((d) => ({
+    slug: d.slug,
+    title: blogI18n.blogFields(d, isDe ? 'de' : 'fr').title,
+    coverImageUrl: d.coverImageUrl,
+    publishedAt: d.publishedAt,
+    readingTimeMinutes: d.readingTimeMinutes,
+    url: blogI18n.blogUrl(d.slug, isDe ? 'de' : 'fr'),
+  }));
 
   const result = { siblingCategories, subCategories, topMakesForCategory, relatedBlogPosts };
   setCached(cacheKey, result);
