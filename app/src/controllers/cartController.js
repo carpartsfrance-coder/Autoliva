@@ -261,7 +261,12 @@ async function showCart(req, res, next) {
       const lineTotalCents = unitPriceCents * item.quantity;
       itemsSubtotalCents += lineTotalCents;
 
-      const fallbackSummary = productOptions.buildOptionsDisplay(product.options, item.optionsSelection).optionsSummary;
+      /* Repli pour les lignes déposées avant cette correction : on le calcule
+         dans la langue du visiteur plutôt que de resservir du français. */
+      const produitPourResume = (req.session && req.session.preferredLang === 'de')
+        ? productI18n.localizeProduct(product, 'de')
+        : product;
+      const fallbackSummary = productOptions.buildOptionsDisplay(produitPourResume.options, item.optionsSelection).optionsSummary;
       const optionsSummary = typeof item.optionsSummary === 'string' && item.optionsSummary.trim() ? item.optionsSummary.trim() : fallbackSummary;
 
       viewItems.push({
@@ -529,7 +534,13 @@ async function addToCart(req, res, next) {
     }
 
     const selection = selectionResult.selection;
-    const display = productOptions.buildOptionsDisplay(product.options, selection);
+    /* Le résumé d'options est FIGÉ dans la ligne de panier, puis recopié sur la
+       commande et dans les e-mails : s'il part en français, il y reste pour
+       toujours. On le construit donc dans la langue du visiteur. La sélection
+       (`selection`, `lineId`) reste bâtie sur les clés, jamais sur le texte. */
+    const optLang = (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
+    const produitAffiche = optLang === 'de' ? productI18n.localizeProduct(product, 'de') : product;
+    const display = productOptions.buildOptionsDisplay(produitAffiche.options, selection);
     const { lineId } = productOptions.buildCartLineId(id, selection);
 
     const cart = getCart(req);
