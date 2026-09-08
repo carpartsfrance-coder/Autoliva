@@ -132,12 +132,17 @@ async function prendreVerrou(nom, dureeMs) {
   const col = mongoose.connection.collection('jobLocks');
   const maintenant = new Date();
   const perime = new Date(maintenant.getTime() - dureeMs);
-  const r = await col.findOneAndUpdate(
-    { _id: nom, $or: [{ pris: { $lt: perime } }, { pris: null }] },
+  /* On ne se fie PAS à la forme du retour de findOneAndUpdate : elle a changé
+     entre les versions du driver ({ value } jusqu'à la v5, le document nu
+     ensuite). `updateOne` renvoie des compteurs, qui eux sont stables. */
+  const r = await col.updateOne(
+    { _id: nom, $or: [{ pris: { $lt: perime } }, { pris: null }, { pris: { $exists: false } }] },
     { $set: { pris: maintenant } },
-    { upsert: true, returnDocument: 'after' }
+    { upsert: true }
   ).catch((e) => (e && e.code === 11000 ? null : Promise.reject(e)));
-  return Boolean(r && r.value !== null);
+  /* Verrou obtenu si on a modifié la ligne existante OU créé la ligne. Une
+     collision d'upsert (11000) veut dire qu'un autre l'a pris à l'instant. */
+  return Boolean(r && (r.modifiedCount === 1 || r.upsertedCount === 1));
 }
 async function rendreVerrou(nom) {
   try { await mongoose.connection.collection('jobLocks').updateOne({ _id: nom }, { $set: { pris: null } }); }
