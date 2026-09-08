@@ -2424,6 +2424,15 @@ async function getAdminDashboard(req, res, next) {
       pipeline = await computePipelineCounts();
     } catch (_) { /* ignore */ }
 
+    /* Santé de la traduction allemande. Deux pannes silencieuses en deux jours
+       ont montré que le mécanisme se tait quand il déraille : on l'affiche donc
+       là où on regarde. Best-effort — un tableau de bord ne tombe pas parce
+       qu'un compteur secondaire a échoué. */
+    let santeDe = null;
+    try {
+      santeDe = await require('../services/santeTraductionDe').etatTraductionDe();
+    } catch (_) { /* ignore */ }
+
     return res.render('admin/dashboard', {
       title: 'Admin - Dashboard',
       dbConnected,
@@ -2437,6 +2446,7 @@ async function getAdminDashboard(req, res, next) {
         ordersThisMonth: showFinancials ? ordersThisMonth : null,
         topProducts: showFinancials ? topProducts : [],
       },
+      santeDe,
       pipeline,
       weeklyChart: { labels: weekLabels, values: weekValues, prevValues: prevWeekValues },
       monthlyChart: { labels: monthLabels, values: monthValues },
