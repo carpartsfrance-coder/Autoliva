@@ -759,5 +759,8 @@
   "shipping.cloningTitle": "Hin- und Rückversand inbegriffen",
   "shipping.cloningDesc": "Frankierte Hin- und Rücksendeetiketten im Service enthalten",
   "breadcrumb.legal": "Rechtliche Hinweise",
-  "legal.lastUpdate": "Zuletzt aktualisiert:"
+  "legal.lastUpdate": "Zuletzt aktualisiert:",
+  "categories.indexTitle": "Kategorien - %brandName%",
+  "categories.indexMeta": "Alle unsere Autoteile-Kategorien: Motor, Bremsen, Karosserie, Elektrik, Wartung und mehr.",
+  "breadcrumb.categoriesLd": "Kategorien"
 }

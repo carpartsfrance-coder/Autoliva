@@ -22,7 +22,7 @@
             <% const _lpHome = typeof langPrefix !== 'undefined' ? langPrefix : ''; %>
             <% const _isDeHome = typeof lang !== 'undefined' && lang === 'de'; %>
             <% const categoriesForHome = (Array.isArray(navCategories) && navCategories.length)
-                 ? navCategories.slice(0, 8).map((c) => ({ label: (_isDeHome && c.nameDe ? c.nameDe : c.name), href: _lpHome + '/categorie/' + encodeURIComponent(c.slug), icon: c.icon || 'category' }))
+                 ? navCategories.slice(0, 8).map((c) => ({ label: (_isDeHome && c.nameDe ? c.nameDe : c.name), href: _lpHome + '/categorie/' + encodeURIComponent(_isDeHome && c.slugDe ? c.slugDe : c.slug), icon: c.icon || 'category' }))
                  : (Array.isArray(homeCategories) ? homeCategories : []).map((c) => ({ label: c.label, href: c.publicPath, icon: c.icon || 'category' })); %>
             <% categoriesForHome.forEach((category) => { %>
               <a class="flex items-center gap-3 group p-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-all" href="<%= category.href %>">

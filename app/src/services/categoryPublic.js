@@ -50,13 +50,18 @@ async function getNavCategories() {
     // Triées par « Ordre » (sortOrder) éditable en admin, puis nom.
     const docs = await Category.find({ isActive: true })
       .sort({ sortOrder: 1, name: 1 })
-      .select('name slug sortOrder showInMenu menuIcon localizations.de.name')
+      .select('name slug sortOrder showInMenu menuIcon localizations.de.name localizations.de.slug')
       .lean();
 
     const toItem = (c) => ({
       name: c.name,
       slug: c.slug,
       nameDe: (c.localizations && c.localizations.de && c.localizations.de.name) ? c.localizations.de.name : c.name,
+      /* Le menu allemand affichait le nom traduit mais pointait vers le slug
+         FRANÇAIS : les 13 liens du menu passaient par une redirection 301, sur
+         chacune des 13 348 pages allemandes. Un lien interne doit viser
+         l'adresse finale, pas un renvoi. */
+      slugDe: (c.localizations && c.localizations.de && c.localizations.de.slug) ? c.localizations.de.slug : c.slug,
       icon: (c.menuIcon && String(c.menuIcon).trim()) ? String(c.menuIcon).trim() : _defaultIcon(c.name),
     });
 
