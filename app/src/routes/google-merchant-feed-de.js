@@ -176,8 +176,24 @@ function construireXml(items) {
 let cache = { xml: null, builtAt: 0 };
 let enCours = null;
 
+/* Le cache mémoire ne doit pas survivre à un changement de tarif : Killian a
+   posé trois prix Europe en base et le flux a continué de servir l'ancien
+   port pendant des heures, jusqu'au prochain redémarrage — que Render n'a
+   pas déclenché pour un commit vide. Merchant Center compare le port du flux
+   au panier : servir un port périmé, c'est se faire refuser le flux. On lit
+   donc la date de la dernière classe modifiée (7 documents, négligeable) et
+   on reconstruit si elle est postérieure au cache. */
+async function tarifsModifiesDepuis(instant) {
+  try {
+    const d = await ShippingClass.findOne({}).sort({ updatedAt: -1 }).select('updatedAt').lean();
+    return Boolean(d && d.updatedAt && new Date(d.updatedAt).getTime() > instant);
+  } catch (e) { return false; }
+}
+
 async function construireAvecCache() {
-  if (cache.xml && Date.now() - cache.builtAt < CACHE_TTL_MS) return cache.xml;
+  if (cache.xml && Date.now() - cache.builtAt < CACHE_TTL_MS && !(await tarifsModifiesDepuis(cache.builtAt))) {
+    return cache.xml;
+  }
   if (enCours) return enCours;
   enCours = (async () => {
     const items = await chargerProduits();
