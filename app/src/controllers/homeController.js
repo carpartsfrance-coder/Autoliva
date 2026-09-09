@@ -342,7 +342,7 @@ async function getHome(req, res, next) {
     const ogTitle = title;
     const ogDescription = metaDescription;
     const ogUrl = canonicalUrl;
-    const ogImage = baseUrl ? `${baseUrl}/images/hero-home.png` : '/images/hero-home.png';
+    const ogImage = baseUrl ? `${baseUrl}/images/hero-home.jpg` : '/images/hero-home.jpg';
     const sameAs = [
       getTrimmedString(siteSettings && siteSettings.facebookUrl),
       getTrimmedString(siteSettings && siteSettings.instagramUrl),

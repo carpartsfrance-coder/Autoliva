@@ -44,6 +44,40 @@ function getProductHelpers() {
 
 const PER_PAGE = 24;
 
+/* ── Mémo court des agrégations de facettes ───────────────────────────────
+ *
+ * Les compteurs « Boîtes (1 234) », la liste marques/modèles/motorisations
+ * et les comptes par état parcouraient TOUT le catalogue à chaque rendu —
+ * six agrégations sans index, pour un résultat qui ne change qu'à la
+ * publication d'une fiche. Les robots enchaînent des dizaines de
+ * combinaisons de filtres par minute sur /pieces-auto : c'était la charge
+ * de fond du serveur. On garde chaque résultat dix minutes, 300 combinaisons
+ * au plus (les plus anciennes sortent). Un compteur en retard de dix minutes
+ * après une publication, personne ne le remarque.
+ *
+ * La clé sérialise les RegExp explicitement : JSON.stringify les rend en
+ * `{}`, et deux catégories auraient partagé le même compteur.
+ */
+const MEMO_MS = 10 * 60 * 1000;
+const MEMO_MAX = 300;
+const memo = new Map();
+
+function cleMemo(prefixe, objet) {
+  return prefixe + ':' + JSON.stringify(objet, (k, v) => (v instanceof RegExp ? 'RegExp(' + v.toString() + ')' : v));
+}
+
+async function memoriser(cle, calcul) {
+  const maintenant = Date.now();
+  const entree = memo.get(cle);
+  if (entree && maintenant - entree.a < MEMO_MS) return entree.valeur;
+  const valeur = await calcul();
+  if (memo.size >= MEMO_MAX) memo.delete(memo.keys().next().value);
+  memo.set(cle, { a: maintenant, valeur });
+  return valeur;
+}
+
+function viderMemo() { memo.clear(); }
+
 /**
  * Prépare TOUT le payload nécessaire au render du template products/index.ejs.
  *
@@ -410,10 +444,10 @@ async function prepareProductListingData(req, options = {}) {
       }
     }
 
-    const productCategoryCounts = await Product.aggregate([
+    const productCategoryCounts = await memoriser(cleMemo('categories', {}), () => Product.aggregate([
       { $match: { category: { $type: 'string', $ne: '' } } },
       { $group: { _id: '$category', count: { $sum: 1 } } },
-    ]);
+    ]));
 
     const usedCountByCategory = new Map();
     const usedMainSet = new Set();
@@ -514,7 +548,11 @@ async function prepareProductListingData(req, options = {}) {
   // Exclut les brouillons (isPublished === false), ex. produits importés non
   // encore publiés, du listing public. Les produits existants ont isPublished
   // à true par défaut → aucun impact sur le catalogue actuel.
-  filter.isPublished = { $ne: false };
+  /* `$in` plutôt que `$ne: false` : même sens (publié, ou champ absent sur
+     une vieille fiche), mais deux valeurs ponctuelles que l'index
+     {isPublished, createdAt} sait parcourir déjà triées — fini le tri en
+     mémoire de 14 000 fiches à chaque page. */
+  filter.isPublished = { $in: [true, null] };
 
   if (selectedVehicleMake || selectedVehicleModel || selectedVehicleEngine) {
     const elem = {};
@@ -567,7 +605,7 @@ async function prepareProductListingData(req, options = {}) {
   // Motorisations par "marque|||modèle" pour le 3e niveau du sélecteur.
   let vehicleEnginesByMakeModel = {};
   if (dbConnected) {
-    const rows = await Product.aggregate([
+    const rows = await memoriser(cleMemo('vehicules', {}), () => Product.aggregate([
       { $unwind: '$compatibility' },
       {
         $match: {
@@ -590,7 +628,7 @@ async function prepareProductListingData(req, options = {}) {
           },
         },
       },
-    ]);
+    ]));
 
     const map = new Map();
     const engMap = new Map();
@@ -889,7 +927,7 @@ async function prepareProductListingData(req, options = {}) {
       const catScope = { ...filter }; delete catScope.category;
       const makeScope = { ...filter }; delete makeScope.compatibility;
       const condScope = { ...filter }; delete condScope['badges.condition'];
-      const [catRows, makeRows, condRows] = await Promise.all([
+      const [catRows, makeRows, condRows] = await memoriser(cleMemo('facettes', filter), () => Promise.all([
         Product.aggregate([
           { $match: { ...catScope, category: { $type: 'string', $ne: '' } } },
           { $group: { _id: '$category', n: { $sum: 1 } } },
@@ -905,7 +943,7 @@ async function prepareProductListingData(req, options = {}) {
           key: c.key,
           n: await Product.countDocuments({ ...condScope, 'badges.condition': { $regex: c.rx } }),
         }))),
-      ]);
+      ]));
       for (const r of catRows) {
         const full = String(r._id || '').trim();
         const n = Number(r.n) || 0;
@@ -1052,6 +1090,7 @@ async function getVehicleTree(dbConnected) {
 }
 
 module.exports = {
+  _memo: { cleMemo, memoriser, viderMemo, MEMO_MS, MEMO_MAX },
   prepareProductListingData,
   getVehicleTree,
   searchProductsViaAtlas,

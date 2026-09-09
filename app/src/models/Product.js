@@ -310,5 +310,11 @@ productSchema.index({ 'localizations.de.translatedAt': 1 });
 productSchema.index({ 'localizations.de.slug': 1 }, { sparse: true });
 /* Filtre catalogue par état (occasion / reconditionné / neuf), champ texte libre. */
 productSchema.index({ 'badges.condition': 1 });
+/* Listing public : « publié » + tri nouveautés (le défaut), et « publié » +
+   catégorie pour les pages de catégorie. Sans eux, chaque page de listing
+   relisait les 14 700 fiches en entier (COLLSCAN) — jusqu'à quinze fois par
+   rendu, facettes comprises — et les triait en mémoire. */
+productSchema.index({ isPublished: 1, createdAt: -1 });
+productSchema.index({ isPublished: 1, category: 1 });
 
 module.exports = mongoose.model('Product', productSchema);
