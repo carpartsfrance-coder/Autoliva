@@ -30,6 +30,7 @@ const adminUsers = require('../services/adminUsers');
 const AdminUser = require('../models/AdminUser');
 const CartEvent = require('../models/CartEvent');
 const openaiProductGenerator = require('../services/openaiProductGenerator');
+const comptoir = require('../services/comptoir');
 const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const { getNextOrderNumber } = require('../services/orderNumber');
 const { formatAttribution } = require('../services/attributionDisplay');
@@ -10361,6 +10362,9 @@ async function postAdminCreateManualOrder(req, res) {
         const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
         await markLeadsRecoveredForOrder(created, { email: user && user.email ? user.email : '' });
       } catch (_) { /* non-bloquant */ }
+
+      /* Comptoir : une vente au téléphone compte autant qu'une vente en ligne. */
+      comptoir.syncOrderInBackground(created._id);
     }
 
     return res.json({
@@ -10421,6 +10425,9 @@ async function postAdminValidateDraftOrder(req, res) {
         const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
         await markLeadsRecoveredForOrder(orderDoc);
       } catch (_) { /* non-bloquant */ }
+
+      /* Comptoir : le brouillon validé devient une vente à compter. */
+      comptoir.syncOrderInBackground(orderDoc._id);
     }
 
     /* Decrement stock */

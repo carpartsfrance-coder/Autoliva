@@ -9,6 +9,7 @@ const { sendConsigneReminders } = require('./sendConsigneReminders');
 const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations } = require('./savCronJobs');
 const { reconcileScalapayOrders } = require('./reconcileScalapayOrders');
 const { syncShipmentTracking } = require('./syncShipmentTracking');
+const { syncComptoirOrders } = require('./syncComptoirOrders');
 const { traduireNouveautesDe } = require('./traduireNouveautesDe');
 const { runEngineQuoteReminders } = require('./sendEngineQuoteReminders');
 const { sendRepurchaseReminders } = require('./sendRepurchaseReminders');
@@ -177,6 +178,18 @@ function startScheduler() {
     }
   });
 
+  // Rattrapage du connecteur Comptoir : toutes les heures à :33, reprend les
+  // commandes encaissées que l'envoi immédiat (au paiement) n'a pas pu pousser.
+  // No-op TOTAL tant que COMPTOIR_API_KEY n'est pas définie sur Render.
+  cron.schedule('33 * * * *', async () => {
+    try {
+      const r = await syncComptoirOrders();
+      if (r && r.sent) console.log('[scheduler] Comptoir: ' + r.sent + ' commande(s) rattrapée(s)');
+    } catch (err) {
+      console.error('[scheduler] Erreur rattrapage Comptoir:', err.message || err);
+    }
+  });
+
   // Import de conversions hors-ligne vers Google Ads : toutes les heures à :40.
   // Remonte les VRAIES conversions du tunnel moteur (lead devis + vente gagnée)
   // via le gclid déjà capté. No-op TOTAL tant que les variables GOOGLE_ADS_*
@@ -200,6 +213,7 @@ function startScheduler() {
   console.log('[scheduler] CRON expiration brouillons programmé (03:00 quotidien)');
   console.log('[scheduler] CRON réconciliation Scalapay programmé (toutes les 15 min)');
   console.log('[scheduler] CRON purge corbeille J+30 programmé (03:37 quotidien)');
+  console.log('[scheduler] CRON rattrapage Comptoir programmé (:33 horaire)');
 }
 
 module.exports = { startScheduler };
