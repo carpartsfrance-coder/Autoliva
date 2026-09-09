@@ -23,6 +23,7 @@ const { getNextOrderNumber } = require('../services/orderNumber');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const { buildOrderAttribution } = require('../middlewares/captureAttribution');
 const { track: trackEvent } = require('../services/eventTracker');
+const comptoir = require('../services/comptoir');
 const reverseChargeSvc = require('../services/reverseCharge');
 const viesValidator = require('../services/viesValidator');
 // Flag d'activation de l'autoliquidation TVA B2B UE (HT). OFF par défaut →
@@ -647,6 +648,11 @@ async function applyMolliePaymentToOrder(order, payment) {
         : null;
       await markAbandonedCartsAsRecoveredForOrder(refreshed, userForCleanup);
     } catch (_) { /* helper handles its own errors */ }
+
+    /* Comptoir (getcomptoir.fr) : la vente rejoint le tableau de bord.
+       En arrière-plan — le client n'attend pas derrière un tiers, et le
+       rattrapage horaire reprend la commande si l'appel échoue. */
+    comptoir.syncOrderInBackground(refreshed && refreshed._id);
   }
 
   return refreshed;
@@ -857,6 +863,9 @@ async function applyScalapayPaymentToOrder(order, { scalapayStatus, paymentStatu
         : null;
       await markAbandonedCartsAsRecoveredForOrder(refreshed, userForCleanup);
     } catch (_) { /* helper handles its own errors */ }
+
+    /* Comptoir (getcomptoir.fr) : voir applyMolliePaymentToOrder. */
+    comptoir.syncOrderInBackground(refreshed && refreshed._id);
   }
 
   return refreshed;

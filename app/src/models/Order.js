@@ -546,6 +546,24 @@ const orderSchema = new mongoose.Schema(
       googleAdsConversionId: { type: String, default: '', trim: true },
       uploadError: { type: String, default: '', trim: true },
     },
+
+    /* ── Connecteur Comptoir (getcomptoir.fr) ────────────────────────────
+     * Trace l'envoi de la commande vers le tableau de bord des ventes.
+     * `sentAt` fait office de verrou : posé, la commande n'est plus reprise
+     * (leur API ignore de toute façon un externalId déjà connu).
+     * `lastError` reste lisible — un échec d'envoi doit pouvoir se constater,
+     * pas disparaître dans un catch. */
+    comptoir: {
+      sentAt: { type: Date, default: null },
+      externalId: { type: String, default: '', trim: true },
+      duplicate: { type: Boolean, default: false },
+      attempts: { type: Number, default: 0, min: 0 },
+      lastAttemptAt: { type: Date, default: null },
+      lastError: { type: String, default: '', trim: true },
+      /* Erreur qui ne passera jamais en réessayant (400 montant, 401 clé) :
+         le rattrapage cesse de la reprendre. */
+      permanentError: { type: Boolean, default: false },
+    },
   },
   {
     timestamps: true,
@@ -700,5 +718,7 @@ orderSchema.index(
 );
 orderSchema.index({ 'attribution.lastTouch.gclid': 1 });
 orderSchema.index({ 'attribution.uploadedToGoogleAdsAt': 1, paymentStatus: 1 });
+/* Rattrapage Comptoir : les commandes encaissées pas encore poussées. */
+orderSchema.index({ 'comptoir.sentAt': 1, paymentStatus: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Order', orderSchema);
