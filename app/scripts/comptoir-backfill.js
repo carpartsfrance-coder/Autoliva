@@ -19,6 +19,11 @@
  *   node scripts/comptoir-backfill.js --days=90       # fenêtre
  *   node scripts/comptoir-backfill.js --limit=50      # plafond d'envois
  *   node scripts/comptoir-backfill.js --apply --all   # tout l'historique
+ *   node scripts/comptoir-backfill.js --apply --force # RENVOIE aussi les déjà envoyées
+ *
+ * `--force` sert quand Comptoir fait évoluer son ingestion et redemande les
+ * commandes (vécu : 251 ventes arrivées sans produit rattaché ; le renvoi du
+ * même externalId les a complétées, réponse `backfilled: true`).
  *
  * Prérequis : COMPTOIR_API_KEY dans l'environnement (même clé que sur Render).
  */
@@ -27,6 +32,7 @@ const mongoose = require('mongoose');
 
 const APPLY = process.argv.includes('--apply');
 const ALL = process.argv.includes('--all');
+const FORCE = process.argv.includes('--force');
 const arg = (name, def) => {
   const a = process.argv.find((x) => x.startsWith(`--${name}=`));
   if (!a) return def;
@@ -58,8 +64,9 @@ async function main() {
   const filter = {
     paymentStatus: { $in: ['paid', 'captured', 'completed'] },
     deletedAt: null,
-    $or: [{ 'comptoir.sentAt': null }, { 'comptoir.sentAt': { $exists: false } }],
   };
+  /* Sans --force, on ne reprend que ce qui n'est jamais parti. */
+  if (!FORCE) filter.$or = [{ 'comptoir.sentAt': null }, { 'comptoir.sentAt': { $exists: false } }];
   if (!ALL) filter.createdAt = { $gte: new Date(Date.now() - WINDOW_DAYS * 86400000) };
 
   const orders = await Order.find(filter)
@@ -71,7 +78,7 @@ async function main() {
   console.log(`Endpoint     : ${comptoir.getEndpoint()}`);
   console.log(`Fenêtre      : ${ALL ? 'tout l\'historique' : WINDOW_DAYS + ' jours'} · plafond ${LIMIT}`);
   console.log(`À envoyer    : ${orders.length} commande(s)`);
-  console.log(`Mode         : ${APPLY ? 'ENVOI RÉEL' : 'SIMULATION (ajouter --apply pour envoyer)'}`);
+  console.log(`Mode         : ${APPLY ? 'ENVOI RÉEL' : 'SIMULATION (ajouter --apply pour envoyer)'}${FORCE ? ' · --force : renvoie aussi les déjà envoyées' : ''}`);
   console.log('');
 
   const out = { sent: 0, duplicates: 0, errors: 0, ignorees: 0 };
@@ -82,7 +89,7 @@ async function main() {
 
     if (!APPLY) { console.log('  [simulation] ' + ligne); continue; }
 
-    const r = await comptoir.syncOrder(o._id);
+    const r = await comptoir.syncOrder(o._id, { force: FORCE });
     if (r.ok && !r.skipped) {
       out.sent++;
       if (r.duplicate) out.duplicates++;

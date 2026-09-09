@@ -40,6 +40,21 @@ node scripts/comptoir-backfill.js --apply --all # tout l'historique
 
 Relançable sans risque : Comptoir ignore une commande déjà connue.
 
+### Renvoyer des commandes déjà envoyées
+
+```bash
+node scripts/comptoir-backfill.js --apply --force --all
+```
+
+`--force` passe outre le verrou `comptoir.sentAt`. Utile quand Comptoir fait
+évoluer son ingestion et redemande les commandes.
+
+**Vécu le 09/09/2026** : les 251 ventes de l'historique sont arrivées **sans
+produit rattaché**. Comptoir a mis à jour son ingestion et demandé un renvoi du
+même `externalId` ; les commandes se sont complétées, réponse
+`{"ok": true, "duplicate": true, "backfilled": true}`. C'est donc bien un
+`--force`, pas un nouveau backfill.
+
 ---
 
 ## Ce qui part, et quand
@@ -113,6 +128,10 @@ Les envois sont tracés sur la commande, dans `order.comptoir` :
   (5 tentatives au maximum).
 - `permanentError: true` → montant invalide (400) ou clé morte (401). Le
   rattrapage l'abandonne : il faut corriger la clé, puis relancer le backfill.
+  Un envoi qui finit par passer remet ce drapeau à zéro — sans quoi une
+  commande poussée après correction de la clé resterait exclue du rattrapage
+  pour toujours (le cas s'est produit le 09/09/2026 : premier backfill lancé
+  avec un placeholder de clé, donc 251 commandes en 401).
 
 Dans les logs Render : `[comptoir]` pour les envois unitaires,
 `[comptoir-sync]` pour le bilan horaire du rattrapage.

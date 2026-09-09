@@ -262,6 +262,12 @@ async function syncOrder(orderOrId, options = {}) {
         'comptoir.duplicate': !!result.duplicate,
         'comptoir.lastAttemptAt': new Date(),
         'comptoir.lastError': '',
+        /* Un envoi qui passe efface le verdict « définitif » d'un échec
+           antérieur : sans ça, une commande poussée après une clé corrigée
+           gardait `permanentError: true` et sortait du rattrapage pour de bon
+           (vécu le 09/09/2026 — backfill lancé une première fois avec un
+           placeholder de clé, donc 251 commandes en 401 puis renvoyées). */
+        'comptoir.permanentError': false,
       },
       $inc: { 'comptoir.attempts': 1 },
     });
