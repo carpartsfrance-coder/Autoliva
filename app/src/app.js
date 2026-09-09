@@ -392,7 +392,7 @@ const crawlerRoutesLimiter = rateLimit({
   legacyHeaders: false,
   handler: (req, res) => res.status(429).type('text/plain').send('Trop de requêtes sur cette ressource, réessayez dans quelques minutes.'),
 });
-app.use(['/sitemap.xml', /^\/sitemap-.*\.xml$/, '/google-merchant-feed.xml'], crawlerRoutesLimiter);
+app.use(['/sitemap.xml', /^\/sitemap-.*\.xml$/, '/google-merchant-feed.xml', '/google-merchant-feed-de.xml'], crawlerRoutesLimiter);
 
 app.get('/sitemap.xml', seoController.getSitemapXml);
 app.get('/sitemap-pages.xml', seoController.getSitemapPages);
@@ -410,6 +410,9 @@ app.get('/robots.txt', seoController.getRobotsTxt);
  * mêmes raisons que les sitemaps : pas de Set-Cookie sur la réponse, cache
  * CDN propre, pas de pollution session sur un endpoint public crawlé. */
 app.get('/google-merchant-feed.xml', require('./routes/google-merchant-feed'));
+/* Flux allemand pour Merchant Center (fiches gratuites Google Shopping DE).
+   Séparé du français : langue, liens /de/ et port zone Europe. */
+app.get('/google-merchant-feed-de.xml', require('./routes/google-merchant-feed-de'));
 
 /* /go/whatsapp — endpoint de redirect 301 vers WhatsApp wa.me.
  *

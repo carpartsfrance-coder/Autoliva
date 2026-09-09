@@ -2245,7 +2245,9 @@ async function postPayment(req, res, next) {
             orderNumber: created.number,
             userId: String(user._id),
           },
-          locale: 'fr_FR',
+          /* La page Mollie s'ouvrait en français pour un client allemand :
+             dernier écran avant de payer, dans la mauvaise langue. */
+          locale: created.lang === 'de' ? 'de_DE' : 'fr_FR',
         });
       } catch (err) {
         console.error('[Mollie] Erreur création paiement', {

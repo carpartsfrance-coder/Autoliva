@@ -762,5 +762,6 @@
   "legal.lastUpdate": "Dernière mise à jour :",
   "categories.indexTitle": "Catégories - %brandName%",
   "categories.indexMeta": "Découvre toutes nos catégories de pièces auto : moteur, freinage, carrosserie, électricité, entretien et plus.",
-  "breadcrumb.categoriesLd": "Catégories"
+  "breadcrumb.categoriesLd": "Catégories",
+  "shipping.homeDescEurope": "Livré chez vous en 4-6 jours ouvrés"
 }
