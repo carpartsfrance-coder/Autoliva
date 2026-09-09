@@ -155,6 +155,13 @@ function buildPayload(order) {
   const productName = buildProductName(order);
   if (productName) payload.productName = productName;
 
+  /* Quantité du PREMIER article — celui qui donne son nom à la fiche côté
+     Comptoir. Envoyer la somme de toutes les lignes associerait la quantité
+     d'articles qu'on ne nomme pas au produit qu'on nomme. */
+  const first = Array.isArray(order && order.items) ? order.items.filter(Boolean)[0] : null;
+  const qty = first ? Math.round(Number(first.quantity)) : NaN;
+  if (Number.isFinite(qty) && qty > 0) payload.quantity = qty;
+
   return payload;
 }
 
@@ -262,6 +269,12 @@ async function syncOrder(orderOrId, options = {}) {
         'comptoir.duplicate': !!result.duplicate,
         'comptoir.lastAttemptAt': new Date(),
         'comptoir.lastError': '',
+        /* Un envoi qui passe efface le verdict « définitif » d'un échec
+           antérieur : sans ça, une commande poussée après une clé corrigée
+           gardait `permanentError: true` et sortait du rattrapage pour de bon
+           (vécu le 09/09/2026 — backfill lancé une première fois avec un
+           placeholder de clé, donc 251 commandes en 401 puis renvoyées). */
+        'comptoir.permanentError': false,
       },
       $inc: { 'comptoir.attempts': 1 },
     });

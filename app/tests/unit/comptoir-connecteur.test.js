@@ -18,7 +18,7 @@ const commande = (over = {}) => Object.assign({
   totalCents: 129900,
   createdAt: new Date('2026-09-01T10:00:00Z'),
   molliePaidAt: new Date('2026-09-01T10:04:00Z'),
-  items: [{ name: 'Mécatronique DQ200 reconditionnée' }],
+  items: [{ name: 'Mécatronique DQ200 reconditionnée', quantity: 1 }],
   billingAddress: { fullName: 'Jean Dupont' },
   shippingAddress: { fullName: 'Jean Dupont' },
 }, over);
@@ -33,6 +33,17 @@ test('le payload respecte les champs du guide Comptoir', () => {
   assert.equal(p.customerName, 'Jean Dupont');
   assert.equal(p.productName, 'Mécatronique DQ200 reconditionnée');
   assert.equal(p.date, '2026-09-01T10:04:00.000Z'); // l'encaissement, pas la création
+});
+
+test('la quantité envoyée est celle du premier article', () => {
+  /* C'est le premier article qui nomme la fiche côté Comptoir : y associer la
+     somme de toutes les lignes compterait des articles qu'on ne nomme pas. */
+  assert.equal(comptoir.buildPayload(commande()).quantity, 1);
+  assert.equal(comptoir.buildPayload(commande({ items: [{ name: 'TCU', quantity: 3 }, { name: 'Huile', quantity: 5 }] })).quantity, 3);
+
+  /* Une quantité absente ou aberrante n'est pas envoyée plutôt qu'envoyée fausse. */
+  assert.equal('quantity' in comptoir.buildPayload(commande({ items: [{ name: 'X' }] })), false);
+  assert.equal('quantity' in comptoir.buildPayload(commande({ items: [] })), false);
 });
 
 test('le montant est en euros et supporte les centimes', () => {

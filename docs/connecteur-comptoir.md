@@ -40,6 +40,21 @@ node scripts/comptoir-backfill.js --apply --all # tout l'historique
 
 Relançable sans risque : Comptoir ignore une commande déjà connue.
 
+### Renvoyer des commandes déjà envoyées
+
+```bash
+node scripts/comptoir-backfill.js --apply --force --all
+```
+
+`--force` passe outre le verrou `comptoir.sentAt`. Utile quand Comptoir fait
+évoluer son ingestion et redemande les commandes.
+
+**Vécu le 09/09/2026** : les 251 ventes de l'historique sont arrivées **sans
+produit rattaché**. Comptoir a mis à jour son ingestion et demandé un renvoi du
+même `externalId` ; les commandes se sont complétées, réponse
+`{"ok": true, "duplicate": true, "backfilled": true}`. C'est donc bien un
+`--force`, pas un nouveau backfill.
+
 ---
 
 ## Ce qui part, et quand
@@ -52,6 +67,14 @@ Relançable sans risque : Comptoir ignore une commande déjà connue.
 | Brouillon validé en « payé » | `/admin` → valider un brouillon |
 | Rattrapage horaire (:33) | `src/jobs/syncComptoirOrders.js` |
 
+**Cette liste est exhaustive** (audit du 09/09/2026) : le code ne contient que
+**deux** créations de commande — `checkoutController.js` (tunnel) et
+`adminController.js` (commande manuelle) — et quatre passages à « payé », tous
+couverts. Les devis moteurs ne créent pas d'`Order` ; une affaire gagnée devient
+une commande manuelle, donc passe par le chemin admin. Et si un cinquième chemin
+apparaissait un jour sans être branché, le rattrapage horaire le rattraperait
+quand même : c'est le filet.
+
 Payload envoyé :
 
 ```json
@@ -61,7 +84,8 @@ Payload envoyé :
   "status": "preparation",
   "date": "2026-09-01T10:04:00.000Z",
   "customerName": "Jean Dupont",
-  "productName": "Mécatronique DQ200 (+1 autre)"
+  "productName": "Mécatronique DQ200 (+1 autre)",
+  "quantity": 1
 }
 ```
 
@@ -69,6 +93,7 @@ Payload envoyé :
   en cas d'autoliquidation TVA — cohérent avec la facture).
 - `customerName` = nom de facturation, à défaut nom de livraison.
 - `productName` = premier article, en signalant les autres.
+- `quantity` = quantité du **premier** article, celui qui nomme la fiche.
 - Une commande **non encaissée** (`paymentStatus` ≠ paid/captured/completed)
   n'est jamais envoyée : un brouillon passé « en préparation » à la main ne
   gonfle pas le compteur.
@@ -113,6 +138,10 @@ Les envois sont tracés sur la commande, dans `order.comptoir` :
   (5 tentatives au maximum).
 - `permanentError: true` → montant invalide (400) ou clé morte (401). Le
   rattrapage l'abandonne : il faut corriger la clé, puis relancer le backfill.
+  Un envoi qui finit par passer remet ce drapeau à zéro — sans quoi une
+  commande poussée après correction de la clé resterait exclue du rattrapage
+  pour toujours (le cas s'est produit le 09/09/2026 : premier backfill lancé
+  avec un placeholder de clé, donc 251 commandes en 401).
 
 Dans les logs Render : `[comptoir]` pour les envois unitaires,
 `[comptoir-sync]` pour le bilan horaire du rattrapage.

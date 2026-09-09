@@ -177,6 +177,47 @@ test('connecteur Comptoir — envoi et rattrapage', async (t) => {
     } finally { f.restaurer(); }
   });
 
+  await t.test('un envoi réussi efface le verdict « définitif » d’un échec passé', async () => {
+    /* Vécu le 09/09/2026 : le backfill a d'abord tourné avec un placeholder de
+       clé → 251 commandes en 401 donc `permanentError`. Relancé avec la vraie
+       clé, l'envoi passait mais le drapeau restait posé : les commandes étaient
+       sorties du rattrapage pour de bon, sans que rien ne le signale. */
+    await Order.deleteMany({});
+    const cmd = await creerCommande();
+
+    let f = avecFetch({ status: 401, text: async () => JSON.stringify({ error: 'Clé API invalide ou révoquée.' }) });
+    try { await comptoir.syncOrder(cmd._id); } finally { f.restaurer(); }
+    assert.equal((await Order.findById(cmd._id).lean()).comptoir.permanentError, true);
+
+    f = avecFetch(OK);
+    try { await comptoir.syncOrder(cmd._id); } finally { f.restaurer(); }
+
+    const relue = await Order.findById(cmd._id).lean();
+    assert.ok(relue.comptoir.sentAt);
+    assert.equal(relue.comptoir.permanentError, false, 'le drapeau doit retomber');
+    assert.equal(relue.comptoir.lastError, '');
+  });
+
+  await t.test('--force renvoie une commande déjà envoyée', async () => {
+    /* Comptoir peut faire évoluer son ingestion et redemander les commandes
+       (le renvoi du même externalId les complète, réponse `backfilled: true`). */
+    await Order.deleteMany({});
+    const cmd = await creerCommande();
+
+    let f = avecFetch(OK);
+    try { await comptoir.syncOrder(cmd._id); } finally { f.restaurer(); }
+
+    f = avecFetch(OK);
+    try {
+      const r = await comptoir.syncOrder(cmd._id, { force: true });
+      assert.equal(r.ok, true);
+      assert.equal(r.skipped, undefined, 'force passe outre le verrou sentAt');
+      assert.equal(f.vues.length, 1, 'l’appel réseau a bien lieu');
+    } finally { f.restaurer(); }
+
+    assert.equal((await Order.findById(cmd._id).lean()).comptoir.attempts, 2);
+  });
+
   await t.test('une commande supprimée n’est pas comptée', async () => {
     await Order.deleteMany({});
     const cmd = await creerCommande({ deletedAt: new Date(), deleteReason: 'test' });
