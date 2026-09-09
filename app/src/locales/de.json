@@ -588,7 +588,7 @@
   "product.faqQ3": "Wie lange ist die Garantie?",
   "product.faqA3": "Bis zu %months% Monate je nach Teil. Bei einem durch die Garantie abgedeckten Defekt wird das generalüberholte Teil ersetzt (Montagekosten sind nicht enthalten).",
   "product.faqQ4": "Wie lange dauert die Lieferung?",
-  "product.faqA4": "Bestellung vor 15 Uhr: Versand am selben Tag, Lieferung innerhalb von 24/48 Stunden in ganz Deutschland, in einer sicheren Verpackung, die auf das Teil abgestimmt ist (Palette für schwere Teile).",
+  "product.faqA4": "Bestellung vor 15 Uhr: Versand am selben Tag ab unserem Lager in Frankreich. Lieferung nach Deutschland in der Regel innerhalb von 4 bis 6 Werktagen, in einer sicheren, auf das Teil abgestimmten Verpackung (Palette für Motoren und Getriebe). Sie erhalten eine Sendungsverfolgung per E-Mail.",
   "product.weAnswer": "Wir antworten Ihnen",
   "product.recommendedAccessories": "Empfohlene Zubehörteile",
   "product.completeMounting": "Vervollständigen Sie Ihre Montage",
@@ -762,5 +762,6 @@
   "legal.lastUpdate": "Zuletzt aktualisiert:",
   "categories.indexTitle": "Kategorien - %brandName%",
   "categories.indexMeta": "Alle unsere Autoteile-Kategorien: Motor, Bremsen, Karosserie, Elektrik, Wartung und mehr.",
-  "breadcrumb.categoriesLd": "Kategorien"
+  "breadcrumb.categoriesLd": "Kategorien",
+  "shipping.homeDescEurope": "Zustellung in 4-6 Werktagen"
 }

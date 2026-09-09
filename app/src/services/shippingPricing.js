@@ -192,6 +192,13 @@ async function computeShippingPricesCents(dbConnected, products, zoneOrAddress) 
    chaîne allemande. L'`id` ne bouge pas — c'est lui qui porte le tarif. */
 async function getShippingMethods(dbConnected, products, zoneOrAddress, lang) {
   const { t } = require('./i18n');
+  /* Le délai annoncé était la même phrase pour toutes les zones : « 2-3 jours
+     ouvrés » promis à Berlin comme à Lyon, pour une palette partie de Nice.
+     Hors métropole on annonce 4-6 jours ouvrés — à confirmer avec le
+     transporteur, mais une estimation prudente vaut mieux qu'une promesse
+     fausse. */
+  const zoneLivraison = toZone(zoneOrAddress);
+  const cleDelai = zoneLivraison === 'metropole' ? 'shipping.homeDesc' : 'shipping.homeDescEurope';
   const list = Array.isArray(products) ? products : [];
   const onlyStandaloneCloning = list.length > 0 && list.every((p) => p && p.serviceType === 'standalone_cloning');
 
@@ -212,7 +219,7 @@ async function getShippingMethods(dbConnected, products, zoneOrAddress, lang) {
     {
       id: 'domicile',
       title: t(lang, 'shipping.homeTitle'),
-      description: t(lang, 'shipping.homeDesc'),
+      description: t(lang, cleDelai),
       priceCents: prices.domicile,
       zone: toZone(zoneOrAddress),
     },
