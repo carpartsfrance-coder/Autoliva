@@ -58,4 +58,41 @@ async function compressImage(buffer, mime) {
   }
 }
 
-module.exports = { compressImage };
+/* ── Images du catalogue (fiches, blog, bandeaux) ──────────────────────────
+ *
+ * Les photos arrivaient en base telles quelles : des PNG de 2 à 2,5 Mo
+ * sortis d'un générateur d'images, servis tels quels sur l'accueil et sur
+ * les fiches. Une page produit n'a besoin d'aucune image de plus de 1600 px
+ * de large ni de plus de 200 Ko.
+ *
+ * Règles : on ne touche qu'aux JPEG et PNG au-dessus d'un seuil ; on réduit à
+ * 1600 px ; un PNG SANS transparence devient un JPEG (une photo en PNG pèse
+ * dix fois trop), un PNG avec transparence reste un PNG. Si le résultat n'est
+ * pas plus petit, on garde l'original. Jamais d'exception : au pire, l'image
+ * est enregistrée comme avant.
+ */
+const CATALOGUE = { largeurMax: 1600, qualite: 82, seuilOctets: 300 * 1024 };
+
+async function optimiserImageCatalogue(buffer, mime, options = {}) {
+  const o = { ...CATALOGUE, ...options };
+  const type = String(mime || '').toLowerCase().trim();
+  const intact = { buffer, mime: type, modifie: false };
+  if (!Buffer.isBuffer(buffer) || !buffer.length) return intact;
+  if (type !== 'image/jpeg' && type !== 'image/png') return intact;
+  if (buffer.length <= o.seuilOctets) return intact;
+  try {
+    const img = await Jimp.read(buffer);
+    if (img.width > o.largeurMax) img.resize({ w: o.largeurMax });
+    const alpha = type === 'image/png' && typeof img.hasAlpha === 'function' && img.hasAlpha();
+    const sortie = alpha
+      ? await img.getBuffer('image/png')
+      : await img.getBuffer('image/jpeg', { quality: o.qualite });
+    if (sortie.length >= buffer.length) return intact;
+    return { buffer: sortie, mime: alpha ? 'image/png' : 'image/jpeg', modifie: true, largeur: img.width, hauteur: img.height };
+  } catch (err) {
+    console.warn('[imageCompress] optimisation catalogue impossible, original conservé:', err && err.message);
+    return intact;
+  }
+}
+
+module.exports = { compressImage, optimiserImageCatalogue, CATALOGUE };

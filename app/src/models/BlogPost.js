@@ -82,4 +82,8 @@ const blogPostSchema = new mongoose.Schema(
   }
 );
 
+/* Listing du blog et articles de l'accueil : publiés, du plus récent au plus
+   ancien. La collection ne pesait que 45 Mo, mais relue à chaque page. */
+blogPostSchema.index({ isPublished: 1, publishedAt: -1 });
+
 module.exports = mongoose.model('BlogPost', blogPostSchema);

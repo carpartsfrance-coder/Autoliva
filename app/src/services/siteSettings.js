@@ -137,7 +137,7 @@ async function updateSiteSettingsFromForm(body) {
 function getDefaultHeroSlides() {
   return [
     {
-      imageUrl: '/images/hero-home.png',
+      imageUrl: '/images/hero-home.webp',
       imageAlt: brand.NAME,
       badge: 'Service Premium',
       title: 'Pièces auto reconditionnées, d’occasion et testées',
@@ -150,7 +150,7 @@ function getDefaultHeroSlides() {
       isActive: true,
     },
     {
-      imageUrl: '/images/hero-boite-transfert.jpeg',
+      imageUrl: '/images/hero-boite-transfert.webp',
       imageAlt: 'Boîte de transfert et pont différentiel reconditionnés',
       badge: 'Transmission',
       title: 'Boîtes de transfert & ponts différentiels reconditionnés',
@@ -163,7 +163,7 @@ function getDefaultHeroSlides() {
       isActive: true,
     },
     {
-      imageUrl: '/images/hero-moteur-reconditionne.jpeg',
+      imageUrl: '/images/hero-moteur-reconditionne.webp',
       imageAlt: 'Moteurs reconditionnés',
       badge: 'Moteur',
       title: 'Moteurs reconditionnés : performance & sérénité',
@@ -215,7 +215,7 @@ function sanitizeHeroSlidesArray(slides) {
 function getDefaultHeroSlidesDe() {
   return [
     {
-      imageUrl: '/images/hero-home.png',
+      imageUrl: '/images/hero-home.webp',
       imageAlt: brand.NAME,
       badge: 'Premium-Service',
       title: 'Aufbereitete, gebrauchte und geprüfte Autoteile',
@@ -228,8 +228,8 @@ function getDefaultHeroSlidesDe() {
       isActive: true,
     },
     {
-      imageUrl: '/images/hero-boite-transfert.jpeg',
-      imageAlt: 'Aufbereitete Verteilergetriebe und Differenziale',
+      imageUrl: '/images/hero-boite-transfert.webp',
+      imageAlt: 'Aufbereitete Verteilergetriebe und Differentiale',
       badge: 'Antrieb',
       title: 'Aufbereitete Verteilergetriebe & Differenziale',
       description: 'Unser aufbereitetes Sortiment ist geprüft und 2 Jahre garantiert — für maximale Zuverlässigkeit.',
@@ -241,7 +241,7 @@ function getDefaultHeroSlidesDe() {
       isActive: true,
     },
     {
-      imageUrl: '/images/hero-moteur-reconditionne.jpeg',
+      imageUrl: '/images/hero-moteur-reconditionne.webp',
       imageAlt: 'Austauschmotoren',
       badge: 'Motor',
       title: 'Austauschmotoren: Leistung & Sicherheit',

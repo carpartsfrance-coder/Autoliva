@@ -609,7 +609,7 @@ Envoyer ma demande
 <%
 const popularEngines = [
   {
-    img: '/images/moteurs/ferrari-458-italia.png',
+    img: '/images/moteurs/ferrari-458-italia.webp',
     alt: 'Moteur Ferrari 458 Italia 4.5 V8',
     title: 'Moteur Ferrari 458 Italia',
     spec: 'F136 FB · V8 atmo · 570 ch',
@@ -619,7 +619,7 @@ const popularEngines = [
     price: 'Sur devis',
   },
   {
-    img: '/images/moteurs/cayenne-turbo-955.png',
+    img: '/images/moteurs/cayenne-turbo-955.webp',
     alt: 'Moteur Porsche Cayenne Turbo 4.5 V8 955',
     title: 'Moteur Cayenne Turbo 4.5 V8',
     spec: 'M48.50 · Bi-Turbo · 450 ch',
@@ -629,7 +629,7 @@ const popularEngines = [
     price: '5 990,00 €',
   },
   {
-    img: '/images/moteurs/cayenne-turbo-m48-52-recond.png',
+    img: '/images/moteurs/cayenne-turbo-m48-52-recond.webp',
     alt: 'Moteur Porsche Cayenne Turbo 4.8 V8 M48.52 reconditionné chemisé fonte',
     title: 'Moteur Cayenne Turbo 4.8 V8',
     spec: 'M48.52 · Bi-Turbo · 500 ch',
@@ -639,7 +639,7 @@ const popularEngines = [
     price: '9 990,00 €',
   },
   {
-    img: '/images/moteurs/cayenne-s-m48-01.png',
+    img: '/images/moteurs/cayenne-s-m48-01.webp',
     alt: 'Moteur Porsche Cayenne S 4.8 V8 M48.01',
     title: 'Moteur Cayenne S 4.8 V8',
     spec: 'M48.01 · Atmo · 385 ch',
@@ -649,7 +649,7 @@ const popularEngines = [
     price: '4 290,00 €',
   },
   {
-    img: '/images/moteurs/macan-3-0-tdi.png',
+    img: '/images/moteurs/macan-3-0-tdi.webp',
     alt: 'Moteur Porsche Macan 3.0 V6 TDI',
     title: 'Moteur Porsche Macan 3.0 V6 TDI',
     spec: 'Diesel · 258 ch · code CRTC/CTBA',
@@ -659,7 +659,7 @@ const popularEngines = [
     price: '4 990,00 €',
   },
   {
-    img: '/images/moteurs/cayenne-gts-m48-02.png',
+    img: '/images/moteurs/cayenne-gts-m48-02.webp',
     alt: 'Moteur Porsche Cayenne GTS 4.8 V8 M48.02',
     title: 'Moteur Cayenne GTS 4.8 V8',
     spec: 'M48.02 · Atmo · 405 ch',
@@ -669,7 +669,7 @@ const popularEngines = [
     price: '5 490,00 €',
   },
   {
-    img: '/images/moteurs/cayenne-turbo-m48-50-recond.png',
+    img: '/images/moteurs/cayenne-turbo-m48-50-recond.webp',
     alt: 'Moteur Porsche Cayenne Turbo 4.5 V8 M48.50 reconditionné chemisé fonte',
     title: 'Moteur Cayenne Turbo 4.5 V8',
     spec: 'M48.50 · Bi-Turbo · 450 ch',
@@ -702,7 +702,7 @@ const popularEngines = [
 </span>
 <% } %>
 <div class="h-40 flex items-center justify-center mb-4">
-<img alt="<%= eng.alt %>" class="max-h-full object-contain" src="<%= eng.img %>" loading="lazy">
+<img alt="<%= eng.alt %>" class="max-h-full object-contain" src="<%= eng.img %>" loading="lazy" decoding="async">
 </div>
 <h3 class="font-bold text-base leading-tight mb-1"><%= eng.title %></h3>
 <p class="text-xs text-gray-500 mb-4"><%= eng.spec %></p>
@@ -782,21 +782,21 @@ Demander mon devis gratuit
 </div>
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 <div class="bg-brand-card rounded-xl border border-gray-800 overflow-hidden shadow-lg transition hover:shadow-2xl hover:border-gray-700 relative group">
-<img alt="Livraison Autoliva chez une concession Porsche" class="w-full h-64 object-cover" src="/images/temoignages/livraison-concession-porsche.png" loading="lazy">
+<img alt="Livraison Autoliva chez une concession Porsche" class="w-full h-64 object-cover" src="/images/temoignages/livraison-concession-porsche.webp" loading="lazy">
 <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-5 pt-14">
 <h3 class="text-base sm:text-lg font-bold text-white leading-snug mb-1">Livré chez Porsche Service</h3>
 <p class="text-xs sm:text-sm text-slate-300">Concession Porsche · Livraison GEODIS</p>
 </div>
 </div>
 <div class="bg-brand-card rounded-xl border border-gray-800 overflow-hidden shadow-lg transition hover:shadow-2xl hover:border-gray-700 relative group">
-<img alt="Moteur en cours de montage chez le partenaire Sun Motors" class="w-full h-64 object-cover" src="/images/temoignages/installation-sun-motors.png" loading="lazy">
+<img alt="Moteur en cours de montage chez le partenaire Sun Motors" class="w-full h-64 object-cover" src="/images/temoignages/installation-sun-motors.webp" loading="lazy">
 <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-5 pt-14">
 <h3 class="text-base sm:text-lg font-bold text-white leading-snug mb-1">Installé chez Sun Motors</h3>
 <p class="text-xs sm:text-sm text-slate-300">Atelier partenaire · Validé par les pros</p>
 </div>
 </div>
 <div class="bg-brand-card rounded-xl border border-gray-800 overflow-hidden shadow-lg transition hover:shadow-2xl hover:border-gray-700 relative group">
-<img alt="Technicien Autoliva chargeant un moteur sur camion grue" class="w-full h-64 object-cover" src="/images/temoignages/chargement-camion-autoliva.png" loading="lazy">
+<img alt="Technicien Autoliva chargeant un moteur sur camion grue" class="w-full h-64 object-cover" src="/images/temoignages/chargement-camion-autoliva.webp" loading="lazy">
 <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black via-black/70 to-transparent p-5 pt-14">
 <h3 class="text-base sm:text-lg font-bold text-white leading-snug mb-1">Expédié partout en Europe</h3>
 <p class="text-xs sm:text-sm text-slate-300">Chargement atelier · 48-72h de livraison</p>

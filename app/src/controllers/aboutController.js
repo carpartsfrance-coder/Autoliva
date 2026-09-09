@@ -54,7 +54,7 @@ async function getAboutPage(req, res, next) {
       ),
       160
     );
-    const ogImage = baseUrl ? `${baseUrl}/images/hero-home.png` : '/images/hero-home.png';
+    const ogImage = baseUrl ? `${baseUrl}/images/hero-home.jpg` : '/images/hero-home.jpg';
     const jsonLd = toSafeJsonLd({
       '@context': 'https://schema.org',
       '@graph': [

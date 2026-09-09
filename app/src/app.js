@@ -504,10 +504,14 @@ const ASSET_VERSIONS = {
   mainCss: _safeMtime('css/styles.css'),
   adminCss: _safeMtime('admin/style.css'),
 };
+/* Polices servies depuis notre domaine (CSS inline + préchargements du
+   gabarit) — lues une fois, voir services/policesLocales.js. */
+const POLICES = require('./services/policesLocales').charger();
 
 app.use((req, res, next) => {
   res.locals.brand = brand;
   res.locals.assetVersions = ASSET_VERSIONS;
+  res.locals.polices = POLICES;
   // Helper d'embed vidéo (YouTube/Vimeo) dispo dans toutes les vues — voir
   // services/videoEmbed.js. Permet d'afficher un lecteur intégré dans la galerie
   // produit sans stocker la vidéo en base.

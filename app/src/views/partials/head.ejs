@@ -4,6 +4,7 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title><%= typeof title !== 'undefined' ? title : brand.NAME %></title>
 <link rel="icon" type="image/png" href="<%= brand.FAVICON_URL %>" />
+<% if (brand.APPLE_TOUCH_ICON_URL) { %><link rel="apple-touch-icon" sizes="180x180" href="<%= brand.APPLE_TOUCH_ICON_URL %>" /><% } %>
 <!-- Consent Mode V2 default state (MUST be before GTM) -->
 <script>
 window.dataLayer = window.dataLayer || [];
@@ -187,15 +188,23 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <% var _cssV = (typeof assetVersions !== 'undefined' && assetVersions.mainCss) || Date.now(); %>
 <link rel="preload" href="/css/styles.css?v=<%= _cssV %>" as="style"/>
 <link rel="stylesheet" href="/css/styles.css?v=<%= _cssV %>"/>
-<!-- Preconnect to Google Fonts -->
+<% var _polices = (typeof polices !== 'undefined' && polices && polices.disponible) ? polices : null; %>
+<% if (_polices) { %>
+<%# Polices servies depuis notre domaine (voir scripts/polices-locales.js) :
+    plus de feuille bloquante chez Google, et 210 Ko d'icônes au lieu des
+    6,4 Mo des deux polices Material complètes. Nouvelle icône dans une vue
+    → relancer le script, sinon elle s'affiche en toutes lettres. %>
+<% _polices.preloads.forEach(function (u) { %><link rel="preload" href="<%= u %>" as="font" type="font/woff2" crossorigin/>
+<% }); %><style><%- _polices.css %></style>
+<% } else { %>
+<!-- Repli sans manifest local (public/fonts/manifest.json absent) : feuilles Google -->
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<!-- Critical fonts: Inter (body) + Outfit (headings) loaded with display=swap -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
-<!-- Icon fonts -->
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet"/>
+<% } %>
 <script>
   (function () {
     var el = document.documentElement;

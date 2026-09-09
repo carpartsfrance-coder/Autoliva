@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { Readable } = require('stream');
+const { optimiserImageCatalogue } = require('./imageCompress');
 
 let cachedBucket = null;
 let cachedDbId = null;
@@ -44,14 +45,33 @@ function buildFilenameFallback(originalName, fallbackPrefix = 'file') {
   return `${fallbackPrefix}-${Date.now()}`;
 }
 
-async function saveBuffer({ buffer, filename, mimeType, metadata } = {}) {
-  const buf = Buffer.isBuffer(buffer) ? buffer : null;
+/* `optimiser: false` pour enregistrer un fichier tel quel (aucun appelant n'en
+   a besoin aujourd'hui ; c'est la porte de sortie si un jour on stocke une
+   image qui doit rester au pixel près). */
+async function saveBuffer({ buffer, filename, mimeType, metadata, optimiser = true } = {}) {
+  let buf = Buffer.isBuffer(buffer) ? buffer : null;
   if (!buf || !buf.length) {
     throw new Error('Fichier vide');
   }
 
-  const safeFilename = buildFilenameFallback(filename, 'upload');
-  const contentType = normalizeContentType(mimeType);
+  let safeFilename = buildFilenameFallback(filename, 'upload');
+  let contentType = normalizeContentType(mimeType);
+
+  /* Les images lourdes sont réduites à l'entrée — voir imageCompress.js. Une
+     photo PNG convertie en JPEG change d'extension pour que le nom annoncé
+     (Content-Disposition) reste vrai. */
+  if (optimiser !== false) {
+    const r = await optimiserImageCatalogue(buf, contentType);
+    if (r.modifie) {
+      const avant = buf.length;
+      buf = r.buffer;
+      if (r.mime !== contentType) {
+        contentType = r.mime;
+        safeFilename = safeFilename.replace(/\.(png|jpe?g)$/i, '') + (r.mime === 'image/jpeg' ? '.jpg' : '.png');
+      }
+      metadata = { ...(metadata && typeof metadata === 'object' ? metadata : {}), optimise: { avantOctets: avant, apresOctets: buf.length, largeur: r.largeur, hauteur: r.hauteur } };
+    }
+  }
 
   const bucket = getBucket();
 
