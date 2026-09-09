@@ -22,9 +22,9 @@ test('toutes les icônes des vues sont dans le sous-ensemble de police embarqué
   assert.ok(strictes.size > 100, 'l’extraction doit voir les icônes des vues (' + strictes.size + ' trouvées)');
 });
 
-test('les six fichiers de police annoncés existent et sont bien du woff2', () => {
+test('les dix fichiers de police annoncés existent et sont bien du woff2', () => {
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
-  assert.equal(manifest.polices.length, 6);
+  assert.equal(manifest.polices.length, 10);
   for (const p of manifest.polices) {
     const chemin = require('path').join(require('path').dirname(MANIFEST), p.fichier);
     assert.ok(fs.existsSync(chemin), p.fichier + ' manquant');

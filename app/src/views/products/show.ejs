@@ -265,9 +265,17 @@
           Header/footer du site conservés (marque Autoliva). Styles inline = fidélité exacte.
           Hooks JS réels préservés : data-add-to-cart-*, data-price-display(-ht),
           data-installment-*, data-main-image/thumb/gallery-*, lightbox. %>
+      <%# Police de la fiche servie depuis notre domaine (public/fonts, déclarée
+          dans le CSS inline du gabarit) et PRÉCHARGÉE : sans cela le texte se
+          redessinait à l'arrivée de la police et la grille du haut de page
+          sautait (CLS 0,20). L'image principale est préchargée aussi : c'est
+          l'élément LCP de la page. Les icônes Material viennent déjà du gabarit. %>
+      <% var _pol = (typeof polices !== 'undefined' && polices && polices.disponible) ? polices : null; %>
+      <% if (_pol) { %><link rel="preload" href="/fonts/plus-jakarta-sans-latin.woff2?v=<%= _pol.version %>" as="font" type="font/woff2" crossorigin /><% } else { %>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,700;1,800&display=swap" rel="stylesheet" />
-      <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0" rel="stylesheet" />
+      <% } %>
+      <% if (mainImage) { %><link rel="preload" as="image" href="<%= mainImage %>" fetchpriority="high" /><% } %>
       <style>
         .ap-page { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; color: #0F1626; }
         .ap-page * { box-sizing: border-box; }

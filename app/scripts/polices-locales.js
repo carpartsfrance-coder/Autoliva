@@ -54,6 +54,10 @@ const LISTE_OFFICIELLE = 'https://raw.githubusercontent.com/google/material-desi
 const FAMILLES = [
   { cle: 'inter', famille: 'Inter', spec: 'Inter:wght@400..800', sousEnsembles: ['latin', 'latin-ext'], display: 'swap', preload: ['latin'] },
   { cle: 'outfit', famille: 'Outfit', spec: 'Outfit:wght@500..700', sousEnsembles: ['latin', 'latin-ext'], display: 'swap', preload: ['latin'] },
+  /* La fiche produit a sa propre police de texte ; préchargée par la fiche
+     elle-même (voir products/show.ejs), pas par le gabarit commun. */
+  { cle: 'plus-jakarta-sans', famille: 'Plus Jakarta Sans', spec: 'Plus+Jakarta+Sans:wght@400..800', sousEnsembles: ['latin', 'latin-ext'], display: 'swap', preload: [] },
+  { cle: 'plus-jakarta-sans-italic', famille: 'Plus Jakarta Sans', spec: 'Plus+Jakarta+Sans:ital,wght@1,700..800', sousEnsembles: ['latin', 'latin-ext'], display: 'swap', preload: [] },
   { cle: 'material-symbols-outlined', famille: 'Material Symbols Outlined', spec: 'Material+Symbols+Outlined:wght,FILL@100..700,0..1', icones: true, display: 'block', preload: true },
   { cle: 'material-symbols-rounded', famille: 'Material Symbols Rounded', spec: 'Material+Symbols+Rounded:wght,FILL@100..700,0..1', icones: true, display: 'block', preload: false },
 ];
