@@ -67,6 +67,14 @@ même `externalId` ; les commandes se sont complétées, réponse
 | Brouillon validé en « payé » | `/admin` → valider un brouillon |
 | Rattrapage horaire (:33) | `src/jobs/syncComptoirOrders.js` |
 
+**Cette liste est exhaustive** (audit du 09/09/2026) : le code ne contient que
+**deux** créations de commande — `checkoutController.js` (tunnel) et
+`adminController.js` (commande manuelle) — et quatre passages à « payé », tous
+couverts. Les devis moteurs ne créent pas d'`Order` ; une affaire gagnée devient
+une commande manuelle, donc passe par le chemin admin. Et si un cinquième chemin
+apparaissait un jour sans être branché, le rattrapage horaire le rattraperait
+quand même : c'est le filet.
+
 Payload envoyé :
 
 ```json
@@ -76,7 +84,8 @@ Payload envoyé :
   "status": "preparation",
   "date": "2026-09-01T10:04:00.000Z",
   "customerName": "Jean Dupont",
-  "productName": "Mécatronique DQ200 (+1 autre)"
+  "productName": "Mécatronique DQ200 (+1 autre)",
+  "quantity": 1
 }
 ```
 
@@ -84,6 +93,7 @@ Payload envoyé :
   en cas d'autoliquidation TVA — cohérent avec la facture).
 - `customerName` = nom de facturation, à défaut nom de livraison.
 - `productName` = premier article, en signalant les autres.
+- `quantity` = quantité du **premier** article, celui qui nomme la fiche.
 - Une commande **non encaissée** (`paymentStatus` ≠ paid/captured/completed)
   n'est jamais envoyée : un brouillon passé « en préparation » à la main ne
   gonfle pas le compteur.

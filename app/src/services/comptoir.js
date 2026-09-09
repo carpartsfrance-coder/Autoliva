@@ -155,6 +155,13 @@ function buildPayload(order) {
   const productName = buildProductName(order);
   if (productName) payload.productName = productName;
 
+  /* Quantité du PREMIER article — celui qui donne son nom à la fiche côté
+     Comptoir. Envoyer la somme de toutes les lignes associerait la quantité
+     d'articles qu'on ne nomme pas au produit qu'on nomme. */
+  const first = Array.isArray(order && order.items) ? order.items.filter(Boolean)[0] : null;
+  const qty = first ? Math.round(Number(first.quantity)) : NaN;
+  if (Number.isFinite(qty) && qty > 0) payload.quantity = qty;
+
   return payload;
 }
 
