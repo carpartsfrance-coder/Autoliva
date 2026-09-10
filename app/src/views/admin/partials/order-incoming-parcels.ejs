@@ -1,0 +1,17 @@
+<section id="detail-incoming" class="detail-incoming bg-white rounded-2xl border border-slate-200 p-6" aria-labelledby="detail-incoming-title">
+  <h2 id="detail-incoming-title">Colis fournisseurs → chez nous</h2>
+  <p class="detail-caption">Réception avant l’expédition au client</p>
+  <div id="detail-parcels">
+    <% const parcelLabels = {pending:'À synchroniser', info_received:'Étiquette créée', in_transit:'En transit', out_for_delivery:'En cours de livraison', delivered:'Livré par le transporteur · pièces à vérifier', exception:'Incident transporteur', unknown:'Suivi indisponible'}; %>
+    <% if (!supplierParcels.length) { %><p>Aucun colis fournisseur enregistré.</p><% } %>
+    <% supplierParcels.forEach(p => { %><article>
+      <strong><%= p.supplier %></strong><a href="<%= p.url %>" target="_blank" rel="noopener"><%= p.carrier.toUpperCase() %> · <%= p.trackingNumber %> ↗</a>
+      <span><%= parcelLabels[p.status] || 'Suivi indisponible' %></span>
+      <% if (p.stale) { %><span class="procurement-warning">Composition modifiée : vérifier les pièces associées.</span><% } %>
+      <% if (p.syncError) { %><span class="procurement-warning"><%= p.syncError %></span><% } %>
+      <small>Vérifié : <%= p.lastCheckedAt ? new Date(p.lastCheckedAt).toLocaleString('fr-FR', {timeZone:'Europe/Paris'}) : 'jamais' %></small>
+    </article><% }); %>
+  </div>
+  <button type="button" class="btn btn-secondary" data-procurement-id="<%= order.id %>">Ajouter un suivi / confirmer les pièces</button>
+  <a class="detail-text-button" href="/admin/fournisseurs?filter=ordered">Voir tous les colis fournisseurs →</a>
+</section>

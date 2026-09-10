@@ -3201,6 +3201,8 @@ async function getAdminOrderDetailPage(req, res, next) {
 
     return res.render('admin/order', {
       title: `Admin - ${orderDoc.number}`,
+      procurementStates: require('../services/orderProcurement').STATES,
+      supplierParcels: (await require('./orderProcurementController').withParcels(orderDoc)).parcels,
       dbConnected,
       errorMessage,
       successMessage,
@@ -3229,6 +3231,8 @@ async function getAdminOrderDetailPage(req, res, next) {
         deletedAtRaw: orderDoc.deletedAt || null,
         deletedBy: orderDoc.deletedBy || '',
         deleteReason: orderDoc.deleteReason || '',
+        procurementSummary: summarizeProcurement(orderDoc),
+        customerPromisedOn: orderDoc.customerPromisedOn || '',
         statusKey: orderDoc.status,
         statusBadge: getOrderStatusBadge(orderDoc.status),
         orderType: orderDoc.orderType || 'standard',

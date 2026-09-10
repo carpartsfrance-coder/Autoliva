@@ -72,7 +72,7 @@
     document.getElementById('procurementDraftWrap').hidden=true;document.getElementById('procurementCopy').textContent='Copier le message';
     document.getElementById('procurementTitle').textContent='Chargement du suivi…';document.getElementById('procurementSummary').textContent='';dialog.showModal();
     var token=++generation;
-    try { var data=await responseJSON(await fetch('/admin/api/commandes/'+encodeURIComponent(button.dataset.procurementId)+'/approvisionnement',{credentials:'same-origin'}));if(token!==generation)return;paint(data);form.hidden=false; } catch(err){if(token===generation)showError(err.message);}
+    try { var data=await responseJSON(await fetch('/admin/api/commandes/'+encodeURIComponent(button.dataset.procurementId)+'/approvisionnement',{credentials:'same-origin'}));if(token!==generation)return;paint(data);form.hidden=false;if(button.dataset.procurementFocus==='customer')form.elements.customerPromisedOn.focus(); } catch(err){if(token===generation)showError(err.message);}
   });
   form.addEventListener('input',function(event){if(event.target.name)dirty=true;});
   form.addEventListener('change',function(event){if(event.target.name)dirty=true;});
@@ -86,7 +86,7 @@
     form.querySelectorAll('input[name],select[name],textarea[name]').forEach(function(el){el.disabled=true;});
     try {
       var data=await responseJSON(await fetch('/admin/api/commandes/'+encodeURIComponent(current.id)+'/approvisionnement',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}));
-      paint(data);feedback.textContent='Suivi enregistré.';document.dispatchEvent(new Event('procurement-saved'));
+      paint(data);feedback.textContent='Suivi enregistré.';document.dispatchEvent(new CustomEvent('procurement-saved',{detail:data}));
       document.querySelectorAll('[data-procurement-id]').forEach(function(button){if(button.dataset.procurementId===data.id){var summary=button.querySelector('[data-procurement-summary]');if(summary)summary.textContent=data.summary.label;var next=button.querySelector('[data-procurement-next]');if(next)next.textContent=data.summary.next;}});
       document.querySelectorAll('[data-procurement-contact]').forEach(function(el){if(el.dataset.procurementContact===data.id){var c=data.summary.lastContact;el.textContent=c?'Contact '+data.channels[c.channel]+' · '+dateFR(c.on):'';}});
       document.querySelectorAll('[data-procurement-alert]').forEach(function(el){if(el.dataset.procurementAlert===data.id)el.textContent=[data.summary.supplierLate?'Fournisseur en retard':'',data.summary.customerLate?'Date client dépassée':''].filter(Boolean).join(' · ');});
@@ -102,7 +102,7 @@
     var button=this;button.disabled=true;saving=true;save.disabled=true;form.querySelectorAll('input[name],select[name],textarea[name]').forEach(el=>el.disabled=true);showError('');feedback.textContent='Association du colis…';
     try{
       await responseJSON(await fetch('/admin/api/colis-fournisseur',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({supplier:supplier,carrier:document.getElementById('incomingCarrier').value,trackingNumber:document.getElementById('incomingNumber').value,links:selected.map(l=>({orderId:current.id,itemIndex:l.index,signature:current.signature}))})}));
-      var data=await responseJSON(await fetch('/admin/api/commandes/'+encodeURIComponent(current.id)+'/approvisionnement',{credentials:'same-origin'}));paint(data);document.getElementById('incomingNumber').value='';feedback.textContent='Colis associé. Le suivi est disponible dans cette commande.';
+      var data=await responseJSON(await fetch('/admin/api/commandes/'+encodeURIComponent(current.id)+'/approvisionnement',{credentials:'same-origin'}));paint(data);document.getElementById('incomingNumber').value='';feedback.textContent='Colis associé. Le suivi est disponible dans cette commande.';document.dispatchEvent(new CustomEvent('procurement-saved',{detail:data}));
     }catch(err){showError(err.message);}finally{saving=false;button.disabled=!!current.readOnly;save.disabled=!!current.readOnly;form.querySelectorAll('input[name],select[name],textarea[name]').forEach(el=>el.disabled=!!current.readOnly);}
   });
   document.getElementById('procurementDraft').addEventListener('click',function(){

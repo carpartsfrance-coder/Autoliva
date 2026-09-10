@@ -62,4 +62,4 @@ function createController(Model = Order, connected = () => mongoose.connection.r
     }
   };
 }
-module.exports = {...createController(), createController, payload};
+module.exports = {...createController(), createController, payload, withParcels};

@@ -30,3 +30,11 @@ Les transporteurs sont détectés par 17TRACK ; la sélection DHL/FedEx/UPS sert
 ## Vérification
 
 Tests unitaires et intégration avec MongoDB temporaire : anciennes commandes, filtres, concurrence, colis partagé entre commandes, doublons, composition modifiée et transitions transporteur. Aperçu local avec commandes et suivis fictifs, suivi externe désactivé. Compilation du CSS admin vérifiée ; le fichier généré reste produit par le build habituel.
+
+## Fiche détaillée
+
+La fiche commence par le client, la prochaine étape et la date annoncée. Les pièces et leurs états manuels sont visibles avant le parcours de commande. Les anciennes indications de stock catalogue ne sont plus présentées comme la disponibilité réelle de cette commande. Les colis entrants apparaissent séparément des expéditions client et retours.
+
+Les actions d’archivage, retour, avis et impression de page restent dans « Autres actions » ; l’impression d’étiquette conserve son accès direct. Le dossier client et les changements manuels sont regroupés dans un panneau ouvrable depuis la navigation. La confirmation de départ d’un colis dont l’étiquette est créée reste visible au-dessus des pièces. Les notes internes et client existantes sont rappelées en tête.
+
+Les changements enregistrés dans le panneau de suivi actualisent les pièces, la prochaine étape, la date client et les colis affichés sans recharger la fiche. Tests de rendu avec le véritable contrôleur pour brouillon, payée, étiquette créée et expédiée ; tests visuels en 1440 × 900, 1280 × 800 et 390 × 844. Total après cette extension : 269 réussites, 5 tests historiques ignorés, aucun échec.
