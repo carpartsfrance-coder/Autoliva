@@ -18,6 +18,10 @@ const { syncConversions } = require('../services/googleAdsConversionSync');
 const { isConfigured: googleAdsConfigured } = require('../services/googleAdsConversions');
 
 function startScheduler() {
+  cron.schedule('*/20 * * * *', async () => {
+    try { await require('../services/supplierTracking').syncDue(); }
+    catch (err) { console.error('[supplier-tracking]', err.message); }
+  });
   // Detect abandoned carts every hour (at minute 0)
   cron.schedule('0 * * * *', async () => {
     console.log('[scheduler] Lancement détection paniers abandonnés...');

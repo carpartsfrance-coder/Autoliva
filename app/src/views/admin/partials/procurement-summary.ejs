@@ -1,0 +1,8 @@
+<% const ps = o.procurementSummary; %>
+<button type="button" class="procurement-trigger" data-procurement-id="<%= o.id %>" aria-label="Suivre les pièces de la commande <%= o.number %>">
+  <strong data-procurement-summary><%= ps ? ps.label : 'Stock à vérifier' %></strong>
+  <span data-procurement-next><%= ps ? ps.next : 'Vérifier le stock' %></span>
+  <span class="procurement-edit">Mettre à jour →</span>
+</button>
+<div class="procurement-warning" data-procurement-alert="<%= o.id %>"><%= ps ? [ps.supplierLate ? 'Fournisseur en retard' : '', ps.customerLate ? 'Date client dépassée' : ''].filter(Boolean).join(' · ') : '' %></div>
+<div class="orders-date" data-procurement-contact="<%= o.id %>"><% if (ps && ps.lastContact) { %>Contact <%= {phone:'tél.',email:'email',whatsapp:'WhatsApp'}[ps.lastContact.channel] %> · <%= ps.lastContact.on.split('-').reverse().join('/') %><% } %></div>

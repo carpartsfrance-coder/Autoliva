@@ -1,0 +1,47 @@
+<%- include('./partials/head') %>
+<link rel="stylesheet" href="/admin/orders-workspace.css?v=2" />
+<%- include('./partials/sidebar', {active:'orders'}) %>
+<main class="supplier-workspace">
+  <a href="/admin/commandes">← Commandes</a><h1>Fournisseurs & colis entrants</h1><p>Regroupez vos achats. Un seul colis peut contenir les pièces de plusieurs commandes.</p>
+  <nav class="orders-queues"><% [['to_order','À commander'],['ordered','À recevoir'],['late','Retards fournisseur'],['all','Tout le suivi']].forEach(function(f){ %><a class="orders-queue <%= filter===f[0]?'is-current':'' %>" href="/admin/fournisseurs?filter=<%= f[0] %>"><%= f[1] %></a><% }); %><a class="orders-queue" href="#supplier-parcels">Colis enregistrés</a></nav>
+  <p class="procurement-help">Pour enregistrer un colis, marquez ses pièces « Commandée fournisseur » et renseignez le même fournisseur sur chaque ligne. La sélection porte sur toute la quantité de chaque ligne.</p>
+  <% if (!groups.length) { %><div class="supplier-card">Aucune pièce dans cette vue.</div><% } %>
+  <% groups.forEach(function(group, groupIndex) { %>
+    <form class="supplier-card" data-supplier-form>
+      <h2><%= group.supplier %></h2>
+      <div class="supplier-table-wrap"><table><thead><tr><th>Sélection</th><th>Commande</th><th>Pièce</th><th>État</th><th>Action</th></tr></thead><tbody>
+      <% group.lines.forEach(function(line){ %><tr>
+        <td><input type="checkbox" name="links" aria-label="Sélectionner <%= line.name %> — <%= line.orderNumber %>" value="<%= JSON.stringify({orderId:line.orderId,itemIndex:line.index,signature:line.signature,name:line.name,sku:line.sku,quantity:line.quantity,orderNumber:line.orderNumber,state:line.state,assigned:line.assigned}) %>" /></td>
+        <td><a href="/admin/commandes/<%= line.orderId %>"><%= line.orderNumber %></a></td><td><strong><%= line.quantity %> × <%= line.name %></strong><div class="procurement-help"><%= line.sku %></div></td>
+        <td><%= {unchecked:'À vérifier',to_order:'À commander',ordered:'Commandée'}[line.state] %><% if(line.assigned){ %><div class="procurement-help">Déjà associée à un colis</div><% } %></td>
+        <td><button type="button" data-procurement-id="<%= line.orderId %>" class="btn btn-secondary">Mettre à jour</button></td>
+      </tr><% }); %></tbody></table></div>
+      <button type="button" class="btn btn-secondary" data-supplier-message>Préparer le message des pièces sélectionnées</button>
+      <label class="supplier-draft" hidden>Message fournisseur à copier<textarea rows="6" data-supplier-draft></textarea><span class="procurement-help">À relire et copier dans WhatsApp. Aucun message n’est envoyé automatiquement.</span></label>
+      <details><summary>Associer les pièces sélectionnées à un colis fournisseur</summary>
+        <div class="procurement-fields">
+          <label>Fournisseur<input name="supplier" maxlength="160" value="<%= group.key?group.supplier:'' %>" required /></label>
+          <label>Transporteur<select name="carrier"><option value="dhl">DHL</option><option value="fedex">FedEx</option><option value="ups">UPS</option></select></label>
+          <label>Numéro de suivi<input name="trackingNumber" maxlength="100" required placeholder="Numéro reçu du fournisseur" /></label>
+        </div><p class="procurement-help">L’arrivée de ce colis met à jour son suivi dans toutes les commandes associées. Vous vérifiez ensuite les pièces reçues.</p><button class="btn btn-primary" type="submit">Enregistrer le colis</button>
+      </details><p role="status" data-supplier-feedback></p>
+    </form>
+  <% }); %>
+  <section id="supplier-parcels"><h2>Colis enregistrés</h2>
+    <p class="supplier-config"><%= trackingConfigured ? 'Suivi 17TRACK configuré · vérification toutes les 20 minutes, sous réserve de la réponse du transporteur.' : 'Suivi automatique non configuré : les colis sont enregistrés, mais leur statut ne sera pas actualisé tant que 17TRACK n’est pas activé.' %></p>
+    <% if(!parcels.length){ %><p>Aucun colis enregistré.</p><% } %>
+    <% parcels.forEach(function(parcel){ %><article class="supplier-card">
+      <h3><%= parcel.supplier %> · <%= parcel.carrier.toUpperCase() %></h3><a href="<%= parcel.url %>" target="_blank" rel="noopener noreferrer"><%= parcel.trackingNumber %> ↗</a>
+      <p><strong><%= parcel.label %></strong></p><p class="procurement-help">Dernière vérification : <%= parcel.lastCheckedAt ? new Date(parcel.lastCheckedAt).toLocaleString('fr-FR',{timeZone:'Europe/Paris'}) : 'jamais' %></p>
+      <% if(parcel.syncError){ %><p class="procurement-warning"><%= parcel.syncError %></p><% } %>
+      <ul><% parcel.links.forEach(function(link){ %><li><%= link.quantity %> × <%= link.name %> · <a href="/admin/commandes/<%= link.orderId %>"><%= link.orderNumber %></a> <button class="btn btn-secondary" type="button" data-procurement-id="<%= link.orderId %>">Vérifier les pièces</button></li><% }); %></ul>
+      <button class="btn btn-secondary" type="button" data-sync-parcel="<%= parcel.id %>" <%= trackingConfigured?'':'disabled' %>>Actualiser le suivi</button><span role="status" data-sync-feedback></span>
+      <% if(parcel.events.length){ %><details><summary>Historique transporteur</summary><% parcel.events.forEach(function(event){ %><p><%= event.date %> · <%= event.event %> · <%= event.location %></p><% }); %></details><% } %>
+    </article><% }); %>
+    <% if(parcelPage>1){ %><a href="?filter=<%= filter %>&page=<%= parcelPage-1 %>#supplier-parcels">← Colis précédents</a><% } %>
+    <% if(parcelPage<parcelPages){ %><a href="?filter=<%= filter %>&page=<%= parcelPage+1 %>#supplier-parcels">Colis suivants →</a><% } %>
+  </section>
+</main>
+<%- include('./partials/procurement-dialog') %>
+<script src="/js/supplier-shipments.js?v=1"></script>
+<%- include('./partials/footer') %>

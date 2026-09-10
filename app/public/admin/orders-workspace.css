@@ -1,0 +1,62 @@
+/* Order processing workspace: scoped to the order list. */
+.orders-workspace .orders-queues{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.orders-workspace .orders-queue{display:inline-flex;align-items:center;gap:8px;padding:11px 15px;background:#fff;border:1px solid #cbd5e1;border-radius:12px;color:#334155;font-size:13px;font-weight:600;min-height:44px}
+.orders-workspace .orders-queue:hover{background:#f1f5f9}
+.orders-workspace .orders-queue.is-current{background:#0f172a;border-color:#0f172a;color:#fff}
+.orders-workspace .orders-queue .material-symbols-outlined{font-size:19px}
+.orders-workspace #ordersFilterForm{margin-top:16px;box-shadow:0 2px 8px #0f172a08}
+.orders-workspace .admin-table th,.orders-workspace .admin-table td{padding:14px 12px}
+.orders-workspace .admin-table th{letter-spacing:.03em;color:#64748b}
+.orders-workspace .admin-table tbody tr:hover{background:#f8fafc}
+.orders-workspace .admin-table tbody tr.is-selected{background:#eff6ff}
+.orders-workspace .orders-number{white-space:nowrap;text-decoration:underline;text-underline-offset:3px}
+.orders-workspace .orders-open{white-space:nowrap;min-height:40px}
+.orders-workspace .orders-selection{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:12px 24px;background:#eff6ff;border-bottom:1px solid #bfdbfe}
+.orders-workspace .orders-selection[hidden]{display:none}
+.orders-workspace a:focus-visible,.orders-workspace button:focus-visible,.orders-workspace input:focus-visible,.orders-workspace select:focus-visible{outline:3px solid #2563eb;outline-offset:3px}
+.orders-workspace td .badge{margin-top:5px}
+@media(max-width:767px){.orders-workspace .orders-queues{display:grid;grid-template-columns:1fr 1fr}.orders-workspace .orders-queue{font-size:12px;padding:10px;gap:6px}.orders-workspace .orders-selection{display:none}}
+.orders-workspace .orders-filter.hidden{display:none}
+.orders-workspace .orders-date{font-size:11px;line-height:1.5;color:#64748b;font-weight:400;margin-top:5px}
+.orders-workspace .admin-table{font-size:13px}
+.orders-workspace .admin-table td:nth-last-child(3){white-space:nowrap}
+.orders-workspace .orders-more{position:relative}
+.orders-workspace .orders-more summary{list-style:none;cursor:pointer;padding:8px;border-radius:8px;min-height:40px;display:flex;align-items:center;color:#475569;letter-spacing:1px}
+.orders-workspace .orders-more summary::-webkit-details-marker{display:none}
+.orders-workspace .orders-more summary:focus-visible{outline:3px solid #2563eb;outline-offset:2px}
+.orders-workspace .orders-more-menu{position:absolute;right:0;top:100%;z-index:20;background:white;border:1px solid #cbd5e1;border-radius:10px;padding:8px;box-shadow:0 8px 20px #0f172a20;display:flex;gap:6px;min-width:100px}
+.orders-workspace .orders-more[open]{z-index:25}
+.orders-workspace .orders-more[open] summary{background:#e2e8f0}
+.orders-workspace .admin-table td:last-child>div{flex-wrap:nowrap}
+.orders-workspace .orders-open{font-size:12px;padding:8px 10px}
+.orders-workspace .orders-open .material-symbols-outlined{display:none}
+.orders-workspace tbody tr:nth-last-child(-n+2) .orders-more-menu{top:auto;bottom:100%}
+/* Procurement is edited in a focused panel without leaving the order queue. */
+.orders-workspace .admin-table td:nth-last-child(3){white-space:normal}
+.orders-workspace .admin-table th,.orders-workspace .admin-table td{padding:12px 10px}
+.orders-workspace .orders-pieces{min-width:150px;max-width:230px}
+.orders-piece-name{font-size:12px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}
+.orders-piece-name:not(:first-child){margin-top:8px}
+.procurement-trigger{text-align:left;display:flex;flex-direction:column;gap:3px;padding:8px 10px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:10px;width:100%;min-width:145px;font-size:12px;color:#334155;line-height:1.4}
+.procurement-trigger:hover{background:#eff6ff;border-color:#93c5fd}.procurement-edit{font-size:11px;color:#1d4ed8;font-weight:600}
+.procurement-warning{color:#b91c1c;font-size:12px;font-weight:600;margin-top:5px;white-space:normal}
+.procurement-mobile{padding:0 20px 16px}.procurement-mobile .procurement-trigger{margin-top:10px}
+.procurement-dialog{position:fixed;inset:0 0 0 auto;margin:0;width:min(740px,100vw);max-width:100vw;height:100dvh;max-height:100dvh;padding:0;border:0;background:#f8fafc;color:#0f172a;box-shadow:-10px 0 40px #0f172a33;overflow-y:auto;font-family:Inter,sans-serif}
+.procurement-dialog::backdrop{background:#0f172a66}
+.procurement-header{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 24px;background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:3;gap:16px}
+.procurement-header h2{font-size:18px;font-weight:700}.procurement-header p{font-size:13px;margin-top:4px;color:#475569}.procurement-header button{border:1px solid #cbd5e1;border-radius:8px;min-width:40px;min-height:40px}
+#procurementForm{padding:20px 24px 0}#procurementError{padding:14px 24px;color:#991b1b;background:#fef2f2;position:sticky;top:82px;z-index:2;font-size:14px}
+.procurement-line,.procurement-section{padding:16px;margin-bottom:20px;border:1px solid #e2e8f0;background:white;border-radius:12px;min-width:0}
+.procurement-line legend{font-weight:700;font-size:14px;padding:0 6px;max-width:100%;overflow-wrap:anywhere}.procurement-help{font-size:12px;color:#64748b;line-height:1.5;margin:6px 0 12px}
+.procurement-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.procurement-dialog label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:#475569;margin-bottom:10px;min-width:0}
+.procurement-dialog input,.procurement-dialog select,.procurement-dialog textarea{width:100%;min-width:0;box-sizing:border-box;background:white;color:#0f172a;border:1px solid #cbd5e1;border-radius:8px;padding:10px;font:400 13px Inter,sans-serif;min-height:40px}
+.procurement-dialog textarea{resize:vertical}.procurement-dialog :disabled{opacity:.7;cursor:not-allowed}
+.procurement-dialog h3{font-size:15px;font-weight:700;margin-bottom:14px}.procurement-dialog h4{font-size:13px;font-weight:700;margin:12px 0}
+.procurement-contact{border-top:1px solid #e2e8f0;padding:10px 0;font-size:12px}.procurement-contact p{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px}
+#procurementDraftWrap{margin-top:16px}.procurement-footer{position:sticky;bottom:0;padding:14px 0;display:flex;justify-content:space-between;align-items:center;gap:12px;background:#f8fafc;border-top:1px solid #cbd5e1;font-size:13px;color:#166534}
+.procurement-dialog :focus-visible{outline:3px solid #2563eb;outline-offset:2px}
+@media(min-width:1024px) and (max-width:1440px){.orders-workspace>div{padding:20px}.orders-workspace .orders-queues{margin-top:16px}.orders-workspace #ordersFilterForm{padding:12px}.orders-workspace .admin-table{font-size:12px}.orders-workspace .admin-table td:nth-child(3){max-width:155px;overflow-wrap:anywhere}}
+@media(max-width:540px){.procurement-fields{grid-template-columns:1fr}.procurement-header{padding:16px}#procurementForm{padding:16px 12px 0}.procurement-header h2{font-size:16px}}
+.supplier-workspace{padding:24px;max-width:1400px;margin:auto}.supplier-workspace h1{font-size:26px;font-weight:700;margin:12px 0}.supplier-workspace h2{font-size:20px;font-weight:700;margin:14px 0}.supplier-workspace h3{font-size:16px;font-weight:700;margin-bottom:8px}.supplier-workspace .orders-queues{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0}.supplier-workspace .orders-queue{padding:10px 14px;border:1px solid #cbd5e1;border-radius:10px;background:white;font-size:13px}.supplier-workspace .is-current{background:#0f172a;color:white}.supplier-card{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:20px;margin:16px 0}.supplier-table-wrap{overflow:auto}.supplier-card table{width:100%;text-align:left;font-size:13px}.supplier-card td,.supplier-card th{padding:10px;border-bottom:1px solid #e2e8f0}.supplier-card input[type=checkbox]{width:18px;height:18px}.supplier-card label{display:block;font-size:13px;margin:12px 0}.supplier-card input:not([type=checkbox]),.supplier-card select,.supplier-card textarea{display:block;width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:10px;margin-top:4px}.supplier-card details{margin-top:14px}.supplier-card summary{cursor:pointer;font-weight:600;padding:10px 0}.supplier-card [hidden]{display:none}.supplier-card li{padding:6px 0}.supplier-card [role=status]{display:block;margin-top:10px;color:#9a3412}.supplier-config{background:#eff6ff;padding:12px;border-radius:10px;font-size:13px}.orders-parts-preview{font-size:11px;font-weight:400;white-space:normal;max-width:230px}.supplier-refresh{position:sticky;top:0;z-index:10}.supplier-workspace a:not(.btn):not(.orders-queue){text-decoration:underline;text-underline-offset:3px}
+.procurement-dialog input[type=checkbox]{width:18px;min-height:18px;height:18px;align-self:flex-start}.procurement-dialog details>summary{cursor:pointer;padding:12px 0;font-weight:600;font-size:13px}
