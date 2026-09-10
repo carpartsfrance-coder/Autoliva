@@ -1,0 +1,20 @@
+<% const ps = order.procurementSummary; const phone = (order.shippingAddress && order.shippingAddress.phone) || (order.billingAddress && order.billingAddress.phone) || ''; %>
+<div class="detail-overview">
+  <div><span class="detail-caption">Client</span><strong><%= order.customer %></strong>
+    <div class="detail-contact-links">
+      <% if (order.customerEmail) { %><a href="mailto:<%= order.customerEmail %>"><%= order.customerEmail %></a><% } %>
+      <% if (phone) { %><a href="tel:<%= phone.replace(/[^+0-9]/g, '') %>"><%= phone %></a><% } %>
+      <% if (!phone && !order.customerEmail) { %><span>Coordonnées non renseignées</span><% } %>
+    </div>
+  </div>
+  <div><span class="detail-caption">Prochaine étape</span><strong id="detail-next"><%= ps.next %></strong>
+    <span><%= order.orderTypeLabel %> · <%= order.total %></span>
+  </div>
+  <div><span class="detail-caption">Date annoncée au client</span><strong id="detail-promised"><%= order.customerPromisedOn ? order.customerPromisedOn.split('-').reverse().join('/') : 'À renseigner' %></strong>
+    <button type="button" class="detail-text-button" data-procurement-focus="customer" data-procurement-id="<%= order.id %>">Date, contact et email de retard →</button>
+  </div>
+  <% if (order.noteInternal || order.noteClient) { %><div class="detail-important-note"><span class="detail-caption">Notes à prendre en compte</span><% if (order.noteInternal) { %><p><strong>Interne :</strong> <%= order.noteInternal %></p><% } %><% if (order.noteClient) { %><p><strong>Client :</strong> <%= order.noteClient %></p><% } %></div><% } %>
+</div>
+<nav class="detail-navigation" aria-label="Sections de la commande">
+  <a href="#detail-parts">Pièces</a><a href="#detail-incoming">Colis fournisseurs</a><a href="#timeline-section">Avancement</a><a href="#detail-shipping">Expédition client</a><a href="#detail-documents">Documents</a><a href="#detail-customer">Client et réglages</a><a href="#detail-emails">Emails</a><a href="#detail-tax">TVA</a>
+</nav>

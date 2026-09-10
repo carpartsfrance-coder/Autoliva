@@ -5,6 +5,12 @@ const orderItemSchema = new mongoose.Schema(
     productId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     name: { type: String, required: true, trim: true },
     sku: { type: String, default: '', trim: true },
+    procurement: {
+      state: { type: String, enum: ['unchecked','in_stock','to_order','ordered','received','not_required'], default: undefined },
+      supplier: { type: String, trim: true, maxlength: 160, default: '' },
+      orderedOn: { type: String, default: '' },
+      expectedOn: { type: String, default: '' },
+    },
     optionsSelection: { type: Object, default: {} },
     optionsSummary: { type: String, default: '', trim: true },
     unitPriceCents: { type: Number, required: true, min: 0 },
@@ -501,6 +507,13 @@ const orderSchema = new mongoose.Schema(
     },
 
     items: { type: [orderItemSchema], required: true },
+    procurementRevision: { type: Number, default: 0 },
+    customerPromisedOn: { type: String, default: '' },
+    procurementContacts: { type: [new mongoose.Schema({
+      channel: { type: String, enum: ['phone','email','whatsapp'], required: true },
+      on: { type: String, required: true }, note: { type: String, maxlength: 2000, required: true },
+      author: { type: String, default: '' }, createdAt: { type: Date, default: Date.now },
+    }, { _id: false })], default: [] },
     shippingAddress: { type: addressSnapshotSchema, required: true },
     billingAddress: { type: addressSnapshotSchema, required: true },
     vehicle: {

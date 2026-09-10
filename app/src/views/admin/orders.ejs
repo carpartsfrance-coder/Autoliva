@@ -1,9 +1,9 @@
 <%- include('./partials/head') %>
+<link rel="stylesheet" href="/admin/orders-workspace.css?v=2" />
 
 <%- include('./partials/sidebar', { active: 'orders' }) %>
 
-<main class="flex-1 relative">
-  <%- include('./partials/skeleton-table') %>
+<main class="flex-1 relative orders-workspace">
   <div class="px-6 lg:px-10 py-8">
     <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
       <div>
@@ -26,6 +26,13 @@
     </div>
 
     <%
+      const _listView = typeof view !== 'undefined' ? view : 'active';
+      function ordersUrl(changes) {
+        const values = Object.assign({}, filters || {}, {view:_listView}, changes || {});
+        const keys=['view','q','status','type','source','orderType','cloningStatus','returnFilter','period','utmCampaign','utmSource','sort','order','limit','page','product','category','sourcing'];
+        const query=keys.filter(k=>values[k]!==undefined&&values[k]!==null&&values[k]!==''&&!(k==='view'&&values[k]==='active')).map(k=>encodeURIComponent(k)+'='+encodeURIComponent(values[k])).join('&');
+        return '/admin/commandes'+(query?'?'+query:'');
+      }
       // Compteur de filtres actifs (hors recherche & pagination)
       const _activeFilterKeys = ['status','orderType','cloningStatus','returnFilter','type','source','period','utmCampaign','utmSource','product','category'];
       let _activeFiltersCount = 0;
@@ -33,12 +40,18 @@
       const _hasAdvancedActive = !!(filters && (filters.type || filters.source || filters.utmCampaign || filters.utmSource || filters.returnFilter));
       const _isCloningOrderType = filters && (filters.orderType === 'exchange_cloning' || filters.orderType === 'standalone_cloning');
     %>
-    <form action="/admin/commandes" class="lg:sticky lg:top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET" id="ordersFilterForm">
+    <nav class="orders-queues" aria-label="Traitement fournisseur">
+      <a class="orders-queue" href="/admin/commandes?sourcing=a_commander">À commander</a>
+      <a class="orders-queue" href="/admin/commandes?sourcing=commandee">À recevoir</a>
+      <a class="orders-queue" href="/admin/commandes?sourcing=overdue">Retards</a>
+      <a class="orders-queue" href="/admin/fournisseurs">Vue par fournisseur · Colis entrants →</a>
+    </nav>
+    <form action="/admin/commandes" class="lg:sticky lg:top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET" id="ordersFilterForm"><input type="hidden" name="view" value="<%= _listView %>" /><input type="hidden" name="sort" value="<%= filters.sort || 'date' %>" /><input type="hidden" name="order" value="<%= filters.order || 'desc' %>" />
       <%/* Ligne 1 : recherche + actions */%>
       <div class="flex flex-col lg:flex-row lg:items-center gap-3">
         <div class="flex-1 relative">
           <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
-          <input class="w-full rounded-xl border border-slate-200 bg-white pl-11 pr-10 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 transition" name="q" placeholder="Rechercher : n° commande, email, nom client…" type="text" value="<%= filters && filters.q ? filters.q : '' %>" />
+          <input class="w-full rounded-xl border border-slate-200 bg-white pl-11 pr-10 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 transition" name="q" aria-label="Rechercher une commande" placeholder="Rechercher : n° commande, email, nom client…" type="text" value="<%= filters && filters.q ? filters.q : '' %>" />
           <% if (filters && filters.q) { %>
             <button type="button" id="ordersClearSearch" class="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Effacer la recherche">
               <span class="material-symbols-outlined text-base">close</span>
@@ -91,7 +104,7 @@
         <label class="orders-filter relative block <%= filters && filters.status ? 'is-active' : '' %>">
           <span class="material-symbols-outlined orders-filter-icon">flag</span>
           <select class="orders-filter-select" name="status" aria-label="Filtrer par statut">
-            <option value="">Tous les statuts</option>
+            <option value="">Tous les statuts</option><option value="draft" <%= filters.status === 'draft' ? 'selected' : '' %>>Brouillon</option>
             <option value="pending_payment" <%= filters && filters.status === 'pending_payment' ? 'selected' : '' %>>En attente paiement</option>
             <option value="paid" <%= filters && filters.status === 'paid' ? 'selected' : '' %>>Payée</option>
             <option value="processing" <%= filters && filters.status === 'processing' ? 'selected' : '' %>>En préparation</option>
@@ -436,20 +449,7 @@
         <%
           const oPerPage = pagination && pagination.perPage ? pagination.perPage : 20;
           function buildOrderPageUrl(p) {
-            const parts = [];
-            if (filters.q) parts.push('q=' + encodeURIComponent(filters.q));
-            if (filters.status) parts.push('status=' + encodeURIComponent(filters.status));
-            if (filters.type) parts.push('type=' + encodeURIComponent(filters.type));
-            if (filters.source) parts.push('source=' + encodeURIComponent(filters.source));
-            if (filters.orderType) parts.push('orderType=' + encodeURIComponent(filters.orderType));
-            if (filters.cloningStatus) parts.push('cloningStatus=' + encodeURIComponent(filters.cloningStatus));
-            if (filters.returnFilter) parts.push('returnFilter=' + encodeURIComponent(filters.returnFilter));
-            if (filters.period) parts.push('period=' + encodeURIComponent(filters.period));
-            if (filters.sort) parts.push('sort=' + filters.sort);
-            if (filters.order) parts.push('order=' + filters.order);
-            if (oPerPage !== 20) parts.push('limit=' + oPerPage);
-            parts.push('page=' + p);
-            return '/admin/commandes?' + parts.join('&');
+            return ordersUrl({page:p,limit:oPerPage});
           }
           function buildOrderPageItems(currentPage, totalPages) {
             if (totalPages <= 7) {
@@ -487,9 +487,9 @@
       <% } %>
 
       <% if (orders && orders.length) { %>
-        <form id="bulkOrdersForm" action="/admin/commandes/supprimer-multi" method="POST" data-ajax="true">
-        <div class="px-6 py-3 bg-white border-b border-slate-100 flex flex-wrap items-center gap-3">
-          <button id="bulkDeleteOrdersBtn" class="btn btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50" type="submit" disabled>
+        <form id="bulkOrdersForm" action="/admin/commandes/supprimer-multi" method="POST" data-ajax="true" data-confirm="Supprimer définitivement la sélection ? Cette action est irréversible."></form>
+        <div id="ordersSelectionBar" class="orders-selection" hidden>
+          <button id="bulkDeleteOrdersBtn" form="bulkOrdersForm" class="btn btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50" type="submit" disabled>
             <span class="material-symbols-outlined mr-2 text-base">delete</span>
             Supprimer la sélection
           </button>
@@ -542,7 +542,7 @@
                   <% } %>
                   <span class="ml-auto text-slate-500"><%= o.itemCount %> art.</span>
                 </div>
-              </a>
+              </a><div class="procurement-mobile"><%- include('./partials/procurement-summary', {o:o}) %></div>
             </li>
           <% }); %>
         </ul>
@@ -555,17 +555,7 @@
               const oOrder = filters.order || 'desc';
               function oSortUrl(field) {
                 const nextOrder = (oSort === field && oOrder === 'asc') ? 'desc' : 'asc';
-                const p = [];
-                if (filters.q) p.push('q=' + encodeURIComponent(filters.q));
-                if (filters.status) p.push('status=' + encodeURIComponent(filters.status));
-                if (filters.type) p.push('type=' + encodeURIComponent(filters.type));
-                if (filters.source) p.push('source=' + encodeURIComponent(filters.source));
-                if (filters.orderType) p.push('orderType=' + encodeURIComponent(filters.orderType));
-                if (filters.cloningStatus) p.push('cloningStatus=' + encodeURIComponent(filters.cloningStatus));
-                if (filters.returnFilter) p.push('returnFilter=' + encodeURIComponent(filters.returnFilter));
-                if (filters.period) p.push('period=' + encodeURIComponent(filters.period));
-                p.push('sort=' + field, 'order=' + nextOrder);
-                return '/admin/commandes?' + p.join('&');
+                return ordersUrl({sort:field,order:nextOrder,page:1});
               }
               function oSortIcon(field) {
                 if (oSort !== field) return 'unfold_more';
@@ -575,34 +565,21 @@
             <thead>
               <tr class="text-xs font-semibold text-slate-400 uppercase tracking-widest bg-white">
                 <th class="px-6 py-4 w-10">
-                  <input id="selectAllOrders" type="checkbox" class="h-4 w-4 rounded border-slate-300" />
+                  <input id="selectAllOrders" aria-label="Sélectionner cette page" type="checkbox" class="h-4 w-4 rounded border-slate-300" />
                 </th>
-                <th class="px-6 py-4">Commande</th>
                 <th class="px-6 py-4 th-sortable <%= oSort === 'date' ? 'sort-active' : '' %>">
                   <a href="<%= oSortUrl('date') %>" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:2px;">
-                    Date<span class="sort-icon material-symbols-outlined"><%= oSortIcon('date') %></span>
+                    Commande<span class="sort-icon material-symbols-outlined"><%= oSortIcon('date') %></span>
                   </a>
                 </th>
                 <th class="px-6 py-4">Client</th>
-                <th class="px-6 py-4">Type client</th>
-                <th class="px-6 py-4">Type commande</th>
-                <th class="px-6 py-4">Articles</th>
-                <th class="px-6 py-4 th-sortable <%= oSort === 'total' ? 'sort-active' : '' %>">
-                  <a href="<%= oSortUrl('total') %>" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:2px;">
-                    Total<span class="sort-icon material-symbols-outlined"><%= oSortIcon('total') %></span>
-                  </a>
-                </th>
+                <th class="px-6 py-4">Pièces</th>
                 <th class="px-6 py-4 th-sortable <%= oSort === 'status' ? 'sort-active' : '' %>">
                   <a href="<%= oSortUrl('status') %>" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:2px;">
                     Statut<span class="sort-icon material-symbols-outlined"><%= oSortIcon('status') %></span>
                   </a>
                 </th>
                 <th class="px-6 py-4">Appro pièce</th>
-                <th class="px-6 py-4 th-sortable <%= oSort === 'urgency' ? 'sort-active' : '' %>">
-                  <a href="<%= oSortUrl('urgency') %>" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:2px;">
-                    <span class="material-symbols-outlined" style="font-size:14px">priority_high</span>Urgence<span class="sort-icon material-symbols-outlined"><%= oSortIcon('urgency') %></span>
-                  </a>
-                </th>
                 <th class="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -610,11 +587,12 @@
               <% orders.forEach((o) => { %>
                 <tr data-row-id="<%= o.id %>" class="<%= o.statusBadge && o.statusBadge.label === 'Brouillon' ? 'bg-slate-50/70' : '' %>">
                   <td class="px-6 py-4">
-                    <input class="rowSelectOrder h-4 w-4 rounded border-slate-300" type="checkbox" name="orderIds" value="<%= o.id %>" />
+                    <input class="rowSelectOrder h-4 w-4 rounded border-slate-300" type="checkbox" name="orderIds" form="bulkOrdersForm" aria-label="Sélectionner <%= o.number %>" value="<%= o.id %>" />
                   </td>
                   <td class="px-6 py-4 font-semibold text-slate-900">
                     <div class="flex items-center gap-1.5">
-                      <%= o.number %>
+                      <a class="orders-number" href="/admin/commandes/<%= o.id %>"><%= o.number %></a>
+
                       <%
                         var _srcIcons = { phone: 'call', email: 'mail', whatsapp: 'chat', leboncoin: '', marketplace: 'storefront', salon: 'groups', manual: 'edit_note', other: 'more_horiz', website: 'language' };
                         var _srcLabels = { phone: 'T\u00e9l', email: 'Email', whatsapp: 'WA', leboncoin: 'LBC', marketplace: 'Mktp', salon: 'Salon', manual: 'Manuel', other: 'Autre', website: 'Web' };
@@ -661,45 +639,20 @@
                         </span>
                       <% } %>
                     </div>
+                    <div class="orders-date"><%= o.date %></div>
                   </td>
-                  <td class="px-6 py-4 text-sm text-slate-500"><%= o.date %></td>
                   <td class="px-6 py-4">
                     <div class="text-sm font-semibold text-slate-500"><%= o.customer %></div>
                     <% if (o.customerEmail) { %>
                       <div class="mt-1 text-xs text-slate-400"><%= o.customerEmail %></div>
                     <% } %>
-                  </td>
-                  <td class="px-6 py-4">
+                    <div class="orders-date"><%= o.total %></div>
                     <span class="badge <%= o.accountType === 'pro' ? 'badge-pro' : 'badge-particulier' %>">
                       <%= o.accountType === 'pro' ? 'PRO' : 'PARTICULIER' %>
                     </span>
                   </td>
-                  <td class="px-6 py-4">
-                    <% if (o.orderType === 'exchange_cloning') { %>
-                      <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                        <span class="material-symbols-outlined" style="font-size:13px">science</span>Éch. + Clonage
-                      </span>
-                    <% } else if (o.orderType === 'standalone_cloning') { %>
-                      <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200">
-                        <span class="material-symbols-outlined" style="font-size:13px">memory</span>Service Clonage
-                      </span>
-                    <% } else if (o.orderType === 'exchange') { %>
-                      <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                        Échange std
-                      </span>
-                    <% } else { %>
-                      <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
-                        Vente simple
-                      </span>
-                    <% } %>
-                  </td>
-                  <td class="px-6 py-4">
-                    <span class="text-sm font-semibold text-slate-900"><%= typeof o.itemCount !== 'undefined' ? o.itemCount : 0 %></span>
-                    <% if (o.hasCloningItem) { %>
-                      <span class="ml-1 inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200"><span class="material-symbols-outlined" style="font-size:11px">science</span>Clonage</span>
-                    <% } %>
-                  </td>
-                  <td class="px-6 py-4 font-semibold text-slate-900"><%= o.total %></td>
+                  <td class="px-6 py-4 orders-pieces"><% if(o.procurementSummary){ o.procurementSummary.lines.slice(0,2).forEach(function(line){ %><div class="orders-piece-name"><%= line.quantity %> × <%= line.name %></div><div class="orders-date"><%= line.sku %></div><% }); if(o.procurementSummary.lines.length>2){ %><div class="orders-date">+ <%= o.procurementSummary.lines.length-2 %> autre(s) pièce(s)</div><% }} %><div class="orders-date"><%= o.orderTypeLabel %></div></td>
+
                   <td class="px-6 py-4">
                     <div class="flex flex-col gap-1">
                       <div class="flex items-center gap-2">
@@ -749,41 +702,13 @@
                     </div>
                   </td>
                   <td class="px-6 py-4">
-                    <% if (o.sourcing && o.sourcing.relevant) { %>
-                      <div class="flex flex-col gap-1 min-w-[8rem]" data-sourcing-cell data-order-id="<%= o.id %>">
-                        <select class="orders-filter-select text-xs py-1" data-sourcing-select aria-label="Approvisionnement de la pièce">
-                          <% (typeof sourcingOptions !== 'undefined' ? sourcingOptions : []).forEach(function (opt) { %>
-                            <option value="<%= opt.key %>" <%= o.sourcing.status === opt.key ? 'selected' : '' %>><%= opt.label %></option>
-                          <% }) %>
-                        </select>
-                        <span class="text-[10px] leading-tight <%= o.sourcing.overdue ? 'text-red-600 font-bold' : 'text-slate-400' %>" data-sourcing-hint>
-                          <% if (o.sourcing.status === 'commandee') { %><%= o.sourcing.overdue ? '⚠ Réception en retard' : (o.sourcing.dueDate ? 'Reçue avant le ' + o.sourcing.dueDate : '') %><% } %>
-                        </span>
-                      </div>
-                    <% } else { %>
-                      <span class="text-slate-300 text-xs">—</span>
-                    <% } %>
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                    <%
-                      var _urgencyLevel = 4;
-                      var _urgencyLabel = '';
-                      var _urgencyClass = 'text-slate-300';
-                      if (o.returnStatus === 'overdue') { _urgencyLevel = 0; _urgencyLabel = 'Retour en retard'; _urgencyClass = 'text-red-500'; }
-                      else if ((o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') && (o.cloningStatus === 'pending_label' || o.cloningStatus === 'label_sent' || o.cloningStatus === 'client_piece_in_transit')) { _urgencyLevel = 1; _urgencyLabel = 'Attente pièce'; _urgencyClass = 'text-orange-500'; }
-                      else if ((o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') && o.cloningStatus === 'cloning_in_progress') { _urgencyLevel = 2; _urgencyLabel = 'Clonage en cours'; _urgencyClass = 'text-purple-500'; }
-                      else if (o.statusBadge && o.statusBadge.label === 'En attente paiement') { _urgencyLevel = 3; _urgencyLabel = 'Attente paiement'; _urgencyClass = 'text-amber-500'; }
-                    %>
-                    <% if (_urgencyLevel < 4) { %>
-                      <span class="material-symbols-outlined text-base <%= _urgencyClass %>" title="<%= _urgencyLabel %>">
-                        <%= _urgencyLevel <= 1 ? 'priority_high' : 'radio_button_checked' %>
-                      </span>
-                    <% } else { %>
-                      <span class="text-slate-200">&mdash;</span>
-                    <% } %>
+                    <%- include('./partials/procurement-summary', {o:o}) %>
                   </td>
                   <td class="px-6 py-4 text-right">
-                    <div class="flex items-center justify-end gap-1 flex-wrap">
+                    <div class="flex items-center justify-end gap-1 flex-wrap"><% if(o.id){ %>                        <a class="btn btn-primary orders-open" href="/admin/commandes/<%= o.id %>">
+                          <span class="material-symbols-outlined mr-2 text-base">visibility</span>
+                          Ouvrir
+                        </a><% } %><details class="orders-more"><summary aria-label="Autres actions <%= o.number %>">•••</summary><div class="orders-more-menu">
                       <% if (!isTrashView && o.lastShippingLabelUrl) { %>
                         <button type="button" class="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-slate-100 transition" title="Imprimer l'étiquette" onclick="(function(){ var w = window.open('<%= o.lastShippingLabelUrl %>', '_blank', 'width=800,height=600'); if(w){ w.addEventListener('load', function(){ setTimeout(function(){ w.print(); }, 500); }); } })()">
                           <span class="material-symbols-outlined text-lg text-slate-500">print</span>
@@ -792,23 +717,7 @@
 
                       <%
                         // URL courante pour revenir au même endroit après l'action
-                        var _currentUrl = '/admin/commandes';
-                        var _qp = [];
-                        if (_view === 'archived') _qp.push('view=archived');
-                        else if (_view === 'trash') _qp.push('view=trash');
-                        if (filters.q) _qp.push('q=' + encodeURIComponent(filters.q));
-                        if (filters.status) _qp.push('status=' + encodeURIComponent(filters.status));
-                        if (filters.type) _qp.push('type=' + encodeURIComponent(filters.type));
-                        if (filters.orderType) _qp.push('orderType=' + encodeURIComponent(filters.orderType));
-                        if (filters.cloningStatus) _qp.push('cloningStatus=' + encodeURIComponent(filters.cloningStatus));
-                        if (filters.returnFilter) _qp.push('returnFilter=' + encodeURIComponent(filters.returnFilter));
-                        if (filters.source) _qp.push('source=' + encodeURIComponent(filters.source));
-                        if (filters.period) _qp.push('period=' + encodeURIComponent(filters.period));
-                        if (filters.sort) _qp.push('sort=' + encodeURIComponent(filters.sort));
-                        if (filters.order) _qp.push('order=' + encodeURIComponent(filters.order));
-                        if (filters.limit && filters.limit !== 20) _qp.push('limit=' + encodeURIComponent(filters.limit));
-                        if (typeof pagination !== 'undefined' && pagination && pagination.page && pagination.page > 1) _qp.push('page=' + encodeURIComponent(pagination.page));
-                        if (_qp.length) _currentUrl += '?' + _qp.join('&');
+                        var _currentUrl = ordersUrl({page:pagination.page});
                       %>
                       <% if (o.id && isTrashView) { %>
                         <form action="/admin/commandes/<%= o.id %>/restaurer" method="POST" class="inline">
@@ -849,16 +758,9 @@
                       <% } %>
 
                       <% if (o.id) { %>
-                        <a class="btn btn-ghost" href="/admin/commandes/<%= o.id %>">
-                          <span class="material-symbols-outlined mr-2 text-base">visibility</span>
-                          Détails
-                        </a>
-                        <form data-ajax="true" data-confirm="Supprimer définitivement la commande <%= o.number %> ? Cette action est irréversible." action="/admin/commandes/<%= o.id %>/supprimer" method="POST" class="inline">
-                          <button class="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-red-50 transition" type="submit" title="Supprimer la commande">
-                            <span class="material-symbols-outlined text-lg text-red-500">delete</span>
-                          </button>
-                        </form>
-                      <% } %>
+
+
+                      <% } %></div></details>
                     </div>
                   </td>
                 </tr>
@@ -872,7 +774,6 @@
             <%- include('./partials/pagination', { pb: ordersPb }) %>
           </div>
         <% } %>
-        </form>
       <% } else if (!dbConnected) { %>
         <div class="px-6 py-4 space-y-3">
           <% for (let i = 0; i < 5; i++) { %>
@@ -911,21 +812,6 @@
       revealPage();
     }
 
-    // Show/hide cloning status filter based on order type
-    var otSelect = document.getElementById('orderTypeFilter');
-    var csSelect = document.getElementById('cloningStatusFilter');
-    if (otSelect && csSelect) {
-      function toggleCloningFilter() {
-        if (otSelect.value === 'exchange_cloning') {
-          csSelect.classList.remove('hidden');
-        } else {
-          csSelect.classList.add('hidden');
-          csSelect.value = '';
-        }
-      }
-      otSelect.addEventListener('change', toggleCloningFilter);
-    }
-
     // Bulk select for orders
     var selectAllOrders = document.getElementById('selectAllOrders');
     var bulkDeleteOrdersBtn = document.getElementById('bulkDeleteOrdersBtn');
@@ -941,6 +827,7 @@
       var count = orderCheckboxes.filter(function (c) { return c && c.checked; }).length;
       if (selectedOrdersCount) selectedOrdersCount.textContent = count + ' sélectionné' + (count > 1 ? 's' : '');
       if (bulkDeleteOrdersBtn) bulkDeleteOrdersBtn.disabled = count === 0;
+      document.getElementById('ordersSelectionBar')?.toggleAttribute('hidden',count===0);
       if (bulkReviewRequestBtn) bulkReviewRequestBtn.disabled = count === 0;
       if (selectAllOrders) {
         selectAllOrders.checked = count > 0 && count === orderCheckboxes.length;
@@ -1025,4 +912,6 @@
   })();
 </script>
 
+<%- include('./partials/procurement-dialog') %>
+<script src="/js/orders-navigation.js"></script>
 <%- include('./partials/footer') %>

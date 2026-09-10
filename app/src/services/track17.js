@@ -119,7 +119,7 @@ function translateEventToFrench(rawEvent) {
 
   const v = raw.toLowerCase();
 
-  if (v.includes('delivered') || v.includes('distribu') || v.includes('livr')) return 'Livré';
+  if (/^(delivered|livré|livrée|distribué|distribuée)[.!]?$/.test(v)) return 'Livré';
   if (v.includes('out for delivery') || v.includes('en cours de livraison')) return 'En cours de livraison';
   if (v.includes('delivery attempt') || v.includes('attempted') || v.includes('tentative')) return 'Tentative de livraison';
 
@@ -262,6 +262,7 @@ function mapTrack17PackageStatusToParcelStatusCode(packageStatus) {
   if (e === 30) return 4;
   if (e === 20) return 2;
   if (e === 10) return 8;
+  if ([0,35,50,60].includes(e)) return e === 0 ? null : 30;
 
   return null;
 }
@@ -271,17 +272,9 @@ function normalizeTrackToDelivery(track) {
 
   const events = buildEventsFromTrack(track);
 
-  const deliveredFromEvents = isDeliveredFromEvents(events);
-  const statusFromPackageState = mapTrack17PackageStatusToParcelStatusCode(track.e);
-
-  let statusCode = null;
-  if (deliveredFromEvents) {
-    statusCode = 0;
-  } else if (Number.isFinite(statusFromPackageState)) {
-    statusCode = statusFromPackageState;
-  } else if (events.length) {
-    statusCode = 2;
-  }
+  // Only the provider's explicit current status can confirm delivery.
+  // Text such as "out for delivery" or an old delivery event is not proof.
+  const statusCode = mapTrack17PackageStatusToParcelStatusCode(track.e);
 
   return {
     status_code: statusCode,
@@ -299,7 +292,7 @@ function normalizeTrackingInfo(acceptedList, preferredNumber) {
     ? list.find((item) => normalizeTrackingNumber(item && item.number) === preferred)
     : null;
 
-  const item = chosen || list[0] || null;
+  const item = preferred ? chosen : list[0] || null;
   if (!item || !item.track) return null;
 
   return normalizeTrackToDelivery(item.track);

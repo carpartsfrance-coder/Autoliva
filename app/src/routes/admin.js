@@ -13,6 +13,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 
 const adminController = require('../controllers/adminController');
+const orderProcurementController = require('../controllers/orderProcurementController');
+const supplierController = require('../controllers/supplierShipmentController');
 const savAdminController = require('../controllers/savAdminController');
 const smsSettingsAdminController = require('../controllers/smsSettingsAdminController');
 const leadTemplatesAdminController = require('../controllers/leadTemplatesAdminController');
@@ -218,6 +220,11 @@ router.get('/visiteurs/:sessionId/events', requireAdminAuth, adminController.get
 
 router.get('/preparation', requireAdminAuth, adminController.getAdminPreparation);
 router.get('/consignes', requireAdminAuth, adminController.getAdminConsignes);
+router.get('/fournisseurs', requireAdminAuth, supplierController.page);
+router.post('/api/colis-fournisseur', requireAdminAuth, supplierController.create);
+router.post('/api/colis-fournisseur/:shipmentId/sync', requireAdminAuth, supplierController.sync);
+router.get('/api/commandes/:orderId/approvisionnement', requireAdminAuth, orderProcurementController.get);
+router.post('/api/commandes/:orderId/approvisionnement', requireAdminAuth, orderProcurementController.save);
 router.get('/commandes', requireAdminAuth, adminController.getAdminOrdersPage);
 router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteOrders);
 // Demande d'avis Skeepers sur une sélection de commandes (≤ 50).
