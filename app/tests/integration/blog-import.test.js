@@ -389,6 +389,20 @@ test('A4.1 — 5 imports par 24 h, puis 429 ; une ligne d’audit par import', a
   assert.deepEqual(refus.map((l) => l.after.raison), ['plafond', 'plafond']);
 });
 
+test('A4.1 — un lot lancé EN PARALLÈLE ne passe pas le plafond non plus', async () => {
+  /* Un script qui envoie ses articles d'un coup : sans file, chaque requête
+     comptait « 0 import » avant que la première n'ait écrit sa ligne d'audit,
+     et tout le lot passait. */
+  const reponses = await Promise.all(
+    Array.from({ length: 12 }, (_, i) => postImport({ token: TOKEN(), body: makeBody({ slug: `parallele-${i + 1}` }) }))
+  );
+  const statuts = reponses.map((r) => r.status);
+  assert.equal(statuts.filter((s) => s === 201).length, 5, `5 imports au plus (reçu ${statuts.join(', ')})`);
+  assert.equal(statuts.filter((s) => s === 429).length, 7);
+  assert.equal(await BlogPost.countDocuments({ slug: /^parallele-/ }), 5);
+  assert.equal((await lignesAudit('blog.import-from-url')).length, 5);
+});
+
 test('A4.1 — les imports de plus de 24 h ne comptent plus', async () => {
   const vieux = new Date(Date.now() - 25 * 3600 * 1000);
   await mongoose.connection.db.collection('auditlogs').insertMany(

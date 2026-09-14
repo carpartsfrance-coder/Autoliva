@@ -26,7 +26,8 @@
  *   2. un article PUBLIÉ n'est jamais réécrit : upsert → 409 (voir
  *      blogPostService.upsertBlogPost) ;
  *   3. 5 imports au plus par 24 heures glissantes, tous modes confondus. Au-delà,
- *      429 : un lot de 50 articles n'est plus possible, même avec le jeton ;
+ *      429 : un lot de 50 articles n'est plus possible, même avec le jeton, et
+ *      même envoyé d'un coup (les imports passent un par un) ;
  *   4. une ligne d'audit par import, et une par refus — elles servent aussi de
  *      compteur, la limite tient donc entre deux redémarrages et deux instances.
  */
@@ -90,6 +91,20 @@ async function occupationDuPlafond(maintenant = Date.now()) {
     libreDansSec = Math.max(1, Math.ceil((libreA - maintenant) / 1000));
   }
   return { nombre, libreDansSec };
+}
+
+/* Compter puis créer n'est sûr que si personne ne crée entre les deux : les
+   imports passent donc UN PAR UN, du comptage jusqu'à la ligne d'audit. Sans
+   cette file, un lot envoyé d'un coup lisait « 0 import » à chaque requête et
+   passait presque en entier (mesuré en test : 8 sur 12). Le téléchargement du
+   markdown reste en dehors : une source lente ne bloque pas les autres.
+   La file vit dans le processus : si le service tournait un jour sur plusieurs
+   instances, le plafond deviendrait « 5 par instance ». */
+let fileDesImports = Promise.resolve();
+function unImportALaFois(tache) {
+  const tour = fileDesImports.then(() => tache());
+  fileDesImports = tour.catch(() => {});
+  return tour;
 }
 
 /* ─── Logger ─────────────────────────────────────────────────────────── */
@@ -412,99 +427,102 @@ router.post('/import-from-url', requireBlogImportToken, express.json({ limit: '2
     }
   }
 
-  /* Plafond : compté en base, sur les lignes d'audit des imports réussis. */
-  if (mongoose.connection.readyState !== 1) {
-    res.set('Retry-After', '120');
-    return fail(res, 'Base de données indisponible, réessayer plus tard.', 503);
-  }
-  try {
-    const { nombre, libreDansSec } = await occupationDuPlafond();
-    if (nombre >= PLAFOND_IMPORTS) {
-      await auditerRefus(req, 'plafond', { slug: metadata.slug, mode, imports24h: nombre });
-      res.set('Retry-After', String(libreDansSec));
-      return fail(res, `Plafond atteint : ${PLAFOND_IMPORTS} imports par 24 heures au plus.`, 429, {
-        plafond: PLAFOND_IMPORTS,
-        imports24h: nombre,
-        libreDansSec,
-      });
+  /* Du comptage à la ligne d’audit, un import à la fois (voir unImportALaFois). */
+  return unImportALaFois(async () => {
+    /* Plafond : compté en base, sur les lignes d'audit des imports réussis. */
+    if (mongoose.connection.readyState !== 1) {
+      res.set('Retry-After', '120');
+      return fail(res, 'Base de données indisponible, réessayer plus tard.', 503);
     }
-  } catch (err) {
-    console.error('[blogImport] Comptage du plafond impossible :', err && err.message);
-    return fail(res, 'Plafond d’import invérifiable, réessayer plus tard.', 503);
-  }
-
-  // Création / Upsert
-  try {
-    let result;
-    if (mode === 'upsert') {
-      result = await blogPostService.upsertBlogPost({
-        data,
-        source: 'api-import',
-        options: { strictProducts: true },
-      });
-    } else {
-      const created = await blogPostService.createBlogPost({
-        data,
-        source: 'api-import',
-        options: { slugMode: 'strict', strictProducts: true },
-      });
-      result = { post: created.post, created: true, updated: false };
-    }
-
-    /* UNE ligne d'audit par import — c'est aussi le compteur du plafond, d'où
-       l'action constante. Best-effort : l'article est déjà enregistré. */
     try {
-      await audit.log({
-        req,
-        action: ACTION_IMPORT,
-        entityType: 'blog_post',
-        entityId: String(result.post._id),
-        after: {
-          slug: result.post.slug,
-          mode,
-          created: result.created,
-          updated: result.updated,
+      const { nombre, libreDansSec } = await occupationDuPlafond();
+      if (nombre >= PLAFOND_IMPORTS) {
+        await auditerRefus(req, 'plafond', { slug: metadata.slug, mode, imports24h: nombre });
+        res.set('Retry-After', String(libreDansSec));
+        return fail(res, `Plafond atteint : ${PLAFOND_IMPORTS} imports par 24 heures au plus.`, 429, {
+          plafond: PLAFOND_IMPORTS,
+          imports24h: nombre,
+          libreDansSec,
+        });
+      }
+    } catch (err) {
+      console.error('[blogImport] Comptage du plafond impossible :', err && err.message);
+      return fail(res, 'Plafond d’import invérifiable, réessayer plus tard.', 503);
+    }
+
+    // Création / Upsert
+    try {
+      let result;
+      if (mode === 'upsert') {
+        result = await blogPostService.upsertBlogPost({
+          data,
           source: 'api-import',
-          tokenId: req.blogImportTokenId,
-          markdownUrl: urlObj.toString(),
-          markdownBytes: Buffer.byteLength(markdown, 'utf8'),
-          isPublished: result.post.isPublished,
-          publicationAutorisee: publier,
-          brouillonImpose: !publier && publicationDemandee,
-          warnings,
-        },
-      });
-    } catch (_) { /* best-effort */ }
+          options: { strictProducts: true },
+        });
+      } else {
+        const created = await blogPostService.createBlogPost({
+          data,
+          source: 'api-import',
+          options: { slugMode: 'strict', strictProducts: true },
+        });
+        result = { post: created.post, created: true, updated: false };
+      }
 
-    const baseUrl = getSiteUrlFromEnv() || '';
-    const publicUrl = baseUrl
-      ? `${baseUrl}/blog/${encodeURIComponent(result.post.slug)}`
-      : `/blog/${encodeURIComponent(result.post.slug)}`;
+      /* UNE ligne d'audit par import — c'est aussi le compteur du plafond, d'où
+         l'action constante. Best-effort : l'article est déjà enregistré. */
+      try {
+        await audit.log({
+          req,
+          action: ACTION_IMPORT,
+          entityType: 'blog_post',
+          entityId: String(result.post._id),
+          after: {
+            slug: result.post.slug,
+            mode,
+            created: result.created,
+            updated: result.updated,
+            source: 'api-import',
+            tokenId: req.blogImportTokenId,
+            markdownUrl: urlObj.toString(),
+            markdownBytes: Buffer.byteLength(markdown, 'utf8'),
+            isPublished: result.post.isPublished,
+            publicationAutorisee: publier,
+            brouillonImpose: !publier && publicationDemandee,
+            warnings,
+          },
+        });
+      } catch (_) { /* best-effort */ }
 
-    return ok(res, {
-      id: String(result.post._id),
-      slug: result.post.slug,
-      url: publicUrl,
-      created: result.created,
-      updated: result.updated,
-      isPublished: result.post.isPublished,
-      warnings,
-    }, result.created ? 201 : 200);
-  } catch (err) {
-    if (err instanceof blogPostService.ConflictError) {
-      const raison = (err.details && err.details.raison) || 'slug_existant';
-      await auditerRefus(req, raison, { slug: (err.details && err.details.slug) || metadata.slug, mode });
-      return fail(res, err.message, 409, err.details);
+      const baseUrl = getSiteUrlFromEnv() || '';
+      const publicUrl = baseUrl
+        ? `${baseUrl}/blog/${encodeURIComponent(result.post.slug)}`
+        : `/blog/${encodeURIComponent(result.post.slug)}`;
+
+      return ok(res, {
+        id: String(result.post._id),
+        slug: result.post.slug,
+        url: publicUrl,
+        created: result.created,
+        updated: result.updated,
+        isPublished: result.post.isPublished,
+        warnings,
+      }, result.created ? 201 : 200);
+    } catch (err) {
+      if (err instanceof blogPostService.ConflictError) {
+        const raison = (err.details && err.details.raison) || 'slug_existant';
+        await auditerRefus(req, raison, { slug: (err.details && err.details.slug) || metadata.slug, mode });
+        return fail(res, err.message, 409, err.details);
+      }
+      if (err instanceof blogPostService.ValidationError) {
+        return fail(res, err.message, 400, err.details);
+      }
+      if (err instanceof blogPostService.ServiceError) {
+        return fail(res, err.message, err.status, err.details);
+      }
+      console.error('[blogImport] Erreur inattendue :', err);
+      return fail(res, 'Erreur serveur interne.', 500);
     }
-    if (err instanceof blogPostService.ValidationError) {
-      return fail(res, err.message, 400, err.details);
-    }
-    if (err instanceof blogPostService.ServiceError) {
-      return fail(res, err.message, err.status, err.details);
-    }
-    console.error('[blogImport] Erreur inattendue :', err);
-    return fail(res, 'Erreur serveur interne.', 500);
-  }
+  });
 });
 
 module.exports = router;
