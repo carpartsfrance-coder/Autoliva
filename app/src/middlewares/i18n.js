@@ -1,6 +1,7 @@
 'use strict';
 
 const { t, DEFAULT_LANG } = require('../services/i18n');
+const { estRobot } = require('../services/robots');
 
 /** Langue préférée du navigateur (1er tag d'Accept-Language). Ex.
  *  "de-DE,de;q=0.9,en;q=0.8" → "de". Sert UNIQUEMENT à proposer (jamais à
@@ -73,7 +74,18 @@ function i18nMiddleware(req, res, next) {
        * Le tunnel lit déjà `preferredLang === 'de' ? 'de' : 'fr'`
        * (services/i18n.js) : une valeur absente vaut « fr ». */
       if (isGerman) {
-        if (req.session.preferredLang !== 'de') req.session.preferredLang = 'de';
+        /* Jamais pour un ROBOT (plan de reprise SEO du 14/09/2026, action
+         * A4.7). Un robot n'envoie pas de cookie : chaque page /de qu'il
+         * lisait — Googlebot compris — créait une session de 30 jours dans
+         * MongoDB, pour une langue de tunnel qu'il n'atteindra jamais. Or
+         * Google a exploré 17 000 pages allemandes le 09/09. La règle porte
+         * sur le User-Agent déclaré (services/robots.js, la même liste que
+         * les statistiques) : un faux Googlebot n'a pas plus besoin de session
+         * que le vrai. Les visiteurs humains ne changent pas : langue du
+         * tunnel, gclid, panier invité et jointures d'audience restent. */
+        if (req.session.preferredLang !== 'de' && !estRobot(req.headers && req.headers['user-agent'])) {
+          req.session.preferredLang = 'de';
+        }
       } else if (!isEnglish) {
         if (req.session.preferredLang !== undefined && req.session.preferredLang !== 'fr') {
           req.session.preferredLang = 'fr';

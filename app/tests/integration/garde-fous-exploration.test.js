@@ -411,6 +411,28 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
     }
   });
 
+  /* ── A4.7 — pas de session pour un robot sur /de ──────────────────────── */
+
+  await t.test('A4.7 une page allemande lue par un robot ne crée pas de session ; un humain garde la sienne', async () => {
+    const page = `/de/produits/${encodeURIComponent(DQ200.localizations.de.slug)}-${DQ200._id}`;
+    const cookies = (r) => (typeof r.headers.getSetCookie === 'function' ? r.headers.getSetCookie() : []).join(' | ');
+
+    const humain = await get(page);
+    assert.equal(humain.status, 200);
+    assert.match(cookies(humain), /carpartsfrance\.sid=/, 'un humain garde sa session (langue du tunnel)');
+
+    for (const ua of [UA_GOOGLEBOT, 'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)', 'AdsBot-Google (+http://www.google.com/adsbot.html)']) {
+      const robot = await get(page, { ua, ip: '66.249.66.1' });
+      assert.equal(robot.status, 200, `${ua} : la page reste servie`);
+      assert.doesNotMatch(cookies(robot), /carpartsfrance\.sid=/, `${ua} : aucune session créée`);
+    }
+
+    /* Le clic Google Ads d'un humain arrivant en allemand reste capté. */
+    const clic = await get(`${page}?gclid=TeSt-gclid-123`);
+    assert.match(cookies(clic), /cpf_attr=/, 'le gclid est capté');
+    assert.match(cookies(clic), /carpartsfrance\.sid=/);
+  });
+
   await t.test('A4.5 page légale : plus de dateModified tiré d’updatedAt', async () => {
     const r = await get('/legal/cgv');
     assert.equal(r.status, 200);
