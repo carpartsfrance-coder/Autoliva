@@ -662,4 +662,117 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     for (const p of FIXTURE.produits) assert.equal((await get(urlFr(p))).status, 200, p.sku);
   });
 
+  /* ── Sitemaps et robots.txt ───────────────────────────────────────────── */
+
+  await t.test('sitemaps : gone et blog — sitemap-blog ne garde que les gardés, deux sitemaps de retrait datés de la bascule', async () => {
+    const bascule = jour(-3);
+    activer('gone,blog', { gone: bascule, blog: bascule });
+    const blog = entrees((await get('/sitemap-blog.xml')).corps);
+    assert.deepEqual(nomsDe([...blog.keys()].map((u) => u.slice('/blog/'.length))), ['K_AUDI', 'K_DQ200', 'K_LR', 'K_PONT', 'N_RR', 'N_TDI']);
+
+    const gone = entrees((await get('/sitemap-retraits-gone.xml')).corps);
+    assert.deepEqual([...gone.keys()].sort(), [...DISPARUS].sort(), 'les 268 adresses en 410');
+    assert.ok([...gone.values()].every((v) => v === bascule), 'lastmod = jour de la bascule');
+
+    const retraitsBlog = entrees((await get('/sitemap-retraits-blog.xml')).corps);
+    assert.deepEqual(nomsDe([...retraitsBlog.keys()].map((u) => u.slice('/blog/'.length))), ['X_ALFA_PIN', 'X_AUDI', 'X_D4FD', 'X_LR_PIN']);
+    assert.ok([...retraitsBlog.values()].every((v) => v === bascule));
+
+    const blogDe = entrees((await get('/sitemap-blog-de.xml')).corps);
+    assert.ok(!blogDe.has(`/de/blog/${S.G_P0726}`) && blogDe.has(`/de/blog/${S.K_DQ200}`), 'sitemap-blog-de : plus de 410');
+
+    const index = entrees((await get('/sitemap.xml')).corps);
+    assert.equal(index.get('/sitemap-retraits-gone.xml'), bascule);
+    assert.equal(index.get('/sitemap-retraits-blog.xml'), bascule);
+    assert.equal(index.get('/sitemap-blog.xml'), '2026-05-20T09:00:00.000Z', 'la date du plus récent article GARDÉ');
+    const robots = (await get('/robots.txt')).corps;
+    assert.ok(robots.includes(`Sitemap: ${base}/sitemap-retraits-gone.xml`) && robots.includes(`Sitemap: ${base}/sitemap-retraits-blog.xml`));
+    assert.ok(!/Disallow: \/blog/.test(robots), 'aucun article n’est bloqué : Google doit lire le noindex');
+
+    /* Sans date de bascule : servi, mais sans lastmod ; une date à venir n'est pas annoncée. */
+    activer('blog');
+    assert.ok([...entrees((await get('/sitemap-retraits-blog.xml')).corps).values()].every((v) => v === ''));
+    activer('blog', { blog: jour(3) });
+    assert.ok([...entrees((await get('/sitemap-retraits-blog.xml')).corps).values()].every((v) => v === ''));
+    /* Huit semaines après la bascule : 404, hors de l'index et de robots.txt. */
+    activer('gone,blog', { gone: jour(-57), blog: jour(-56) });
+    assert.equal((await get('/sitemap-retraits-gone.xml')).status, 404);
+    assert.equal((await get('/sitemap-retraits-blog.xml')).status, 404);
+    assert.ok(!(await get('/robots.txt')).corps.includes('retraits'));
+    assert.ok(!(await get('/sitemap.xml')).corps.includes('retraits'));
+    /* La famille reste active : sitemap-blog ne garde que les gardés. */
+    assert.equal(entrees((await get('/sitemap-blog.xml')).corps).size, 6);
+  });
+
+  await t.test('sitemaps : reference garde les 3, pieces-auto les pages gardées, products retire ses fiches — chacun avec son retrait', async () => {
+    const bascule = jour(-2);
+    activer('reference', { reference: bascule });
+    assert.deepEqual([...entrees((await get('/sitemap-references.xml')).corps).keys()], ['/reference/0AM927769G', '/reference/C2D3506']);
+    const refsRetirees = entrees((await get('/sitemap-retraits-reference.xml')).corps);
+    assert.ok(refsRetirees.has('/reference/XYZ-99887') && refsRetirees.has('/reference/80536744'));
+    assert.ok(!refsRetirees.has('/reference/0AM927769G') && !refsRetirees.has('/reference/C2D3506'));
+    assert.ok((await get('/sitemap.xml')).corps.includes('/sitemap-references.xml'), 'sitemap-references reste dans l’index');
+
+    activer('pieces-auto', { 'pieces-auto': bascule });
+    const vehicules = [...entrees((await get('/sitemap-vehicles.xml')).corps).keys()];
+    assert.ok(vehicules.length > 0);
+    const garder = new Set(fs.readFileSync(path.join(LISTES, 'keep-pieces-auto.txt'), 'utf8').split('\n').filter(Boolean).map((u) => u.replace('https://autoliva.com', '')));
+    assert.deepEqual(vehicules.filter((u) => !garder.has(u)), [], 'sitemap-vehicles : seulement des pages gardées');
+    for (const u of ['/pieces-auto/audi', '/pieces-auto/audi/a4', '/pieces-auto/opel/zafira']) assert.ok(vehicules.includes(u), u);
+    const vehiculesRetires = entrees((await get('/sitemap-retraits-pieces-auto.xml')).corps);
+    assert.ok(vehiculesRetires.has('/pieces-auto/audi/a4/turbos'));
+    assert.ok([...vehiculesRetires.keys()].every((u) => !garder.has(u)));
+
+    activer('products', { products: bascule });
+    const fiches = entrees((await get('/sitemap-products.xml')).corps);
+    for (const p of [DQ200, ALV_BX, DM_REMISE]) assert.ok(fiches.has(urlFr(p)), `${p.sku} reste dans sitemap-products`);
+    for (const p of [ASY, DM, EDN]) assert.ok(!fiches.has(urlFr(p)), `${p.sku} sort de sitemap-products`);
+    const fichesRetirees = entrees((await get('/sitemap-retraits-products.xml')).corps);
+    for (const p of [ASY, DM, EDN]) assert.equal(fichesRetirees.get(urlFr(p)), bascule, `${p.sku} dans le retrait`);
+    assert.ok(!fichesRetirees.has(urlFr(DQ200)));
+
+    /* Pas de sitemap de retrait des fiches tant que « products » est coupée. */
+    activer('gone,blog,reference,pieces-auto,de');
+    assert.equal((await get('/sitemap-retraits-products.xml')).status, 404);
+    assert.ok(!(await get('/robots.txt')).corps.includes('retraits-products'));
+  });
+
+  await t.test('sitemaps : de — les sitemaps allemands quittent l’index et robots.txt, servis huit semaines datés de la bascule, puis 404', async () => {
+    const bascule = jour(-4);
+    activer('de', { de: bascule });
+    const index = (await get('/sitemap.xml')).corps;
+    const robots = (await get('/robots.txt')).corps;
+    for (const e of ['sitemap-categories-de.xml', 'sitemap-products-de.xml', 'sitemap-blog-de.xml']) {
+      assert.ok(!index.includes(e), `index : ${e} doit sortir`);
+      assert.ok(!robots.includes(e), `robots.txt : ${e} doit sortir`);
+      const r = await get(`/${e}`);
+      assert.equal(r.status, 200, `${e} reste servi`);
+      const dates = [...entrees(r.corps).values()];
+      assert.ok(dates.length > 0 && dates.every((v) => v === bascule), `${e} : chaque adresse datée de la bascule`);
+    }
+    assert.ok(index.includes('sitemap-retraits-de.xml') && robots.includes('sitemap-retraits-de.xml'));
+    const retraits = entrees((await get('/sitemap-retraits-de.xml')).corps);
+    for (const u of ['/de', '/de/blog', '/de/legal/cgv', '/de/categorie/motoren', urlDe(DQ200), `/de/blog/${S.K_DQ200}`]) {
+      assert.equal(retraits.get(u), bascule, `retraits-de : ${u}`);
+    }
+    activer('de', { de: jour(-60) });
+    for (const e of ['sitemap-categories-de.xml', 'sitemap-products-de.xml', 'sitemap-blog-de.xml', 'sitemap-retraits-de.xml']) {
+      assert.equal((await get(`/${e}`)).status, 404, `${e} : 404 après huit semaines`);
+    }
+  });
+
+  await t.test('flux Merchant : toutes les familles allumées, chaque fiche publiée y reste (français et allemand)', async () => {
+    activer('');
+    const avant = await get('/google-merchant-feed.xml');
+    const avantDe = await get('/google-merchant-feed-de.xml');
+    activer(TOUTES, { products: jour(-1), de: jour(-1) });
+    const apres = await get('/google-merchant-feed.xml');
+    const apresDe = await get('/google-merchant-feed-de.xml');
+    const idsDe = (xml) => [...xml.matchAll(/<g:id>([^<]*)<\/g:id>/g)].map((m) => m[1]).sort();
+    assert.equal(apres.status, 200);
+    assert.deepEqual(idsDe(apres.corps), idsDe(avant.corps));
+    assert.deepEqual(idsDe(apresDe.corps), idsDe(avantDe.corps));
+    for (const p of [ASY, DM, EDN]) assert.ok(apres.corps.includes(p.slug), `${p.sku} reste dans le flux`);
+  });
+
 });

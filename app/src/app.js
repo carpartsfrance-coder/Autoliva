@@ -417,6 +417,10 @@ app.get('/sitemap-vehicles.xml', seoController.getSitemapVehicles);
 app.get('/sitemap-references.xml', seoController.getSitemapReferences);
 app.get('/sitemap-blog.xml', seoController.getSitemapBlog);
 app.get('/sitemap-blog-de.xml', seoController.getSitemapBlogDe);
+/* Sitemaps de retrait (plan de reprise SEO, action A5.6) : ils n'existent que
+   pendant les huit semaines qui suivent l'allumage d'une famille de SEO_PRUNE ;
+   sinon la requête continue son chemin jusqu'au 404, comme avant. */
+app.get(/^\/sitemap-retraits-([a-z-]+)\.xml$/, seoController.getSitemapRetraits);
 app.get('/robots.txt', seoController.getRobotsTxt);
 
 /* Feed Google Shopping (Merchant Center). Monté avant session pour les
