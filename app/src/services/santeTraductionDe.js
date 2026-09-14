@@ -31,6 +31,40 @@ function heuresDepuis(date) {
   return Math.round((Date.now() - new Date(date).getTime()) / 36e5 * 10) / 10;
 }
 
+/**
+ * Un seul verdict, pour ne pas avoir à interpréter cinq chiffres.
+ *
+ * Désarmée = PAUSE VOULUE, pas une panne (plan de reprise SEO du 14/09/2026,
+ * décision 2 : la couche allemande sort de Google et la traduction automatique
+ * reste coupée — les traductions gpt-4o-mini non relues des 04–08/09 font partie
+ * du contenu produit en masse). L'ancien message, en rouge sur le tableau de
+ * bord — « N page(s) en français sur le site allemand — la traduction
+ * automatique n'est pas armée » —, poussait à la réarmer : exactement ce qu'il
+ * ne faut pas faire. Le verdict « pause » s'affiche en gris, sans alerte, et
+ * dit ce que la pause coûte (les fiches neuves n'entrent pas dans le flux
+ * Shopping allemand, qui ne prend que les fiches traduites).
+ */
+function verdictTraduction({ arme, enAttente = 0, quarantaine = 0, attenteDepuisH = null } = {}) {
+  if (!arme) {
+    return {
+      verdict: 'pause',
+      message: enAttente
+        ? `Traduction allemande en pause volontaire (plan SEO du 14/09/2026). ${enAttente} page(s) récente(s) restent en français sous /de et hors du flux Shopping allemand : c'est attendu, ne pas réarmer DE_AUTO_TRANSLATE avant le point d'étape SEO.`
+        : 'Traduction allemande en pause volontaire (plan SEO du 14/09/2026). Rien en attente.',
+    };
+  }
+  if (quarantaine) {
+    return { verdict: 'alerte', message: `${quarantaine} page(s) mise(s) de côté après plusieurs échecs — elles resteront en français.` };
+  }
+  if (enAttente && attenteDepuisH !== null && attenteDepuisH > RETARD_ANORMAL_H) {
+    return { verdict: 'alerte', message: `${enAttente} page(s) en attente depuis ${attenteDepuisH} h — le balayage ne progresse pas.` };
+  }
+  if (enAttente) {
+    return { verdict: 'en_cours', message: `${enAttente} page(s) en attente, rattrapage en cours.` };
+  }
+  return { verdict: 'ok', message: 'Tout est traduit.' };
+}
+
 async function etatTraductionDe() {
   if (mongoose.connection.readyState !== 1) return null;
 
@@ -76,25 +110,7 @@ async function etatTraductionDe() {
   const quarantaine = fichesQuarantaine + articlesQuarantaine;
   const attenteDepuisH = heuresDepuis(plusVieilleAttente && plusVieilleAttente.createdAt);
   const arme = process.env.DE_AUTO_TRANSLATE === 'true';
-
-  /* Un seul verdict, pour ne pas avoir à interpréter cinq chiffres. */
-  let verdict = 'ok';
-  let message = 'Tout est traduit.';
-  if (!arme) {
-    verdict = enAttente ? 'alerte' : 'desarme';
-    message = enAttente
-      ? `${enAttente} page(s) en français sur le site allemand — la traduction automatique n'est pas armée (DE_AUTO_TRANSLATE).`
-      : 'Traduction automatique désarmée (DE_AUTO_TRANSLATE absent). Rien en attente pour l’instant.';
-  } else if (quarantaine) {
-    verdict = 'alerte';
-    message = `${quarantaine} page(s) mise(s) de côté après plusieurs échecs — elles resteront en français.`;
-  } else if (enAttente && attenteDepuisH !== null && attenteDepuisH > RETARD_ANORMAL_H) {
-    verdict = 'alerte';
-    message = `${enAttente} page(s) en attente depuis ${attenteDepuisH} h — le balayage ne progresse pas.`;
-  } else if (enAttente) {
-    verdict = 'en_cours';
-    message = `${enAttente} page(s) en attente, rattrapage en cours.`;
-  }
+  const { verdict, message } = verdictTraduction({ arme, enAttente, quarantaine, attenteDepuisH });
 
   return {
     verdict,
@@ -110,4 +126,4 @@ async function etatTraductionDe() {
   };
 }
 
-module.exports = { etatTraductionDe, RETARD_ANORMAL_H };
+module.exports = { etatTraductionDe, verdictTraduction, RETARD_ANORMAL_H };
