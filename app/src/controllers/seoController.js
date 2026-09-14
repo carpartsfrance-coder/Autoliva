@@ -574,7 +574,7 @@ async function datesDerniereModif() {
   ]);
 
   const valeurs = {
-    produits: datesSeo.dateDescriptionsFiches() || null,
+    produits: datesSeo.lastmodIndexFichesFr() || null,
     produitsDe,
     categoriesDe,
     blog,

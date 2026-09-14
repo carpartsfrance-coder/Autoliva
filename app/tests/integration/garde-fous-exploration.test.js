@@ -380,6 +380,8 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
     seo.__test.viderCaches();
     let r = await get('/sitemap-products.xml');
     assert.ok(![...entrees(r.corps).values()].some(Boolean), 'interrupteur coupé : la description n’est plus servie');
+    const index = entrees((await get('/sitemap.xml')).corps);
+    assert.equal(index.get(`${base}/sitemap-products.xml`), '', 'l’index ne dit pas une date qu’aucune fiche ne porte');
     delete process.env.SHOW_PRODUCT_DESCRIPTION;
 
     FICHES_A3.dateMiseEnLigne = '2099-01-01';

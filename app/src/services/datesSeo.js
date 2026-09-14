@@ -69,6 +69,16 @@ function lastmodFicheFr(produit, options = {}) {
   return dateDescriptionsFiches(options);
 }
 
+/**
+ * <lastmod> de sitemap-products.xml dans l'index : la date A3, sauf si
+ * l'interrupteur coupe toutes les descriptions — l'index dirait alors une date
+ * qu'aucune fiche du sitemap ne porte.
+ */
+function lastmodIndexFichesFr(options = {}) {
+  if (claimFilter.motifDescriptionMasquee({}, { lang: 'fr' }) === 'interrupteur') return '';
+  return dateDescriptionsFiches(options);
+}
+
 /** Date de publication d'un article français (ou sa création, à défaut). */
 function datePublicationArticle(post) {
   return enDate(post && (post.publishedAt || post.createdAt));
@@ -98,6 +108,7 @@ module.exports = {
   isoPasse,
   dateDescriptionsFiches,
   lastmodFicheFr,
+  lastmodIndexFichesFr,
   datePublicationArticle,
   dateModificationArticle,
   dateModificationArticleDe,
