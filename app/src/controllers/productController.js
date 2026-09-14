@@ -25,6 +25,7 @@ const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const { sanitizeBrandLeak } = require('../services/brandSanitizer');
 const claimFilter = require('../services/claimFilter');
 const scalapay = require('../services/scalapay');
+const produitsDisparus = require('../services/produitsDisparus');
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -433,6 +434,18 @@ async function getProductBySlug(req, res, next) {
           req.params.id = String(byId._id);
           return getProduct(req, res, next);
         }
+      }
+      /* Fiche disparue (plan de reprise SEO du 14/09/2026, action A4.8) :
+         /product/wc-NNNN retrouve sa fiche par le SKU, et les 19 slugs morts
+         qui recevaient encore du trafic — dont 16 pages d'arrivée Ads — vont
+         vers leur fiche de remplacement plutôt que vers la recherche (noindex).
+         La chaîne de requête suit : le gclid d'un clic Ads arrive jusqu'à la
+         fiche. Tout autre slug garde le repli ci-dessous jusqu'à la fin du
+         changement d'adresse (31/10). */
+      const cible = await produitsDisparus.redirectionPourSlugInconnu(slug);
+      if (cible) {
+        const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+        return res.redirect(301, cible + qs);
       }
       return res.redirect(301, `/produits?q=${encodeURIComponent(raw)}`);
     }

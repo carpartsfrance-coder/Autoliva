@@ -108,6 +108,10 @@ function slugifier(s) {
   return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
+/* Slugs de catégorie de la production, quand ils diffèrent du nom slugifié. */
+const SLUGS_PROD = { 'Mécatroniques & calculateurs': 'mecatroniques' };
+const slugCategorie = (nom) => SLUGS_PROD[nom] || slugifier(nom);
+
 function versMongo(p) {
   const doc = { ...p };
   delete doc._role;
@@ -187,6 +191,65 @@ const CATEGORIES_EN_PLUS = [
   { name: 'Filtres huile', slug: 'filtres-huile', isActive: false },
 ];
 
+/* Fiches disparues (A4.8). Les fiches CIBLES du plan, avec leurs vrais slugs,
+   SKU, catégories et état de publication, relevés en lecture seule sur la
+   production le 14/09/2026 (champs publics). « false » = brouillon. */
+const CIBLES = [
+  ['WC-4714', 'boite-multitronic-0aw-audi-a4-b8-a5-8t-2-7-tdi', 'Boîtes de vitesses', true],
+  ['WC-4494', 'boite-vitesses-s-tronic-7-reconditionnee-audi-a6-a7-3-0-tdi-quattro-dl501-0b5-nsf', 'Boîtes de vitesses', true],
+  ['WC-5442', 'boite-vitesses-automatique-ecvt-ford-mondeo-hybrid-2-0', 'Boîtes de vitesses', false],
+  ['N62', 'moteur-bmw-n62b48b-4-8-v8-occasion-reconditionne', 'Moteurs', true],
+  ['WC-4933', 'boite-vitesses-automatique-mercedes-c320-cdi-w203-s203', 'Boîtes de vitesses', false],
+  ['WC-4808', 'boite-vitesses-automatique-reconditionnee-zf-5hp24-range-rover-l322-4-4-v8', 'Boîtes de vitesses', false],
+  ['WC-10441', 'boite-vitesses-s-tronic-7-audi-a1-1-4-tfsi-pmt', 'Boîtes de vitesses', true],
+  ['WC-4831', 'boite-vitesses-dsg7-dq200-reconditionnee-volkswagen-audi-seat-skoda', 'Boîtes de vitesses', true],
+  ['WC-4449', 'kit-demarrage-porsche-cayenne-955-turbo-4-5-v8-reconditionne', 'Électricité / Électronique > Démarrage / Charge', true],
+  ['WC-5431', 'boite-vitesses-s-tronic-7-audi-q5-3-0-tdi-quattro-lgh', 'Boîtes de vitesses', true],
+  ['WC-13522', 'boite-vitesses-automatique-bmw-ga6hp26z-zf-6hp26z-24007563432-7563432', 'Boîtes de vitesses', true],
+  ['WC-5179', 'boite-vitesses-automatique-powershift-ford-transit-connect-1-5-tdci-reconditionnee', 'Boîtes de vitesses', false],
+  ['WC-13238', 'boite-vitesses-audi-3-0-tdi-quattro-nsf-0b5-dl501-a6-a7', 'Boîtes de vitesses', true],
+  ['WC-6315', 'boite-vitesses-s-tronic-7-audi-s5-3-0-tfsi-v6', 'Boîtes de vitesses', true],
+  ['WC-11410', 'calculateur-boite-edc-6dct250-dc4-continental-programme-vin', 'Mécatroniques & calculateurs', true],
+  ['WC-5293', 'boite-vitesse-pdk-reconditionnee-porsche-panamera-4s-4-8-v8-gts-970', 'Boîtes de vitesses', true],
+  ['WC-4452', 'accoudoir-central-cuir-noir-reconditionne-porsche-cayenne-955-957', 'Habitacle > Consoles / Accoudoirs', true],
+].map(([sku, slug, category, isPublished]) => ({
+  _id: new mongoose.Types.ObjectId(),
+  name: slug.replace(/-/g, ' '),
+  slug,
+  sku,
+  category,
+  priceCents: 99000,
+  inStock: true,
+  isPublished,
+  createdAt: new Date('2026-02-08T00:00:00Z'),
+  updatedAt: REDATE,
+}));
+
+/* Ce que le plan demande pour chacun des 19 slugs morts
+   (listes/dead-product-slugs-map.tsv), écrit ici indépendamment du fichier
+   de l'application : une fiche en brouillon renvoie vers sa catégorie. */
+const DISPARUS_ATTENDUS = {
+  'boite-multitronic-0aw-audi-a4-b8-a5-8t-2-7-tdi-reconditionnee': '/product/boite-multitronic-0aw-audi-a4-b8-a5-8t-2-7-tdi/',
+  'wc-4714': '/product/boite-multitronic-0aw-audi-a4-b8-a5-8t-2-7-tdi/',
+  'boite-vitesses-s-tronic-7-audi-a6-c7-3-0-tdi-quattro-reconditionnee': '/product/boite-vitesses-s-tronic-7-reconditionnee-audi-a6-a7-3-0-tdi-quattro-dl501-0b5-nsf/',
+  'wc-5442': '/categorie/boites-de-vitesses',
+  'moteur-bmw-n62b48b-4-8l-v8-occasion': '/product/moteur-bmw-n62b48b-4-8-v8-occasion-reconditionne/',
+  'wc-4933': '/categorie/boites-de-vitesses',
+  'boite-vitesses-range-rover-l322-4-4-v8-zf-5hp24-reconditionnee': '/categorie/boites-de-vitesses',
+  'wc-10441': '/product/boite-vitesses-s-tronic-7-audi-a1-1-4-tfsi-pmt/',
+  'wc-4831': '/product/boite-vitesses-dsg7-dq200-reconditionnee-volkswagen-audi-seat-skoda/',
+  'wc-4449': '/product/kit-demarrage-porsche-cayenne-955-turbo-4-5-v8-reconditionne/',
+  'wc-5431': '/product/boite-vitesses-s-tronic-7-audi-q5-3-0-tdi-quattro-lgh/',
+  'wc-13522': '/product/boite-vitesses-automatique-bmw-ga6hp26z-zf-6hp26z-24007563432-7563432/',
+  'wc-5179': '/categorie/boites-de-vitesses',
+  'wc-13238': '/product/boite-vitesses-audi-3-0-tdi-quattro-nsf-0b5-dl501-a6-a7/',
+  'wc-6315': '/product/boite-vitesses-s-tronic-7-audi-s5-3-0-tfsi-v6/',
+  'wc-11410': '/product/calculateur-boite-edc-6dct250-dc4-continental-programme-vin/',
+  'boite-vitesses-pdk-porsche-panamera-4s-gts-4-8-v8-970-occasion': '/product/boite-vitesse-pdk-reconditionnee-porsche-panamera-4s-4-8-v8-gts-970/',
+  'phares-origine-porsche-panamera-970-reconditionnes-gauche-droit': '/categorie/carrosserie-eclairage-phares-feux',
+  'accoudoir-cuir-noir-porsche-cayenne-955-957': '/product/accoudoir-central-cuir-noir-reconditionne-porsche-cayenne-955-957/',
+};
+
 const ARTICLE_FR = {
   title: 'Panne de mécatronique DQ200 : le guide',
   slug: 'panne-mecatronique-dq200-guide',
@@ -226,11 +289,11 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
   await mongoose.connect(serveur.getUri());
   const db = mongoose.connection.db;
 
-  await db.collection('products').insertMany([...FIXTURE.produits.map(versMongo), HORS_LISTE, FREIN, TURBO_AUDI, BROUILLON]);
+  await db.collection('products').insertMany([...FIXTURE.produits.map(versMongo), HORS_LISTE, FREIN, TURBO_AUDI, BROUILLON, ...CIBLES]);
   const categories = [...new Set(FIXTURE.produits.map((p) => p.category))];
   await db.collection('categories').insertMany(categories.map((name, i) => ({
     name,
-    slug: slugifier(name),
+    slug: slugCategorie(name),
     isActive: true,
     sortOrder: i,
     createdAt: new Date('2026-05-01T00:00:00Z'),
@@ -239,7 +302,10 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
       ? { localizations: { de: { name: 'Motoren', slug: 'motoren', translatedAt: new Date('2026-09-05T12:00:00Z') } } }
       : {}),
   })));
-  await db.collection('categories').insertMany(CATEGORIES_EN_PLUS.map((c, i) => ({ ...c, sortOrder: 100 + i, updatedAt: REDATE })));
+  await db.collection('categories').insertMany([
+    ...CATEGORIES_EN_PLUS,
+    { name: 'Carrosserie / Éclairage > Phares / Feux', slug: 'carrosserie-eclairage-phares-feux', isActive: true },
+  ].map((c, i) => ({ ...c, sortOrder: 100 + i, updatedAt: REDATE })));
   await db.collection('blogposts').insertMany([ARTICLE_FR, ARTICLE_TRADUIT]);
   await db.collection('legalpages').insertOne({
     slug: 'cgv', title: 'Conditions générales de vente', content: 'Article 1 — Objet.', isPublished: true,
@@ -388,7 +454,7 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
     assert.equal(r.status, 200);
     const locs = [...entrees(r.corps).keys()].map((u) => u.replace(`${base}/categorie/`, ''));
     for (const nom of categories) {
-      assert.ok(locs.includes(slugifier(nom)), `« ${nom} » a des fiches : elle reste`);
+      assert.ok(locs.includes(slugCategorie(nom)), `« ${nom} » a des fiches : elle reste`);
     }
     assert.ok(locs.includes('freinage'), '« Freinage » compte ses fiches « Freinage > Disques »');
     for (const vide of ['disques-frein', 'brouillons-seulement', 'filtres-huile']) {
@@ -431,6 +497,70 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
     const clic = await get(`${page}?gclid=TeSt-gclid-123`);
     assert.match(cookies(clic), /cpf_attr=/, 'le gclid est capté');
     assert.match(cookies(clic), /carpartsfrance\.sid=/);
+  });
+
+  /* ── A4.8 — fiches disparues ────────────────────────────────────────── */
+
+  await t.test('A4.8 les 19 slugs morts vont vers leur fiche (ou sa catégorie si elle est en brouillon), jamais vers une 404', async () => {
+    const { REDIRECTIONS } = require('../../src/services/produitsDisparus');
+    assert.deepEqual(Object.keys(REDIRECTIONS).sort(), Object.keys(DISPARUS_ATTENDUS).sort(), 'exactement les 19 slugs du plan');
+    for (const [mort, attendu] of Object.entries(DISPARUS_ATTENDUS)) {
+      const r = await get(`/product/${mort}/`);
+      assert.equal(r.status, 301, `${mort} : ${r.status}`);
+      assert.equal(r.location, attendu, `${mort} → ${r.location}`);
+      const arrivee = await get(attendu);
+      assert.equal(arrivee.status, 200, `${mort} → ${attendu} répond ${arrivee.status}`);
+    }
+  });
+
+  await t.test('A4.8 le gclid d’un clic Ads suit la redirection', async () => {
+    const r = await get('/product/wc-5431/?gclid=Cj0-test&utm_source=google');
+    assert.equal(r.location, '/product/boite-vitesses-s-tronic-7-audi-q5-3-0-tdi-quattro-lgh/?gclid=Cj0-test&utm_source=google');
+  });
+
+  await t.test('A4.8 une fiche republiée redevient la cible, sans toucher au fichier', async () => {
+    const Product = mongoose.model('Product');
+    await Product.updateOne({ sku: 'WC-5442' }, { $set: { isPublished: true } });
+    await Product.updateOne({ sku: 'WC-4808' }, { $set: { isPublished: true } });
+    try {
+      assert.equal((await get('/product/wc-5442/')).location, '/product/boite-vitesses-automatique-ecvt-ford-mondeo-hybrid-2-0/', 'par le SKU');
+      assert.equal((await get('/product/boite-vitesses-range-rover-l322-4-4-v8-zf-5hp24-reconditionnee/')).location,
+        '/product/boite-vitesses-automatique-reconditionnee-zf-5hp24-range-rover-l322-4-4-v8/', 'par la liste');
+    } finally {
+      await Product.updateOne({ sku: 'WC-5442' }, { $set: { isPublished: false } });
+      await Product.updateOne({ sku: 'WC-4808' }, { $set: { isPublished: false } });
+    }
+  });
+
+  await t.test('A4.8 /product/wc-NNNN retrouve toute fiche publiée par son SKU ; le reste garde le repli d’avant', async () => {
+    const wc = FIXTURE.produits.find((p) => p.sku === 'WC-7756');
+    assert.equal((await get('/product/wc-7756/')).location, `/product/${wc.slug}/`, 'hors liste, retrouvée par le SKU');
+    /* En majuscules : la normalisation d'URL en amont passe d'abord en
+       minuscules avec la barre finale, puis le SKU fait le reste. */
+    const majuscules = await get('/product/WC-7756');
+    assert.equal(majuscules.location, '/product/wc-7756/');
+    assert.equal((await get(majuscules.location)).location, `/product/${wc.slug}/`);
+    assert.equal((await get('/product/wc-999999/')).location, '/produits?q=wc-999999', 'SKU inconnu : repli d’avant');
+    assert.equal((await get('/product/piece-qui-na-jamais-existe/')).location, '/produits?q=piece-qui-na-jamais-existe',
+      'slug inconnu : repli d’avant, jusqu’à la fin du changement d’adresse');
+  });
+
+  await t.test('A4.8 une fiche EN LIGNE n’est jamais redirigée, même si son slug figure dans la liste', async () => {
+    const Product = mongoose.model('Product');
+    const vivante = await Product.create({
+      name: 'Accoudoir cuir noir Porsche Cayenne 955 957',
+      slug: 'accoudoir-cuir-noir-porsche-cayenne-955-957',
+      sku: 'WC-900010',
+      category: 'Habitacle > Consoles / Accoudoirs',
+      priceCents: 30000,
+      isPublished: true,
+    });
+    try {
+      const r = await get('/product/accoudoir-cuir-noir-porsche-cayenne-955-957/');
+      assert.equal(r.status, 200, `servie en place (reçu ${r.status} → ${r.location || ''})`);
+    } finally {
+      await Product.deleteOne({ _id: vivante._id });
+    }
   });
 
   await t.test('A4.5 page légale : plus de dateModified tiré d’updatedAt', async () => {
