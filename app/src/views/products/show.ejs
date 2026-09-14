@@ -744,6 +744,39 @@
         </div>
       </div>
 
+      <%# ═══ Description ═══
+           Absente de la refonte « Autoparts v3 » du 05/07/2026 : le contrôleur
+           calculait toujours `descriptionHtmlSafe`, mais plus rien ne l'affichait.
+           Pendant deux mois, 13 362 fiches n'ont montré que le gabarit commun —
+           pour Google, des pages identiques à 95 % qui ne différaient que par le
+           titre. C'est le texte propre à CHAQUE pièce : il doit être dans la page,
+           pas seulement en base. %>
+      <% var _descHtml = (product && typeof product.descriptionHtmlSafe === 'string') ? product.descriptionHtmlSafe.trim() : ''; %>
+      <% var _descTxt = _descHtml ? '' : String((product && (product.descriptionText || product.description || product.shortDescription)) || '').trim(); %>
+      <% if (_descHtml || _descTxt || (_ib.description_end && _ib.description_end.length)) { %>
+      <section id="description" style="margin-top: 72px; max-width: 860px;">
+        <h2 style="font-size: 19px; font-weight: 800; color: #0F1626; margin: 0 0 14px 0;"><%= t('product.description') %></h2>
+        <div class="desc-collapse-wrapper relative" data-desc-collapse>
+          <div class="desc-collapse-inner" data-desc-collapse-inner>
+            <% if (_descHtml) { %>
+              <div class="pp-prose product-html" style="font-size: 14px; line-height: 1.75; color: #3E4657;"><%- _descHtml %></div>
+            <% } else if (_descTxt) { %>
+              <p class="pp-prose" style="white-space: pre-line; margin: 0; font-size: 14px; line-height: 1.75; color: #3E4657;"><%= _descTxt %></p>
+            <% } %>
+          </div>
+          <div class="desc-collapse-fade hidden" data-desc-fade>
+            <button type="button" data-desc-toggle data-label-more="<%= t('product.readMore') %>" data-label-less="<%= t('product.readLess') %>" style="width: 100%; border: none; background: transparent; cursor: pointer; color: #E02128; font-weight: 700; font-size: 13.5px; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 32px 0 8px 0; font-family: inherit;">
+              <span data-desc-toggle-label><%= t('product.readMore') %></span>
+              <span class="material-symbols-outlined" style="font-size: 17px; transition: transform 0.2s;" data-desc-toggle-icon>expand_more</span>
+            </button>
+          </div>
+        </div>
+        <% if (_ib.description_end && _ib.description_end.length) { %>
+          <%- include('./partials/info-blocks', { blocks: _ib.description_end }) %>
+        <% } %>
+      </section>
+      <% } %>
+
       <%# ═══ Comment nous reconditionnons (bande navy) ═══ %>
       <% if (_showIso) { %>
       <div class="ap-recond-grid" style="background: #15213B; border-radius: 20px; padding: 40px 44px; margin-top: 72px; color: #FFFFFF; display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 44px; align-items: center;">
@@ -1698,6 +1731,8 @@
       var toggleLabel = wrapper.querySelector('[data-desc-toggle-label]');
       var toggleIcon = wrapper.querySelector('[data-desc-toggle-icon]');
       if (!inner || !fade || !toggleBtn) return;
+      var LABEL_MORE = toggleBtn.getAttribute('data-label-more') || 'Lire la suite';
+      var LABEL_LESS = toggleBtn.getAttribute('data-label-less') || 'Réduire';
 
       var THRESHOLD = 250; /* px - only collapse if taller than this */
       var expanded = false;
@@ -1713,7 +1748,7 @@
           inner.classList.remove('is-expanded');
           fade.classList.remove('hidden');
           expanded = false;
-          if (toggleLabel) toggleLabel.textContent = 'Lire la suite';
+          if (toggleLabel) toggleLabel.textContent = LABEL_MORE;
           if (toggleIcon) toggleIcon.style.transform = '';
         } else {
           inner.classList.remove('is-collapsed');
@@ -1729,13 +1764,13 @@
           inner.classList.remove('is-collapsed');
           inner.classList.add('is-expanded');
           fade.classList.add('hidden');
-          if (toggleLabel) toggleLabel.textContent = 'Réduire';
+          if (toggleLabel) toggleLabel.textContent = LABEL_LESS;
           if (toggleIcon) toggleIcon.style.transform = 'rotate(180deg)';
         } else {
           inner.classList.add('is-collapsed');
           inner.classList.remove('is-expanded');
           fade.classList.remove('hidden');
-          if (toggleLabel) toggleLabel.textContent = 'Lire la suite';
+          if (toggleLabel) toggleLabel.textContent = LABEL_MORE;
           if (toggleIcon) toggleIcon.style.transform = '';
           wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }

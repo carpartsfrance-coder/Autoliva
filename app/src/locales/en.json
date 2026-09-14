@@ -420,6 +420,7 @@
   "product.quoteError": "Error. Check your email or try again.",
   "product.networkError": "Network error.",
   "product.readMore": "Read more",
+  "product.readLess": "Show less",
   "product.offerContent": "What's included",
   "product.seeAlsoCompat": "See also our compatible parts",
   "product.allPartsFor": "All %make% parts",

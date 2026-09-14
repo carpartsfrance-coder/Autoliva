@@ -420,6 +420,7 @@
   "product.quoteError": "Erreur. Vérifiez votre email ou réessayez.",
   "product.networkError": "Erreur réseau.",
   "product.readMore": "Lire la suite",
+  "product.readLess": "Réduire",
   "product.offerContent": "Contenu de l'offre",
   "product.seeAlsoCompat": "Voir aussi nos pièces compatibles",
   "product.allPartsFor": "Toutes les pièces %make%",

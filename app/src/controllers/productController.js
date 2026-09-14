@@ -1166,7 +1166,9 @@ async function getProduct(req, res, next) {
       };
     });
 
-    const descriptionRaw = product.description || product.shortDescription || '';
+    /* Maintenant que la description est de nouveau AFFICHÉE, l'ancien nom ne doit
+       pas y ressortir : 6 325 fiches importées disent encore « Car Parts France ». */
+    const descriptionRaw = sanitizeBrandLeak(product.description || product.shortDescription || '');
     const descriptionNormalized = normalizeImportedText(descriptionRaw);
     const htmlCandidate = looksLikeHtml(descriptionNormalized)
       ? descriptionNormalized

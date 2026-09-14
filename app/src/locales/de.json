@@ -420,6 +420,7 @@
   "product.quoteError": "Fehler. Prüfen Sie Ihre E-Mail oder versuchen Sie es erneut.",
   "product.networkError": "Netzwerkfehler.",
   "product.readMore": "Mehr lesen",
+  "product.readLess": "Weniger anzeigen",
   "product.offerContent": "Lieferumfang",
   "product.seeAlsoCompat": "Siehe auch unsere kompatiblen Teile",
   "product.allPartsFor": "Alle %make% Teile",
