@@ -19,6 +19,7 @@ const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const brand = require('../config/brand');
+const datesSeo = require('../services/datesSeo');
 
 const LANG_PREFIX = '/de';
 
@@ -349,7 +350,9 @@ async function getBlogPostDe(req, res) {
     const hreflang = buildHreflangSetForBlogPost(baseUrl, post.slug);
 
     const publishedAt = post.publishedAt || post.createdAt || null;
-    const updatedAt = de.translatedAt || post.updatedAt || publishedAt || null;
+    /* Dernière modification de la page ALLEMANDE : sa traduction, sinon la
+       publication. Jamais updatedAt (plan de reprise SEO, action A4.5). */
+    const modifieLe = datesSeo.dateModificationArticleDe(post);
 
     const ogImageRaw = (post.seo && post.seo.ogImageUrl) ? post.seo.ogImageUrl : post.coverImageUrl;
     const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
@@ -423,7 +426,7 @@ async function getBlogPostDe(req, res) {
           description: computedDesc || undefined,
           image: ogImage ? [ogImage] : undefined,
           datePublished: publishedAt ? new Date(publishedAt).toISOString() : undefined,
-          dateModified: updatedAt ? new Date(updatedAt).toISOString() : undefined,
+          dateModified: datesSeo.isoPasse(modifieLe) || undefined,
           inLanguage: 'de',
           author: { '@type': 'Person', name: post.authorName || brand.NAME },
           publisher: {
@@ -454,7 +457,7 @@ async function getBlogPostDe(req, res) {
       ogLocale: 'de_DE',
       ogLocaleAlternate: 'fr_FR',
       ogArticlePublishedTime: publishedAt ? new Date(publishedAt).toISOString() : '',
-      ogArticleModifiedTime:  updatedAt   ? new Date(updatedAt).toISOString()   : '',
+      ogArticleModifiedTime:  datesSeo.isoPasse(modifieLe),
       ogImage,
       jsonLd,
       metaRobots: 'index, follow',
