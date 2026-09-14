@@ -97,6 +97,35 @@ async function getNavCategories() {
   }
 }
 
+/**
+ * Nombre de fiches PUBLIÉES par catégorie, avec la règle exacte de la page
+ * catégorie (productListingService) : isPublished vrai ou absent, et catégorie
+ * de la fiche égale au nom OU « Nom > … », sans tenir compte de la casse. C'est
+ * sur ce nombre que la page se sert elle-même en noindex quand il vaut 0 : le
+ * sitemap doit dire la même chose que la page.
+ *
+ * Une seule agrégation (un groupe par libellé de catégorie des fiches), puis
+ * le rapprochement en mémoire — une soixantaine de catégories.
+ *
+ * @param {string[]} noms — Category.name
+ * @returns {Promise<Map<string, number>>} nom → nombre de fiches
+ */
+async function compterFichesPubliees(noms) {
+  const Product = require('../models/Product');
+  const groupes = await Product.aggregate([
+    { $match: { isPublished: { $in: [true, null] }, category: { $type: 'string', $ne: '' } } },
+    { $group: { _id: '$category', n: { $sum: 1 } } },
+  ]);
+  const comptes = new Map();
+  for (const nom of noms || []) {
+    const rx = new RegExp('^' + _escapeRegExp(String(nom || '').trim()) + '(\\s*>|$)', 'i');
+    let total = 0;
+    for (const g of groupes) if (g && typeof g._id === 'string' && rx.test(g._id)) total += g.n;
+    comptes.set(nom, total);
+  }
+  return comptes;
+}
+
 function getPublicBaseUrlFromReq(req) {
   return getSiteUrlFromReq(req);
 }
@@ -119,4 +148,5 @@ module.exports = {
   buildCategoryPublicUrl,
   getPublicBaseUrlFromReq,
   getNavCategories,
+  compterFichesPubliees,
 };

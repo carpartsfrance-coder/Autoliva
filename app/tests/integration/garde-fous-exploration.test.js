@@ -139,6 +139,54 @@ const HORS_LISTE = {
   updatedAt: REDATE,
 };
 
+/* Sitemap des catégories et des pages véhicule (A4.6).
+   - « Freinage » n'a pas de fiche à son nom exact, mais une en
+     « Freinage > Disques » : elle n'est PAS vide (règle « Nom > … » de la page) ;
+   - « Disques frein » n'a aucune fiche, « Brouillons seulement » n'a qu'un
+     brouillon : vides, donc servies en noindex, donc hors du sitemap ;
+   - « AUDI / A4 » et « Audi / a4 » : deux écritures, un seul slug. */
+const FREIN = {
+  _id: new mongoose.Types.ObjectId(),
+  name: 'Disques de frein avant Audi A4',
+  slug: 'disques-frein-avant-audi-a4-test',
+  sku: 'WC-900001',
+  category: 'Freinage > Disques',
+  priceCents: 12000,
+  isPublished: true,
+  compatibility: [{ make: 'AUDI', model: 'A4' }],
+  createdAt: new Date('2026-06-01T00:00:00Z'),
+  updatedAt: REDATE,
+};
+const TURBO_AUDI = {
+  _id: new mongoose.Types.ObjectId(),
+  name: 'Turbo Audi A4 2.0 TDI',
+  slug: 'turbo-audi-a4-2-0-tdi-test',
+  sku: 'WC-900002',
+  category: 'Turbos',
+  priceCents: 45000,
+  isPublished: true,
+  compatibility: [{ make: 'Audi', model: 'a4' }, { make: 'Audi', model: 'A4 ' }],
+  createdAt: new Date('2026-06-01T00:00:00Z'),
+  updatedAt: REDATE,
+};
+const BROUILLON = {
+  _id: new mongoose.Types.ObjectId(),
+  name: 'Pièce en brouillon',
+  slug: 'piece-en-brouillon-test',
+  sku: 'WC-900003',
+  category: 'Brouillons seulement',
+  priceCents: 1000,
+  isPublished: false,
+  createdAt: new Date('2026-06-01T00:00:00Z'),
+  updatedAt: REDATE,
+};
+const CATEGORIES_EN_PLUS = [
+  { name: 'Freinage', slug: 'freinage', isActive: true },
+  { name: 'Disques frein', slug: 'disques-frein', isActive: true },
+  { name: 'Brouillons seulement', slug: 'brouillons-seulement', isActive: true },
+  { name: 'Filtres huile', slug: 'filtres-huile', isActive: false },
+];
+
 const ARTICLE_FR = {
   title: 'Panne de mécatronique DQ200 : le guide',
   slug: 'panne-mecatronique-dq200-guide',
@@ -178,7 +226,7 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
   await mongoose.connect(serveur.getUri());
   const db = mongoose.connection.db;
 
-  await db.collection('products').insertMany([...FIXTURE.produits.map(versMongo), HORS_LISTE]);
+  await db.collection('products').insertMany([...FIXTURE.produits.map(versMongo), HORS_LISTE, FREIN, TURBO_AUDI, BROUILLON]);
   const categories = [...new Set(FIXTURE.produits.map((p) => p.category))];
   await db.collection('categories').insertMany(categories.map((name, i) => ({
     name,
@@ -191,6 +239,7 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
       ? { localizations: { de: { name: 'Motoren', slug: 'motoren', translatedAt: new Date('2026-09-05T12:00:00Z') } } }
       : {}),
   })));
+  await db.collection('categories').insertMany(CATEGORIES_EN_PLUS.map((c, i) => ({ ...c, sortOrder: 100 + i, updatedAt: REDATE })));
   await db.collection('blogposts').insertMany([ARTICLE_FR, ARTICLE_TRADUIT]);
   await db.collection('legalpages').insertOne({
     slug: 'cgv', title: 'Conditions générales de vente', content: 'Article 1 — Objet.', isPublished: true,
@@ -329,6 +378,37 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
     assert.equal(postingDe.dateModified, '2026-09-07T09:30:00.000Z');
     assert.equal(metaPropriete(de.corps, 'article:modified_time'), '2026-09-07T09:30:00.000Z');
     assert.ok(!de.corps.includes(MARQUE_REDATE));
+  });
+
+  /* ── A4.6 — sitemaps : catégories vides, doublons des pages véhicule ──── */
+
+  await t.test('A4.6 sitemap des catégories : les catégories vides (servies en noindex) en sortent', async () => {
+    seo.__test.viderCaches();
+    const r = await get('/sitemap-categories.xml');
+    assert.equal(r.status, 200);
+    const locs = [...entrees(r.corps).keys()].map((u) => u.replace(`${base}/categorie/`, ''));
+    for (const nom of categories) {
+      assert.ok(locs.includes(slugifier(nom)), `« ${nom} » a des fiches : elle reste`);
+    }
+    assert.ok(locs.includes('freinage'), '« Freinage » compte ses fiches « Freinage > Disques »');
+    for (const vide of ['disques-frein', 'brouillons-seulement', 'filtres-huile']) {
+      assert.ok(!locs.includes(vide), `« ${vide} » est vide (ou inactive) : hors du sitemap`);
+    }
+    /* Le sitemap dit la même chose que la page : la catégorie vide reste en
+       ligne (200), c'est la page qui se déclare non indexable. */
+    assert.equal((await get('/categorie/disques-frein')).status, 200);
+  });
+
+  await t.test('A4.6 sitemap des pages véhicule : chaque URL une seule fois', async () => {
+    seo.__test.viderCaches();
+    const r = await get('/sitemap-vehicles.xml');
+    assert.equal(r.status, 200);
+    const locs = [...r.corps.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1]);
+    const doublons = locs.filter((u, i) => locs.indexOf(u) !== i);
+    assert.deepEqual(doublons, [], 'une URL listée deux fois');
+    for (const attendu of ['/pieces-auto/audi', '/pieces-auto/audi/a4', '/pieces-auto/audi/a4/turbos', '/pieces-auto/volkswagen', '/pieces-auto/opel/zafira']) {
+      assert.ok(locs.includes(base + attendu), `${attendu} manque`);
+    }
   });
 
   await t.test('A4.5 page légale : plus de dateModified tiré d’updatedAt', async () => {

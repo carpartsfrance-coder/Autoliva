@@ -6,7 +6,7 @@ const LegalPage = require('../models/LegalPage');
 const BlogPost = require('../models/BlogPost');
 const demoProducts = require('../demoProducts');
 const { buildProductPublicUrl, getPublicBaseUrlFromReq } = require('../services/productPublic');
-const { buildCategoryPublicUrl } = require('../services/categoryPublic');
+const { buildCategoryPublicUrl, compterFichesPubliees } = require('../services/categoryPublic');
 const { DEFAULT_LEGAL_PAGES } = require('../services/legalPages');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 /* Dates des sitemaps : jamais updatedAt (plan de reprise SEO du 14/09/2026,
@@ -138,14 +138,30 @@ async function buildCategoriesUrls(req, dbConnected) {
   }
 
   const cats = await Category.find({ isActive: true })
-    .select('_id slug')
+    .select('_id slug name')
     .sort({ sortOrder: 1, name: 1 })
     .lean();
+
+  /* Catégories VIDES hors du sitemap (plan de reprise SEO du 14/09/2026,
+     action A4.6). La page d'une catégorie sans fiche publiée se sert en
+     noindex (categoryController) : la lister ici demandait à Google d'explorer
+     42 pages qu'on lui interdit d'indexer. Même règle que la page, calculée à
+     chaque construction : une catégorie qui se remplit revient d'elle-même.
+     Si le comptage échoue, on garde la liste entière — mieux vaut un sitemap
+     trop long qu'un sitemap vide. */
+  let comptes = null;
+  try {
+    comptes = await compterFichesPubliees(cats.map((c) => c && c.name).filter(Boolean));
+  } catch (err) {
+    console.error('[sitemap] catégories : comptage impossible, liste complète :', err && err.message ? err.message : err);
+  }
+
   const urls = [];
   /* Pas de lastmod : une page catégorie est une liste de fiches, elle n'a pas
      de « dernière modification » propre — et updatedAt n'en est pas une. */
   for (const c of cats) {
     if (!c || !c.slug) continue;
+    if (comptes && !(comptes.get(c.name) > 0)) continue;
     const loc = buildCategoryPublicUrl(c, { req });
     if (!loc) continue;
     urls.push({ loc, lastmod: '' });
@@ -268,6 +284,16 @@ async function buildVehiclesUrls(req, baseUrl, dbConnected) {
   VEHICLE_URLS_EN_COURS = (async () => {
     const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
     const urls = [];
+    /* Une URL, une entrée (plan de reprise SEO du 14/09/2026, action A4.6).
+       Les marques et modèles sont groupés tels qu'écrits dans les fiches :
+       « AUDI » et « Audi », « A4 » et « a4 » font deux groupes mais le même
+       slug — 471 URL sortaient deux fois sur 8 281. */
+    const dejaListees = new Set();
+    const ajouter = (path) => {
+      if (dejaListees.has(path)) return;
+      dejaListees.add(path);
+      urls.push({ loc: resolveUrl(path), lastmod: '' });
+    };
     try {
       const vehicleService = require('../services/vehicleLandingService');
       const Category = require('../models/Category');
@@ -313,17 +339,17 @@ async function buildVehiclesUrls(req, baseUrl, dbConnected) {
 
       for (const make of makes) {
         if (!(parMarque.get(make.nameLower) > 0)) continue;
-        urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}`), lastmod: '' });
+        ajouter(`/pieces-auto/${make.slug}`);
         for (const model of (make.models || [])) {
           const cats = parCouple.get(make.nameLower + '|' + model.nameLower);
           if (!cats) continue;
-          urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}`), lastmod: '' });
+          ajouter(`/pieces-auto/${make.slug}/${model.slug}`);
           const slugs = cats
             .map((nom) => slugParNomCategorie.get(nom))
             .filter(Boolean)
             .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
           for (const cat of slugs) {
-            urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}/${cat.slug}`), lastmod: '' });
+            ajouter(`/pieces-auto/${make.slug}/${model.slug}/${cat.slug}`);
           }
         }
       }
