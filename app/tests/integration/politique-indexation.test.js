@@ -649,6 +649,35 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     assert.ok(liens(de).includes(`/de/blog/${S.K_AUDI}`), 'le lien vers un article gardé reste');
   });
 
+  await t.test('description de fiche : un lien vers un 410 perd sa balise, sous ses trois écritures', async () => {
+    const origine = await Product.findById(DQ200._id).select('description').lean();
+    const formes = [`href="/blog/${S.G_P0726}"`, `href="https://autoliva.com/blog/${S.G_HILUX}/"`, `href="https://www.carpartsfrance.fr/blog/${S.G_CODES}"`];
+    const description = `<p>Voir le <a ${formes[0]}>code P0726</a>, <a ${formes[1]}>le différentiel Hilux</a> et `
+      + `<a ${formes[2]}>les codes DSG</a> ; guide gardé : <a href="/blog/${S.K_DQ200}">accumulateur DQ200</a>.</p>`;
+    await Product.updateOne({ _id: DQ200._id }, { $set: { description } });
+    try {
+      const versUn410 = (html) => [...html.matchAll(/<a\b[^>]*>/g)].map((m) => m[0])
+        .filter((a) => [S.G_P0726, S.G_HILUX, S.G_CODES].some((s) => a.includes(s)));
+      activer('');
+      const ouverte = versUn410((await get(urlFr(DQ200))).corps);
+      /* L'ancien domaine est déjà réécrit en autoliva.com avant l'affichage :
+         on vérifie que chaque article en 410 y a bien son lien. */
+      for (const slug of [S.G_P0726, S.G_HILUX, S.G_CODES]) {
+        assert.ok(ouverte.some((a) => a.includes(slug)), `jeu d’essai : la description affichée mène à ${slug}`);
+      }
+      activer('gone');
+      const fermee = (await get(urlFr(DQ200))).corps;
+      assert.deepEqual(versUn410(fermee), [], 'la fiche ne mène plus à un 410');
+      for (const texte of ['code P0726', 'le différentiel Hilux', 'les codes DSG']) assert.ok(fermee.includes(texte), `le texte « ${texte} » reste`);
+      assert.ok(liens(fermee).includes(`/blog/${S.K_DQ200}`), 'le lien vers un article gardé reste');
+    } finally {
+      await Product.updateOne({ _id: DQ200._id }, origine && typeof origine.description === 'string'
+        ? { $set: { description: origine.description } }
+        : { $unset: { description: '' } });
+      activer('');
+    }
+  });
+
   /* ── reference ────────────────────────────────────────────────────────── */
 
   await t.test('reference : toute /reference sort, sauf les 3 gardées, dans toutes les casses ; canonique en majuscules', async () => {
@@ -964,5 +993,34 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     assert.equal((await choix(ASY.sku)).indexOverride, undefined);
     estNoindex(await get(urlFr(ASY)), 'ASY revenue à la politique');
     activer('');
+  });
+
+  await t.test('admin : le choix d’indexation posé à la création d’une fiche est enregistré', async () => {
+    activer('products');
+    const commun = {
+      name: 'Boîte de transfert créée dans l’admin', category: TRANSFERT.category, price: '1290', isPublished: 'true',
+      imageUrl: '/images/test.jpg', specType: 'Boîte de transfert', badgeTopLeft: 'Garantie 12 mois', badgeCondition: 'Reconditionné',
+      shortDescription: 'Boîte de transfert reconditionnée.', description: 'Boîte de transfert reconditionnée, testée.',
+    };
+    const creer = async (n, seoIndexOverride) => {
+      const res = fausseReponse();
+      await admin.postAdminCreateProduct({
+        body: { ...commun, slug: `boite-transfert-creee-admin-${n}`, sku: `TEST-ADMIN-${n}`, seoIndexOverride },
+        session: { admin: { adminUserId: null } },
+      }, res, (e) => { throw e; });
+      assert.ok(res.redirection, `création refusée : ${res.options && res.options.errorMessage}`);
+      return Product.findOne({ sku: `TEST-ADMIN-${n}` }).lean();
+    };
+    try {
+      const retiree = await creer(1, 'noindex');
+      assert.equal(retiree.seo.indexOverride, 'noindex', '« Retirée de Google » choisi dès la création');
+      estNoindex(await get(`/product/${retiree.slug}/`), 'fiche créée « Retirée de Google »');
+      const auto = await creer(2, '');
+      assert.equal((auto.seo || {}).indexOverride, undefined, '« Automatique » : rien de plus écrit qu’avant');
+      estIndexable(await get(`/product/${auto.slug}/`), 'fiche créée en automatique');
+    } finally {
+      await Product.deleteMany({ sku: { $in: ['TEST-ADMIN-1', 'TEST-ADMIN-2'] } });
+      activer('');
+    }
   });
 });
