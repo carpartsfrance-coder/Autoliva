@@ -41,6 +41,10 @@ const brand = require('../config/brand');
 const sourcingStatus = require('../config/sourcingStatus');
 const vatScheme = require('../services/vatScheme');
 const purchaseInvoice = require('../services/purchaseInvoice');
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.7) :
+   choix d'indexation fiche par fiche, et fiches nées en noindex quand elles
+   arrivent par lot d'import. */
+const seoIndexPolicy = require('../services/seoIndexPolicy');
 
 const ADMIN_LOGIN_BUCKETS = new Map();
 const ADMIN_RESET_BUCKETS = new Map();
@@ -7460,6 +7464,7 @@ async function postAdminCreateProduct(req, res, next) {
       videoUrl: getTrimmedString(req.body.videoUrl),
       metaTitle: getTrimmedString(req.body.metaTitle),
       metaDescription: getTrimmedString(req.body.metaDescription),
+      seoIndexOverride: seoIndexPolicy.normaliserOverride(req.body.seoIndexOverride),
       consigneEnabled: req.body.consigneEnabled === 'on' || req.body.consigneEnabled === 'true',
       consigneChargeUpfront: req.body.consigneChargeUpfront === 'on' || req.body.consigneChargeUpfront === 'true',
       consigneAmount: getTrimmedString(req.body.consigneAmount),
@@ -7764,6 +7769,8 @@ async function postAdminCreateProduct(req, res, next) {
       seo: {
         metaTitle: form.metaTitle,
         metaDescription: form.metaDescription,
+        /* Rien d'écrit tant que le choix reste « Automatique ». */
+        ...(form.seoIndexOverride ? { indexOverride: form.seoIndexOverride } : {}),
       },
     };
 
@@ -7956,6 +7963,7 @@ async function getAdminEditProductPage(req, res, next) {
         videoUrl: product.media && product.media.videoUrl ? product.media.videoUrl : '',
         metaTitle: product.seo && product.seo.metaTitle ? product.seo.metaTitle : '',
         metaDescription: product.seo && product.seo.metaDescription ? product.seo.metaDescription : '',
+        seoIndexOverride: seoIndexPolicy.normaliserOverride(product.seo && product.seo.indexOverride),
         consigneEnabled: !!(product.consigne && product.consigne.enabled),
         consigneAmount: formatPriceForInput(product.consigne && Number.isFinite(product.consigne.amountCents) ? product.consigne.amountCents : 0),
         consigneDelayDays: String(product.consigne && Number.isFinite(product.consigne.delayDays) ? product.consigne.delayDays : 30),
@@ -8005,6 +8013,7 @@ async function getAdminEditProductPage(req, res, next) {
       selectedInfoBlockIds,
       compatIndex,
       productId: String(product._id),
+      seoIndexState: seoIndexPolicy.etatProduitPourAdmin(product),
       latestAiDraftJob: buildProductDraftJobView(latestAiDraftJobDoc, { includeDraft: true }),
       ...buildAiProfileViewData(),
     });
@@ -8070,6 +8079,7 @@ async function postAdminUpdateProduct(req, res, next) {
       videoUrl: getTrimmedString(req.body.videoUrl),
       metaTitle: getTrimmedString(req.body.metaTitle),
       metaDescription: getTrimmedString(req.body.metaDescription),
+      seoIndexOverride: seoIndexPolicy.normaliserOverride(req.body.seoIndexOverride),
       consigneEnabled: req.body.consigneEnabled === 'on' || req.body.consigneEnabled === 'true',
       consigneChargeUpfront: req.body.consigneChargeUpfront === 'on' || req.body.consigneChargeUpfront === 'true',
       consigneAmount: getTrimmedString(req.body.consigneAmount),
@@ -8125,7 +8135,7 @@ async function postAdminUpdateProduct(req, res, next) {
       });
     }
 
-    const existing = await Product.findById(productId).select('_id imageUrl slug galleryUrls').lean();
+    const existing = await Product.findById(productId).select('_id imageUrl slug galleryUrls seo.indexOverride').lean();
     if (!existing) {
       cleanupUploadedFiles(req);
 
@@ -8405,6 +8415,10 @@ async function postAdminUpdateProduct(req, res, next) {
 
     const resolvedInfoBlockIds = await resolveInfoBlockIds(req.body.infoBlockIds);
 
+    const indexOverride = Object.prototype.hasOwnProperty.call(req.body, 'seoIndexOverride')
+      ? form.seoIndexOverride
+      : seoIndexPolicy.normaliserOverride(existing.seo && existing.seo.indexOverride);
+
     const updated = await Product.findByIdAndUpdate(
       productId,
       {
@@ -8455,6 +8469,10 @@ async function postAdminUpdateProduct(req, res, next) {
           seo: {
             metaTitle: form.metaTitle,
             metaDescription: form.metaDescription,
+            /* Choix d'indexation (plan SEO A5.7) : `seo` est réécrit en bloc,
+               on repose donc le choix — celui du formulaire, sinon celui déjà
+               en base (une requête qui n'envoie pas le champ ne l'efface pas). */
+            ...(indexOverride ? { indexOverride } : {}),
           },
         },
       },
@@ -11776,6 +11794,15 @@ async function postAdminImportProducts(req, res) {
 
     const ctx = { categoryNames, shippingByName, existingSlugById, infoBlockBySlug, batchSlugs: new Set() };
 
+    /* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.7,
+       décision 3) : un lot de plus de 3 fiches, c'est un catalogue fournisseur
+       importé en masse — ce qui a fait déclasser le site. Quand « products » est
+       active, les fiches CRÉÉES par ce lot naissent hors de Google (en vente,
+       dans le catalogue et le flux Merchant) ; Killian les y remet une à une
+       depuis la fiche. Une fiche seule et le formulaire ne sont pas visés, et
+       une mise à jour par SKU ne touche pas à l'indexation. */
+    const lotHorsIndex = items.length > seoIndexPolicy.SEUIL_IMPORT_LOT && seoIndexPolicy.familleActive('products');
+
     const results = [];
     let created = 0;
     let updated = 0;
@@ -11888,6 +11915,10 @@ async function postAdminImportProducts(req, res) {
         importFieldsApplied.push('images');
       }
       if (importHas(raw, 'stock')) importFieldsApplied.push('stockQty');
+      if (lotHorsIndex) {
+        createData.seo = { ...(createData.seo || {}), indexOverride: 'noindex' };
+        warnings.push('Import en lot : fiche créée hors de Google (noindex). À remettre dans Google depuis la fiche (Indexation Google).');
+      }
 
       try {
         const doc = await Product.create(createData);
@@ -11905,6 +11936,7 @@ async function postAdminImportProducts(req, res) {
           slug: createData.slug,
           id: String(doc._id),
           fields: importFieldsApplied,
+          ...(lotHorsIndex ? { indexation: 'noindex' } : {}),
           warnings,
         });
       } catch (e) {

@@ -391,6 +391,7 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
 
   const seoIndexPolicy = require('../../src/services/seoIndexPolicy');
   const seo = require('../../src/controllers/seoController');
+  const admin = require('../../src/controllers/adminController');
   const Product = require('../../src/models/Product');
   const BlogPost = require('../../src/models/BlogPost');
 
@@ -775,4 +776,92 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     for (const p of [ASY, DM, EDN]) assert.ok(apres.corps.includes(p.slug), `${p.sku} reste dans le flux`);
   });
 
+  /* ── Admin ────────────────────────────────────────────────────────────── */
+
+  function fausseReponse() {
+    const res = { code: 200, payload: null, vue: null, options: null, redirection: null, locals: {} };
+    res.status = (c) => { res.code = c; return res; };
+    res.json = (p) => { res.payload = p; return res; };
+    res.render = (vue, options) => { res.vue = vue; res.options = options; return res; };
+    res.redirect = (a, b) => { res.redirection = b || a; return res; };
+    return res;
+  }
+  const lot = (prefixe, n) => Array.from({ length: n }, (_, i) => ({
+    nom: `Pièce d'import ${prefixe} ${i + 1}`, sku: `IMP-${prefixe}-${i + 1}`, prix_ttc: 199, categorie: 'Autre', statut: 'brouillon',
+  }));
+  async function importer(items) {
+    const res = fausseReponse();
+    await admin.postAdminImportProducts({ body: items, session: { admin: { adminUserId: null } } }, res);
+    assert.equal(res.payload && res.payload.ok, true, JSON.stringify(res.payload));
+    return res.payload;
+  }
+  const choix = async (sku) => ((await Product.findOne({ sku }).lean()) || {}).seo || {};
+
+  await t.test('admin : un lot de plus de 3 fiches importé avec « products » active naît hors de Google', async () => {
+    activer('products');
+    const r = await importer(lot('A', 4));
+    assert.equal(r.summary.created, 4);
+    for (const res of r.results) assert.equal(res.indexation, 'noindex', res.sku);
+    for (let i = 1; i <= 4; i++) assert.equal((await choix(`IMP-A-${i}`)).indexOverride, 'noindex');
+
+    const trois = await importer(lot('B', 3));
+    assert.equal(trois.summary.created, 3);
+    for (let i = 1; i <= 3; i++) assert.equal((await choix(`IMP-B-${i}`)).indexOverride, undefined, '3 fiches : pas un lot');
+
+    activer('blog');
+    await importer(lot('C', 4));
+    for (let i = 1; i <= 4; i++) assert.equal((await choix(`IMP-C-${i}`)).indexOverride, undefined, '« products » coupée : rien');
+
+    /* Une mise à jour par SKU ne touche pas à l'indexation. */
+    activer('products');
+    await importer([...lot('B', 3), ...lot('D', 1)].map((it) => ({ ...it, prix_ttc: 249 })));
+    for (let i = 1; i <= 3; i++) assert.equal((await choix(`IMP-B-${i}`)).indexOverride, undefined, `IMP-B-${i} mise à jour`);
+    assert.equal((await choix('IMP-D-1')).indexOverride, 'noindex', 'la fiche créée par ce lot de 4');
+  });
+
+  await t.test('admin : le choix d’indexation se lit, s’enregistre et passe devant la liste du plan', async () => {
+    activer('products');
+    const edition = fausseReponse();
+    await admin.getAdminEditProductPage({ params: { productId: String(ASY._id) }, session: { admin: { adminUserId: null } }, query: {} }, edition, (e) => { throw e; });
+    assert.equal(edition.vue, 'admin/product');
+    assert.equal(edition.options.form.seoIndexOverride, '');
+    assert.equal(edition.options.seoIndexState.code, 'noindex-liste');
+
+    /* Le formulaire rend le sélecteur, sur l'état de la fiche. */
+    const ejs = require('ejs');
+    const vues = path.join(__dirname, '..', '..', 'src', 'views');
+    const source = fs.readFileSync(path.join(vues, 'admin', 'product.ejs'), 'utf8');
+    const debut = source.indexOf('<%# Indexation fiche par fiche');
+    const fin = source.indexOf('</section>', debut);
+    const fragment = ejs.render(source.slice(debut, fin), { form: { seoIndexOverride: 'index' }, seoIndexState: edition.options.seoIndexState });
+    assert.match(fragment, /<select[^>]*name="seoIndexOverride"/);
+    assert.match(fragment, /<option value="index" selected>/);
+    assert.match(fragment, /data-seo-index-etat="noindex-liste"/);
+
+    const corps = {
+      name: ASY.name, slug: ASY.slug, sku: ASY.sku, category: ASY.category, price: '4990', isPublished: 'true',
+      imageUrl: '/images/test.jpg', specType: 'Moteur', badgeTopLeft: 'Garantie 12 mois', badgeCondition: 'Reconditionné',
+      shortDescription: 'Moteur reconditionné.', description: 'Moteur reconditionné, testé.', seoIndexOverride: 'index',
+    };
+    const enregistrer = async (body) => {
+      const res = fausseReponse();
+      await admin.postAdminUpdateProduct({ params: { productId: String(ASY._id) }, body, session: { admin: { adminUserId: null } } }, res, (e) => { throw e; });
+      assert.ok(res.redirection, `enregistrement refusé : ${res.options && res.options.errorMessage}`);
+    };
+    await enregistrer(corps);
+    assert.equal((await choix(ASY.sku)).indexOverride, 'index');
+    estIndexable(await get(urlFr(ASY)), 'ASY remise dans Google depuis l’admin');
+
+    /* Un enregistrement qui n'envoie pas le champ ne l'efface pas. */
+    const sansChamp = { ...corps };
+    delete sansChamp.seoIndexOverride;
+    await enregistrer(sansChamp);
+    assert.equal((await choix(ASY.sku)).indexOverride, 'index');
+
+    /* « Automatique » : la liste du plan reprend la main. */
+    await enregistrer({ ...corps, seoIndexOverride: '' });
+    assert.equal((await choix(ASY.sku)).indexOverride, undefined);
+    estNoindex(await get(urlFr(ASY)), 'ASY revenue à la politique');
+    activer('');
+  });
 });
