@@ -82,6 +82,8 @@ async function get(chemin, { entetes = {} } = {}) {
     location: r.headers.get('location'),
     xRobotsTag: r.headers.get('x-robots-tag'),
     type: (r.headers.get('content-type') || '').split(';')[0],
+    cacheControl: r.headers.get('cache-control'),
+    setCookie: r.headers.get('set-cookie'),
     corps: await r.text(),
   };
 }
@@ -448,6 +450,20 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     /* Toutes les écritures de l'adresse. */
     for (const variante of [`/blog/${S.G_P0726}/`, `/BLOG/${S.G_P0726.toUpperCase()}`]) {
       assert.equal((await get(variante)).status, 410, variante);
+    }
+    /* Un visiteur qui a une session reçoit son cookie à chaque réponse
+       (rolling) : la page 410 qui le porte ne doit jamais se déclarer
+       « public » — un cache partagé la resservirait, cookie compris, à
+       d'autres visiteurs. */
+    const UA_HUMAIN = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36';
+    const entree = await get('/de/blog', { entetes: { 'User-Agent': UA_HUMAIN } });
+    assert.ok(entree.setCookie, 'jeu d’essai : une page allemande ouvre une session au visiteur');
+    const cookie = entree.setCookie.split(';')[0];
+    for (const url of [`/blog/${S.G_P0726}`, `/de/blog/${S.G_P0726}`]) {
+      const r = await get(url, { entetes: { 'User-Agent': UA_HUMAIN, Cookie: cookie } });
+      assert.equal(r.status, 410, url);
+      assert.ok(!(r.setCookie && /public/i.test(r.cacheControl || '')),
+        `${url} : « ${r.cacheControl} » avec un cookie de session — un cache partagé le distribuerait`);
     }
     /* L'ancienne adresse à la racine ne redirige plus vers un 410. */
     assert.notEqual((await get(`/${S.G_P0726}`)).status, 301);

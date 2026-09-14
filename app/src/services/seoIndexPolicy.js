@@ -336,11 +336,14 @@ function middleware(req, res, next) {
 
 /* 410 Gone : un article publié après la chute, que rien ne peut sauver. Une
    page courte, qui renvoie vers le blog (jamais une redirection : rediriger un
-   article supprimé vers /blog ou l'accueil serait un soft 404). */
+   article supprimé vers /blog ou l'accueil serait un soft 404).
+   Pas de « Cache-Control: public » : la page passe après la session, qui
+   renvoie son cookie à chaque réponse (rolling) — un cache partagé qui la
+   garderait resservirait la session d'un visiteur aux suivants. Elle garde
+   donc l'en-tête de cache de toutes les pages HTML du site. */
 function repondreDisparu(req, res, decision) {
   const de = decision.lang === 'de';
   marquerNoindex(res);
-  res.set('Cache-Control', 'public, max-age=600');
   return res.status(410).render('errors/410', {
     title: de ? 'Artikel nicht mehr verfügbar' : 'Article retiré',
     metaRobots: ROBOTS_NOINDEX,
