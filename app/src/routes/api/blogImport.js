@@ -13,6 +13,22 @@
  *   - Coût contexte réduit côté agent (pas de markdown 12-20 Ko dans le prompt)
  *   - Server-to-server propre (Bearer token, audit log, validation stricte)
  *   - Compatible avec mode upsert pour ré-exécutions idempotentes
+ *
+ * ── Garde-fous (plan de reprise SEO du 14/09/2026, action A4.1) ─────────────
+ *
+ * Google a déclassé tout le domaine le 31/08/2026 : le site publiait des
+ * articles à l'échelle industrielle (1 040 en 104 jours, 325 en deux jours
+ * début juin), et 134 de plus sont arrivés par cette API les 05 et 06/09,
+ * depuis des machines que personne n'a identifiées. Désormais :
+ *   1. l'API ne crée que des BROUILLONS — un humain relit et publie depuis
+ *      l'admin. BLOG_IMPORT_ALLOW_PUBLISH=true (exactement « true ») rend la
+ *      publication, au redémarrage du service ;
+ *   2. un article PUBLIÉ n'est jamais réécrit : upsert → 409 (voir
+ *      blogPostService.upsertBlogPost) ;
+ *   3. 5 imports au plus par 24 heures glissantes, tous modes confondus. Au-delà,
+ *      429 : un lot de 50 articles n'est plus possible, même avec le jeton ;
+ *   4. une ligne d'audit par import, et une par refus — elles servent aussi de
+ *      compteur, la limite tient donc entre deux redémarrages et deux instances.
  */
 
 const express = require('express');
@@ -20,12 +36,61 @@ const path = require('path');
 const fs = require('fs');
 const { URL } = require('url');
 const dns = require('dns').promises;
+const mongoose = require('mongoose');
 
 const blogPostService = require('../../services/blogPostService');
 const audit = require('../../services/auditLogger');
+const AuditLog = require('../../models/AuditLog');
 const { getSiteUrlFromEnv } = require('../../services/siteUrl');
 
 const router = express.Router();
+
+/* ─── Garde-fous de publication ──────────────────────────────────────────── */
+
+const PLAFOND_IMPORTS = 5;
+const FENETRE_PLAFOND_MS = 24 * 60 * 60 * 1000;
+/* L'action des imports RÉUSSIS : c'est elle que compte le plafond. Les refus
+   ont la leur, sinon une série de refus bloquerait les imports légitimes. */
+const ACTION_IMPORT = 'blog.import-from-url';
+const ACTION_REFUS = 'blog.import-from-url.refus';
+
+/* Strictement « true » : un bouton qu'on tape à la main sur Render ne doit pas
+   s'armer sur un « 1 » ou un « yes » laissé par erreur. Lu à chaque requête ;
+   un changement prend effet au redémarrage (« Save and deploy »). */
+function publicationAutorisee() {
+  return String(process.env.BLOG_IMPORT_ALLOW_PUBLISH || '').trim() === 'true';
+}
+
+function estDemande(valeur) {
+  return valeur === true || valeur === 'true' || valeur === 'on';
+}
+
+async function auditerRefus(req, raison, details) {
+  await audit.log({
+    req,
+    action: ACTION_REFUS,
+    entityType: 'blog_post',
+    entityId: details && details.slug ? String(details.slug) : '',
+    after: { raison, tokenId: req.blogImportTokenId, ...(details || {}) },
+  });
+}
+
+/**
+ * Nombre d'imports réussis dans les 24 dernières heures, et le moment où la
+ * place la plus ancienne se libère (pour Retry-After).
+ */
+async function occupationDuPlafond(maintenant = Date.now()) {
+  const depuis = new Date(maintenant - FENETRE_PLAFOND_MS);
+  const filtre = { action: ACTION_IMPORT, createdAt: { $gte: depuis } };
+  const nombre = await AuditLog.countDocuments(filtre);
+  let libreDansSec = 0;
+  if (nombre >= PLAFOND_IMPORTS) {
+    const plusAncien = await AuditLog.findOne(filtre).sort({ createdAt: 1 }).select('createdAt').lean();
+    const libreA = plusAncien ? new Date(plusAncien.createdAt).getTime() + FENETRE_PLAFOND_MS : maintenant + FENETRE_PLAFOND_MS;
+    libreDansSec = Math.max(1, Math.ceil((libreA - maintenant) / 1000));
+  }
+  return { nombre, libreDansSec };
+}
 
 /* ─── Logger ─────────────────────────────────────────────────────────── */
 
@@ -332,6 +397,42 @@ router.post('/import-from-url', requireBlogImportToken, express.json({ limit: '2
     // Si publishedAt n'est pas fourni mais isPublished=true, le service utilisera now
   };
 
+  /* Brouillon imposé. « À la une » et « accueil » aussi : un brouillon marqué
+     « à la une » retirait ce statut à l'article en ligne (createBlogPost délaisse
+     tous les autres) — une modification du site public par la bande. */
+  const publier = publicationAutorisee();
+  const publicationDemandee = estDemande(metadata.isPublished);
+  if (!publier) {
+    data.isPublished = false;
+    data.publishedAt = null;
+    data.isFeatured = false;
+    data.isHomeFeatured = false;
+    if (publicationDemandee || estDemande(metadata.isFeatured) || estDemande(metadata.isHomeFeatured)) {
+      warnings.push('Publication désactivée sur ce serveur : article enregistré en BROUILLON, à relire et publier depuis l’admin.');
+    }
+  }
+
+  /* Plafond : compté en base, sur les lignes d'audit des imports réussis. */
+  if (mongoose.connection.readyState !== 1) {
+    res.set('Retry-After', '120');
+    return fail(res, 'Base de données indisponible, réessayer plus tard.', 503);
+  }
+  try {
+    const { nombre, libreDansSec } = await occupationDuPlafond();
+    if (nombre >= PLAFOND_IMPORTS) {
+      await auditerRefus(req, 'plafond', { slug: metadata.slug, mode, imports24h: nombre });
+      res.set('Retry-After', String(libreDansSec));
+      return fail(res, `Plafond atteint : ${PLAFOND_IMPORTS} imports par 24 heures au plus.`, 429, {
+        plafond: PLAFOND_IMPORTS,
+        imports24h: nombre,
+        libreDansSec,
+      });
+    }
+  } catch (err) {
+    console.error('[blogImport] Comptage du plafond impossible :', err && err.message);
+    return fail(res, 'Plafond d’import invérifiable, réessayer plus tard.', 503);
+  }
+
   // Création / Upsert
   try {
     let result;
@@ -350,21 +451,26 @@ router.post('/import-from-url', requireBlogImportToken, express.json({ limit: '2
       result = { post: created.post, created: true, updated: false };
     }
 
-    // Audit log (best-effort, n'échoue pas la requête)
+    /* UNE ligne d'audit par import — c'est aussi le compteur du plafond, d'où
+       l'action constante. Best-effort : l'article est déjà enregistré. */
     try {
       await audit.log({
         req,
-        action: 'blog.import-from-url',
+        action: ACTION_IMPORT,
         entityType: 'blog_post',
         entityId: String(result.post._id),
         after: {
           slug: result.post.slug,
           mode,
+          created: result.created,
+          updated: result.updated,
           source: 'api-import',
           tokenId: req.blogImportTokenId,
           markdownUrl: urlObj.toString(),
           markdownBytes: Buffer.byteLength(markdown, 'utf8'),
           isPublished: result.post.isPublished,
+          publicationAutorisee: publier,
+          brouillonImpose: !publier && publicationDemandee,
           warnings,
         },
       });
@@ -386,6 +492,8 @@ router.post('/import-from-url', requireBlogImportToken, express.json({ limit: '2
     }, result.created ? 201 : 200);
   } catch (err) {
     if (err instanceof blogPostService.ConflictError) {
+      const raison = (err.details && err.details.raison) || 'slug_existant';
+      await auditerRefus(req, raison, { slug: (err.details && err.details.slug) || metadata.slug, mode });
       return fail(res, err.message, 409, err.details);
     }
     if (err instanceof blogPostService.ValidationError) {
