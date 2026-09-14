@@ -671,6 +671,13 @@ app.use('/uploads/sav', express.static(path.join(__dirname, '..', '..', 'uploads
 // gêner un visiteur réel, même derrière un NAT d'entreprise/mobile. On épargne
 // le back-office (usage intensif) et les moteurs de recherche légitimes (SEO).
 // NB : coupe les bursts agressifs, pas un scraper LENT — pour ça, Cloudflare.
+//
+// AdsBot-Google, Storebot-Google et Google-InspectionTool ne contiennent PAS
+// « googlebot » : ils passaient sous la limite. Or AdsBot contrôle les pages
+// d'arrivée des annonces (un 429 = « destination inaccessible » côté Ads),
+// Storebot les fiches Shopping, et Google compte tout 429 comme une erreur
+// serveur (plan de reprise SEO du 14/09/2026, action A4.3). Même règle que
+// pour Googlebot : exemptés sur leur User-Agent.
 const publicSiteLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 300,
@@ -680,7 +687,7 @@ const publicSiteLimiter = rateLimit({
     const p = (req.path || '').toLowerCase();
     if (p.startsWith('/admin') || p.startsWith('/comptable') || p.startsWith('/media') || p.startsWith('/uploads')) return true;
     const ua = (req.headers['user-agent'] || '').toLowerCase();
-    return /googlebot|bingbot|slurp|duckduckbot|applebot|yandexbot|facebookexternalhit|twitterbot|linkedinbot/.test(ua);
+    return /googlebot|adsbot-google|storebot-google|google-inspectiontool|bingbot|slurp|duckduckbot|applebot|yandexbot|facebookexternalhit|twitterbot|linkedinbot/.test(ua);
   },
   handler: (req, res) => res.status(429).type('text/plain').send('Trop de requêtes, réessayez dans une minute.'),
 });

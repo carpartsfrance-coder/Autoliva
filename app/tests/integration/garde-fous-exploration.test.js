@@ -572,4 +572,25 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
     assert.ok(page, 'le JSON-LD WebPage reste');
     assert.equal(page.dateModified, undefined);
   });
+
+  /* ── A4.3 (suite) — le limiteur GÉNÉRAL du site (300 pages / min) ─────────
+     Il épargnait Googlebot et Bingbot, mais ni AdsBot-Google (qui contrôle
+     les pages d'arrivée des annonces) ni Storebot-Google (Shopping) : sur un
+     compteur partagé, un 429 pouvait tomber sur eux. Dernier bloc du fichier :
+     sans le correctif, il épuise le compteur de 127.0.0.1. */
+  await t.test('A4.3 limiteur général : AdsBot-Google et Storebot-Google ne reçoivent jamais de 429', async () => {
+    const robots = [
+      'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36 (compatible; AdsBot-Google-Mobile; +http://www.google.com/mobile/adsbot.html)',
+      'AdsBot-Google (+http://www.google.com/adsbot.html)',
+      'Mozilla/5.0 (X11; Linux x86_64; Storebot-Google/1.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36',
+    ];
+    const statuts = new Map();
+    for (let i = 0; i < 330; i++) {
+      /* /en/… : une redirection 301 sans base ni rendu, derrière le limiteur. */
+      const r = await fetch(`${base}/en/contact`, { redirect: 'manual', headers: { 'User-Agent': robots[i % robots.length] } });
+      await r.arrayBuffer();
+      statuts.set(r.status, (statuts.get(r.status) || 0) + 1);
+    }
+    assert.deepEqual([...statuts.keys()], [301], `statuts reçus : ${JSON.stringify([...statuts])}`);
+  });
 });
