@@ -535,7 +535,7 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
     isPublished: { $ne: false },
     'localizations.de.translatedAt': { $ne: null },
   })
-    .select('_id slug name imageUrl galleryUrls localizations.de.translatedAt localizations.de.slug localizations.de.name')
+    .select('_id slug sku name imageUrl galleryUrls seo.indexOverride localizations.de.translatedAt localizations.de.slug localizations.de.name')
     .sort({ updatedAt: -1 })
     .lean();
 
@@ -558,7 +558,15 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
         if (typeof u === 'string' && u.trim()) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(u.trim(), imgTitle)));
       }
     }
-    urls.push({ loc, lastmod: last, images, imageTitle: imgTitle || '' });
+    urls.push({
+      loc,
+      lastmod: last,
+      images,
+      imageTitle: imgTitle || '',
+      /* De quoi appliquer la famille « products » : la page allemande d'une
+         fiche retirée sort de Google avec elle (voir getSitemapProductsDe). */
+      produit: { _id: p._id, sku: p.sku, seo: p.seo },
+    });
   }
   return urls;
 }
@@ -733,7 +741,15 @@ const RETRAITS = {
   },
   async products(req, baseUrl, dbConnected) {
     const toutes = await buildProductsUrlsToutes(req, baseUrl, dbConnected);
-    return toutes.filter((u) => seoIndexPolicy.produitNoindex(u.produit));
+    const fiches = toutes.filter((u) => seoIndexPolicy.produitNoindex(u.produit));
+    /* La page allemande d'une fiche retirée sort avec elle (getProduct décide
+       sur l'_id, dans les deux langues). Quand « de » est déjà allumée, elle
+       était sortie avant, avec son propre retrait : la redater au jour de
+       « products » annoncerait un changement qui n'a pas eu lieu. */
+    if (seoIndexPolicy.familleActive('de')) return fiches;
+    const allemandes = (await buildProductUrlsDe(req, baseUrl, dbConnected))
+      .filter((u) => seoIndexPolicy.produitNoindex(u.produit));
+    return fiches.concat(allemandes);
   },
 };
 
@@ -897,8 +913,14 @@ async function getSitemapProductsDe(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
-    const urls = await buildProductUrlsDe(req, baseUrl, dbConnected);
-    if (servirSitemapDeRetire(req, res, next, urls)) return undefined;
+    const toutes = await buildProductUrlsDe(req, baseUrl, dbConnected);
+    /* « de » allumée : le sitemap retiré sert toute sa liste (tout y est en
+       noindex). Sinon, famille « products » : la page allemande d'une fiche
+       retirée est servie en noindex — un sitemap ne la propose plus. */
+    if (servirSitemapDeRetire(req, res, next, toutes)) return undefined;
+    const urls = seoIndexPolicy.familleActive('products')
+      ? toutes.filter((u) => !seoIndexPolicy.produitNoindex(u.produit))
+      : toutes;
     return sendXml(res, renderUrlset(urls, { withImages: true }));
   } catch (err) {
     return next(err);

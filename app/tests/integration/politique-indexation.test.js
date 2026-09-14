@@ -747,6 +747,24 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     const fichesRetirees = entrees((await get('/sitemap-retraits-products.xml')).corps);
     for (const p of [ASY, DM, EDN]) assert.equal(fichesRetirees.get(urlFr(p)), bascule, `${p.sku} dans le retrait`);
     assert.ok(!fichesRetirees.has(urlFr(DQ200)));
+    /* Leur page allemande est servie en noindex elle aussi (getProduct décide
+       sur l'_id, dans les deux langues) : un sitemap ne doit pas la proposer.
+       Elle quitte sitemap-products-de et rejoint le retrait des fiches. */
+    const fichesDe = entrees((await get('/sitemap-products-de.xml')).corps);
+    assert.ok(fichesDe.has(urlDe(DQ200)) && fichesDe.has(urlDe(ALV_BX)), 'les fiches gardées restent dans sitemap-products-de');
+    for (const p of [ASY, DM, EDN]) {
+      assert.ok(!fichesDe.has(urlDe(p)), `${p.sku} : page allemande en noindex encore proposée par sitemap-products-de`);
+      assert.equal(fichesRetirees.get(urlDe(p)), bascule, `${p.sku} : page allemande dans le retrait`);
+    }
+    assert.ok(!fichesRetirees.has(urlDe(DQ200)) && !fichesRetirees.has(urlDe(ALV_BX)));
+    /* « de » déjà allumée : la page allemande était sortie avant, avec son
+       propre retrait — la redater au jour de « products » serait faux. */
+    activer('de,products', { de: jour(-9), products: bascule });
+    const avecDe = entrees((await get('/sitemap-retraits-products.xml')).corps);
+    assert.ok(avecDe.has(urlFr(DM)) && !avecDe.has(urlDe(DM)), 'retraits-products, « de » allumée : sans les pages allemandes');
+    activer('');
+    const toutesDe = entrees((await get('/sitemap-products-de.xml')).corps);
+    for (const p of [ASY, DM, EDN, DQ200]) assert.ok(toutesDe.has(urlDe(p)), `products coupée : ${p.sku} revient dans sitemap-products-de`);
 
     /* Pas de sitemap de retrait des fiches tant que « products » est coupée. */
     activer('gone,blog,reference,pieces-auto,de');
