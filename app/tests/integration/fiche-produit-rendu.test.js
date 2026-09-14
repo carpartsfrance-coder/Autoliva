@@ -238,6 +238,11 @@ test('fiche produit rendue par l’application — description et allégations (
     const rDek = await get(`/de/produits/${encodeURIComponent(DEK.localizations.de.slug)}-${DEK._id}`);
     assert.equal(rDek.status, 200);
     assert.ok(!ALLEGATIONS['ISO 9001'].test(toutCeQuiEstAffirme(rDek.html)), 'ISO 9001 sur la fiche allemande');
+    /* Ni l'atelier « à nous » du gabarit allemand (« Von unseren Werkstätten
+       aus », sous la photo de chargement) : la légende reste, réécrite. */
+    const deTexte = texte(rDek.html);
+    assert.ok(!/unseren Werkstätten|unserer Werkstatt\b/.test(deTexte), 'atelier « à nous » sur la fiche allemande');
+    assert.ok(deTexte.includes('Von unseren Partnerwerkstätten aus'), 'la légende de la photo doit rester, réécrite');
   });
 
   await t.test('(e) aucune allégation non prouvée sur les 10 fiches — texte, meta, JSON-LD', () => {
@@ -321,6 +326,53 @@ test('fiche produit rendue par l’application — description et allégations (
       delete process.env.SHOW_PRODUCT_DESCRIPTION;
     }
     assert.ok(sectionDescription(await getFiche(DQ200)), 'le bloc revient sans la variable');
+  });
+
+  await t.test('blocs « fin de description » : filtrés, et jamais sans la description', async () => {
+    /* faf510d remet ces blocs à l'écran avec la description. Un bloc est
+       partagé par des centaines de fiches : sa garantie et son « nos ateliers »
+       doivent passer par le même filtre que la fiche. Et là où la description
+       est retenue (DM, interrupteur), la section entière reste absente — le
+       retour arrière « off » rend la page d'avant, sans titre orphelin. */
+    const blocId = new mongoose.Types.ObjectId();
+    await db.collection('infoblocks').insertOne({
+      _id: blocId,
+      title: 'Conditions — Boîtes reconditionnées',
+      slug: 'conditions-test-a3',
+      content: 'Chaque boîte est contrôlée dans nos ateliers avant expédition.\n\nGarantie : 1 an pièces et main d’œuvre.',
+      position: 'description_end',
+      isActive: true,
+      autoCategories: [],
+      sortOrder: 0,
+    });
+    const dek = { ...versMongo({ ...DEK, _id: new mongoose.Types.ObjectId().toHexString(), slug: `${DEK.slug}-bloc` }), infoBlockIds: [blocId] };
+    const dm = { ...versMongo({ ...DM, _id: new mongoose.Types.ObjectId().toHexString(), slug: `${DM.slug}-bloc` }), infoBlockIds: [blocId] };
+    await db.collection('products').insertMany([dek, dm]);
+    try {
+      const section = sectionDescription((await get(`/product/${dek.slug}/`)).html);
+      assert.ok(section, 'DEK : la section description doit exister');
+      const bloc = texte(section);
+      assert.ok(bloc.includes('Conditions — Boîtes reconditionnées'), 'le bloc doit être rendu');
+      assert.ok(bloc.includes('Chaque boîte est contrôlée chez nos partenaires reconditionneurs avant expédition.'), 'le bloc doit être réécrit');
+      assert.ok(!/nos ateliers/.test(bloc), '« nos ateliers » dans le bloc');
+      assert.ok(!/1 an pièces/.test(bloc), 'garantie 1 an affichée sur une fiche à 24 mois');
+
+      const rDm = await get(`/product/${dm.slug}/`);
+      assert.equal(rDm.status, 200);
+      assert.equal(sectionDescription(rDm.html), null, 'DM : section description rendue pour un seul bloc');
+
+      process.env.SHOW_PRODUCT_DESCRIPTION = 'off';
+      try {
+        const rOff = await get(`/product/${dek.slug}/`);
+        assert.equal(sectionDescription(rOff.html), null, 'off : la section doit disparaître, blocs compris');
+        assert.ok(!texte(rOff.html).includes('Conditions — Boîtes reconditionnées'), 'off : le bloc reste affiché');
+      } finally {
+        delete process.env.SHOW_PRODUCT_DESCRIPTION;
+      }
+    } finally {
+      await db.collection('products').deleteMany({ _id: { $in: [dek._id, dm._id] } });
+      await db.collection('infoblocks').deleteOne({ _id: blocId });
+    }
   });
 
   await t.test('le filtre 3x/4x suit Scalapay : rallumé, la mention revient', async () => {

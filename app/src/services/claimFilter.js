@@ -123,6 +123,11 @@ function familleADescriptionMasquee(product) {
   return Object.prototype.hasOwnProperty.call(table, famille) ? famille : null;
 }
 
+/* Valeurs qui COUPENT l'interrupteur. « off » est la valeur documentée, mais
+   c'est un bouton d'urgence, tapé à la main sur Render : un « false » ou un
+   « 0 » qui ne couperait rien laisserait croire au retour arrière. */
+const INTERRUPTEUR_COUPE = new Set(['off', 'false', '0', 'no', 'non']);
+
 /**
  * Raison pour laquelle le bloc « Description » n'est PAS affiché, ou null.
  *   'interrupteur' — SHOW_PRODUCT_DESCRIPTION=off (retour arrière sans code) ;
@@ -133,7 +138,7 @@ function familleADescriptionMasquee(product) {
  * du service (« Save and deploy » sur Render).
  */
 function motifDescriptionMasquee(product, { lang = 'fr' } = {}) {
-  if (String(process.env.SHOW_PRODUCT_DESCRIPTION || '').trim().toLowerCase() === 'off') return 'interrupteur';
+  if (INTERRUPTEUR_COUPE.has(String(process.env.SHOW_PRODUCT_DESCRIPTION || '').trim().toLowerCase())) return 'interrupteur';
   if (lang !== 'fr') return 'langue';
   const famille = familleADescriptionMasquee(product);
   return famille ? `famille:${famille}` : null;
@@ -152,6 +157,12 @@ const PLURIEL = /^(nos|des)\b/i;
 function partenaire(possessif) {
   return PLURIEL.test(possessif) ? 'nos partenaires reconditionneurs' : 'notre partenaire reconditionneur';
 }
+
+/* « de notre atelier » ne devient « de CHEZ notre partenaire » qu'après un mot
+   de mouvement (« sort de », « part de », « au départ de ») : ailleurs, « chez »
+   est fautif — « passe entre les mains de chez notre partenaire » ne se dit
+   pas. Le mot qui précède est lu dans le texte même (arguments du replace). */
+const MOUVEMENT_AVANT = /(?:^|[^\wÀ-ÿ])(?:sort\w*|part|partent|partir|parti|partie|départ|provien\w*)\s+$/i;
 
 /* L'ordre compte : les formes longues avant les formes génériques. */
 const REECRITURES = [
@@ -177,13 +188,30 @@ const REECRITURES = [
       ? 'quitter les ateliers de nos partenaires reconditionneurs'
       : 'quitter l’atelier de notre partenaire reconditionneur'),
   },
+  /* « notre réseau d'ateliers » : même allégation au pluriel. « …d'ateliers
+     PARTENAIRES » dit déjà vrai : laissé tel quel. */
+  {
+    regle: 'atelierPropre',
+    motif: /\b(dans|de|par) notre réseau d['’]ateliers(?!\s+partenaires)(?![\wÀ-ÿ])/gi,
+    par: (m, prep) => avecCasse(prep, prep.toLowerCase() === 'dans' ? 'chez nos partenaires reconditionneurs' : `${prep.toLowerCase()} nos partenaires reconditionneurs`),
+  },
+  { regle: 'atelierPropre', motif: /\bnotre réseau d['’]ateliers(?!\s+partenaires)(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'nos partenaires reconditionneurs') },
+  /* « Autoliva le reconditionne… dans son atelier » : l'atelier de la marque.
+     Seulement quand la marque est le sujet — « le garagiste le monte dans son
+     atelier » parle du client et reste intact. */
+  {
+    regle: 'atelierPropre',
+    motif: /(\b(?:Autoliva|Car\s?Parts\s?France)\b[^.!?\n]{0,80}?)\bdans son atelier(?![\wÀ-ÿ])/gi,
+    par: (m, debut) => `${debut}chez son partenaire reconditionneur`,
+  },
   {
     regle: 'atelierPropre',
     motif: /\b(dans|de|depuis|par) ((?:notre|nos) (?:atelier|ateliers|usine|usines))(?:\s+(?:spécialisée?s?|partenaires?|de reconditionnement))?(?![\wÀ-ÿ])/gi,
-    par: (m, prep, groupe) => {
+    par: (m, prep, groupe, position, chaine) => {
       const p = prep.toLowerCase();
       const cible = partenaire(groupe);
-      const txt = p === 'dans' ? `chez ${cible}` : p === 'de' ? `de chez ${cible}` : `${p} ${cible}`;
+      const deChez = p === 'de' && MOUVEMENT_AVANT.test(chaine.slice(Math.max(0, position - 30), position));
+      const txt = p === 'dans' ? `chez ${cible}` : deChez ? `de chez ${cible}` : `${p} ${cible}`;
       return avecCasse(prep, txt);
     },
   },
@@ -192,6 +220,13 @@ const REECRITURES = [
     motif: /\b((?:notre|nos) (?:atelier|ateliers|usine|usines))(?:\s+(?:spécialisée?s?|partenaires?|de reconditionnement))?(?![\wÀ-ÿ])/gi,
     par: (m, groupe) => avecCasse(groupe, partenaire(groupe)),
   },
+  /* Même allégation dans le gabarit ALLEMAND : « Von unseren Werkstätten aus »
+     s'affiche sous la photo de chargement de chaque fiche /de. « Partner- »
+     garde la phrase et dit vrai. */
+  { regle: 'atelierPropre', motif: /\bunseren Werkstätten(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unseren Partnerwerkstätten') },
+  { regle: 'atelierPropre', motif: /\bunsere Werkstätten(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unsere Partnerwerkstätten') },
+  { regle: 'atelierPropre', motif: /\bunserer Werkstatt(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unserer Partnerwerkstatt') },
+  { regle: 'atelierPropre', motif: /\bunsere Werkstatt(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unsere Partnerwerkstatt') },
 
   /* Superlatif invérifiable. */
   { regle: 'couvertureLaPlusLongue', motif: /\s*[—–,]?\s*(?:la )?couverture la plus longue du marché(?:\s+sur\s+(?:ce modèle|cette référence|cette pièce))?/gi, par: '' },
@@ -493,7 +528,8 @@ function filtrerFaqs(faqs, ctx) {
 /**
  * Copie de la fiche avec tous les textes AFFICHÉS filtrés : description,
  * description courte (qui sert de meta description et de description JSON-LD),
- * balises SEO, badges, garantie, FAQ, points clés. Ne mute pas l'original.
+ * balises SEO, badges, garantie, FAQ, points clés, blocs d'information. Ne
+ * mute pas l'original.
  */
 function filtrerFiche(product, ctx) {
   if (!product || !ctx || !ctx.regles || !ctx.regles.size) return product;
@@ -519,6 +555,31 @@ function filtrerFiche(product, ctx) {
   }
   if (Array.isArray(out.keyPoints)) out.keyPoints = filtrerListe(out.keyPoints, ctx);
   if (Array.isArray(out.faqs)) out.faqs = filtrerFaqs(out.faqs, ctx);
+  if (out.infoBlocksByPosition && typeof out.infoBlocksByPosition === 'object') {
+    out.infoBlocksByPosition = filtrerBlocsInfo(out.infoBlocksByPosition, ctx);
+  }
+  return out;
+}
+
+/** Blocs d'information (InfoBlock, markdown rendu en HTML) attachés à la fiche.
+ *  faf510d a remis à l'écran ceux de fin de description : un bloc partagé par
+ *  des centaines de fiches (« Garantie : 1 an pièces et main d'œuvre ») ne doit
+ *  pas contredire la garantie de CELLE-CI. Un bloc vidé disparaît. */
+function filtrerBlocsInfo(groupes, ctx) {
+  const visible = (html) => typeof html === 'string' && html.replace(/<[^>]*>/g, '').trim() !== '';
+  const out = {};
+  for (const [position, blocs] of Object.entries(groupes)) {
+    out[position] = Array.isArray(blocs)
+      ? blocs.flatMap((b) => {
+        if (!b || typeof b !== 'object') return [b];
+        const html = filtrer(b.html, ctx);
+        /* Seul un bloc que le FILTRE a vidé disparaît ; un bloc déjà sans
+           contenu reste tel que l'admin l'a voulu. */
+        if (visible(b.html) && !visible(html)) return [];
+        return [{ ...b, title: filtrer(b.title, ctx), html }];
+      })
+      : blocs;
+  }
   return out;
 }
 
@@ -545,6 +606,7 @@ module.exports = {
   filtrer,
   filtrerListe,
   filtrerFaqs,
+  filtrerBlocsInfo,
   filtrerFiche,
   filtrerLanding,
 };

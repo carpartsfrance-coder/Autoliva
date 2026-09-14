@@ -761,11 +761,15 @@
            `descriptionAffichee` (contrôleur) : faux en allemand, pour les copies
            distrimotor (DM-), les 264 fiches Alibaba, ou SHOW_PRODUCT_DESCRIPTION=off.
            Il coupe AUSSI le repli sur product.description : sans lui, une fiche
-           masquée aurait ressorti son texte brut par la ligne ci-dessous. %>
+           masquée aurait ressorti son texte brut par la ligne ci-dessous.
+           Et il coupe la SECTION entière, blocs « fin de description » compris :
+           sans quoi une fiche DM ou une fiche sous interrupteur montrerait un
+           titre « Description » au-dessus d'un seul encadré — et « off » ne
+           ramènerait pas la page d'avant faf510d, qui n'avait aucun des deux. %>
       <% var _descVisible = (typeof descriptionAffichee !== 'undefined') && descriptionAffichee === true; %>
       <% var _descHtml = (_descVisible && product && typeof product.descriptionHtmlSafe === 'string') ? product.descriptionHtmlSafe.trim() : ''; %>
       <% var _descTxt = (!_descVisible || _descHtml) ? '' : String((product && (product.descriptionText || product.description || product.shortDescription)) || '').trim(); %>
-      <% if (_descHtml || _descTxt || (_ib.description_end && _ib.description_end.length)) { %>
+      <% if (_descVisible && (_descHtml || _descTxt || (_ib.description_end && _ib.description_end.length))) { %>
       <section id="description" style="margin-top: 72px; max-width: 860px;">
         <h2 style="font-size: 19px; font-weight: 800; color: #0F1626; margin: 0 0 14px 0;"><%= t('product.description') %></h2>
         <div class="desc-collapse-wrapper relative" data-desc-collapse>

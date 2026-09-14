@@ -47,8 +47,16 @@ test('description masquée : français seulement, jamais DM ni Alibaba, interrup
     assert.equal(cf.familleADescriptionMasquee({ sku: 'ASY-1' }), null);
     process.env.SHOW_PRODUCT_DESCRIPTION = ' OFF ';
     assert.equal(cf.motifDescriptionMasquee({ sku: '0AM 325 025' }, { lang: 'fr' }), 'interrupteur');
-    process.env.SHOW_PRODUCT_DESCRIPTION = 'on';
-    assert.equal(cf.motifDescriptionMasquee({ sku: '0AM 325 025' }, { lang: 'fr' }), null);
+    /* Bouton d'urgence tapé à la main sur Render : les façons courantes de
+       dire « coupé » coupent toutes. */
+    for (const coupe of ['false', 'FALSE', '0', 'no', 'non']) {
+      process.env.SHOW_PRODUCT_DESCRIPTION = coupe;
+      assert.equal(cf.motifDescriptionMasquee({ sku: '0AM 325 025' }, { lang: 'fr' }), 'interrupteur', `« ${coupe} » doit couper`);
+    }
+    for (const allume of ['on', 'true', '1', '']) {
+      process.env.SHOW_PRODUCT_DESCRIPTION = allume;
+      assert.equal(cf.motifDescriptionMasquee({ sku: '0AM 325 025' }, { lang: 'fr' }), null, `« ${allume} » ne doit rien couper`);
+    }
   } finally {
     if (avant === undefined) delete process.env.SHOW_PRODUCT_DESCRIPTION; else process.env.SHOW_PRODUCT_DESCRIPTION = avant;
   }
@@ -119,6 +127,53 @@ test('« notre atelier » → « notre partenaire reconditionneur », prépositi
   for (const [avant, apres] of cas) assert.equal(cf.filtrer(avant, ASY), apres);
   /* Un atelier qui n'est pas « le nôtre » reste tel quel. */
   const neutre = 'Livraisons réelles chez nos clients — garages, concessions et ateliers. Contrôlé en atelier.';
+  assert.equal(cf.filtrer(neutre, ASY), neutre);
+});
+
+test('« de chez » seulement après un mot de mouvement', () => {
+  /* ASY-FHZ : « passe entre les mains de chez notre partenaire » ne se dit pas. */
+  assert.equal(
+    cf.filtrer('Chaque exemplaire passe entre les mains de notre atelier pour un reconditionnement complet.', ASY),
+    'Chaque exemplaire passe entre les mains de notre partenaire reconditionneur pour un reconditionnement complet.'
+  );
+  assert.equal(
+    cf.filtrer('Chaque moteur APX reconditionné sort de notre atelier remis à neuf.', ASY),
+    'Chaque moteur APX reconditionné sort de chez notre partenaire reconditionneur remis à neuf.'
+  );
+  assert.equal(
+    cf.filtrer('Chaque exemplaire qui sort de notre atelier est reconditionné.', ASY),
+    'Chaque exemplaire qui sort de chez notre partenaire reconditionneur est reconditionné.'
+  );
+});
+
+test('les autres tournures d’atelier « à nous » du catalogue', () => {
+  /* ASY-169A5000, ASY-AUA, ASY-XRMA : les trois dernières passaient au travers. */
+  assert.equal(
+    cf.filtrer('Chaque exemplaire est remis à neuf dans notre réseau d\'ateliers selon le cahier des charges constructeur.', ASY),
+    'Chaque exemplaire est remis à neuf chez nos partenaires reconditionneurs selon le cahier des charges constructeur.'
+  );
+  assert.equal(
+    cf.filtrer('Cet échange standard est reconditionné selon les spécifications constructeur dans notre réseau d\'ateliers : chemises remplacées.', ASY),
+    'Cet échange standard est reconditionné selon les spécifications constructeur chez nos partenaires reconditionneurs : chemises remplacées.'
+  );
+  assert.equal(
+    cf.filtrer('Autoliva le reconditionne en échange standard dans son atelier, selon les spécifications du constructeur.', ASY),
+    'Autoliva le reconditionne en échange standard chez son partenaire reconditionneur, selon les spécifications du constructeur.'
+  );
+  /* Un réseau d'ateliers PARTENAIRES dit vrai ; l'atelier du garagiste n'est
+     pas le nôtre. */
+  for (const neutre of [
+    'Il est confié à notre réseau d\'ateliers partenaires.',
+    'Le garagiste le monte dans son atelier en une journée.',
+  ]) assert.equal(cf.filtrer(neutre, ASY), neutre);
+});
+
+test('allemand : « unseren Werkstätten » devient « unseren Partnerwerkstätten »', () => {
+  /* Légende du gabarit sous la photo de chargement de chaque fiche /de. */
+  assert.equal(cf.filtrer('Von unseren Werkstätten aus', ASY), 'Von unseren Partnerwerkstätten aus');
+  assert.equal(cf.filtrer('Teil vor Versand in unserer Werkstatt fotografiert', ASY), 'Teil vor Versand in unserer Partnerwerkstatt fotografiert');
+  /* La Werkstatt du client reste la sienne. */
+  const neutre = 'Sie oder Ihre Werkstatt bauen das Teil ein.';
   assert.equal(cf.filtrer(neutre, ASY), neutre);
 });
 
@@ -256,4 +311,29 @@ test('fiche : badges, FAQ, meta et points clés passent par le même filtre', ()
   assert.equal(out.description, produit.description);
   assert.notStrictEqual(out, produit, 'copie, jamais l’original');
   assert.deepEqual(produit.badges.cards, ['Garantie 6 mois', 'Paiement 3× sans frais', 'Norme ISO 9001'], 'l’original est intact');
+});
+
+test('blocs d’information : même filtre, avec la garantie de CETTE fiche', () => {
+  /* Bloc réel « Conditions — Moteurs reconditionnés », partagé par 334 fiches
+     ASY et VEGE. Il annonce 1 an : vrai à 12 mois, faux à 24. */
+  const bloc = {
+    id: 'b1',
+    title: 'Conditions — Moteurs reconditionnés',
+    html: '<p>Avant expédition, chaque moteur fait l’objet d’un contrôle complet.</p>\n<p>Garantie : 1 an pièces et main d’œuvre.</p>',
+  };
+  const tout = { id: 'b2', title: 'Paiement', html: '<p>Paiement en 3x ou 4x sans frais via Scalapay.</p>' };
+  const groupes = { description_end: [bloc, tout], after_inclusions: [], dedicated_tab: [] };
+
+  const a12 = cf.filtrerFiche({ sku: 'ASY-1', warranty: { months: 12 }, infoBlocksByPosition: groupes }, fiche('ASY-1', 12));
+  assert.equal(a12.infoBlocksByPosition.description_end[0].html, bloc.html, '12 mois : le bloc reste tel quel');
+
+  const a24 = cf.filtrerFiche({ sku: 'VEGE-1', warranty: { months: 24 }, infoBlocksByPosition: groupes }, fiche('VEGE-1', 24));
+  assert.equal(a24.infoBlocksByPosition.description_end[0].html, '<p>Avant expédition, chaque moteur fait l’objet d’un contrôle complet.</p>',
+    '24 mois : la ligne « 1 an » tombe, le reste du bloc demeure');
+  assert.equal(a24.infoBlocksByPosition.description_end.length, 1, 'un bloc entièrement fait d’allégations disparaît');
+  assert.deepEqual(a24.infoBlocksByPosition.after_inclusions, []);
+  assert.equal(groupes.description_end[0].html, bloc.html, 'l’original est intact');
+  /* Un bloc déjà vide en admin (titre seul) n'est pas l'œuvre du filtre : il reste. */
+  const titreSeul = cf.filtrerBlocsInfo({ description_end: [{ id: 'b3', title: 'À savoir', html: '' }] }, fiche('VEGE-1', 24));
+  assert.deepEqual(titreSeul.description_end, [{ id: 'b3', title: 'À savoir', html: '' }]);
 });
