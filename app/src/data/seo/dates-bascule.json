@@ -1,0 +1,14 @@
+{
+ "_lisezMoi": [
+  "Jour où chaque famille de la politique d'indexation a été allumée (AAAA-MM-JJ) — plan de reprise SEO du 14/09/2026, action A5.6. Lu par src/services/seoIndexPolicy.js.",
+  "Il sert de <lastmod> aux sitemaps de retrait (sitemap-retraits-<famille>.xml) et aux sitemaps allemands retirés : Google y lit « ces pages ont changé ce jour-là » et revient les explorer, ce qui lui fait voir le noindex ou le 410. Huit semaines (56 jours) après cette date, ces sitemaps répondent 404 et quittent robots.txt et l'index des sitemaps.",
+  "La variable Render SEO_PRUNE_SINCE_<FAMILLE> passe devant ce fichier (ex. SEO_PRUNE_SINCE_GONE=2026-09-16, SEO_PRUNE_SINCE_PIECES_AUTO=2026-09-18) : c'est le plus simple, à poser en même temps que la famille dans SEO_PRUNE.",
+  "Sans date, les sitemaps de retrait sont servis sans <lastmod> et n'expirent pas. Une date à venir n'est jamais annoncée."
+ ],
+ "gone": "",
+ "blog": "",
+ "reference": "",
+ "pieces-auto": "",
+ "de": "",
+ "products": ""
+}
