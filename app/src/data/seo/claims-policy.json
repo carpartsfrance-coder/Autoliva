@@ -1,0 +1,60 @@
+{
+  "_lisezMoi": [
+    "Allégations NON PROUVÉES retirées des fiches produit et des pages véhicule, à l'affichage seulement : rien n'est modifié en base.",
+    "Plan de reprise SEO du 14/09/2026, action A3 (e). Lu par src/services/claimFilter.js.",
+    "Toutes les règles sont ACTIVES par défaut : la décision 4 (preuves ISO 9001, atelier, garanties) n'est pas encore rendue.",
+    "Lever une règle pour une famille dont la preuve est fournie : ajouter sa clé dans « leveePour » (ex. \"leveePour\": [\"DEK\"]), puis déployer.",
+    "Retirer la clé remet le filtre en place au déploiement suivant. Les clés de famille sont celles de « familles » ci-dessous.",
+    "« descriptionMasquee » : familles dont la description n'est JAMAIS affichée, quelle que soit la langue."
+  ],
+  "familleParDefaut": "AUTRES",
+  "familleLandingVehicule": "PAGES-VEHICULE",
+  "familles": [
+    { "cle": "DM", "prefixes": ["DM-"], "libelle": "Import distrimotor.com — 6 327 fiches, descriptions copiées mot pour mot" },
+    { "cle": "ALIBABA", "prefixes": ["ALV-PT-", "ALV-BT-", "ALV-MEC-", "ALV-CP-", "ALV-RD-"], "libelle": "Import Alibaba — 264 fiches (ponts, transferts, mécatroniques, coupleurs, réducteurs)" },
+    { "cle": "ALV-BX", "prefixes": ["ALV-BX-"], "libelle": "Boîtes de vitesses ALV-BX" },
+    { "cle": "DEK", "prefixes": ["DEK-"], "libelle": "Boîtes de vitesses Dekram (Allegro)" },
+    { "cle": "EDN", "prefixes": ["EDN-"], "libelle": "Boîtes de vitesses Eden" },
+    { "cle": "ASY", "prefixes": ["ASY-"], "libelle": "Moteurs reconditionnés Asysum" },
+    { "cle": "AUTO", "prefixes": ["AUTO-"], "libelle": "Moteurs d'occasion" },
+    { "cle": "VEGE", "prefixes": ["VEGE-"], "libelle": "Moteurs reconditionnés VEGE" },
+    { "cle": "WC", "prefixes": ["WC-"], "libelle": "Fiches reprises de l'ancien site WooCommerce" },
+    { "cle": "OCC", "prefixes": ["OCC-"], "libelle": "Pièces d'occasion unitaires" }
+  ],
+  "descriptionMasquee": {
+    "DM": "Texte copié mot pour mot sur distrimotor.com (mêmes identifiants, titres et descriptions) : jamais affiché.",
+    "ALIBABA": "État réel, garantie fournisseur (12 mois) et certifications à confirmer — masqué jusqu'à la décision 4."
+  },
+  "regles": {
+    "iso9001": {
+      "active": true,
+      "leveePour": [],
+      "description": "« usine(s) certifiée(s) ISO 9001 » → « usine(s) spécialisée(s) » ; toute autre mention d'ISO 9001 retire sa phrase ; badges et mentions ISO du gabarit masqués."
+    },
+    "concessionnaires": {
+      "active": true,
+      "leveePour": [],
+      "description": "« (fournisseur des concessionnaires) », « qui équipent directement les concessionnaires » → retirés."
+    },
+    "atelierPropre": {
+      "active": true,
+      "leveePour": [],
+      "description": "« dans notre atelier », « nos ateliers », « notre usine » → « chez notre partenaire reconditionneur » (accord conservé)."
+    },
+    "couvertureLaPlusLongue": {
+      "active": true,
+      "leveePour": [],
+      "description": "« couverture la plus longue du marché » → retiré."
+    },
+    "paiementFractionne": {
+      "active": true,
+      "leveePour": [],
+      "description": "3x / 4x / Scalapay retirés TANT QUE le paiement en plusieurs fois est coupé (SCALAPAY_ENABLED ≠ on)."
+    },
+    "dureeGarantie": {
+      "active": true,
+      "leveePour": [],
+      "description": "Phrase annonçant une durée de garantie différente de warranty.months (fiche) — ou une durée quelconque sur une page qui regroupe plusieurs pièces (page véhicule) → retirée."
+    }
+  }
+}

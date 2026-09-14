@@ -23,6 +23,8 @@ const VehicleLanding = require('../models/VehicleLanding');
 const { buildHreflangSet } = require('../services/i18n');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
 const internalLinking = require('../services/internalLinking');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
 
 function toJsonLdSafe(value) {
   return JSON.stringify(value)
@@ -213,12 +215,23 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
     ? `${canonicalBase}?page=${encodeURIComponent(String(data.page))}`
     : canonicalBase;
 
-  /* Lookup override admin */
-  const override = await findLanding({
-    make: makeName,
-    model: modelName,
-    partType: partTypeSlug,
-  });
+  /* Lookup override admin.
+   *
+   * Les 724 textes rédigés en base promettent tous « 3x ou 4x sans frais via
+   * Scalapay » (coupé depuis le 05/08), « nos ateliers » et une « garantie de
+   * 24 mois » pour des pièces garanties 6, 12 ou 24 mois. Aucun n'est servi
+   * aujourd'hui (leurs catégories sont inactives ou n'existent pas), mais il
+   * suffirait de réactiver « Transmission > Pont / Différentiel » pour qu'ils
+   * reviennent : ils passent donc par le même filtre que les fiches (plan SEO
+   * du 14/09/2026, action A3 e). Rien n'est modifié en base. */
+  const override = claimFilter.filtrerLanding(
+    await findLanding({
+      make: makeName,
+      model: modelName,
+      partType: partTypeSlug,
+    }),
+    claimFilter.contexteLanding({ scalapayActif: scalapay.estActif() })
+  );
 
   const title = clampSeoTitle((override && override.metaTitle)
     ? override.metaTitle
