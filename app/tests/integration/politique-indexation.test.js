@@ -543,6 +543,68 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     assert.ok(!listeDe.includes(S.G_P0726) && listeDe.includes(S.K_DQ200), '/de/blog : pas de 410 allemand');
   });
 
+  await t.test('blog et gone : article à la une, catégories du blog, articles qui citent une fiche — aucun retiré', async () => {
+    /* Trois requêtes que le jeu d'essai de base ne met pas à l'épreuve : on
+       donne aux articles retirés, le temps du test, ce qui les y ferait entrer. */
+    const internalLinking = require('../../src/services/internalLinking');
+    const UNE_SEULE = 'categorie-seulement-retiree';
+    const retireSeul = [...NOINDEX_BLOG].map((u) => u.slice('/blog/'.length)).find((s) => !Object.values(S).includes(s));
+    await BlogPost.updateMany({ _id: { $in: [ids.G_CODES, ids.X_AUDI] } }, { $set: { isFeatured: true, relatedProductIds: [new mongoose.Types.ObjectId(ALV_BX._id)] } });
+    await BlogPost.collection.insertOne(article('SEUL', {
+      slug: retireSeul, titre: 'Article retiré, seul de sa catégorie', categorie: UNE_SEULE, publie: '2026-06-15T09:00:00Z',
+    }));
+    try {
+      const lienCategorie = `/blog?category=${UNE_SEULE}`;
+      activer('');
+      const avant = await get('/blog');
+      assert.ok(articlesLies(avant.corps).includes(S.G_CODES), 'jeu d’essai : l’article à la une le plus récent est un 410');
+      assert.ok(liens(avant.corps).includes(lienCategorie), 'jeu d’essai : la catégorie n’a qu’un article, retiré');
+      const ficheAvant = articlesLies((await get(urlFr(ALV_BX))).corps);
+      assert.ok(ficheAvant.includes(S.G_CODES) && ficheAvant.includes(S.X_AUDI), `jeu d’essai : deux articles retirés citent la fiche (${nomsDe(ficheAvant)})`);
+
+      activer('gone,blog');
+      const apres = await get('/blog');
+      assert.deepEqual(nomsDe(articlesLies(apres.corps).filter((s) => !GARDES.has(`/blog/${s}`))), [], '/blog : un article à la une retiré');
+      assert.ok(articlesLies(apres.corps).includes(S.K_DQ200), '/blog : l’article à la une gardé prend la place');
+      assert.ok(!liens(apres.corps).includes(lienCategorie), '/blog : une catégorie sans article gardé mène à une liste vide');
+      const ficheApres = articlesLies((await get(urlFr(ALV_BX))).corps);
+      assert.deepEqual(nomsDe(ficheApres.filter((s) => !GARDES.has(`/blog/${s}`))), [], `fiche : un article retiré la cite encore`);
+    } finally {
+      await BlogPost.updateMany({ _id: { $in: [ids.G_CODES, ids.X_AUDI] } }, { $set: { isFeatured: false, relatedProductIds: [] } });
+      await BlogPost.deleteOne({ _id: ids.SEUL });
+      internalLinking.clearCache();
+      activer('');
+    }
+  });
+
+  await t.test('la page d’un article en 410 n’est pas rendue, même si une route passait avant le middleware', async () => {
+    /* Le middleware répond 410 avant les contrôleurs ; les contrôleurs, eux,
+       ne doivent pas savoir rendre ces articles si l'ordre des routes change. */
+    const blogController = require('../../src/controllers/blogController');
+    const blogDeController = require('../../src/controllers/blogDeController');
+    const fausseReq = (slug) => ({
+      params: { slug }, query: {}, lang: 'fr', path: `/blog/${slug}`, originalUrl: `/blog/${slug}`,
+      protocol: 'https', hostname: 'autoliva.com', headers: { host: 'autoliva.com' }, get: (h) => (String(h).toLowerCase() === 'host' ? 'autoliva.com' : undefined),
+    });
+    const fausseRes = () => {
+      const res = { code: 200, vue: null, redirection: null, locals: {}, entetes: {} };
+      res.status = (c) => { res.code = c; return res; };
+      res.set = (k, v) => { res.entetes[k] = v; return res; };
+      res.render = (vue) => { res.vue = vue; return res; };
+      res.redirect = (a, b) => { res.redirection = b || a; res.code = typeof a === 'number' ? a : 302; return res; };
+      return res;
+    };
+    activer('gone');
+    const fr = fausseRes();
+    await blogController.getBlogPost(fausseReq(S.G_P0726), fr);
+    assert.equal(fr.vue, 'errors/404', `article FR en 410 rendu par le contrôleur (${fr.code} ${fr.vue})`);
+    const de = fausseRes();
+    await blogDeController.getBlogPostDe(fausseReq(S.G_P0726), de);
+    assert.notEqual(de.vue, 'blog/show', `article DE en 410 rendu par le contrôleur (${de.code} ${de.vue})`);
+    assert.equal(de.redirection, `/blog/${S.G_P0726}`, 'l’allemand renvoie vers le français, qui répond 410');
+    activer('');
+  });
+
   await t.test('maillage : chaque article gardé privé de liens en reçoit un depuis un article gardé', async () => {
     const gardes = ['K_DQ200', 'K_AUDI', 'K_LR', 'K_PONT', 'N_RR', 'N_TDI'];
     async function hotesDe(cible) {
@@ -621,7 +683,9 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
 
   await t.test('de : toute la couche allemande sort de Google et reste en ligne ; plus de hreflang de, le sélecteur reste', async () => {
     activer('de');
-    for (const chemin of ['/de', '/de/blog', `/de/blog/${S.K_DQ200}`, urlDe(DQ200), '/de/categorie/motoren', '/de/contact', '/de/devis', '/de/legal/cgv', '/de/produits']) {
+    /* Les 13 pages statiques de noindex-de.txt ont chacune leur gabarit : les
+       index (/de/produits, /de/categorie, /de/legal) comme les pages. */
+    for (const chemin of ['/de', '/de/blog', `/de/blog/${S.K_DQ200}`, urlDe(DQ200), '/de/categorie/motoren', '/de/contact', '/de/devis', '/de/legal/cgv', '/de/produits', '/de/categorie', '/de/legal']) {
       estNoindex(await get(chemin), chemin);
     }
     /* Fiche française : fr et x-default (français), plus de de ; le sélecteur
@@ -702,6 +766,9 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     assert.equal(index.get('/sitemap-retraits-gone.xml'), bascule);
     assert.equal(index.get('/sitemap-retraits-blog.xml'), bascule);
     assert.equal(index.get('/sitemap-blog.xml'), '2026-05-20T09:00:00.000Z', 'la date du plus récent article GARDÉ');
+    /* Même règle pour l'allemand : les copies en 410 étaient les dernières
+       traduites (08/09) ; elles ne datent plus sitemap-blog-de. */
+    assert.equal(index.get('/sitemap-blog-de.xml'), '2026-09-07T09:30:00.000Z', 'la date de la plus récente traduction RESTANTE');
     const robots = (await get('/robots.txt')).corps;
     assert.ok(robots.includes(`Sitemap: ${base}/sitemap-retraits-gone.xml`) && robots.includes(`Sitemap: ${base}/sitemap-retraits-blog.xml`));
     assert.ok(!/Disallow: \/blog/.test(robots), 'aucun article n’est bloqué : Google doit lire le noindex');
