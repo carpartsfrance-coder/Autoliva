@@ -379,14 +379,16 @@ test('liens vers un 410 : la balise <a> part sous toutes les écritures, le text
     `<a href='https://www.carpartsfrance.fr/blog/${disparu}'>ancien domaine</a>`,
     `<a href=http://carpartsfrance.fr/blog/${disparu}?utm=1>sans guillemets</a>`,
     `<a href="//autoliva.com/de/blog/${disparu}#faq"><strong>allemand</strong></a>`,
-    `<a href="/blog/${garde}">gardé</a> <a href="https://example.com/blog/${disparu}">autre site</a> <a href="/product/${disparu}/">fiche</a></p>`,
+    `<a href="/blog/${garde}">gardé</a> <a href="https://example.com/blog/${disparu}">autre site</a> <a href="/product/${disparu}/">fiche</a>`,
+    /* Seul l'attribut href compte : un data-href vers le 410 ne condamne pas un lien vivant. */
+    `<a data-href="/blog/${disparu}" href="/blog/${garde}">vivant</a></p>`,
   ].join(' ');
   process.env.SEO_PRUNE = 'blog';
   assert.equal(politique.retirerLiensDisparus(html), html, '« gone » coupée : rien ne change');
   process.env.SEO_PRUNE = 'gone';
   const net = politique.retirerLiensDisparus(html);
   const restants = [...net.matchAll(/<a\b[^>]*>/g)].map((m) => m[0]).filter((a) => a.includes(disparu));
-  assert.deepEqual(restants, [`<a href="https://example.com/blog/${disparu}">`, `<a href="/product/${disparu}/">`],
+  assert.deepEqual(restants, [`<a href="https://example.com/blog/${disparu}">`, `<a href="/product/${disparu}/">`, `<a data-href="/blog/${disparu}" href="/blog/${garde}">`],
     'seuls restent les liens qui ne mènent pas à l’article en 410');
   for (const texte of ['relatif', 'absolu', 'ancien domaine', 'sans guillemets', '<strong>allemand</strong>']) assert.ok(net.includes(texte), texte);
   assert.ok(net.includes(`<a href="/blog/${garde}">gardé</a>`));

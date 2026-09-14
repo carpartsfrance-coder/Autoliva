@@ -418,7 +418,8 @@ function lienVersDisparu(href) {
 function retirerLiensDisparus(html) {
   if (typeof html !== 'string' || !html || !familleActive('gone')) return html;
   return html.replace(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi, (tout, attributs, texte) => {
-    const m = attributs.match(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+    /* L'attribut href lui-même, pas un data-href ni un xlink:href. */
+    const m = attributs.match(/(?:^|\s)href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
     if (!m) return tout;
     const href = m[1] !== undefined ? m[1] : (m[2] !== undefined ? m[2] : m[3]);
     return lienVersDisparu(href) ? texte : tout;
