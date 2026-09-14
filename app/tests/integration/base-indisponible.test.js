@@ -75,4 +75,21 @@ test('base indisponible : 503 + Retry-After sur les pages qui en dépendent', as
     assert.equal(robots.status, 200, 'un 5xx sur robots.txt suspendrait toute l’exploration');
     assert.equal((await get('/securite')).status, 200);
   });
+
+  await t.test('la règle ne déborde pas : landings Ads, tunnel, flux et sitemaps restent hors de son champ', () => {
+    const { cheminConcerne } = require('../../src/middlewares/baseRequise');
+    for (const chemin of ['/product', '/product/x/', '/blog', '/pieces-auto/audi', '/reference/0AM927769G',
+      '/categorie/moteurs', '/de/produits/x-1', '/de/blog/x', '/de/categorie/x', '/Product/WC-4714']) {
+      assert.equal(cheminConcerne(chemin), true, `${chemin} : concerné`);
+    }
+    /* Pages d'arrivée Google Ads, tunnel d'achat, flux Merchant, sitemaps,
+       robots.txt, API, admin — et les faux amis (/produits, /blogs,
+       /categories, /referencement). */
+    for (const chemin of ['/', '/moteurs', '/moteurs-reconditionnes', '/boites-vitesse', '/ponts-differentiels',
+      '/devis', '/panier', '/commande/paiement', '/google-merchant-feed.xml', '/google-merchant-feed-de.xml',
+      '/sitemap.xml', '/sitemap-products.xml', '/robots.txt', '/api/blog/import-from-url', '/admin/blog',
+      '/produits', '/produits/x', '/blogs', '/blog-auto', '/categories', '/referencement', '/de', '/de/panier']) {
+      assert.equal(cheminConcerne(chemin), false, `${chemin} : ne doit jamais recevoir ce 503`);
+    }
+  });
 });
