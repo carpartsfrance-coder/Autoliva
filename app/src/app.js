@@ -738,6 +738,14 @@ app.use('/sav-files', require('./routes/savFiles'));
 const i18nSav = require('./services/i18nSav');
 app.use(i18nSav.middleware());
 
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5) :
+   410 sur les articles retirés, noindex (balise ET en-tête) sur les familles
+   citées dans SEO_PRUNE — blog, /reference, /pieces-auto, /de. Les fiches
+   produit se décident dans leur contrôleur, sur l'_id. SEO_PRUNE absent : ce
+   middleware ne fait rien. Voir services/seoIndexPolicy.js. Avant baseRequise :
+   un 410 n'a pas besoin de la base. */
+app.use(require('./services/seoIndexPolicy').middleware);
+
 /* Base de données indisponible : 503 + Retry-After sur les fiches, le blog,
    /pieces-auto, /reference et /categorie (et leurs pages allemandes), plutôt
    qu'un 404, une redirection ou une fiche de démonstration que Google

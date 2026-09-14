@@ -1,0 +1,32 @@
+<%# 410 Gone — article retiré (plan de reprise SEO du 14/09/2026, action A6).
+    Servi par services/seoIndexPolicy.js quand la famille « gone » est active.
+    Une page courte qui renvoie vers le blog : jamais de redirection, un article
+    supprimé redirigé vers /blog ou l'accueil serait lu comme un soft 404. -%>
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<% const _blog410 = typeof lienBlog === 'string' && lienBlog ? lienBlog : '/blog'; %>
+<% const _accueil410 = typeof lienAccueil === 'string' && lienAccueil ? lienAccueil : '/'; %>
+<main class="flex-1">
+<div class="mx-auto max-w-[1440px] px-4 md:px-10 py-16">
+<div class="mx-auto max-w-2xl bg-white rounded-2xl border border-slate-200 p-8">
+<% if (typeof articleDe !== 'undefined' && articleDe) { %>
+<h1 class="text-3xl font-black text-slate-900 uppercase">Artikel nicht mehr verfügbar</h1>
+<p class="mt-4 text-slate-600">Dieser Artikel wurde dauerhaft entfernt. Weitere Ratgeber finden Sie in unserem Blog.</p>
+<div class="mt-8 flex flex-col sm:flex-row gap-3">
+<a class="inline-flex items-center justify-center px-6 py-3 bg-primary text-white font-black rounded-xl hover:bg-red-700 transition-colors" href="<%= _blog410 %>">Zum Blog</a>
+<a class="inline-flex items-center justify-center px-6 py-3 bg-slate-100 text-slate-700 font-black rounded-xl hover:bg-slate-200 transition-colors" href="<%= _accueil410 %>">Zur Startseite</a>
+</div>
+<% } else { %>
+<h1 class="text-3xl font-black text-slate-900 uppercase">Article retiré</h1>
+<p class="mt-4 text-slate-600">Cet article a été retiré définitivement. Retrouvez nos autres guides sur le blog.</p>
+<div class="mt-8 flex flex-col sm:flex-row gap-3">
+<a class="inline-flex items-center justify-center px-6 py-3 bg-primary text-white font-black rounded-xl hover:bg-red-700 transition-colors" href="<%= _blog410 %>">Voir le blog</a>
+<a class="inline-flex items-center justify-center px-6 py-3 bg-slate-100 text-slate-700 font-black rounded-xl hover:bg-slate-200 transition-colors" href="<%= _accueil410 %>">Retour à l'accueil</a>
+</div>
+<% } %>
+</div>
+</div>
+</main>
+
+<%- include('../partials/footer') %>

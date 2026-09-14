@@ -10,6 +10,7 @@ const { buildCategoryPublicPath } = require('../services/categoryPublic');
 const { buildHreflangSet } = require('../services/i18n');
 const productI18n = require('../services/productI18n');
 const siteSettingsService = require('../services/siteSettings');
+const { publicBlogFilter } = require('../services/seoIndexPolicy');
 const brand = require('../config/brand');
 
 function getTrimmedString(value) {
@@ -261,7 +262,11 @@ async function getHome(req, res, next) {
       /* En allemand on ne propose QUE des articles traduits : un lien vers un
          article français depuis la home DE renvoyait le visiteur en français. */
       const blogLangFilter = isDeHome ? { 'localizations.de.translatedAt': { $ne: null } } : {};
-      const pinned = await BlogPost.find({ isPublished: true, isHomeFeatured: true, ...blogLangFilter })
+      /* Politique d'indexation (plan SEO A5.5) : un article épinglé qui sort de
+         Google (2 des 3 épinglés aujourd'hui) ou répond 410 quitte le bloc, et
+         le complément ci-dessous le remplace par un article gardé. */
+      const filtreLangue = { lang: isDeHome ? 'de' : 'fr' };
+      const pinned = await BlogPost.find(publicBlogFilter({ isPublished: true, isHomeFeatured: true, ...blogLangFilter }, filtreLangue))
         .sort({ publishedAt: -1, createdAt: -1 })
         .limit(3)
         .lean();
@@ -269,11 +274,11 @@ async function getHome(req, res, next) {
       const pinnedSlugs = new Set((pinned || []).map((p) => String(p && p.slug ? p.slug : '')).filter(Boolean));
 
       const fill = pinnedSlugs.size < 3
-        ? await BlogPost.find({
+        ? await BlogPost.find(publicBlogFilter({
             isPublished: true,
             ...blogLangFilter,
             ...(pinnedSlugs.size ? { slug: { $nin: Array.from(pinnedSlugs) } } : {}),
-          })
+          }, filtreLangue))
             .sort({ publishedAt: -1, createdAt: -1 })
             .limit(Math.max(0, 3 - pinnedSlugs.size))
             .lean()
@@ -434,7 +439,8 @@ async function redirectLegacyBlogSlug(req, res, next) {
     ]);
     if (reserved.has(slug)) return next();
 
-    const exists = await BlogPost.findOne({ slug, isPublished: true })
+    /* Un article en 410 ne reçoit pas de redirection depuis son ancienne adresse. */
+    const exists = await BlogPost.findOne(publicBlogFilter({ slug, isPublished: true }, { page: true }))
       .select('_id slug')
       .lean();
 

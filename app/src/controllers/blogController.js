@@ -8,6 +8,10 @@ const { buildHreflangSet } = require('../services/i18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const brand = require('../config/brand');
 const datesSeo = require('../services/datesSeo');
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.5) :
+   toute requête publique passe par publicBlogFilter — les articles en 410
+   n'apparaissent nulle part, ceux en noindex quittent les listes. */
+const { publicBlogFilter, retirerLiensDisparus, articlesAMailler } = require('../services/seoIndexPolicy');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -424,7 +428,7 @@ function getBlogIndex(req, res) {
       });
     }
 
-    const featuredDoc = await BlogPost.findOne({ isPublished: true, isFeatured: true })
+    const featuredDoc = await BlogPost.findOne(publicBlogFilter({ isPublished: true, isFeatured: true }))
       .sort({ publishedAt: -1, createdAt: -1 })
       .lean();
 
@@ -439,10 +443,10 @@ function getBlogIndex(req, res) {
 
     const showFeatured = !q && !category && page <= 1;
 
-    const listingFilter = {
+    const listingFilter = publicBlogFilter({
       ...baseFilter,
       ...((showFeatured && featuredDoc && featuredDoc.slug) ? { slug: { $ne: featuredDoc.slug } } : {}),
-    };
+    });
 
     const perPage = 12;
     const total = await BlogPost.countDocuments(listingFilter);
@@ -455,7 +459,7 @@ function getBlogIndex(req, res) {
       .limit(perPage)
       .lean();
 
-    const allForCategories = await BlogPost.find({ isPublished: true })
+    const allForCategories = await BlogPost.find(publicBlogFilter({ isPublished: true }))
       .select('category')
       .lean();
 
@@ -516,7 +520,7 @@ function getBlogIndex(req, res) {
       ],
     });
 
-    const popularArticles = await BlogPost.find({ isPublished: true })
+    const popularArticles = await BlogPost.find(publicBlogFilter({ isPublished: true }))
       .sort({ publishedAt: -1, createdAt: -1 })
       .limit(5)
       .select('slug title category')
@@ -579,7 +583,9 @@ async function getBlogPost(req, res) {
       return res.status(503).render('errors/500', { title: `Erreur - ${brand.NAME}` });
     }
 
-    const post = await BlogPost.findOne({ slug: slugParam, isPublished: true }).lean();
+    /* L'article lui-même reste servi quand il sort de Google (noindex) : seul
+       le 410 l'écarte — et le middleware de la politique a déjà répondu. */
+    const post = await BlogPost.findOne(publicBlogFilter({ slug: slugParam, isPublished: true }, { page: true })).lean();
     if (!post) {
       return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
@@ -745,15 +751,34 @@ async function getBlogPost(req, res) {
       );
     }
 
-    const similarDocs = await BlogPost.find({
+    /* Liens vers un article en 410 : le texte reste, la balise <a> part — dans
+       les trois écritures de l'adresse (plan SEO A5.5). */
+    contentHtml = retirerLiensDisparus(contentHtml);
+
+    let similarDocs = await BlogPost.find(publicBlogFilter({
       isPublished: true,
       slug: { $ne: post.slug },
       ...(post.category && post.category.slug ? { 'category.slug': post.category.slug } : {}),
-    })
+    }))
       .sort({ publishedAt: -1, createdAt: -1 })
       .limit(4)
       .select('slug title coverImageUrl relatedProductIds')
       .lean();
+
+    /* Articles gardés qui n'ont plus aucun lien depuis un autre article gardé
+       (kept-posts-need-inlinks.txt) : chacun est placé en tête du bloc
+       « articles similaires » d'un article gardé — rien tant que ni « blog »
+       ni « gone » n'est actif. */
+    const aMailler = (await articlesAMailler(post.slug)).filter((s) => s !== post.slug);
+    if (aMailler.length) {
+      const mailles = await BlogPost.find(publicBlogFilter({ isPublished: true, slug: { $in: aMailler } }))
+        .select('slug title coverImageUrl relatedProductIds')
+        .lean();
+      const parSlug = new Map(mailles.map((d) => [d.slug, d]));
+      const enTete = aMailler.map((s) => parSlug.get(s)).filter(Boolean);
+      const dejaLa = new Set(enTete.map((d) => d.slug));
+      similarDocs = enTete.concat((similarDocs || []).filter((d) => !dejaLa.has(d.slug))).slice(0, 4);
+    }
 
     const similarCoverMap = await resolveRelatedCoverMap(similarDocs || []);
     const similarPosts = (similarDocs || []).map((s) => ({

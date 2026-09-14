@@ -15,6 +15,10 @@
 
 const mongoose = require('mongoose');
 const BlogPost = require('../models/BlogPost');
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.5) :
+   le tri « les plus récents » plaçait les articles du 05–06/09 (410) dans 7
+   des 12 cartes des landings Ads. Ni 410 ni article sorti de Google ici. */
+const { publicBlogFilter } = require('./seoIndexPolicy');
 
 // Catégorie de landing → ensemble de slugs de catégorie blog réels.
 const CATEGORY_SLUGS = {
@@ -41,11 +45,11 @@ async function getLandingArticles(category, limit = 3) {
       image: d.coverImageUrl,
       excerpt: d.excerpt || '',
     }));
-    const query = (slugs, n) => BlogPost.find({
+    const query = (slugs, n) => BlogPost.find(publicBlogFilter({
       isPublished: true,
       'category.slug': { $in: slugs },
       coverImageUrl: { $nin: ['', null] },
-    })
+    }))
       .select('title slug excerpt coverImageUrl publishedAt')
       .sort({ publishedAt: -1, _id: -1 })
       .limit(n)

@@ -18,6 +18,7 @@ const brand = require('../config/brand');
 const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
+const seoIndexPolicy = require('../services/seoIndexPolicy');
 
 function escapeRegex(value) {
   return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -81,7 +82,13 @@ async function getReferenceLanding(req, res, next) {
     });
 
     const baseUrl = getPublicBaseUrlFromReq(req);
-    const canonicalUrl = baseUrl ? `${baseUrl}/reference/${encodeURIComponent(rawRef)}` : `/reference/${encodeURIComponent(rawRef)}`;
+    /* Famille « reference » active (plan de reprise SEO, action A8) : la
+       canonique s'écrit en MAJUSCULES, quelle que soit l'écriture demandée —
+       /reference/0am927769g et /reference/0AM927769G sont une seule page, et la
+       gardée (0AM927769G) ne se dédouble pas. Sinon : l'écriture reçue, comme
+       avant. */
+    const refCanonique = seoIndexPolicy.familleActive('reference') ? refUpper : rawRef;
+    const canonicalUrl = baseUrl ? `${baseUrl}/reference/${encodeURIComponent(refCanonique)}` : `/reference/${encodeURIComponent(refCanonique)}`;
 
     /* Compile les véhicules compatibles à partir des produits trouvés (utile
      * pour le contenu et les schemas). */

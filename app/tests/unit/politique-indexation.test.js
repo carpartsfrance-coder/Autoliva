@@ -22,6 +22,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const zlib = require('zlib');
+const ejs = require('ejs');
 
 delete process.env.SEO_PRUNE;
 for (const cle of Object.keys(process.env)) if (cle.startsWith('SEO_PRUNE_SINCE_')) delete process.env[cle];
@@ -301,6 +302,35 @@ test('middleware : un en-tête déjà plus strict (hors production, FORCE_NOINDE
   politique.middleware({ method: 'POST', path: DISPARUS[0] }, post, () => { suite = true; });
   assert.ok(suite);
   assert.equal(post.code, 200);
+});
+
+/* ─── partials/head.ejs ───────────────────────────────────────────────────── */
+
+const HEAD = path.join(RACINE, 'src', 'views', 'partials', 'head.ejs');
+function rendreHead(locaux) {
+  const brand = { NAME: 'Autoliva', FAVICON_URL: '/f.png', APPLE_TOUCH_ICON_URL: '' };
+  return ejs.render(fs.readFileSync(HEAD, 'utf8'), { brand, ...locaux }, { filename: HEAD });
+}
+const baliseRobots = (html) => (html.match(/<meta name="robots" content="([^"]*)"\/>/) || [])[1];
+const hreflangs = (html) => [...html.matchAll(/<link rel="alternate" hreflang="([^"]*)" href="([^"]*)"\/>/g)].map((m) => m[1]);
+
+test('head.ejs : seoForceNoindex passe devant tout metaRobots ; sans lui, rien ne change', () => {
+  assert.equal(baliseRobots(rendreHead({ metaRobots: 'index, follow', seoForceNoindex: 'noindex, follow' })), 'noindex, follow');
+  assert.equal(baliseRobots(rendreHead({ metaRobots: undefined, seoForceNoindex: 'noindex, follow' })), 'noindex, follow');
+  assert.equal(baliseRobots(rendreHead({ metaRobots: 'index, follow' })), 'index, follow');
+  assert.equal(baliseRobots(rendreHead({})), 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1');
+  assert.equal(baliseRobots(rendreHead({ metaRobots: 'noindex, follow' })), 'noindex, follow');
+});
+
+test('head.ejs : famille « de » — plus de hreflang de, fr et x-default (français) restent ; sans elle, tout reste', () => {
+  const hreflangTags = [
+    { lang: 'fr', href: 'https://autoliva.com/product/x/' },
+    { lang: 'de', href: 'https://autoliva.com/de/produits/x-1' },
+    { lang: 'x-default', href: 'https://autoliva.com/product/x/' },
+  ];
+  assert.deepEqual(hreflangs(rendreHead({ hreflangTags, seoHreflangSansDe: true })), ['fr', 'x-default']);
+  assert.deepEqual(hreflangs(rendreHead({ hreflangTags })), ['fr', 'de', 'x-default']);
+  assert.equal(hreflangTags.length, 3, 'les données du sélecteur de langue ne sont pas touchées');
 });
 
 /* ─── Articles : filtre des requêtes publiques et liens morts ─────────────── */

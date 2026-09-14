@@ -26,6 +26,7 @@ const { sanitizeBrandLeak } = require('../services/brandSanitizer');
 const claimFilter = require('../services/claimFilter');
 const scalapay = require('../services/scalapay');
 const produitsDisparus = require('../services/produitsDisparus');
+const seoIndexPolicy = require('../services/seoIndexPolicy');
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -668,6 +669,14 @@ async function getProduct(req, res, next) {
       });
     }
 
+    /* Politique d'indexation, famille « products » (plan de reprise SEO du
+       14/09/2026, actions A5.7 et A14) : décidée ICI, sur l'_id, le SKU et le
+       choix fait dans l'admin — seul le contrôleur les connaît une fois le
+       slug résolu. Avant le calque allemand, qui remplace seo. La fiche reste
+       en ligne, en vente et dans les flux Merchant ; la page allemande d'une
+       fiche retirée sort aussi. SEO_PRUNE sans « products » : rien ne change. */
+    seoIndexPolicy.appliquerProduit(res, product);
+
     // Blocs d'information attachés (rendus markdown → HTML, groupés par position).
     product.infoBlocksByPosition = dbConnected
       ? await loadInfoBlocksByPosition(product)
@@ -1143,8 +1152,10 @@ async function getProduct(req, res, next) {
         .filter((v) => mongoose.Types.ObjectId.isValid(v))
         .map((v) => new mongoose.Types.ObjectId(v));
 
+      /* Articles en 410 ou sortis de Google : jamais proposés depuis une fiche
+         (politique d'indexation, plan SEO A5.5). */
       const chosenDocs = chosenObjectIds.length
-        ? await BlogPost.find({ _id: { $in: chosenObjectIds }, isPublished: true, ...blogFilterLang })
+        ? await BlogPost.find(seoIndexPolicy.publicBlogFilter({ _id: { $in: chosenObjectIds }, isPublished: true, ...blogFilterLang }, { lang: blogLang }))
             .select(`_id ${blogProjection}`)
             .lean()
         : [];
@@ -1154,11 +1165,11 @@ async function getProduct(req, res, next) {
         .map((oid) => chosenById.get(String(oid)))
         .filter(Boolean);
 
-      const fromArticlesDocs = await BlogPost.find({
+      const fromArticlesDocs = await BlogPost.find(seoIndexPolicy.publicBlogFilter({
         isPublished: true,
         ...blogFilterLang,
         relatedProductIds: new mongoose.Types.ObjectId(id),
-      })
+      }, { lang: blogLang }))
         .sort({ publishedAt: -1, createdAt: -1 })
         .limit(6)
         .select(`_id ${blogProjection}`)
@@ -1212,7 +1223,8 @@ async function getProduct(req, res, next) {
     const htmlCandidate = looksLikeHtml(descriptionNormalized)
       ? descriptionNormalized
       : markdownToHtml(descriptionNormalized);
-    const safeDescriptionHtml = sanitizeProductHtml(htmlCandidate);
+    /* Un lien vers un article en 410 ne survit pas dans la description. */
+    const safeDescriptionHtml = seoIndexPolicy.retirerLiensDisparus(sanitizeProductHtml(htmlCandidate));
 
     product = {
       ...product,
