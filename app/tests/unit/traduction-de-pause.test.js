@@ -91,4 +91,24 @@ test('le balayage ne fait rien tant que DE_AUTO_TRANSLATE ne vaut pas exactement
     assert.strictEqual(await traduireNouveautesDe(), null, `DE_AUTO_TRANSLATE=${JSON.stringify(valeur)}`);
   }
   assert.equal(mongoose.connection.readyState, 0, 'aucune connexion tentée');
+
+  /* Base absente, le test ci-dessus passerait même sans la garde. Sans clé
+     OpenAI, en revanche, le job qui franchit la garde le DIT (« clé absente ») :
+     désarmé, il doit se taire — c'est la preuve qu'il s'est arrêté avant. */
+  process.env.OPENAI_API_KEY = '';
+  const avertissements = [];
+  const warn = console.warn;
+  console.warn = (...args) => { avertissements.push(args.join(' ')); };
+  try {
+    for (const valeur of [undefined, 'false', '1', 'TRUE', ' true']) {
+      if (valeur === undefined) delete process.env.DE_AUTO_TRANSLATE; else process.env.DE_AUTO_TRANSLATE = valeur;
+      await traduireNouveautesDe();
+    }
+    assert.deepEqual(avertissements, [], 'désarmé, le balayage s’arrête avant même de chercher sa clé');
+    process.env.DE_AUTO_TRANSLATE = 'true';
+    await traduireNouveautesDe();
+    assert.equal(avertissements.length, 1, 'armé, il va plus loin — le contrôle ci-dessus voit donc bien la garde');
+  } finally {
+    console.warn = warn;
+  }
 });
