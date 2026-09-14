@@ -93,18 +93,38 @@ function premiereIp(valeur) {
  * rôle, offres Cloudflare Enterprise). req.ip en dernier recours (local,
  * tests, ou si Cloudflare disparaissait).
  */
-function ipDuVisiteur(req) {
+function lireVisiteur(req) {
   const h = (req && req.headers) || {};
-  return premiereIp(h['cf-connecting-ip'])
-    || premiereIp(h['true-client-ip'])
-    || normaliserIp(req && (req.ip || (req.socket && req.socket.remoteAddress)));
+  const cf = premiereIp(h['cf-connecting-ip']);
+  if (cf) return { ip: cf, source: 'CF-Connecting-IP' };
+  const tci = premiereIp(h['true-client-ip']);
+  if (tci) return { ip: tci, source: 'True-Client-IP' };
+  return { ip: normaliserIp(req && (req.ip || (req.socket && req.socket.remoteAddress))), source: 'req.ip' };
+}
+
+function ipDuVisiteur(req) {
+  return lireVisiteur(req).ip;
+}
+
+/* Rien ne garantit encore que Render transmet CF-Connecting-IP jusqu'à
+   l'application. Une ligne par source et par démarrage, dans les journaux
+   Render, le dit : si « CF-Connecting-IP » n'apparaît jamais après quelques
+   lectures de sitemap, l'en-tête n'arrive pas, et la clé retombe sur
+   l'adresse d'avant (le nœud, peut-être). À vérifier AVANT de resoumettre un
+   sitemap (action A13). Jamais l'adresse elle-même : seulement d'où elle vient. */
+const SOURCES_SIGNALEES = new Set();
+function signalerSource(source) {
+  if (SOURCES_SIGNALEES.has(source)) return;
+  SOURCES_SIGNALEES.add(source);
+  console.log(`[limiteur crawl] adresse du visiteur lue dans ${source}`);
 }
 
 /** Clé de limiteur : l'adresse du visiteur, regroupée par /56 en IPv6 (un
  *  abonné IPv6 dispose d'un bloc entier : sans regroupement, il changerait
  *  d'adresse à chaque requête pour échapper à la limite). */
 function cleLimiteur(req) {
-  const ip = ipDuVisiteur(req);
+  const { ip, source } = lireVisiteur(req);
+  signalerSource(source);
   return ip ? ipKeyGenerator(ip, 56) : 'ip-inconnue';
 }
 

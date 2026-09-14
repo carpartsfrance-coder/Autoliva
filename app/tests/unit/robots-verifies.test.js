@@ -208,3 +208,27 @@ test('clé du limiteur : un visiteur par clé, le nœud Cloudflare ne mélange p
   const v6b = cleLimiteur({ headers: { 'cf-connecting-ip': '2a01:e0a:1:2:ffff::9' } });
   assert.equal(v6a, v6b);
 });
+
+test('les journaux disent d’où vient l’adresse du visiteur, une fois par source, sans jamais l’écrire', (t) => {
+  /* Module neuf : le « déjà signalé » des autres tests ne compte pas. */
+  const chemin = require.resolve('../../src/services/robotsVerifies');
+  const sauvegarde = require.cache[chemin];
+  delete require.cache[chemin];
+  const lignes = [];
+  const log = console.log;
+  console.log = (...args) => { lignes.push(args.join(' ')); };
+  t.after(() => { console.log = log; require.cache[chemin] = sauvegarde; });
+
+  const neuf = require('../../src/services/robotsVerifies');
+  for (let i = 0; i < 5; i++) neuf.cleLimiteur({ headers: { 'cf-connecting-ip': `203.0.113.${i + 1}` }, ip: '172.70.1.1' });
+  neuf.cleLimiteur({ headers: {}, ip: '172.70.1.1' });
+  neuf.cleLimiteur({ headers: {}, ip: '172.70.1.2' });
+  console.log = log;
+
+  const signalements = lignes.filter((l) => l.startsWith('[limiteur crawl]'));
+  assert.deepEqual(signalements, [
+    '[limiteur crawl] adresse du visiteur lue dans CF-Connecting-IP',
+    '[limiteur crawl] adresse du visiteur lue dans req.ip',
+  ]);
+  assert.ok(!lignes.some((l) => /203\.0\.113\.|172\.70\./.test(l)), 'aucune adresse dans les journaux');
+});
