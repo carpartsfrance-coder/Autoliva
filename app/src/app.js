@@ -731,6 +731,12 @@ app.use('/sav-files', require('./routes/savFiles'));
 const i18nSav = require('./services/i18nSav');
 app.use(i18nSav.middleware());
 
+/* Base de données indisponible : 503 + Retry-After sur les fiches, le blog,
+   /pieces-auto, /reference et /categorie (et leurs pages allemandes), plutôt
+   qu'un 404, une redirection ou une fiche de démonstration que Google
+   prendrait au mot. Plan de reprise SEO du 14/09/2026, action A4.4. */
+app.use(require('./middlewares/baseRequise'));
+
 // French routes (default)
 app.use('/', indexRouter);
 app.use('/blog', blogRouter);
