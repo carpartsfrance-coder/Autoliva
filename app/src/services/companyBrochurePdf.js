@@ -194,7 +194,11 @@ function buildCompanyBrochurePdf(opts = {}) {
       { icon: glyphShield, fill: C_RED,  t: 'Garantie écrite', d: 'Occasion : 6 mois, sans franchise kilométrique, transférable à la revente. Reconditionné : 1 an.' },
       { icon: glyphGauge,  fill: C_NAVY, t: 'Contrôlé & certifié', d: "Chaque moteur passe sur banc d'essai : compression, étanchéité, endoscopie. Rapport de test + attestation fournis." },
       { icon: glyphTruck,  fill: C_NAVY, t: 'Expédition rapide', d: 'Logistique optimisée, emballage sécurisé et suivi colis, partout en Europe une fois la pièce prête et payée.' },
-      { icon: glyphCard,   fill: C_RED,  t: 'Paiement flexible', d: 'Réglez en 3 ou 4 fois si vous le souhaitez : solution de financement immédiate et 100% sécurisée.' },
+      /* Le 3/4 fois n'est proposé que si Scalapay est actif (coupé depuis le
+         05/08) : la brochure le promettait sans condition. Plan SEO A11. */
+      require('./scalapay').estActif()
+        ? { icon: glyphCard, fill: C_RED, t: 'Paiement flexible', d: 'Réglez en 3 ou 4 fois si vous le souhaitez : solution de financement immédiate et 100% sécurisée.' }
+        : { icon: glyphCard, fill: C_RED, t: 'Paiement sécurisé', d: 'Paiement en ligne 100 % sécurisé, facture fournie pour chaque commande.' },
     ];
     const cardW = (W - 14) / 2, cardH = 96, gapX = 14, gapY = 14;
     vp.forEach((v, i) => {

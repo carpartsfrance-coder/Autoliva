@@ -17,6 +17,12 @@ const mongoose = require('mongoose');
 const BlogPost = require('../models/BlogPost');
 const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
+const blogProductCta = require('../services/blogProductCta');
+const nettoyageArticle = require('../services/nettoyageArticle');
+const signatureArticle = require('../services/signatureArticle');
+const { sanitizeBrandLeak } = require('../services/brandSanitizer');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const brand = require('../config/brand');
 const datesSeo = require('../services/datesSeo');
@@ -190,33 +196,14 @@ async function rewriteInternalBlogLinks(html, currentSlug) {
 // ── CTA produit allemand inline (remplace le placeholder dans contentHtml) ──
 
 function buildGermanProductCta(product) {
-  const cents = Number.isFinite(product.priceCents) ? product.priceCents : 0;
-  const priceEuros = (cents / 100).toFixed(2).replace('.', ',');
-  /* Le paiement en 3 fois passait par Scalapay, coupé côté boutique en 08/2026.
-     Ce CTA continuait de le promettre sur chaque article allemand. Il suit
-     désormais le même interrupteur que le reste du site. */
-  const scalapayActif = require('../services/scalapay').estActif();
-  const dreiRaten = (scalapayActif && cents > 50000)
-    ? `bzw. 3 Raten à ${(cents / 300).toFixed(2).replace('.', ',')} € ohne Aufpreis`
-    : '';
-  const prodUrl = produitUrlDe(product);
-  const safeName = escapeHtml(produitNomDe(product));
-  const safeUrl = escapeHtml(prodUrl);
-
-  return `<div class="blog-product-cta" data-product-cta="1">`
-    + `<span class="cta-eyebrow">Generalüberholtes Teil — 2 Jahre Garantie</span>`
-    + `<h3 class="cta-title">${safeName}</h3>`
-    + `<span class="cta-price">${priceEuros} € inkl. MwSt.</span>`
-    + (dreiRaten ? `<span class="cta-price-sub">${dreiRaten}</span>` : '')
-    + `<ul class="cta-features">`
-    + `<li>Geprüft, 24 Monate Garantie</li>`
-    + `<li>Lieferung 3-5 Werktage</li>`
-    + `<li>Dedizierter Technik-Support</li>`
-    + (scalapayActif ? `<li>Sichere Zahlung in 3 Raten ohne Aufpreis</li>` : `<li>Sichere Zahlung</li>`)
-    + `</ul>`
-    + `<a class="cta-btn" href="${safeUrl}">Zum Produkt</a>`
-    + `<a class="cta-btn-outline" href="/de/contact">Techniker kontaktieren</a>`
-    + `</div>`;
+  /* Même encadré que le français, même règle : il ne dit que ce que dit la
+     fiche (état traduit, garantie saisie, délai traduit) — plan SEO A11.
+     Il promettait « 2 Jahre Garantie » et « 24 Monate » sur toute pièce. */
+  return blogProductCta.construireCta(product, {
+    lang: 'de',
+    url: produitUrlDe(product),
+    nom: produitNomDe(product),
+  });
 }
 
 // ── Index DE — liste des articles traduits (avec pagination) ────────────────
@@ -344,9 +331,13 @@ async function getBlogPostDe(req, res) {
       ? `${baseUrl}/de/blog/${encodeURIComponent(post.slug)}`
       : `/de/blog/${encodeURIComponent(post.slug)}`;
 
-    const computedDesc = truncateText(stripHtml(de.excerpt || de.contentHtml || ''), 160);
+    /* Même filtre que le corps pour le résumé et la description Google
+       (5 résumés et 4 descriptions promettaient encore « Ratenzahlung »). */
+    const sansAllegation = (t) => (t ? sanitizeBrandLeak(claimFilter.filtrer(t, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }))) : '');
+    const excerptPropre = sansAllegation(de.excerpt);
+    const computedDesc = truncateText(stripHtml(excerptPropre || sansAllegation(nettoyageArticle.nettoyerHtml(de.contentHtml || '', { lang: 'de' })) || ''), 160);
     const metaDescription = normalizeMetaText(
-      (de.seo && de.seo.metaDescription) ? de.seo.metaDescription : computedDesc
+      (de.seo && de.seo.metaDescription && sansAllegation(de.seo.metaDescription)) || computedDesc
     );
     const titleTag = normalizeMetaText(
       (de.seo && de.seo.metaTitle) ? de.seo.metaTitle : `${de.title} - ${brand.NAME}`
@@ -363,7 +354,16 @@ async function getBlogPostDe(req, res) {
     const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
 
     // Réécriture des liens internes /blog/X → /de/blog/X quand X est traduit
-    let contentHtml = await rewriteInternalBlogLinks(de.contentHtml || '', post.slug);
+    /* Mêmes restes de chaîne que le français, retirés avant la réécriture des
+       liens internes (les liens de préproduction deviennent /blog/x, puis
+       /de/blog/x) — plan SEO A12. */
+    let contentHtml = await rewriteInternalBlogLinks(
+      claimFilter.filtrer(
+        nettoyageArticle.nettoyerHtml(de.contentHtml || '', { lang: 'de' }),
+        claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() })
+      ),
+      post.slug
+    );
     /* Liens vers un article en 410 (/blog/x, /de/blog/x, autoliva.com,
        carpartsfrance.fr) : le texte reste, la balise <a> part. */
     contentHtml = retirerLiensDisparus(contentHtml);
@@ -373,7 +373,7 @@ async function getBlogPostDe(req, res) {
     let related = [];
     if (Array.isArray(post.relatedProductIds) && post.relatedProductIds.length) {
       related = await Product.find({ _id: { $in: post.relatedProductIds } })
-        .select('_id name priceCents imageUrl slug localizations.de.name localizations.de.slug localizations.de.translatedAt')
+        .select('_id name priceCents imageUrl slug localizations.de.name localizations.de.slug localizations.de.translatedAt ' + blogProductCta.CHAMPS_FICHE)
         .lean();
     }
 
@@ -436,7 +436,7 @@ async function getBlogPostDe(req, res) {
           datePublished: publishedAt ? new Date(publishedAt).toISOString() : undefined,
           dateModified: datesSeo.isoPasse(modifieLe) || undefined,
           inLanguage: 'de',
-          author: { '@type': 'Person', name: post.authorName || brand.NAME },
+          author: signatureArticle.signature(post, { lang: 'de', marque: brand.NAME, baseUrl }).auteurJsonLd,
           publisher: {
             '@type': 'Organization',
             name: brand.NAME,
@@ -472,10 +472,13 @@ async function getBlogPostDe(req, res) {
       post: {
         title: de.title,
         slug: post.slug,
-        excerpt: de.excerpt || computedDesc,
+        excerpt: excerptPropre || computedDesc,
         coverImageUrl: buildSeoMediaUrl(post.coverImageUrl, de.title),
         category: post.category && post.category.slug ? { slug: post.category.slug, label: blogCategoryLabelDe(post.category) } : null,
-        authorName: post.authorName || 'Autoliva-Experte',
+        ...(() => {
+          const signe = signatureArticle.signature(post, { lang: 'de', marque: brand.NAME, baseUrl });
+          return { authorName: signe.nom, verification: signe.verification, mentionIa: signe.mentionIa };
+        })(),
         dateLabel: formatDateDE(publishedAt),
         readingTimeLabel: `${estimateReadingTimeMinutes(de.contentHtml)} Min. Lesezeit`,
         contentHtml: contentHtml || '',

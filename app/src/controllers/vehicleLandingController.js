@@ -57,13 +57,17 @@ function clampSeoTitle(t) {
 
 /* Auto-templates de contenu SEO (utilisés quand pas de VehicleLanding admin) */
 function buildAutoSeoText({ makeName, modelName, partTypeName, totalCount }) {
+  /* Plan SEO A11 : le paiement en 3x/4x n'est annoncé que si Scalapay est
+     actif — il est coupé depuis le 05/08 et ces textes le promettaient sur
+     les 7 782 pages véhicule. */
+  const actif = scalapay.estActif();
   if (modelName && partTypeName) {
-    return `<p>Notre catalogue propose ${totalCount} ${partTypeName.toLowerCase()} d'occasion et reconditionné(e)s compatibles avec ${makeName} ${modelName}, contrôlé(e)s et garanti(e)s. Paiement en 3x ou 4x sans frais, expédition en France et en Europe.</p>`;
+    return `<p>Notre catalogue propose ${totalCount} ${partTypeName.toLowerCase()} d'occasion et reconditionné(e)s compatibles avec ${makeName} ${modelName}, contrôlé(e)s et garanti(e)s.${actif ? ' Paiement en 3x ou 4x sans frais,' : ''} Expédition en France et en Europe.</p>`;
   }
   if (modelName) {
-    return `<p>Découvrez notre sélection de pièces auto ${makeName} ${modelName} (occasion et reconditionné) : ${totalCount} référence(s) contrôlées et garanties, paiement en 3x ou 4x sans frais, expédition rapide en France et en Europe.</p>`;
+    return `<p>Découvrez notre sélection de pièces auto ${makeName} ${modelName} (occasion et reconditionné) : ${totalCount} référence(s) contrôlées et garanties,${actif ? ' paiement en 3x ou 4x sans frais,' : ''} expédition rapide en France et en Europe.</p>`;
   }
-  return `<p>Notre catalogue de pièces auto ${makeName} (occasion, reconditionné et neuf) couvre l'ensemble des modèles de la marque : ${totalCount} référence(s) contrôlées et garanties, expédiées en France et en Europe. Toutes nos pièces ${makeName} bénéficient d'un paiement en 3x ou 4x sans frais.</p>`;
+  return `<p>Notre catalogue de pièces auto ${makeName} (occasion, reconditionné et neuf) couvre l'ensemble des modèles de la marque : ${totalCount} référence(s) contrôlées et garanties, expédiées en France et en Europe.${actif ? ` Toutes nos pièces ${makeName} bénéficient d'un paiement en 3x ou 4x sans frais.` : ''}</p>`;
 }
 
 /* Construit un title 60 char max EN PRÉSERVANT le nom modèle complet.
@@ -110,13 +114,14 @@ function buildAutoTitle({ makeName, modelName, partTypeName }) {
 
 function buildAutoMetaDescription({ makeName, modelName, partTypeName, totalCount }) {
   const count = totalCount > 0 ? `${totalCount} référence${totalCount > 1 ? 's' : ''}` : 'Large choix';
+  const paiement = scalapay.estActif() ? ' Paiement 3x/4x sans frais.' : '';
   if (modelName && partTypeName) {
-    return `${partTypeName} ${makeName} ${modelName} d'occasion et reconditionné — ${count} contrôlées et garanties. Livraison France & Europe. Paiement 3x/4x.`;
+    return `${partTypeName} ${makeName} ${modelName} d'occasion et reconditionné — ${count} contrôlées et garanties. Livraison France & Europe.${paiement}`;
   }
   if (modelName) {
-    return `Pièces auto ${makeName} ${modelName} occasion et reconditionné : ${count} contrôlées et garanties. Paiement 3x/4x sans frais. Expédition rapide.`;
+    return `Pièces auto ${makeName} ${modelName} occasion et reconditionné : ${count} contrôlées et garanties. Expédition rapide.${paiement}`;
   }
-  return `Pièces auto ${makeName} d'occasion, reconditionnées et neuves — ${count} contrôlées et garanties. Paiement 3x/4x. Livraison France & Europe.`;
+  return `Pièces auto ${makeName} d'occasion, reconditionnées et neuves — ${count} contrôlées et garanties. Livraison France & Europe.${paiement}`;
 }
 
 /* Lookup le VehicleLanding override pour un combo. Renvoie null si rien. */
@@ -140,7 +145,7 @@ async function listMakes(req, res, next) {
     const baseUrl = getPublicBaseUrlFromReq(req);
     const canonicalUrl = baseUrl ? `${baseUrl}/pieces-auto` : '/pieces-auto';
     const title = clampSeoTitle(`Pièces auto d'occasion et reconditionnées par marque | ${brand.NAME}`);
-    const metaDescription = `Trouvez vos pièces auto d'occasion et reconditionnées, contrôlées et garanties, classées par marque véhicule. Catalogue complet : Audi, BMW, Peugeot, Renault, Volkswagen et plus. Paiement 3x/4x sans frais.`;
+    const metaDescription = `Trouvez vos pièces auto d'occasion et reconditionnées, contrôlées et garanties, classées par marque véhicule. Catalogue complet : Audi, BMW, Peugeot, Renault, Volkswagen et plus.${scalapay.estActif() ? ' Paiement 3x/4x sans frais.' : ''}`;
 
     const jsonLd = toJsonLdSafe({
       '@context': 'https://schema.org',
@@ -509,4 +514,6 @@ module.exports = {
   getModelLanding,
   getModelCategoryLanding,
   renderLanding,
+  /* Exposé pour les tests : les promesses de ces textes sont vérifiées. */
+  _pourTests: { buildAutoSeoText, buildAutoMetaDescription },
 };

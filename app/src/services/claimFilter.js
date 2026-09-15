@@ -108,6 +108,19 @@ function contexteLanding({ scalapayActif = false } = {}) {
   };
 }
 
+/**
+ * Article de blog : les mêmes règles que les pages, SAUF la durée de
+ * garantie. Un article parle de pièces précises — beaucoup sont bien
+ * garanties 24 mois — et sans fiche de référence, retirer toute durée
+ * effacerait du vrai. Les durées des articles relèvent de la relecture
+ * humaine (plan SEO A17).
+ */
+function contexteArticle({ scalapayActif = false } = {}) {
+  const regles = reglesActives(FAMILLE_LANDING, { scalapayActif });
+  regles.delete('dureeGarantie');
+  return { famille: FAMILLE_LANDING, regles, dureeGarantieMois: null, portee: 'article' };
+}
+
 /* ─── Description masquée ─────────────────────────────────────────────────── */
 
 /**
@@ -228,8 +241,10 @@ const REECRITURES = [
   { regle: 'atelierPropre', motif: /\bunserer Werkstatt(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unserer Partnerwerkstatt') },
   { regle: 'atelierPropre', motif: /\bunsere Werkstatt(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unsere Partnerwerkstatt') },
 
-  /* Superlatif invérifiable. */
-  { regle: 'couvertureLaPlusLongue', motif: /\s*[—–,]?\s*(?:la )?couverture la plus longue du marché(?:\s+sur\s+(?:ce modèle|cette référence|cette pièce))?/gi, par: '' },
+  /* Superlatif invérifiable. « (?:\s*[—–,])?\s* » et non « \s*[—–,]?\s* » :
+     deux \s* collés se partagent les blancs de toutes les façons possibles,
+     et une suite de 2 000 espaces figeait le rendu 1,7 s (4 000 : 14 s). */
+  { regle: 'couvertureLaPlusLongue', motif: /(?:\s*[—–,])?\s*(?:la )?couverture la plus longue du marché(?:\s+sur\s+(?:ce modèle|cette référence|cette pièce))?/gi, par: '' },
 
   /* « …, paiement en 3× sans frais » en FIN de phrase : on retire la seule
      proposition, la phrase garde son début (« Échange standard sans caution »). */
@@ -249,6 +264,15 @@ const PAIEMENT = [
   /\b[34]\s+fois\s+sans\s+frais\b/i,
   /\bscalapay\b/i,
   /\b(?:payer|paiement|régler)\s+en\s+plusieurs\s+fois\b/i,
+  /* Relevées dans les articles de blog (15/09/2026) : le montant s'intercale
+     (« payable en 3 x 263 EUR sans frais »), ou le nombre de fois est écrit en
+     toutes lettres après un mot de paiement. Un mot de PAIEMENT est exigé :
+     « serrer en 3 fois » n'est pas une promesse. */
+  /\b[34]\s?[x×]\s*\d[\d\s.,]*\s*(?:€|eur\b|euros?\b)\s*(?:ttc\s*)?sans\s+frais/i,
+  /\b(?:paiements?|payer|régler|payable|réglable)\s+en\s+[34]\s+fois\b/i,
+  /* Allemand : « in 3 Raten », « Ratenzahlung ». */
+  /\b[34]\s+Raten\b/i,
+  /\bRatenzahlung\b/i,
 ];
 
 const NOMBRES = {
@@ -354,8 +378,18 @@ function lisible(morceau) {
 
 /* Frontières de phrase : « . » « ! » « ? » suivis d'un blanc puis d'une
    MAJUSCULE (« réf. 0AM » n'en est pas une), et le séparateur « · » des listes
-   compactes (« reconditionnée · garantie 24 mois · paiement 3x/4x »). */
-const SEPARATEUR = /\s+·\s+|(?<=[.!?…][\uE000-\uEFFF»"”’)]*)\s+(?=[\uE000-\uEFFF]*[«"“(]?\s?[A-ZÀ-ÖØ-ÞŒ])/g;
+   compactes (« reconditionnée · garantie 24 mois · paiement 3x/4x »).
+   Le point d'une ABRÉVIATION non plus : en allemand, le nom qui suit prend
+   toujours la majuscule. « Für 1.390 € inkl. MwSt – in 3 Raten zahlbar – wird
+   sie… » était coupé après « inkl. », et le retrait de la suite laissait
+   « Für 1.390 € inkl. » seul dans 85 articles /de (mesuré le 15/09/2026). */
+const ABREVIATIONS = ['[Ii]nkl', '[Zz]zgl', '[Ee]xkl', 'ca', 'bzw', 'evtl', 'ggf', 'vgl', 'Nr', '[Rr]éf', 'env', 'cf', '[zdu]', 'z\\.\\s?B', 'd\\.\\s?h', 'u\\.\\s?a'];
+const SEPARATEUR = new RegExp(
+  '\\s+·\\s+|(?<=[.!?…][\\uE000-\\uEFFF»"”’)]*)'
+  + `(?<!(?:^|[^\\wÀ-ÿ])(?:${ABREVIATIONS.join('|')})\\.[\\uE000-\\uEFFF]*)`
+  + '\\s+(?=[\\uE000-\\uEFFF]*[«"“(]?\\s?[A-ZÀ-ÖØ-ÞŒ])',
+  'g'
+);
 
 function decouper(bloc) {
   const morceaux = [];
@@ -493,13 +527,41 @@ function filtrer(texte, ctx) {
     plat2 += parties[i];
   }
   let out = restaurer(plat2, balises);
-  /* Éléments vidés par un retrait (<p></p>, <li></li>, <strong></strong>). */
+  /* Éléments vidés par un retrait (<p></p>, <li></li>, <strong></strong>),
+     puis les titres dont toute la section est partie. */
   let precedent;
   do {
     precedent = out;
-    out = out.replace(/<(p|li|strong|em|b|i|u|span|h[2-4])(?:\s[^<>]*)?>\s*<\/\1>/gi, '');
+    out = out.replace(/<(p|li|ul|ol|strong|em|b|i|u|span|h[2-4])(?:\s[^<>]*)?>\s*<\/\1>/gi, '');
+    out = retirerTitresOrphelins(out, texte);
   } while (out !== precedent);
   return out.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/* Titre directement suivi d'un titre de même rang (ou plus haut), ou de la
+   fin du texte : sa section est vide. Dans les articles, c'étaient des
+   questions de FAQ restées sans réponse (« Combien coûte un pont arrière
+   BMW 3,08 reconditionné ? » dont l'unique réponse promettait le 3x) :
+   19 en français, 21 en allemand, mesurés le 15/09/2026. */
+const TITRE_ET_SUITE = /<(h([2-6]))(?:\s[^<>]*)?>(?:(?!<\/?h[1-6][\s>/])[\s\S])*?<\/\1>\s*(?=<h([1-6])[\s>/]|$)/gi;
+
+function titresOrphelins(html) {
+  const liste = new Set();
+  for (const m of html.matchAll(TITRE_ET_SUITE)) {
+    if (m[3] && Number(m[3]) > Number(m[2])) continue; // un sous-titre suit : la section continue
+    liste.add(m[0].trim());
+  }
+  return liste;
+}
+
+/* Seul un titre que le FILTRE a laissé sans section part : un titre déjà
+   seul dans le texte d'origine reste tel que l'auteur l'a voulu. */
+function retirerTitresOrphelins(sortie, source) {
+  const deja = titresOrphelins(source);
+  return sortie.replace(TITRE_ET_SUITE, (m, balise, rang, rangSuivant) => {
+    if (rangSuivant && Number(rangSuivant) > Number(rang)) return m;
+    return deja.has(m.trim()) ? m : '';
+  });
 }
 
 function nettoyerSiModifie(avant, apres) {
@@ -601,6 +663,7 @@ module.exports = {
   reglesActives,
   contexteFiche,
   contexteLanding,
+  contexteArticle,
   familleADescriptionMasquee,
   motifDescriptionMasquee,
   filtrer,

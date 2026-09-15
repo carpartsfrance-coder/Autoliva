@@ -3,6 +3,12 @@ const mongoose = require('mongoose');
 const BlogPost = require('../models/BlogPost');
 const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
+const blogProductCta = require('../services/blogProductCta');
+const nettoyageArticle = require('../services/nettoyageArticle');
+const signatureArticle = require('../services/signatureArticle');
+const { sanitizeBrandLeak } = require('../services/brandSanitizer');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
 const { markdownToHtml, escapeHtml } = require('../services/blogContent');
 const { buildHreflangSet } = require('../services/i18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
@@ -610,7 +616,7 @@ async function getBlogPost(req, res) {
     const cleanedMarkdown = (post && typeof post.contentMarkdown === 'string' && post.contentMarkdown.trim())
       ? stripLeadingSommaireSectionFromMarkdown(
           stripLeadingSeoNoiseFromMarkdown(
-            stripDuplicateLeadingTitleFromMarkdown(post.contentMarkdown, post.title)
+            stripDuplicateLeadingTitleFromMarkdown(nettoyageArticle.nettoyerMarkdown(post.contentMarkdown), post.title)
           )
         )
       : '';
@@ -651,8 +657,15 @@ async function getBlogPost(req, res) {
       return buildBlogPostCanonical(baseUrl, post.slug);
     })();
 
-    const computedDesc = truncateText(stripHtml(post.excerpt || contentHtml || ''), 160);
-    const metaDescription = normalizeMetaText(post.seo && post.seo.metaDescription ? post.seo.metaDescription : computedDesc);
+    /* Résumé et description Google passent par le même filtre que le corps :
+       9 résumés et 13 descriptions promettaient encore le 3x, et le résumé
+       s'affiche juste au-dessus du texte filtré. Calculés sur le corps
+       NETTOYÉ, pas sur le brut (JSON-LD collé en tête d'article). Un texte
+       vidé par le filtre retombe sur le suivant. Plan SEO A11. */
+    const sansAllegation = (t) => (t ? sanitizeBrandLeak(claimFilter.filtrer(t, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }))) : '');
+    const excerptPropre = sansAllegation(post.excerpt);
+    const computedDesc = truncateText(stripHtml(excerptPropre || sansAllegation(nettoyageArticle.nettoyerHtml(contentHtml || '', { lang: 'fr' })) || ''), 160);
+    const metaDescription = normalizeMetaText((post.seo && post.seo.metaDescription && sansAllegation(post.seo.metaDescription)) || computedDesc);
     /* Title : on garantit toujours le suffix " | Autoliva" pour éviter que
      * <title> et <h1> soient identiques (cause des 14 alertes Semrush
      * "duplicate H1 and title tags" sur les articles blog). Si le DB
@@ -674,7 +687,7 @@ async function getBlogPost(req, res) {
       : `${post.title} | ${brand.NAME}`;
     const title = clampSeoTitle(normalizeMetaText(rawTitle));
 
-    const excerptForView = post.excerpt || computedDesc;
+    const excerptForView = excerptPropre || computedDesc;
 
     if (!post.excerpt && finalMarkdown) {
       const withoutLeadParagraph = stripLeadingParagraphFromMarkdown(finalMarkdown);
@@ -690,7 +703,7 @@ async function getBlogPost(req, res) {
     let related = [];
     if (Array.isArray(post.relatedProductIds) && post.relatedProductIds.length) {
       related = await Product.find({ _id: { $in: post.relatedProductIds } })
-        .select('_id name priceCents imageUrl slug')
+        .select('_id name priceCents imageUrl slug ' + blogProductCta.CHAMPS_FICHE)
         .lean();
     }
 
@@ -723,28 +736,27 @@ async function getBlogPost(req, res) {
       };
     });
 
+    /* Restes de la chaîne de production retirés À L'AFFICHAGE (JSON-LD collé
+       dans le texte, titres « cocon / satellite », ancien nom, liens vers la
+       préproduction coupée) — plan SEO A12. Avant l'encadré produit et avant
+       le retrait des liens vers les articles en 410, pour que les liens
+       réécrits y passent aussi. */
+    contentHtml = nettoyageArticle.nettoyerHtml(contentHtml, { lang: 'fr' });
+    /* Mêmes promesses non prouvées que les fiches (3x/4x tant que Scalapay
+       est coupé, ISO 9001, « nos ateliers »…) : 303 articles promettaient
+       encore le paiement en plusieurs fois. Plan SEO A11. */
+    contentHtml = claimFilter.filtrer(contentHtml, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }));
+    const signe = signatureArticle.signature(post, { lang: 'fr', marque: brand.NAME, baseUrl });
+
     if (related.length && contentHtml) {
       const p = related[0];
-      const cents = Number.isFinite(p.priceCents) ? p.priceCents : 0;
-      const priceEuros = (cents / 100).toFixed(2).replace('.', ',');
-      const troisFois = cents > 50000
-        ? `soit 3x ${(cents / 300).toFixed(2).replace('.', ',')} € sans frais`
-        : '';
-      const prodUrl = buildProductPublicPath(p);
-      const ctaHtml = `<div class="blog-product-cta" data-product-cta="1">`
-        + `<span class="cta-eyebrow">Pièce reconditionnée — Garantie 2 ans</span>`
-        + `<h3 class="cta-title">${escapeHtml(p.name || '')}</h3>`
-        + `<span class="cta-price">${priceEuros} € TTC</span>`
-        + (troisFois ? `<span class="cta-price-sub">${troisFois}</span>` : '')
-        + `<ul class="cta-features">`
-        + `<li>Testé et garanti 24 mois</li>`
-        + `<li>Livraison express 24/48h</li>`
-        + `<li>Support technique dédié</li>`
-        + `<li>Paiement sécurisé en 3x sans frais</li>`
-        + `</ul>`
-        + `<a class="cta-btn" href="${escapeHtml(prodUrl)}">Voir la fiche produit</a>`
-        + `<a class="cta-btn-outline" href="/contact">Contacter un technicien</a>`
-        + `</div>`;
+      /* L'encadré ne promet plus que ce que dit la fiche liée (état, garantie,
+         délai, 3x seulement si Scalapay est actif) — plan SEO A11. */
+      const ctaHtml = blogProductCta.construireCta(p, {
+        lang: 'fr',
+        url: buildProductPublicPath(p),
+        nom: p.name || '',
+      });
       contentHtml = contentHtml.replace(
         /<div class="blog-product-cta" data-product-cta="1"><\/div>/g,
         ctaHtml
@@ -816,10 +828,9 @@ async function getBlogPost(req, res) {
       image: ogImage ? [ogImage] : undefined,
       datePublished: publishedAt ? new Date(publishedAt).toISOString() : undefined,
       dateModified: datesSeo.isoPasse(modifieLe) || undefined,
-      author: {
-        '@type': 'Person',
-        name: post.authorName || brand.NAME,
-      },
+      /* Plus de « Person » fictive : l'équipe (Organization), ou la personne
+         qui a réellement relu l'article (plan SEO A12). */
+      author: signe.auteurJsonLd,
       publisher: {
         '@type': 'Organization',
         name: brand.NAME,
@@ -920,7 +931,9 @@ async function getBlogPost(req, res) {
         excerpt: excerptForView,
         coverImageUrl: buildSeoMediaUrl(effectiveCoverImageUrl, post.title),
         category: post.category && post.category.slug ? { slug: post.category.slug, label: post.category.label || post.category.slug } : null,
-        authorName: post.authorName || 'Expert CarParts',
+        authorName: signe.nom,
+        verification: signe.verification,
+        mentionIa: signe.mentionIa,
         dateLabel: formatDateFR(publishedAt),
         readingTimeLabel: `${readingTimeMinutes} min de lecture`,
         contentHtml: contentHtml || '',

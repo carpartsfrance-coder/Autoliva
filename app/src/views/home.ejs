@@ -117,8 +117,9 @@
           <span class="material-symbols-rounded text-primary text-3xl">payments</span>
         </div>
         <div>
-          <h3 class="font-bold text-base sm:text-lg home-display"><%= t('home.flexPayTitle') %></h3>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1"><%= t('home.flexPayDesc') %></p>
+          <%# Le « 3 ou 4 fois » n'est annoncé que si Scalapay est actif (coupé depuis le 05/08) %>
+          <h3 class="font-bold text-base sm:text-lg home-display"><%= (typeof scalapayActif !== 'undefined' && scalapayActif) ? t('home.flexPayTitle') : t('product.securePay') %></h3>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1"><%= (typeof scalapayActif !== 'undefined' && scalapayActif) ? t('home.flexPayDesc') : t('product.reassure2SubNoScalapay') %></p>
         </div>
       </div>
       <div class="bg-white dark:bg-surface-dark p-4 sm:p-6 rounded-2xl flex items-center gap-4 sm:gap-5 shadow-sm border border-slate-100 dark:border-slate-800">
