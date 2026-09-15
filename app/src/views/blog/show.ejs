@@ -31,6 +31,12 @@
                 <span class="material-symbols-outlined text-sm text-primary">person</span>
                 <%= t('blog.by') %> <%= post && post.authorName ? post.authorName : brand.NAME_SHORT %>
               </span>
+              <% if (post && post.verification) { %>
+                <span class="flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm text-primary">verified</span>
+                  <%= post.verification %>
+                </span>
+              <% } %>
               <span class="flex items-center gap-1">
                 <span class="material-symbols-outlined text-sm text-primary">calendar_today</span>
                 <%= post && post.dateLabel ? post.dateLabel : '' %>
@@ -51,6 +57,9 @@
 
             <div class="prose dark:prose-invert max-w-none article-content">
               <%- post && post.contentHtml ? post.contentHtml : '' %>
+              <% if (post && post.mentionIa) { %>
+                <p class="mt-8 text-xs text-slate-500"><%= post.mentionIa %></p>
+              <% } %>
             </div>
 
             <!-- Gros CTA fin d'article : capture lead avec contexte produit/sujet -->

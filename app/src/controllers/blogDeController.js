@@ -18,6 +18,8 @@ const BlogPost = require('../models/BlogPost');
 const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
 const blogProductCta = require('../services/blogProductCta');
+const nettoyageArticle = require('../services/nettoyageArticle');
+const signatureArticle = require('../services/signatureArticle');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const brand = require('../config/brand');
 const datesSeo = require('../services/datesSeo');
@@ -345,7 +347,10 @@ async function getBlogPostDe(req, res) {
     const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
 
     // Réécriture des liens internes /blog/X → /de/blog/X quand X est traduit
-    let contentHtml = await rewriteInternalBlogLinks(de.contentHtml || '', post.slug);
+    /* Mêmes restes de chaîne que le français, retirés avant la réécriture des
+       liens internes (les liens de préproduction deviennent /blog/x, puis
+       /de/blog/x) — plan SEO A12. */
+    let contentHtml = await rewriteInternalBlogLinks(nettoyageArticle.nettoyerHtml(de.contentHtml || '', { lang: 'de' }), post.slug);
     /* Liens vers un article en 410 (/blog/x, /de/blog/x, autoliva.com,
        carpartsfrance.fr) : le texte reste, la balise <a> part. */
     contentHtml = retirerLiensDisparus(contentHtml);
@@ -418,7 +423,7 @@ async function getBlogPostDe(req, res) {
           datePublished: publishedAt ? new Date(publishedAt).toISOString() : undefined,
           dateModified: datesSeo.isoPasse(modifieLe) || undefined,
           inLanguage: 'de',
-          author: { '@type': 'Person', name: post.authorName || brand.NAME },
+          author: signatureArticle.signature(post, { lang: 'de', marque: brand.NAME, baseUrl }).auteurJsonLd,
           publisher: {
             '@type': 'Organization',
             name: brand.NAME,
@@ -457,7 +462,10 @@ async function getBlogPostDe(req, res) {
         excerpt: de.excerpt || computedDesc,
         coverImageUrl: buildSeoMediaUrl(post.coverImageUrl, de.title),
         category: post.category && post.category.slug ? { slug: post.category.slug, label: blogCategoryLabelDe(post.category) } : null,
-        authorName: post.authorName || 'Autoliva-Experte',
+        ...(() => {
+          const signe = signatureArticle.signature(post, { lang: 'de', marque: brand.NAME, baseUrl });
+          return { authorName: signe.nom, verification: signe.verification, mentionIa: signe.mentionIa };
+        })(),
         dateLabel: formatDateDE(publishedAt),
         readingTimeLabel: `${estimateReadingTimeMinutes(de.contentHtml)} Min. Lesezeit`,
         contentHtml: contentHtml || '',

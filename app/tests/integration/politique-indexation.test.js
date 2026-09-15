@@ -630,9 +630,14 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
       .filter((a) => a.includes(S.G_P0726) || a.includes(S.G_HILUX) || a.includes(S.G_CODES));
     activer('');
     const avant = (await get(`/blog/${S.K_DQ200}`)).corps;
-    for (const forme of [`href="/blog/${S.G_P0726}"`, `href="https://autoliva.com/blog/${S.G_P0726}/"`, `href='https://www.carpartsfrance.fr/blog/${S.G_HILUX}'`]) {
+    /* L'écriture carpartsfrance.fr stockée en base sort déjà en autoliva.com :
+       le nettoyage d'affichage des articles (plan SEO A12) remplace l'ancien
+       domaine avant le retrait des liens vers un 410. Les trois écritures
+       restent couvertes par le test unitaire de retirerLiensDisparus. */
+    for (const forme of [`href="/blog/${S.G_P0726}"`, `href="https://autoliva.com/blog/${S.G_P0726}/"`, `href='https://autoliva.com/blog/${S.G_HILUX}'`]) {
       assert.ok(avant.includes(forme), `jeu d’essai : le corps pointe vers ${forme}`);
     }
+    assert.ok(!/carpartsfrance\.fr/.test(avant), 'plus aucun lien vers l’ancien domaine dans un article affiché');
     const avantDe = liens((await get(`/de/blog/${S.K_DQ200}`)).corps);
     for (const forme of [`/de/blog/${S.G_P0726}`, `/de/blog/${S.G_HILUX}`, `https://autoliva.com/de/blog/${S.G_CODES}`]) {
       assert.ok(avantDe.includes(forme), `jeu d’essai : le corps allemand pointe vers ${forme}`);

@@ -4,6 +4,8 @@ const BlogPost = require('../models/BlogPost');
 const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
 const blogProductCta = require('../services/blogProductCta');
+const nettoyageArticle = require('../services/nettoyageArticle');
+const signatureArticle = require('../services/signatureArticle');
 const { markdownToHtml, escapeHtml } = require('../services/blogContent');
 const { buildHreflangSet } = require('../services/i18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
@@ -611,7 +613,7 @@ async function getBlogPost(req, res) {
     const cleanedMarkdown = (post && typeof post.contentMarkdown === 'string' && post.contentMarkdown.trim())
       ? stripLeadingSommaireSectionFromMarkdown(
           stripLeadingSeoNoiseFromMarkdown(
-            stripDuplicateLeadingTitleFromMarkdown(post.contentMarkdown, post.title)
+            stripDuplicateLeadingTitleFromMarkdown(nettoyageArticle.nettoyerMarkdown(post.contentMarkdown), post.title)
           )
         )
       : '';
@@ -724,6 +726,14 @@ async function getBlogPost(req, res) {
       };
     });
 
+    /* Restes de la chaîne de production retirés À L'AFFICHAGE (JSON-LD collé
+       dans le texte, titres « cocon / satellite », ancien nom, liens vers la
+       préproduction coupée) — plan SEO A12. Avant l'encadré produit et avant
+       le retrait des liens vers les articles en 410, pour que les liens
+       réécrits y passent aussi. */
+    contentHtml = nettoyageArticle.nettoyerHtml(contentHtml, { lang: 'fr' });
+    const signe = signatureArticle.signature(post, { lang: 'fr', marque: brand.NAME, baseUrl });
+
     if (related.length && contentHtml) {
       const p = related[0];
       /* L'encadré ne promet plus que ce que dit la fiche liée (état, garantie,
@@ -804,10 +814,9 @@ async function getBlogPost(req, res) {
       image: ogImage ? [ogImage] : undefined,
       datePublished: publishedAt ? new Date(publishedAt).toISOString() : undefined,
       dateModified: datesSeo.isoPasse(modifieLe) || undefined,
-      author: {
-        '@type': 'Person',
-        name: post.authorName || brand.NAME,
-      },
+      /* Plus de « Person » fictive : l'équipe (Organization), ou la personne
+         qui a réellement relu l'article (plan SEO A12). */
+      author: signe.auteurJsonLd,
       publisher: {
         '@type': 'Organization',
         name: brand.NAME,
@@ -908,7 +917,9 @@ async function getBlogPost(req, res) {
         excerpt: excerptForView,
         coverImageUrl: buildSeoMediaUrl(effectiveCoverImageUrl, post.title),
         category: post.category && post.category.slug ? { slug: post.category.slug, label: post.category.label || post.category.slug } : null,
-        authorName: post.authorName || 'Expert CarParts',
+        authorName: signe.nom,
+        verification: signe.verification,
+        mentionIa: signe.mentionIa,
         dateLabel: formatDateFR(publishedAt),
         readingTimeLabel: `${readingTimeMinutes} min de lecture`,
         contentHtml: contentHtml || '',

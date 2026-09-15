@@ -18,6 +18,14 @@ const blogPostSchema = new mongoose.Schema(
 
     authorName: { type: String, default: 'Expert CarParts', trim: true },
 
+    /* Relecture humaine (plan SEO du 14/09/2026, A12). Remplis à la main dans
+       l'admin, par la personne qui a VRAIMENT relu l'article : ce sont eux, et
+       eux seuls, qui mettent un nom de personne en signature et dans le
+       JSON-LD. Vides → l'article est signé par l'équipe. */
+    reviewedBy: { type: String, default: '', trim: true },
+    reviewerRole: { type: String, default: '', trim: true },
+    reviewedAt: { type: Date, default: null },
+
     readingTimeMinutes: { type: Number, default: 0, min: 0, max: 120 },
 
     relatedProductIds: {
@@ -74,6 +82,7 @@ const blogPostSchema = new mongoose.Schema(
         translationBucket: { type: String, default: '', trim: true }, // 'technical' | 'comparative' | 'simple'
         reviewedAt: { type: Date, default: null },
         reviewedBy: { type: String, default: '', trim: true },
+        reviewerRole: { type: String, default: '', trim: true },
       },
     },
   },

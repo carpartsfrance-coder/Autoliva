@@ -397,6 +397,32 @@ async function getAdminBlogPostSearchApi(req, res, next) {
   }
 }
 
+
+/* Relecture humaine d'un article (plan SEO du 14/09/2026, A12). Seul le
+   formulaire admin peut la poser — jamais l'API d'import : une signature de
+   personne doit correspondre à quelqu'un qui a vraiment relu. Nom ET date
+   sont exigés ; l'un sans l'autre ne vaut rien. */
+function lireRelecture(body) {
+  const reviewedBy = getTrimmedString(body && body.reviewedBy);
+  const reviewerRole = getTrimmedString(body && body.reviewerRole);
+  const brut = getTrimmedString(body && body.reviewedAt);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(brut);
+  const date = m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)) : null;
+  const valide = Boolean(reviewedBy && date && !Number.isNaN(date.getTime()) && date.getTime() <= Date.now() + 86400000);
+  return {
+    reviewedBy: valide ? reviewedBy : '',
+    reviewerRole: valide ? reviewerRole : '',
+    reviewedAt: valide ? brut : '',
+    reviewedAtDate: valide ? date : null,
+  };
+}
+
+function dateIsoJour(d) {
+  if (!d) return '';
+  const x = d instanceof Date ? d : new Date(d);
+  return Number.isNaN(x.getTime()) ? '' : x.toISOString().slice(0, 10);
+}
+
 function buildBlogPostForm(post) {
   const categorySlug = post && post.category && post.category.slug ? post.category.slug : '';
   const categoryLabel = post && post.category && post.category.label ? post.category.label : '';
@@ -409,6 +435,9 @@ function buildBlogPostForm(post) {
     excerpt: post && post.excerpt ? post.excerpt : '',
     coverImageUrl: post && post.coverImageUrl ? post.coverImageUrl : '',
     authorName: post && post.authorName ? post.authorName : 'Expert CarParts',
+    reviewedBy: post && post.reviewedBy ? post.reviewedBy : '',
+    reviewerRole: post && post.reviewerRole ? post.reviewerRole : '',
+    reviewedAt: post ? dateIsoJour(post.reviewedAt) : '',
     readingTimeMinutes: Number.isFinite(post && post.readingTimeMinutes) ? String(post.readingTimeMinutes) : '',
     relatedProductIds: Array.isArray(post && post.relatedProductIds)
       ? post.relatedProductIds.map((id) => String(id)).join('\n')
@@ -526,6 +555,7 @@ async function postAdminCreateBlogPost(req, res, next) {
       excerpt: getTrimmedString(req.body.excerpt),
       coverImageUrl: getTrimmedString(req.body.coverImageUrl),
       authorName: getTrimmedString(req.body.authorName) || 'Expert CarParts',
+      ...lireRelecture(req.body),
       readingTimeMinutes: getTrimmedString(req.body.readingTimeMinutes),
       relatedProductIds: typeof req.body.relatedProductIds === 'string' ? req.body.relatedProductIds : '',
       isFeatured: req.body.isFeatured === 'on' || req.body.isFeatured === 'true',
@@ -587,6 +617,12 @@ async function postAdminCreateBlogPost(req, res, next) {
       source: 'admin-form',
       options: { slugMode: 'auto', strictProducts: false },
     });
+    if (form.reviewedBy && form.reviewedAtDate) {
+      await BlogPost.updateOne(
+        { _id: created._id },
+        { $set: { reviewedBy: form.reviewedBy, reviewerRole: form.reviewerRole, reviewedAt: form.reviewedAtDate } }
+      );
+    }
 
     if (created.isPublished && !created.newsletterSentAt) {
       const baseUrl = getSiteUrlFromEnv() || '';
@@ -697,6 +733,7 @@ async function postAdminUpdateBlogPost(req, res, next) {
       excerpt: getTrimmedString(req.body.excerpt),
       coverImageUrl: getTrimmedString(req.body.coverImageUrl),
       authorName: getTrimmedString(req.body.authorName) || 'Expert CarParts',
+      ...lireRelecture(req.body),
       readingTimeMinutes: getTrimmedString(req.body.readingTimeMinutes),
       relatedProductIds: typeof req.body.relatedProductIds === 'string' ? req.body.relatedProductIds : '',
       isFeatured: req.body.isFeatured === 'on' || req.body.isFeatured === 'true',
@@ -771,6 +808,9 @@ async function postAdminUpdateBlogPost(req, res, next) {
             label: form.categoryLabel,
           },
           authorName: form.authorName,
+          reviewedBy: form.reviewedBy,
+          reviewerRole: form.reviewerRole,
+          reviewedAt: form.reviewedAtDate,
           readingTimeMinutes: readingTimeMinutes !== null
             ? readingTimeMinutes
             : (Number.isFinite(existing.readingTimeMinutes) ? existing.readingTimeMinutes : 0),
@@ -872,6 +912,8 @@ async function postAdminBlogMediaUploadApi(req, res, next) {
 }
 
 module.exports = {
+  /* Exposé pour les tests : la relecture exige un nom ET une date valide. */
+  _pourTests: { lireRelecture },
   getAdminBlogPostsPage,
   getAdminNewBlogPostPage,
   postAdminCreateBlogPost,
