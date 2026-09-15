@@ -75,7 +75,6 @@ const LIBELLES = {
     eyebrowParDefaut: 'Pièce auto',
     prix: (p) => `${p} € TTC`,
     troisFois: (p) => `soit 3x ${p} € sans frais`,
-    delaiParDefaut: 'Expédition suivie depuis la France',
     support: 'Support technique dédié',
     paiement3x: 'Paiement sécurisé en 3x sans frais',
     paiement: 'Paiement sécurisé',
@@ -88,7 +87,6 @@ const LIBELLES = {
     eyebrowParDefaut: 'Autoteil',
     prix: (p) => `${p} € inkl. MwSt.`,
     troisFois: (p) => `bzw. 3 Raten à ${p} € ohne Aufpreis`,
-    delaiParDefaut: 'Lieferung 3-5 Werktage',
     support: 'Dedizierter Technik-Support',
     paiement3x: 'Sichere Zahlung in 3 Raten ohne Aufpreis',
     paiement: 'Sichere Zahlung',
@@ -115,7 +113,11 @@ function construireCta(produit, { lang = 'fr', url, nom, scalapayActif } = {}) {
 
   const lignes = [
     mois ? L.garantie(mois) : '',
-    delai(produit, lang) || L.delaiParDefaut,
+    /* Pas de délai par défaut : « Lieferung 3-5 Werktage » ou « Expédition
+       depuis la France » promettaient, faute de texte traduit ou saisi, ce
+       que la fiche ne dit pas (pièces expédiées par un fournisseur étranger,
+       « Délai selon disponibilité » sur 145 des 299 fiches liées). */
+    delai(produit, lang),
     L.support,
     actif ? L.paiement3x : L.paiement,
   ].filter(Boolean);

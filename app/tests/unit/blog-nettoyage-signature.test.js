@@ -82,7 +82,8 @@ test('signature : plus de personne fictive', async (sub) => {
   await sub.test('persona de la chaîne → l’équipe, déclarée comme organisation', () => {
     for (const persona of ['Expert CarParts', 'Car Parts France', 'Expert Autoliva', 'Autoliva', '']) {
       const s = signature({ authorName: persona }, opts);
-      assert.equal(s.nom, 'L\'équipe Autoliva', persona);
+      /* Affiché après « Par » : minuscule. */
+      assert.equal(s.nom, 'l\'équipe Autoliva', persona);
       assert.equal(s.auteurJsonLd['@type'], 'Organization', persona);
       assert.equal(s.verification, '');
     }
@@ -103,7 +104,8 @@ test('signature : plus de personne fictive', async (sub) => {
 
   await sub.test('en allemand, seule la relecture de la version allemande compte', () => {
     const relu = { reviewedBy: 'Killian Belabbes', reviewedAt: new Date('2026-09-20T12:00:00Z') };
-    assert.equal(signature(relu, { ...opts, lang: 'de' }).nom, 'Das Autoliva-Team');
+    /* Affiché après « Von » : « Von der Autoliva-Redaktion », pas « Von Das … ». */
+    assert.equal(signature(relu, { ...opts, lang: 'de' }).nom, 'der Autoliva-Redaktion');
     const s = signature({ localizations: { de: { reviewedBy: 'Jonas Weber', reviewedAt: new Date('2026-09-21T12:00:00Z') } } }, { ...opts, lang: 'de' });
     assert.match(s.verification, /^Geprüft von Jonas Weber, am 21\. September 2026$/);
   });
@@ -122,6 +124,20 @@ test('admin : la relecture exige un nom ET une date plausible', () => {
   assert.equal(lireRelecture({ reviewedBy: '', reviewedAt: '2026-09-20' }).reviewedAtDate, null);
   assert.equal(lireRelecture({ reviewedBy: 'Killian', reviewedAt: '2099-01-01' }).reviewedAtDate, null, 'date future refusée');
   assert.equal(lireRelecture({ reviewedBy: 'Killian', reviewedAt: '20/09/2026' }).reviewedAtDate, null, 'format inattendu refusé');
+  assert.equal(lireRelecture({ reviewedBy: 'Killian', reviewedAt: '2026-02-31' }).reviewedAtDate, null, 'jour inexistant refusé, pas reporté au 3 mars');
+});
+
+test('« pilier » : le jargon part, le vrai français reste', () => {
+  /* Mesuré sur les articles publiés : « guide pilier complet » donnait
+     « guide complet complet » (7 articles), « un pilier du marché » devenait
+     « un guide du marché ». */
+  assert.equal(nettoyerHtml('<p>Consultez notre guide pilier complet sur la boîte.</p>'), '<p>Consultez notre guide complet sur la boîte.</p>');
+  assert.equal(nettoyerHtml('<p>X — le guide pilier complet.</p>'), '<p>X — le guide complet.</p>');
+  assert.equal(nettoyerHtml('<p>La W211 est un pilier du marché de l&#39;occasion.</p>'), '<p>La W211 est un pilier du marché de l&#39;occasion.</p>');
+  assert.equal(nettoyerHtml('<p>Les piliers de la fiabilité.</p>'), '<p>Les piliers de la fiabilité.</p>');
+  assert.equal(nettoyerHtml('<p>Voir l&#39;article pilier sur la DSG.</p>'), '<p>Voir le guide complet sur la DSG.</p>');
+  assert.equal(nettoyerHtml('<p>La fin de l&#39;article pilier.</p>'), '<p>La fin du guide complet.</p>');
+  assert.equal(nettoyerHtml('<p>Retour à l’article pilier ici.</p>'), '<p>Retour au guide complet ici.</p>');
 });
 
 test('le jargon allemand de la traduction est retiré aussi', () => {

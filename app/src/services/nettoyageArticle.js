@@ -101,15 +101,24 @@ function nettoyerHtml(html, { lang = 'fr' } = {}) {
       .replace(/\bThemen-?Cluster\b/g, 'Themenbereich')
       .replace(/\b[KC]okon\b/g, 'Themenbereich'));
   }
+  /* « … pilier complet » : le « complet » d'origine est absorbé, sinon
+     « guide pilier complet » donnait « guide complet complet » (7 articles).
+     « l'article pilier » → « le guide complet », jamais « l'guide ».
+     « un pilier du marché », « les piliers de… » sont du vrai français : seul
+     le pilier SANS ces déterminants est du jargon de plan. */
   out = surTexte(out, (t) => t
     .replace(/\s+[—–-]\s+pilier(?:\s+complet)?\s*$/i, '')
     .replace(/\s*\(pilier\)/gi, '')
-    .replace(/\s+[—–-]\s+l(?:'|’|&#39;|&#x27;)article pilier/gi, '')
-    .replace(/\b([Aa])rticle pilier\b/g, (m, a) => (a === 'A' ? 'Guide complet' : 'guide complet'))
-    .replace(/\b([Dd])ossier pilier\b/g, '$1ossier complet')
-    .replace(/\b([Gg])uide pilier\b/g, '$1uide complet')
-    .replace(/\b([Pp])iliers(?=\s)/g, (m, p) => (p === 'P' ? 'Guides' : 'guides'))
-    .replace(/\b([Pp])ilier(?!\s+[ABC]\b)(?=\s)/g, (m, p) => (p === 'P' ? 'Guide' : 'guide'))
+    .replace(/\s+[—–-]\s+l(?:'|’|&#39;|&#x27;)article pilier(?:\s+complet)?/gi, '')
+    .replace(/\b([Dd])e l(?:'|’|&#39;|&#x27;)article pilier(?:\s+complet)?\b/g, '$1u guide complet')
+    .replace(/(^|[^\p{L}])([Àà]) l(?:'|’|&#39;|&#x27;)article pilier(?:\s+complet)?\b/gu, (m, avant, a) => `${avant}${a === 'À' ? 'Au' : 'au'} guide complet`)
+    .replace(/\b([Ll])(?:'|’|&#39;|&#x27;)article pilier(?:\s+complet)?\b/g, (m, l) => (l === 'L' ? 'Le guide complet' : 'le guide complet'))
+    .replace(/\b([Cc])et article pilier(?:\s+complet)?\b/g, '$1e guide complet')
+    .replace(/\b([Aa])rticle pilier(?:\s+complet)?\b/g, (m, a) => (a === 'A' ? 'Guide complet' : 'guide complet'))
+    .replace(/\b([Dd])ossier pilier(?:\s+complet)?\b/g, '$1ossier complet')
+    .replace(/\b([Gg])uide pilier(?:\s+complet)?\b/g, '$1uide complet')
+    .replace(/(?<!\b(?:[Dd]es|[Ll]es)\s)\b([Pp])iliers(?=\s)/g, (m, p) => (p === 'P' ? 'Guides' : 'guides'))
+    .replace(/(?<!\b[Uu]n\s)\b([Pp])ilier(?!\s+[ABC]\b)(?=\s)/g, (m, p) => (p === 'P' ? 'Guide' : 'guide'))
     .replace(/\bdans le cocon\s+[^:*\]]{0,39}[^:*\]\s]/gi, 'sur le même sujet')
     .replace(/\bcocon\s+SEO\s+/gi, 'dossier ')
     .replace(/\b([Gg])uides?\s+cocon\b/g, '$1uides')

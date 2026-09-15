@@ -77,8 +77,11 @@ function signature(post, { lang = 'fr', marque = 'Autoliva', baseUrl = '' } = {}
     return { nom: saisi, verification: '', mentionIa: '', auteurJsonLd: { '@type': 'Person', name: saisi } };
   }
 
+  /* `nom` suit « Par » / « Von » dans la ligne d'auteur (blog/show.ejs) :
+     « Par l'équipe Autoliva », « Von der Autoliva-Redaktion » — et non
+     « Par L'équipe » ni « Von Das Autoliva-Team », fautif en allemand. */
   return {
-    nom: lang === 'de' ? `Das ${marque}-Team` : `L'équipe ${marque}`,
+    nom: lang === 'de' ? `der ${marque}-Redaktion` : `l'équipe ${marque}`,
     verification: '',
     mentionIa: '',
     auteurJsonLd: { '@type': 'Organization', name: marque, ...(baseUrl ? { url: baseUrl } : {}) },

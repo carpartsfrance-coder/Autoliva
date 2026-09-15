@@ -64,7 +64,13 @@ test('l’allemand ne reprend que les champs traduits', async (sub) => {
     const html = construireCta(OCCASION_12, { lang: 'de', url: '/de/produits/x', nom: 'Motor', scalapayActif: false });
     assert.doesNotMatch(html, /Occasion|Expédition/);
     assert.match(html, /12 Monate Garantie/);
-    assert.match(html, /Lieferung 3-5 Werktage/);
+    /* Délai non traduit : la ligne disparaît, aucun délai n'est promis. */
+    assert.doesNotMatch(html, /Lieferung|Werktage|Versand/);
+  });
+
+  await sub.test('délai absent en français : aucune ligne de délai inventée', () => {
+    const html = construireCta({ ...OCCASION_12, shippingDelayText: '' }, { lang: 'fr', url: '/p', scalapayActif: false });
+    assert.doesNotMatch(html, /Expédition|Livraison|24\/48/);
   });
 
   await sub.test('pastille traduite : elle est reprise', () => {

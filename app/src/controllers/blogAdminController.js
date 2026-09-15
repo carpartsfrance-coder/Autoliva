@@ -408,7 +408,10 @@ function lireRelecture(body) {
   const brut = getTrimmedString(body && body.reviewedAt);
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(brut);
   const date = m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)) : null;
-  const valide = Boolean(reviewedBy && date && !Number.isNaN(date.getTime()) && date.getTime() <= Date.now() + 86400000);
+  /* Date.UTC reporte les jours hors mois (« 2026-02-31 » → 3 mars) : une date
+     qui ne se relit pas à l'identique est refusée, pas déplacée. */
+  const existe = Boolean(date && !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === brut);
+  const valide = Boolean(reviewedBy && existe && date.getTime() <= Date.now() + 86400000);
   return {
     reviewedBy: valide ? reviewedBy : '',
     reviewerRole: valide ? reviewerRole : '',
