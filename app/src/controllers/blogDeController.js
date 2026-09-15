@@ -17,6 +17,7 @@ const mongoose = require('mongoose');
 const BlogPost = require('../models/BlogPost');
 const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
+const blogProductCta = require('../services/blogProductCta');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const brand = require('../config/brand');
 const datesSeo = require('../services/datesSeo');
@@ -190,33 +191,14 @@ async function rewriteInternalBlogLinks(html, currentSlug) {
 // ── CTA produit allemand inline (remplace le placeholder dans contentHtml) ──
 
 function buildGermanProductCta(product) {
-  const cents = Number.isFinite(product.priceCents) ? product.priceCents : 0;
-  const priceEuros = (cents / 100).toFixed(2).replace('.', ',');
-  /* Le paiement en 3 fois passait par Scalapay, coupé côté boutique en 08/2026.
-     Ce CTA continuait de le promettre sur chaque article allemand. Il suit
-     désormais le même interrupteur que le reste du site. */
-  const scalapayActif = require('../services/scalapay').estActif();
-  const dreiRaten = (scalapayActif && cents > 50000)
-    ? `bzw. 3 Raten à ${(cents / 300).toFixed(2).replace('.', ',')} € ohne Aufpreis`
-    : '';
-  const prodUrl = produitUrlDe(product);
-  const safeName = escapeHtml(produitNomDe(product));
-  const safeUrl = escapeHtml(prodUrl);
-
-  return `<div class="blog-product-cta" data-product-cta="1">`
-    + `<span class="cta-eyebrow">Generalüberholtes Teil — 2 Jahre Garantie</span>`
-    + `<h3 class="cta-title">${safeName}</h3>`
-    + `<span class="cta-price">${priceEuros} € inkl. MwSt.</span>`
-    + (dreiRaten ? `<span class="cta-price-sub">${dreiRaten}</span>` : '')
-    + `<ul class="cta-features">`
-    + `<li>Geprüft, 24 Monate Garantie</li>`
-    + `<li>Lieferung 3-5 Werktage</li>`
-    + `<li>Dedizierter Technik-Support</li>`
-    + (scalapayActif ? `<li>Sichere Zahlung in 3 Raten ohne Aufpreis</li>` : `<li>Sichere Zahlung</li>`)
-    + `</ul>`
-    + `<a class="cta-btn" href="${safeUrl}">Zum Produkt</a>`
-    + `<a class="cta-btn-outline" href="/de/contact">Techniker kontaktieren</a>`
-    + `</div>`;
+  /* Même encadré que le français, même règle : il ne dit que ce que dit la
+     fiche (état traduit, garantie saisie, délai traduit) — plan SEO A11.
+     Il promettait « 2 Jahre Garantie » et « 24 Monate » sur toute pièce. */
+  return blogProductCta.construireCta(product, {
+    lang: 'de',
+    url: produitUrlDe(product),
+    nom: produitNomDe(product),
+  });
 }
 
 // ── Index DE — liste des articles traduits (avec pagination) ────────────────
@@ -373,7 +355,7 @@ async function getBlogPostDe(req, res) {
     let related = [];
     if (Array.isArray(post.relatedProductIds) && post.relatedProductIds.length) {
       related = await Product.find({ _id: { $in: post.relatedProductIds } })
-        .select('_id name priceCents imageUrl slug localizations.de.name localizations.de.slug localizations.de.translatedAt')
+        .select('_id name priceCents imageUrl slug localizations.de.name localizations.de.slug localizations.de.translatedAt ' + blogProductCta.CHAMPS_FICHE)
         .lean();
     }
 

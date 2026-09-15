@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const BlogPost = require('../models/BlogPost');
 const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
+const blogProductCta = require('../services/blogProductCta');
 const { markdownToHtml, escapeHtml } = require('../services/blogContent');
 const { buildHreflangSet } = require('../services/i18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
@@ -690,7 +691,7 @@ async function getBlogPost(req, res) {
     let related = [];
     if (Array.isArray(post.relatedProductIds) && post.relatedProductIds.length) {
       related = await Product.find({ _id: { $in: post.relatedProductIds } })
-        .select('_id name priceCents imageUrl slug')
+        .select('_id name priceCents imageUrl slug ' + blogProductCta.CHAMPS_FICHE)
         .lean();
     }
 
@@ -725,26 +726,13 @@ async function getBlogPost(req, res) {
 
     if (related.length && contentHtml) {
       const p = related[0];
-      const cents = Number.isFinite(p.priceCents) ? p.priceCents : 0;
-      const priceEuros = (cents / 100).toFixed(2).replace('.', ',');
-      const troisFois = cents > 50000
-        ? `soit 3x ${(cents / 300).toFixed(2).replace('.', ',')} € sans frais`
-        : '';
-      const prodUrl = buildProductPublicPath(p);
-      const ctaHtml = `<div class="blog-product-cta" data-product-cta="1">`
-        + `<span class="cta-eyebrow">Pièce reconditionnée — Garantie 2 ans</span>`
-        + `<h3 class="cta-title">${escapeHtml(p.name || '')}</h3>`
-        + `<span class="cta-price">${priceEuros} € TTC</span>`
-        + (troisFois ? `<span class="cta-price-sub">${troisFois}</span>` : '')
-        + `<ul class="cta-features">`
-        + `<li>Testé et garanti 24 mois</li>`
-        + `<li>Livraison express 24/48h</li>`
-        + `<li>Support technique dédié</li>`
-        + `<li>Paiement sécurisé en 3x sans frais</li>`
-        + `</ul>`
-        + `<a class="cta-btn" href="${escapeHtml(prodUrl)}">Voir la fiche produit</a>`
-        + `<a class="cta-btn-outline" href="/contact">Contacter un technicien</a>`
-        + `</div>`;
+      /* L'encadré ne promet plus que ce que dit la fiche liée (état, garantie,
+         délai, 3x seulement si Scalapay est actif) — plan SEO A11. */
+      const ctaHtml = blogProductCta.construireCta(p, {
+        lang: 'fr',
+        url: buildProductPublicPath(p),
+        nom: p.name || '',
+      });
       contentHtml = contentHtml.replace(
         /<div class="blog-product-cta" data-product-cta="1"><\/div>/g,
         ctaHtml
