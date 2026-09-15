@@ -525,13 +525,41 @@ function filtrer(texte, ctx) {
     plat2 += parties[i];
   }
   let out = restaurer(plat2, balises);
-  /* Éléments vidés par un retrait (<p></p>, <li></li>, <strong></strong>). */
+  /* Éléments vidés par un retrait (<p></p>, <li></li>, <strong></strong>),
+     puis les titres dont toute la section est partie. */
   let precedent;
   do {
     precedent = out;
-    out = out.replace(/<(p|li|strong|em|b|i|u|span|h[2-4])(?:\s[^<>]*)?>\s*<\/\1>/gi, '');
+    out = out.replace(/<(p|li|ul|ol|strong|em|b|i|u|span|h[2-4])(?:\s[^<>]*)?>\s*<\/\1>/gi, '');
+    out = retirerTitresOrphelins(out, texte);
   } while (out !== precedent);
   return out.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/* Titre directement suivi d'un titre de même rang (ou plus haut), ou de la
+   fin du texte : sa section est vide. Dans les articles, c'étaient des
+   questions de FAQ restées sans réponse (« Combien coûte un pont arrière
+   BMW 3,08 reconditionné ? » dont l'unique réponse promettait le 3x) :
+   19 en français, 21 en allemand, mesurés le 15/09/2026. */
+const TITRE_ET_SUITE = /<(h([2-6]))(?:\s[^<>]*)?>(?:(?!<\/?h[1-6][\s>/])[\s\S])*?<\/\1>\s*(?=<h([1-6])[\s>/]|$)/gi;
+
+function titresOrphelins(html) {
+  const liste = new Set();
+  for (const m of html.matchAll(TITRE_ET_SUITE)) {
+    if (m[3] && Number(m[3]) > Number(m[2])) continue; // un sous-titre suit : la section continue
+    liste.add(m[0].trim());
+  }
+  return liste;
+}
+
+/* Seul un titre que le FILTRE a laissé sans section part : un titre déjà
+   seul dans le texte d'origine reste tel que l'auteur l'a voulu. */
+function retirerTitresOrphelins(sortie, source) {
+  const deja = titresOrphelins(source);
+  return sortie.replace(TITRE_ET_SUITE, (m, balise, rang, rangSuivant) => {
+    if (rangSuivant && Number(rangSuivant) > Number(rang)) return m;
+    return deja.has(m.trim()) ? m : '';
+  });
 }
 
 function nettoyerSiModifie(avant, apres) {

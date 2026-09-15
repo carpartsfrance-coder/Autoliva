@@ -70,3 +70,20 @@ test('le point d’une abréviation ne coupe pas la phrase : pas de « 1.390 €
   /* Une vraie fin de phrase reste une frontière. */
   assert.equal(cf.filtrer('<p>Livraison offerte. Paiement en 3 fois disponible. Garde.</p>', coupe()), '<p>Livraison offerte. Garde.</p>');
 });
+
+test('une question de FAQ dont la réponse est retirée part avec elle', () => {
+  /* 19 questions FR et 21 DE restaient sans réponse (« Combien coûte un pont
+     arrière BMW 3,08 reconditionné ? » suivie directement de la question
+     suivante). */
+  const faq = '<h2>FAQ</h2>\n<h3>Combien coûte le pont ?</h3>\n<p>Le pont est à 1 290 € TTC (3 × 430 € sans frais).</p>\n<h3>Quelle garantie ?</h3>\n<p>2 ans.</p>';
+  assert.equal(cf.filtrer(faq, coupe()), '<h2>FAQ</h2>\n<h3>Quelle garantie ?</h3>\n<p>2 ans.</p>');
+  /* Section entière vidée, jusqu'au titre qui la chapeaute. */
+  const seule = '<p>Intro.</p>\n<h2>FAQ</h2>\n<h3>Peut-on payer en plusieurs fois ?</h3>\n<ul>\n<li>3x sans frais</li>\n</ul>\n<h2>Conclusion</h2>\n<p>Fin.</p>';
+  assert.equal(cf.filtrer(seule, coupe()), '<p>Intro.</p>\n<h2>Conclusion</h2>\n<p>Fin.</p>');
+  /* Un titre suivi d'un sous-titre garde sa section ; un titre déjà seul
+     dans le texte d'origine reste tel que l'auteur l'a voulu. */
+  const sous = '<h2>Section</h2>\n<h3>Sous</h3>\n<p>Paiement en 3 fois disponible.</p>\n<h3>Suite</h3>\n<p>Texte.</p>';
+  assert.equal(cf.filtrer(sous, coupe()), '<h2>Section</h2>\n<h3>Suite</h3>\n<p>Texte.</p>');
+  const voulu = '<h2>Titre seul</h2>\n<h2>Autre</h2>\n<p>Paiement en 3 fois disponible. Garde.</p>';
+  assert.equal(cf.filtrer(voulu, coupe()), '<h2>Titre seul</h2>\n<h2>Autre</h2>\n<p>Garde.</p>');
+});
