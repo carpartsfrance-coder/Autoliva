@@ -20,6 +20,11 @@ const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const brand = require('../config/brand');
 const datesSeo = require('../services/datesSeo');
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.5) :
+   les 134 articles allemands en 410 n'apparaissent dans aucune liste. La
+   couche allemande entière relève de la famille « de » (noindex par le
+   chemin), qui la garde en ligne : rien d'autre n'est écarté ici. */
+const { publicBlogFilter, retirerLiensDisparus } = require('../services/seoIndexPolicy');
 
 const LANG_PREFIX = '/de';
 
@@ -162,11 +167,11 @@ async function rewriteInternalBlogLinks(html, currentSlug) {
   if (slugs.size === 0) return html;
 
   // Vérifie en BDD lesquels sont traduits en DE
-  const translated = await BlogPost.find({
+  const translated = await BlogPost.find(publicBlogFilter({
     slug: { $in: Array.from(slugs) },
     isPublished: true,
     'localizations.de.translatedAt': { $ne: null },
-  }).select('slug').lean();
+  }, { lang: 'de' })).select('slug').lean();
 
   const translatedSet = new Set(translated.map((d) => String(d.slug || '').toLowerCase()));
   if (translatedSet.size === 0) return html;
@@ -247,10 +252,10 @@ async function getBlogIndexDe(req, res) {
       return res.render('blog/index', { ...baseLocals, articles: [], popularArticles: [], page: 1, totalPages: 1 });
     }
 
-    const filter = {
+    const filter = publicBlogFilter({
       isPublished: true,
       'localizations.de.translatedAt': { $ne: null },
-    };
+    }, { lang: 'de' });
 
     const total = await BlogPost.countDocuments(filter);
     const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -320,7 +325,7 @@ async function getBlogPostDe(req, res) {
       return res.status(503).render('errors/500', { title: `Fehler - ${brand.NAME}` });
     }
 
-    const post = await BlogPost.findOne({ slug: slugParam, isPublished: true }).lean();
+    const post = await BlogPost.findOne(publicBlogFilter({ slug: slugParam, isPublished: true }, { lang: 'de', page: true })).lean();
     if (!post) {
       // Article DE inexistant → on essaie l'équivalent FR avant de 404.
       return res.redirect(301, `/blog/${encodeURIComponent(slugParam)}`);
@@ -359,6 +364,9 @@ async function getBlogPostDe(req, res) {
 
     // Réécriture des liens internes /blog/X → /de/blog/X quand X est traduit
     let contentHtml = await rewriteInternalBlogLinks(de.contentHtml || '', post.slug);
+    /* Liens vers un article en 410 (/blog/x, /de/blog/x, autoliva.com,
+       carpartsfrance.fr) : le texte reste, la balise <a> part. */
+    contentHtml = retirerLiensDisparus(contentHtml);
 
     // Produits liés : on récupère, on construit le CTA inline avec labels DE,
     // on remplace le placeholder <div class="blog-product-cta" data-product-cta="1"></div>.
@@ -390,12 +398,12 @@ async function getBlogPostDe(req, res) {
     }
 
     // Articles similaires : uniquement parmi ceux traduits en DE, même catégorie
-    const similarDocs = await BlogPost.find({
+    const similarDocs = await BlogPost.find(publicBlogFilter({
       isPublished: true,
       slug: { $ne: post.slug },
       'localizations.de.translatedAt': { $ne: null },
       ...(post.category && post.category.slug ? { 'category.slug': post.category.slug } : {}),
-    })
+    }, { lang: 'de' }))
       .sort({ publishedAt: -1, createdAt: -1 })
       .limit(4)
       .select('slug title localizations.de.title coverImageUrl')

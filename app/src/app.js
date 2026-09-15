@@ -417,6 +417,10 @@ app.get('/sitemap-vehicles.xml', seoController.getSitemapVehicles);
 app.get('/sitemap-references.xml', seoController.getSitemapReferences);
 app.get('/sitemap-blog.xml', seoController.getSitemapBlog);
 app.get('/sitemap-blog-de.xml', seoController.getSitemapBlogDe);
+/* Sitemaps de retrait (plan de reprise SEO, action A5.6) : ils n'existent que
+   pendant les huit semaines qui suivent l'allumage d'une famille de SEO_PRUNE ;
+   sinon la requête continue son chemin jusqu'au 404, comme avant. */
+app.get(/^\/sitemap-retraits-([a-z-]+)\.xml$/, seoController.getSitemapRetraits);
 app.get('/robots.txt', seoController.getRobotsTxt);
 
 /* Feed Google Shopping (Merchant Center). Monté avant session pour les
@@ -737,6 +741,14 @@ app.use('/sav-files', require('./routes/savFiles'));
 // i18n SAV : injecte tSav() et savLocale dans toutes les vues
 const i18nSav = require('./services/i18nSav');
 app.use(i18nSav.middleware());
+
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5) :
+   410 sur les articles retirés, noindex (balise ET en-tête) sur les familles
+   citées dans SEO_PRUNE — blog, /reference, /pieces-auto, /de. Les fiches
+   produit se décident dans leur contrôleur, sur l'_id. SEO_PRUNE absent : ce
+   middleware ne fait rien. Voir services/seoIndexPolicy.js. Avant baseRequise :
+   un 410 n'a pas besoin de la base. */
+app.use(require('./services/seoIndexPolicy').middleware);
 
 /* Base de données indisponible : 503 + Retry-After sur les fiches, le blog,
    /pieces-auto, /reference et /categorie (et leurs pages allemandes), plutôt

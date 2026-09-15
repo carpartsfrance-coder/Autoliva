@@ -1077,6 +1077,24 @@
             <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="metaDescription">Meta Description</label>
             <textarea class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary resize-none" id="metaDescription" name="metaDescription" rows="3"><%= form && form.metaDescription ? form.metaDescription : '' %></textarea>
           </div>
+          <%# Indexation fiche par fiche (plan de reprise SEO du 14/09/2026, action
+              A5.7) : remettre une fiche dans Google, ou l'en sortir, sans PR. Le
+              choix passe devant la liste du plan, mais n'agit que quand la famille
+              « products » est allumée dans SEO_PRUNE (Render). -%>
+          <% var _override = form && typeof form.seoIndexOverride === 'string' ? form.seoIndexOverride : ''; %>
+          <% var _etatIndex = typeof seoIndexState !== 'undefined' && seoIndexState ? seoIndexState : null; %>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 uppercase mb-2" for="seoIndexOverride">Indexation Google</label>
+            <select class="w-full bg-gray-50 dark:bg-gray-900 border-border-light dark:border-border-dark rounded-lg py-2.5 px-4 text-sm focus:ring-primary focus:border-primary" id="seoIndexOverride" name="seoIndexOverride">
+              <option value="" <%= _override === '' ? 'selected' : '' %>>Automatique — suit la politique d'indexation</option>
+              <option value="index" <%= _override === 'index' ? 'selected' : '' %>>Toujours indexable — passe devant la liste</option>
+              <option value="noindex" <%= _override === 'noindex' ? 'selected' : '' %>>Retirée de Google (noindex, follow)</option>
+            </select>
+            <p class="mt-1 text-xs text-slate-400">N'agit que lorsque la famille « products » est active dans SEO_PRUNE (Render). La fiche reste en ligne, en vente, dans le catalogue, la recherche et le flux Merchant.</p>
+            <% if (_etatIndex) { %>
+            <p class="mt-1 text-xs text-slate-500" data-seo-index-etat="<%= _etatIndex.code %>"><%= _etatIndex.texte %></p>
+            <% } %>
+          </div>
         </div>
       </section>
     </form>

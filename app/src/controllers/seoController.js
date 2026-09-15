@@ -12,6 +12,11 @@ const { buildSeoMediaUrl } = require('../services/mediaStorage');
 /* Dates des sitemaps : jamais updatedAt (plan de reprise SEO du 14/09/2026,
    action A4.5) — voir services/datesSeo.js. */
 const datesSeo = require('../services/datesSeo');
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.6) :
+   les sitemaps suivent les mêmes interrupteurs que la balise robots. Une
+   famille ne quitte les sitemaps qu'une fois allumée dans SEO_PRUNE ; un
+   sitemap de retrait temporaire la montre alors à Google. */
+const seoIndexPolicy = require('../services/seoIndexPolicy');
 
 function escapeXml(value) {
   return String(value)
@@ -179,7 +184,16 @@ const PRODUCTS_URLS_CACHE = { value: null, expiresAt: 0, baseUrl: null };
 const PRODUCTS_URLS_TTL_MS = 30 * 60 * 1000;
 let PRODUCTS_URLS_EN_COURS = null;
 
+/* Fiches du sitemap, famille « products » appliquée : une fiche sortie de
+   Google n'y figure plus. Le cache garde TOUTES les fiches ; le filtre passe
+   à la lecture, l'état de l'interrupteur ne peut donc pas y rester collé. */
 async function buildProductsUrls(req, baseUrl, dbConnected) {
+  const toutes = await buildProductsUrlsToutes(req, baseUrl, dbConnected);
+  if (!seoIndexPolicy.familleActive('products')) return toutes;
+  return toutes.filter((u) => !seoIndexPolicy.produitNoindex(u.produit));
+}
+
+async function buildProductsUrlsToutes(req, baseUrl, dbConnected) {
   const now = Date.now();
   if (dbConnected && PRODUCTS_URLS_CACHE.value && PRODUCTS_URLS_CACHE.expiresAt > now
       && PRODUCTS_URLS_CACHE.baseUrl === baseUrl) {
@@ -206,7 +220,7 @@ async function buildProductsUrlsSansCache(req, baseUrl, dbConnected) {
   let products = [];
   if (dbConnected) {
     products = await Product.find({ isPublished: { $ne: false } })
-      .select('_id slug sku name imageUrl galleryUrls')
+      .select('_id slug sku name imageUrl galleryUrls seo.indexOverride')
       .sort({ updatedAt: -1 })
       .lean();
   } else {
@@ -229,7 +243,14 @@ async function buildProductsUrlsSansCache(req, baseUrl, dbConnected) {
     }
     /* lastmod = jour où la fiche a regagné sa description (A3), et seulement
        pour celles-là. Les autres n'ont pas changé : rien à annoncer. */
-    urls.push({ loc, lastmod: datesSeo.lastmodFicheFr(p), images, imageTitle: p.name || '' });
+    urls.push({
+      loc,
+      lastmod: datesSeo.lastmodFicheFr(p),
+      images,
+      imageTitle: p.name || '',
+      /* De quoi appliquer la famille « products » à la lecture du cache. */
+      produit: { _id: p._id, sku: p.sku, seo: p.seo },
+    });
   }
   return urls;
 }
@@ -272,7 +293,7 @@ let VEHICLE_URLS_EN_COURS = null;
  * valeurs passées en minuscules et on les rapproche de `nameLower` renvoyé
  * par listMakes().
  */
-async function buildVehiclesUrls(req, baseUrl, dbConnected) {
+async function buildVehiclesUrlsToutes(req, baseUrl, dbConnected) {
   if (!dbConnected) return [];
   const now = Date.now();
   if (VEHICLE_URLS_CACHE.value && VEHICLE_URLS_CACHE.expiresAt > now
@@ -374,10 +395,37 @@ async function buildVehiclesUrls(req, baseUrl, dbConnected) {
   }
 }
 
-async function buildReferencesUrls(baseUrl, dbConnected) {
+/* Pages véhicule du sitemap, famille « pieces-auto » appliquée : seules les
+   242 pages gardées y restent. Même principe que les fiches : le cache garde
+   tout, le filtre passe à la lecture. */
+async function buildVehiclesUrls(req, baseUrl, dbConnected) {
+  const toutes = await buildVehiclesUrlsToutes(req, baseUrl, dbConnected);
+  if (!seoIndexPolicy.familleActive('pieces-auto')) return toutes;
+  return toutes.filter((u) => seoIndexPolicy.pieceAutoIndexable(cheminDe(u.loc)));
+}
+
+/* Chemin d'une <loc> absolue ou relative (https://autoliva.com/x → /x). */
+function cheminDe(loc) {
+  const s = String(loc || '');
+  if (s.startsWith('/')) return s;
+  try { return new URL(s).pathname; } catch (_) { return s; }
+}
+
+/* Références : sitemap-references.xml, famille « reference » appliquée — il
+   ne garde alors que les 3 références qui ont rapporté (plan SEO A8). Le
+   filtre porte sur la requête et non sur sa sortie : la limite de 5 000
+   s'applique après le tri alphabétique, et C2D3506 aurait pu passer dessous.
+   `pourRetrait` : toutes les AUTRES références, sans limite de 5 000, pour
+   sitemap-retraits-reference.xml. */
+async function buildReferencesUrls(baseUrl, dbConnected, { pourRetrait = false } = {}) {
   if (!dbConnected) return [];
   const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
   const urls = [];
+  const filtree = seoIndexPolicy.familleActive('reference');
+  const gardees = seoIndexPolicy.referencesGardees();
+  let selection = [];
+  if (pourRetrait) selection = [{ $match: { _id: { $nin: gardees } } }];
+  else if (filtree) selection = [{ $match: { _id: { $in: gardees } } }];
   try {
     const refRows = await Product.aggregate([
       { $match: { isPublished: { $ne: false }, compatibleReferences: { $exists: true, $ne: [] } } },
@@ -385,8 +433,9 @@ async function buildReferencesUrls(baseUrl, dbConnected) {
       { $project: { ref: { $trim: { input: '$compatibleReferences' } } } },
       { $match: { ref: { $regex: /^[A-Za-z0-9._\-/]{4,50}$/ } } },
       { $group: { _id: { $toUpper: '$ref' } } },
+      ...selection,
       { $sort: { _id: 1 } },
-      { $limit: 5000 },
+      { $limit: pourRetrait ? 50000 : 5000 },
     ]);
     for (const row of refRows || []) {
       if (!row || !row._id) continue;
@@ -401,7 +450,8 @@ async function buildReferencesUrls(baseUrl, dbConnected) {
 async function buildBlogUrls(baseUrl, dbConnected) {
   if (!dbConnected) return [];
   const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
-  const posts = await BlogPost.find({ isPublished: true })
+  /* Famille « blog » : seuls les 295 articles gardés ; « gone » : pas les 410. */
+  const posts = await BlogPost.find(seoIndexPolicy.publicBlogFilter({ isPublished: true }))
     .select('_id slug title publishedAt createdAt coverImageUrl')
     .sort({ publishedAt: -1, updatedAt: -1 })
     .lean();
@@ -426,10 +476,10 @@ async function buildBlogUrls(baseUrl, dbConnected) {
 async function buildBlogUrlsDe(baseUrl, dbConnected) {
   if (!dbConnected) return [];
   const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
-  const posts = await BlogPost.find({
+  const posts = await BlogPost.find(seoIndexPolicy.publicBlogFilter({
     isPublished: true,
     'localizations.de.translatedAt': { $ne: null },
-  })
+  }, { lang: 'de' }))
     .select('_id slug title publishedAt createdAt coverImageUrl localizations.de.translatedAt localizations.de.title')
     .sort({ publishedAt: -1, updatedAt: -1 })
     .lean();
@@ -485,7 +535,7 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
     isPublished: { $ne: false },
     'localizations.de.translatedAt': { $ne: null },
   })
-    .select('_id slug name imageUrl galleryUrls localizations.de.translatedAt localizations.de.slug localizations.de.name')
+    .select('_id slug sku name imageUrl galleryUrls seo.indexOverride localizations.de.translatedAt localizations.de.slug localizations.de.name')
     .sort({ updatedAt: -1 })
     .lean();
 
@@ -508,7 +558,15 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
         if (typeof u === 'string' && u.trim()) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(u.trim(), imgTitle)));
       }
     }
-    urls.push({ loc, lastmod: last, images, imageTitle: imgTitle || '' });
+    urls.push({
+      loc,
+      lastmod: last,
+      images,
+      imageTitle: imgTitle || '',
+      /* De quoi appliquer la famille « products » : la page allemande d'une
+         fiche retirée sort de Google avec elle (voir getSitemapProductsDe). */
+      produit: { _id: p._id, sku: p.sku, seo: p.seo },
+    });
   }
   return urls;
 }
@@ -552,7 +610,8 @@ const LASTMOD_TTL_MS = 10 * 60 * 1000;
 let lastmodCache = { at: 0, valeurs: null };
 
 async function datesDerniereModif() {
-  if (lastmodCache.valeurs && Date.now() - lastmodCache.at < LASTMOD_TTL_MS) return lastmodCache.valeurs;
+  const sig = seoIndexPolicy.signature();
+  if (lastmodCache.valeurs && lastmodCache.sig === sig && Date.now() - lastmodCache.at < LASTMOD_TTL_MS) return lastmodCache.valeurs;
   if (mongoose.connection.readyState !== 1) return {};
 
   const dernier = async (modele, champ, filtre) => {
@@ -569,8 +628,10 @@ async function datesDerniereModif() {
   const [produitsDe, categoriesDe, blog, blogDe] = await Promise.all([
     dernier(Product, 'localizations.de.translatedAt', { isPublished: { $ne: false }, 'localizations.de.translatedAt': { $ne: null, ...pasDansLeFutur } }),
     dernier(Category, 'localizations.de.translatedAt', { isActive: true, 'localizations.de.translatedAt': { $ne: null, ...pasDansLeFutur } }),
-    dernier(BlogPost, 'publishedAt', { isPublished: true, publishedAt: pasDansLeFutur }),
-    dernier(BlogPost, 'localizations.de.translatedAt', { isPublished: true, 'localizations.de.translatedAt': { $ne: null, ...pasDansLeFutur } }),
+    /* Les articles qui ont quitté le sitemap (410, noindex) ne lui donnent
+       plus sa date : c'étaient justement les plus récents. */
+    dernier(BlogPost, 'publishedAt', seoIndexPolicy.publicBlogFilter({ isPublished: true, publishedAt: pasDansLeFutur })),
+    dernier(BlogPost, 'localizations.de.translatedAt', seoIndexPolicy.publicBlogFilter({ isPublished: true, 'localizations.de.translatedAt': { $ne: null, ...pasDansLeFutur } }, { lang: 'de' })),
   ]);
 
   const valeurs = {
@@ -580,8 +641,133 @@ async function datesDerniereModif() {
     blog,
     blogDe,
   };
-  lastmodCache = { at: Date.now(), valeurs };
+  lastmodCache = { at: Date.now(), valeurs, sig };
   return valeurs;
+}
+
+/* ─── Sitemaps et politique d'indexation ─────────────────────────────────── */
+
+/* Les sous-sitemaps, dans l'ordre de l'index et de robots.txt. */
+const ENFANTS = [
+  'sitemap-pages.xml',
+  'sitemap-categories.xml',
+  'sitemap-categories-de.xml',
+  'sitemap-products.xml',
+  'sitemap-products-de.xml',
+  'sitemap-vehicles.xml',
+  'sitemap-references.xml',
+  'sitemap-blog.xml',
+  'sitemap-blog-de.xml',
+];
+const ENFANTS_DE = new Set(['sitemap-categories-de.xml', 'sitemap-products-de.xml', 'sitemap-blog-de.xml']);
+
+/**
+ * Sous-sitemaps annoncés (index et robots.txt), selon SEO_PRUNE :
+ *   - « de » actif : les trois sitemaps allemands en sortent (ils restent
+ *     servis huit semaines, voir servirSitemapDeRetire) ;
+ *   - chaque famille allumée ajoute sitemap-retraits-<famille>.xml pendant
+ *     ses huit semaines.
+ * SEO_PRUNE absent : exactement la liste d'avant.
+ */
+function enfantsAnnonces() {
+  const sansDe = seoIndexPolicy.familleActive('de');
+  const enfants = ENFANTS.filter((e) => !(sansDe && ENFANTS_DE.has(e)));
+  for (const famille of seoIndexPolicy.famillesEnRetrait()) enfants.push(`sitemap-retraits-${famille}.xml`);
+  return enfants;
+}
+
+/**
+ * Sitemap allemand retiré (famille « de ») : il sert encore sa liste pendant
+ * huit semaines, chaque adresse datée du jour de la bascule — Google repasse
+ * et lit le noindex —, puis répond 404. Rien ne change sans « de ».
+ * Renvoie true si la réponse est partie (ou confiée au 404).
+ */
+function servirSitemapDeRetire(req, res, next, urls) {
+  if (!seoIndexPolicy.familleActive('de')) return false;
+  if (!seoIndexPolicy.retraitsEnCours('de')) { next(); return true; }
+  const jour = seoIndexPolicy.dateBascule('de');
+  sendXml(res, renderUrlset(urls.map((u) => ({ ...u, lastmod: jour })), { withImages: true }));
+  return true;
+}
+
+/* Pages allemandes sans sitemap propre : l'accueil, les index, contact, devis
+   et les pages légales traduites. Elles sortent aussi de Google avec « de ». */
+async function buildPagesUrlsDe(baseUrl, dbConnected) {
+  const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
+  const chemins = ['/de', '/de/produits', '/de/categorie', '/de/blog', '/de/contact', '/de/devis', '/de/legal'];
+  if (dbConnected) {
+    const legales = await LegalPage.find({ isPublished: { $ne: false }, 'localizations.de.translatedAt': { $ne: null } })
+      .select('slug')
+      .sort({ sortOrder: 1, title: 1 })
+      .lean();
+    for (const lp of legales) if (lp && lp.slug) chemins.push(`/de/legal/${encodeURIComponent(lp.slug)}`);
+  }
+  return chemins.map((c) => ({ loc: resolveUrl(c), lastmod: '' }));
+}
+
+/* Adresses qui quittent Google avec chaque famille : le contenu des
+   sitemap-retraits-<famille>.xml. */
+const RETRAITS = {
+  async gone(req, baseUrl) {
+    return seoIndexPolicy.cheminsDisparus().map((c) => ({ loc: baseUrl ? `${baseUrl}${c}` : c }));
+  },
+  async blog(req, baseUrl, dbConnected) {
+    if (!dbConnected) return [];
+    /* Tout article publié hors des 295 gardés ; les 410 ont leur propre
+       fichier quand « gone » est allumé. */
+    const exclus = seoIndexPolicy.articlesGardes();
+    if (seoIndexPolicy.familleActive('gone')) {
+      for (const c of seoIndexPolicy.cheminsDisparus()) if (c.startsWith('/blog/')) exclus.push(c.slice('/blog/'.length));
+    }
+    const posts = await BlogPost.find({ isPublished: true, slug: { $nin: exclus } }).select('slug').sort({ slug: 1 }).lean();
+    return posts.filter((p) => p && p.slug).map((p) => ({ loc: `${baseUrl}/blog/${encodeURIComponent(String(p.slug))}` }));
+  },
+  async reference(req, baseUrl, dbConnected) {
+    return buildReferencesUrls(baseUrl, dbConnected, { pourRetrait: true });
+  },
+  async 'pieces-auto'(req, baseUrl, dbConnected) {
+    const toutes = await buildVehiclesUrlsToutes(req, baseUrl, dbConnected);
+    const garder = new Set(['pieces-auto']);
+    return toutes.filter((u) => seoIndexPolicy.decisionChemin(cheminDe(u.loc), garder));
+  },
+  async de(req, baseUrl, dbConnected) {
+    const [pages, categories, fiches, articles] = await Promise.all([
+      buildPagesUrlsDe(baseUrl, dbConnected),
+      buildCategoryUrlsDe(req, baseUrl, dbConnected),
+      buildProductUrlsDe(req, baseUrl, dbConnected),
+      buildBlogUrlsDe(baseUrl, dbConnected),
+    ]);
+    return [...pages, ...categories, ...fiches, ...articles];
+  },
+  async products(req, baseUrl, dbConnected) {
+    const toutes = await buildProductsUrlsToutes(req, baseUrl, dbConnected);
+    const fiches = toutes.filter((u) => seoIndexPolicy.produitNoindex(u.produit));
+    /* La page allemande d'une fiche retirée sort avec elle (getProduct décide
+       sur l'_id, dans les deux langues). Quand « de » est déjà allumée, elle
+       était sortie avant, avec son propre retrait : la redater au jour de
+       « products » annoncerait un changement qui n'a pas eu lieu. */
+    if (seoIndexPolicy.familleActive('de')) return fiches;
+    const allemandes = (await buildProductUrlsDe(req, baseUrl, dbConnected))
+      .filter((u) => seoIndexPolicy.produitNoindex(u.produit));
+    return fiches.concat(allemandes);
+  },
+};
+
+/* GET /sitemap-retraits-<famille>.xml — n'existe que pendant les huit
+   semaines qui suivent l'allumage de la famille ; chaque adresse porte la
+   date de la bascule en <lastmod>. Sinon : la requête continue vers le 404. */
+async function getSitemapRetraits(req, res, next) {
+  try {
+    const famille = String((req.params && req.params[0]) || '').toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(RETRAITS, famille) || !seoIndexPolicy.retraitsEnCours(famille)) return next();
+    const dbConnected = mongoose.connection.readyState === 1;
+    const baseUrl = getPublicBaseUrlFromReq(req);
+    const jour = seoIndexPolicy.dateBascule(famille);
+    const urls = await RETRAITS[famille](req, baseUrl, dbConnected);
+    return sendXml(res, renderUrlset(urls.map((u) => ({ loc: u.loc, lastmod: jour }))));
+  } catch (err) {
+    return next(err);
+  }
 }
 
 async function getSitemapXml(req, res, next) {
@@ -594,17 +780,18 @@ async function getSitemapXml(req, res, next) {
 
     const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
     const d = await datesDerniereModif().catch(() => ({}));
-    const sitemaps = [
-      { loc: resolveUrl('/sitemap-pages.xml'), lastmod: '' },
-      { loc: resolveUrl('/sitemap-categories.xml'), lastmod: '' },
-      { loc: resolveUrl('/sitemap-categories-de.xml'), lastmod: d.categoriesDe || '' },
-      { loc: resolveUrl('/sitemap-products.xml'), lastmod: d.produits || '' },
-      { loc: resolveUrl('/sitemap-products-de.xml'), lastmod: d.produitsDe || '' },
-      { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: '' },
-      { loc: resolveUrl('/sitemap-references.xml'), lastmod: '' },
-      { loc: resolveUrl('/sitemap-blog.xml'), lastmod: d.blog || '' },
-      { loc: resolveUrl('/sitemap-blog-de.xml'), lastmod: d.blogDe || '' },
-    ];
+    const dates = {
+      'sitemap-categories-de.xml': d.categoriesDe || '',
+      'sitemap-products.xml': d.produits || '',
+      'sitemap-products-de.xml': d.produitsDe || '',
+      'sitemap-blog.xml': d.blog || '',
+      'sitemap-blog-de.xml': d.blogDe || '',
+    };
+    /* Les sitemaps de retrait annoncent la date de leur bascule. */
+    for (const famille of seoIndexPolicy.famillesEnRetrait()) {
+      dates[`sitemap-retraits-${famille}.xml`] = seoIndexPolicy.dateBascule(famille);
+    }
+    const sitemaps = enfantsAnnonces().map((e) => ({ loc: resolveUrl(`/${e}`), lastmod: dates[e] || '' }));
 
     return sendXml(res, renderSitemapIndex(sitemaps));
   } catch (err) {
@@ -703,6 +890,7 @@ async function getSitemapBlogDe(req, res, next) {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildBlogUrlsDe(baseUrl, dbConnected);
+    if (servirSitemapDeRetire(req, res, next, urls)) return undefined;
     return sendXml(res, renderUrlset(urls, { withImages: true }));
   } catch (err) {
     return next(err);
@@ -714,6 +902,7 @@ async function getSitemapCategoriesDe(req, res, next) {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
     const urls = await buildCategoryUrlsDe(req, baseUrl, dbConnected);
+    if (servirSitemapDeRetire(req, res, next, urls)) return undefined;
     return sendXml(res, renderUrlset(urls));
   } catch (err) {
     return next(err);
@@ -724,7 +913,14 @@ async function getSitemapProductsDe(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
     const baseUrl = getPublicBaseUrlFromReq(req);
-    const urls = await buildProductUrlsDe(req, baseUrl, dbConnected);
+    const toutes = await buildProductUrlsDe(req, baseUrl, dbConnected);
+    /* « de » allumée : le sitemap retiré sert toute sa liste (tout y est en
+       noindex). Sinon, famille « products » : la page allemande d'une fiche
+       retirée est servie en noindex — un sitemap ne la propose plus. */
+    if (servirSitemapDeRetire(req, res, next, toutes)) return undefined;
+    const urls = seoIndexPolicy.familleActive('products')
+      ? toutes.filter((u) => !seoIndexPolicy.produitNoindex(u.produit))
+      : toutes;
     return sendXml(res, renderUrlset(urls, { withImages: true }));
   } catch (err) {
     return next(err);
@@ -833,15 +1029,10 @@ function getRobotsTxt(req, res) {
     '',
     '# --- Sitemaps ---',
     `Sitemap: ${abs('/sitemap.xml')}`,
-    `Sitemap: ${abs('/sitemap-pages.xml')}`,
-    `Sitemap: ${abs('/sitemap-categories.xml')}`,
-    `Sitemap: ${abs('/sitemap-categories-de.xml')}`,
-    `Sitemap: ${abs('/sitemap-products.xml')}`,
-    `Sitemap: ${abs('/sitemap-products-de.xml')}`,
-    `Sitemap: ${abs('/sitemap-vehicles.xml')}`,
-    `Sitemap: ${abs('/sitemap-references.xml')}`,
-    `Sitemap: ${abs('/sitemap-blog.xml')}`,
-    `Sitemap: ${abs('/sitemap-blog-de.xml')}`,
+    /* Mêmes sous-sitemaps que l'index, selon SEO_PRUNE (plan SEO A5.6).
+       Aucune page n'est jamais bloquée ici : Google doit pouvoir lire le
+       noindex d'une page pour la retirer. */
+    ...enfantsAnnonces().map((e) => `Sitemap: ${abs(`/${e}`)}`),
     '',
   ];
 
@@ -862,6 +1053,7 @@ module.exports = {
   getSitemapReferences,
   getSitemapBlog,
   getSitemapBlogDe,
+  getSitemapRetraits,
 };
 
 /* Exposé pour les tests d'équivalence et de cache (pas une API). */

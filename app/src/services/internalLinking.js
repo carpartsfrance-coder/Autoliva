@@ -26,11 +26,23 @@
 
 const mongoose = require('mongoose');
 const { slugify } = require('./productPublic');
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.5) :
+   les blocs d'articles liés n'affichent ni un article en 410 ni un article
+   sorti de Google. Le cache dépend donc aussi de l'état de SEO_PRUNE. */
+const seoIndexPolicy = require('./seoIndexPolicy');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const _cache = new Map();
 
+/* Même clé qu'avant tant que SEO_PRUNE est absent ; sinon l'état de
+   l'interrupteur en fait partie. */
+function cleAvecPolitique(key) {
+  const sig = seoIndexPolicy.signature();
+  return sig ? `${key}|${sig}` : key;
+}
+
 function getCached(key) {
+  key = cleAvecPolitique(key);
   const entry = _cache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.at > CACHE_TTL_MS) {
@@ -41,7 +53,7 @@ function getCached(key) {
 }
 
 function setCached(key, value) {
-  _cache.set(key, { value, at: Date.now() });
+  _cache.set(cleAvecPolitique(key), { value, at: Date.now() });
 }
 
 function clearCache() {
@@ -131,14 +143,14 @@ async function getMakeLinkingData(makeName) {
   })).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 
   /* Articles blog liés : titre OU slug OU primaryKeyword contient la marque. */
-  const relatedBlogPosts = await BlogPost.find({
+  const relatedBlogPosts = await BlogPost.find(seoIndexPolicy.publicBlogFilter({
     isPublished: true,
     $or: [
       { title: { $regex: escMake, $options: 'i' } },
       { slug: { $regex: makeSlug, $options: 'i' } },
       { 'seo.primaryKeyword': { $regex: escMake, $options: 'i' } },
     ],
-  })
+  }))
     .select('slug title coverImageUrl publishedAt readingTimeMinutes')
     .sort({ publishedAt: -1 })
     .limit(6)
@@ -217,7 +229,7 @@ async function getModelLinkingData(makeName, modelName) {
      on prend le premier token significatif. */
   const modelToken = modelName.split(/\s+/)[0];
   const escModelToken = safeRegexEscape(modelToken);
-  const relatedBlogPosts = await BlogPost.find({
+  const relatedBlogPosts = await BlogPost.find(seoIndexPolicy.publicBlogFilter({
     isPublished: true,
     $and: [
       { $or: [
@@ -232,7 +244,7 @@ async function getModelLinkingData(makeName, modelName) {
         { 'seo.primaryKeyword': { $regex: escModel, $options: 'i' } },
       ] },
     ],
-  })
+  }))
     .select('slug title coverImageUrl publishedAt readingTimeMinutes')
     .sort({ publishedAt: -1 })
     .limit(6)
@@ -365,7 +377,7 @@ async function getMoneyPageLinkingData(makeName, modelName, categorySlug) {
       ],
     });
   }
-  const relatedBlogPosts = await BlogPost.find(blogQuery)
+  const relatedBlogPosts = await BlogPost.find(seoIndexPolicy.publicBlogFilter(blogQuery))
     .select('slug title coverImageUrl publishedAt readingTimeMinutes')
     .sort({ publishedAt: -1 })
     .limit(4)
@@ -472,14 +484,14 @@ async function getCategoryLinkingData(category, lang) {
     ? category.name.split('>').pop().trim()
     : category.name;
   const escCatNameTop = safeRegexEscape(catNameTop);
-  const relatedBlogPostsDocs = await BlogPost.find({
+  const relatedBlogPostsDocs = await BlogPost.find(seoIndexPolicy.publicBlogFilter({
     isPublished: true,
     ...blogI18n.blogLangFilter(isDe ? 'de' : 'fr'),
     $or: [
       { 'category.slug': category.slug },
       { title: { $regex: escCatNameTop, $options: 'i' } },
     ],
-  })
+  }, { lang: isDe ? 'de' : 'fr' }))
     .select(`slug title coverImageUrl publishedAt readingTimeMinutes ${blogI18n.DE_PROJECTION}`)
     .sort({ publishedAt: -1 })
     .limit(6)
@@ -610,7 +622,7 @@ async function getProductLinkingData(product) {
     orClauses.push({ _id: { $in: product.relatedBlogPostIds } });
   }
   if (orClauses.length > 0) {
-    const posts = await BlogPost.find({ isPublished: true, $or: orClauses })
+    const posts = await BlogPost.find(seoIndexPolicy.publicBlogFilter({ isPublished: true, $or: orClauses }))
       .select('slug title coverImageUrl publishedAt readingTimeMinutes')
       .sort({ publishedAt: -1 })
       .limit(4)
@@ -749,7 +761,7 @@ async function getBlogPostLinkingData(post) {
   if (post.category && post.category.slug) {
     siblingFilter['category.slug'] = post.category.slug;
   }
-  const siblingBlogPosts = await BlogPost.find(siblingFilter)
+  const siblingBlogPosts = await BlogPost.find(seoIndexPolicy.publicBlogFilter(siblingFilter))
     .select('slug title coverImageUrl publishedAt readingTimeMinutes')
     .sort({ publishedAt: -1 })
     .limit(4)

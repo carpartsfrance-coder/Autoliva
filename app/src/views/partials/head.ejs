@@ -119,7 +119,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     visibility: hidden;
   }
 </style>
-<meta name="robots" content="<%= (typeof metaRobots !== 'undefined' && metaRobots) ? metaRobots : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' %>"/>
+<%# Politique d'indexation (plan SEO du 14/09/2026, action A5) : seoForceNoindex
+    n'est posé que par services/seoIndexPolicy.js, jamais par un contrôleur, et
+    passe devant tout metaRobots — les options de rendu écrasent res.locals, un
+    simple res.locals.metaRobots aurait perdu. Même texte que X-Robots-Tag. -%>
+<meta name="robots" content="<%= (typeof seoForceNoindex !== 'undefined' && seoForceNoindex) ? seoForceNoindex : ((typeof metaRobots !== 'undefined' && metaRobots) ? metaRobots : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1') %>"/>
 <% if (typeof metaDescription !== 'undefined' && metaDescription) { %>
 <meta name="description" content="<%= metaDescription %>"/>
 <% } %>
@@ -128,6 +132,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <% } %>
 <% if (typeof hreflangTags !== 'undefined' && Array.isArray(hreflangTags) && hreflangTags.length > 0) { %>
 <% hreflangTags.forEach(function(tag) { %>
+<%# Couche allemande sortie de Google (famille « de ») : on ne la déclare plus
+    comme alternative. Filtré ICI seulement : hreflangTags reste entier pour le
+    sélecteur FR/DE (header.ejs) et la suggestion de langue. -%>
+<% if (typeof seoHreflangSansDe !== 'undefined' && seoHreflangSansDe && tag && tag.lang === 'de') return; -%>
 <link rel="alternate" hreflang="<%= tag.lang %>" href="<%= tag.href %>"/>
 <% }); %>
 <% } else { %>

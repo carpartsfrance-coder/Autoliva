@@ -280,6 +280,14 @@ const productSchema = new mongoose.Schema(
     seo: {
       metaTitle: { type: String, default: '', trim: true },
       metaDescription: { type: String, default: '', trim: true },
+      /* Indexation choisie fiche par fiche dans l'admin (plan de reprise SEO
+         du 14/09/2026, action A5.7) : '' ou absent = la politique décide
+         (services/seoIndexPolicy.js), 'index' = toujours indexable, 'noindex'
+         = retirée de Google. Passe devant la liste du plan, mais n'agit que si
+         la famille « products » est active dans SEO_PRUNE — la couper remet
+         toutes les fiches à l'index d'un coup. Pas de valeur par défaut : une
+         fiche créée n'écrit rien de plus qu'avant. */
+      indexOverride: { type: String, enum: ['', 'index', 'noindex'], trim: true },
     },
 
     sections: {
