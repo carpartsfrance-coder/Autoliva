@@ -56,9 +56,13 @@ test('le cron ne rapatrie que les sessions qui ont un article', async (t) => {
   });
 });
 
+/* Un visiteur humain : un navigateur envoie toujours son User-Agent. Sans lui,
+   la requête est traitée comme un robot (voir le test suivant). */
+const UA_NAVIGATEUR = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
 test('la langue préférée n’est écrite que si elle change', async (t) => {
-  const appel = (session, url) => {
-    const req = { session, method: 'GET', originalUrl: url, url, path: url, headers: {}, query: {} };
+  const appel = (session, url, ua = UA_NAVIGATEUR) => {
+    const req = { session, method: 'GET', originalUrl: url, url, path: url, headers: { 'user-agent': ua }, query: {} };
     const res = { locals: {} };
     i18nMiddleware(req, res, () => {});
     return req.session;
@@ -91,6 +95,30 @@ test('la langue préférée n’est écrite que si elle change', async (t) => {
   await t.test('le tunnel d’achat ne fixe jamais la langue', () => {
     assert.deepEqual(appel({}, '/panier'), {});
     assert.equal(appel({ preferredLang: 'de' }, '/commande').preferredLang, 'de');
+  });
+
+  /* Plan de reprise SEO du 14/09/2026, action A4.7 : chaque page /de lue par
+     un robot — Googlebot compris, 17 000 pages allemandes le 09/09 — créait une
+     session de 30 jours en base. Un robot n'a pas de tunnel d'achat. */
+  await t.test('une page DE lue par un robot n’écrit RIEN', () => {
+    for (const ua of [
+      'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      'Mozilla/5.0 (X11; Linux x86_64; Storebot-Google/1.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.88 Safari/537.36',
+      'AdsBot-Google (+http://www.google.com/adsbot.html)',
+      'Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)',
+      'Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)',
+      'curl/8.4.0',
+      '',
+    ]) {
+      assert.deepEqual(appel({}, '/de/produits/mechatronik-dq200-6988d15c707eef3255a726b6', ua), {}, `robot « ${ua} »`);
+    }
+  });
+
+  await t.test('un humain sur une page DE garde sa langue, sur mobile comme sur ordinateur', () => {
+    const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+    assert.equal(appel({}, '/de/blog/mechatronik-dq200', iphone).preferredLang, 'de');
+    assert.equal(appel({}, '/de', UA_NAVIGATEUR).preferredLang, 'de');
   });
 });
 

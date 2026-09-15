@@ -127,6 +127,12 @@ function startScheduler() {
   // ligne depuis un jour, en français, sous une interface allemande.
   //
   // No-op tant que DE_AUTO_TRANSLATE=true n'est pas posé sur Render.
+  //
+  // Et c'est voulu : plan de reprise SEO du 14/09/2026, décision 2 — la couche
+  // allemande sort de Google, la traduction automatique reste coupée. Le job
+  // reste inscrit ici, désarmé, parce qu'il alimente le flux Shopping allemand
+  // (google-merchant-feed-de.js ne prend que les fiches traduites) : le
+  // retirer figerait ce flux sans que personne l'ait décidé.
   cron.schedule('42 * * * *', async () => {
     try {
       await traduireNouveautesDe();

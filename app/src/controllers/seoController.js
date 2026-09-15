@@ -6,9 +6,12 @@ const LegalPage = require('../models/LegalPage');
 const BlogPost = require('../models/BlogPost');
 const demoProducts = require('../demoProducts');
 const { buildProductPublicUrl, getPublicBaseUrlFromReq } = require('../services/productPublic');
-const { buildCategoryPublicUrl } = require('../services/categoryPublic');
+const { buildCategoryPublicUrl, compterFichesPubliees } = require('../services/categoryPublic');
 const { DEFAULT_LEGAL_PAGES } = require('../services/legalPages');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
+/* Dates des sitemaps : jamais updatedAt (plan de reprise SEO du 14/09/2026,
+   action A4.5) — voir services/datesSeo.js. */
+const datesSeo = require('../services/datesSeo');
 
 function escapeXml(value) {
   return String(value)
@@ -17,17 +20,6 @@ function escapeXml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;');
-}
-
-function toIsoDate(value) {
-  try {
-    if (!value) return '';
-    const d = value instanceof Date ? value : new Date(value);
-    if (Number.isNaN(d.getTime())) return '';
-    return d.toISOString();
-  } catch (err) {
-    return '';
-  }
 }
 
 /* ─── Helpers de rendu XML ────────────────────────────────────────────── */
@@ -107,16 +99,19 @@ async function buildPagesUrls(baseUrl, dbConnected) {
   let legalPages = [];
   if (dbConnected) {
     legalPages = await LegalPage.find({ isPublished: { $ne: false } })
-      .select('_id slug updatedAt')
+      .select('_id slug')
       .sort({ sortOrder: 1, title: 1 })
       .lean();
   } else {
-    legalPages = (DEFAULT_LEGAL_PAGES || []).map((p) => ({ slug: p.slug, updatedAt: null }));
+    legalPages = (DEFAULT_LEGAL_PAGES || []).map((p) => ({ slug: p.slug }));
   }
 
+  /* Pas de lastmod : updatedAt des pages légales bouge aussi quand on écrit
+     leur traduction allemande (scripts/translate-legal-de.js), sans que le
+     texte français change. */
   for (const lp of legalPages) {
     if (!lp || !lp.slug) continue;
-    urls.push({ loc: resolveUrl(`/legal/${encodeURIComponent(lp.slug)}`), lastmod: toIsoDate(lp.updatedAt) });
+    urls.push({ loc: resolveUrl(`/legal/${encodeURIComponent(lp.slug)}`), lastmod: '' });
   }
   return urls;
 }
@@ -132,7 +127,7 @@ async function buildCategoriesUrls(req, dbConnected) {
       const slug = main.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
         .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
       if (!slug) continue;
-      if (!bySlug.has(slug)) bySlug.set(slug, { slug, updatedAt: null });
+      if (!bySlug.has(slug)) bySlug.set(slug, { slug });
     }
     const urls = [];
     for (const c of bySlug.values()) {
@@ -143,15 +138,33 @@ async function buildCategoriesUrls(req, dbConnected) {
   }
 
   const cats = await Category.find({ isActive: true })
-    .select('_id slug updatedAt')
+    .select('_id slug name')
     .sort({ sortOrder: 1, name: 1 })
     .lean();
+
+  /* Catégories VIDES hors du sitemap (plan de reprise SEO du 14/09/2026,
+     action A4.6). La page d'une catégorie sans fiche publiée se sert en
+     noindex (categoryController) : la lister ici demandait à Google d'explorer
+     42 pages qu'on lui interdit d'indexer. Même règle que la page, calculée à
+     chaque construction : une catégorie qui se remplit revient d'elle-même.
+     Si le comptage échoue, on garde la liste entière — mieux vaut un sitemap
+     trop long qu'un sitemap vide. */
+  let comptes = null;
+  try {
+    comptes = await compterFichesPubliees(cats.map((c) => c && c.name).filter(Boolean));
+  } catch (err) {
+    console.error('[sitemap] catégories : comptage impossible, liste complète :', err && err.message ? err.message : err);
+  }
+
   const urls = [];
+  /* Pas de lastmod : une page catégorie est une liste de fiches, elle n'a pas
+     de « dernière modification » propre — et updatedAt n'en est pas une. */
   for (const c of cats) {
     if (!c || !c.slug) continue;
+    if (comptes && !(comptes.get(c.name) > 0)) continue;
     const loc = buildCategoryPublicUrl(c, { req });
     if (!loc) continue;
-    urls.push({ loc, lastmod: toIsoDate(c.updatedAt) });
+    urls.push({ loc, lastmod: '' });
   }
   return urls;
 }
@@ -193,7 +206,7 @@ async function buildProductsUrlsSansCache(req, baseUrl, dbConnected) {
   let products = [];
   if (dbConnected) {
     products = await Product.find({ isPublished: { $ne: false } })
-      .select('_id slug name updatedAt imageUrl galleryUrls')
+      .select('_id slug sku name imageUrl galleryUrls')
       .sort({ updatedAt: -1 })
       .lean();
   } else {
@@ -214,7 +227,9 @@ async function buildProductsUrlsSansCache(req, baseUrl, dbConnected) {
         }
       }
     }
-    urls.push({ loc, lastmod: toIsoDate(p.updatedAt), images, imageTitle: p.name || '' });
+    /* lastmod = jour où la fiche a regagné sa description (A3), et seulement
+       pour celles-là. Les autres n'ont pas changé : rien à annoncer. */
+    urls.push({ loc, lastmod: datesSeo.lastmodFicheFr(p), images, imageTitle: p.name || '' });
   }
   return urls;
 }
@@ -269,6 +284,16 @@ async function buildVehiclesUrls(req, baseUrl, dbConnected) {
   VEHICLE_URLS_EN_COURS = (async () => {
     const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
     const urls = [];
+    /* Une URL, une entrée (plan de reprise SEO du 14/09/2026, action A4.6).
+       Les marques et modèles sont groupés tels qu'écrits dans les fiches :
+       « AUDI » et « Audi », « A4 » et « a4 » font deux groupes mais le même
+       slug — 471 URL sortaient deux fois sur 8 281. */
+    const dejaListees = new Set();
+    const ajouter = (path) => {
+      if (dejaListees.has(path)) return;
+      dejaListees.add(path);
+      urls.push({ loc: resolveUrl(path), lastmod: '' });
+    };
     try {
       const vehicleService = require('../services/vehicleLandingService');
       const Category = require('../models/Category');
@@ -314,17 +339,17 @@ async function buildVehiclesUrls(req, baseUrl, dbConnected) {
 
       for (const make of makes) {
         if (!(parMarque.get(make.nameLower) > 0)) continue;
-        urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}`), lastmod: '' });
+        ajouter(`/pieces-auto/${make.slug}`);
         for (const model of (make.models || [])) {
           const cats = parCouple.get(make.nameLower + '|' + model.nameLower);
           if (!cats) continue;
-          urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}`), lastmod: '' });
+          ajouter(`/pieces-auto/${make.slug}/${model.slug}`);
           const slugs = cats
             .map((nom) => slugParNomCategorie.get(nom))
             .filter(Boolean)
             .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
           for (const cat of slugs) {
-            urls.push({ loc: resolveUrl(`/pieces-auto/${make.slug}/${model.slug}/${cat.slug}`), lastmod: '' });
+            ajouter(`/pieces-auto/${make.slug}/${model.slug}/${cat.slug}`);
           }
         }
       }
@@ -377,17 +402,19 @@ async function buildBlogUrls(baseUrl, dbConnected) {
   if (!dbConnected) return [];
   const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
   const posts = await BlogPost.find({ isPublished: true })
-    .select('_id slug title updatedAt publishedAt coverImageUrl')
+    .select('_id slug title publishedAt createdAt coverImageUrl')
     .sort({ publishedAt: -1, updatedAt: -1 })
     .lean();
   const urls = [];
   for (const bp of posts) {
     if (!bp || !bp.slug) continue;
     const loc = resolveUrl(`/blog/${encodeURIComponent(String(bp.slug))}`);
-    const last = bp.updatedAt || bp.publishedAt || null;
+    /* La date de publication, pas updatedAt : l'écriture en masse du 08/09
+       avait redaté 1 173 articles dont pas un mot n'avait changé. */
+    const last = datesSeo.isoPasse(datesSeo.dateModificationArticle(bp));
     const images = [];
     if (bp.coverImageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(bp.coverImageUrl, bp.title)));
-    urls.push({ loc, lastmod: toIsoDate(last), images, imageTitle: bp.title || '' });
+    urls.push({ loc, lastmod: last, images, imageTitle: bp.title || '' });
   }
   return urls;
 }
@@ -403,7 +430,7 @@ async function buildBlogUrlsDe(baseUrl, dbConnected) {
     isPublished: true,
     'localizations.de.translatedAt': { $ne: null },
   })
-    .select('_id slug title updatedAt publishedAt coverImageUrl localizations.de.translatedAt localizations.de.title')
+    .select('_id slug title publishedAt createdAt coverImageUrl localizations.de.translatedAt localizations.de.title')
     .sort({ publishedAt: -1, updatedAt: -1 })
     .lean();
   const urls = [];
@@ -412,14 +439,13 @@ async function buildBlogUrlsDe(baseUrl, dbConnected) {
     const deLoc = bp.localizations && bp.localizations.de;
     if (!deLoc || !deLoc.translatedAt) continue;
     const loc = resolveUrl(`/de/blog/${encodeURIComponent(String(bp.slug))}`);
-    // lastmod = max(translatedAt, updatedAt) pour signaler les retraductions
-    const last = (deLoc.translatedAt && bp.updatedAt && new Date(deLoc.translatedAt) > new Date(bp.updatedAt))
-      ? deLoc.translatedAt
-      : (bp.updatedAt || bp.publishedAt || deLoc.translatedAt || null);
+    /* lastmod = date de la traduction, celle du texte allemand servi. Plus
+       updatedAt, qui bouge quand on ÉCRIT la traduction… et le reste. */
+    const last = datesSeo.isoPasse(datesSeo.dateModificationArticleDe(bp));
     const images = [];
     const imgTitle = deLoc.title || bp.title;
     if (bp.coverImageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(bp.coverImageUrl, imgTitle)));
-    urls.push({ loc, lastmod: toIsoDate(last), images, imageTitle: imgTitle || '' });
+    urls.push({ loc, lastmod: last, images, imageTitle: imgTitle || '' });
   }
   return urls;
 }
@@ -437,7 +463,7 @@ async function buildCategoryUrlsDe(req, baseUrl, dbConnected) {
     isActive: true,
     'localizations.de.translatedAt': { $ne: null },
   })
-    .select('_id slug updatedAt localizations.de.slug localizations.de.translatedAt')
+    .select('_id slug localizations.de.slug localizations.de.translatedAt')
     .sort({ sortOrder: 1, name: 1 })
     .lean();
 
@@ -448,7 +474,7 @@ async function buildCategoryUrlsDe(req, baseUrl, dbConnected) {
     const deSlug = (deLoc.slug && String(deLoc.slug).trim()) || c.slug;
     if (!deSlug) continue;
     const path = `/de/categorie/${encodeURIComponent(deSlug)}`;
-    urls.push({ loc: baseUrl ? `${baseUrl}${path}` : path, lastmod: toIsoDate(c.updatedAt) });
+    urls.push({ loc: baseUrl ? `${baseUrl}${path}` : path, lastmod: datesSeo.isoPasse(datesSeo.dateTraductionDe(c)) });
   }
   return urls;
 }
@@ -459,7 +485,7 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
     isPublished: { $ne: false },
     'localizations.de.translatedAt': { $ne: null },
   })
-    .select('_id slug name updatedAt imageUrl galleryUrls localizations.de.translatedAt localizations.de.slug localizations.de.name')
+    .select('_id slug name imageUrl galleryUrls localizations.de.translatedAt localizations.de.slug localizations.de.name')
     .sort({ updatedAt: -1 })
     .lean();
 
@@ -471,10 +497,9 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
     const deSlug = (deLoc.slug && String(deLoc.slug).trim()) || p.slug || String(p._id);
     const path = `/de/produits/${encodeURIComponent(deSlug)}-${p._id}`;
     const loc = baseUrl ? `${baseUrl}${path}` : path;
-    // lastmod = max(translatedAt, updatedAt) → signale les retraductions à Google
-    const last = (deLoc.translatedAt && p.updatedAt && new Date(deLoc.translatedAt) > new Date(p.updatedAt))
-      ? deLoc.translatedAt
-      : (p.updatedAt || deLoc.translatedAt || null);
+    /* lastmod = date de la traduction : c'est elle qui a fait le texte
+       allemand de la page. updatedAt bouge à chaque stock ou prix. */
+    const last = datesSeo.isoPasse(datesSeo.dateTraductionDe(p));
     const imgTitle = deLoc.name || p.name;
     const images = [];
     if (p.imageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(p.imageUrl, imgTitle)));
@@ -483,7 +508,7 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
         if (typeof u === 'string' && u.trim()) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(u.trim(), imgTitle)));
       }
     }
-    urls.push({ loc, lastmod: toIsoDate(last), images, imageTitle: imgTitle || '' });
+    urls.push({ loc, lastmod: last, images, imageTitle: imgTitle || '' });
   }
   return urls;
 }
@@ -514,16 +539,20 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
  * Contrainte héritée d'une panne : la version qui testait le CONTENU de chaque
  * sous-sitemap faisait un Vehicle.find() sur 2 065 documents et mettait
  * /sitemap.xml en timeout. On ne lit donc qu'UNE ligne par collection, sur un
- * champ trié, et on garde le résultat en mémoire. En cas d'échec ou de base
- * absente, on retombe sur `now` — un lastmod approximatif vaut mieux qu'un
- * sitemap qui ne répond pas.
+ * champ trié, et on garde le résultat en mémoire.
+ *
+ * Plan de reprise SEO du 14/09/2026 (action A4.5) : chaque enfant annonce la
+ * plus récente des dates qu'il contient, et ces dates ne viennent plus
+ * d'updatedAt (voir services/datesSeo.js). Un enfant sans date — pages,
+ * catégories, pages véhicule, références — n'en annonce pas ; et en cas
+ * d'échec, on n'en annonce pas non plus : « maintenant » était une fraîcheur
+ * inventée, exactement ce que Google apprend à ignorer.
  */
 const LASTMOD_TTL_MS = 10 * 60 * 1000;
 let lastmodCache = { at: 0, valeurs: null };
 
 async function datesDerniereModif() {
   if (lastmodCache.valeurs && Date.now() - lastmodCache.at < LASTMOD_TTL_MS) return lastmodCache.valeurs;
-  const maintenant = new Date().toISOString();
   if (mongoose.connection.readyState !== 1) return {};
 
   const dernier = async (modele, champ, filtre) => {
@@ -531,27 +560,25 @@ async function datesDerniereModif() {
       const d = await modele.findOne(filtre || {}).sort({ [champ]: -1 }).select(champ).lean()
         .maxTimeMS(2000);
       const v = champ.split('.').reduce((o, k) => (o == null ? undefined : o[k]), d);
-      return v ? new Date(v).toISOString() : null;
+      return datesSeo.isoPasse(v) || null;
     } catch (e) { return null; }
   };
 
   const BlogPost = require('../models/BlogPost');
-  const [produits, produitsDe, categories, categoriesDe, blog, blogDe] = await Promise.all([
-    dernier(Product, 'updatedAt', { isPublished: { $ne: false } }),
-    dernier(Product, 'localizations.de.translatedAt', { 'localizations.de.translatedAt': { $ne: null } }),
-    dernier(Category, 'updatedAt', { isActive: true }),
-    dernier(Category, 'localizations.de.translatedAt', { 'localizations.de.translatedAt': { $ne: null } }),
-    dernier(BlogPost, 'updatedAt', { isPublished: true }),
-    dernier(BlogPost, 'localizations.de.translatedAt', { 'localizations.de.translatedAt': { $ne: null } }),
+  const pasDansLeFutur = { $lte: new Date() };
+  const [produitsDe, categoriesDe, blog, blogDe] = await Promise.all([
+    dernier(Product, 'localizations.de.translatedAt', { isPublished: { $ne: false }, 'localizations.de.translatedAt': { $ne: null, ...pasDansLeFutur } }),
+    dernier(Category, 'localizations.de.translatedAt', { isActive: true, 'localizations.de.translatedAt': { $ne: null, ...pasDansLeFutur } }),
+    dernier(BlogPost, 'publishedAt', { isPublished: true, publishedAt: pasDansLeFutur }),
+    dernier(BlogPost, 'localizations.de.translatedAt', { isPublished: true, 'localizations.de.translatedAt': { $ne: null, ...pasDansLeFutur } }),
   ]);
 
   const valeurs = {
-    produits: produits || maintenant,
-    produitsDe: produitsDe || maintenant,
-    categories: categories || maintenant,
-    categoriesDe: categoriesDe || maintenant,
-    blog: blog || maintenant,
-    blogDe: blogDe || maintenant,
+    produits: datesSeo.lastmodIndexFichesFr() || null,
+    produitsDe,
+    categoriesDe,
+    blog,
+    blogDe,
   };
   lastmodCache = { at: Date.now(), valeurs };
   return valeurs;
@@ -566,18 +593,17 @@ async function getSitemapXml(req, res, next) {
     }
 
     const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
-    const now = new Date().toISOString();
     const d = await datesDerniereModif().catch(() => ({}));
     const sitemaps = [
-      { loc: resolveUrl('/sitemap-pages.xml'), lastmod: d.produits || now },
-      { loc: resolveUrl('/sitemap-categories.xml'), lastmod: d.categories || now },
-      { loc: resolveUrl('/sitemap-categories-de.xml'), lastmod: d.categoriesDe || now },
-      { loc: resolveUrl('/sitemap-products.xml'), lastmod: d.produits || now },
-      { loc: resolveUrl('/sitemap-products-de.xml'), lastmod: d.produitsDe || now },
-      { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: d.produits || now },
-      { loc: resolveUrl('/sitemap-references.xml'), lastmod: d.produits || now },
-      { loc: resolveUrl('/sitemap-blog.xml'), lastmod: d.blog || now },
-      { loc: resolveUrl('/sitemap-blog-de.xml'), lastmod: d.blogDe || now },
+      { loc: resolveUrl('/sitemap-pages.xml'), lastmod: '' },
+      { loc: resolveUrl('/sitemap-categories.xml'), lastmod: '' },
+      { loc: resolveUrl('/sitemap-categories-de.xml'), lastmod: d.categoriesDe || '' },
+      { loc: resolveUrl('/sitemap-products.xml'), lastmod: d.produits || '' },
+      { loc: resolveUrl('/sitemap-products-de.xml'), lastmod: d.produitsDe || '' },
+      { loc: resolveUrl('/sitemap-vehicles.xml'), lastmod: '' },
+      { loc: resolveUrl('/sitemap-references.xml'), lastmod: '' },
+      { loc: resolveUrl('/sitemap-blog.xml'), lastmod: d.blog || '' },
+      { loc: resolveUrl('/sitemap-blog-de.xml'), lastmod: d.blogDe || '' },
     ];
 
     return sendXml(res, renderSitemapIndex(sitemaps));
@@ -839,5 +865,17 @@ module.exports = {
 };
 
 /* Exposé pour les tests d'équivalence et de cache (pas une API). */
-module.exports.__test = { buildVehiclesUrls, buildProductsUrls };
+module.exports.__test = {
+  buildVehiclesUrls,
+  buildProductsUrls,
+  /* Les sitemaps sont en cache (10 à 30 min) : un test qui change une donnée
+     ou un interrupteur entre deux lectures doit repartir de zéro. */
+  viderCaches() {
+    PRODUCTS_URLS_CACHE.value = null;
+    PRODUCTS_URLS_CACHE.expiresAt = 0;
+    VEHICLE_URLS_CACHE.value = null;
+    VEHICLE_URLS_CACHE.expiresAt = 0;
+    lastmodCache = { at: 0, valeurs: null };
+  },
+};
 

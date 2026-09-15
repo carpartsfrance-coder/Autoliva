@@ -139,7 +139,9 @@ async function getLegalPage(req, res, next) {
           name: page.title,
           url: canonicalUrl,
           description: metaDescription,
-          dateModified: page && page.updatedAt ? new Date(page.updatedAt).toISOString() : undefined,
+          /* Pas de dateModified : updatedAt d'une page légale bouge aussi
+             quand on écrit sa traduction allemande (translate-legal-de.js),
+             sans que le texte change. Plan de reprise SEO, action A4.5. */
         },
         {
           '@type': 'BreadcrumbList',

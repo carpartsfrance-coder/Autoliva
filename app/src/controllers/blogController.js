@@ -7,6 +7,7 @@ const { markdownToHtml, escapeHtml } = require('../services/blogContent');
 const { buildHreflangSet } = require('../services/i18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const brand = require('../config/brand');
+const datesSeo = require('../services/datesSeo');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -695,7 +696,12 @@ async function getBlogPost(req, res) {
     const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
 
     const publishedAt = post.publishedAt || post.createdAt || null;
-    const updatedAt = post.updatedAt || publishedAt || null;
+    /* Dernière modification annoncée (JSON-LD dateModified, article:
+       modified_time) : la publication, jamais updatedAt — une écriture en
+       masse du 08/09 avait daté du jour 1 173 articles inchangés. Plan de
+       reprise SEO du 14/09/2026, action A4.5 ; la date de relecture humaine
+       (A12) viendra s'y substituer. */
+    const modifieLe = datesSeo.dateModificationArticle(post);
     const readingTimeMinutes = Number.isFinite(post.readingTimeMinutes) && post.readingTimeMinutes > 0
       ? post.readingTimeMinutes
       : estimateReadingTimeMinutes(contentHtml || '');
@@ -784,7 +790,7 @@ async function getBlogPost(req, res) {
       description: computedDesc || undefined,
       image: ogImage ? [ogImage] : undefined,
       datePublished: publishedAt ? new Date(publishedAt).toISOString() : undefined,
-      dateModified: updatedAt ? new Date(updatedAt).toISOString() : undefined,
+      dateModified: datesSeo.isoPasse(modifieLe) || undefined,
       author: {
         '@type': 'Person',
         name: post.authorName || brand.NAME,
@@ -853,7 +859,7 @@ async function getBlogPost(req, res) {
     });
 
     const ogArticlePublishedTime = publishedAt ? new Date(publishedAt).toISOString() : '';
-    const ogArticleModifiedTime = updatedAt ? new Date(updatedAt).toISOString() : '';
+    const ogArticleModifiedTime = datesSeo.isoPasse(modifieLe);
 
     /* Maillage interne : on enrichit avec detectedVehicleLandings (links vers
        /pieces-auto/{make}/{model} si l'article mentionne une marque/modèle).

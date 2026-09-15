@@ -379,10 +379,21 @@ app.get('/favicon.ico', (req, res) => {
  * 11 Mo. Mesuré : un seul appel suffisait à faire passer /produits de 2 s à
  * 8 s pour tous les visiteurs.
  *
- * Volontairement SANS exception par user-agent : n'importe qui peut se
- * déclarer « Googlebot ». Google demande un sitemap quelques fois par jour,
- * jamais vingt fois en dix minutes ; un vrai crawler n'est pas gêné, un
- * scraper l'est. Les caches et verrous posés sur chaque route font le reste. */
+ * Pas d'exception sur le seul user-agent : n'importe qui peut se déclarer
+ * « Googlebot ». Google demande un sitemap quelques fois par jour, jamais vingt
+ * fois en dix minutes ; un scraper, lui, est freiné. Les caches et verrous
+ * posés sur chaque route font le reste.
+ *
+ * Plan de reprise SEO du 14/09/2026 (action A4.3) — deux corrections, à mettre
+ * en ligne AVANT de resoumettre le moindre sitemap :
+ *   - la clé est l'adresse du VISITEUR (CF-Connecting-IP / True-Client-IP),
+ *     plus req.ip : derrière Cloudflare, req.ip peut être le nœud Cloudflare,
+ *     partagé — un scraper épuisait alors le quota de Googlebot, et Google
+ *     compte un 429 comme une erreur serveur ;
+ *   - Googlebot, Storebot-Google, AdsBot-Google et Bingbot VÉRIFIÉS (DNS
+ *     inverse puis direct, en cache, attente bornée) passent sans compter.
+ *     Un faux Googlebot reste sous la limite. Voir services/robotsVerifies.js. */
+const robotsVerifies = require('./services/robotsVerifies');
 const crawlerRoutesLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   /* Une passe complète = l'index + ses 8 sous-sitemaps, soit ~9 requêtes.
@@ -390,6 +401,8 @@ const crawlerRoutesLimiter = rateLimit({
   max: 30,
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => robotsVerifies.cleLimiteur(req),
+  skip: (req) => robotsVerifies.estRobotVerifie(req),
   handler: (req, res) => res.status(429).type('text/plain').send('Trop de requêtes sur cette ressource, réessayez dans quelques minutes.'),
 });
 app.use(['/sitemap.xml', /^\/sitemap-.*\.xml$/, '/google-merchant-feed.xml', '/google-merchant-feed-de.xml'], crawlerRoutesLimiter);
@@ -658,6 +671,13 @@ app.use('/uploads/sav', express.static(path.join(__dirname, '..', '..', 'uploads
 // gêner un visiteur réel, même derrière un NAT d'entreprise/mobile. On épargne
 // le back-office (usage intensif) et les moteurs de recherche légitimes (SEO).
 // NB : coupe les bursts agressifs, pas un scraper LENT — pour ça, Cloudflare.
+//
+// AdsBot-Google, Storebot-Google et Google-InspectionTool ne contiennent PAS
+// « googlebot » : ils passaient sous la limite. Or AdsBot contrôle les pages
+// d'arrivée des annonces (un 429 = « destination inaccessible » côté Ads),
+// Storebot les fiches Shopping, et Google compte tout 429 comme une erreur
+// serveur (plan de reprise SEO du 14/09/2026, action A4.3). Même règle que
+// pour Googlebot : exemptés sur leur User-Agent.
 const publicSiteLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 300,
@@ -667,7 +687,7 @@ const publicSiteLimiter = rateLimit({
     const p = (req.path || '').toLowerCase();
     if (p.startsWith('/admin') || p.startsWith('/comptable') || p.startsWith('/media') || p.startsWith('/uploads')) return true;
     const ua = (req.headers['user-agent'] || '').toLowerCase();
-    return /googlebot|bingbot|slurp|duckduckbot|applebot|yandexbot|facebookexternalhit|twitterbot|linkedinbot/.test(ua);
+    return /googlebot|adsbot-google|storebot-google|google-inspectiontool|bingbot|slurp|duckduckbot|applebot|yandexbot|facebookexternalhit|twitterbot|linkedinbot/.test(ua);
   },
   handler: (req, res) => res.status(429).type('text/plain').send('Trop de requêtes, réessayez dans une minute.'),
 });
@@ -717,6 +737,12 @@ app.use('/sav-files', require('./routes/savFiles'));
 // i18n SAV : injecte tSav() et savLocale dans toutes les vues
 const i18nSav = require('./services/i18nSav');
 app.use(i18nSav.middleware());
+
+/* Base de données indisponible : 503 + Retry-After sur les fiches, le blog,
+   /pieces-auto, /reference et /categorie (et leurs pages allemandes), plutôt
+   qu'un 404, une redirection ou une fiche de démonstration que Google
+   prendrait au mot. Plan de reprise SEO du 14/09/2026, action A4.4. */
+app.use(require('./middlewares/baseRequise'));
 
 // French routes (default)
 app.use('/', indexRouter);

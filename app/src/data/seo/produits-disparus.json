@@ -1,0 +1,32 @@
+{
+ "_lisezMoi": [
+  "Adresses de fiches DISPARUES qui recevaient encore du trafic — plan de reprise SEO du 14/09/2026, action A4.8. Lu par src/services/produitsDisparus.js.",
+  "Ces 19 slugs ne correspondent plus à aucune fiche et partaient en 301 vers la recherche /produits?q=… (noindex) : un soft-404 pour Google, une page de résultats pour le client. 94 clics Google de juin à août ; 16 d'entre eux sont des pages d'arrivée Google Ads.",
+  "Chaque entrée : « fiches » = slugs des fiches cibles, par ordre de préférence — la première PUBLIÉE au moment de la requête gagne ; « secours » = page servie si aucune ne l'est (jamais une 404). Une fiche en brouillon que Killian republie redevient donc la cible sans toucher à ce fichier.",
+  "Cibles vérifiées en LECTURE SEULE sur la base de production le 14/09/2026 (client natif, find uniquement) : toutes les fiches cibles existent ; celles marquées « brouillon » ne sont pas publiées, d'où leur secours ; /categorie/boites-de-vitesses (2 968 fiches), /categorie/moteurs (3 485), /categorie/mecatroniques (33) et /categorie/carrosserie-eclairage-phares-feux (36) sont actives et non vides.",
+  "Quand la fiche cible est la seule de sa catégorie (kit de démarrage, accoudoir), le secours est /produits : la catégorie deviendrait vide avec elle.",
+  "Les /product/wc-NNNN passent d'abord par le SKU WC-NNNN (fiche publiée → 301 vers elle) ; ce fichier ne sert qu'ensuite. Tout autre slug inconnu garde le repli d'avant jusqu'à la fin du changement d'adresse (31/10/2026)."
+ ],
+ "verifieLe": "2026-09-14",
+ "redirections": {
+  "boite-multitronic-0aw-audi-a4-b8-a5-8t-2-7-tdi-reconditionnee": { "fiches": ["boite-multitronic-0aw-audi-a4-b8-a5-8t-2-7-tdi"], "secours": "/categorie/boites-de-vitesses", "protection": "K1K2K3", "clicsJuinAout": 24 },
+  "wc-4714": { "fiches": ["boite-multitronic-0aw-audi-a4-b8-a5-8t-2-7-tdi"], "secours": "/categorie/boites-de-vitesses", "protection": "K2", "clicsJuinAout": 12 },
+  "boite-vitesses-s-tronic-7-audi-a6-c7-3-0-tdi-quattro-reconditionnee": { "fiches": ["boite-vitesses-s-tronic-7-reconditionnee-audi-a6-a7-3-0-tdi-quattro-dl501-0b5-nsf"], "secours": "/categorie/boites-de-vitesses", "protection": "K1K2K3", "clicsJuinAout": 9 },
+  "wc-5442": { "fiches": ["boite-vitesses-automatique-ecvt-ford-mondeo-hybrid-2-0"], "secours": "/categorie/boites-de-vitesses", "brouillon": true, "protection": "K2", "clicsJuinAout": 7 },
+  "moteur-bmw-n62b48b-4-8l-v8-occasion": { "fiches": ["moteur-bmw-n62b48b-4-8-v8-occasion-reconditionne"], "secours": "/categorie/moteurs", "protection": "K2", "clicsJuinAout": 5 },
+  "wc-4933": { "fiches": ["boite-vitesses-automatique-mercedes-c320-cdi-w203-s203"], "secours": "/categorie/boites-de-vitesses", "brouillon": true, "protection": "K2", "clicsJuinAout": 5 },
+  "boite-vitesses-range-rover-l322-4-4-v8-zf-5hp24-reconditionnee": { "fiches": ["boite-vitesses-automatique-reconditionnee-zf-5hp24-range-rover-l322-4-4-v8"], "secours": "/categorie/boites-de-vitesses", "brouillon": true, "protection": "K2", "clicsJuinAout": 5 },
+  "wc-10441": { "fiches": ["boite-vitesses-s-tronic-7-audi-a1-1-4-tfsi-pmt"], "secours": "/categorie/boites-de-vitesses", "protection": "K2", "clicsJuinAout": 4 },
+  "wc-4831": { "fiches": ["boite-vitesses-dsg7-dq200-reconditionnee-volkswagen-audi-seat-skoda"], "secours": "/categorie/boites-de-vitesses", "protection": "K2K3", "clicsJuinAout": 4 },
+  "wc-4449": { "fiches": ["kit-demarrage-porsche-cayenne-955-turbo-4-5-v8-reconditionne"], "secours": "/produits", "protection": "K2", "clicsJuinAout": 3 },
+  "wc-5431": { "fiches": ["boite-vitesses-s-tronic-7-audi-q5-3-0-tdi-quattro-lgh"], "secours": "/categorie/boites-de-vitesses", "protection": "K1K2K3", "clicsJuinAout": 3 },
+  "wc-13522": { "fiches": ["boite-vitesses-automatique-bmw-ga6hp26z-zf-6hp26z-24007563432-7563432"], "secours": "/categorie/boites-de-vitesses", "protection": "K2", "clicsJuinAout": 2 },
+  "wc-5179": { "fiches": ["boite-vitesses-automatique-powershift-ford-transit-connect-1-5-tdci-reconditionnee"], "secours": "/categorie/boites-de-vitesses", "brouillon": true, "protection": "K2", "clicsJuinAout": 2 },
+  "wc-13238": { "fiches": ["boite-vitesses-audi-3-0-tdi-quattro-nsf-0b5-dl501-a6-a7"], "secours": "/categorie/boites-de-vitesses", "protection": "", "clicsJuinAout": 2 },
+  "wc-6315": { "fiches": ["boite-vitesses-s-tronic-7-audi-s5-3-0-tfsi-v6"], "secours": "/categorie/boites-de-vitesses", "protection": "K2", "clicsJuinAout": 2 },
+  "wc-11410": { "fiches": ["calculateur-boite-edc-6dct250-dc4-continental-programme-vin"], "secours": "/categorie/mecatroniques", "protection": "", "clicsJuinAout": 2 },
+  "boite-vitesses-pdk-porsche-panamera-4s-gts-4-8-v8-970-occasion": { "fiches": ["boite-vitesse-pdk-reconditionnee-porsche-panamera-4s-4-8-v8-gts-970"], "secours": "/categorie/boites-de-vitesses", "protection": "K2", "clicsJuinAout": 1 },
+  "phares-origine-porsche-panamera-970-reconditionnes-gauche-droit": { "fiches": [], "secours": "/categorie/carrosserie-eclairage-phares-feux", "protection": "K2", "clicsJuinAout": 1 },
+  "accoudoir-cuir-noir-porsche-cayenne-955-957": { "fiches": ["accoudoir-central-cuir-noir-reconditionne-porsche-cayenne-955-957"], "secours": "/produits", "protection": "", "clicsJuinAout": 1 }
+ }
+}
