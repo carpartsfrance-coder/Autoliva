@@ -108,6 +108,19 @@ function contexteLanding({ scalapayActif = false } = {}) {
   };
 }
 
+/**
+ * Article de blog : les mêmes règles que les pages, SAUF la durée de
+ * garantie. Un article parle de pièces précises — beaucoup sont bien
+ * garanties 24 mois — et sans fiche de référence, retirer toute durée
+ * effacerait du vrai. Les durées des articles relèvent de la relecture
+ * humaine (plan SEO A17).
+ */
+function contexteArticle({ scalapayActif = false } = {}) {
+  const regles = reglesActives(FAMILLE_LANDING, { scalapayActif });
+  regles.delete('dureeGarantie');
+  return { famille: FAMILLE_LANDING, regles, dureeGarantieMois: null, portee: 'article' };
+}
+
 /* ─── Description masquée ─────────────────────────────────────────────────── */
 
 /**
@@ -249,6 +262,15 @@ const PAIEMENT = [
   /\b[34]\s+fois\s+sans\s+frais\b/i,
   /\bscalapay\b/i,
   /\b(?:payer|paiement|régler)\s+en\s+plusieurs\s+fois\b/i,
+  /* Relevées dans les articles de blog (15/09/2026) : le montant s'intercale
+     (« payable en 3 x 263 EUR sans frais »), ou le nombre de fois est écrit en
+     toutes lettres après un mot de paiement. Un mot de PAIEMENT est exigé :
+     « serrer en 3 fois » n'est pas une promesse. */
+  /\b[34]\s?[x×]\s*\d[\d\s.,]*\s*(?:€|eur\b|euros?\b)\s*(?:ttc\s*)?sans\s+frais/i,
+  /\b(?:paiements?|payer|régler|payable|réglable)\s+en\s+[34]\s+fois\b/i,
+  /* Allemand : « in 3 Raten », « Ratenzahlung ». */
+  /\b[34]\s+Raten\b/i,
+  /\bRatenzahlung\b/i,
 ];
 
 const NOMBRES = {
@@ -601,6 +623,7 @@ module.exports = {
   reglesActives,
   contexteFiche,
   contexteLanding,
+  contexteArticle,
   familleADescriptionMasquee,
   motifDescriptionMasquee,
   filtrer,

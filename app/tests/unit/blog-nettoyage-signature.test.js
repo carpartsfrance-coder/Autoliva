@@ -146,3 +146,13 @@ test('le jargon allemand de la traduction est retiré aussi', () => {
   assert.match(out, /Siehe unseren Hauptartikel und den Themenbereich zur DQ200/);
   assert.match(out, /Satellitenräder bleiben/, 'une vraie pièce (Satellitenräder) ne doit pas être touchée');
 });
+
+test('admin : une relecture incomplète est signalée, pas ignorée', () => {
+  const { lireRelecture } = require('../../src/controllers/blogAdminController')._pourTests;
+  const sansDate = lireRelecture({ reviewedBy: 'Killian', reviewerRole: 'gérant', reviewedAt: '' });
+  assert.match(sansDate.relectureErreur, /nom de la personne ET une date/);
+  assert.equal(sansDate.reviewedBy, 'Killian', 'la saisie reste affichée');
+  assert.equal(sansDate.reviewedAtDate, null, 'rien n’est enregistré');
+  assert.equal(lireRelecture({}).relectureErreur, '', 'tout vide : pas de relecture, pas d’erreur');
+  assert.equal(lireRelecture({ reviewedBy: 'Killian', reviewedAt: '2026-09-14' }).relectureErreur, '');
+});

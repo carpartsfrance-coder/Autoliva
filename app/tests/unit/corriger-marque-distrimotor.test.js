@@ -97,3 +97,16 @@ test('seul l’endroit corrigé change : typographie et mise en forme du reste i
   const marqueurInterne = String.fromCharCode(1);
   for (const v of Object.values(set)) assert.ok(typeof v !== 'string' || !v.includes(marqueurInterne), 'marqueur interne resté dans le texte');
 });
+
+test('une entrée vide qui porte un moteur cité nulle part ailleurs n’est pas effacée', () => {
+  const { manuel } = transformer({
+    sku: 'ASY-5', name: 'Moteur X – Audi / Distrimotor',
+    compatibility: [{ make: 'Audi', model: 'A4', engine: '2.0 TDI' }, { make: 'Distrimotor', model: '', engine: '1.9 TDI PD' }],
+  });
+  assert.ok(manuel.some((m) => /moteur cité nulle part ailleurs/.test(m)), 'la fiche aurait perdu « 1.9 TDI PD »');
+  const { set } = transformer({
+    sku: 'ASY-6', name: 'Moteur Y – Audi / Distrimotor',
+    compatibility: [{ make: 'Audi', model: 'A4', engine: '2.0 TDI' }, { make: 'Distrimotor', model: '', engine: '2.0 TDI' }],
+  });
+  assert.deepEqual(set.compatibility, [{ make: 'Audi', model: 'A4', engine: '2.0 TDI' }], 'moteur déjà cité ailleurs : l’entrée parasite part');
+});

@@ -412,11 +412,19 @@ function lireRelecture(body) {
      qui ne se relit pas à l'identique est refusée, pas déplacée. */
   const existe = Boolean(date && !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === brut);
   const valide = Boolean(reviewedBy && existe && date.getTime() <= Date.now() + 86400000);
+  /* Une relecture incomplète n'est plus ignorée en silence : le formulaire
+     est renvoyé avec un message, et ce qui a été saisi reste affiché. Tout
+     vide = pas de relecture (ou relecture retirée), sans erreur. */
+  const saisie = Boolean(reviewedBy || reviewerRole || brut);
+  const relectureErreur = saisie && !valide
+    ? 'Relecture humaine : indiquez le nom de la personne ET une date de relecture réelle, passée ou du jour.'
+    : '';
   return {
-    reviewedBy: valide ? reviewedBy : '',
-    reviewerRole: valide ? reviewerRole : '',
-    reviewedAt: valide ? brut : '',
+    reviewedBy: valide || relectureErreur ? reviewedBy : '',
+    reviewerRole: valide || relectureErreur ? reviewerRole : '',
+    reviewedAt: valide || relectureErreur ? brut : '',
     reviewedAtDate: valide ? date : null,
+    relectureErreur,
   };
 }
 
@@ -581,6 +589,19 @@ async function postAdminCreateBlogPost(req, res, next) {
         dbConnected,
         mode: 'new',
         errorMessage: 'Merci de renseigner un titre.',
+        postId: null,
+        form,
+        seoAssistant: buildSeoAssistant({ form, mode: 'new' }),
+      });
+    }
+
+    if (form.relectureErreur) {
+      cleanupUploadedBlogFile(req);
+      return res.status(400).render('admin/blog-post', {
+        title: 'Admin - Nouvel article',
+        dbConnected,
+        mode: 'new',
+        errorMessage: form.relectureErreur,
         postId: null,
         form,
         seoAssistant: buildSeoAssistant({ form, mode: 'new' }),
@@ -755,6 +776,12 @@ async function postAdminUpdateBlogPost(req, res, next) {
     if (!form.title) {
       cleanupUploadedBlogFile(req);
       req.session.adminBlogError = 'Merci de renseigner un titre.';
+      return res.redirect(`/admin/blog/${encodeURIComponent(String(postId))}`);
+    }
+
+    if (form.relectureErreur) {
+      cleanupUploadedBlogFile(req);
+      req.session.adminBlogError = form.relectureErreur;
       return res.redirect(`/admin/blog/${encodeURIComponent(String(postId))}`);
     }
 

@@ -88,7 +88,15 @@ function corrigerCompatibilites(compat) {
   for (const entree of (compat || [])) {
     if (!entree || !EST_DISTRIMOTOR.test(entree.make || '')) { sortie.push(entree); continue; }
     const modele = String(entree.model || '').trim();
-    if (!modele) continue; /* parasite : les vraies marques sont déjà listées */
+    if (!modele) {
+      /* Parasite : les vraies marques sont déjà listées. Sauf si elle porte un
+         moteur qu'aucune autre entrée ne cite (2 fiches sur 51) : l'effacer
+         perdrait une information, la fiche part en relecture. */
+      const moteur = String(entree.engine || '').trim().toLowerCase();
+      const ailleurs = (compat || []).some((e) => e && e !== entree && String(e.engine || '').trim().toLowerCase() === moteur);
+      if (moteur && !ailleurs) { manuel.push(`entrée « Distrimotor » vide portant un moteur cité nulle part ailleurs (« ${entree.engine} »)`); sortie.push(entree); }
+      continue;
+    }
     const cles = modelesConnus(modele);
     if (!cles) { manuel.push(`modèle inconnu « ${modele} »`); sortie.push(entree); continue; }
     const vehicules = [];

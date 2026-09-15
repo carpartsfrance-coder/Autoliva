@@ -6,6 +6,8 @@ const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services
 const blogProductCta = require('../services/blogProductCta');
 const nettoyageArticle = require('../services/nettoyageArticle');
 const signatureArticle = require('../services/signatureArticle');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
 const { markdownToHtml, escapeHtml } = require('../services/blogContent');
 const { buildHreflangSet } = require('../services/i18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
@@ -732,6 +734,10 @@ async function getBlogPost(req, res) {
        le retrait des liens vers les articles en 410, pour que les liens
        réécrits y passent aussi. */
     contentHtml = nettoyageArticle.nettoyerHtml(contentHtml, { lang: 'fr' });
+    /* Mêmes promesses non prouvées que les fiches (3x/4x tant que Scalapay
+       est coupé, ISO 9001, « nos ateliers »…) : 303 articles promettaient
+       encore le paiement en plusieurs fois. Plan SEO A11. */
+    contentHtml = claimFilter.filtrer(contentHtml, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }));
     const signe = signatureArticle.signature(post, { lang: 'fr', marque: brand.NAME, baseUrl });
 
     if (related.length && contentHtml) {

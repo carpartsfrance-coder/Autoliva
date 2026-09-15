@@ -20,6 +20,8 @@ const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services
 const blogProductCta = require('../services/blogProductCta');
 const nettoyageArticle = require('../services/nettoyageArticle');
 const signatureArticle = require('../services/signatureArticle');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const brand = require('../config/brand');
 const datesSeo = require('../services/datesSeo');
@@ -350,7 +352,13 @@ async function getBlogPostDe(req, res) {
     /* Mêmes restes de chaîne que le français, retirés avant la réécriture des
        liens internes (les liens de préproduction deviennent /blog/x, puis
        /de/blog/x) — plan SEO A12. */
-    let contentHtml = await rewriteInternalBlogLinks(nettoyageArticle.nettoyerHtml(de.contentHtml || '', { lang: 'de' }), post.slug);
+    let contentHtml = await rewriteInternalBlogLinks(
+      claimFilter.filtrer(
+        nettoyageArticle.nettoyerHtml(de.contentHtml || '', { lang: 'de' }),
+        claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() })
+      ),
+      post.slug
+    );
     /* Liens vers un article en 410 (/blog/x, /de/blog/x, autoliva.com,
        carpartsfrance.fr) : le texte reste, la balise <a> part. */
     contentHtml = retirerLiensDisparus(contentHtml);
