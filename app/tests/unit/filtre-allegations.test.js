@@ -337,3 +337,16 @@ test('blocs d’information : même filtre, avec la garantie de CETTE fiche', ()
   const titreSeul = cf.filtrerBlocsInfo({ description_end: [{ id: 'b3', title: 'À savoir', html: '' }] }, fiche('VEGE-1', 24));
   assert.deepEqual(titreSeul.description_end, [{ id: 'b3', title: 'À savoir', html: '' }]);
 });
+
+test('une longue suite de blancs ne fige pas le filtre', () => {
+  /* « \s*[—–,]?\s* » était cubique : 2 000 espaces → 1,7 s, 4 000 → 14 s,
+     à chaque affichage de la page. */
+  const blancs = `<p>Fin.${' '.repeat(3000)}suite</p>`;
+  const debut = process.hrtime.bigint();
+  cf.filtrer(blancs, LANDING);
+  const ms = Number(process.hrtime.bigint() - debut) / 1e6;
+  assert.ok(ms < 1000, `${Math.round(ms)} ms pour 3 000 espaces`);
+  /* La réécriture fonctionne toujours, avec ou sans tiret ni virgule. */
+  assert.equal(cf.filtrer('Garantie 2 ans — la couverture la plus longue du marché.', fiche('ASY-1', 24)), 'Garantie 2 ans.');
+  assert.equal(cf.filtrer('Garantie 2 ans, couverture la plus longue du marché.', fiche('ASY-1', 24)), 'Garantie 2 ans.');
+});

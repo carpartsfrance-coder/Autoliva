@@ -241,8 +241,10 @@ const REECRITURES = [
   { regle: 'atelierPropre', motif: /\bunserer Werkstatt(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unserer Partnerwerkstatt') },
   { regle: 'atelierPropre', motif: /\bunsere Werkstatt(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unsere Partnerwerkstatt') },
 
-  /* Superlatif invérifiable. */
-  { regle: 'couvertureLaPlusLongue', motif: /\s*[—–,]?\s*(?:la )?couverture la plus longue du marché(?:\s+sur\s+(?:ce modèle|cette référence|cette pièce))?/gi, par: '' },
+  /* Superlatif invérifiable. « (?:\s*[—–,])?\s* » et non « \s*[—–,]?\s* » :
+     deux \s* collés se partagent les blancs de toutes les façons possibles,
+     et une suite de 2 000 espaces figeait le rendu 1,7 s (4 000 : 14 s). */
+  { regle: 'couvertureLaPlusLongue', motif: /(?:\s*[—–,])?\s*(?:la )?couverture la plus longue du marché(?:\s+sur\s+(?:ce modèle|cette référence|cette pièce))?/gi, par: '' },
 
   /* « …, paiement en 3× sans frais » en FIN de phrase : on retire la seule
      proposition, la phrase garde son début (« Échange standard sans caution »). */
