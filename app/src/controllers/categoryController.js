@@ -419,5 +419,5 @@ module.exports = {
   listCategories,
   getCategory,
   /* Exposé pour les tests : les promesses de ces descriptions sont vérifiées. */
-  _pourTests: { buildCategoryMetaDescription },
+  _pourTests: { buildCategoryMetaDescription, buildCategoryMetaDescriptionDe },
 };

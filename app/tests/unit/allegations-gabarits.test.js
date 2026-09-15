@@ -87,6 +87,26 @@ test('gabarits : plus de garantie générale ni d’atelier revendiqué', () => 
   }
 });
 
+test('allemand, blog et accueil : mêmes règles que les gabarits français', () => {
+  /* Oubliés au premier passage : la diapositive allemande par défaut (seule
+     servie en /de), la description des 63 catégories allemandes, la tuile
+     « Garantie 2 ans* » en fin de chaque article, et la tuile « Payez en 3 ou
+     4 fois » de l'accueil, affichée sans condition. */
+  assert.doesNotMatch(lire('src/services/siteSettings.js'), /2 Jahre|24 Monate/i, 'diapositive allemande');
+  const { buildCategoryMetaDescriptionDe } = require('../../src/controllers/categoryController')._pourTests;
+  for (const total of [0, 42]) {
+    assert.doesNotMatch(buildCategoryMetaDescriptionDe('Automatikgetriebe', total), /2 Jahre|24 Monate|24\/48/, 'catégorie allemande');
+  }
+  for (const langue of ['fr', 'de']) {
+    const t = JSON.parse(lire('src/locales/' + langue + '.json'));
+    assert.doesNotMatch(t['blogCta.warranty2y'], /\d/, 'tuile garantie du blog en ' + langue);
+  }
+  const accueil = lire('src/views/home.ejs');
+  for (const ligne of accueil.split('\n')) {
+    if (/home\.flexPay/.test(ligne)) assert.match(ligne, /scalapayActif/, 'tuile 3/4 fois non conditionnée : ' + ligne.trim().slice(0, 90));
+  }
+});
+
 test('fiche sans garantie saisie : « nous consulter », pas « 24 mois »', () => {
   const fiche = lire('src/views/products/show.ejs');
   assert.doesNotMatch(fiche, /product\.warranty24/, 'le repli « Garantie 24 Mois » est revenu');

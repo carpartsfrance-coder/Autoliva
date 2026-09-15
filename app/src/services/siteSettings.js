@@ -232,7 +232,7 @@ function getDefaultHeroSlidesDe() {
       imageAlt: 'Aufbereitete Verteilergetriebe und Differentiale',
       badge: 'Antrieb',
       title: 'Aufbereitete Verteilergetriebe & Differenziale',
-      description: 'Unser aufbereitetes Sortiment ist geprüft und 2 Jahre garantiert — für maximale Zuverlässigkeit.',
+      description: 'Unser aufbereitetes Sortiment wird vor dem Versand geprüft, mit der auf jeder Produktseite angegebenen Garantie.',
       ctaPrimaryText: 'Kostenloses Angebot anfordern',
       ctaPrimaryUrl: '/devis',
       ctaSecondaryText: 'Katalog durchsuchen',
