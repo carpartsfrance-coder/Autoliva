@@ -781,8 +781,20 @@ async function postAdminUpdateBlogPost(req, res, next) {
 
     if (form.relectureErreur) {
       cleanupUploadedBlogFile(req);
-      req.session.adminBlogError = form.relectureErreur;
-      return res.redirect(`/admin/blog/${encodeURIComponent(String(postId))}`);
+      /* Rendu direct, pas de redirection : la redirection rechargeait
+         l'article depuis la base et effaçait tout ce qui venait d'être
+         modifié (texte, titre, SEO) pour une date de relecture oubliée. */
+      return res.status(400).render('admin/blog-post', {
+        title: `Admin - ${existing.title || form.title}`,
+        dbConnected,
+        mode: 'edit',
+        errorMessage: form.relectureErreur,
+        successMessage: null,
+        postId,
+        form,
+        publicUrl: existing.slug ? `/blog/${encodeURIComponent(existing.slug)}` : '',
+        seoAssistant: buildSeoAssistant({ form, mode: 'edit' }),
+      });
     }
 
     const stableSlug = existing.slug && String(existing.slug).trim()
