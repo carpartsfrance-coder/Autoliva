@@ -154,7 +154,7 @@ function getDefaultHeroSlides() {
       imageAlt: 'Boîte de transfert et pont différentiel reconditionnés',
       badge: 'Transmission',
       title: 'Boîtes de transfert & ponts différentiels reconditionnés',
-      description: 'Notre gamme reconditionnée est testée et garantie 2 ans, pour une fiabilité maximale.',
+      description: 'Notre gamme reconditionnée est contrôlée avant expédition, avec une garantie indiquée sur chaque fiche.',
       ctaPrimaryText: 'Demander un Devis Gratuit',
       ctaPrimaryUrl: '/devis',
       ctaSecondaryText: 'Parcourir le catalogue',

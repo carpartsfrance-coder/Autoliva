@@ -14,6 +14,7 @@
  */
 
 const mongoose = require('mongoose');
+const scalapay = require('../services/scalapay');
 const brand = require('../config/brand');
 const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
@@ -104,7 +105,7 @@ async function getReferenceLanding(req, res, next) {
 
     const title = `Référence ${refUpper} - Pièce auto occasion & reconditionné | ${brand.NAME}`;
     const compatStr = vehicleCompat.length ? ` Compatible ${vehicleCompat.slice(0, 3).join(', ')}.` : '';
-    const metaDescription = `Pièce auto référence ${refUpper} d'occasion ou reconditionnée, contrôlée et garantie.${compatStr} Paiement 3x/4x sans frais. Expédition France & Europe.`;
+    const metaDescription = `Pièce auto référence ${refUpper} d'occasion ou reconditionnée, contrôlée et garantie.${compatStr}${scalapay.estActif() ? ' Paiement 3x/4x sans frais.' : ''} Expédition France & Europe.`;
 
     /* JSON-LD : ItemList des produits avec cette référence */
     const itemListElements = productsView.map((p, idx) => ({

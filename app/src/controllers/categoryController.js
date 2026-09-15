@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const scalapay = require('../services/scalapay');
 
 const Category = require('../models/Category');
 const demoProducts = require('../demoProducts');
@@ -393,11 +394,16 @@ function buildCategoryMetaDescription(name, totalCount) {
   const n = name.toLowerCase();
   const count = totalCount > 0 ? totalCount : '';
   const countText = count ? `${count} références` : 'Large choix';
+  /* Plan SEO A11 : ces descriptions promettaient « garantie 2 ans » et
+     « 3x/4x sans frais » à toute la catégorie. La garantie dépend de la pièce
+     (6, 12 ou 24 mois) et le paiement en plusieurs fois est coupé depuis le
+     05/08 : il ne réapparaît que si Scalapay est rallumé. */
+  const paiement = scalapay.estActif() ? ' Paiement en 3x/4x sans frais.' : '';
 
   const templates = [
-    `${name} reconditionnées et testées sur banc. Garantie 2 ans, expédition 24/48h. ${countText} à prix compétitifs. Paiement en 3x/4x sans frais.`,
-    `${countText} de ${n} reconditionnées avec garantie 2 ans. Testées sur banc, expédiées sous 24/48h. Commandez en 3x/4x sans frais.`,
-    `${name} d'occasion et reconditionnées. ${countText} testées et garanties 2 ans. Livraison express 24/48h. Paiement en 3x/4x disponible.`,
+    `${name} reconditionnées et d'occasion, contrôlées avant expédition. Garantie selon la pièce. ${countText} à prix compétitifs.${paiement}`,
+    `${countText} de ${n} d'occasion et reconditionnées, contrôlées avant expédition, garantie indiquée sur chaque fiche.${paiement}`,
+    `${name} d'occasion et reconditionnées. ${countText} contrôlées, garantie indiquée sur chaque fiche. Livraison en France et en Europe.${paiement}`,
   ];
 
   for (const t of templates) {
@@ -405,11 +411,13 @@ function buildCategoryMetaDescription(name, totalCount) {
     if (clean.length >= 140 && clean.length <= 160) return clean;
   }
 
-  const fallback = `${name} reconditionnées, testées sur banc et garanties 2 ans. ${countText} disponibles, expédition 24/48h. Paiement en 3x/4x.`;
+  const fallback = `${name} d'occasion et reconditionnées, garantie indiquée sur chaque fiche. ${countText} disponibles, livraison en France et en Europe.${paiement}`;
   return truncateText(normalizeMetaText(fallback), 160);
 }
 
 module.exports = {
   listCategories,
   getCategory,
+  /* Exposé pour les tests : les promesses de ces descriptions sont vérifiées. */
+  _pourTests: { buildCategoryMetaDescription },
 };

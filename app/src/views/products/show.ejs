@@ -79,8 +79,8 @@
         : (findSpec('garantie') || topLeftBadge || ''); %>
       <%# Garantie « jusqu'à N mois » (formulation conforme, design Autoparts) %>
       <% const _wm = (product.warranty && Number(product.warranty.months) > 0) ? Number(product.warranty.months) : 0; %>
-      <% const _garLabel = _wm ? t('product.warrantyUpTo', { months: _wm }) : (keyGarantie || t('product.warranty24')); %>
-      <% const _garValue = _wm ? (t('product.upToMonths', { months: _wm }) + ' — ' + t('product.partsLabor')) : (keyGarantie || t('product.warranty24')); %>
+      <% const _garLabel = _wm ? t('product.warrantyUpTo', { months: _wm }) : (keyGarantie || t('product.warrantyAsk')); %>
+      <% const _garValue = _wm ? (t('product.upToMonths', { months: _wm }) + ' — ' + t('product.partsLabor')) : (keyGarantie || t('product.warrantyAsk')); %>
       <% const optionGroups = Array.isArray(product.displayOptions) ? product.displayOptions : []; %>
       <% const compGrouped = {}; %>
       <% (Array.isArray(product.compatibility) ? product.compatibility : []).forEach((c) => {
@@ -231,7 +231,7 @@
             { icon: 'verified', label: t('product.svcWarranty30') },
           ]
         : [
-            { icon: 'verified', label: keyGarantie || t('product.warranty24') },
+            { icon: 'verified', label: keyGarantie || t('product.warrantyAsk') },
             { icon: 'terminal', label: keyProgrammation || t('product.progIncluded') },
             { icon: 'analytics', label: t('product.benchTested') },
             consigneUpfront ? { icon: 'verified_user', label: t('product.consigneRefundable') } : { icon: 'lock_open', label: t('product.noDeposit') },
