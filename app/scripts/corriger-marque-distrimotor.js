@@ -1,8 +1,5 @@
 'use strict';
 
-/* Charge .env comme les autres scripts : MONGODB_URI vient de là. */
-require('dotenv').config();
-
 /**
  * Corrige les fiches moteur dont les textes donnent « Distrimotor » comme
  * MARQUE DE VÉHICULE.
@@ -111,13 +108,20 @@ function corrigerCompatibilites(compat) {
   return { compat: sortie, marquesDistri: unique(marquesDistri), reprises, manuel };
 }
 
-function nettoyerPonctuation(t) {
+/* Marque l'endroit d'un retrait, pour ne recoller QUE là. */
+const TROU = '\u0001';
+
+/* Recolle le texte autour des seuls mots retirés. L'ancienne version
+   normalisait tout le champ : sur 63 descriptions, « main d'œuvre ; »
+   devenait « main d'œuvre; » (typographie française), et des espaces
+   doubles ou retours à la ligne sans rapport avec Distrimotor auraient été
+   écrasés. */
+function recoller(t) {
   return t
-    .replace(/\s{2,}/g, ' ')
-    .replace(/\s+([.,;:!?|])/g, (m, p) => (p === '|' || p === ':' ? ` ${p}` : p))
-    .replace(/([–-])\s*([.,|])/g, '$2')
-    .replace(/\(\s*\)/g, '')
-    .trim();
+    .replace(/[ \t]*\([ \t]*\u0001+[ \t]*\)/g, '')
+    .replace(/[ \t]*\u0001+[ \t]*(?=[.,;:!?)\]|]|$)/g, '')
+    .replace(/(^|[(\[])[ \t]*\u0001+[ \t]*/g, '$1')
+    .replace(/[ \t]*\u0001+[ \t]*/g, (m) => (/[ \t]/.test(m) ? ' ' : ''));
 }
 
 /**
@@ -138,8 +142,8 @@ function corrigerTexte(texte, { lang, reprises, marquesDistri, marquePrincipale 
     : t.replace(/\bvotre Distrimotor\b/g, seule ? `votre ${seule}` : 'votre véhicule');
 
   /* 3. Dans une liste de marques : on retire le mot et son séparateur. */
-  t = t.replace(/\s*(?:\/|,)\s*Distrimotor\b(?!\s+[A-Z0-9])/g, '')
-    .replace(/\bDistrimotor\s*(?:\/|,)\s*/g, '');
+  t = t.replace(/\s*(?:\/|,)\s*Distrimotor\b(?!\s+[A-Z0-9])/g, TROU)
+    .replace(/\bDistrimotor\s*(?:\/|,)\s*/g, TROU);
 
   /* 4. Resté seul (« – Distrimotor », « pour Distrimotor. ») : la vraie marque. */
   const remplacement = marquesDistri.length ? marquesDistri.join(' / ') : (marquePrincipale || '');
@@ -147,7 +151,7 @@ function corrigerTexte(texte, { lang, reprises, marquesDistri, marquePrincipale 
     if (!remplacement) return null;
     t = t.replace(/\bDistrimotor\b/g, remplacement);
   }
-  t = nettoyerPonctuation(t);
+  t = recoller(t);
   return /distrimotor/i.test(t) ? null : t;
 }
 
@@ -202,6 +206,9 @@ function transformer(produit) {
 }
 
 async function main() {
+  /* .env chargé ici, pas au require : les tests importent ce module et ne
+     doivent pas recevoir l'adresse de la base de production. */
+  require('dotenv').config();
   const appliquer = process.argv.includes('--appliquer');
   if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI manquante');
   const { MongoClient } = require('mongodb');

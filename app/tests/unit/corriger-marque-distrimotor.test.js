@@ -83,3 +83,17 @@ test('modèle inconnu : rien n’est deviné, la fiche part en relecture', () =>
   assert.ok(manuel.some((m) => /modèle inconnu/.test(m)));
   assert.ok(!('compatibility' in set) || set.compatibility.some((e) => e.make === 'Distrimotor'), 'une marque a été inventée');
 });
+
+test('seul l’endroit corrigé change : typographie et mise en forme du reste intactes', () => {
+  /* Relevé sur les 63 descriptions à corriger : la normalisation portait sur
+     tout le champ, « main d'œuvre ; » devenait « main d'œuvre; ». */
+  const description = 'Ce moteur équipe notamment : Audi, Distrimotor. Garantie pièces et main d’œuvre ; livré nu !\n\nDeux  espaces ici ?';
+  const { set, manuel } = transformer({
+    sku: 'ASY-5', description,
+    compatibility: [{ make: 'Audi', model: 'A3' }, { make: 'Distrimotor', model: '' }],
+  });
+  assert.deepEqual(manuel, []);
+  assert.equal(set.description, 'Ce moteur équipe notamment : Audi. Garantie pièces et main d’œuvre ; livré nu !\n\nDeux  espaces ici ?');
+  const marqueurInterne = String.fromCharCode(1);
+  for (const v of Object.values(set)) assert.ok(typeof v !== 'string' || !v.includes(marqueurInterne), 'marqueur interne resté dans le texte');
+});
