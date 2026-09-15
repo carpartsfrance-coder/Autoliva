@@ -376,8 +376,18 @@ function lisible(morceau) {
 
 /* Frontières de phrase : « . » « ! » « ? » suivis d'un blanc puis d'une
    MAJUSCULE (« réf. 0AM » n'en est pas une), et le séparateur « · » des listes
-   compactes (« reconditionnée · garantie 24 mois · paiement 3x/4x »). */
-const SEPARATEUR = /\s+·\s+|(?<=[.!?…][\uE000-\uEFFF»"”’)]*)\s+(?=[\uE000-\uEFFF]*[«"“(]?\s?[A-ZÀ-ÖØ-ÞŒ])/g;
+   compactes (« reconditionnée · garantie 24 mois · paiement 3x/4x »).
+   Le point d'une ABRÉVIATION non plus : en allemand, le nom qui suit prend
+   toujours la majuscule. « Für 1.390 € inkl. MwSt – in 3 Raten zahlbar – wird
+   sie… » était coupé après « inkl. », et le retrait de la suite laissait
+   « Für 1.390 € inkl. » seul dans 85 articles /de (mesuré le 15/09/2026). */
+const ABREVIATIONS = ['[Ii]nkl', '[Zz]zgl', '[Ee]xkl', 'ca', 'bzw', 'evtl', 'ggf', 'vgl', 'Nr', '[Rr]éf', 'env', 'cf', '[zdu]', 'z\\.\\s?B', 'd\\.\\s?h', 'u\\.\\s?a'];
+const SEPARATEUR = new RegExp(
+  '\\s+·\\s+|(?<=[.!?…][\\uE000-\\uEFFF»"”’)]*)'
+  + `(?<!(?:^|[^\\wÀ-ÿ])(?:${ABREVIATIONS.join('|')})\\.[\\uE000-\\uEFFF]*)`
+  + '\\s+(?=[\\uE000-\\uEFFF]*[«"“(]?\\s?[A-ZÀ-ÖØ-ÞŒ])',
+  'g'
+);
 
 function decouper(bloc) {
   const morceaux = [];

@@ -57,3 +57,16 @@ test('plus de délai « 24/48h » promis par défaut', () => {
   const brochure = fs.readFileSync(path.join(__dirname, '../../src/services/companyBrochurePdf.js'), 'utf8');
   assert.match(brochure, /scalapay'\)\.estActif\(\)/, 'le 3/4 fois de la brochure doit dépendre de Scalapay');
 });
+
+test('le point d’une abréviation ne coupe pas la phrase : pas de « 1.390 € inkl. » laissé seul', () => {
+  /* 85 articles /de gardaient « Für 1.390 € inkl. » : la phrase était coupée
+     après « inkl. » (le nom allemand qui suit prend la majuscule). */
+  const de = cf.filtrer('<p>Für 1.390 € inkl. MwSt – in 3 Raten ohne Zinsen zahlbar – wird sie fahrfertig geliefert. Der Austausch ist ohne Kaution.</p>', coupe());
+  assert.equal(de, '<p>Der Austausch ist ohne Kaution.</p>');
+  const balise = cf.filtrer('<p>Ab 1.290 € <strong>inkl.</strong> MwSt., zahlbar in 4 Raten. Versand in 48 h.</p>', coupe());
+  assert.equal(balise, '<p>Versand in 48 h.</p>');
+  const fr = cf.filtrer('<p>La mécatronique réf. DQ200 est payable en 3 x 430 € sans frais. Garde ce texte.</p>', coupe());
+  assert.equal(fr, '<p>Garde ce texte.</p>');
+  /* Une vraie fin de phrase reste une frontière. */
+  assert.equal(cf.filtrer('<p>Livraison offerte. Paiement en 3 fois disponible. Garde.</p>', coupe()), '<p>Livraison offerte. Garde.</p>');
+});
