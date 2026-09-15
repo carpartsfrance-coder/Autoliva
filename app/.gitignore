@@ -26,3 +26,8 @@ public/css/*
 
 public/uploads/
 !public/uploads/**/.gitkeep
+
+# Scripts SEO one-shot (diag + apply + backups locaux)
+_seo_*.js
+_seo_backups/
+_test_*.js
