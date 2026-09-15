@@ -6,6 +6,7 @@ const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services
 const blogProductCta = require('../services/blogProductCta');
 const nettoyageArticle = require('../services/nettoyageArticle');
 const signatureArticle = require('../services/signatureArticle');
+const { sanitizeBrandLeak } = require('../services/brandSanitizer');
 const claimFilter = require('../services/claimFilter');
 const scalapay = require('../services/scalapay');
 const { markdownToHtml, escapeHtml } = require('../services/blogContent');
@@ -656,8 +657,15 @@ async function getBlogPost(req, res) {
       return buildBlogPostCanonical(baseUrl, post.slug);
     })();
 
-    const computedDesc = truncateText(stripHtml(post.excerpt || contentHtml || ''), 160);
-    const metaDescription = normalizeMetaText(post.seo && post.seo.metaDescription ? post.seo.metaDescription : computedDesc);
+    /* Résumé et description Google passent par le même filtre que le corps :
+       9 résumés et 13 descriptions promettaient encore le 3x, et le résumé
+       s'affiche juste au-dessus du texte filtré. Calculés sur le corps
+       NETTOYÉ, pas sur le brut (JSON-LD collé en tête d'article). Un texte
+       vidé par le filtre retombe sur le suivant. Plan SEO A11. */
+    const sansAllegation = (t) => (t ? sanitizeBrandLeak(claimFilter.filtrer(t, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }))) : '');
+    const excerptPropre = sansAllegation(post.excerpt);
+    const computedDesc = truncateText(stripHtml(excerptPropre || sansAllegation(nettoyageArticle.nettoyerHtml(contentHtml || '', { lang: 'fr' })) || ''), 160);
+    const metaDescription = normalizeMetaText((post.seo && post.seo.metaDescription && sansAllegation(post.seo.metaDescription)) || computedDesc);
     /* Title : on garantit toujours le suffix " | Autoliva" pour éviter que
      * <title> et <h1> soient identiques (cause des 14 alertes Semrush
      * "duplicate H1 and title tags" sur les articles blog). Si le DB
@@ -679,7 +687,7 @@ async function getBlogPost(req, res) {
       : `${post.title} | ${brand.NAME}`;
     const title = clampSeoTitle(normalizeMetaText(rawTitle));
 
-    const excerptForView = post.excerpt || computedDesc;
+    const excerptForView = excerptPropre || computedDesc;
 
     if (!post.excerpt && finalMarkdown) {
       const withoutLeadParagraph = stripLeadingParagraphFromMarkdown(finalMarkdown);

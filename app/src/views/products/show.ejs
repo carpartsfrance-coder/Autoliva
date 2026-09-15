@@ -265,7 +265,8 @@
       <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.specState'), keyEtat); %>
       <% if (technicalSpecs.length < 6 && keyProgrammation) pushTechnicalSpec(t('product.specProg'), keyProgrammation); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.guarantee'), (product.warranty && Number(product.warranty.months) > 0) ? (Number(product.warranty.months) + ' ' + t('product.monthsWord')) : (keyGarantie || t('product.specIncluded'))); %>
-      <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.shippingLabel'), shippingDelayText || t('product.specShipping2448')); %>
+      <%# Délai : seulement s'il est saisi — « Sous 24/48h » par défaut sur 6 329 fiches (plan SEO A11). %>
+      <% if (technicalSpecs.length < 6 && shippingDelayText) pushTechnicalSpec(t('product.shippingLabel'), shippingDelayText); %>
 
       <%# ══════════════════════════ REFONTE DESIGN — AUTOPARTS v3 ══════════════════════════
           Fiche produit portée au pixel depuis le handoff « Page Produit Autoparts v3 ».
@@ -870,7 +871,7 @@
              { c: t('product.cmpPrice'), u: t('product.cmpPriceUsed'), r: t('product.cmpPriceRecond'), n: t('product.cmpPriceNew'), weak: [true, false, false] },
              { c: t('product.cmpWarranty'), u: t('product.cmpNone'), r: (_wm ? t('product.cmpWarrantyRecond', { months: _wm }) : 'Garantie sur la pièce'), n: t('product.cmpWarrantyNew'), weak: [true, false, false] },
              { c: t('product.cmpHistory'), u: t('product.cmpUnknown'), r: t('product.cmpHistoryRecond'), n: t('product.cmpNew2'), weak: [true, false, false] },
-             { c: t('product.cmpAvail'), u: t('product.cmpRandom'), r: t('product.cmpAvailRecond'), n: t('product.cmpAvailNew'), weak: [true, false, false] },
+             { c: t('product.cmpAvail'), u: t('product.cmpRandom'), r: (shippingDelayText || t('product.cmpAvailRecond')), n: t('product.cmpAvailNew'), weak: [true, false, false] },
              { c: t('product.cmpBreakdown'), u: t('product.cmpNoRecourse'), r: t('product.cmpBreakdownRecond'), n: t('product.cmpBreakdownNew'), weak: [true, false, false] },
              { c: t('product.cmpEnv'), cIcon: 'eco', u: t('product.cmpReuse'), r: t('product.cmpReuseRecond'), rIcon: 'check_circle', n: t('product.cmpNewProd'), weak: [false, false, true] }
            ]; %>
@@ -983,7 +984,7 @@
       <%# ═══ FAQ ═══ %>
       <% var _faqItems = (product.sections && product.sections.showFaq && Array.isArray(product.faqs) && product.faqs.length)
            ? product.faqs.map((f) => ({ q: f.question, a: f.answer }))
-           : [ {q: t('product.faqQ1'), a: t('product.faqA1')}, {q: t('product.faqQ2'), a: t('product.faqA2')}, {q: t('product.faqQ3'), a: t('product.faqA3', { months: (_wm || 24) })}, {q: t('product.faqQ4'), a: t('product.faqA4')} ]; %>
+           : [ {q: t('product.faqQ1'), a: t('product.faqA1')}, {q: t('product.faqQ2'), a: t('product.faqA2')}, {q: t('product.faqQ3'), a: (_wm ? t('product.faqA3', { months: _wm }) : t('product.faqA3Ask'))}, {q: t('product.faqQ4'), a: t('product.faqA4')} ]; %>
       <% if (_faqItems.length) { %>
       <div style="max-width: 780px; margin: 72px auto 0 auto;">
         <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #ED1C24; margin-bottom: 8px;"><%= t('product.weAnswer') %></div>

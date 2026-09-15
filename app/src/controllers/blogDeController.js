@@ -20,6 +20,7 @@ const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services
 const blogProductCta = require('../services/blogProductCta');
 const nettoyageArticle = require('../services/nettoyageArticle');
 const signatureArticle = require('../services/signatureArticle');
+const { sanitizeBrandLeak } = require('../services/brandSanitizer');
 const claimFilter = require('../services/claimFilter');
 const scalapay = require('../services/scalapay');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
@@ -330,9 +331,13 @@ async function getBlogPostDe(req, res) {
       ? `${baseUrl}/de/blog/${encodeURIComponent(post.slug)}`
       : `/de/blog/${encodeURIComponent(post.slug)}`;
 
-    const computedDesc = truncateText(stripHtml(de.excerpt || de.contentHtml || ''), 160);
+    /* Même filtre que le corps pour le résumé et la description Google
+       (5 résumés et 4 descriptions promettaient encore « Ratenzahlung »). */
+    const sansAllegation = (t) => (t ? sanitizeBrandLeak(claimFilter.filtrer(t, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }))) : '');
+    const excerptPropre = sansAllegation(de.excerpt);
+    const computedDesc = truncateText(stripHtml(excerptPropre || sansAllegation(nettoyageArticle.nettoyerHtml(de.contentHtml || '', { lang: 'de' })) || ''), 160);
     const metaDescription = normalizeMetaText(
-      (de.seo && de.seo.metaDescription) ? de.seo.metaDescription : computedDesc
+      (de.seo && de.seo.metaDescription && sansAllegation(de.seo.metaDescription)) || computedDesc
     );
     const titleTag = normalizeMetaText(
       (de.seo && de.seo.metaTitle) ? de.seo.metaTitle : `${de.title} - ${brand.NAME}`
@@ -467,7 +472,7 @@ async function getBlogPostDe(req, res) {
       post: {
         title: de.title,
         slug: post.slug,
-        excerpt: de.excerpt || computedDesc,
+        excerpt: excerptPropre || computedDesc,
         coverImageUrl: buildSeoMediaUrl(post.coverImageUrl, de.title),
         category: post.category && post.category.slug ? { slug: post.category.slug, label: blogCategoryLabelDe(post.category) } : null,
         ...(() => {

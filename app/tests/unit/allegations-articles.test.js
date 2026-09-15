@@ -54,6 +54,17 @@ test('les articles ne perdent pas leurs durées de garantie (relecture humaine)'
 test('plus de délai « 24/48h » promis par défaut', () => {
   const fiche = fs.readFileSync(path.join(__dirname, '../../src/views/products/show.ejs'), 'utf8');
   assert.doesNotMatch(fiche, /shippingDelayText\s*\|\|\s*'24\/48h'/);
+  assert.doesNotMatch(fiche, /\|\|\s*t\('product\.specShipping2448'\)/, 'repli « Sous 24/48h » revenu dans les caractéristiques');
+  assert.doesNotMatch(fiche, /_wm\s*\|\|\s*24/, 'repli « 24 mois » revenu dans la FAQ');
+  /* Textes affichés sur TOUTE fiche reconditionnée, délai saisi ou non. */
+  for (const langue of ['fr', 'de']) {
+    const t = JSON.parse(fs.readFileSync(path.join(__dirname, '../../src/locales/' + langue + '.json'), 'utf8'));
+    for (const cle of ['product.faqA4', 'product.exStep1Text', 'product.exStep1TextConsigne', 'product.cmpAvailRecond']) {
+      assert.doesNotMatch(String(t[cle]), /24\s*\/\s*48|selben Tag|jour même/i, `${langue} ${cle} promet encore un délai`);
+    }
+    assert.ok(t['product.faqA3Ask'], `product.faqA3Ask manque en ${langue}`);
+    assert.doesNotMatch(t['product.faqA3Ask'], /\d/, 'la réponse sans garantie saisie ne doit citer aucune durée');
+  }
   const brochure = fs.readFileSync(path.join(__dirname, '../../src/services/companyBrochurePdf.js'), 'utf8');
   assert.match(brochure, /scalapay'\)\.estActif\(\)/, 'le 3/4 fois de la brochure doit dépendre de Scalapay');
 });
