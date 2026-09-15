@@ -185,6 +185,13 @@
       <%# ISO 9001 : mis en avant UNIQUEMENT sur les pièces reconditionnées (pas occasion / neuf / service). %>
       <% const _isoHay = (String(product.category || '') + ' ' + String(conditionBadge || '') + ' ' + String(keyEtat || '')).toLowerCase(); %>
       <% const _showIso = !isService && !/occasion|\bneuf\b/.test(_isoHay); %>
+      <%# _showIso décide des blocs « pièce reconditionnée » (comparatif, échange
+          standard). La MENTION ISO 9001, elle, est une allégation : elle suit
+          la politique src/data/seo/claims-policy.json (règle iso9001, active
+          tant que la certification n'est pas prouvée — décision 4). Absent =
+          masqué : un contrôleur qui oublierait le drapeau n'affirme rien. %>
+      <% const _isoOk = _showIso && (typeof iso9001Affichable !== 'undefined') && iso9001Affichable === true; %>
+      <% const _filtreAlleg = (typeof filtreAllegations === 'function') ? filtreAllegations : (s) => s; %>
       <% const heroBadge = isService
         ? (topLeftBadge || t('product.serviceRemote'))
         : (keyEtat || conditionBadge || topLeftBadge || t('product.reconditioningPro')); %>
@@ -504,7 +511,7 @@
           <input type="hidden" name="qty" value="1" data-qty-input />
           <h1 style="font-size: 30px; font-weight: 800; line-height: 1.22; letter-spacing: -0.015em; margin: 0 0 10px 0; color: #0F1626; text-wrap: pretty;"><%= product.name %></h1>
 
-          <% if (_showIso) { %>
+          <% if (_isoOk) { %>
           <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
             <div style="display: flex; gap: 2.5px;">
               <% for (var _s = 0; _s < 5; _s++) { %><span style="width: 18px; height: 18px; background: #00B67A; display: flex; align-items: center; justify-content: center;"><span class="material-symbols-outlined ap-fill" style="font-size: 12.5px; color: #FFFFFF;">star</span></span><% } %>
@@ -520,7 +527,7 @@
             <% if (gearsVal) _specBits.push(gearsVal + ' ' + t('product.gearsWord')); %>
             <% if (_showIso) _specBits.push(t('product.exchangeStandardWord')); %>
             <% if (_garLabel) _specBits.push(_garLabel); %>
-            <%= _specBits.join(' · ') %><% if (_showIso) { %> · <%= t('product.isoFactories') %><% } %>
+            <%= _specBits.join(' · ') %><% if (_isoOk) { %> · <%= t('product.isoFactories') %><% } %>
           </div>
 
           <%# ═══ Options produit (Mode de fourniture, programmation…) — hooks réels du script principal ═══ %>
@@ -744,16 +751,68 @@
         </div>
       </div>
 
+      <%# ═══ Description ═══
+           Absente de la refonte « Autoparts v3 » du 05/07/2026 : le contrôleur
+           calculait toujours `descriptionHtmlSafe`, mais plus rien ne l'affichait.
+           Pendant deux mois, 13 362 fiches n'ont montré que le gabarit commun —
+           pour Google, des pages identiques à 95 % qui ne différaient que par le
+           titre. C'est le texte propre à CHAQUE pièce : il doit être dans la page,
+           pas seulement en base.
+           `descriptionAffichee` (contrôleur) : faux en allemand, pour les copies
+           distrimotor (DM-), les 264 fiches Alibaba, ou SHOW_PRODUCT_DESCRIPTION=off.
+           Il coupe AUSSI le repli sur product.description : sans lui, une fiche
+           masquée aurait ressorti son texte brut par la ligne ci-dessous.
+           Et il coupe la SECTION entière, blocs « fin de description » compris :
+           sans quoi une fiche DM ou une fiche sous interrupteur montrerait un
+           titre « Description » au-dessus d'un seul encadré — et « off » ne
+           ramènerait pas la page d'avant faf510d, qui n'avait aucun des deux. %>
+      <% var _descVisible = (typeof descriptionAffichee !== 'undefined') && descriptionAffichee === true; %>
+      <% var _descHtml = (_descVisible && product && typeof product.descriptionHtmlSafe === 'string') ? product.descriptionHtmlSafe.trim() : ''; %>
+      <% var _descTxt = (!_descVisible || _descHtml) ? '' : String((product && (product.descriptionText || product.description || product.shortDescription)) || '').trim(); %>
+      <% if (_descVisible && (_descHtml || _descTxt || (_ib.description_end && _ib.description_end.length))) { %>
+      <section id="description" style="margin-top: 72px; max-width: 860px;">
+        <h2 style="font-size: 19px; font-weight: 800; color: #0F1626; margin: 0 0 14px 0;"><%= t('product.description') %></h2>
+        <div class="desc-collapse-wrapper relative" data-desc-collapse>
+          <div class="desc-collapse-inner" data-desc-collapse-inner>
+            <% if (_descHtml) { %>
+              <div class="pp-prose product-html" style="font-size: 14px; line-height: 1.75; color: #3E4657;"><%- _descHtml %></div>
+            <% } else if (_descTxt) { %>
+              <p class="pp-prose" style="white-space: pre-line; margin: 0; font-size: 14px; line-height: 1.75; color: #3E4657;"><%= _descTxt %></p>
+            <% } %>
+          </div>
+          <div class="desc-collapse-fade hidden" data-desc-fade>
+            <button type="button" data-desc-toggle data-label-more="<%= t('product.readMore') %>" data-label-less="<%= t('product.readLess') %>" style="width: 100%; border: none; background: transparent; cursor: pointer; color: #E02128; font-weight: 700; font-size: 13.5px; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 32px 0 8px 0; font-family: inherit;">
+              <span data-desc-toggle-label><%= t('product.readMore') %></span>
+              <span class="material-symbols-outlined" style="font-size: 17px; transition: transform 0.2s;" data-desc-toggle-icon>expand_more</span>
+            </button>
+          </div>
+        </div>
+        <% if (_ib.description_end && _ib.description_end.length) { %>
+          <%- include('./partials/info-blocks', { blocks: _ib.description_end }) %>
+        <% } %>
+      </section>
+      <% } %>
+
       <%# ═══ Comment nous reconditionnons (bande navy) ═══ %>
       <% if (_showIso) { %>
       <div class="ap-recond-grid" style="background: #15213B; border-radius: 20px; padding: 40px 44px; margin-top: 72px; color: #FFFFFF; display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 44px; align-items: center;">
         <div>
+          <%# Les cinq étoiles vertes n'accompagnent QUE la mention ISO : seules,
+              elles passeraient pour une note d'avis qui n'existe pas. %>
+          <% if (_isoOk) { %>
           <div style="display: flex; align-items: center; gap: 11px; margin-bottom: 16px;">
             <div style="display: flex; gap: 3px;"><% for (var _s2 = 0; _s2 < 5; _s2++) { %><span style="width: 20px; height: 20px; background: #00B67A; display: flex; align-items: center; justify-content: center;"><span class="material-symbols-outlined ap-fill" style="font-size: 14px; color: #FFFFFF;">star</span></span><% } %></div>
             <span style="font-size: 12.5px; font-weight: 800; letter-spacing: 0.02em; color: #FFFFFF;"><%= t('product.qualityPremiumIso') %></span>
           </div>
+          <% } %>
           <div style="font-size: 22px; font-weight: 800; line-height: 1.3; margin-bottom: 12px; text-wrap: pretty;"><%= t('product.howWeRecond') %></div>
-          <p style="font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.72); line-height: 1.7; margin: 0 0 26px 0; max-width: 480px;"><%= t('product.recondIntro') %></p>
+          <%# « remontée dans nos usines certifiées ISO 9001 » : même filtre que la
+              fiche. Vidé (texte allemand dont la seule phrase porte l'ISO) → pas
+              de paragraphe. %>
+          <% var _recondIntro = _filtreAlleg(t('product.recondIntro')); %>
+          <% if (_recondIntro) { %>
+          <p style="font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.72); line-height: 1.7; margin: 0 0 26px 0; max-width: 480px;"><%= _recondIntro %></p>
+          <% } %>
           <div style="display: flex; flex-direction: column; gap: 18px;">
             <% var _recSteps = [ {t: t('product.recStep1Title'), d: t('product.recStep1Text')}, {t: t('product.recStep2Title'), d: t('product.recStep2Text')}, {t: (_wm ? t('product.recStep3Title', { months: _wm }) : 'Certificat et garantie'), d: t('product.recStep3Text')} ]; %>
             <% _recSteps.forEach((st, i) => { %>
@@ -887,7 +946,7 @@
           <a href="tel:<%= brand.PHONE_INTL %>" style="border: 1px solid #DEE2E9; border-radius: 10px; padding: 10px 16px; background: #FFFFFF; font-family: inherit; font-size: 12.5px; font-weight: 800; color: #0F1626; text-decoration: none; white-space: nowrap;" class="ap-iconbtn"><%= t('product.areYouGarage') %></a>
         </div>
         <div class="ap-carousel ap-photos-carousel" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
-          <% var _proofs = [ {img:'/design/autoparts/photo-porsche.webp', t: t('product.proof1Title'), s: t('product.proof1Sub')}, {img:'/design/autoparts/photo-sun-motors.webp', t: t('product.proof2Title'), s: t('product.proof2Sub')}, {img:'/design/autoparts/photo-chargement.webp', t: t('product.proof3Title'), s: t('product.proof3Sub')} ]; %>
+          <% var _proofs = [ {img:'/design/autoparts/photo-porsche.webp', t: t('product.proof1Title'), s: t('product.proof1Sub')}, {img:'/design/autoparts/photo-sun-motors.webp', t: t('product.proof2Title'), s: t('product.proof2Sub')}, {img:'/design/autoparts/photo-chargement.webp', t: t('product.proof3Title'), s: _filtreAlleg(t('product.proof3Sub'))} ]; %><%# « Au départ de nos ateliers » : règle atelierPropre. %>
           <% _proofs.forEach((pf) => { %>
             <div class="ap-photocard" style="position: relative; border-radius: 14px; overflow: hidden; aspect-ratio: 16 / 10; background: #1A2233;">
               <img src="<%= pf.img %>" alt="<%= pf.t %>" width="800" height="600" loading="lazy" decoding="async" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;" />
@@ -1698,6 +1757,8 @@
       var toggleLabel = wrapper.querySelector('[data-desc-toggle-label]');
       var toggleIcon = wrapper.querySelector('[data-desc-toggle-icon]');
       if (!inner || !fade || !toggleBtn) return;
+      var LABEL_MORE = toggleBtn.getAttribute('data-label-more') || 'Lire la suite';
+      var LABEL_LESS = toggleBtn.getAttribute('data-label-less') || 'Réduire';
 
       var THRESHOLD = 250; /* px - only collapse if taller than this */
       var expanded = false;
@@ -1713,7 +1774,7 @@
           inner.classList.remove('is-expanded');
           fade.classList.remove('hidden');
           expanded = false;
-          if (toggleLabel) toggleLabel.textContent = 'Lire la suite';
+          if (toggleLabel) toggleLabel.textContent = LABEL_MORE;
           if (toggleIcon) toggleIcon.style.transform = '';
         } else {
           inner.classList.remove('is-collapsed');
@@ -1729,13 +1790,13 @@
           inner.classList.remove('is-collapsed');
           inner.classList.add('is-expanded');
           fade.classList.add('hidden');
-          if (toggleLabel) toggleLabel.textContent = 'Réduire';
+          if (toggleLabel) toggleLabel.textContent = LABEL_LESS;
           if (toggleIcon) toggleIcon.style.transform = 'rotate(180deg)';
         } else {
           inner.classList.add('is-collapsed');
           inner.classList.remove('is-expanded');
           fade.classList.remove('hidden');
-          if (toggleLabel) toggleLabel.textContent = 'Lire la suite';
+          if (toggleLabel) toggleLabel.textContent = LABEL_MORE;
           if (toggleIcon) toggleIcon.style.transform = '';
           wrapper.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }

@@ -23,6 +23,8 @@ const blogI18n = require('../services/blogI18n');
 const categoryI18n = require('../services/categoryI18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const { sanitizeBrandLeak } = require('../services/brandSanitizer');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -680,6 +682,25 @@ async function getProduct(req, res, next) {
       product.infoBlocksByPosition = INFO_BLOCK_EMPTY_GROUPS;
     }
 
+    /* ─── Allégations non prouvées (plan SEO du 14/09/2026, action A3 e) ─────
+       La description revient à l'écran : avec elle, « usine certifiée ISO 9001 »,
+       « dans notre atelier », « 3× sans frais »… que personne n'a prouvés
+       (décision 4 en attente). Filtrés ICI, à l'affichage, sur tout texte de la
+       fiche qui finit dans la page — description, description courte (meta et
+       JSON-LD), badges, FAQ — dans la langue servie. Rien n'est réécrit en base.
+       Le filtre passe après le calque allemand pour couvrir ce qui est affiché ;
+       sanitizeBrandLeak (ancien nom de marque) est indépendant et déjà appliqué
+       par normalizeProduct. */
+    const allegations = claimFilter.contexteFiche(product, { scalapayActif: scalapay.estActif() });
+    product = claimFilter.filtrerFiche(product, allegations);
+    /* Bloc « Description » : français seulement, jamais pour les copies
+       distrimotor (DM-) ni pour les 264 fiches Alibaba (décision 4), coupé
+       d'un coup par SHOW_PRODUCT_DESCRIPTION=off. */
+    const motifSansDescription = claimFilter.motifDescriptionMasquee(product, { lang: pageLang });
+    /* DM / Alibaba : leur texte ne sert pas non plus de repli à la meta
+       description ni au JSON-LD — sinon la copie ressortait par la bande. */
+    const descriptionInterdite = !!claimFilter.familleADescriptionMasquee(product);
+
     // On ne redirige vers l'URL canonique /product/<slug>/ QUE si le produit a
     // un vrai slug ET qu'on est en FR. Sans slug, cette canonique retomberait
     // sur un slug qui ne résout pas → on rend la fiche en place. En DE, l'URL
@@ -801,7 +822,8 @@ async function getProduct(req, res, next) {
     const descriptionOverride = product.seo && typeof product.seo.metaDescription === 'string'
       ? sanitizeBrandLeak(product.seo.metaDescription.trim())
       : '';
-    const baseDesc = product.shortDescription || product.description || '';
+    const descriptionPourMeta = descriptionInterdite ? '' : product.description;
+    const baseDesc = product.shortDescription || descriptionPourMeta || '';
     const baseDescPlain = toPlainText(baseDesc);
     const refsText = compatibleReferences.length ? compatibleReferences.slice(0, 6).join(', ') : '';
     const autoDesc = `Pièce auto ${product.name}${skuText ? ` (réf ${skuText})` : ''}${refsText ? ` (références compatibles ${refsText})` : ''}${compatText ? ` compatible ${compatText}` : ''}. Livraison rapide. Paiement sécurisé.`;
@@ -818,7 +840,7 @@ async function getProduct(req, res, next) {
     const ogImage = resolveAbsoluteUrl(req, mainImage);
 
     const price = Number.isFinite(product.priceCents) ? (product.priceCents / 100).toFixed(2) : undefined;
-    const descriptionForSchema = normalizeMetaText(metaDescription || toPlainText(product.shortDescription || product.description || autoDesc));
+    const descriptionForSchema = normalizeMetaText(metaDescription || toPlainText(product.shortDescription || descriptionPourMeta || autoDesc));
     const schemaBrandName = brandText || (firstCompat && typeof firstCompat.make === 'string' ? firstCompat.make.trim() : '');
     const conditionText = findSpecValue('état', 'etat') || (product.badges && product.badges.condition ? String(product.badges.condition).trim() : '');
     const schemaCondition = mapSchemaCondition(conditionText);
@@ -1166,7 +1188,13 @@ async function getProduct(req, res, next) {
       };
     });
 
-    const descriptionRaw = product.description || product.shortDescription || '';
+    /* Maintenant que la description est de nouveau AFFICHÉE, l'ancien nom ne doit
+       pas y ressortir : 6 325 fiches importées disent encore « Car Parts France ».
+       Description masquée (voir plus haut) : rien n'est calculé, et la vue ne
+       retombe pas sur product.description (drapeau descriptionAffichee). */
+    const descriptionRaw = motifSansDescription
+      ? ''
+      : sanitizeBrandLeak(product.description || product.shortDescription || '');
     const descriptionNormalized = normalizeImportedText(descriptionRaw);
     const htmlCandidate = looksLikeHtml(descriptionNormalized)
       ? descriptionNormalized
@@ -1272,6 +1300,12 @@ async function getProduct(req, res, next) {
       returnTo: req.originalUrl,
       errorMessage,
       product,
+      /* Voir « Allégations non prouvées » plus haut. La vue masque le bloc
+         description, les mentions ISO 9001 du gabarit, et fait passer ses
+         propres textes (« nos ateliers ») par le même filtre que la fiche. */
+      descriptionAffichee: !motifSansDescription,
+      iso9001Affichable: !allegations.regles.has('iso9001'),
+      filtreAllegations: (texte) => claimFilter.filtrer(texte, allegations),
       categoryUrl,
       categoryName,
       relatedProducts,
