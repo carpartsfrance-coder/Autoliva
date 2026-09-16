@@ -138,6 +138,28 @@ publicRouter.get('/verify-report/:numero', async (req, res) => {
   } catch (err) { return fail(res, err.message, 500); }
 });
 
+// GET /api/sav/dossier-fournisseur/:numero.pdf?h= — dossier en anglais pour le fournisseur.
+// Lien signé partagé sur WhatsApp : ouvrable sans compte, uniquement avec la bonne signature.
+publicRouter.get('/dossier-fournisseur/:numero.pdf', async (req, res) => {
+  try {
+    const dossier = require('../../services/savDossierFournisseur');
+    if (!dossier.verifySignature(req.params.numero, req.query.h)) return res.status(403).send('Lien invalide');
+    const ticket = await SavTicket.findOne({ numero: req.params.numero }).lean();
+    if (!ticket) return res.status(404).send('Dossier introuvable');
+    const order = ticket.numeroCommande
+      ? await Order.findOne({ number: ticket.numeroCommande }).select('number items.name items.sku createdAt').lean()
+      : null;
+    const pdf = await dossier.buildPdf(ticket, order, { baseUrl: `${req.protocol}://${req.get('host')}` });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="warranty-claim-${ticket.numero}.pdf"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Robots-Tag', 'noindex');
+    return res.end(pdf);
+  } catch (err) {
+    return res.status(500).send('Erreur de génération du dossier');
+  }
+});
+
 // GET /api/sav/satisfaction/:numero — page publique de notation post-clôture (NPS/CSAT)
 publicRouter.get('/satisfaction/:numero', async (req, res) => {
   try {
@@ -760,6 +782,72 @@ adminRouter.post('/tickets/:numero/assign', async (req, res) => {
   }
 });
 
+// Dossier fournisseur (anglais) : checklist, message WhatsApp, lien PDF signé, photos.
+async function dossierFournisseurPayload(req, ticket, phone) {
+  const dossier = require('../../services/savDossierFournisseur');
+  const wa = require('../../services/whatsappFournisseur');
+  const order = ticket.numeroCommande
+    ? await Order.findOne({ number: ticket.numeroCommande }).select('number items.name items.sku createdAt').lean()
+    : null;
+  const pdfUrl = `${req.protocol}://${req.get('host')}${dossier.pdfPath(ticket.numero)}`;
+  const text = dossier.buildMessageEn(ticket, order, pdfUrl);
+  const cleanPhone = String(phone || '').replace(/[^\d]/g, '');
+  const checklist = dossier.checklist(ticket);
+  const f = ticket.fournisseur || {};
+  return {
+    text,
+    waUrl: cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}` : '',
+    phone: phone || '',
+    pdfUrl,
+    checklist,
+    complete: checklist.filter((i) => i.photo).every((i) => i.ok),
+    photos: dossier.filesWithRoles(ticket).map((p) => ({
+      url: p.url, kind: p.kind, role: p.role, isImage: p.isImage, name: p.originalName || '', mime: p.mime || '',
+    })),
+    clientRequest: dossier.clientRequestText(ticket),
+    descriptionTranslated: !!(f.descriptionEn),
+    hasDescription: !!(ticket.diagnostic && ticket.diagnostic.description),
+    dateEnvoi: f.dateEnvoi || null,
+    reponse: f.reponse || '',
+    clientScript: wa.buildClientScript(ticket),
+    configured: wa.isConfigured(),
+  };
+}
+
+// GET /admin/api/sav/tickets/:numero/dossier-fournisseur?phone=
+adminRouter.get('/tickets/:numero/dossier-fournisseur', async (req, res) => {
+  try {
+    const ticket = await SavTicket.findOne({ numero: req.params.numero });
+    if (!ticket) return fail(res, 'Ticket introuvable', 404);
+    const dossier = require('../../services/savDossierFournisseur');
+    // Traduction de la description client, mémorisée tant que le texte ne change pas.
+    if (await dossier.ensureTranslation(ticket)) await ticket.save();
+    const phone = (req.query.phone || (ticket.fournisseur && ticket.fournisseur.contact) || '').toString();
+    return ok(res, await dossierFournisseurPayload(req, ticket.toObject(), phone));
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
+// POST /admin/api/sav/tickets/:numero/dossier-fournisseur/photos — rôle de chaque fichier
+// body { roles: [{ url, role: obd|reglage|autre|exclu }] }
+adminRouter.post('/tickets/:numero/dossier-fournisseur/photos', async (req, res) => {
+  try {
+    const ticket = await SavTicket.findOne({ numero: req.params.numero });
+    if (!ticket) return fail(res, 'Ticket introuvable', 404);
+    const dossier = require('../../services/savDossierFournisseur');
+    const known = new Set(dossier.filesWithRoles(ticket.toObject()).map((f) => f.url));
+    const roles = Array.isArray(req.body && req.body.roles) ? req.body.roles : [];
+    const next = new Map(((ticket.fournisseur && ticket.fournisseur.photosDossier) || []).map((p) => [p.url, p.role]));
+    roles.forEach((r) => {
+      if (r && known.has(r.url) && dossier.ROLES.includes(r.role)) next.set(r.url, r.role);
+    });
+    ticket.fournisseur = ticket.fournisseur || {};
+    ticket.fournisseur.photosDossier = Array.from(next, ([url, role]) => ({ url, role }));
+    await ticket.save();
+    const phone = (ticket.fournisseur.contact || '').toString();
+    return ok(res, await dossierFournisseurPayload(req, ticket.toObject(), phone));
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
 // GET /admin/api/sav/tickets/:numero/whatsapp-fournisseur/preview
 // → renvoie le texte WhatsApp prêt + URL wa.me + script client final
 adminRouter.get('/tickets/:numero/whatsapp-fournisseur/preview', async (req, res) => {
@@ -780,20 +868,29 @@ adminRouter.post('/tickets/:numero/whatsapp-fournisseur/send', async (req, res) 
     if (!ticket) return fail(res, 'Ticket introuvable', 404);
     const wa = require('../../services/whatsappFournisseur');
     const phone = (req.body.phone || (ticket.fournisseur && ticket.fournisseur.contact) || '').toString();
+    const onlyReply = !!req.body.parsedReply && !req.body.markSent;
     let result = { sent: false };
-    if (wa.isConfigured()) {
-      result = await wa.sendReal(ticket, phone);
+    if (req.body.mode === 'wame' || onlyReply) {
+      // Envoi fait à la main depuis WhatsApp (lien wa.me) : on enregistre seulement.
+      result = { sent: false, manual: true };
+    } else if (wa.isConfigured()) {
+      result = await wa.sendReal(ticket, phone, req.body.text);
     } else {
       // Mode dev : on ne peut pas envoyer, on retourne juste le wa.me
       result = wa.preview(ticket, phone);
     }
     ticket.fournisseur = ticket.fournisseur || {};
-    if (!ticket.fournisseur.dateEnvoi) ticket.fournisseur.dateEnvoi = new Date();
+    if (phone) ticket.fournisseur.contact = phone;
     if (req.body.parsedReply) {
       ticket.fournisseur.reponse = String(req.body.parsedReply).slice(0, 4000);
       ticket.fournisseur.dateRetour = new Date();
     }
-    ticket.addMessage('admin', 'interne', `Dossier WhatsApp envoyé au fournisseur (${phone || '—'})`);
+    if (onlyReply) {
+      ticket.addMessage('admin', 'interne', 'Réponse du fournisseur enregistrée');
+    } else {
+      if (!ticket.fournisseur.dateEnvoi) ticket.fournisseur.dateEnvoi = new Date();
+      ticket.addMessage('admin', 'interne', `Dossier fournisseur (anglais) envoyé sur WhatsApp (${phone || '—'})`);
+    }
     await ticket.save();
     audit.log({ req, action: 'sav.whatsapp_fournisseur', entityType: 'sav_ticket', entityId: ticket.numero, after: { phone } });
     return ok(res, { result, fournisseur: ticket.fournisseur });

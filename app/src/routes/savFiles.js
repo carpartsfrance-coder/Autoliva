@@ -8,6 +8,7 @@
  *   3. Suivi invité (req.session.savGuest) si le numéro de ticket en session
  *      correspond à `metadata.ticketNumero`.
  *   4. Magic link (?tk=…) si le token HMAC correspond au ticket+email.
+ *   4 bis. Lien du dossier fournisseur (?fk=…) : fichier inclus dans le dossier du ticket.
  *   5. PDF de devis moteur (`metadata.kind === 'engine_quote_pdf'`) → servi au
  *      porteur du lien (envoyé au client par email/SMS), même modèle de
  *      confiance que le reste du parcours devis public (identifiants GridFS
@@ -54,6 +55,14 @@ async function tokenMatches(token, ticketNumero) {
   } catch (_) { return false; }
 }
 
+// Lien du dossier fournisseur (?fk=…) : seulement les fichiers inclus dans ce dossier.
+async function supplierTokenMatches(token, ticketNumero, fileId) {
+  try {
+    const t = await SavTicket.findOne({ numero: ticketNumero }).select('numero documents documentsList fournisseur').lean();
+    return require('../services/savDossierFournisseur').fileSharedWithSupplier(t, fileId, token);
+  } catch (_) { return false; }
+}
+
 router.get('/:id', async (req, res) => {
   try {
     const file = await storage.findOne(req.params.id);
@@ -75,6 +84,7 @@ router.get('/:id', async (req, res) => {
       if (await userOwnsTicket(req, ticketNumero)) allowed = true;
       else if (guestMatches(req, ticketNumero)) allowed = true;
       else if (req.query.tk && (await tokenMatches(String(req.query.tk), ticketNumero))) allowed = true;
+      else if (req.query.fk && (await supplierTokenMatches(String(req.query.fk), ticketNumero, req.params.id))) allowed = true;
     }
     if (!allowed) return res.status(403).send('Accès refusé');
 

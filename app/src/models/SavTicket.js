@@ -403,6 +403,15 @@ const savTicketSchema = new mongoose.Schema(
       dateEnvoi: { type: Date },
       dateRetour: { type: Date },
       reponse: { type: String, trim: true },
+      // Dossier en anglais envoyé au fournisseur : rôle de chaque fichier du ticket
+      // dans le PDF (vide = rôle déduit du type de document) et description traduite.
+      photosDossier: [{
+        _id: false,
+        url: { type: String, trim: true },
+        role: { type: String, enum: ['obd', 'reglage', 'autre', 'exclu'] },
+      }],
+      descriptionEn: { type: String, trim: true },
+      descriptionEnSource: { type: String, trim: true }, // empreinte du texte d'origine traduit
     },
 
     // Assignation

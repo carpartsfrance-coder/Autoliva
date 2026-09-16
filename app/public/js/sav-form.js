@@ -581,6 +581,7 @@
     { v: 'factureMontage', l: 'Facture garage' },
     { v: 'photoPiece', l: 'Photo pièce installée' },
     { v: 'photoObd', l: 'Photo OBD' },
+    { v: 'confirmationReglageBase', l: 'Photo réglage de base' },
     { v: 'photoCompteur', l: 'Photo compteur (km)' },
     { v: 'bonGarantie', l: 'Bon garantie (optionnel)' },
   ];
@@ -590,6 +591,7 @@
     var n = (file.name || '').toLowerCase();
     if (/facture|invoice/.test(n)) return 'factureMontage';
     if (/obd|defaut|fault/.test(n)) return 'photoObd';
+    if (/reglage|basic|adaptation/.test(n)) return 'confirmationReglageBase';
     if (/compteur|km|odometre/.test(n)) return 'photoCompteur';
     if (/garantie|warranty/.test(n)) return 'bonGarantie';
     return 'photoPiece';
@@ -841,7 +843,7 @@
     if (droppedFiles.length) {
       docsHtml = '<div class="sav-recap__files">' +
         droppedFiles.map(function (f) {
-          var labelMap = { factureMontage: 'Facture', photoObd: 'Photo OBD', photoCompteur: 'Compteur', photoPiece: 'Pièce', bonGarantie: 'Garantie' };
+          var labelMap = { factureMontage: 'Facture', photoObd: 'Photo OBD', confirmationReglageBase: 'Réglage de base', photoCompteur: 'Compteur', photoPiece: 'Pièce', bonGarantie: 'Garantie' };
           var label = labelMap[f.kind] || f.kind;
           var thumb = f.preview
             ? '<img src="' + f.preview + '" alt="">'

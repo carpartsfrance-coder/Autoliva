@@ -67,11 +67,11 @@ function preview(ticket, fournisseurPhone) {
   };
 }
 
-async function sendReal(ticket, fournisseurPhone) {
+async function sendReal(ticket, fournisseurPhone, customText) {
   return new Promise((resolve) => {
     const cleanPhone = String(fournisseurPhone || '').replace(/[^\d]/g, '');
     if (!cleanPhone) return resolve({ ok: false, error: 'phone_missing' });
-    const text = buildMessage(ticket);
+    const text = (customText && String(customText).trim()) || buildMessage(ticket);
     const phoneId = process.env.WHATSAPP_PHONE_ID;
     const token = process.env.WHATSAPP_API_TOKEN;
     const body = JSON.stringify({
