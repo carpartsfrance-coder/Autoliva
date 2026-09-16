@@ -122,10 +122,15 @@ test('« Expédiée » est bloquée sans numéro de suivi d’envoi', () => {
   assert.deepEqual(cf.actionsPossibles(avec), ['expediee']);
 });
 
-test('livrée avec consigne pas revenue : pas de « Terminer »', () => {
+test('livrée avec consigne pas revenue : pas de « Terminer », et hors de « En transit »', () => {
   const c = commande({ status: 'delivered', orderType: 'exchange', returnStatus: 'pending' });
   assert.equal(cf.actionSuivante(c).besoin, 'retour');
   assert.deepEqual(cf.actionsPossibles(c), []);
+  /* Le colis est arrivé : la suite est dans « Consignes en attente ». */
+  assert.deepEqual(cf.files(c), ['all']);
+  assert.deepEqual(cf.files(commande({ status: 'delivered', orderType: 'exchange', returnStatus: 'overdue' })), ['all']);
+  /* Expédiée avec consigne : le colis roule encore, elle reste en transit. */
+  assert.deepEqual(cf.files(commande({ status: 'shipped', orderType: 'exchange', returnStatus: 'pending' })), ['transit', 'all']);
   const revenue = commande({ status: 'delivered', orderType: 'exchange', returnStatus: 'returned' });
   assert.deepEqual(cf.actionsPossibles(revenue), ['terminer']);
 });
@@ -147,11 +152,11 @@ test('état et file après l’action : la commande sort de sa file', () => {
   assert.deepEqual(cf.filesApres(commande({ status: 'delivered' }), 'terminer'), ['all']);
 });
 
-test('alerte d’appro : fournisseur en retard, ou appro jamais renseignée — rien d’autre', () => {
+test('alerte d’appro : seulement un fournisseur en retard', () => {
   const enRetard = commande({ status: 'processing', sourcing: { status: 'commandee', orderedAt: ilYa(10), expectedDays: 7 } });
   assert.equal(cf.alerteAppro(enRetard, MAINTENANT), 'Fournisseur en retard · 3j');
-  assert.equal(cf.alerteAppro(commande(), MAINTENANT), 'Appro non renseignée à la commande');
-  assert.equal(cf.alerteAppro(commande({ purchase: { supplier: 'Ovoko PL' } }), MAINTENANT), '');
+  /* Plus d'« appro non renseignée » : en production, c'était chaque ligne. */
+  assert.equal(cf.alerteAppro(commande(), MAINTENANT), '');
   /* Une étiquette en retard ne s'annonce pas ici : la pastille de statut le dit. */
   assert.equal(cf.alerteAppro(commande({ status: 'label_created', sourcing: { status: 'en_stock' }, createdAt: ilYa(9) }), MAINTENANT), '');
 });

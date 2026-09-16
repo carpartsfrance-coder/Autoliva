@@ -2994,7 +2994,19 @@ async function getAdminOrdersPage(req, res, next) {
         .map((u) => (u && u._id ? u._id : null))
         .filter(Boolean);
 
-      query.$or = [{ number: rx }];
+      /* Le champ promet « n° commande, client, réf OE, n° de suivi » : la
+         recherche serveur (Entrée) doit trouver les mêmes choses que le filtre
+         immédiat de la liste — avant, un numéro de suivi ou une référence de
+         pièce ne renvoyait rien. */
+      query.$or = [
+        { number: rx },
+        { 'invoice.number': rx },
+        { 'items.sku': rx },
+        { 'items.name': rx },
+        { 'shipments.trackingNumber': rx },
+        { 'shippingAddress.fullName': rx },
+        { 'shippingAddress.phone': rx },
+      ];
       if (userIds.length) {
         query.$or.push({ userId: { $in: userIds } });
       }

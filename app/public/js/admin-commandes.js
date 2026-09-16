@@ -55,7 +55,7 @@
   }
 
   function visibles() {
-    return toutesLignes().filter(function (el) { return !el.hidden && !el.classList.contains('is-sortie'); });
+    return toutesLignes().filter(function (el) { return !el.hidden && !el.classList.contains('is-sortie') && !el.classList.contains('is-traitee'); });
   }
 
   function envoyer(url, options) {
@@ -139,7 +139,7 @@
     var vide = document.getElementById('cmdVide');
     var videRecherche = document.getElementById('cmdVideRecherche');
     var filtre = rechercheEl && rechercheEl.value.trim();
-    var aucune = toutesLignes().filter(function (l) { return !l.classList.contains('is-sortie') && !l.classList.contains('is-partie'); }).length === 0;
+    var aucune = toutesLignes().filter(function (l) { return !l.classList.contains('is-sortie') && !l.classList.contains('is-partie') && !l.classList.contains('is-traitee'); }).length === 0;
     if (vide) vide.hidden = !aucune;
     if (videRecherche) videRecherche.hidden = aucune || n > 0 || !filtre;
   }
@@ -206,6 +206,12 @@
         if (dansFile && j.ligne && j.ligne.html) {
           var nouvelle = remplacerLigne(item.el, j.ligne.html);
           if (nouvelle) nouvelle.hidden = false;
+        } else if (item.bandeau) {
+          /* Traitée et partie de la file : le bandeau reste où il est, sans
+             « Annuler », et ne se replie que souris hors de la liste. */
+          var bouton = item.bandeau.querySelector('[data-annuler-ligne]');
+          if (bouton) bouton.remove();
+          replierQuandLibre(item.el);
         } else if (item.el.parentNode) {
           item.el.parentNode.removeChild(item.el);
         }
@@ -227,9 +233,42 @@
 
   function restaurerLigne(item) {
     var d = donnees(item.el);
-    item.el.classList.remove('is-sortie', 'is-en-cours', 'is-partie');
+    item.el.classList.remove('is-sortie', 'is-en-cours', 'is-partie', 'is-traitee', 'is-repliee');
+    if (item.bandeau && item.bandeau.parentNode) item.bandeau.parentNode.removeChild(item.bandeau);
+    item.bandeau = null;
     item.el.hidden = false;
     deplacerCompteurs(d.files, d.filesApres[item.action], -1);
+  }
+
+  /* Une ligne traitée qui quitte la file ne DISPARAÎT PAS sous la souris :
+     elle devient un bandeau « fait » de même hauteur. Sinon la page se
+     décale d'une ligne et le clic suivant tombe sur une autre commande —
+     constaté en simulant un opérateur (16/09/2026). */
+  function marquerTraitee(item, texte) {
+    var el = item.el;
+    el.classList.add('is-traitee');
+    var bandeau = document.createElement('div');
+    bandeau.className = 'cmd-traitee';
+    bandeau.setAttribute('role', 'status');
+    bandeau.innerHTML = '<span class="ms" aria-hidden="true">check_circle</span><span class="cmd-traitee-t"></span>'
+      + '<button type="button" class="cmd-traitee-annuler" data-annuler-ligne><span class="ms" aria-hidden="true">undo</span>Annuler</button>';
+    bandeau.querySelector('.cmd-traitee-t').textContent = texte;
+    el.appendChild(bandeau);
+    item.bandeau = bandeau;
+  }
+
+  /* Le repli (hauteur réduite) décale les lignes suivantes : seulement quand
+     la souris n'est pas sur la liste. */
+  function replierQuandLibre(el) {
+    var replier = function () { if (el.isConnected) el.classList.add('is-repliee'); };
+    if (lignesEl && lignesEl.matches(':hover')) {
+      lignesEl.addEventListener('mouseleave', function unique() {
+        lignesEl.removeEventListener('mouseleave', unique);
+        replier();
+      });
+    } else {
+      replier();
+    }
   }
 
   /* Envoie l'action en attente, tout de suite. */
@@ -289,16 +328,23 @@
       var c = item.el.querySelector('.cmd-check');
       if (c) c.checked = false;
       if (fileActive !== 'all' && apres.indexOf(fileActive) === -1) {
-        item.el.classList.add('is-sortie');
-        setTimeout(function () { if (item.el.classList.contains('is-sortie')) { item.el.hidden = true; item.el.classList.add('is-partie'); } }, 230);
+        marquerTraitee(item, d.number + ' → ' + (MESSAGES[item.action] || 'mise à jour'));
       } else {
         item.el.classList.add('is-en-cours');
       }
     });
     majSelection();
-    setTimeout(function () { majCompteLignes(); poserCurseur(curseur, false); }, 240);
+    majCompteLignes();
+    poserCurseur(curseur, false);
     enAttente = { lignes: items, timer: setTimeout(validerEnAttente, DELAI_ANNULATION) };
     notifier(message, { onAnnuler: annulerEnAttente });
+  }
+
+  /* Actions qui préviennent le client (appliquerStatutCommande côté serveur) :
+     passage en préparation depuis « payée », et livraison. */
+  function previentClient(d, actionId) {
+    if (actionId === 'livree') return true;
+    return ['en_stock', 'commandee', 'recue'].indexOf(actionId) !== -1 && !!d.etat && d.etat.status === 'paid';
   }
 
   var MESSAGES = {
@@ -328,7 +374,8 @@
       actionId = a.id;
     }
     if (!actionId || (d.actionsPossibles || []).indexOf(actionId) === -1) return;
-    programmer([{ el: el, action: actionId }], d.number + ' → ' + (MESSAGES[actionId] || 'mise à jour'));
+    programmer([{ el: el, action: actionId }], d.number + ' → ' + (MESSAGES[actionId] || 'mise à jour')
+      + (previentClient(d, actionId) ? ' · e-mail au client dans 6 s' : ''));
   }
 
   /* ─── Panneau latéral ─────────────────────────────────────────────────── */
@@ -537,7 +584,8 @@
     setTimeout(function () {
       var reste = visibles();
       if (!reste.length) { fermerPanneau(); return; }
-      var suivante = el.hidden || el.classList.contains('is-partie') ? reste[Math.min(index, reste.length - 1)] : (reste[index + 1] || el);
+      var sortie = el.hidden || el.classList.contains('is-partie') || el.classList.contains('is-traitee');
+      var suivante = sortie ? reste[Math.min(index, reste.length - 1)] : (reste[index + 1] || el);
       ouvrirPanneau(suivante);
     }, 260);
   }
@@ -667,8 +715,22 @@
         notifier('Rien à avancer d’un clic : ces commandes demandent une décision ou une saisie (appro, étiquette, suivi).', { erreur: true, duree: 5000 });
         return;
       }
-      programmer(items, items.length + ' commande' + (items.length > 1 ? 's avancées' : ' avancée')
-        + (ignorees ? ' · ' + ignorees + ' à traiter une par une' : ''));
+      var lancer = function () {
+        programmer(items, items.length + ' commande' + (items.length > 1 ? 's avancées' : ' avancée')
+          + (ignorees ? ' · ' + ignorees + ' à traiter une par une' : ''));
+      };
+      /* En masse, un e-mail au client part pour chaque commande concernée —
+         y compris pour une vieille commande restée à la mauvaise étape. */
+      var livrees = items.filter(function (it) { return it.action === 'livree'; }).length;
+      var preparees = items.filter(function (it) { return it.action !== 'livree' && previentClient(donnees(it.el), it.action); }).length;
+      if (livrees || preparees) {
+        var details = [];
+        if (livrees) details.push(livrees + ' passeront en « Livrée » (e-mail de livraison, et délai de retour de consigne compté à partir d’aujourd’hui)');
+        if (preparees) details.push(preparees + ' passeront en préparation (e-mail « commande validée »)');
+        confirmer('Des clients vont recevoir un e-mail : ' + details.join(' ; ') + '. Continuer ?').then(function (ok) { if (ok) lancer(); });
+        return;
+      }
+      lancer();
       return;
     }
     var ids = lignes.map(function (el) { return donnees(el).id; });
@@ -781,6 +843,10 @@
       var t = e.target;
       var el = t.closest('.cmd-ligne');
       if (!el || vue !== 'active') return;
+      if (el.classList.contains('is-traitee')) {
+        if (t.closest('[data-annuler-ligne]') && enAttente && enAttente.lignes.some(function (it) { return it.el === el; })) annulerEnAttente();
+        return;
+      }
 
       var plus = t.closest('.cmd-plus');
       if (plus) {
@@ -856,7 +922,7 @@
     var mots = rechercheEl.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
     var n = 0;
     toutesLignes().forEach(function (el) {
-      if (el.classList.contains('is-sortie') || el.classList.contains('is-partie')) return;
+      if (el.classList.contains('is-sortie') || el.classList.contains('is-partie') || el.classList.contains('is-traitee')) return;
       var texte = el.getAttribute('data-recherche') || '';
       var ok = mots.every(function (m) { return texte.indexOf(m) !== -1; });
       el.hidden = !ok;
@@ -882,14 +948,33 @@
       filtrer();
     });
   }
+  if (rechercheEl && rechercheFormEl) {
+    /* Entrée = chercher dans toutes les commandes. Le bouton d'envoi masqué
+       du formulaire suffit en principe (envoi implicite) ; on ne dépend pas
+       de cette règle du navigateur pour la fonction la plus utilisée. */
+    rechercheEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      e.preventDefault();
+      validerEnAttente().then(function () {
+        if (typeof rechercheFormEl.requestSubmit === 'function') rechercheFormEl.requestSubmit();
+        else rechercheFormEl.submit();
+      });
+    });
+  }
   if (rechercheFormEl) {
     rechercheFormEl.addEventListener('change', function (e) {
-      if (e.target.tagName === 'SELECT') validerEnAttente().then(function () { rechercheFormEl.submit(); });
+      if (e.target.tagName === 'SELECT') validerEnAttente().then(function () { rechercheFormEl.requestSubmit ? rechercheFormEl.requestSubmit() : rechercheFormEl.submit(); });
     });
+    /* Les filtres vides ne partent pas dans l'adresse (…&status=&type=…). */
+    var nettoyerFormulaire = function () {
+      rechercheFormEl.querySelectorAll('input[name], select[name]').forEach(function (c) {
+        if (c.type !== 'hidden' && !String(c.value || '').trim()) c.disabled = true;
+      });
+    };
     rechercheFormEl.addEventListener('submit', function (e) {
-      if (!enAttente) return;
+      if (!enAttente) { nettoyerFormulaire(); return; }
       e.preventDefault();
-      validerEnAttente().then(function () { rechercheFormEl.submit(); });
+      validerEnAttente().then(function () { nettoyerFormulaire(); rechercheFormEl.submit(); });
     });
   }
 

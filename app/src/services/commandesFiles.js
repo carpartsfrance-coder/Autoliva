@@ -23,6 +23,9 @@
  *     pièce est en stock.
  *   - Une commande livrée dont l'ancienne pièce (consigne) n'est pas revenue
  *     ne propose pas « Terminer » : clore le dossier cacherait un retour dû.
+ *     Elle ne reste pas non plus dans « En transit » : le colis est arrivé, la
+ *     suite se joue dans « Consignes en attente ». En production, c'étaient
+ *     144 des 182 commandes de la file, qui noyaient les 38 à traiter.
  *   - Le service de clonage seul (pas de pièce à sourcer) ne passe pas par les
  *     files d'appro ; il rejoint « À expédier » quand le clonage est fait.
  */
@@ -51,7 +54,6 @@ const APPRO = {
 };
 
 const AVANT_EXPEDITION = sourcingStatus.PRESHIP_STATUSES; // paid, processing, label_created
-const EN_ROUTE = ['shipped', 'delivered'];
 
 /* Les actions qu'un clic peut appliquer depuis la liste. `message` complète
    « CP2026-000512 → … » dans la notification. */
@@ -112,7 +114,7 @@ function files(order) {
       const appro = approEffectif(order);
       liste.push(appro === 'en_stock' ? 'expedier' : appro);
     }
-  } else if (EN_ROUTE.includes(order.status)) {
+  } else if (order.status === 'shipped' || (order.status === 'delivered' && !retourAttendu(order))) {
     liste.push('transit');
   }
   liste.push('all');
@@ -267,18 +269,16 @@ function filesApres(order, actionId) {
 }
 
 /** Ligne d'alerte sous la cellule Appro — uniquement pour l'appro, jamais pour
- *  un retard d'expédition (c'est la pastille de statut qui le porte). */
+ *  un retard d'expédition (c'est la pastille de statut qui le porte).
+ *
+ *  La maquette ajoutait « Appro non renseignée à la commande » quand aucun
+ *  fournisseur n'était saisi : en production, c'était TOUTES les lignes de la
+ *  file, en rouge — une alerte partout ne signale plus rien. Retirée. */
 function alerteAppro(order, maintenant = new Date()) {
   if (!order || !AVANT_EXPEDITION.includes(order.status) || estServiceClonage(order)) return '';
-  const appro = approEffectif(order);
-  if (appro === 'commandee') {
-    const r = retard(order, maintenant);
-    return r.enRetard ? `Fournisseur en retard · ${r.jours}j` : '';
-  }
-  if (appro === 'a_verifier' && !String((order.purchase && order.purchase.supplier) || '').trim()) {
-    return 'Appro non renseignée à la commande';
-  }
-  return '';
+  if (approEffectif(order) !== 'commandee') return '';
+  const r = retard(order, maintenant);
+  return r.enRetard ? `Fournisseur en retard · ${r.jours}j` : '';
 }
 
 /** Compteurs des files : { [fileId]: { total, enRetard } }. */

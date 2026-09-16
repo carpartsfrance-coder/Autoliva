@@ -143,7 +143,7 @@ test('liste des commandes en files de traitement', async (t) => {
     assert.equal(compteur(html, 'a_commander'), 1);
     assert.equal(compteur(html, 'commandee'), 1);
     assert.equal(compteur(html, 'expedier'), 3, 'en stock + deux étiquettes, dont celle sans appro renseignée');
-    assert.equal(compteur(html, 'transit'), 3);
+    assert.equal(compteur(html, 'transit'), 2, 'la livrée dont la consigne n’est pas revenue n’est plus « en transit »');
     assert.equal(compteur(html, 'all'), 10, 'toutes les commandes actives, annulée comprise, archivée exclue');
     assert.deepEqual(lignes(html), [ids.aVerifier]);
     assert.match(html, /Pièce en stock \?/);
@@ -165,6 +165,17 @@ test('liste des commandes en files de traitement', async (t) => {
     const html = (await requete('/admin/commandes?file=commandee')).corps;
     assert.deepEqual(lignes(html), [ids.commandee]);
     assert.match(html, /Fournisseur en retard · 3j/);
+  });
+
+  await t.test('recherche : Entrée envoie le formulaire, et trouve par n° de suivi ou référence de pièce', async () => {
+    const page = (await requete('/admin/commandes')).corps;
+    /* Sans bouton d'envoi, un formulaire à plusieurs champs texte ne part pas
+       sur Entrée : la recherche dans toutes les commandes ne marchait pas. */
+    assert.match(page, /<form id="cmdRecherche"[\s\S]*?<button type="submit"[\s\S]*?<\/form>/);
+    let html = (await requete('/admin/commandes?file=all&q=JMG123FR')).corps;
+    assert.deepEqual(lignes(html), [ids.etiquetteAvecSuivi], 'numéro de suivi');
+    html = (await requete('/admin/commandes?file=all&q=325065S')).corps;
+    assert.ok(lignes(html).includes(ids.enStock), 'référence de pièce');
   });
 
   await t.test('un lien avec filtre (tableau de bord, favori) cherche dans « Toutes », comme avant', async () => {
