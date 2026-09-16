@@ -4072,6 +4072,108 @@
       });
     });
 
+    // -------- Modèles d'équipe (texte + pièces jointes) --------
+    // Enregistrés une fois depuis le composeur, utilisables sur tous les tickets.
+    // Appliquer un modèle remplit le message et joint une copie de ses fichiers.
+    var sharedTemplates = {};
+    function loadSharedTemplates() {
+      api('/shared-templates').then(function (res) {
+        if (!res.ok || !res.j.success) return;
+        var host = document.getElementById('sav-templates-chips');
+        if (!host) return;
+        host.querySelectorAll('.sav-tpl-chip--shared').forEach(function (n) { n.remove(); });
+        sharedTemplates = {};
+        ((res.j.data && res.j.data.templates) || []).forEach(function (t) {
+          var key = 'shared_' + t._id;
+          sharedTemplates[key] = t;
+          TEMPLATES[key] = t.body;
+          var nbPj = (t.attachments || []).length;
+          var chip = document.createElement('span');
+          chip.className = 'sav-tpl-chip sav-tpl-chip--sm sav-tpl-chip--shared';
+          chip.setAttribute('role', 'button');
+          chip.setAttribute('tabindex', '0');
+          chip.setAttribute('data-shared-tpl', key);
+          chip.setAttribute('title', t.title + (nbPj ? ' — ' + nbPj + ' pièce(s) jointe(s)' : ''));
+          chip.innerHTML = (nbPj ? '<span class="material-symbols-outlined" style="font-size:13px;" aria-hidden="true">attach_file</span>' : '') +
+            '<span>#' + escapeHtml(t.title) + '</span>' +
+            '<span class="sav-tpl-del" role="button" tabindex="0" data-del-shared-tpl="' + escapeHtml(t._id) + '" aria-label="Supprimer ce modèle">×</span>';
+          host.insertBefore(chip, host.firstChild);
+        });
+      });
+    }
+    loadSharedTemplates();
+
+    function applySharedTemplate(key) {
+      var t = sharedTemplates[key];
+      if (!t) return;
+      applyTemplate(key);
+      // Les fichiers d'un modèle appliqué avant sont remplacés, les autres PJ restent.
+      attachFiles = attachFiles.filter(function (a) { return !a.fromTemplate; });
+      var list = t.attachments || [];
+      if (!list.length) { renderAttachList(); return; }
+      Promise.all(list.map(function (a) {
+        return fetch(a.url, { credentials: 'same-origin' })
+          .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.blob(); })
+          .then(function (blob) { return new File([blob], a.originalName || 'piece-jointe', { type: a.mime || blob.type }); });
+      })).then(function (files) {
+        files.forEach(function (f) {
+          if (attachFiles.length < 5) attachFiles.push({ file: f, isReturnLabel: false, fromTemplate: true });
+        });
+        renderAttachList();
+        toast('Modèle « ' + t.title + ' » prêt (' + files.length + ' PJ)');
+      }).catch(function () {
+        toast('Texte appliqué, mais les pièces jointes du modèle n\'ont pas pu être chargées', 'error');
+      });
+      api('/shared-templates/' + encodeURIComponent(t._id) + '/used', { method: 'POST', body: '{}' });
+    }
+
+    var sharedChipsHost = document.getElementById('sav-templates-chips');
+    if (sharedChipsHost) {
+      sharedChipsHost.addEventListener('click', function (e) {
+        var del = e.target.closest && e.target.closest('[data-del-shared-tpl]');
+        if (del) {
+          e.preventDefault(); e.stopPropagation();
+          var id = del.getAttribute('data-del-shared-tpl');
+          var tpl = sharedTemplates['shared_' + id];
+          if (!confirm('Supprimer le modèle « ' + (tpl ? tpl.title : '') + ' » pour toute l\'équipe ?')) return;
+          api('/shared-templates/' + encodeURIComponent(id), { method: 'DELETE' }).then(function (res) {
+            if (res.ok && res.j.success) { toast('Modèle supprimé'); delete TEMPLATES['shared_' + id]; loadSharedTemplates(); }
+            else toast((res.j && res.j.error) || 'Erreur', 'error');
+          });
+          return;
+        }
+        var chip = e.target.closest && e.target.closest('[data-shared-tpl]');
+        if (chip) applySharedTemplate(chip.getAttribute('data-shared-tpl'));
+      });
+      sharedChipsHost.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        var chip = e.target.closest && e.target.closest('[data-shared-tpl]');
+        if (chip && !e.target.closest('[data-del-shared-tpl]')) { e.preventDefault(); applySharedTemplate(chip.getAttribute('data-shared-tpl')); }
+      });
+    }
+
+    var saveSharedBtn = document.getElementById('sav-save-shared-template');
+    if (saveSharedBtn) saveSharedBtn.addEventListener('click', function () {
+      var body = editor && editor.innerText ? editor.innerText.trim() : '';
+      if (!body) { toast('Écrivez d\'abord le message à enregistrer', 'error'); return; }
+      var files = attachFiles.filter(function (a) { return !a.isReturnLabel; });
+      var title = window.prompt('Nom du modèle (visible par toute l\'équipe)' + (files.length ? ' — ' + files.length + ' pièce(s) jointe(s) incluse(s)' : '') + ' :', body.split('\n')[0].slice(0, 40));
+      if (!title || !title.trim()) return;
+      var fd = new FormData();
+      fd.append('title', title.trim());
+      fd.append('body', body);
+      files.forEach(function (a) { fd.append('attachments', a.file, a.file.name); });
+      saveSharedBtn.disabled = true;
+      fetch('/admin/api/sav/shared-templates', { method: 'POST', headers: { 'Authorization': 'Bearer ' + TOKEN }, body: fd })
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          if (res.ok && res.j.success) { toast('Modèle « ' + title.trim() + ' » enregistré', 'success'); loadSharedTemplates(); }
+          else toast((res.j && res.j.error) || 'Erreur', 'error');
+        })
+        .catch(function () { toast('Erreur réseau', 'error'); })
+        .finally(function () { saveSharedBtn.disabled = false; });
+    });
+
     // Suppression d'un favori
     document.addEventListener('click', function (e) {
       var btn = e.target && e.target.matches && e.target.matches('[data-del-tpl]') ? e.target : null;

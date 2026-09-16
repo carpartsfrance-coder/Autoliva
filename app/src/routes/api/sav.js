@@ -1050,7 +1050,7 @@ adminRouter.post('/tickets/:numero/communication', upload.array('attachments', 5
           size: f.size,
           mime: f.mimetype,
         });
-        savedAttachments.push({ url, name: f.originalname });
+        savedAttachments.push({ url, name: f.originalname, originalName: f.originalname, size: f.size, mime: f.mimetype, kind });
       }
     }
 
@@ -1087,11 +1087,9 @@ adminRouter.post('/tickets/:numero/communication', upload.array('attachments', 5
       }
     }
 
-    let logContenu = contenu;
-    if (savedAttachments.length) {
-      logContenu += '\n\n— Pièces jointes : ' + savedAttachments.map((a) => a.name).join(', ');
-    }
-    ticket.addMessage('admin', canal, logContenu);
+    // Les pièces jointes sont rattachées au message : le client les voit dans la bulle,
+    // pas seulement dans la liste des documents en bas de page.
+    ticket.addMessage('admin', canal, contenu, savedAttachments);
     await ticket.save();
     audit.log({ req, action: 'sav.comm.' + canal, entityType: 'sav_ticket', entityId: ticket.numero, after: { attachments: savedAttachments.length } });
     return ok(res, { numero: ticket.numero, attachments: savedAttachments });
@@ -2505,6 +2503,74 @@ adminRouter.get('/message-templates', (_req, res) => {
     { key: 'etiquette_retour', title: 'Étiquette de retour envoyée', icon: 'local_shipping', body: `Bonjour {client_prenom},\n\nVous trouverez ci-joint l'étiquette prépayée pour nous retourner votre {piece_type}.\n\nMerci de :\n• Emballer soigneusement la pièce (carton + calage)\n• Coller l'étiquette bien visible\n• Déposer le colis en point relais ou bureau de poste\n\nDès réception à l'atelier, nous démarrerons l'analyse.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
   ];
   return ok(res, { templates });
+});
+
+// ---------- Modèles de message partagés (texte + pièces jointes) ----------
+
+const SavMessageTemplate = require('../../models/SavMessageTemplate');
+
+// GET /admin/api/sav/shared-templates
+adminRouter.get('/shared-templates', async (_req, res) => {
+  try {
+    const templates = await SavMessageTemplate.find({}).sort({ usageCount: -1, title: 1 }).lean();
+    return ok(res, { templates });
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
+// POST /admin/api/sav/shared-templates — multipart { title, body, attachments[] }
+adminRouter.post('/shared-templates', upload.array('attachments', 5), async (req, res) => {
+  try {
+    const title = String((req.body && req.body.title) || '').trim().slice(0, 80);
+    const body = String((req.body && req.body.body) || '').trim();
+    if (!title || !body) return fail(res, 'Titre et texte requis');
+    if (body.length > 5000) return fail(res, 'Texte trop long (5000 caractères max)');
+    const files = Array.isArray(req.files) ? req.files : [];
+    // Tout vérifier avant d'enregistrer : un refus ne doit pas laisser de fichiers orphelins.
+    const refused = files.find((f) => !/^(image\/|application\/pdf$)/.test(f.mimetype || ''));
+    if (refused) return fail(res, `Fichier refusé : ${refused.originalname} (images et PDF uniquement)`);
+    const attachments = [];
+    for (const f of files) {
+      const stored = await savFileStorage.saveBuffer({
+        buffer: f.buffer,
+        filename: f.originalname,
+        mime: f.mimetype,
+        metadata: { ticketNumero: null, kind: 'modele_message', uploadedBy: 'admin' },
+      });
+      attachments.push({ url: stored.url, originalName: f.originalname, mime: f.mimetype, size: f.size });
+    }
+    const doc = await SavMessageTemplate.create({
+      title,
+      body,
+      attachments,
+      createdByEmail: (req.session && req.session.admin && req.session.admin.email) || '',
+    });
+    audit.log({ req, action: 'sav.template.create', entityType: 'sav_message_template', entityId: String(doc._id), after: { title, attachments: attachments.length } });
+    return ok(res, { template: doc });
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
+// POST /admin/api/sav/shared-templates/:id/used — compteur d'usage (ordre des modèles)
+adminRouter.post('/shared-templates/:id/used', async (req, res) => {
+  try {
+    await SavMessageTemplate.updateOne({ _id: req.params.id }, { $inc: { usageCount: 1 } });
+    return ok(res, { id: req.params.id });
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
+// DELETE /admin/api/sav/shared-templates/:id
+adminRouter.delete('/shared-templates/:id', async (req, res) => {
+  try {
+    const doc = await SavMessageTemplate.findById(req.params.id);
+    if (!doc) return fail(res, 'Modèle introuvable', 404);
+    // Les copies déjà jointes aux tickets sont des fichiers distincts : elles restent.
+    for (const a of doc.attachments || []) {
+      const fileId = savFileStorage.extractIdFromUrl(a.url);
+      if (fileId) { try { await savFileStorage.deleteFile(fileId); } catch (_) {} }
+    }
+    await doc.deleteOne();
+    audit.log({ req, action: 'sav.template.delete', entityType: 'sav_message_template', entityId: String(doc._id), before: { title: doc.title } });
+    return ok(res, { id: req.params.id });
+  } catch (err) { return fail(res, err.message, 500); }
 });
 
 // GET /admin/api/sav/report-templates — liste + summary de chaque template
