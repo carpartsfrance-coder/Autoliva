@@ -507,6 +507,24 @@
               </div>
             </div>
 
+            <div class="sav-doc-slot" data-kind="confirmationReglageBase">
+              <input type="file" class="sr-only sav-doc-slot__input" accept="application/pdf,image/jpeg,image/png,image/heic,image/heif">
+              <div class="sav-doc-slot__icon"><span class="material-symbols-rounded" aria-hidden="true">fact_check</span></div>
+              <div class="sav-doc-slot__body">
+                <div class="sav-doc-slot__title">Photo du réglage de base <span class="sav-doc-slot__optional">facultatif</span></div>
+                <div class="sav-doc-slot__hint">Écran de la valise avec le résultat : réussi, ou le code d'erreur</div>
+                <div class="sav-doc-slot__cta"><span class="material-symbols-rounded" aria-hidden="true">add</span>Ajouter la photo</div>
+              </div>
+              <div class="sav-doc-slot__filled" hidden>
+                <img class="sav-doc-slot__thumb" alt="">
+                <div class="sav-doc-slot__file">
+                  <div class="sav-doc-slot__name"></div>
+                  <div class="sav-doc-slot__meta"></div>
+                </div>
+                <button type="button" class="sav-doc-slot__rm" aria-label="Retirer ce fichier"><span class="material-symbols-rounded" aria-hidden="true">close</span></button>
+              </div>
+            </div>
+
             <div class="sav-doc-slot" data-kind="photoCompteur">
               <input type="file" class="sr-only sav-doc-slot__input" accept="application/pdf,image/jpeg,image/png,image/heic,image/heif">
               <div class="sav-doc-slot__icon"><span class="material-symbols-rounded" aria-hidden="true">speed</span></div>
@@ -627,6 +645,6 @@
 
 <!-- browser-image-compression UMD via CDN (compression auto > 2 Mo) -->
 <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js" defer></script>
-<script src="/js/sav-form.js?v=12" defer></script>
+<script src="/js/sav-form.js?v=13" defer></script>
 
 <%- include('../partials/footer') %>

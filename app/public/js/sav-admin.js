@@ -4648,58 +4648,165 @@
       else toast('Pas d\'URL de tracking enregistrée', 'error');
     });
 
-    // -------- WhatsApp fournisseur (4.2) --------
+    // -------- Dossier fournisseur (WhatsApp, en anglais) --------
+    // Le fournisseur demande toujours : codes défaut (photo de la valise) et résultat
+    // du réglage de base. La modale vérifie ce qui manque, laisse choisir le rôle de
+    // chaque photo, puis prépare le message anglais + le lien vers le PDF.
     var waBtn = document.getElementById('sav-fourn-whatsapp');
     var waModal = document.getElementById('sav-wa-modal');
     var waPhone = document.getElementById('sav-wa-phone');
     var waText = document.getElementById('sav-wa-text');
     var waLink = document.getElementById('sav-wa-link');
+    var waPdf = document.getElementById('sav-wa-pdf');
     var waCopy = document.getElementById('sav-wa-copy');
     var waSend = document.getElementById('sav-wa-send');
     var waSaveReply = document.getElementById('sav-wa-save-reply');
     var waClientScript = document.getElementById('sav-wa-client-script');
+    var waDossier = null;
+    var WA_PHONE_KEY = 'savFournisseurWhatsapp';
+    var ROLE_LABELS = { obd: 'Codes défaut (valise)', reglage: 'Réglage de base', autre: 'Autre photo', exclu: 'Ne pas envoyer' };
+
+    function waCleanPhone() { return (waPhone && waPhone.value || '').replace(/[^\d]/g, ''); }
+    function refreshWaLink() {
+      if (!waLink) return;
+      var clean = waCleanPhone();
+      waLink.href = clean ? 'https://wa.me/' + clean + '?text=' + encodeURIComponent(waText.value) : '#';
+    }
+    function renderFournDossier(d) {
+      waDossier = d;
+      var status = document.getElementById('sav-wa-status');
+      if (status) {
+        status.classList.toggle('hidden', !d.dateEnvoi);
+        if (d.dateEnvoi) status.textContent = 'Déjà envoyé au fournisseur le ' + new Date(d.dateEnvoi).toLocaleDateString('fr-FR');
+      }
+      var list = document.getElementById('sav-wa-checklist');
+      if (list) {
+        list.innerHTML = (d.checklist || []).map(function (i) {
+          var icon = i.ok ? 'check_circle' : (i.optional ? 'help' : 'cancel');
+          var color = i.ok ? '#059669' : (i.optional ? '#d97706' : '#dc2626');
+          var value = i.value ? ' <span class="text-slate-500">— ' + escapeHtml(i.value) + '</span>' : '';
+          var hint = !i.ok && i.key === 'codes' ? ' <span class="text-slate-500">— lus sur la photo</span>' : '';
+          return '<li class="flex items-start gap-1.5"><span class="material-symbols-outlined" style="font-size:16px;color:' + color + ';">' + icon + '</span>' +
+            '<span><span class="font-medium text-slate-800">' + escapeHtml(i.label) + '</span>' + value + hint + '</span></li>';
+        }).join('');
+      }
+      var missing = document.getElementById('sav-wa-missing');
+      if (missing) missing.classList.toggle('hidden', !d.clientRequest);
+      var photos = document.getElementById('sav-wa-photos');
+      if (photos) {
+        photos.innerHTML = (d.photos || []).length ? d.photos.map(function (p, i) {
+          var thumb = p.isImage
+            ? '<img src="' + escapeHtml(p.url) + '" alt="" class="w-full h-24 object-cover rounded-lg bg-slate-100" loading="lazy">'
+            : '<div class="w-full h-24 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500"><span class="material-symbols-outlined">picture_as_pdf</span></div>';
+          var options = ['obd', 'reglage', 'autre', 'exclu'].map(function (r) {
+            return '<option value="' + r + '"' + (p.role === r ? ' selected' : '') + '>' + ROLE_LABELS[r] + '</option>';
+          }).join('');
+          return '<div class="rounded-xl border ' + (p.role === 'exclu' ? 'border-slate-200 opacity-60' : 'border-emerald-300') + ' p-1.5">' +
+            '<a href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener" title="' + escapeHtml(p.name || '') + '">' + thumb + '</a>' +
+            '<select data-wa-photo="' + i + '" class="mt-1.5 w-full rounded-lg border border-slate-300 px-1.5 py-1 text-xs">' + options + '</select>' +
+          '</div>';
+        }).join('') : '<p class="text-xs text-slate-500 col-span-full">Aucun fichier sur ce ticket.</p>';
+      }
+      var tr = document.getElementById('sav-wa-translation');
+      if (tr) {
+        var untranslated = d.hasDescription && !d.descriptionTranslated;
+        tr.classList.toggle('hidden', !untranslated);
+        tr.textContent = untranslated ? 'La description du client reste en français dans le PDF : la traduction automatique n\'est pas disponible.' : '';
+      }
+      if (waText) waText.value = d.text || '';
+      if (waPdf) waPdf.href = d.pdfUrl || '#';
+      if (waClientScript && !waClientScript.value) waClientScript.value = d.clientScript || '';
+      var reply = document.getElementById('sav-wa-reply');
+      if (reply && !reply.value) reply.value = d.reponse || '';
+      if (waSend) waSend.classList.toggle('hidden', !d.configured);
+      refreshWaLink();
+    }
     function openWa() {
-      var phone = (ticket && ticket.fournisseur && ticket.fournisseur.contact) || '';
-      api('/tickets/' + encodeURIComponent(numero) + '/whatsapp-fournisseur/preview?phone=' + encodeURIComponent(phone))
+      var saved = '';
+      try { saved = localStorage.getItem(WA_PHONE_KEY) || ''; } catch (_) {}
+      var phone = (ticket && ticket.fournisseur && ticket.fournisseur.contact) || saved;
+      if (waPhone) waPhone.value = phone;
+      if (waClientScript) waClientScript.value = '';
+      var reply = document.getElementById('sav-wa-reply');
+      if (reply) reply.value = '';
+      api('/tickets/' + encodeURIComponent(numero) + '/dossier-fournisseur?phone=' + encodeURIComponent(phone))
         .then(function (res) {
-          if (!res.ok) { toast('Erreur preview', 'error'); return; }
-          var d = res.j.data;
-          waPhone.value = phone;
-          waText.value = d.text || '';
-          waClientScript.value = d.clientScript || '';
-          waLink.href = d.waUrl || '#';
+          if (!res.ok || !res.j.success) { toast((res.j && res.j.error) || 'Erreur de préparation du dossier', 'error'); return; }
+          renderFournDossier(res.j.data);
           openModal(waModal);
         });
     }
     function closeWa() { if (waModal) closeModal(waModal); }
     if (waBtn) waBtn.addEventListener('click', openWa);
     if (waModal) waModal.addEventListener('click', function (e) { if (e.target === waModal || (e.target.matches && e.target.matches('[data-close-wa]'))) closeWa(); });
-    if (waPhone) waPhone.addEventListener('input', function () {
-      var clean = waPhone.value.replace(/[^\d]/g, '');
-      waLink.href = clean ? 'https://wa.me/' + clean + '?text=' + encodeURIComponent(waText.value) : '#';
+    if (waModal) waModal.addEventListener('change', function (e) {
+      var sel = e.target.closest && e.target.closest('[data-wa-photo]');
+      if (!sel || !waDossier) return;
+      var p = waDossier.photos[parseInt(sel.getAttribute('data-wa-photo'), 10)];
+      if (!p) return;
+      api('/tickets/' + encodeURIComponent(numero) + '/dossier-fournisseur/photos', {
+        method: 'POST', body: JSON.stringify({ roles: [{ url: p.url, role: sel.value }] }),
+      }).then(function (res) {
+        if (!res.ok || !res.j.success) { toast((res.j && res.j.error) || 'Erreur', 'error'); return; }
+        renderFournDossier(res.j.data);
+      });
     });
-    if (waText) waText.addEventListener('input', function () {
-      var clean = (waPhone.value || '').replace(/[^\d]/g, '');
-      waLink.href = clean ? 'https://wa.me/' + clean + '?text=' + encodeURIComponent(waText.value) : '#';
+    if (waPhone) waPhone.addEventListener('input', refreshWaLink);
+    if (waText) waText.addEventListener('input', refreshWaLink);
+    if (waLink) waLink.addEventListener('click', function (e) {
+      if (!waCleanPhone()) {
+        e.preventDefault();
+        toast('Indiquez le numéro WhatsApp du fournisseur', 'error');
+        if (waPhone) waPhone.focus();
+        return;
+      }
+      // Le lien s'ouvre dans WhatsApp ; on garde la trace de l'envoi sur le ticket.
+      try { localStorage.setItem(WA_PHONE_KEY, waPhone.value); } catch (_) {}
+      api('/tickets/' + encodeURIComponent(numero) + '/whatsapp-fournisseur/send', {
+        method: 'POST', body: JSON.stringify({ phone: waPhone.value, mode: 'wame' }),
+      }).then(function (res) {
+        if (!(res.ok && res.j.success)) return;
+        toast('Envoi au fournisseur noté sur le ticket');
+        if (waDossier && !waDossier.dateEnvoi) {
+          waDossier.dateEnvoi = new Date().toISOString();
+          renderFournDossier(waDossier);
+        }
+        loadTicket();
+      });
     });
     if (waCopy) waCopy.addEventListener('click', function () {
-      navigator.clipboard.writeText(waText.value).then(function () { toast('Texte copié'); });
+      navigator.clipboard.writeText(waText.value).then(function () { toast('Message copié'); });
     });
     if (waSend) waSend.addEventListener('click', function () {
       api('/tickets/' + encodeURIComponent(numero) + '/whatsapp-fournisseur/send', {
-        method: 'POST', body: JSON.stringify({ phone: waPhone.value }),
+        method: 'POST', body: JSON.stringify({ phone: waPhone.value, text: waText.value }),
       }).then(function (res) {
-        if (res.ok && res.j.success) { toast('Envoi enregistré'); loadTicket(); }
-        else toast(res.j.error || 'Erreur', 'error');
+        if (res.ok && res.j.success) { toast('Dossier envoyé'); loadTicket(); }
+        else toast((res.j && res.j.error) || 'Erreur', 'error');
       });
+    });
+    var waAsk = document.getElementById('sav-wa-ask-client');
+    if (waAsk) waAsk.addEventListener('click', function () {
+      if (!waDossier || !waDossier.clientRequest) return;
+      TEMPLATES.__dossier_fournisseur = waDossier.clientRequest;
+      applyTemplate('__dossier_fournisseur');
+      closeWa();
+      var cw = document.getElementById('sav-composer-wrap');
+      if (cw) {
+        cw.classList.remove('hidden');
+        cw.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      if (editor) editor.focus();
+      toast('Message prêt : relisez puis envoyez-le au client');
     });
     if (waSaveReply) waSaveReply.addEventListener('click', function () {
       var reply = document.getElementById('sav-wa-reply').value;
+      if (!reply.trim()) { toast('Collez la réponse du fournisseur', 'error'); return; }
       api('/tickets/' + encodeURIComponent(numero) + '/whatsapp-fournisseur/send', {
         method: 'POST', body: JSON.stringify({ phone: waPhone.value, parsedReply: reply }),
       }).then(function (res) {
         if (res.ok && res.j.success) { toast('Réponse enregistrée'); closeWa(); loadTicket(); }
-        else toast(res.j.error || 'Erreur', 'error');
+        else toast((res.j && res.j.error) || 'Erreur', 'error');
       });
     });
 
