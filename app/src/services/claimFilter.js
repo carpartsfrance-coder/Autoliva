@@ -176,6 +176,17 @@ function partenaire(possessif) {
   return PLURIEL.test(possessif) ? 'nos partenaires reconditionneurs' : 'notre partenaire reconditionneur';
 }
 
+/* « nos usines certifiées ISO 9001 » devient « nos partenaires reconditionneurs
+   certifiés ISO 9001 » : la certification suit le partenaire, accordée au
+   masculin. Ce reste n'existe que là où la règle iso9001 est LEVÉE (famille
+   dont le certificat est détenu) : ailleurs, les réécritures ISO passent
+   avant et en ont déjà fait « usines spécialisées ». */
+function certification(possessif, suite) {
+  if (!suite) return '';
+  const iso = (suite.match(/\s+ISO\s?-?\s?9001/i) || [''])[0];
+  return (PLURIEL.test(possessif) ? ' certifiés' : ' certifié') + iso;
+}
+
 /* « de notre atelier » ne devient « de CHEZ notre partenaire » qu'après un mot
    de mouvement (« sort de », « part de », « au départ de ») : ailleurs, « chez »
    est fautif — « passe entre les mains de chez notre partenaire » ne se dit
@@ -224,10 +235,10 @@ const REECRITURES = [
   },
   {
     regle: 'atelierPropre',
-    motif: /\b(dans|de|depuis|par) ((?:notre|nos) (?:atelier|ateliers|usine|usines))(?:\s+(?:spécialisée?s?|partenaires?|de reconditionnement))?(?![\wÀ-ÿ])/gi,
-    par: (m, prep, groupe, position, chaine) => {
+    motif: /\b(dans|de|depuis|par) ((?:notre|nos) (?:atelier|ateliers|usine|usines))(?:\s+(?:spécialisée?s?|partenaires?|de reconditionnement))?(\s+certifiée?s?(?:\s+ISO\s?-?\s?9001)?)?(?![\wÀ-ÿ])/gi,
+    par: (m, prep, groupe, certif, position, chaine) => {
       const p = prep.toLowerCase();
-      const cible = partenaire(groupe);
+      const cible = partenaire(groupe) + certification(groupe, certif);
       const deChez = p === 'de' && MOUVEMENT_AVANT.test(chaine.slice(Math.max(0, position - 30), position));
       const txt = p === 'dans' ? `chez ${cible}` : deChez ? `de chez ${cible}` : `${p} ${cible}`;
       return avecCasse(prep, txt);
@@ -235,13 +246,17 @@ const REECRITURES = [
   },
   {
     regle: 'atelierPropre',
-    motif: /\b((?:notre|nos) (?:atelier|ateliers|usine|usines))(?:\s+(?:spécialisée?s?|partenaires?|de reconditionnement))?(?![\wÀ-ÿ])/gi,
-    par: (m, groupe) => avecCasse(groupe, partenaire(groupe)),
+    motif: /\b((?:notre|nos) (?:atelier|ateliers|usine|usines))(?:\s+(?:spécialisée?s?|partenaires?|de reconditionnement))?(\s+certifiée?s?(?:\s+ISO\s?-?\s?9001)?)?(?![\wÀ-ÿ])/gi,
+    par: (m, groupe, certif) => avecCasse(groupe, partenaire(groupe) + certification(groupe, certif)),
   },
   /* Même allégation dans le gabarit ALLEMAND : « Von unseren Werkstätten aus »
      s'affiche sous la photo de chargement de chaque fiche /de. « Partner- »
      garde la phrase et dit vrai. */
   { regle: 'atelierPropre', motif: /\bunseren Werkstätten(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unseren Partnerwerkstätten') },
+  /* « in unseren ISO 9001-zertifizierten Werken » (gabarit allemand) : ailleurs
+     la phrase part avec le filtre ISO ; là où la certification est prouvée,
+     elle reste, mais les usines sont celles des partenaires. */
+  { regle: 'atelierPropre', motif: /\bunseren ((?:ISO[\s-]?9001-zertifizierten|zertifizierten) )?Werken(?![\wÀ-ÿ])/g, par: (m, adj) => `den ${adj || ''}Werken unserer Partner` },
   { regle: 'atelierPropre', motif: /\bunsere Werkstätten(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unsere Partnerwerkstätten') },
   { regle: 'atelierPropre', motif: /\bunserer Werkstatt(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unserer Partnerwerkstatt') },
   { regle: 'atelierPropre', motif: /\bunsere Werkstatt(?![\wÀ-ÿ])/gi, par: (m) => avecCasse(m, 'unsere Partnerwerkstatt') },

@@ -2,7 +2,7 @@
   "_lisezMoi": [
     "Allégations NON PROUVÉES retirées des fiches produit et des pages véhicule, à l'affichage seulement : rien n'est modifié en base.",
     "Plan de reprise SEO du 14/09/2026, action A3 (e). Lu par src/services/claimFilter.js.",
-    "Décision 4, réponse de Killian le 16/09/2026 : les pièces Alibaba sont REFAITES EN USINE (leur description redevient visible) et l'usine est certifiée ISO 9001, mais le certificat n'est pas fourni — la règle iso9001 reste donc active jusqu'à réception du document.",
+    "Décision 4, réponse de Killian le 16/09/2026 : les pièces Alibaba sont REFAITES EN USINE (leur description redevient visible) et leur usine est certifiée ISO 9001 — Killian détient le certificat (non publié, fourni sur demande). La règle iso9001 est donc levée pour ALIBABA, et pour elle seule : les boîtes ALV-BX et EDN viennent d'Eden, les DEK de Dekram, que ce certificat ne couvre pas.",
     "Lever une règle pour une famille dont la preuve est fournie : ajouter sa clé dans « leveePour » (ex. \"leveePour\": [\"DEK\"]), puis déployer.",
     "Retirer la clé remet le filtre en place au déploiement suivant. Les clés de famille sont celles de « familles » ci-dessous.",
     "« descriptionMasquee » : familles dont la description n'est JAMAIS affichée, quelle que soit la langue."
@@ -27,8 +27,8 @@
   "regles": {
     "iso9001": {
       "active": true,
-      "leveePour": [],
-      "description": "« usine(s) certifiée(s) ISO 9001 » → « usine(s) spécialisée(s) » ; toute autre mention d'ISO 9001 retire sa phrase ; badges et mentions ISO du gabarit masqués. Concerne 977 fiches ALV-BX, 630 DEK et 331 EDN (les 264 fiches Alibaba n'en parlent jamais). À lever avec « leveePour » le jour où le certificat de l'usine est en main."
+      "leveePour": ["ALIBABA"],
+      "description": "« usine(s) certifiée(s) ISO 9001 » → « usine(s) spécialisée(s) » ; toute autre mention d'ISO 9001 retire sa phrase ; badges et mentions ISO du gabarit masqués. Levée pour ALIBABA le 16/09/2026 (certificat de l'usine détenu par Killian) : le badge « Qualité Premium : ISO 9001 » et la mention « usines certifiées ISO 9001 » du gabarit y reviennent. Reste active pour 977 fiches ALV-BX et 331 EDN (Eden) et 630 DEK (Dekram) : à lever famille par famille, certificat du fournisseur en main."
     },
     "concessionnaires": {
       "active": true,

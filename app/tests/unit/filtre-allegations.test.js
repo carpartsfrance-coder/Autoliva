@@ -64,19 +64,45 @@ test('description masquée : français seulement, jamais DM, interrupteur global
   }
 });
 
-test('politique : toutes les règles actives, aucune levée tant que la preuve manque', () => {
+test('politique : toutes les règles actives, levées seulement là où la preuve est en main', () => {
   /* Lever une règle est un choix de Killian, preuve à l'appui : ce test doit
      être modifié EN MÊME TEMPS que claims-policy.json, jamais par accident. */
+  const LEVEES = {
+    /* 16/09/2026 : Killian détient le certificat ISO 9001 de l'usine qui refait
+       les pièces Alibaba. Il ne couvre ni Eden (ALV-BX, EDN) ni Dekram (DEK). */
+    iso9001: ['ALIBABA'],
+  };
   const regles = cf.POLITIQUE.regles;
   for (const id of ['iso9001', 'concessionnaires', 'atelierPropre', 'couvertureLaPlusLongue', 'paiementFractionne', 'dureeGarantie']) {
     assert.ok(regles[id], `règle ${id} absente`);
     assert.equal(regles[id].active, true, `règle ${id} désactivée`);
-    assert.deepEqual(regles[id].leveePour, [], `règle ${id} levée pour ${regles[id].leveePour}`);
+    assert.deepEqual(regles[id].leveePour, LEVEES[id] || [], `règle ${id} levée pour ${regles[id].leveePour}`);
   }
+  for (const famille of ['ALV-BX', 'EDN', 'DEK']) {
+    assert.ok(cf.contexteFiche({ sku: `${famille}-1` }).regles.has('iso9001'), `ISO 9001 affiché sur ${famille} sans certificat`);
+  }
+  assert.ok(!cf.contexteFiche({ sku: 'ALV-PT-2462800200' }).regles.has('iso9001'), 'ISO 9001 toujours filtré sur Alibaba');
   /* Seules les copies distrimotor restent masquées : Alibaba est rendue le
      16/09/2026. L'ISO 9001 reste filtré tant que le certificat de l'usine
      n'est pas en main — c'est « leveePour » qui le lèvera, pas ce test. */
   assert.deepEqual(Object.keys(cf.POLITIQUE.descriptionMasquee).sort(), ['DM']);
+});
+
+test('ISO 9001 levé (Alibaba) : la certification reste, les usines sont celles des partenaires', () => {
+  const alibaba = cf.contexteFiche({ sku: 'ALV-PT-2462800200' });
+  const eden = cf.contexteFiche({ sku: 'ALV-BX-TWP-B7AB26' });
+  const cas = [
+    ['Chaque pièce est remontée dans nos usines certifiées ISO 9001, avec des pièces d’origine.',
+      'Chaque pièce est remontée chez nos partenaires reconditionneurs certifiés ISO 9001, avec des pièces d’origine.'],
+    ['Remontée dans notre usine certifiée ISO 9001.', 'Remontée chez notre partenaire reconditionneur certifié ISO 9001.'],
+    ['Nos usines certifiées ISO 9001 testent chaque pièce.', 'Nos partenaires reconditionneurs certifiés ISO 9001 testent chaque pièce.'],
+    ['Jedes Teil wird in unseren ISO 9001-zertifizierten Werken wieder montiert.',
+      'Jedes Teil wird in den ISO 9001-zertifizierten Werken unserer Partner wieder montiert.'],
+  ];
+  for (const [avant, apres] of cas) assert.equal(cf.filtrer(avant, alibaba), apres);
+  /* Eden (ALV-BX) : pas de certificat, la mention part toujours. */
+  assert.equal(cf.filtrer(cas[0][0], eden), 'Chaque pièce est remontée chez nos partenaires reconditionneurs, avec des pièces d’origine.');
+  assert.equal(cf.filtrer(cas[3][0], eden), '');
 });
 
 test('ISO 9001 : chaque tournure du catalogue devient « usine spécialisée »', () => {
