@@ -233,6 +233,7 @@ router.post('/commandes/:orderId/statut', requireAdminAuth, adminController.post
 // Action suivante en un clic depuis la liste, et ligne à jour après une saisie dans le panneau.
 router.post('/commandes/:orderId/avancer', requireAdminAuth, adminController.postAdminAvancerCommande);
 router.get('/commandes/:orderId/ligne', requireAdminAuth, adminController.getAdminOrderRow);
+router.post('/commandes/:orderId/livraison-prevue', requireAdminAuth, adminController.postAdminDeliveryEstimate);
 router.post('/commandes/:orderId/type', requireAdminAuth, adminController.postAdminUpdateOrderType);
 // Demande d'avis Skeepers sur UNE commande (bouton du détail).
 router.post('/commandes/:orderId/demande-avis', requireAdminAuth, require('../controllers/reviewsAdminController').postRequestReviewSingle);

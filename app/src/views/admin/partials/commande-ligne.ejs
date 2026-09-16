@@ -67,6 +67,9 @@
     <% if (o.sousStatut) { %>
       <div class="cmd-sous is-<%= o.sousStatut.ton %>"><span class="ms" aria-hidden="true"><%= o.sousStatut.icon %></span><span><%= o.sousStatut.texte %></span></div>
     <% } %>
+    <% if (o.livraison) { %>
+      <div class="cmd-sous is-<%= o.livraison.ton %>"><span class="ms" aria-hidden="true">event</span><span><%= o.livraison.texte %><% if (!o.livraison.prevenu) { %> · <span class="cmd-non-prevenu">client pas prévenu</span><% } %></span></div>
+    <% } %>
   </div>
 
   <div class="cmd-c cmd-c-appro" role="cell">

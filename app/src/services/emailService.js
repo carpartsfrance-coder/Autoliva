@@ -15,6 +15,7 @@ const {
   buildAbandonedCartReminder3,
   buildDeliveryConfirmedEmail,
   buildOrderStatusChangeEmail,
+  buildDeliveryEstimateEmail,
   buildCloningLabelEmail,
   buildCloningPieceReceivedEmail,
   buildCloningDoneEmail,
@@ -586,6 +587,20 @@ async function sendOrderStatusChangeEmail({ order, user, newStatus, message } = 
 }
 
 /**
+ * Date de livraison annoncée au client (liste des commandes).
+ * @param {{ order, user, date: string, changement?: boolean }} params  date AAAA-MM-JJ
+ */
+async function sendDeliveryEstimateEmail({ order, user, date, changement = false } = {}) {
+  if (!order || !user || !user.email || !date) return { ok: false, reason: 'missing_data' };
+  const baseUrl = getBaseUrl();
+  const fullUser = await hydrateUserForEmail(user);
+  /* La réhydratation ne relit pas `lang` : on garde celle du compte transmis. */
+  const lang = langueDe({ order, user: { lang: (fullUser && fullUser.lang) || user.lang } });
+  const built = buildDeliveryEstimateEmail({ order, user: fullUser, date, changement, baseUrl, lang });
+  return sendEmail({ toEmail: fullUser.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo(), lang });
+}
+
+/**
  * Logs an email send event to the Order.emailsSent array.
  * Non-blocking — errors are swallowed so they never break the caller.
  *
@@ -731,6 +746,7 @@ module.exports = {
   sendAbandonedCartReminder,
   sendDeliveryConfirmedEmail,
   sendOrderStatusChangeEmail,
+  sendDeliveryEstimateEmail,
   sendCloningLabelEmail,
   sendCloningStepEmail,
   sendRefundIssuedEmail,

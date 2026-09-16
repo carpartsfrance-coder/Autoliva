@@ -55,7 +55,7 @@
   }
 
   function visibles() {
-    return toutesLignes().filter(function (el) { return !el.hidden && !el.classList.contains('is-sortie'); });
+    return toutesLignes().filter(function (el) { return !el.hidden && !el.classList.contains('is-sortie') && !el.classList.contains('is-traitee'); });
   }
 
   function envoyer(url, options) {
@@ -139,7 +139,7 @@
     var vide = document.getElementById('cmdVide');
     var videRecherche = document.getElementById('cmdVideRecherche');
     var filtre = rechercheEl && rechercheEl.value.trim();
-    var aucune = toutesLignes().filter(function (l) { return !l.classList.contains('is-sortie') && !l.classList.contains('is-partie'); }).length === 0;
+    var aucune = toutesLignes().filter(function (l) { return !l.classList.contains('is-sortie') && !l.classList.contains('is-partie') && !l.classList.contains('is-traitee'); }).length === 0;
     if (vide) vide.hidden = !aucune;
     if (videRecherche) videRecherche.hidden = aucune || n > 0 || !filtre;
   }
@@ -206,6 +206,12 @@
         if (dansFile && j.ligne && j.ligne.html) {
           var nouvelle = remplacerLigne(item.el, j.ligne.html);
           if (nouvelle) nouvelle.hidden = false;
+        } else if (item.bandeau) {
+          /* Traitée et partie de la file : le bandeau reste où il est, sans
+             « Annuler », et ne se replie que souris hors de la liste. */
+          var bouton = item.bandeau.querySelector('[data-annuler-ligne]');
+          if (bouton) bouton.remove();
+          replierQuandLibre(item.el);
         } else if (item.el.parentNode) {
           item.el.parentNode.removeChild(item.el);
         }
@@ -227,9 +233,42 @@
 
   function restaurerLigne(item) {
     var d = donnees(item.el);
-    item.el.classList.remove('is-sortie', 'is-en-cours', 'is-partie');
+    item.el.classList.remove('is-sortie', 'is-en-cours', 'is-partie', 'is-traitee', 'is-repliee');
+    if (item.bandeau && item.bandeau.parentNode) item.bandeau.parentNode.removeChild(item.bandeau);
+    item.bandeau = null;
     item.el.hidden = false;
     deplacerCompteurs(d.files, d.filesApres[item.action], -1);
+  }
+
+  /* Une ligne traitée qui quitte la file ne DISPARAÎT PAS sous la souris :
+     elle devient un bandeau « fait » de même hauteur. Sinon la page se
+     décale d'une ligne et le clic suivant tombe sur une autre commande —
+     constaté en simulant un opérateur (16/09/2026). */
+  function marquerTraitee(item, texte) {
+    var el = item.el;
+    el.classList.add('is-traitee');
+    var bandeau = document.createElement('div');
+    bandeau.className = 'cmd-traitee';
+    bandeau.setAttribute('role', 'status');
+    bandeau.innerHTML = '<span class="ms" aria-hidden="true">check_circle</span><span class="cmd-traitee-t"></span>'
+      + '<button type="button" class="cmd-traitee-annuler" data-annuler-ligne><span class="ms" aria-hidden="true">undo</span>Annuler</button>';
+    bandeau.querySelector('.cmd-traitee-t').textContent = texte;
+    el.appendChild(bandeau);
+    item.bandeau = bandeau;
+  }
+
+  /* Le repli (hauteur réduite) décale les lignes suivantes : seulement quand
+     la souris n'est pas sur la liste. */
+  function replierQuandLibre(el) {
+    var replier = function () { if (el.isConnected) el.classList.add('is-repliee'); };
+    if (lignesEl && lignesEl.matches(':hover')) {
+      lignesEl.addEventListener('mouseleave', function unique() {
+        lignesEl.removeEventListener('mouseleave', unique);
+        replier();
+      });
+    } else {
+      replier();
+    }
   }
 
   /* Envoie l'action en attente, tout de suite. */
@@ -289,16 +328,23 @@
       var c = item.el.querySelector('.cmd-check');
       if (c) c.checked = false;
       if (fileActive !== 'all' && apres.indexOf(fileActive) === -1) {
-        item.el.classList.add('is-sortie');
-        setTimeout(function () { if (item.el.classList.contains('is-sortie')) { item.el.hidden = true; item.el.classList.add('is-partie'); } }, 230);
+        marquerTraitee(item, d.number + ' → ' + (MESSAGES[item.action] || 'mise à jour'));
       } else {
         item.el.classList.add('is-en-cours');
       }
     });
     majSelection();
-    setTimeout(function () { majCompteLignes(); poserCurseur(curseur, false); }, 240);
+    majCompteLignes();
+    poserCurseur(curseur, false);
     enAttente = { lignes: items, timer: setTimeout(validerEnAttente, DELAI_ANNULATION) };
     notifier(message, { onAnnuler: annulerEnAttente });
+  }
+
+  /* Seule action de la liste qui écrit au client : « Livrée ». Le passage en
+     préparation (« Oui », « Commandée », « Reçue atelier ») reste silencieux
+     côté serveur (postAdminAvancerCommande). */
+  function previentClient(d, actionId) {
+    return actionId === 'livree';
   }
 
   var MESSAGES = {
@@ -328,7 +374,8 @@
       actionId = a.id;
     }
     if (!actionId || (d.actionsPossibles || []).indexOf(actionId) === -1) return;
-    programmer([{ el: el, action: actionId }], d.number + ' → ' + (MESSAGES[actionId] || 'mise à jour'));
+    programmer([{ el: el, action: actionId }], d.number + ' → ' + (MESSAGES[actionId] || 'mise à jour')
+      + (previentClient(d, actionId) ? ' · e-mail au client dans 6 s' : ''));
   }
 
   /* ─── Panneau latéral ─────────────────────────────────────────────────── */
@@ -408,6 +455,32 @@
       + '</form></section>';
   }
 
+  function dateLongue(aaaammjj) {
+    var d = new Date(aaaammjj + 'T12:00:00');
+    return isNaN(d.getTime()) ? aaaammjj : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  /* Date de livraison ANNONCÉE AU CLIENT — « Réception prévue », dans l'appro,
+     reste la date interne du fournisseur. */
+  function blocLivraison(p) {
+    var l = p.livraison || {};
+    if (!l.pertinente) return '';
+    var info = l.annonceePour
+      ? 'Dernière date envoyée au client : ' + dateLongue(l.annonceePour) + (l.annonceeLe ? ' (e-mail du ' + l.annonceeLe + ')' : '')
+      : 'Aucune date envoyée au client pour l’instant.';
+    return '<section class="cmd-bloc" data-section="livraison"><h3>Livraison prévue</h3>'
+      + '<form data-form="livraison"><div class="cmd-champs">'
+      + '<label class="cmd-champ">Date annoncée au client<input type="date" name="date" value="' + esc(l.date) + '" min="' + esc(l.aujourdhui) + '" /></label>'
+      + '</div>'
+      + '<p class="cmd-bloc-avertissement">' + (l.emailClient
+        ? 'Chaque nouvelle date part au client par e-mail. La même date enregistrée deux fois n’envoie rien.'
+        : 'Aucun e-mail client sur cette commande : la date sera enregistrée sans prévenir le client.') + '</p>'
+      + '<div class="cmd-bloc-actions"><button type="submit" class="cmd-act"><span class="ms" aria-hidden="true">event</span>' + (l.emailClient ? 'Enregistrer et prévenir le client' : 'Enregistrer la date') + '</button>'
+      + (l.date ? '<button type="button" class="cmd-bouton is-petit" data-retirer-livraison>Retirer la date</button>' : '')
+      + '</div></form>'
+      + '<div class="cmd-bloc-info">' + esc(info) + '</div></section>';
+  }
+
   function blocPieces(p, d) {
     var dernier = (p.envois || []).length ? p.envois[p.envois.length - 1] : null;
     return '<section class="cmd-bloc"><h3>Pièce et transport</h3><div class="cmd-pieces">'
@@ -459,7 +532,7 @@
     var expeditionD_abord = action.besoin === 'etiquette' || action.besoin === 'suivi';
     corps.innerHTML = blocAvancement(p)
       + (expeditionD_abord ? blocExpedition(p) + blocAppro(p) : blocAppro(p) + blocExpedition(p))
-      + blocPieces(p, d) + blocClient(p, d) + blocNote(p);
+      + blocLivraison(p) + blocPieces(p, d) + blocClient(p, d) + blocNote(p);
 
     var liste = visibles();
     var i = liste.indexOf(el);
@@ -537,7 +610,8 @@
     setTimeout(function () {
       var reste = visibles();
       if (!reste.length) { fermerPanneau(); return; }
-      var suivante = el.hidden || el.classList.contains('is-partie') ? reste[Math.min(index, reste.length - 1)] : (reste[index + 1] || el);
+      var sortie = el.hidden || el.classList.contains('is-partie') || el.classList.contains('is-traitee');
+      var suivante = sortie ? reste[Math.min(index, reste.length - 1)] : (reste[index + 1] || el);
       ouvrirPanneau(suivante);
     }, 260);
   }
@@ -549,21 +623,28 @@
     return envoyer('/admin/commandes/' + encodeURIComponent(d.id) + '/ligne?file=' + encodeURIComponent(fileActive), { method: 'GET' })
       .then(function (j) {
         if (!j || !j.ok) { notifier((j && j.error) || 'La ligne n’a pas pu être rechargée.', { erreur: true }); return; }
-        appliquerCompteurs(j.compteurs, j.resume);
-        var dansFile = fileActive === 'all' || j.ligne.files.indexOf(fileActive) !== -1;
-        var nouvelle = remplacerLigne(el, j.ligne.html);
-        if (!nouvelle) return;
-        if (!dansFile) {
-          nouvelle.hidden = true;
-          nouvelle.classList.add('is-partie');
-          majCompteLignes();
-          notifier((message ? message + ' · ' : '') + d.number + ' quitte la file');
-          if (ouverte === el) naviguerPanneau(0);
-        } else {
-          if (message) notifier(message);
-          if (ouverte === el) { ouverte = nouvelle; remplirPanneau(nouvelle); }
-        }
+        appliquerLigneAJour(el, j, message);
       });
+  }
+
+  /* Réponse { ligne, compteurs, resume } d'un endpoint : ligne remplacée,
+     compteurs à jour, panneau rafraîchi si la commande reste dans la file. */
+  function appliquerLigneAJour(el, j, message, options) {
+    var d = donnees(el);
+    appliquerCompteurs(j.compteurs, j.resume);
+    var dansFile = fileActive === 'all' || j.ligne.files.indexOf(fileActive) !== -1;
+    var nouvelle = remplacerLigne(el, j.ligne.html);
+    if (!nouvelle) return;
+    if (!dansFile) {
+      nouvelle.hidden = true;
+      nouvelle.classList.add('is-partie');
+      majCompteLignes();
+      notifier((message ? message + ' · ' : '') + d.number + ' quitte la file', options);
+      if (ouverte === el) naviguerPanneau(0);
+    } else {
+      if (message) notifier(message, options);
+      if (ouverte === el) { ouverte = nouvelle; remplirPanneau(nouvelle); }
+    }
   }
 
   function soumettreAppro(form) {
@@ -606,6 +687,49 @@
     }).catch(function () { notifier('Réseau indisponible : suivi non enregistré.', { erreur: true }); if (bouton) bouton.disabled = false; });
   }
 
+  var RAISONS_EMAIL = {
+    missing_api_key: 'envoi d’e-mails non configuré',
+    missing_from_email: 'expéditeur non configuré',
+    missing_to_email: 'adresse client manquante',
+  };
+
+  function soumettreLivraison(form, retirer) {
+    var el = ouverte;
+    var d = donnees(el);
+    var l = (d.panneau && d.panneau.livraison) || {};
+    var date = retirer ? '' : form.elements.date.value;
+    if (!retirer && !date) { form.elements.date.focus(); return; }
+    if (!retirer && l.aujourdhui && date < l.aujourdhui) { notifier('Cette date est déjà passée.', { erreur: true }); form.elements.date.focus(); return; }
+    var prevenir = !retirer && l.emailClient && date !== l.annonceePour;
+    var question = retirer
+      ? 'Retirer la date de livraison de ' + d.number + ' ? Le client n’est pas prévenu.'
+      : (prevenir ? 'Le client de ' + d.number + ' va recevoir un e-mail : livraison prévue le ' + dateLongue(date) + '. Continuer ?' : null);
+    (question ? confirmer(question) : Promise.resolve(true)).then(function (ok) {
+      if (!ok) return;
+      var boutons = Array.prototype.slice.call(form.querySelectorAll('button'));
+      var reactiver = function () { boutons.forEach(function (b) { b.disabled = false; }); };
+      boutons.forEach(function (b) { b.disabled = true; });
+      validerEnAttente().then(function () {
+        return envoyer('/admin/commandes/' + encodeURIComponent(d.id) + '/livraison-prevue', { body: { date: date, file: fileActive } });
+      }).then(function (j) {
+        if (!j || !j.ok) { notifier((j && j.error) || 'Date non enregistrée.', { erreur: true }); reactiver(); return; }
+        var e = j.email || {};
+        var message;
+        var options;
+        if (retirer) message = d.number + ' → date de livraison retirée';
+        else if (e.envoye) message = d.number + ' → date envoyée au client par e-mail';
+        else if (e.raison === 'meme_date') message = d.number + ' → date enregistrée · déjà envoyée au client, pas de nouvel e-mail';
+        else if (e.raison === 'sans_email') message = d.number + ' → date enregistrée · pas d’e-mail client sur la commande';
+        else if (e.raison === 'en_cours') message = d.number + ' → date enregistrée · e-mail déjà en cours d’envoi';
+        else {
+          message = d.number + ' → date enregistrée, mais l’e-mail n’est PAS parti (' + (RAISONS_EMAIL[e.raison] || e.raison || 'erreur') + ')';
+          options = { erreur: true, duree: 8000 };
+        }
+        appliquerLigneAJour(el, j, message, options);
+      }).catch(function () { notifier('Réseau indisponible : date non enregistrée.', { erreur: true }); reactiver(); });
+    });
+  }
+
   function soumettreNote(form) {
     var el = ouverte;
     var d = donnees(el);
@@ -629,6 +753,7 @@
       var type = form.getAttribute('data-form');
       if (type === 'appro') soumettreAppro(form);
       else if (type === 'expedition') soumettreExpedition(form);
+      else if (type === 'livraison') soumettreLivraison(form, false);
       else if (type === 'note') soumettreNote(form);
     });
     panneauEl.addEventListener('click', function (e) {
@@ -638,6 +763,8 @@
       if (nav) { naviguerPanneau(parseInt(nav.getAttribute('data-panneau-nav'), 10)); return; }
       var act = t.closest('[data-panneau-action]');
       if (act) { actionDepuisPanneau(act.getAttribute('data-panneau-action')); return; }
+      var retirer = t.closest('[data-retirer-livraison]');
+      if (retirer) { soumettreLivraison(retirer.closest('form'), true); return; }
       var copier = t.closest('[data-copier]');
       if (copier) {
         var ref = copier.getAttribute('data-copier');
@@ -667,8 +794,20 @@
         notifier('Rien à avancer d’un clic : ces commandes demandent une décision ou une saisie (appro, étiquette, suivi).', { erreur: true, duree: 5000 });
         return;
       }
-      programmer(items, items.length + ' commande' + (items.length > 1 ? 's avancées' : ' avancée')
-        + (ignorees ? ' · ' + ignorees + ' à traiter une par une' : ''));
+      var lancer = function () {
+        programmer(items, items.length + ' commande' + (items.length > 1 ? 's avancées' : ' avancée')
+          + (ignorees ? ' · ' + ignorees + ' à traiter une par une' : ''));
+      };
+      /* En masse, un e-mail au client part pour chaque commande concernée —
+         y compris pour une vieille commande restée à la mauvaise étape. */
+      var livrees = items.filter(function (it) { return previentClient(donnees(it.el), it.action); }).length;
+      if (livrees) {
+        confirmer('Des clients vont recevoir un e-mail : ' + livrees + ' commande' + (livrees > 1 ? 's passeront' : ' passera')
+          + ' en « Livrée » (e-mail de livraison, et délai de retour de consigne compté à partir d’aujourd’hui). Continuer ?')
+          .then(function (ok) { if (ok) lancer(); });
+        return;
+      }
+      lancer();
       return;
     }
     var ids = lignes.map(function (el) { return donnees(el).id; });
@@ -781,6 +920,10 @@
       var t = e.target;
       var el = t.closest('.cmd-ligne');
       if (!el || vue !== 'active') return;
+      if (el.classList.contains('is-traitee')) {
+        if (t.closest('[data-annuler-ligne]') && enAttente && enAttente.lignes.some(function (it) { return it.el === el; })) annulerEnAttente();
+        return;
+      }
 
       var plus = t.closest('.cmd-plus');
       if (plus) {
@@ -856,7 +999,7 @@
     var mots = rechercheEl.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
     var n = 0;
     toutesLignes().forEach(function (el) {
-      if (el.classList.contains('is-sortie') || el.classList.contains('is-partie')) return;
+      if (el.classList.contains('is-sortie') || el.classList.contains('is-partie') || el.classList.contains('is-traitee')) return;
       var texte = el.getAttribute('data-recherche') || '';
       var ok = mots.every(function (m) { return texte.indexOf(m) !== -1; });
       el.hidden = !ok;
@@ -882,14 +1025,33 @@
       filtrer();
     });
   }
+  if (rechercheEl && rechercheFormEl) {
+    /* Entrée = chercher dans toutes les commandes. Le bouton d'envoi masqué
+       du formulaire suffit en principe (envoi implicite) ; on ne dépend pas
+       de cette règle du navigateur pour la fonction la plus utilisée. */
+    rechercheEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      e.preventDefault();
+      validerEnAttente().then(function () {
+        if (typeof rechercheFormEl.requestSubmit === 'function') rechercheFormEl.requestSubmit();
+        else rechercheFormEl.submit();
+      });
+    });
+  }
   if (rechercheFormEl) {
     rechercheFormEl.addEventListener('change', function (e) {
-      if (e.target.tagName === 'SELECT') validerEnAttente().then(function () { rechercheFormEl.submit(); });
+      if (e.target.tagName === 'SELECT') validerEnAttente().then(function () { rechercheFormEl.requestSubmit ? rechercheFormEl.requestSubmit() : rechercheFormEl.submit(); });
     });
+    /* Les filtres vides ne partent pas dans l'adresse (…&status=&type=…). */
+    var nettoyerFormulaire = function () {
+      rechercheFormEl.querySelectorAll('input[name], select[name]').forEach(function (c) {
+        if (c.type !== 'hidden' && !String(c.value || '').trim()) c.disabled = true;
+      });
+    };
     rechercheFormEl.addEventListener('submit', function (e) {
-      if (!enAttente) return;
+      if (!enAttente) { nettoyerFormulaire(); return; }
       e.preventDefault();
-      validerEnAttente().then(function () { rechercheFormEl.submit(); });
+      validerEnAttente().then(function () { nettoyerFormulaire(); rechercheFormEl.submit(); });
     });
   }
 

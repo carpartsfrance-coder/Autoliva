@@ -107,6 +107,10 @@
             placeholder="Rechercher : n° commande, client, réf OE, n° de suivi…" />
           <kbd class="cmd-kbd" aria-hidden="true">/</kbd>
         </label>
+        <%/* Sans bouton d'envoi, un formulaire à plusieurs champs texte ne part
+            PAS sur Entrée (règle HTML de l'envoi implicite) : la recherche dans
+            toutes les commandes ne marchait pas. Masqué à l'écran, pas au clavier. */%>
+        <button type="submit" class="sr-only">Rechercher dans toutes les commandes</button>
         <button type="button" class="cmd-bouton" id="cmdFiltresToggle" aria-expanded="<%= _nbFiltres ? 'true' : 'false' %>" aria-controls="cmdFiltres">
           <span class="ms" aria-hidden="true">tune</span>Filtres avancés<% if (_nbFiltres) { %><span class="cmd-pastille"><%= _nbFiltres %></span><% } %>
         </button>

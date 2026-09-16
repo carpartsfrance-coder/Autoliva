@@ -2493,6 +2493,12 @@ const CANAUX_COMMANDE = {
   other: { label: 'Autre', icon: 'more_horiz' },
 };
 
+/* Une date de livraison n'a plus de sens à annoncer une fois la commande
+   livrée, terminée, annulée ou remboursée. */
+function LIVRAISON_ANNONCABLE(status) {
+  return !['draft', 'delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded'].includes(status);
+}
+
 /** « 2026-09-16 » en heure de Paris, pour un <input type="date">. */
 function dateSaisie(value) {
   if (!value) return '';
@@ -2565,6 +2571,22 @@ function champsFilesCommande(o, { user = null, noteInfo = null, maintenant = new
   const s = o.sourcing || {};
   const echeanceFournisseur = sourcingStatus.dueDate({ ...s, status: s.status });
 
+  /* Date de livraison annoncée au client (≠ réception fournisseur, interne). */
+  const estimation = o.deliveryEstimate || {};
+  const notifs = o.notifications || {};
+  const dateLivraison = dateSaisie(estimation.date);
+  const annonceePour = String(notifs.deliveryEstimateSentFor || '');
+  const livraisonPertinente = LIVRAISON_ANNONCABLE(o.status);
+  let livraison = null;
+  if (livraisonPertinente && dateLivraison) {
+    const depassee = dateLivraison < dateSaisie(maintenant) && ['pending_payment', ...commandesFiles.AVANT_EXPEDITION].includes(o.status);
+    livraison = {
+      texte: depassee ? `Livraison annoncée au ${dateCourte(estimation.date)} dépassée` : `Livraison prévue le ${dateCourte(estimation.date)}`,
+      ton: depassee ? 'rouge' : 'bleu',
+      prevenu: annonceePour === dateLivraison,
+    };
+  }
+
   /* Avancement : Payée → Appro tranchée → Pièce reçue → Étiquette → Expédiée → Livrée. */
   const atteint = {
     paid: !['draft', 'pending_payment'].includes(o.status),
@@ -2621,6 +2643,7 @@ function champsFilesCommande(o, { user = null, noteInfo = null, maintenant = new
     },
     alerteAppro: commandesFiles.alerteAppro(o, maintenant),
     sousStatut,
+    livraison,
     canal,
     pieceResume: premier ? `${premier.quantity || 1} × ${premier.name}${autres > 0 ? ` + ${autres} autre${autres > 1 ? 's' : ''}` : ''}` : '—',
     reference,
@@ -2643,6 +2666,14 @@ function champsFilesCommande(o, { user = null, noteInfo = null, maintenant = new
         fournisseur: (o.purchase && o.purchase.supplier) || '',
         majLe: dateCourte(s.updatedAt),
         majPar: s.updatedBy || '',
+      },
+      livraison: {
+        pertinente: livraisonPertinente,
+        date: dateLivraison,
+        annonceePour,
+        annonceeLe: dateCourte(notifs.deliveryEstimateSentAt),
+        aujourdhui: dateSaisie(maintenant),
+        emailClient: Boolean(user && user.email),
       },
       pieces: items.map((it) => ({ qte: it.quantity || 1, nom: it.name, sku: it.sku || '' })),
       montant: total,
@@ -2994,7 +3025,19 @@ async function getAdminOrdersPage(req, res, next) {
         .map((u) => (u && u._id ? u._id : null))
         .filter(Boolean);
 
-      query.$or = [{ number: rx }];
+      /* Le champ promet « n° commande, client, réf OE, n° de suivi » : la
+         recherche serveur (Entrée) doit trouver les mêmes choses que le filtre
+         immédiat de la liste — avant, un numéro de suivi ou une référence de
+         pièce ne renvoyait rien. */
+      query.$or = [
+        { number: rx },
+        { 'invoice.number': rx },
+        { 'items.sku': rx },
+        { 'items.name': rx },
+        { 'shipments.trackingNumber': rx },
+        { 'shippingAddress.fullName': rx },
+        { 'shippingAddress.phone': rx },
+      ];
       if (userIds.length) {
         query.$or.push({ userId: { $in: userIds } });
       }
@@ -3249,7 +3292,9 @@ async function postAdminAvancerCommande(req, res) {
     }
     if (apres.status !== order.status) {
       const changedBy = req.session && req.session.admin && req.session.admin.email ? String(req.session.admin.email) : 'admin';
-      await appliquerStatutCommande(orderId, apres.status, { changedBy });
+      /* Passer « En préparation » depuis la liste n'écrit pas au client (voir
+         appliquerStatutCommande). La livraison, elle, le prévient toujours. */
+      await appliquerStatutCommande(orderId, apres.status, { changedBy, notifierClient: apres.status !== 'processing' });
     }
 
     const [ligne, filesEtat] = await Promise.all([chargerLigneCommande(orderId, maintenant), chargerFilesCommandes(maintenant)]);
@@ -3289,6 +3334,112 @@ async function getAdminOrderRow(req, res) {
   } catch (err) {
     console.error('[admin] getAdminOrderRow:', err && err.message ? err.message : err);
     return res.status(500).json({ ok: false, error: 'Erreur serveur.' });
+  }
+}
+
+/**
+ * POST /admin/commandes/:orderId/livraison-prevue — { date: 'AAAA-MM-JJ' | '', file }
+ *
+ * Date de livraison ANNONCÉE AU CLIENT. Chaque date nouvelle part au client
+ * par e-mail ; la même date enregistrée deux fois n'écrit pas deux fois
+ * (notifications.deliveryEstimateSentFor). Une date vide retire la date, sans
+ * rien envoyer.
+ *
+ * L'envoi est RÉSERVÉ avant d'appeler le fournisseur d'e-mails : un double
+ * clic, ou deux personnes sur la même commande, n'envoient qu'un e-mail. Si
+ * l'envoi échoue, la réservation est rendue, pour qu'un nouvel essai reparte.
+ */
+async function postAdminDeliveryEstimate(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'Base indisponible.' });
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+
+    const b = req.body || {};
+    const fileActive = commandesFiles.IDS_FILES.includes(b.file) ? b.file : 'all';
+    const date = typeof b.date === 'string' ? b.date.trim() : '';
+    const maintenant = new Date();
+    const aujourdhui = dateSaisie(maintenant);
+
+    if (date) {
+      const jour = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T12:00:00Z`) : null;
+      if (!jour || Number.isNaN(jour.getTime()) || jour.toISOString().slice(0, 10) !== date) {
+        return res.status(400).json({ ok: false, error: 'Date invalide.' });
+      }
+      if (date < aujourdhui) return res.status(400).json({ ok: false, error: 'Cette date est déjà passée.' });
+      if (jour.getTime() - maintenant.getTime() > 366 * 86400000) return res.status(400).json({ ok: false, error: 'Date à plus d’un an : vérifie l’année.' });
+    }
+
+    const order = await Order.findById(orderId)
+      .select('_id number status userId lang items deletedAt deliveryEstimate notifications.deliveryEstimateSentFor')
+      .lean();
+    if (!order || order.deletedAt) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+    if (!LIVRAISON_ANNONCABLE(order.status)) {
+      return res.status(422).json({ ok: false, code: 'statut', error: `${order.number} — commande ${getOrderStatusBadge(order.status).label.toLowerCase()} : plus de date de livraison à annoncer.` });
+    }
+
+    const adminName = nomAdminPourAppro(req);
+    await Order.updateOne({ _id: order._id }, {
+      $set: {
+        'deliveryEstimate.date': date ? new Date(`${date}T12:00:00Z`) : null,
+        'deliveryEstimate.updatedAt': maintenant,
+        'deliveryEstimate.updatedBy': adminName,
+      },
+    });
+
+    const dejaAnnoncee = String((order.notifications && order.notifications.deliveryEstimateSentFor) || '');
+    let email = { envoye: false, raison: date ? 'meme_date' : 'date_retiree' };
+    if (date && date !== dejaAnnoncee) {
+      const reserve = await Order.findOneAndUpdate(
+        { _id: order._id, 'notifications.deliveryEstimateSentFor': dejaAnnoncee ? dejaAnnoncee : { $in: ['', null] } },
+        { $set: { 'notifications.deliveryEstimateSentFor': date } },
+        { projection: { _id: 1 } },
+      ).lean();
+      const rendre = () => Order.updateOne(
+        { _id: order._id, 'notifications.deliveryEstimateSentFor': date },
+        { $set: { 'notifications.deliveryEstimateSentFor': dejaAnnoncee } },
+      );
+
+      if (!reserve) {
+        email = { envoye: false, raison: 'en_cours' };
+      } else {
+        const user = order.userId && mongoose.Types.ObjectId.isValid(String(order.userId))
+          ? await User.findById(order.userId).select('_id email firstName lang').lean()
+          : null;
+        if (!user || !user.email) {
+          await rendre();
+          email = { envoye: false, raison: 'sans_email' };
+        } else {
+          let sent = null;
+          try {
+            sent = await emailService.sendDeliveryEstimateEmail({ order, user, date, changement: Boolean(dejaAnnoncee) });
+          } catch (err) {
+            sent = { ok: false, reason: err && err.message ? err.message : 'exception' };
+          }
+          await emailService.logEmailSent({ orderId: order._id, emailType: 'delivery_estimate', recipientEmail: user.email, result: sent });
+          if (sent && sent.ok) {
+            await Order.updateOne({ _id: order._id }, { $set: { 'notifications.deliveryEstimateSentAt': new Date() } });
+            email = { envoye: true, destinataire: user.email, changement: Boolean(dejaAnnoncee) };
+          } else {
+            await rendre();
+            email = { envoye: false, raison: (sent && sent.reason) || 'echec' };
+          }
+        }
+      }
+    }
+
+    const [ligne, filesEtat] = await Promise.all([chargerLigneCommande(orderId, maintenant), chargerFilesCommandes(maintenant)]);
+    return res.json({
+      ok: true,
+      date,
+      email,
+      ligne: { html: await rendreLigneCommande(res, ligne, { fileActive }), files: ligne.files },
+      compteurs: filesEtat.compteurs,
+      resume: filesEtat.resume,
+    });
+  } catch (err) {
+    console.error('[admin] postAdminDeliveryEstimate:', err && err.message ? err.message : err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur : recharge la page avant de réessayer.' });
   }
 }
 
@@ -3887,6 +4038,8 @@ async function getAdminOrderDetailPage(req, res, next) {
                 consigne_reminder_soon: 'Rappel consigne',
                 consigne_overdue: 'Consigne en retard',
                 status_change_validee: 'Statut : Validée',
+                status_change: 'Changement de statut',
+                delivery_estimate: 'Date de livraison annoncée',
               };
               return {
                 type: e.type || '',
@@ -3937,11 +4090,19 @@ async function getAdminOrderDetailPage(req, res, next) {
  *
  * Partagé par le formulaire de la fiche (postAdminUpdateOrderStatus) et les
  * actions en un clic de la liste (postAdminAvancerCommande) : un changement de
- * statut produit les mêmes effets, d'où qu'il vienne.
+ * statut produit les mêmes effets, d'où qu'il vienne — sauf le message
+ * « commande validée », voir `notifierClient`.
+ *
+ * `notifierClient: false` n'envoie pas l'e-mail ni le SMS « commande validée »
+ * du passage en payée / en préparation. La liste s'en sert : pour elle, « En
+ * préparation » n'est qu'une étape interne (appro tranchée), franchie sur
+ * CHAQUE commande — le client a déjà sa confirmation de commande au paiement
+ * (159 envoyées en 90 jours) ; ce second message n'était parti que 3 fois en
+ * 90 jours avant la liste, et serait devenu systématique.
  *
  * @returns {Promise<{ changed: boolean, existing: object|null }>}
  */
-async function appliquerStatutCommande(orderId, status, { changedBy = 'admin' } = {}) {
+async function appliquerStatutCommande(orderId, status, { changedBy = 'admin', notifierClient = true } = {}) {
   const existing = await Order.findById(orderId)
     .select('_id number userId status items consigne notifications')
     .lean();
@@ -4012,29 +4173,31 @@ async function appliquerStatutCommande(orderId, status, { changedBy = 'admin' } 
     await sendDeliveredNotifications(orderId);
   } else if (status === 'paid' || status === 'processing') {
     // Send status change notification for paid/processing orders
-    try {
-      const user = existing && existing.userId
-        ? await User.findById(existing.userId).select('_id email firstName').lean()
-        : null;
+    if (notifierClient) {
+      try {
+        const user = existing && existing.userId
+          ? await User.findById(existing.userId).select('_id email firstName').lean()
+          : null;
 
-      if (user && user.email) {
-        const sent = await emailService.sendOrderStatusChangeEmail({
-          order: existing,
-          user,
-          newStatus: status,
-          message: 'Votre commande a été validée et va être préparée dans les meilleurs délais.',
-        });
-        emailService.logEmailSent({ orderId: existing._id, emailType: 'status_change', recipientEmail: user.email, result: sent });
-        smsService.sendOrderStatusChangeSms({ order: existing, user, newStatus: status }).catch(() => {});
-        if (sent && sent.ok) {
-          await Order.updateOne(
-            { _id: existing._id },
-            { $set: { 'notifications.statusChangeSentAt': new Date() } }
-          );
+        if (user && user.email) {
+          const sent = await emailService.sendOrderStatusChangeEmail({
+            order: existing,
+            user,
+            newStatus: status,
+            message: 'Votre commande a été validée et va être préparée dans les meilleurs délais.',
+          });
+          emailService.logEmailSent({ orderId: existing._id, emailType: 'status_change', recipientEmail: user.email, result: sent });
+          smsService.sendOrderStatusChangeSms({ order: existing, user, newStatus: status }).catch(() => {});
+          if (sent && sent.ok) {
+            await Order.updateOne(
+              { _id: existing._id },
+              { $set: { 'notifications.statusChangeSentAt': new Date() } }
+            );
+          }
         }
+      } catch (err) {
+        console.error('Erreur email changement statut (admin) :', err && err.message ? err.message : err);
       }
-    } catch (err) {
-      console.error('Erreur email changement statut (admin) :', err && err.message ? err.message : err);
     }
 
     /* Rapprochement leads : commande passée « payée » À LA MAIN (virement,
@@ -13453,6 +13616,7 @@ module.exports = {
   postAdminUpdateOrderSourcing,
   postAdminAvancerCommande,
   getAdminOrderRow,
+  postAdminDeliveryEstimate,
   postAdminBulkTrashOrders,
   getAdminOrdersLabelsPdf,
   postAdminUpdateOrderVatScheme,
