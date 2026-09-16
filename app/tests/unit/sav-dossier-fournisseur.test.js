@@ -79,3 +79,31 @@ test('lien public : signature exigée, facture jamais accessible', () => {
   assert.equal(dossier.fileSharedWithSupplier(t, 'bbbbbbbbbbbbbbbbbbbbbbbb', h), false);
   assert.equal(dossier.fileSharedWithSupplier(t, 'aaaaaaaaaaaaaaaaaaaaaaaa', 'faux'), false);
 });
+
+test('description client : signature, téléphone et e-mail retirés, références techniques gardées', () => {
+  const t = ticket({ client: { nom: 'Hüseyin KERSIN', email: 'h.kersin@example.com', telephone: '+33612252190' } });
+  const texte = [
+    'Commande CP2026-000464 du 13 juillet 2026, mécatronique 0AM 325 025, VIN WVWZZZAUZFW522663, 129590 km.',
+    'Codes : P1895 00, P073C 00.',
+    'Cordialement,',
+    'Hüseyin KERSIN',
+    '06 12 25 21 90 / +33 6 12 25 21 90 / 0612252190 / +34 612 345 678',
+    'h.kersin@example.com',
+  ].join('\n');
+  const out = dossier.scrubPersonal(texte, t);
+  ['CP2026-000464', '13 juillet 2026', '0AM 325 025', 'WVWZZZAUZFW522663', '129590 km', 'P1895 00', 'P073C 00'].forEach((garde) => {
+    assert.ok(out.includes(garde), `« ${garde} » doit rester`);
+  });
+  assert.doesNotMatch(out, /Hüseyin|KERSIN|kersin|example\.com|06 12 25|0612252190|\+33|\+34/);
+});
+
+test('le PDF et le message n’utilisent que la description nettoyée', () => {
+  const t = ticket({
+    client: { nom: 'Jean Dupont', email: 'jean@example.com', telephone: '0600000000' },
+    diagnostic: { codesDefaut: [], description: 'Boîte en mode dégradé.\nJean Dupont\n06 00 00 00 00' },
+    fournisseur: {},
+  });
+  const s = dossier.summary(t, null);
+  assert.doesNotMatch(s.description, /Jean|Dupont|06 00/);
+  assert.match(s.description, /mode dégradé/);
+});

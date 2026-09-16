@@ -166,8 +166,32 @@ function fmtKm(km) {
   return Number.isFinite(n) && n > 0 ? `${n.toLocaleString('en-GB')} km` : '';
 }
 
+// Le préfixe de version invalide les traductions faites avant le retrait des
+// données personnelles (elles contenaient la signature du client).
 function descriptionHash(text) {
-  return crypto.createHash('sha1').update(clean(text)).digest('hex');
+  return crypto.createHash('sha1').update(`v2|${clean(text)}`).digest('hex');
+}
+
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// La description est un texte libre : les clients la signent souvent (nom,
+// téléphone, e-mail). Rien de cela ne doit partir chez le fournisseur.
+function scrubPersonal(text, ticket) {
+  let out = String(text || '');
+  const c = (ticket && ticket.client) || {};
+  out = out.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '');
+  // Téléphones : français (06 12 34 56 78, +33 6…, 0033…) et internationaux (+34 612…).
+  out = out.replace(/(?<![\w+])(?:(?:\+|00)33[\s.-]?(?:\(0\)[\s.-]?)?|0)[1-9](?:[\s.-]?\d{2}){4}(?!\d)/g, '');
+  out = out.replace(/(?<![\w+])\+\d{2,3}(?:[\s.-]?\d{2,4}){3,5}(?!\d)/g, '');
+  const known = [c.telephone].filter(Boolean).map((t) => String(t).trim()).filter((t) => t.length >= 6);
+  known.forEach((t) => { out = out.split(t).join(''); });
+  const names = [c.nom, c.prenom].filter(Boolean).join(' ').split(/\s+/).filter((w) => w.length >= 3);
+  names.forEach((w) => {
+    out = out.replace(new RegExp(`(?<![\\p{L}])${escapeRegex(w)}(?![\\p{L}])`, 'giu'), '');
+  });
+  return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
 }
 
 // Faits du dossier, en anglais, partagés par le message et le PDF.
@@ -177,8 +201,8 @@ function summary(ticket, order, descriptionEn) {
   const d = ticket.diagnostic || {};
   const f = ticket.fournisseur || {};
   const rawDescription = clean(d.description);
-  const translated = descriptionEn
-    || (f.descriptionEn && f.descriptionEnSource === descriptionHash(rawDescription) ? f.descriptionEn : '');
+  const translated = scrubPersonal(descriptionEn
+    || (f.descriptionEn && f.descriptionEnSource === descriptionHash(rawDescription) ? f.descriptionEn : ''), ticket);
   const items = order && Array.isArray(order.items)
     ? order.items.map((it) => clean([it.name, it.sku ? `(${it.sku})` : ''].filter(Boolean).join(' '))).filter(Boolean)
     : [];
@@ -200,7 +224,7 @@ function summary(ticket, order, descriptionEn) {
     failureWhen: MOMENT_EN[m.momentPanne] || clean(m.momentPanne),
     symptoms: (d.symptomes || []).map((s) => SYMPTOM_EN[s] || clean(s)).filter(Boolean),
     faultCodes: (d.codesDefaut || []).map(clean).filter(Boolean),
-    description: translated || rawDescription,
+    description: translated || scrubPersonal(rawDescription, ticket),
     descriptionIsTranslated: !!translated,
   };
 }
@@ -279,9 +303,10 @@ function buildMessageEn(ticket, order, link) {
 // Traduction de la description client (OpenAI, facultative)
 // ---------------------------------------------------------------------------
 
-async function translateToEnglish(text) {
+async function translateToEnglish(text, ticket) {
   const apiKey = (process.env.OPENAI_API_KEY || '').trim();
-  const source = clean(text).slice(0, 4000);
+  // Les données personnelles sont retirées AVANT l'envoi à la traduction.
+  const source = scrubPersonal(clean(text), ticket).slice(0, 4000);
   if (!apiKey || !source) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
@@ -296,7 +321,7 @@ async function translateToEnglish(text) {
         messages: [
           {
             role: 'system',
-            content: 'Translate the French text written by a customer about a faulty car part into clear, plain English for a parts supplier. Keep fault codes, part numbers, order numbers, dates and figures exactly as written. Output only the translation, without any comment.',
+            content: 'Translate the French text written by a customer about a faulty car part into clear, plain English for a parts supplier. Keep fault codes, part numbers, order numbers, dates and figures exactly as written. Leave out the customer\'s signature, name, phone number, e-mail and postal address. Output only the translation, without any comment.',
           },
           { role: 'user', content: source },
         ],
@@ -322,7 +347,7 @@ async function ensureTranslation(ticket) {
   const hash = descriptionHash(raw);
   const f = ticket.fournisseur || {};
   if (f.descriptionEn && f.descriptionEnSource === hash) return false;
-  const translated = await translateToEnglish(raw);
+  const translated = await translateToEnglish(raw, ticket);
   if (!translated) return false;
   ticket.fournisseur = ticket.fournisseur || {};
   ticket.fournisseur.descriptionEn = translated;
@@ -495,6 +520,7 @@ function fileSharedWithSupplier(ticket, fileId, token) {
 
 module.exports = {
   ROLES,
+  scrubPersonal,
   signature,
   verifySignature,
   pdfPath,
