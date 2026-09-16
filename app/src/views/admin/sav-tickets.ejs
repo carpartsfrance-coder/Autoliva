@@ -45,7 +45,7 @@
         <div class="sav-mini-kpi__icon bg-red-100 text-red-700"><span class="material-symbols-outlined text-base">warning</span></div>
         <div><div class="sav-mini-kpi__value" data-mini-kpi="slaDepasse">—</div><div class="sav-mini-kpi__label">SLA dépassé</div></div>
       </button>
-      <button type="button" data-mini-kpi-filter="awaitingClient=true&sort=attente&dir=asc" class="sav-mini-kpi" title="Tickets où le client a écrit après notre dernière réponse — à toi de jouer. Le plus ancien en premier.">
+      <button type="button" data-mini-kpi-filter="awaitingClient=true" class="sav-mini-kpi" title="Tickets où le client a écrit après notre dernière réponse — à toi de jouer. Le plus récent en premier.">
         <div class="sav-mini-kpi__icon bg-rose-100 text-rose-700"><span class="material-symbols-outlined text-base">mark_unread_chat_alt</span></div>
         <div><div class="sav-mini-kpi__value" data-mini-kpi="awaitingClient">—</div><div class="sav-mini-kpi__label">Client a répondu</div></div>
       </button>
@@ -363,5 +363,5 @@
 </div>
 
 <script src="/js/sav-labels.js?v=5" defer></script>
-<script src="/js/sav-admin.js?v=41" defer></script>
+<script src="/js/sav-admin.js?v=42" defer></script>
 <%- include('./partials/footer') %>

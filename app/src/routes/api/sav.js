@@ -583,6 +583,35 @@ adminRouter.get('/tickets', async (req, res) => {
       });
     }
 
+    // Tri « réponses en haut » : d'abord les tickets où le client a écrit après notre
+    // dernière réponse (ouverts), le message le plus récent en premier ; ensuite le reste
+    // par activité client puis date d'ouverture.
+    if (sortField === 'reponse') {
+      const [tickets, total] = await Promise.all([
+        SavTicket.aggregate([
+          // aggregate ne convertit pas les types comme find (ex. assignedToUserId → ObjectId)
+          { $match: SavTicket.find(q).cast(SavTicket) },
+          { $addFields: {
+            _clientARepondu: { $cond: [{ $and: [
+              { $ne: [{ $ifNull: ['$lastClientMessageAt', null] }, null] },
+              { $or: [
+                { $eq: [{ $ifNull: ['$lastAdminMessageAt', null] }, null] },
+                { $gt: ['$lastClientMessageAt', '$lastAdminMessageAt'] },
+              ] },
+              { $not: { $in: ['$statut', TERMINAL_STATUTS] } },
+            ] }, 1, 0] },
+          } },
+          { $sort: { _clientARepondu: -1, lastClientMessageAt: -1, createdAt: -1, _id: -1 } },
+          { $skip: skip },
+          { $limit: perPage },
+          { $project: { _clientARepondu: 0 } },
+        ]),
+        SavTicket.countDocuments(q),
+      ]);
+      if (req.query.lite === '1') toListItems(tickets);
+      return ok(res, { count: tickets.length, total, page, perPage, totalPages: Math.ceil(total / perPage), tickets });
+    }
+
     const sort = { [sortMap[sortField] || 'createdAt']: sortDir };
     const [tickets, total] = await Promise.all([
       SavTicket.find(q).sort(sort).skip(skip).limit(perPage).lean(),
