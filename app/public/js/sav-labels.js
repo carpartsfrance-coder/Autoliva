@@ -81,6 +81,7 @@
   var KANBAN_COLUMNS = [
     { key: 'nouveau', label: 'Nouveau', statuts: ['ouvert', 'pre_qualification'] },
     { key: 'docs', label: 'Attente docs', statuts: ['en_attente_documents', 'relance_1', 'relance_2'] },
+    { key: 'logistique', label: 'Transporteur / Rétractation', statuts: ['reserve_transporteur', 'enquete_transporteur', 'retractation_recue', 'remboursement_initie'] },
     { key: 'retour', label: 'Retour / Transit', statuts: ['retour_demande', 'en_transit_retour'] },
     { key: 'atelier', label: 'Reçu atelier', statuts: ['recu_atelier'] },
     { key: 'analyse', label: 'En analyse', statuts: ['en_analyse', 'analyse_terminee'] },

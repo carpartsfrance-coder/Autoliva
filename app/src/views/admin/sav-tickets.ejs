@@ -1,5 +1,5 @@
 <%- include('./partials/head') %>
-<link rel="stylesheet" href="/css/sav.css?v=22">
+<link rel="stylesheet" href="/css/sav.css?v=33">
 <%- include('./partials/sidebar', { active: 'sav' }) %>
 
 <main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>" data-current-user-id="<%= (typeof currentAdmin !== 'undefined' && currentAdmin && currentAdmin.adminUserId) || '' %>">
@@ -8,7 +8,7 @@
     <div class="flex items-start justify-between gap-4 mb-4">
       <div>
         <div class="text-2xl md:text-3xl font-semibold text-slate-900">Tickets SAV</div>
-        <div class="mt-1 text-xs text-slate-500">Raccourcis : <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">j</kbd>/<kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">k</kbd> nav · <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">↵</kbd> ouvrir · <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">/</kbd> recherche · <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">?</kbd> aide</div>
+        <div class="mt-1 text-xs text-slate-500">Raccourcis : <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">j</kbd>/<kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">k</kbd> nav · <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">↵</kbd> ouvrir · <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">⌘ clic</kbd> nouvel onglet · <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">/</kbd> recherche · <kbd class="px-1.5 py-0.5 rounded border border-slate-300 bg-slate-50">?</kbd> aide</div>
       </div>
       <div class="flex items-center gap-2">
         <button type="button" id="sav-new-ticket-btn" class="btn btn-primary">
@@ -29,7 +29,7 @@
         <div class="sav-mini-kpi__icon bg-slate-100 text-slate-600"><span class="material-symbols-outlined text-base">list_alt</span></div>
         <div><div class="sav-mini-kpi__value" data-mini-kpi="total">—</div><div class="sav-mini-kpi__label">Total</div></div>
       </button>
-      <button type="button" data-mini-kpi-filter="statut=ouvert,pre_qualification,recu_atelier,en_analyse,analyse_terminee,en_transit_retour" class="sav-mini-kpi">
+      <button type="button" data-mini-kpi-filter="statut=ouvert,pre_qualification,en_attente_documents,relance_1,relance_2,retour_demande,en_transit_retour,recu_atelier,en_analyse,analyse_terminee,en_attente_decision_client,en_attente_fournisseur,reserve_transporteur,enquete_transporteur,retractation_recue,remboursement_initie" class="sav-mini-kpi">
         <div class="sav-mini-kpi__icon bg-sky-100 text-sky-700"><span class="material-symbols-outlined text-base">inbox</span></div>
         <div><div class="sav-mini-kpi__value" data-mini-kpi="ouverts">—</div><div class="sav-mini-kpi__label">Ouverts</div></div>
       </button>
@@ -45,7 +45,7 @@
         <div class="sav-mini-kpi__icon bg-red-100 text-red-700"><span class="material-symbols-outlined text-base">warning</span></div>
         <div><div class="sav-mini-kpi__value" data-mini-kpi="slaDepasse">—</div><div class="sav-mini-kpi__label">SLA dépassé</div></div>
       </button>
-      <button type="button" data-mini-kpi-filter="awaitingClient=true" class="sav-mini-kpi" title="Tickets où le client a écrit après notre dernière réponse — à toi de jouer">
+      <button type="button" data-mini-kpi-filter="awaitingClient=true&sort=attente&dir=asc" class="sav-mini-kpi" title="Tickets où le client a écrit après notre dernière réponse — à toi de jouer. Le plus ancien en premier.">
         <div class="sav-mini-kpi__icon bg-rose-100 text-rose-700"><span class="material-symbols-outlined text-base">mark_unread_chat_alt</span></div>
         <div><div class="sav-mini-kpi__value" data-mini-kpi="awaitingClient">—</div><div class="sav-mini-kpi__label">Client a répondu</div></div>
       </button>
@@ -83,7 +83,6 @@
     <form id="sav-filters" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 mb-4">
       <input type="hidden" name="awaitingClient">
       <input type="hidden" name="waitingForClient">
-      <input type="hidden" name="sla_depasse">
       <div class="lg:col-span-2 relative">
         <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base">search</span>
         <input id="sav-search" type="text" name="search" placeholder="N°, email, VIN, plaque…" autocomplete="off"
@@ -103,6 +102,8 @@
             relance_1:'Relance 1', relance_2:'Relance 2', retour_demande:'Retour demandé', en_transit_retour:'En transit retour',
             recu_atelier:'Reçu atelier', en_analyse:'En analyse', analyse_terminee:'Analyse terminée',
             en_attente_decision_client:'Attente décision client', en_attente_fournisseur:'Attente fournisseur',
+            reserve_transporteur:'Réserve transporteur', enquete_transporteur:'Enquête transporteur',
+            retractation_recue:'Rétractation reçue', remboursement_initie:'Remboursement initié',
             resolu_garantie:'Résolu (garantie)', resolu_facture:'Résolu (facturé)', clos:'Clôturé',
             clos_sans_reponse:'Clos (sans réponse)', refuse:'Refusé'
           }; Object.keys(STATUT_LIST_FR).forEach(function(s){ %>
@@ -352,6 +353,7 @@
     <ul class="text-sm space-y-2">
       <li class="flex justify-between"><span>Naviguer dans la liste</span><span><kbd class="px-2 py-0.5 rounded border bg-slate-50">j</kbd> / <kbd class="px-2 py-0.5 rounded border bg-slate-50">k</kbd></span></li>
       <li class="flex justify-between"><span>Ouvrir le ticket sélectionné</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">↵</kbd></li>
+      <li class="flex justify-between"><span>L'ouvrir dans un nouvel onglet</span><span><kbd class="px-2 py-0.5 rounded border bg-slate-50">⌘↵</kbd> ou <kbd class="px-2 py-0.5 rounded border bg-slate-50">o</kbd></span></li>
       <li class="flex justify-between"><span>Focus recherche</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">/</kbd></li>
       <li class="flex justify-between"><span>Cette aide</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">?</kbd></li>
       <li class="flex justify-between"><span>Cocher / décocher la ligne</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">x</kbd></li>
@@ -360,6 +362,6 @@
   </div>
 </div>
 
-<script src="/js/sav-labels.js?v=3" defer></script>
-<script src="/js/sav-admin.js?v=20" defer></script>
+<script src="/js/sav-labels.js?v=5" defer></script>
+<script src="/js/sav-admin.js?v=41" defer></script>
 <%- include('./partials/footer') %>

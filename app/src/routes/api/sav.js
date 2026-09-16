@@ -416,6 +416,28 @@ publicRouter.post('/tickets/:numero/messages', async (req, res) => {
 const adminRouter = express.Router();
 adminRouter.use(requireAdminToken);
 
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Allège une ligne de liste : on remplace le fil complet par le dernier message
+// du client (ce qu'il faut lire pour décider), le reste du fil n'est utile qu'en fiche.
+function toListItems(tickets) {
+  tickets.forEach((t) => {
+    const msgs = Array.isArray(t.messages) ? t.messages : [];
+    let last = null;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i] && msgs[i].auteur === 'client' && msgs[i].canal !== 'interne') { last = msgs[i]; break; }
+    }
+    if (last) {
+      const txt = String(last.contenu || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      t.lastClientMessage = { extrait: txt.length > 180 ? txt.slice(0, 177) + '…' : txt, date: last.date };
+    }
+    delete t.messages;
+  });
+  return tickets;
+}
+
 // GET /admin/api/sav/tickets — liste filtrable, paginée, triée
 adminRouter.get('/tickets', async (req, res) => {
   try {
@@ -492,16 +514,22 @@ adminRouter.get('/tickets', async (req, res) => {
     if (req.query.search) {
       const s = String(req.query.search).trim();
       if (s) {
+        // Échappé : « +33 6… » ou une parenthèse faisaient planter la recherche (regex invalide).
+        const re = new RegExp(escapeRegex(s), 'i');
         q.$or = [
-          { numero: new RegExp(s, 'i') },
-          { 'client.email': new RegExp(s, 'i') },
-          { 'client.nom': new RegExp(s, 'i') },
-          { 'vehicule.vin': new RegExp(s, 'i') },
-          { 'messages.contenu': new RegExp(s, 'i') },
-          { 'diagnostic.description': new RegExp(s, 'i') },
-          { 'vehicule.immatriculation': new RegExp(s, 'i') },
-          { numeroCommande: new RegExp(s, 'i') },
+          { numero: re },
+          { 'client.email': re },
+          { 'client.nom': re },
+          { 'client.telephone': re },
+          { 'vehicule.vin': re },
+          { 'messages.contenu': re },
+          { 'diagnostic.description': re },
+          { 'vehicule.immatriculation': re },
+          { numeroCommande: re },
         ];
+        // Le téléphone est saisi avec ou sans espaces : on cherche aussi la version compacte.
+        const digits = s.replace(/[\s.\-()]/g, '');
+        if (/^\+?\d{6,}$/.test(digits) && digits !== s) q.$or.push({ 'client.telephone': new RegExp(escapeRegex(digits), 'i') });
       }
     }
 
@@ -521,6 +549,7 @@ adminRouter.get('/tickets', async (req, res) => {
       sla: 'sla.dateLimite',
       createdAt: 'createdAt',
       assignedTo: 'assignedToName',
+      attente: 'lastClientMessageAt',
     };
 
     // Pagination
@@ -545,6 +574,7 @@ adminRouter.get('/tickets', async (req, res) => {
       // Enrichit chaque ticket avec l'explain score pour debug UI
       sorted.forEach((t) => { t._priorityExplain = priority.explainScore(t); });
       const sliced = sorted.slice(skip, skip + perPage);
+      if (req.query.lite === '1') toListItems(sliced);
       return ok(res, {
         count: sliced.length, total, page, perPage,
         totalPages: Math.ceil(total / perPage),
@@ -558,6 +588,7 @@ adminRouter.get('/tickets', async (req, res) => {
       SavTicket.find(q).sort(sort).skip(skip).limit(perPage).lean(),
       SavTicket.countDocuments(q),
     ]);
+    if (req.query.lite === '1') toListItems(tickets);
     return ok(res, { count: tickets.length, total, page, perPage, totalPages: Math.ceil(total / perPage), tickets });
   } catch (err) {
     return fail(res, err.message, 500);
@@ -2381,8 +2412,17 @@ adminRouter.get('/dashboard', async (req, res) => {
       'analyse_terminee',
       'en_attente_decision_client',
       'en_attente_fournisseur',
+      // Flux logistique / commercial : ils étaient absents, ~40 % des tickets ouverts
+      // n'apparaissaient donc dans aucun compteur.
+      'reserve_transporteur',
+      'enquete_transporteur',
+      'retractation_recue',
+      'remboursement_initie',
     ];
     const STATUTS_CLOS = ['clos', 'refuse', 'resolu_garantie', 'resolu_facture', 'clos_sans_reponse'];
+    // Les compteurs de la liste doivent tomber sur le même nombre que le filtre
+    // qu'ils appliquent au clic, or la liste masque les archivés.
+    const NON_ARCHIVE = { archivedAt: { $in: [null, undefined] } };
 
     const [
       ouverts,
@@ -2397,13 +2437,17 @@ adminRouter.get('/dashboard', async (req, res) => {
       tousResolus,
       awaitingClient,
       waitingForClient,
+      totalListe,
+      enAttenteClient,
+      enAttenteFournisseur,
     ] = await Promise.all([
-      SavTicket.countDocuments({ statut: { $in: STATUTS_ACTIFS } }),
+      SavTicket.countDocuments({ statut: { $in: STATUTS_ACTIFS }, ...NON_ARCHIVE }),
       SavTicket.countDocuments({ statut: { $in: ['en_attente_documents', 'relance_1', 'relance_2'] } }),
       SavTicket.countDocuments({ statut: 'en_analyse' }),
       SavTicket.countDocuments({
         statut: { $in: STATUTS_ACTIFS },
         'sla.dateLimite': { $lt: now },
+        ...NON_ARCHIVE,
       }),
       SavTicket.countDocuments({ 'analyse.conclusion': { $exists: true, $ne: null } }),
       SavTicket.countDocuments({ 'analyse.conclusion': 'defaut_produit' }),
@@ -2416,6 +2460,7 @@ adminRouter.get('/dashboard', async (req, res) => {
         .lean(),
       // État conversation — logique unifiée timeline messages (voir GET /tickets).
       SavTicket.countDocuments({
+        ...NON_ARCHIVE,
         $expr: {
           $and: [
             { $ne: ['$lastClientMessageAt', null] },
@@ -2428,6 +2473,7 @@ adminRouter.get('/dashboard', async (req, res) => {
         },
       }),
       SavTicket.countDocuments({
+        ...NON_ARCHIVE,
         $expr: {
           $and: [
             { $ne: ['$lastAdminMessageAt', null] },
@@ -2439,6 +2485,9 @@ adminRouter.get('/dashboard', async (req, res) => {
           ],
         },
       }),
+      SavTicket.countDocuments(NON_ARCHIVE),
+      SavTicket.countDocuments({ statut: { $in: ['en_attente_decision_client', 'en_attente_documents', 'relance_1', 'relance_2'] }, ...NON_ARCHIVE }),
+      SavTicket.countDocuments({ statut: 'en_attente_fournisseur', ...NON_ARCHIVE }),
     ]);
 
     // Temps moyen de résolution (jours) sur les tickets clos cette année
@@ -2501,7 +2550,7 @@ adminRouter.get('/dashboard', async (req, res) => {
 
     // Compteurs par équipe (tickets actifs)
     const byTeamAgg = await SavTicket.aggregate([
-      { $match: { statut: { $in: STATUTS_ACTIFS } } },
+      { $match: { statut: { $in: STATUTS_ACTIFS }, ...NON_ARCHIVE } },
       { $group: { _id: '$assignedTeam', count: { $sum: 1 } } },
     ]);
     const by_team = { atelier: 0, logistique: 0, commercial: 0, compta: 0, sav_general: 0 };
@@ -2529,6 +2578,10 @@ adminRouter.get('/dashboard', async (req, res) => {
       mes_tickets: mesTickets || 0,
       awaiting_client: awaitingClient || 0,
       waiting_for_client: waitingForClient || 0,
+      total_liste: totalListe || 0,
+      en_attente_client: enAttenteClient || 0,
+      en_attente_fournisseur: enAttenteFournisseur || 0,
+      statuts_actifs: STATUTS_ACTIFS,
       by_team,
       by_motif,
       chart: { labels, ouverts: ouvertsArr, clos: closArr },

@@ -2985,3 +2985,22 @@ main.sav-module {
 .sav-sla-badge--danger .material-symbols-outlined {
   animation: sav-pulse 1.6s ease-in-out infinite;
 }
+
+/* Liste tickets — traitement rapide */
+.sav-mini-kpi--active { border-color: var(--color-primary, #2563eb); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25); }
+.sav-row-link { color: inherit; text-decoration: none; }
+.sav-row-link:hover { text-decoration: underline; }
+.sav-row-excerpt {
+  margin-top: 4px; max-width: 340px; font-size: 11px; line-height: 1.35; color: #334155;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  border-left: 2px solid #fda4af; padding-left: 6px;
+}
+.sav-row-excerpt__age { font-weight: 600; color: #be123c; }
+.sav-queue-nav { display: inline-flex; align-items: center; gap: 2px; }
+.sav-queue-nav a, .sav-queue-nav span.sav-queue-nav__btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border-radius: 8px; color: #64748b; text-decoration: none;
+}
+.sav-queue-nav a:hover { background: #f1f5f9; color: #0f172a; }
+.sav-queue-nav span.sav-queue-nav__btn { opacity: 0.35; }
+.sav-queue-nav__pos { font-size: 11px; color: #64748b; padding: 0 4px; font-variant-numeric: tabular-nums; }
