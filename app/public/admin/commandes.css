@@ -602,6 +602,7 @@ kbd, .cmd-kbd {
 .cmd-sous.is-bleu { color: #1D4ED8; }
 .cmd-sous.is-violet { color: #6D28D9; }
 .cmd-sous.is-rouge { color: #B91C1C; }
+.cmd-sous .cmd-non-prevenu { color: #B45309; font-weight: 600; }
 
 /* Appro pièce : décision binaire, ou état cliquable. Icône + teinte. */
 .cmd-decision { display: flex; flex-direction: column; gap: 6px; }

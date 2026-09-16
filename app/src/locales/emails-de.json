@@ -528,5 +528,13 @@
   "📄 Voir le devis en ligne (PDF) →": "📄 Angebot online ansehen (PDF) →",
   "📦 Comment procéder :": "📦 So gehen Sie vor:",
   "📦 Prochaine étape : expédition": "📦 Nächster Schritt: Versand",
-  "🔬 Prochaine étape : clonage": "🔬 Nächster Schritt: Klonen"
+  "🔬 Prochaine étape : clonage": "🔬 Nächster Schritt: Klonen",
+  "Livraison prévue — commande #": "Voraussichtliche Lieferung — Bestellung #",
+  "Nouvelle date de livraison — commande #": "Neuer Liefertermin — Bestellung #",
+  "Livraison prévue": "Voraussichtliche Lieferung",
+  "Nouvelle date de livraison": "Neuer Liefertermin",
+  "Livraison prévue :": "Voraussichtliche Lieferung:",
+  "Nous avons une date de livraison pour votre commande.": "Wir haben einen Liefertermin für Ihre Bestellung.",
+  "La date de livraison de votre commande a changé.": "Der Liefertermin Ihrer Bestellung hat sich geändert.",
+  "Cette date est une estimation. Dès l'expédition, vous recevrez le numéro de suivi par e-mail.": "Dieses Datum ist eine Schätzung. Sobald Ihre Bestellung versendet ist, erhalten Sie die Sendungsnummer per E-Mail."
 }

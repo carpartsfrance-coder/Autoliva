@@ -126,6 +126,22 @@ test('liste des commandes en files de traitement', async (t) => {
   smsService.sendOrderStatusChangeSms = async (a) => { messagesValidee.push(`sms:${a.order._id}`); return { ok: false, reason: 'test' }; };
   t.after(() => { emailService.sendOrderStatusChangeEmail = vraiEmail; smsService.sendOrderStatusChangeSms = vraiSms; });
 
+  /* Espion sur l'e-mail « date de livraison » : lent (30 ms) pour que deux
+     clics rapprochés se chevauchent vraiment ; `echecLivraison` simule un
+     fournisseur d'e-mails en panne. */
+  const envoisLivraison = [];
+  let echecLivraison = false;
+  const vraiLivraison = emailService.sendDeliveryEstimateEmail;
+  emailService.sendDeliveryEstimateEmail = async (a) => {
+    await new Promise((r) => setTimeout(r, 30));
+    const ok = !echecLivraison;
+    envoisLivraison.push({ id: String(a.order._id), date: a.date, changement: a.changement, email: a.user.email, ok });
+    return ok ? { ok: true } : { ok: false, reason: 'panne_test' };
+  };
+  t.after(() => { emailService.sendDeliveryEstimateEmail = vraiLivraison; });
+  const dansJours = (n) => new Date(Date.now() + n * JOUR).toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+  const livraisonPrevue = (id, date, options = {}) => requete(`/admin/commandes/${id}/livraison-prevue`, { method: 'POST', json: { date, file: 'commandee' }, ...options });
+
   const app = require('../../src/app');
   http = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   base = `http://127.0.0.1:${http.address().port}`;
@@ -305,5 +321,117 @@ test('liste des commandes en files de traitement', async (t) => {
     const html = (await requete('/admin/commandes?view=trash')).corps;
     assert.deepEqual(lignes(html), [ids.annulee]);
     assert.match(html, /Restaurer/);
+  });
+
+  await t.test('livraison prévue : sans session, refusé', async () => {
+    const r = await livraisonPrevue(ids.commandee, dansJours(5), { sansSession: true });
+    assert.equal(r.status, 401);
+    assert.equal(envoisLivraison.length, 0);
+  });
+
+  await t.test('livraison prévue : la première date part au client, une seule fois', async () => {
+    const date = dansJours(5);
+    let r = await livraisonPrevue(ids.commandee, date);
+    assert.equal(r.status, 200, JSON.stringify(r.corps));
+    assert.equal(r.corps.email.envoye, true);
+    assert.deepEqual(envoisLivraison.map((e) => [e.id, e.date, e.changement, e.email]), [[ids.commandee, date, false, 'client-files@example.com']]);
+
+    const o = await Order.findById(ids.commandee).lean();
+    assert.equal(o.deliveryEstimate.date.toISOString().slice(0, 10), date);
+    assert.equal(o.notifications.deliveryEstimateSentFor, date);
+    assert.ok(o.notifications.deliveryEstimateSentAt);
+    assert.ok(o.emailsSent.some((e) => e.type === 'delivery_estimate' && e.status === 'sent'), 'e-mail journalisé sur la commande');
+    assert.match(r.corps.ligne.html, /Livraison prévue le/);
+    assert.doesNotMatch(r.corps.ligne.html, /client pas prévenu/);
+    assert.deepEqual(r.corps.ligne.files, ['commandee', 'all'], 'la date ne change pas la file');
+
+    /* Même date enregistrée une deuxième fois : rien ne repart. */
+    r = await livraisonPrevue(ids.commandee, date);
+    assert.equal(r.status, 200);
+    assert.equal(r.corps.email.envoye, false);
+    assert.equal(r.corps.email.raison, 'meme_date');
+    assert.equal(envoisLivraison.length, 1);
+
+    const page = (await requete('/admin/commandes?file=commandee')).corps;
+    assert.match(page, /Livraison prévue le/);
+  });
+
+  await t.test('livraison prévue : une date modifiée part comme « nouvelle date »', async () => {
+    const date = dansJours(9);
+    const r = await livraisonPrevue(ids.commandee, date);
+    assert.equal(r.status, 200);
+    assert.equal(r.corps.email.envoye, true);
+    assert.equal(envoisLivraison.length, 2);
+    assert.equal(envoisLivraison[1].date, date);
+    assert.equal(envoisLivraison[1].changement, true);
+    assert.equal((await Order.findById(ids.commandee).lean()).notifications.deliveryEstimateSentFor, date);
+  });
+
+  await t.test('livraison prévue : un double clic n’envoie qu’un e-mail', async () => {
+    const date = dansJours(12);
+    const reponses = await Promise.all([livraisonPrevue(ids.commandee, date), livraisonPrevue(ids.commandee, date)]);
+    reponses.forEach((r) => assert.equal(r.status, 200));
+    assert.equal(envoisLivraison.filter((e) => e.date === date).length, 1);
+    assert.equal(reponses.filter((r) => r.corps.email.envoye).length, 1);
+  });
+
+  await t.test('livraison prévue : e-mail en échec → la date est gardée, mais reste à envoyer', async () => {
+    const date = dansJours(15);
+    echecLivraison = true;
+    let r;
+    try {
+      r = await livraisonPrevue(ids.commandee, date);
+    } finally {
+      echecLivraison = false;
+    }
+    assert.equal(r.status, 200);
+    assert.equal(r.corps.email.envoye, false);
+    assert.equal(r.corps.email.raison, 'panne_test');
+    let o = await Order.findById(ids.commandee).lean();
+    assert.equal(o.deliveryEstimate.date.toISOString().slice(0, 10), date, 'la date est enregistrée');
+    assert.equal(o.notifications.deliveryEstimateSentFor, dansJours(12), 'la dernière date ENVOYÉE ne bouge pas');
+    assert.ok(o.emailsSent.some((e) => e.type === 'delivery_estimate' && e.status === 'failed'));
+    assert.match(r.corps.ligne.html, /client pas prévenu/);
+
+    /* Nouvel essai, fournisseur rétabli : l'e-mail part. */
+    r = await livraisonPrevue(ids.commandee, date);
+    assert.equal(r.corps.email.envoye, true);
+    o = await Order.findById(ids.commandee).lean();
+    assert.equal(o.notifications.deliveryEstimateSentFor, date);
+    assert.doesNotMatch(r.corps.ligne.html, /client pas prévenu/);
+  });
+
+  await t.test('livraison prévue : dates refusées, rien n’est écrit', async () => {
+    const avant = await Order.findById(ids.commandee).lean();
+    const envois = envoisLivraison.length;
+    for (const date of [dansJours(-1), '2026-02-30', 'demain', dansJours(400)]) {
+      const r = await livraisonPrevue(ids.commandee, date);
+      assert.equal(r.status, 400, `${date} → ${r.status}`);
+    }
+    const apres = await Order.findById(ids.commandee).lean();
+    assert.equal(String(apres.deliveryEstimate.date), String(avant.deliveryEstimate.date));
+    assert.equal(envoisLivraison.length, envois);
+  });
+
+  await t.test('livraison prévue : pas sur une commande livrée (422)', async () => {
+    const r = await livraisonPrevue(ids.livreeConsigne, dansJours(3));
+    assert.equal(r.status, 422);
+    assert.equal((await Order.findById(ids.livreeConsigne).lean()).deliveryEstimate.date, null);
+  });
+
+  await t.test('livraison prévue : retirer la date n’écrit pas au client', async () => {
+    const envois = envoisLivraison.length;
+    const r = await livraisonPrevue(ids.commandee, '');
+    assert.equal(r.status, 200);
+    assert.equal(r.corps.email.raison, 'date_retiree');
+    assert.equal(envoisLivraison.length, envois);
+    assert.equal((await Order.findById(ids.commandee).lean()).deliveryEstimate.date, null);
+    assert.doesNotMatch(r.corps.ligne.html, /Livraison prévue le/);
+  });
+
+  await t.test('livraison prévue : le vrai service d’envoi se branche sans erreur (clé vide = rien ne part)', async () => {
+    const o = await Order.findById(ids.commandee).lean();
+    const r = await vraiLivraison({ order: o, user: { _id: client._id, email: client.email, firstName: 'Julien' }, date: dansJours(5) });
+    assert.deepEqual(r, { ok: false, reason: 'missing_api_key' });
   });
 });

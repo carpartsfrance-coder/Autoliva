@@ -1203,6 +1203,69 @@ ${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
   };
 }
 
+/**
+ * Date de livraison annoncée au client — saisie dans le panneau de la liste des
+ * commandes (16/09/2026). `date` : AAAA-MM-JJ ; `changement` : une date avait
+ * déjà été annoncée.
+ *
+ * Comme les autres gabarits, les phrases restent en français et emailI18n les
+ * traduit (clés dans locales/emails-de.json). Seule la DATE est écrite
+ * directement dans la langue du client, dans son propre nœud : « mardi 23
+ * septembre 2026 » n'est pas une chaîne qu'une table peut traduire.
+ */
+function buildDeliveryEstimateEmail({ order, user, date, changement = false, baseUrl, lang = 'fr' } = {}) {
+  const number = order && order.number ? String(order.number) : '';
+  const orderId = order && order._id ? String(order._id) : '';
+  const firstName = user && user.firstName ? String(user.firstName).trim() : '';
+  const greeting = firstName ? escapeHtml(firstName) : 'Bonjour';
+  const jour = new Date(`${date}T12:00:00Z`);
+  const dateLongue = Number.isNaN(jour.getTime())
+    ? String(date || '')
+    : jour.toLocaleDateString(lang === 'de' ? 'de-DE' : 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
+  const items = order && Array.isArray(order.items) ? order.items.filter((it) => it && it.name) : [];
+  const orderUrl = baseUrl && orderId ? `${baseUrl.replace(/\/$/, '')}/compte/commandes/${encodeURIComponent(orderId)}` : '';
+
+  const phrase = changement
+    ? 'La date de livraison de votre commande a changé.'
+    : 'Nous avons une date de livraison pour votre commande.';
+  const subject = changement
+    ? (number ? `Nouvelle date de livraison — commande #${number}` : 'Nouvelle date de livraison')
+    : (number ? `Livraison prévue — commande #${number}` : 'Livraison prévue');
+
+  const bodyHtml = `
+<div style="font-size:16px;font-weight:900;">${greeting},</div>
+<div style="margin-top:10px;font-size:14px;line-height:1.6;color:#334155;">${phrase}</div>
+
+<div style="margin-top:14px;padding:16px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:14px;color:#1e3a8a;">
+  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Livraison prévue</div>
+  <div style="margin-top:6px;font-size:18px;font-weight:900;">${escapeHtml(dateLongue)}</div>
+  ${number ? `<div style="margin-top:6px;font-size:13px;">Commande <strong>#${escapeHtml(number)}</strong></div>` : ''}
+</div>
+
+${items.length ? `<div style="margin-top:12px;font-size:13px;line-height:1.6;color:#334155;">${items.map((it) => `<div>${escapeHtml(String(it.quantity || 1))} × ${escapeHtml(it.name)}</div>`).join('')}</div>` : ''}
+
+<div style="margin-top:14px;font-size:13px;line-height:1.6;color:#334155;">Cette date est une estimation. Dès l'expédition, vous recevrez le numéro de suivi par e-mail.</div>
+
+${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
+
+<div style="margin-top:14px;font-size:12px;line-height:1.6;color:#64748b;">
+  Si vous avez une question, répondez directement à cet email.
+</div>`;
+
+  return {
+    subject,
+    html: renderEmailLayout({ title: subject, preheader: subject, bodyHtml, baseUrl }),
+    /* Une idée par ligne : emailI18n traduit la version texte ligne à ligne. */
+    text: [
+      phrase,
+      number ? `Commande #${number}` : '',
+      'Livraison prévue :',
+      dateLongue,
+      "Cette date est une estimation. Dès l'expédition, vous recevrez le numéro de suivi par e-mail.",
+    ].filter(Boolean).join('\n'),
+  };
+}
+
 function buildCloningPieceReceivedEmail({ order, user, baseUrl } = {}) {
   const number = order && order.number ? String(order.number) : '';
   const orderId = order && order._id ? String(order._id) : '';
@@ -1437,6 +1500,7 @@ module.exports = {
   buildAbandonedCartReminder3,
   buildDeliveryConfirmedEmail,
   buildOrderStatusChangeEmail,
+  buildDeliveryEstimateEmail,
   buildCloningLabelEmail,
   buildCloningPieceReceivedEmail,
   buildCloningDoneEmail,

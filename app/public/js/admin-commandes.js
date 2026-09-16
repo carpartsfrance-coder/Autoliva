@@ -455,6 +455,32 @@
       + '</form></section>';
   }
 
+  function dateLongue(aaaammjj) {
+    var d = new Date(aaaammjj + 'T12:00:00');
+    return isNaN(d.getTime()) ? aaaammjj : d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  /* Date de livraison ANNONCÉE AU CLIENT — « Réception prévue », dans l'appro,
+     reste la date interne du fournisseur. */
+  function blocLivraison(p) {
+    var l = p.livraison || {};
+    if (!l.pertinente) return '';
+    var info = l.annonceePour
+      ? 'Dernière date envoyée au client : ' + dateLongue(l.annonceePour) + (l.annonceeLe ? ' (e-mail du ' + l.annonceeLe + ')' : '')
+      : 'Aucune date envoyée au client pour l’instant.';
+    return '<section class="cmd-bloc" data-section="livraison"><h3>Livraison prévue</h3>'
+      + '<form data-form="livraison"><div class="cmd-champs">'
+      + '<label class="cmd-champ">Date annoncée au client<input type="date" name="date" value="' + esc(l.date) + '" min="' + esc(l.aujourdhui) + '" /></label>'
+      + '</div>'
+      + '<p class="cmd-bloc-avertissement">' + (l.emailClient
+        ? 'Chaque nouvelle date part au client par e-mail. La même date enregistrée deux fois n’envoie rien.'
+        : 'Aucun e-mail client sur cette commande : la date sera enregistrée sans prévenir le client.') + '</p>'
+      + '<div class="cmd-bloc-actions"><button type="submit" class="cmd-act"><span class="ms" aria-hidden="true">event</span>' + (l.emailClient ? 'Enregistrer et prévenir le client' : 'Enregistrer la date') + '</button>'
+      + (l.date ? '<button type="button" class="cmd-bouton is-petit" data-retirer-livraison>Retirer la date</button>' : '')
+      + '</div></form>'
+      + '<div class="cmd-bloc-info">' + esc(info) + '</div></section>';
+  }
+
   function blocPieces(p, d) {
     var dernier = (p.envois || []).length ? p.envois[p.envois.length - 1] : null;
     return '<section class="cmd-bloc"><h3>Pièce et transport</h3><div class="cmd-pieces">'
@@ -506,7 +532,7 @@
     var expeditionD_abord = action.besoin === 'etiquette' || action.besoin === 'suivi';
     corps.innerHTML = blocAvancement(p)
       + (expeditionD_abord ? blocExpedition(p) + blocAppro(p) : blocAppro(p) + blocExpedition(p))
-      + blocPieces(p, d) + blocClient(p, d) + blocNote(p);
+      + blocLivraison(p) + blocPieces(p, d) + blocClient(p, d) + blocNote(p);
 
     var liste = visibles();
     var i = liste.indexOf(el);
@@ -597,21 +623,28 @@
     return envoyer('/admin/commandes/' + encodeURIComponent(d.id) + '/ligne?file=' + encodeURIComponent(fileActive), { method: 'GET' })
       .then(function (j) {
         if (!j || !j.ok) { notifier((j && j.error) || 'La ligne n’a pas pu être rechargée.', { erreur: true }); return; }
-        appliquerCompteurs(j.compteurs, j.resume);
-        var dansFile = fileActive === 'all' || j.ligne.files.indexOf(fileActive) !== -1;
-        var nouvelle = remplacerLigne(el, j.ligne.html);
-        if (!nouvelle) return;
-        if (!dansFile) {
-          nouvelle.hidden = true;
-          nouvelle.classList.add('is-partie');
-          majCompteLignes();
-          notifier((message ? message + ' · ' : '') + d.number + ' quitte la file');
-          if (ouverte === el) naviguerPanneau(0);
-        } else {
-          if (message) notifier(message);
-          if (ouverte === el) { ouverte = nouvelle; remplirPanneau(nouvelle); }
-        }
+        appliquerLigneAJour(el, j, message);
       });
+  }
+
+  /* Réponse { ligne, compteurs, resume } d'un endpoint : ligne remplacée,
+     compteurs à jour, panneau rafraîchi si la commande reste dans la file. */
+  function appliquerLigneAJour(el, j, message, options) {
+    var d = donnees(el);
+    appliquerCompteurs(j.compteurs, j.resume);
+    var dansFile = fileActive === 'all' || j.ligne.files.indexOf(fileActive) !== -1;
+    var nouvelle = remplacerLigne(el, j.ligne.html);
+    if (!nouvelle) return;
+    if (!dansFile) {
+      nouvelle.hidden = true;
+      nouvelle.classList.add('is-partie');
+      majCompteLignes();
+      notifier((message ? message + ' · ' : '') + d.number + ' quitte la file', options);
+      if (ouverte === el) naviguerPanneau(0);
+    } else {
+      if (message) notifier(message, options);
+      if (ouverte === el) { ouverte = nouvelle; remplirPanneau(nouvelle); }
+    }
   }
 
   function soumettreAppro(form) {
@@ -654,6 +687,49 @@
     }).catch(function () { notifier('Réseau indisponible : suivi non enregistré.', { erreur: true }); if (bouton) bouton.disabled = false; });
   }
 
+  var RAISONS_EMAIL = {
+    missing_api_key: 'envoi d’e-mails non configuré',
+    missing_from_email: 'expéditeur non configuré',
+    missing_to_email: 'adresse client manquante',
+  };
+
+  function soumettreLivraison(form, retirer) {
+    var el = ouverte;
+    var d = donnees(el);
+    var l = (d.panneau && d.panneau.livraison) || {};
+    var date = retirer ? '' : form.elements.date.value;
+    if (!retirer && !date) { form.elements.date.focus(); return; }
+    if (!retirer && l.aujourdhui && date < l.aujourdhui) { notifier('Cette date est déjà passée.', { erreur: true }); form.elements.date.focus(); return; }
+    var prevenir = !retirer && l.emailClient && date !== l.annonceePour;
+    var question = retirer
+      ? 'Retirer la date de livraison de ' + d.number + ' ? Le client n’est pas prévenu.'
+      : (prevenir ? 'Le client de ' + d.number + ' va recevoir un e-mail : livraison prévue le ' + dateLongue(date) + '. Continuer ?' : null);
+    (question ? confirmer(question) : Promise.resolve(true)).then(function (ok) {
+      if (!ok) return;
+      var boutons = Array.prototype.slice.call(form.querySelectorAll('button'));
+      var reactiver = function () { boutons.forEach(function (b) { b.disabled = false; }); };
+      boutons.forEach(function (b) { b.disabled = true; });
+      validerEnAttente().then(function () {
+        return envoyer('/admin/commandes/' + encodeURIComponent(d.id) + '/livraison-prevue', { body: { date: date, file: fileActive } });
+      }).then(function (j) {
+        if (!j || !j.ok) { notifier((j && j.error) || 'Date non enregistrée.', { erreur: true }); reactiver(); return; }
+        var e = j.email || {};
+        var message;
+        var options;
+        if (retirer) message = d.number + ' → date de livraison retirée';
+        else if (e.envoye) message = d.number + ' → date envoyée au client par e-mail';
+        else if (e.raison === 'meme_date') message = d.number + ' → date enregistrée · déjà envoyée au client, pas de nouvel e-mail';
+        else if (e.raison === 'sans_email') message = d.number + ' → date enregistrée · pas d’e-mail client sur la commande';
+        else if (e.raison === 'en_cours') message = d.number + ' → date enregistrée · e-mail déjà en cours d’envoi';
+        else {
+          message = d.number + ' → date enregistrée, mais l’e-mail n’est PAS parti (' + (RAISONS_EMAIL[e.raison] || e.raison || 'erreur') + ')';
+          options = { erreur: true, duree: 8000 };
+        }
+        appliquerLigneAJour(el, j, message, options);
+      }).catch(function () { notifier('Réseau indisponible : date non enregistrée.', { erreur: true }); reactiver(); });
+    });
+  }
+
   function soumettreNote(form) {
     var el = ouverte;
     var d = donnees(el);
@@ -677,6 +753,7 @@
       var type = form.getAttribute('data-form');
       if (type === 'appro') soumettreAppro(form);
       else if (type === 'expedition') soumettreExpedition(form);
+      else if (type === 'livraison') soumettreLivraison(form, false);
       else if (type === 'note') soumettreNote(form);
     });
     panneauEl.addEventListener('click', function (e) {
@@ -686,6 +763,8 @@
       if (nav) { naviguerPanneau(parseInt(nav.getAttribute('data-panneau-nav'), 10)); return; }
       var act = t.closest('[data-panneau-action]');
       if (act) { actionDepuisPanneau(act.getAttribute('data-panneau-action')); return; }
+      var retirer = t.closest('[data-retirer-livraison]');
+      if (retirer) { soumettreLivraison(retirer.closest('form'), true); return; }
       var copier = t.closest('[data-copier]');
       if (copier) {
         var ref = copier.getAttribute('data-copier');

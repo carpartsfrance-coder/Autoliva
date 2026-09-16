@@ -316,6 +316,15 @@ const orderSchema = new mongoose.Schema(
       updatedAt: { type: Date, default: null },
       updatedBy: { type: String, default: '', trim: true },
     },
+    /* Date de livraison ANNONCÉE AU CLIENT, saisie dans le panneau de la liste
+     * des commandes. Distincte de sourcing.expectedDays (réception fournisseur,
+     * interne). Chaque nouvelle date part au client par e-mail — voir
+     * notifications.deliveryEstimateSentFor. */
+    deliveryEstimate: {
+      date: { type: Date, default: null },
+      updatedAt: { type: Date, default: null },
+      updatedBy: { type: String, default: '', trim: true },
+    },
     statusHistory: { type: [statusHistorySchema], default: [] },
     // ── Archivage & corbeille (soft delete) ─────────────────────────────
     archived: { type: Boolean, default: false },
@@ -369,6 +378,10 @@ const orderSchema = new mongoose.Schema(
       shipmentTrackingNumbersSent: { type: [String], default: [] },
       deliveryConfirmedSentAt: { type: Date, default: null },
       statusChangeSentAt: { type: Date, default: null },
+      /* Dernière date de livraison ENVOYÉE au client (AAAA-MM-JJ) : la même
+         date enregistrée deux fois ne réécrit pas au client. */
+      deliveryEstimateSentFor: { type: String, default: '', trim: true },
+      deliveryEstimateSentAt: { type: Date, default: null },
       // Demande d'avis Skeepers/Avis Vérifiés poussée (posé uniquement après succès).
       skeepersReviewRequestedAt: { type: Date, default: null },
     },
