@@ -869,9 +869,12 @@ adminRouter.post('/tickets/:numero/whatsapp-fournisseur/send', async (req, res) 
     const wa = require('../../services/whatsappFournisseur');
     const phone = (req.body.phone || (ticket.fournisseur && ticket.fournisseur.contact) || '').toString();
     const onlyReply = !!req.body.parsedReply && !req.body.markSent;
+    // `groupe` : dossier partagé à la main dans le groupe WhatsApp du fournisseur
+    // (aucune API ne permet d'écrire dans un groupe créé depuis l'application).
+    const toGroup = req.body.mode === 'groupe';
     let result = { sent: false };
-    if (req.body.mode === 'wame' || onlyReply) {
-      // Envoi fait à la main depuis WhatsApp (lien wa.me) : on enregistre seulement.
+    if (req.body.mode === 'wame' || toGroup || onlyReply) {
+      // Envoi fait à la main depuis WhatsApp : on enregistre seulement.
       result = { sent: false, manual: true };
     } else if (wa.isConfigured()) {
       result = await wa.sendReal(ticket, phone, req.body.text);
@@ -880,7 +883,7 @@ adminRouter.post('/tickets/:numero/whatsapp-fournisseur/send', async (req, res) 
       result = wa.preview(ticket, phone);
     }
     ticket.fournisseur = ticket.fournisseur || {};
-    if (phone) ticket.fournisseur.contact = phone;
+    if (phone && !toGroup) ticket.fournisseur.contact = phone;
     if (req.body.parsedReply) {
       ticket.fournisseur.reponse = String(req.body.parsedReply).slice(0, 4000);
       ticket.fournisseur.dateRetour = new Date();
@@ -889,7 +892,9 @@ adminRouter.post('/tickets/:numero/whatsapp-fournisseur/send', async (req, res) 
       ticket.addMessage('admin', 'interne', 'Réponse du fournisseur enregistrée');
     } else {
       if (!ticket.fournisseur.dateEnvoi) ticket.fournisseur.dateEnvoi = new Date();
-      ticket.addMessage('admin', 'interne', `Dossier fournisseur (anglais) envoyé sur WhatsApp (${phone || '—'})`);
+      ticket.addMessage('admin', 'interne', toGroup
+        ? 'Dossier fournisseur (anglais) partagé dans le groupe WhatsApp du fournisseur'
+        : `Dossier fournisseur (anglais) envoyé sur WhatsApp (${phone || '—'})`);
     }
     await ticket.save();
     audit.log({ req, action: 'sav.whatsapp_fournisseur', entityType: 'sav_ticket', entityId: ticket.numero, after: { phone } });

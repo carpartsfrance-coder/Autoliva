@@ -3017,3 +3017,7 @@ main.sav-module {
 .sav-queue-nav a:hover { background: #f1f5f9; color: #0f172a; }
 .sav-queue-nav span.sav-queue-nav__btn { opacity: 0.35; }
 .sav-queue-nav__pos { font-size: 11px; color: #64748b; padding: 0 4px; font-variant-numeric: tabular-nums; }
+
+/* `.btn` impose un display qui écrasait `.hidden` : des boutons censés être masqués
+   (envoi via l'API WhatsApp non configurée, partage indisponible…) restaient visibles. */
+.btn.hidden { display: none !important; }
