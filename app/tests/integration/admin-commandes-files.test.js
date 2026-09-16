@@ -163,8 +163,15 @@ test('liste des commandes en files de traitement', async (t) => {
     assert.ok(cookie, 'cookie de session attendu');
   });
 
-  await t.test('la page s’ouvre sur « Appro à vérifier », compteurs et retards justes', async () => {
+  await t.test('la page s’ouvre sur « Toutes »', async () => {
     const r = await requete('/admin/commandes');
+    assert.equal(r.status, 200);
+    assert.match(r.corps, /class="cmd-file is-active" href="\/admin\/commandes\?file=all"/);
+    assert.equal(lignes(r.corps).length, 11, 'toutes les commandes actives');
+  });
+
+  await t.test('« Appro à vérifier » : compteurs et retards justes', async () => {
+    const r = await requete('/admin/commandes?file=a_verifier');
     assert.equal(r.status, 200);
     const html = r.corps;
     assert.equal(compteur(html, 'a_verifier'), 1);

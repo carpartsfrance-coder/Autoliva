@@ -447,6 +447,14 @@ kbd, .cmd-kbd {
   gap: 4px;
 }
 .cmd-colonnes .cmd-c.cmd-c-actions { justify-content: flex-end; text-align: right; }
+/* L'action principale (« Ajouter étiquette », « Expédiée »…) est plus large
+   que la colonne une fois les icônes à côté : sans retour à la ligne elle
+   débordait sur la carte appro. Elle prend la largeur de la colonne, les
+   icônes passent dessous. */
+@media (min-width: 901px) {
+  .cmd-ligne .cmd-c.cmd-c-actions { flex-wrap: wrap; align-content: flex-start; row-gap: 6px; }
+  .cmd-ligne .cmd-c-actions > .cmd-act { flex: 1 1 100%; justify-content: center; white-space: normal; text-align: center; min-width: 0; }
+}
 .cmd-c-check input { width: 16px; height: 16px; accent-color: var(--cmd-traitement); cursor: pointer; margin: 2px 0 0; }
 
 .cmd-ligne {

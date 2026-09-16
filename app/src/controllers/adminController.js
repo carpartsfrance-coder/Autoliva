@@ -2882,19 +2882,12 @@ async function getAdminOrdersPage(req, res, next) {
     const view = ['archived', 'trash'].includes(viewRaw) ? viewRaw : 'active';
 
     /* File de traitement (« qu'est-ce que je traite maintenant ? »). Sans file
-       demandée, la page s'ouvre sur « Appro à vérifier » — sauf si l'adresse
-       porte déjà un filtre ou une page (liens du tableau de bord, anciens
-       favoris) : elle cherche alors dans « Toutes », comme avant. */
+       demandée, la page s'ouvre sur « Toutes » (choix de Killian, 16/09/2026) ;
+       les autres files restent à un clic. */
     const maintenant = new Date();
     const fileDemandee = typeof req.query.file === 'string' ? req.query.file.trim() : '';
     const vueFiles = view === 'active' && status !== 'draft';
-    const filtresHerites = [q, status, type, period, sourceFilter, utmCampaignFilter, utmSourceFilter, orderTypeFilter,
-      cloningStatusFilter, returnFilter, productFilter, categoryFilter, sourcingFilter, rawPage].some(Boolean);
-    let file = 'all';
-    if (vueFiles) {
-      if (commandesFiles.IDS_FILES.includes(fileDemandee)) file = fileDemandee;
-      else if (!filtresHerites) file = 'a_verifier';
-    }
+    const file = vueFiles && commandesFiles.IDS_FILES.includes(fileDemandee) ? fileDemandee : 'all';
 
     /* Count drafts for the tab badge */
     let draftsCount = 0;
