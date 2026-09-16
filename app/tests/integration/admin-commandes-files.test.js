@@ -111,8 +111,20 @@ test('liste des commandes en files de traitement', async (t) => {
     livreeConsigne: await commande({ status: 'delivered', orderType: 'exchange', returnStatus: 'pending', returnDates: { returnDueDate: new Date(Date.now() + 10 * JOUR) } }),
     livree: await commande({ status: 'delivered' }),
     annulee: await commande({ status: 'cancelled' }),
+    payeeFiche: await commande({ status: 'paid', sourcing: { status: 'en_stock' } }),
     archivee: await commande({ status: 'paid', archived: true }),
   };
+
+  /* Espions sur le message « commande validée » (e-mail + SMS) : on compte ce
+     qui PARTIRAIT, sans rien envoyer. */
+  const emailService = require('../../src/services/emailService');
+  const smsService = require('../../src/services/smsService');
+  const messagesValidee = [];
+  const vraiEmail = emailService.sendOrderStatusChangeEmail;
+  const vraiSms = smsService.sendOrderStatusChangeSms;
+  emailService.sendOrderStatusChangeEmail = async (a) => { messagesValidee.push(`email:${a.order._id}`); return { ok: false, reason: 'test' }; };
+  smsService.sendOrderStatusChangeSms = async (a) => { messagesValidee.push(`sms:${a.order._id}`); return { ok: false, reason: 'test' }; };
+  t.after(() => { emailService.sendOrderStatusChangeEmail = vraiEmail; smsService.sendOrderStatusChangeSms = vraiSms; });
 
   const app = require('../../src/app');
   http = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
@@ -142,19 +154,19 @@ test('liste des commandes en files de traitement', async (t) => {
     assert.equal(compteur(html, 'a_verifier'), 1);
     assert.equal(compteur(html, 'a_commander'), 1);
     assert.equal(compteur(html, 'commandee'), 1);
-    assert.equal(compteur(html, 'expedier'), 3, 'en stock + deux étiquettes, dont celle sans appro renseignée');
+    assert.equal(compteur(html, 'expedier'), 4, 'deux en stock + deux étiquettes, dont celle sans appro renseignée');
     assert.equal(compteur(html, 'transit'), 2, 'la livrée dont la consigne n’est pas revenue n’est plus « en transit »');
-    assert.equal(compteur(html, 'all'), 10, 'toutes les commandes actives, annulée comprise, archivée exclue');
+    assert.equal(compteur(html, 'all'), 11, 'toutes les commandes actives, annulée comprise, archivée exclue');
     assert.deepEqual(lignes(html), [ids.aVerifier]);
     assert.match(html, /Pièce en stock \?/);
     assert.match(html, /Retard 2j/);
-    assert.match(html, /1 prête à expédier|2 prêtes à expédier|3 prêtes à expédier/);
+    assert.match(html, /4 prêtes à expédier/);
     assert.match(html, /1 pièce fournisseur en retard/);
   });
 
   await t.test('« À expédier » : l’étiquette sans suivi ouvre la saisie, celle avec suivi s’expédie en un clic', async () => {
     const html = (await requete('/admin/commandes?file=expedier')).corps;
-    assert.deepEqual(new Set(lignes(html)), new Set([ids.enStock, ids.etiquetteSansSuivi, ids.etiquetteAvecSuivi]));
+    assert.deepEqual(new Set(lignes(html)), new Set([ids.enStock, ids.payeeFiche, ids.etiquetteSansSuivi, ids.etiquetteAvecSuivi]));
     const ligneSans = html.slice(html.indexOf(`data-id="${ids.etiquetteSansSuivi}"`));
     assert.match(ligneSans.slice(0, 6000), /data-ouvrir="expedition" data-message="CPTEST-\d+ — renseigne le numéro de suivi/);
     const ligneAvec = html.slice(html.indexOf(`data-id="${ids.etiquetteAvecSuivi}"`));
@@ -192,12 +204,15 @@ test('liste des commandes en files de traitement', async (t) => {
     assert.equal(r.corps.ok, true);
     assert.deepEqual(r.corps.ligne.files, ['expedier', 'all']);
     assert.equal(r.corps.compteurs.a_verifier.total, 0);
-    assert.equal(r.corps.compteurs.expedier.total, 4);
+    assert.equal(r.corps.compteurs.expedier.total, 5);
     assert.match(r.corps.ligne.html, /class="cmd-ligne/);
     const o = await Order.findById(ids.aVerifier).lean();
     assert.equal(o.status, 'processing');
     assert.equal(o.sourcing.status, 'en_stock');
     assert.equal(o.statusHistory[o.statusHistory.length - 1].status, 'processing', 'le changement de statut passe par l’historique');
+    /* « En préparation » depuis la liste est une étape interne : pas d'e-mail
+       ni de SMS « commande validée » (le client a sa confirmation au paiement). */
+    assert.deepEqual(messagesValidee.filter((m) => m.endsWith(ids.aVerifier)), []);
   });
 
   await t.test('deux personnes sur la même commande : la seconde action est refusée (409)', async () => {
@@ -250,6 +265,12 @@ test('liste des commandes en files de traitement', async (t) => {
     assert.equal(r.status, 200, JSON.stringify(r.corps));
     assert.deepEqual(r.corps.ligne.files, ['all']);
     assert.equal((await Order.findById(ids.livree).lean()).status, 'completed');
+  });
+
+  await t.test('la fiche, elle, prévient toujours le client quand on passe une commande payée en préparation', async () => {
+    const r = await requete(`/admin/commandes/${ids.payeeFiche}/statut`, { method: 'POST', json: { status: 'processing' } });
+    assert.equal(r.status, 200);
+    assert.ok(messagesValidee.includes(`email:${ids.payeeFiche}`), 'e-mail « commande validée » depuis la fiche');
   });
 
   await t.test('le formulaire de la fiche change toujours le statut (même logique partagée)', async () => {

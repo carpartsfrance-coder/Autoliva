@@ -340,11 +340,11 @@
     notifier(message, { onAnnuler: annulerEnAttente });
   }
 
-  /* Actions qui préviennent le client (appliquerStatutCommande côté serveur) :
-     passage en préparation depuis « payée », et livraison. */
+  /* Seule action de la liste qui écrit au client : « Livrée ». Le passage en
+     préparation (« Oui », « Commandée », « Reçue atelier ») reste silencieux
+     côté serveur (postAdminAvancerCommande). */
   function previentClient(d, actionId) {
-    if (actionId === 'livree') return true;
-    return ['en_stock', 'commandee', 'recue'].indexOf(actionId) !== -1 && !!d.etat && d.etat.status === 'paid';
+    return actionId === 'livree';
   }
 
   var MESSAGES = {
@@ -721,13 +721,11 @@
       };
       /* En masse, un e-mail au client part pour chaque commande concernée —
          y compris pour une vieille commande restée à la mauvaise étape. */
-      var livrees = items.filter(function (it) { return it.action === 'livree'; }).length;
-      var preparees = items.filter(function (it) { return it.action !== 'livree' && previentClient(donnees(it.el), it.action); }).length;
-      if (livrees || preparees) {
-        var details = [];
-        if (livrees) details.push(livrees + ' passeront en « Livrée » (e-mail de livraison, et délai de retour de consigne compté à partir d’aujourd’hui)');
-        if (preparees) details.push(preparees + ' passeront en préparation (e-mail « commande validée »)');
-        confirmer('Des clients vont recevoir un e-mail : ' + details.join(' ; ') + '. Continuer ?').then(function (ok) { if (ok) lancer(); });
+      var livrees = items.filter(function (it) { return previentClient(donnees(it.el), it.action); }).length;
+      if (livrees) {
+        confirmer('Des clients vont recevoir un e-mail : ' + livrees + ' commande' + (livrees > 1 ? 's passeront' : ' passera')
+          + ' en « Livrée » (e-mail de livraison, et délai de retour de consigne compté à partir d’aujourd’hui). Continuer ?')
+          .then(function (ok) { if (ok) lancer(); });
         return;
       }
       lancer();

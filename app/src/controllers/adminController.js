@@ -3261,7 +3261,9 @@ async function postAdminAvancerCommande(req, res) {
     }
     if (apres.status !== order.status) {
       const changedBy = req.session && req.session.admin && req.session.admin.email ? String(req.session.admin.email) : 'admin';
-      await appliquerStatutCommande(orderId, apres.status, { changedBy });
+      /* Passer « En préparation » depuis la liste n'écrit pas au client (voir
+         appliquerStatutCommande). La livraison, elle, le prévient toujours. */
+      await appliquerStatutCommande(orderId, apres.status, { changedBy, notifierClient: apres.status !== 'processing' });
     }
 
     const [ligne, filesEtat] = await Promise.all([chargerLigneCommande(orderId, maintenant), chargerFilesCommandes(maintenant)]);
@@ -3949,11 +3951,19 @@ async function getAdminOrderDetailPage(req, res, next) {
  *
  * Partagé par le formulaire de la fiche (postAdminUpdateOrderStatus) et les
  * actions en un clic de la liste (postAdminAvancerCommande) : un changement de
- * statut produit les mêmes effets, d'où qu'il vienne.
+ * statut produit les mêmes effets, d'où qu'il vienne — sauf le message
+ * « commande validée », voir `notifierClient`.
+ *
+ * `notifierClient: false` n'envoie pas l'e-mail ni le SMS « commande validée »
+ * du passage en payée / en préparation. La liste s'en sert : pour elle, « En
+ * préparation » n'est qu'une étape interne (appro tranchée), franchie sur
+ * CHAQUE commande — le client a déjà sa confirmation de commande au paiement
+ * (159 envoyées en 90 jours) ; ce second message n'était parti que 3 fois en
+ * 90 jours avant la liste, et serait devenu systématique.
  *
  * @returns {Promise<{ changed: boolean, existing: object|null }>}
  */
-async function appliquerStatutCommande(orderId, status, { changedBy = 'admin' } = {}) {
+async function appliquerStatutCommande(orderId, status, { changedBy = 'admin', notifierClient = true } = {}) {
   const existing = await Order.findById(orderId)
     .select('_id number userId status items consigne notifications')
     .lean();
@@ -4024,29 +4034,31 @@ async function appliquerStatutCommande(orderId, status, { changedBy = 'admin' } 
     await sendDeliveredNotifications(orderId);
   } else if (status === 'paid' || status === 'processing') {
     // Send status change notification for paid/processing orders
-    try {
-      const user = existing && existing.userId
-        ? await User.findById(existing.userId).select('_id email firstName').lean()
-        : null;
+    if (notifierClient) {
+      try {
+        const user = existing && existing.userId
+          ? await User.findById(existing.userId).select('_id email firstName').lean()
+          : null;
 
-      if (user && user.email) {
-        const sent = await emailService.sendOrderStatusChangeEmail({
-          order: existing,
-          user,
-          newStatus: status,
-          message: 'Votre commande a été validée et va être préparée dans les meilleurs délais.',
-        });
-        emailService.logEmailSent({ orderId: existing._id, emailType: 'status_change', recipientEmail: user.email, result: sent });
-        smsService.sendOrderStatusChangeSms({ order: existing, user, newStatus: status }).catch(() => {});
-        if (sent && sent.ok) {
-          await Order.updateOne(
-            { _id: existing._id },
-            { $set: { 'notifications.statusChangeSentAt': new Date() } }
-          );
+        if (user && user.email) {
+          const sent = await emailService.sendOrderStatusChangeEmail({
+            order: existing,
+            user,
+            newStatus: status,
+            message: 'Votre commande a été validée et va être préparée dans les meilleurs délais.',
+          });
+          emailService.logEmailSent({ orderId: existing._id, emailType: 'status_change', recipientEmail: user.email, result: sent });
+          smsService.sendOrderStatusChangeSms({ order: existing, user, newStatus: status }).catch(() => {});
+          if (sent && sent.ok) {
+            await Order.updateOne(
+              { _id: existing._id },
+              { $set: { 'notifications.statusChangeSentAt': new Date() } }
+            );
+          }
         }
+      } catch (err) {
+        console.error('Erreur email changement statut (admin) :', err && err.message ? err.message : err);
       }
-    } catch (err) {
-      console.error('Erreur email changement statut (admin) :', err && err.message ? err.message : err);
     }
 
     /* Rapprochement leads : commande passée « payée » À LA MAIN (virement,
