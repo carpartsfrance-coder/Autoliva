@@ -2,7 +2,7 @@
   "_lisezMoi": [
     "Allégations NON PROUVÉES retirées des fiches produit et des pages véhicule, à l'affichage seulement : rien n'est modifié en base.",
     "Plan de reprise SEO du 14/09/2026, action A3 (e). Lu par src/services/claimFilter.js.",
-    "Toutes les règles sont ACTIVES par défaut : la décision 4 (preuves ISO 9001, atelier, garanties) n'est pas encore rendue.",
+    "Décision 4, réponse de Killian le 16/09/2026 : les pièces Alibaba sont REFAITES EN USINE (leur description redevient visible) et l'usine est certifiée ISO 9001, mais le certificat n'est pas fourni — la règle iso9001 reste donc active jusqu'à réception du document.",
     "Lever une règle pour une famille dont la preuve est fournie : ajouter sa clé dans « leveePour » (ex. \"leveePour\": [\"DEK\"]), puis déployer.",
     "Retirer la clé remet le filtre en place au déploiement suivant. Les clés de famille sont celles de « familles » ci-dessous.",
     "« descriptionMasquee » : familles dont la description n'est JAMAIS affichée, quelle que soit la langue."
@@ -22,14 +22,13 @@
     { "cle": "OCC", "prefixes": ["OCC-"], "libelle": "Pièces d'occasion unitaires" }
   ],
   "descriptionMasquee": {
-    "DM": "Texte copié mot pour mot sur distrimotor.com (mêmes identifiants, titres et descriptions) : jamais affiché.",
-    "ALIBABA": "État réel, garantie fournisseur (12 mois) et certifications à confirmer — masqué jusqu'à la décision 4."
+    "DM": "Texte copié mot pour mot sur distrimotor.com (mêmes identifiants, titres et descriptions) : jamais affiché."
   },
   "regles": {
     "iso9001": {
       "active": true,
       "leveePour": [],
-      "description": "« usine(s) certifiée(s) ISO 9001 » → « usine(s) spécialisée(s) » ; toute autre mention d'ISO 9001 retire sa phrase ; badges et mentions ISO du gabarit masqués."
+      "description": "« usine(s) certifiée(s) ISO 9001 » → « usine(s) spécialisée(s) » ; toute autre mention d'ISO 9001 retire sa phrase ; badges et mentions ISO du gabarit masqués. Concerne 977 fiches ALV-BX, 630 DEK et 331 EDN (les 264 fiches Alibaba n'en parlent jamais). À lever avec « leveePour » le jour où le certificat de l'usine est en main."
     },
     "concessionnaires": {
       "active": true,

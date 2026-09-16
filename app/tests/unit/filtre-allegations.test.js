@@ -32,7 +32,7 @@ test('familles : le préfixe du SKU décide, sans confondre ALV-BX et les import
   assert.equal(cf.familleDuSku(''), 'AUTRES');
 });
 
-test('description masquée : français seulement, jamais DM ni Alibaba, interrupteur global', () => {
+test('description masquée : français seulement, jamais DM, interrupteur global', () => {
   const avant = process.env.SHOW_PRODUCT_DESCRIPTION;
   try {
     delete process.env.SHOW_PRODUCT_DESCRIPTION;
@@ -42,7 +42,9 @@ test('description masquée : français seulement, jamais DM ni Alibaba, interrup
     /* Les 6 327 copies distrimotor : la règle porte sur le SKU, pas sur le
        texte — elle couvre aussi celles dont le texte a été retouché. */
     assert.equal(cf.motifDescriptionMasquee({ sku: 'DM-81318' }, { lang: 'fr' }), 'famille:DM');
-    assert.equal(cf.motifDescriptionMasquee({ sku: 'ALV-PT-2462800200' }, { lang: 'fr' }), 'famille:ALIBABA');
+    /* Alibaba : retenue jusqu'au 16/09/2026, rendue depuis — les pièces sont
+       refaites en usine, leur description dit donc vrai (décision 4). */
+    assert.equal(cf.motifDescriptionMasquee({ sku: 'ALV-PT-2462800200' }, { lang: 'fr' }), null);
     assert.equal(cf.familleADescriptionMasquee({ sku: 'DM-1' }), 'DM');
     assert.equal(cf.familleADescriptionMasquee({ sku: 'ASY-1' }), null);
     process.env.SHOW_PRODUCT_DESCRIPTION = ' OFF ';
@@ -62,7 +64,7 @@ test('description masquée : français seulement, jamais DM ni Alibaba, interrup
   }
 });
 
-test('politique : toutes les règles actives, aucune levée, tant que la décision 4 n’est pas rendue', () => {
+test('politique : toutes les règles actives, aucune levée tant que la preuve manque', () => {
   /* Lever une règle est un choix de Killian, preuve à l'appui : ce test doit
      être modifié EN MÊME TEMPS que claims-policy.json, jamais par accident. */
   const regles = cf.POLITIQUE.regles;
@@ -71,7 +73,10 @@ test('politique : toutes les règles actives, aucune levée, tant que la décisi
     assert.equal(regles[id].active, true, `règle ${id} désactivée`);
     assert.deepEqual(regles[id].leveePour, [], `règle ${id} levée pour ${regles[id].leveePour}`);
   }
-  assert.deepEqual(Object.keys(cf.POLITIQUE.descriptionMasquee).sort(), ['ALIBABA', 'DM']);
+  /* Seules les copies distrimotor restent masquées : Alibaba est rendue le
+     16/09/2026. L'ISO 9001 reste filtré tant que le certificat de l'usine
+     n'est pas en main — c'est « leveePour » qui le lèvera, pas ce test. */
+  assert.deepEqual(Object.keys(cf.POLITIQUE.descriptionMasquee).sort(), ['DM']);
 });
 
 test('ISO 9001 : chaque tournure du catalogue devient « usine spécialisée »', () => {

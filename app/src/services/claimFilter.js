@@ -125,8 +125,13 @@ function contexteArticle({ scalapayActif = false } = {}) {
 
 /**
  * Famille dont la description ne doit JAMAIS servir, pas même de repli pour la
- * balise meta : « DM » (copie mot pour mot de distrimotor.com), « ALIBABA »
- * (état et garantie à confirmer, décision 4). null sinon.
+ * balise meta : « DM » (copie mot pour mot de distrimotor.com). null sinon.
+ *
+ * « ALIBABA » en faisait partie jusqu'au 16/09/2026 : ces 264 fiches disent
+ * que la pièce est démontée, remise en état et contrôlée avant envoi, ce qui
+ * restait à confirmer. Killian a répondu — elles sont refaites en usine — donc
+ * leur description est de nouveau servie. Les autres règles (atelier, durée de
+ * garantie, ISO 9001…) s'y appliquent comme partout ailleurs.
  */
 function familleADescriptionMasquee(product) {
   const famille = familleDuSku(product && product.sku);
@@ -146,7 +151,7 @@ const INTERRUPTEUR_COUPE = new Set(['off', 'false', '0', 'no', 'non']);
  *   'interrupteur' — SHOW_PRODUCT_DESCRIPTION=off (retour arrière sans code) ;
  *   'langue'       — la page n'est pas en français : les descriptions
  *                    allemandes sont des traductions automatiques non relues ;
- *   'famille:DM' / 'famille:ALIBABA' — voir familleADescriptionMasquee.
+ *   'famille:DM' — voir familleADescriptionMasquee.
  * Lu à chaque requête : un changement de variable prend effet au redémarrage
  * du service (« Save and deploy » sur Render).
  */

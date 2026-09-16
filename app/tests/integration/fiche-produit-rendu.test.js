@@ -220,10 +220,18 @@ test('fiche produit rendue par l’application — description et allégations (
     assert.ok(!/Turbos garantis 1 an Chaque turbo/.test(tout), 'le corps du texte copié ressort');
   });
 
-  await t.test('(c) Alibaba (ALV-PT/BT/MEC/CP/RD) : description retenue jusqu’à la décision 4', () => {
+  await t.test('(c) Alibaba (ALV-PT/BT/MEC/CP/RD) : description servie depuis la décision 4', () => {
+    /* Retenue du 14 au 16/09/2026, le temps que Killian confirme l'état réel :
+       ces pièces sont refaites en usine, donc le texte qui décrit le démontage,
+       la remise en état et le contrôle avant envoi dit vrai. Les autres règles
+       continuent de s'y appliquer. */
     const html = pages.get(ALIBABA.sku);
-    assert.equal(sectionDescription(html), null);
-    assert.ok(!toutCeQuiEstAffirme(html).includes(extrait(ALIBABA.description, 60)), 'la description Alibaba ressort');
+    const section = sectionDescription(html);
+    assert.ok(section, 'le bloc description manque sur la fiche Alibaba');
+    assert.ok(texte(section).includes(extrait(ALIBABA.description, 60)), 'la description Alibaba ne ressort pas');
+    const tout = toutCeQuiEstAffirme(html);
+    assert.ok(!ALLEGATIONS['ISO 9001'].test(tout), 'ISO 9001 sur une fiche Alibaba : le certificat n’est pas fourni');
+    assert.ok(!ALLEGATIONS['atelier / usine « à nous »'].test(tout), 'atelier « à nous » sur une fiche Alibaba');
   });
 
   await t.test('(a) en allemand : jamais de description, même traduite', async () => {

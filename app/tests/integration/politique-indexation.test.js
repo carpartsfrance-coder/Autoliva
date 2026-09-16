@@ -61,6 +61,18 @@ process.env.TRACK17_ENABLED = 'false';
 const ECRIRE_REFERENCE = process.env.SEO_REFERENCE_ECRIRE === '1';
 const REFERENCE = path.join(__dirname, '..', 'fixtures', 'seo', 'rendu-avant-politique.json.gz');
 
+/* La date A3 (PR #373) est neutralisée le temps de la capture : elle n'existait
+   pas quand la référence a été enregistrée, et le jour venu elle ajoute un
+   <lastmod> au sitemap des fiches. Sans cela, ce test se mettrait à échouer
+   tout seul le 16/09/2026, pour une raison étrangère à SEO_PRUNE — les dates
+   sont vérifiées par garde-fous-exploration. Le require échoue sur le code
+   d'AVANT la PR #373, d'où le try. */
+let FICHES_A3 = null;
+try { FICHES_A3 = require('../../src/data/seo/fiches-description-a3.json'); } catch { FICHES_A3 = null; }
+function viderCachesSeo() {
+  try { require('../../src/controllers/seoController').__test.viderCaches(); } catch { /* code d'avant */ }
+}
+
 const FIXTURE = require('../fixtures/fiches-produit-prod.json');
 
 const UA_GOOGLEBOT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
@@ -375,7 +387,13 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
 
   await t.test('SEO_PRUNE absent : chaque page témoin est servie exactement comme avant la politique', async () => {
     const signatures = {};
-    for (const chemin of PAGES_TEMOINS) signatures[chemin] = signature(await get(chemin));
+    const dateA3 = FICHES_A3 ? FICHES_A3.dateMiseEnLigne : null;
+    if (FICHES_A3) { FICHES_A3.dateMiseEnLigne = '2099-01-01'; viderCachesSeo(); }
+    try {
+      for (const chemin of PAGES_TEMOINS) signatures[chemin] = signature(await get(chemin));
+    } finally {
+      if (FICHES_A3) { FICHES_A3.dateMiseEnLigne = dateA3; viderCachesSeo(); }
+    }
 
     if (ECRIRE_REFERENCE) {
       fs.writeFileSync(REFERENCE, zlib.gzipSync(JSON.stringify(signatures, null, 1) + '\n', { level: 9 }));

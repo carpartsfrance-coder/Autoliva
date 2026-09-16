@@ -15,8 +15,8 @@ const FICHES_A3 = require('../../src/data/seo/fiches-description-a3.json');
 const APRES_A3 = Date.parse('2026-10-01T00:00:00Z');
 const REDATE = new Date('2026-09-08T18:16:30Z');
 
-test('la liste A3 : 6 771 fiches, identifiants valides et uniques, date au format AAAA-MM-JJ', () => {
-  assert.equal(FICHES_A3.ids.length, 6771, 'le nombre annoncé par la PR #372 (6 787 du plan − 16 fiches DM-)');
+test('la liste A3 : 7 035 fiches, identifiants valides et uniques, date au format AAAA-MM-JJ', () => {
+  assert.equal(FICHES_A3.ids.length, 7035, '6 771 fiches de la PR #372 + les 264 fiches Alibaba rendues le 16/09/2026');
   assert.equal(new Set(FICHES_A3.ids).size, FICHES_A3.ids.length);
   for (const id of FICHES_A3.ids) assert.match(id, /^[a-f0-9]{24}$/);
   assert.match(FICHES_A3.dateMiseEnLigne, /^\d{4}-\d{2}-\d{2}$/);
@@ -31,7 +31,9 @@ test('fiche française : la date A3 si elle a regagné sa description, rien sino
     'hors liste : pas de lastmod, quel que soit updatedAt');
   /* La liste ne suffit pas : si la description n'est pas servie, rien n'a changé. */
   assert.equal(datesSeo.lastmodFicheFr({ _id: listee, sku: 'DM-81318' }, opts), '', 'copie distrimotor');
-  assert.equal(datesSeo.lastmodFicheFr({ _id: listee, sku: 'ALV-PT-2462800200' }, opts), '', 'Alibaba, décision 4');
+  /* Alibaba : masquée jusqu'au 16/09/2026, rendue depuis — si la fiche est
+     dans la liste A3, elle porte la date comme les autres. */
+  assert.equal(datesSeo.lastmodFicheFr({ _id: listee, sku: 'ALV-PT-2462800200' }, opts), date);
   assert.equal(datesSeo.lastmodFicheFr(null, opts), '');
 });
 
