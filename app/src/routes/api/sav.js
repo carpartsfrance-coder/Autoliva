@@ -2492,27 +2492,48 @@ adminRouter.delete('/personal-templates/:key', async (req, res) => {
   } catch (err) { return fail(res, err.message, 500); }
 });
 
-// GET /admin/api/sav/message-templates — bibliothèque de modèles de réponse
-adminRouter.get('/message-templates', (_req, res) => {
-  const templates = [
-    { key: 'piece_recue', title: 'Pièce reçue atelier', icon: 'inventory_2', body: `Bonjour {client_prenom},\n\nNous avons bien reçu votre pièce à l'atelier. Notre équipe technique va procéder au diagnostic sur banc dans les prochains jours ouvrés.\n\nNous reviendrons vers vous dès que l'analyse sera terminée.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
-    { key: 'diag_positif', title: 'Diagnostic positif (garantie)', icon: 'verified', body: `Bonjour {client_prenom},\n\nL'analyse de votre {piece_type} est terminée. Nous avons effectivement constaté un défaut produit pris en charge au titre de notre garantie.\n\nNous procédons à un échange standard, expédition sous 48h ouvrées.\n\nVous recevrez un numéro de suivi dès expédition.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
-    { key: 'diag_negatif', title: 'Diagnostic négatif (non défectueux)', icon: 'cancel', body: `Bonjour {client_prenom},\n\nL'analyse de votre {piece_type} est terminée. Après tests complets sur banc dédié, votre pièce est conforme aux valeurs constructeur et ne présente pas de défaut.\n\nConformément à nos CGV SAV, le forfait d'analyse de 149 € TTC est dû. Un lien de paiement sécurisé vous sera envoyé séparément.\n\nVous trouverez en pièce jointe le rapport d'analyse complet.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
-    { key: 'mauvais_montage', title: 'Mauvais montage détecté', icon: 'build', body: `Bonjour {client_prenom},\n\nL'analyse de votre {piece_type} est terminée. Les tests ont révélé des traces de mauvais montage (absence de réglage base, serrages non conformes) qui excluent la prise en charge sous garantie.\n\nConformément à nos CGV SAV, le forfait d'analyse de 149 € TTC est dû. Un lien de paiement sécurisé vous sera envoyé séparément.\n\nLe rapport détaillé est joint à ce message.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
-    { key: 'relance_docs', title: 'Relance documents manquants', icon: 'campaign', body: `Bonjour {client_prenom},\n\nAfin de pouvoir traiter votre dossier SAV n° {numero}, nous vous invitons à nous transmettre les documents suivants :\n\n• Facture de montage du garage\n• Photos du compteur kilométrique\n• Confirmation du réglage de base effectué\n\nSans ces éléments, nous ne pourrons pas poursuivre la prise en charge.\n\nMerci pour votre retour rapide,\nL'équipe SAV ${brand.NAME}` },
-    { key: 'etiquette_retour', title: 'Étiquette de retour envoyée', icon: 'local_shipping', body: `Bonjour {client_prenom},\n\nVous trouverez ci-joint l'étiquette prépayée pour nous retourner votre {piece_type}.\n\nMerci de :\n• Emballer soigneusement la pièce (carton + calage)\n• Coller l'étiquette bien visible\n• Déposer le colis en point relais ou bureau de poste\n\nDès réception à l'atelier, nous démarrerons l'analyse.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
-  ];
-  return ok(res, { templates });
-});
-
 // ---------- Modèles de message partagés (texte + pièces jointes) ----------
 
 const SavMessageTemplate = require('../../models/SavMessageTemplate');
 
+// Copie unique des modèles livrés avec le site dans la collection (idempotent).
+async function ensureDefaultMessageTemplates() {
+  const settings = await SavSettings.getSingleton();
+  if (settings.messageTemplatesSeededAt) return;
+  const { defaultMessageTemplates } = require('../../config/savMessageTemplatesDefaults');
+  for (const t of defaultMessageTemplates()) {
+    await SavMessageTemplate.updateOne({ builtinKey: t.builtinKey }, { $setOnInsert: t }, { upsert: true });
+  }
+  settings.messageTemplatesSeededAt = new Date();
+  await settings.save();
+}
+
+function parseTemplateMotifs(raw) {
+  const allowed = SavTicket.MOTIFS_SAV || [];
+  return String(raw || '').split(',').map((m) => m.trim()).filter((m) => allowed.includes(m));
+}
+
+const TEMPLATE_FILE_RE = /^(image\/|application\/pdf$)/;
+
+async function storeTemplateFiles(files) {
+  const out = [];
+  for (const f of files) {
+    const stored = await savFileStorage.saveBuffer({
+      buffer: f.buffer,
+      filename: f.originalname,
+      mime: f.mimetype,
+      metadata: { ticketNumero: null, kind: 'modele_message', uploadedBy: 'admin' },
+    });
+    out.push({ url: stored.url, originalName: f.originalname, mime: f.mimetype, size: f.size });
+  }
+  return out;
+}
+
 // GET /admin/api/sav/shared-templates
 adminRouter.get('/shared-templates', async (_req, res) => {
   try {
-    const templates = await SavMessageTemplate.find({}).sort({ usageCount: -1, title: 1 }).lean();
+    await ensureDefaultMessageTemplates();
+    const templates = await SavMessageTemplate.find({}).collation({ locale: 'fr' }).sort({ usageCount: -1, title: 1 }).lean();
     return ok(res, { templates });
   } catch (err) { return fail(res, err.message, 500); }
 });
@@ -2526,25 +2547,53 @@ adminRouter.post('/shared-templates', upload.array('attachments', 5), async (req
     if (body.length > 5000) return fail(res, 'Texte trop long (5000 caractères max)');
     const files = Array.isArray(req.files) ? req.files : [];
     // Tout vérifier avant d'enregistrer : un refus ne doit pas laisser de fichiers orphelins.
-    const refused = files.find((f) => !/^(image\/|application\/pdf$)/.test(f.mimetype || ''));
+    const refused = files.find((f) => !TEMPLATE_FILE_RE.test(f.mimetype || ''));
     if (refused) return fail(res, `Fichier refusé : ${refused.originalname} (images et PDF uniquement)`);
-    const attachments = [];
-    for (const f of files) {
-      const stored = await savFileStorage.saveBuffer({
-        buffer: f.buffer,
-        filename: f.originalname,
-        mime: f.mimetype,
-        metadata: { ticketNumero: null, kind: 'modele_message', uploadedBy: 'admin' },
-      });
-      attachments.push({ url: stored.url, originalName: f.originalname, mime: f.mimetype, size: f.size });
-    }
+    const attachments = await storeTemplateFiles(files);
     const doc = await SavMessageTemplate.create({
       title,
       body,
       attachments,
+      motifs: parseTemplateMotifs(req.body.motifs),
       createdByEmail: (req.session && req.session.admin && req.session.admin.email) || '',
     });
     audit.log({ req, action: 'sav.template.create', entityType: 'sav_message_template', entityId: String(doc._id), after: { title, attachments: attachments.length } });
+    return ok(res, { template: doc });
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
+// PUT /admin/api/sav/shared-templates/:id — multipart { title, body, motifs, keepAttachments (JSON d'URLs), attachments[] }
+adminRouter.put('/shared-templates/:id', upload.array('attachments', 5), async (req, res) => {
+  try {
+    const doc = await SavMessageTemplate.findById(req.params.id);
+    if (!doc) return fail(res, 'Modèle introuvable', 404);
+    const title = String((req.body && req.body.title) || '').trim().slice(0, 80);
+    const body = String((req.body && req.body.body) || '').trim();
+    if (!title || !body) return fail(res, 'Titre et texte requis');
+    if (body.length > 5000) return fail(res, 'Texte trop long (5000 caractères max)');
+    const files = Array.isArray(req.files) ? req.files : [];
+    const refused = files.find((f) => !TEMPLATE_FILE_RE.test(f.mimetype || ''));
+    if (refused) return fail(res, `Fichier refusé : ${refused.originalname} (images et PDF uniquement)`);
+    let keepUrls = [];
+    try { keepUrls = JSON.parse(req.body.keepAttachments || '[]'); } catch (_) { keepUrls = []; }
+    const keep = new Set(Array.isArray(keepUrls) ? keepUrls : []);
+    const kept = (doc.attachments || []).filter((a) => keep.has(a.url));
+    const removed = (doc.attachments || []).filter((a) => !keep.has(a.url));
+    if (kept.length + files.length > 5) return fail(res, '5 pièces jointes maximum par modèle');
+    const before = { title: doc.title, attachments: (doc.attachments || []).length };
+    const added = await storeTemplateFiles(files);
+    doc.title = title;
+    doc.body = body;
+    doc.motifs = parseTemplateMotifs(req.body.motifs);
+    doc.attachments = kept.map((a) => (a.toObject ? a.toObject() : a)).concat(added);
+    doc.updatedByEmail = (req.session && req.session.admin && req.session.admin.email) || '';
+    await doc.save();
+    // Fichiers retirés du modèle : supprimés (les copies jointes aux tickets sont d'autres fichiers).
+    for (const a of removed) {
+      const fileId = savFileStorage.extractIdFromUrl(a.url);
+      if (fileId) { try { await savFileStorage.deleteFile(fileId); } catch (_) {} }
+    }
+    audit.log({ req, action: 'sav.template.update', entityType: 'sav_message_template', entityId: String(doc._id), before, after: { title, attachments: doc.attachments.length } });
     return ok(res, { template: doc });
   } catch (err) { return fail(res, err.message, 500); }
 });

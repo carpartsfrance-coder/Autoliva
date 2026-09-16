@@ -17,10 +17,17 @@ const SavMessageTemplateSchema = new mongoose.Schema(
       mime: { type: String, trim: true },
       size: { type: Number, min: 0 },
     }],
+    // Motifs de ticket où le modèle est proposé (vide = tous les tickets).
+    motifs: [{ type: String, trim: true }],
+    // Repère des modèles livrés avec le site (copiés une fois, puis libres).
+    builtinKey: { type: String, trim: true },
     createdByEmail: { type: String, trim: true },
+    updatedByEmail: { type: String, trim: true },
     usageCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
+
+SavMessageTemplateSchema.index({ builtinKey: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('SavMessageTemplate', SavMessageTemplateSchema);

@@ -1574,6 +1574,7 @@
         renderPaiement();
         prefillDiagEnrichi();
         prefillFournisseur();
+        renderSharedChips();
         renderPreview();
         renderTabBadges();
         loadOrderContext();
@@ -2647,39 +2648,7 @@
           }
         }
 
-        // Templates du playbook (dans l'onglet Répondre)
-        var tplWrap = document.getElementById('sav-playbook-templates-wrap');
-        var tplChips = document.getElementById('sav-playbook-templates-chips');
-        if (tplWrap && tplChips) {
-          var tpls = playbookData.templates || [];
-          tplChips.innerHTML = '';
-          if (!tpls.length) {
-            tplWrap.classList.add('hidden');
-          } else {
-            tplWrap.classList.remove('hidden');
-            tpls.forEach(function (tp) {
-              var b = document.createElement('button');
-              b.type = 'button';
-              b.className = 'sav-tpl-chip sav-tpl-chip--sm';
-              b.innerHTML = '<span>#' + escapeHtml(tp.label) + '</span>';
-              b.addEventListener('click', function () {
-                var body = interpolateMacro(tp.body || '', ticket || {});
-                var ed = document.getElementById('sav-msg-editor');
-                if (!ed) return;
-                // Insertion : remplace si vide, sinon append en fin
-                var current = (ed.innerHTML || '').trim();
-                ed.innerHTML = current ? (current + '<br><br>' + body) : body;
-                var htmlField = document.getElementById('sav-msg-html');
-                var textField = document.getElementById('sav-msg-contenu');
-                if (htmlField) htmlField.value = ed.innerHTML;
-                if (textField) textField.value = ed.innerText;
-                toast('Modèle inséré : ' + tp.label);
-                ed.focus();
-              });
-              tplChips.appendChild(b);
-            });
-          }
-        }
+        // Les modèles propres au motif sont désormais des modèles d'équipe (voir renderSharedChips).
 
         // Re-render "ACTION SUIVANTE" maintenant que playbookData est dispo
         if (ticket) renderNextAction(ticket);
@@ -3943,21 +3912,25 @@
     window.renderTabBadges = renderTabBadges;
 
     // -------- Templates + variables + WYSIWYG + preview --------
-    var TEMPLATES = {
-      reception: 'Bonjour {client_prenom},\n\nNous avons bien reçu votre pièce ({piece_type}) à notre atelier. L\'analyse sur banc démarrera dans les jours qui viennent.\n\nDossier : {ticket_numero}',
-      analyse_ok: 'Bonjour {client_prenom},\n\nBonne nouvelle : notre analyse confirme un défaut produit sur votre {piece_type}. Nous allons procéder à l\'échange/remboursement.\n\nDossier : {ticket_numero}',
-      analyse_neg: 'Bonjour {client_prenom},\n\nNotre rapport d\'analyse est terminé. La pièce {piece_type} ne présente pas de défaut produit : un forfait de 149 € TTC vous sera facturé conformément aux CGV SAV.\n\nDossier : {ticket_numero}',
-      relance_doc: 'Bonjour {client_prenom},\n\nPour traiter votre dossier {ticket_numero}, nous avons besoin de la facture du garage {garage_nom} et de la confirmation du réglage de base.',
-      rdv: 'Bonjour {client_prenom},\n\nPouvez-vous nous confirmer le rendez-vous {rendez_vous_date} pour la prise en charge de votre dossier {ticket_numero} ?',
-    };
+    // Contenu des modèles appliqués au composeur, par clé. Les modèles eux-mêmes
+    // vivent en base (modèles d'équipe, modifiables) : voir loadSharedTemplates.
+    var TEMPLATES = {};
     function interpolate(text) {
       if (!ticket) return text;
       var c = ticket.client || {};
       var prenom = (c.nom || c.email || '').split(' ')[0];
+      var nomComplet = ((c.prenom || '') + ' ' + (c.nom || '')).trim() || 'Client';
+      var v = ticket.vehicule || {};
+      var vehicule = [v.marque, v.modele, v.annee].filter(Boolean).join(' ') || 'votre véhicule';
+      // {nom}, {numero}, {piece} et {vehicule} : variables des anciens modèles de playbook.
       return String(text || '')
         .replace(/{client_prenom}/g, escapeHtml(prenom))
+        .replace(/{nom}/g, escapeHtml(nomComplet))
         .replace(/{ticket_numero}/g, escapeHtml(ticket.numero || ''))
+        .replace(/{numero}/g, escapeHtml(ticket.numero || ''))
         .replace(/{piece_type}/g, escapeHtml(ticket.pieceType || ''))
+        .replace(/{piece}/g, escapeHtml(ticket.pieceType || 'la pièce'))
+        .replace(/{vehicule}/g, escapeHtml(vehicule))
         .replace(/{garage_nom}/g, escapeHtml((ticket.garage && ticket.garage.nom) || ''))
         .replace(/{rendez_vous_date}/g, '[à compléter]');
     }
@@ -4034,15 +4007,6 @@
       host.appendChild(btn);
     }
 
-    // Charge la bibliothèque de templates depuis l'API et ajoute les chips
-    api('/message-templates').then(function (res) {
-      if (!res.ok || !res.j.success) return;
-      var list = (res.j.data && res.j.data.templates) || [];
-      var host = document.getElementById('sav-templates-chips');
-      if (!host) return;
-      list.forEach(function (t) { appendTemplateChip(host, t, false); });
-    });
-
     // Charge les templates personnels de l'agent connecté
     function loadPersonalTemplates() {
       if (!CURRENT_USER_ID) return;
@@ -4072,34 +4036,46 @@
       });
     });
 
-    // -------- Modèles d'équipe (texte + pièces jointes) --------
-    // Enregistrés une fois depuis le composeur, utilisables sur tous les tickets.
-    // Appliquer un modèle remplit le message et joint une copie de ses fichiers.
+    // -------- Modèles d'équipe (texte + pièces jointes, modifiables) --------
+    // Tous les modèles du composeur viennent de la base : l'équipe les crée, les
+    // modifie et les supprime. Un modèle peut être réservé à certains motifs.
     var sharedTemplates = {};
+    var sharedTemplateList = [];
     function loadSharedTemplates() {
       api('/shared-templates').then(function (res) {
         if (!res.ok || !res.j.success) return;
-        var host = document.getElementById('sav-templates-chips');
-        if (!host) return;
-        host.querySelectorAll('.sav-tpl-chip--shared').forEach(function (n) { n.remove(); });
-        sharedTemplates = {};
-        ((res.j.data && res.j.data.templates) || []).forEach(function (t) {
-          var key = 'shared_' + t._id;
-          sharedTemplates[key] = t;
-          TEMPLATES[key] = t.body;
-          var nbPj = (t.attachments || []).length;
-          var chip = document.createElement('span');
-          chip.className = 'sav-tpl-chip sav-tpl-chip--sm sav-tpl-chip--shared';
-          chip.setAttribute('role', 'button');
-          chip.setAttribute('tabindex', '0');
-          chip.setAttribute('data-shared-tpl', key);
-          chip.setAttribute('title', t.title + (nbPj ? ' — ' + nbPj + ' pièce(s) jointe(s)' : ''));
-          chip.innerHTML = (nbPj ? '<span class="material-symbols-outlined" style="font-size:13px;" aria-hidden="true">attach_file</span>' : '') +
-            '<span>#' + escapeHtml(t.title) + '</span>' +
-            '<span class="sav-tpl-del" role="button" tabindex="0" data-del-shared-tpl="' + escapeHtml(t._id) + '" aria-label="Supprimer ce modèle">×</span>';
-          host.insertBefore(chip, host.firstChild);
-        });
+        sharedTemplateList = (res.j.data && res.j.data.templates) || [];
+        renderSharedChips();
       });
+    }
+    function renderSharedChips() {
+      var host = document.getElementById('sav-templates-chips');
+      if (!host) return;
+      host.querySelectorAll('.sav-tpl-chip--shared').forEach(function (n) { n.remove(); });
+      sharedTemplates = {};
+      var motif = (ticket && ticket.motifSav) || 'piece_defectueuse';
+      var visible = sharedTemplateList.filter(function (t) {
+        return !t.motifs || !t.motifs.length || t.motifs.indexOf(motif) !== -1;
+      });
+      var frag = document.createDocumentFragment();
+      visible.forEach(function (t) {
+        var key = 'shared_' + t._id;
+        sharedTemplates[key] = t;
+        TEMPLATES[key] = t.body;
+        var nbPj = (t.attachments || []).length;
+        var chip = document.createElement('span');
+        chip.className = 'sav-tpl-chip sav-tpl-chip--sm sav-tpl-chip--shared';
+        chip.setAttribute('role', 'button');
+        chip.setAttribute('tabindex', '0');
+        chip.setAttribute('data-shared-tpl', key);
+        chip.setAttribute('title', t.title + (nbPj ? ' — ' + nbPj + ' pièce(s) jointe(s)' : ''));
+        chip.innerHTML = (nbPj ? '<span class="material-symbols-outlined" style="font-size:13px;" aria-hidden="true">attach_file</span>' : '') +
+          '<span>#' + escapeHtml(t.title) + '</span>' +
+          '<span class="sav-tpl-del sav-tpl-edit" role="button" tabindex="0" data-edit-shared-tpl="' + escapeHtml(key) + '" title="Modifier ou supprimer ce modèle" aria-label="Modifier ou supprimer ce modèle">' +
+            '<span class="material-symbols-outlined" style="font-size:12px;" aria-hidden="true">edit</span></span>';
+        frag.appendChild(chip);
+      });
+      host.insertBefore(frag, host.firstChild);
     }
     loadSharedTemplates();
 
@@ -4110,6 +4086,7 @@
       // Les fichiers d'un modèle appliqué avant sont remplacés, les autres PJ restent.
       attachFiles = attachFiles.filter(function (a) { return !a.fromTemplate; });
       var list = t.attachments || [];
+      api('/shared-templates/' + encodeURIComponent(t._id) + '/used', { method: 'POST', body: '{}' });
       if (!list.length) { renderAttachList(); return; }
       Promise.all(list.map(function (a) {
         return fetch(a.url, { credentials: 'same-origin' })
@@ -4124,22 +4101,113 @@
       }).catch(function () {
         toast('Texte appliqué, mais les pièces jointes du modèle n\'ont pas pu être chargées', 'error');
       });
-      api('/shared-templates/' + encodeURIComponent(t._id) + '/used', { method: 'POST', body: '{}' });
+    }
+
+    // Fenêtre de création / modification
+    var tplModal = document.getElementById('sav-tpl-modal');
+    var tplForm = document.getElementById('sav-tpl-form');
+    var tplState = { id: null, keep: [], files: [] };
+    function tplScopeSync() {
+      var scope = document.getElementById('sav-tpl-scope');
+      var box = document.getElementById('sav-tpl-motifs');
+      if (scope && box) box.classList.toggle('hidden', scope.value !== 'motifs');
+    }
+    function renderTplFiles() {
+      var ul = document.getElementById('sav-tpl-files');
+      if (!ul) return;
+      var rows = tplState.keep.map(function (a, i) {
+        return '<li class="flex items-center gap-2"><span class="material-symbols-outlined text-slate-400" style="font-size:16px;">attach_file</span>' +
+          '<a href="' + escapeHtml(a.url) + '" target="_blank" rel="noopener" class="flex-1 truncate text-primary hover:underline">' + escapeHtml(a.originalName || 'fichier') + '</a>' +
+          '<button type="button" data-tpl-rm-keep="' + i + '" class="text-slate-400 hover:text-red-600" aria-label="Retirer"><span class="material-symbols-outlined" style="font-size:16px;">close</span></button></li>';
+      }).concat(tplState.files.map(function (f, i) {
+        return '<li class="flex items-center gap-2"><span class="material-symbols-outlined text-emerald-600" style="font-size:16px;">add</span>' +
+          '<span class="flex-1 truncate">' + escapeHtml(f.name) + '</span>' +
+          '<button type="button" data-tpl-rm-new="' + i + '" class="text-slate-400 hover:text-red-600" aria-label="Retirer"><span class="material-symbols-outlined" style="font-size:16px;">close</span></button></li>';
+      }));
+      ul.innerHTML = rows.length ? rows.join('') : '<li class="text-slate-400">Aucune pièce jointe</li>';
+    }
+    function openTplModal(t, prefill) {
+      if (!tplModal) return;
+      tplState = {
+        id: t ? t._id : null,
+        keep: t ? (t.attachments || []).slice() : [],
+        files: (prefill && prefill.files) || [],
+      };
+      document.getElementById('sav-tpl-modal-title').textContent = t ? 'Modifier le modèle' : 'Nouveau modèle d\'équipe';
+      document.getElementById('sav-tpl-title').value = t ? t.title : ((prefill && prefill.title) || '');
+      document.getElementById('sav-tpl-body').value = t ? t.body : ((prefill && prefill.body) || '');
+      var motifs = (t && t.motifs) || [];
+      document.getElementById('sav-tpl-scope').value = motifs.length ? 'motifs' : 'all';
+      tplModal.querySelectorAll('[data-tpl-motif]').forEach(function (cb) { cb.checked = motifs.indexOf(cb.value) !== -1; });
+      tplScopeSync();
+      document.getElementById('sav-tpl-delete').classList.toggle('hidden', !t);
+      renderTplFiles();
+      openModal(tplModal);
+      document.getElementById('sav-tpl-title').focus();
+    }
+    function closeTplModal() { if (tplModal) closeModal(tplModal); }
+    if (tplModal) {
+      tplModal.addEventListener('click', function (e) {
+        if (e.target === tplModal || (e.target.closest && e.target.closest('[data-close-tpl]'))) { closeTplModal(); return; }
+        var rmKeep = e.target.closest && e.target.closest('[data-tpl-rm-keep]');
+        if (rmKeep) { tplState.keep.splice(parseInt(rmKeep.getAttribute('data-tpl-rm-keep'), 10), 1); renderTplFiles(); return; }
+        var rmNew = e.target.closest && e.target.closest('[data-tpl-rm-new]');
+        if (rmNew) { tplState.files.splice(parseInt(rmNew.getAttribute('data-tpl-rm-new'), 10), 1); renderTplFiles(); }
+      });
+      document.getElementById('sav-tpl-scope').addEventListener('change', tplScopeSync);
+      var tplFileInput = document.getElementById('sav-tpl-file-input');
+      document.getElementById('sav-tpl-add-file').addEventListener('click', function () { tplFileInput.click(); });
+      tplFileInput.addEventListener('change', function () {
+        for (var i = 0; i < tplFileInput.files.length; i++) {
+          if (tplState.keep.length + tplState.files.length >= 5) { toast('5 pièces jointes maximum', 'error'); break; }
+          tplState.files.push(tplFileInput.files[i]);
+        }
+        tplFileInput.value = '';
+        renderTplFiles();
+      });
+      tplForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var fd = new FormData();
+        fd.append('title', document.getElementById('sav-tpl-title').value.trim());
+        fd.append('body', document.getElementById('sav-tpl-body').value.trim());
+        var motifs = document.getElementById('sav-tpl-scope').value === 'motifs'
+          ? Array.prototype.map.call(tplModal.querySelectorAll('[data-tpl-motif]:checked'), function (cb) { return cb.value; })
+          : [];
+        if (document.getElementById('sav-tpl-scope').value === 'motifs' && !motifs.length) { toast('Cochez au moins un motif', 'error'); return; }
+        fd.append('motifs', motifs.join(','));
+        if (tplState.id) fd.append('keepAttachments', JSON.stringify(tplState.keep.map(function (a) { return a.url; })));
+        tplState.files.forEach(function (f) { fd.append('attachments', f, f.name); });
+        var submitBtn = document.getElementById('sav-tpl-submit');
+        submitBtn.disabled = true;
+        fetch('/admin/api/sav/shared-templates' + (tplState.id ? '/' + encodeURIComponent(tplState.id) : ''), {
+          method: tplState.id ? 'PUT' : 'POST', headers: { 'Authorization': 'Bearer ' + TOKEN }, body: fd,
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (res.ok && res.j.success) { toast(tplState.id ? 'Modèle modifié' : 'Modèle créé', 'success'); closeTplModal(); loadSharedTemplates(); }
+            else toast((res.j && res.j.error) || 'Erreur', 'error');
+          })
+          .catch(function () { toast('Erreur réseau', 'error'); })
+          .finally(function () { submitBtn.disabled = false; });
+      });
+      document.getElementById('sav-tpl-delete').addEventListener('click', function () {
+        if (!tplState.id) return;
+        var title = document.getElementById('sav-tpl-title').value;
+        if (!confirm('Supprimer le modèle « ' + title + ' » pour toute l\'équipe ?')) return;
+        api('/shared-templates/' + encodeURIComponent(tplState.id), { method: 'DELETE' }).then(function (res) {
+          if (res.ok && res.j.success) { toast('Modèle supprimé'); closeTplModal(); loadSharedTemplates(); }
+          else toast((res.j && res.j.error) || 'Erreur', 'error');
+        });
+      });
     }
 
     var sharedChipsHost = document.getElementById('sav-templates-chips');
     if (sharedChipsHost) {
       sharedChipsHost.addEventListener('click', function (e) {
-        var del = e.target.closest && e.target.closest('[data-del-shared-tpl]');
-        if (del) {
+        var edit = e.target.closest && e.target.closest('[data-edit-shared-tpl]');
+        if (edit) {
           e.preventDefault(); e.stopPropagation();
-          var id = del.getAttribute('data-del-shared-tpl');
-          var tpl = sharedTemplates['shared_' + id];
-          if (!confirm('Supprimer le modèle « ' + (tpl ? tpl.title : '') + ' » pour toute l\'équipe ?')) return;
-          api('/shared-templates/' + encodeURIComponent(id), { method: 'DELETE' }).then(function (res) {
-            if (res.ok && res.j.success) { toast('Modèle supprimé'); delete TEMPLATES['shared_' + id]; loadSharedTemplates(); }
-            else toast((res.j && res.j.error) || 'Erreur', 'error');
-          });
+          openTplModal(sharedTemplates[edit.getAttribute('data-edit-shared-tpl')]);
           return;
         }
         var chip = e.target.closest && e.target.closest('[data-shared-tpl]');
@@ -4147,31 +4215,21 @@
       });
       sharedChipsHost.addEventListener('keydown', function (e) {
         if (e.key !== 'Enter' && e.key !== ' ') return;
+        var edit = e.target.closest && e.target.closest('[data-edit-shared-tpl]');
         var chip = e.target.closest && e.target.closest('[data-shared-tpl]');
-        if (chip && !e.target.closest('[data-del-shared-tpl]')) { e.preventDefault(); applySharedTemplate(chip.getAttribute('data-shared-tpl')); }
+        if (!chip) return;
+        e.preventDefault();
+        if (edit) openTplModal(sharedTemplates[edit.getAttribute('data-edit-shared-tpl')]);
+        else applySharedTemplate(chip.getAttribute('data-shared-tpl'));
       });
     }
 
+    // « Créer un modèle » : part du message en cours et de ses pièces jointes.
     var saveSharedBtn = document.getElementById('sav-save-shared-template');
     if (saveSharedBtn) saveSharedBtn.addEventListener('click', function () {
       var body = editor && editor.innerText ? editor.innerText.trim() : '';
-      if (!body) { toast('Écrivez d\'abord le message à enregistrer', 'error'); return; }
-      var files = attachFiles.filter(function (a) { return !a.isReturnLabel; });
-      var title = window.prompt('Nom du modèle (visible par toute l\'équipe)' + (files.length ? ' — ' + files.length + ' pièce(s) jointe(s) incluse(s)' : '') + ' :', body.split('\n')[0].slice(0, 40));
-      if (!title || !title.trim()) return;
-      var fd = new FormData();
-      fd.append('title', title.trim());
-      fd.append('body', body);
-      files.forEach(function (a) { fd.append('attachments', a.file, a.file.name); });
-      saveSharedBtn.disabled = true;
-      fetch('/admin/api/sav/shared-templates', { method: 'POST', headers: { 'Authorization': 'Bearer ' + TOKEN }, body: fd })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-        .then(function (res) {
-          if (res.ok && res.j.success) { toast('Modèle « ' + title.trim() + ' » enregistré', 'success'); loadSharedTemplates(); }
-          else toast((res.j && res.j.error) || 'Erreur', 'error');
-        })
-        .catch(function () { toast('Erreur réseau', 'error'); })
-        .finally(function () { saveSharedBtn.disabled = false; });
+      var files = attachFiles.filter(function (a) { return !a.isReturnLabel; }).map(function (a) { return a.file; });
+      openTplModal(null, { body: body, title: body.split('\n')[0].slice(0, 40), files: files.slice(0, 5) });
     });
 
     // Suppression d'un favori
