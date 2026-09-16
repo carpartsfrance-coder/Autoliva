@@ -1,5 +1,5 @@
 <%- include('./partials/head') %>
-<link rel="stylesheet" href="/css/sav.css?v=33">
+<link rel="stylesheet" href="/css/sav.css?v=34">
 <%- include('./partials/sidebar', { active: 'sav' }) %>
 
 <main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>" data-sav-numero="<%= numero %>" data-current-statut="" data-current-user-id="<%= (typeof currentAdmin !== 'undefined' && currentAdmin && currentAdmin.adminUserId) || '' %>">
@@ -256,6 +256,9 @@
                   </button>
                   <button type="button" id="sav-reformulate-btn" class="sav-composer__icon-btn" title="Reformuler avec l'IA (ton <%= brand.NAME %>)">
                     <span class="material-symbols-outlined" style="font-size:18px;">auto_awesome</span>
+                  </button>
+                  <button type="button" id="sav-save-shared-template" class="sav-composer__icon-btn" title="Enregistrer ce message (et ses pièces jointes) comme modèle pour l'équipe">
+                    <span class="material-symbols-outlined" style="font-size:18px;">bookmark_add</span>
                   </button>
                   <input type="file" id="sav-attach-input" class="hidden" multiple accept="application/pdf,image/*">
                   <input type="file" id="sav-return-label-input" class="hidden" accept="application/pdf">
@@ -1038,5 +1041,5 @@
 
 <div class="sav-toast-root" id="sav-toast-root" aria-live="polite"></div>
 <script src="/js/sav-labels.js?v=5" defer></script>
-<script src="/js/sav-admin.js?v=43" defer></script>
+<script src="/js/sav-admin.js?v=44" defer></script>
 <%- include('./partials/footer') %>

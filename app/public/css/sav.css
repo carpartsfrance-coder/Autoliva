@@ -2047,6 +2047,19 @@
 }
 .sav-tpl-del:hover { background: #f59e0b; color: #fff; }
 
+/* Modèles d'équipe (texte + pièces jointes) */
+.sav-tpl-chip--shared {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1e40af;
+  position: relative;
+  padding-right: 22px;
+  cursor: pointer;
+}
+.sav-tpl-chip--shared:hover { border-color: #3b82f6; }
+.sav-tpl-chip--shared .sav-tpl-del { color: #1e40af; }
+.sav-tpl-chip--shared .sav-tpl-del:hover { background: #3b82f6; color: #fff; }
+
 /* ====================================================================== */
 /* === Sous-sections (split visuel d'étape) ============================ */
 /* ====================================================================== */
