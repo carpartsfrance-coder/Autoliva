@@ -1,5 +1,5 @@
 <%- include('./partials/head') %>
-<link rel="stylesheet" href="/css/sav.css?v=34">
+<link rel="stylesheet" href="/css/sav.css?v=35">
 <%- include('./partials/sidebar', { active: 'sav' }) %>
 
 <main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>" data-sav-numero="<%= numero %>" data-current-statut="" data-current-user-id="<%= (typeof currentAdmin !== 'undefined' && currentAdmin && currentAdmin.adminUserId) || '' %>">
@@ -153,34 +153,9 @@
                   </button>
                 </div>
                 <input type="hidden" name="canal" id="sav-canal-input" value="inapp">
-                <div id="sav-templates-chips" class="flex gap-1 flex-wrap">
-                  <% const _tpls = [
-                    ['reception','Piece recue','inventory'],
-                    ['analyse_ok','Defaut confirme','verified'],
-                    ['analyse_neg','Pas de defaut','euro'],
-                    ['relance_doc','Relance docs','description'],
-                    ['rdv','RDV','event'],
-                  ]; %>
-                  <% _tpls.forEach(function(t){ %>
-                    <button type="button" data-template="<%= t[0] %>" title="<%= t[1] %>" class="sav-tpl-chip sav-tpl-chip--sm">
-                      <span>#<%= t[1] %></span>
-                    </button>
-                  <% }); %>
-                </div>
-                <!-- Playbook templates -->
-                <div id="sav-playbook-templates-wrap" class="hidden">
-                  <div id="sav-playbook-templates-chips" class="flex gap-1 flex-wrap"></div>
-                </div>
+                <!-- Modèles d'équipe : chargés depuis /shared-templates, filtrés selon le motif du ticket -->
+                <div id="sav-templates-chips" class="flex gap-1 flex-wrap"></div>
               </div>
-
-              <select id="sav-template" class="hidden">
-                <option value=""></option>
-                <option value="reception"></option>
-                <option value="analyse_ok"></option>
-                <option value="analyse_neg"></option>
-                <option value="relance_doc"></option>
-                <option value="rdv"></option>
-              </select>
 
               <!-- Sujet retiré : toute conversation passe par l'espace SAV (in-app), seules
                    des notifications courtes sont envoyées par email. Pas de champ sujet utile. -->
@@ -257,7 +232,7 @@
                   <button type="button" id="sav-reformulate-btn" class="sav-composer__icon-btn" title="Reformuler avec l'IA (ton <%= brand.NAME %>)">
                     <span class="material-symbols-outlined" style="font-size:18px;">auto_awesome</span>
                   </button>
-                  <button type="button" id="sav-save-shared-template" class="sav-composer__icon-btn" title="Enregistrer ce message (et ses pièces jointes) comme modèle pour l'équipe">
+                  <button type="button" id="sav-save-shared-template" class="sav-composer__icon-btn" title="Créer un modèle d'équipe à partir de ce message (et de ses pièces jointes)">
                     <span class="material-symbols-outlined" style="font-size:18px;">bookmark_add</span>
                   </button>
                   <input type="file" id="sav-attach-input" class="hidden" multiple accept="application/pdf,image/*">
@@ -935,6 +910,52 @@
   </div>
 </div>
 
+<!-- Modale modèle de message (création / modification) -->
+<div id="sav-tpl-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-tpl-modal-title">
+  <div class="bg-white rounded-2xl shadow-xl max-w-xl w-full p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h3 id="sav-tpl-modal-title" class="text-lg font-semibold">Modèle de message</h3>
+      <button type="button" data-close-tpl aria-label="Fermer" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+    </div>
+    <form id="sav-tpl-form" class="space-y-4">
+      <div>
+        <label for="sav-tpl-title" class="block text-xs font-semibold text-slate-600 mb-1">Nom du modèle</label>
+        <input id="sav-tpl-title" maxlength="80" required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label for="sav-tpl-body" class="block text-xs font-semibold text-slate-600 mb-1">Texte</label>
+        <textarea id="sav-tpl-body" rows="10" maxlength="5000" required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></textarea>
+        <p class="mt-1 text-xs text-slate-500">Remplacés à l'envoi : {client_prenom}, {nom}, {ticket_numero}, {piece_type}, {vehicule}, {garage_nom}</p>
+      </div>
+      <div>
+        <label for="sav-tpl-scope" class="block text-xs font-semibold text-slate-600 mb-1">Proposer ce modèle</label>
+        <select id="sav-tpl-scope" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+          <option value="all">Sur tous les tickets</option>
+          <option value="motifs">Seulement pour certains motifs</option>
+        </select>
+        <div id="sav-tpl-motifs" class="hidden mt-2 grid grid-cols-2 gap-1.5 text-sm">
+          <% [['piece_defectueuse','Pièce défectueuse'],['retard_livraison','Retard de livraison'],['colis_abime','Colis abîmé'],['colis_non_recu','Colis non reçu'],['erreur_preparation','Erreur de préparation'],['retractation','Rétractation'],['non_compatible','Non compatible'],['facture_document','Facture / document'],['remboursement','Remboursement'],['autre','Autre']].forEach(function (m) { %>
+            <label class="inline-flex items-center gap-2"><input type="checkbox" value="<%= m[0] %>" data-tpl-motif class="rounded"><span><%= m[1] %></span></label>
+          <% }); %>
+        </div>
+      </div>
+      <div>
+        <div class="text-xs font-semibold text-slate-600 mb-1">Pièces jointes (images ou PDF, 5 maximum)</div>
+        <ul id="sav-tpl-files" class="space-y-1 text-sm"></ul>
+        <button type="button" id="sav-tpl-add-file" class="mt-2 btn btn-secondary text-xs inline-flex items-center gap-1"><span class="material-symbols-outlined" style="font-size:16px;">attach_file</span>Ajouter un fichier</button>
+        <input type="file" id="sav-tpl-file-input" class="hidden" multiple accept="image/*,application/pdf">
+      </div>
+      <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+        <button type="button" id="sav-tpl-delete" class="hidden text-sm font-medium text-red-600 hover:underline">Supprimer le modèle</button>
+        <div class="flex gap-2 ml-auto">
+          <button type="button" data-close-tpl class="btn btn-secondary">Annuler</button>
+          <button type="submit" id="sav-tpl-submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- Modale aide raccourcis -->
 <div id="sav-kbd-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-kbd-modal-title">
   <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
@@ -1041,5 +1062,5 @@
 
 <div class="sav-toast-root" id="sav-toast-root" aria-live="polite"></div>
 <script src="/js/sav-labels.js?v=5" defer></script>
-<script src="/js/sav-admin.js?v=44" defer></script>
+<script src="/js/sav-admin.js?v=45" defer></script>
 <%- include('./partials/footer') %>

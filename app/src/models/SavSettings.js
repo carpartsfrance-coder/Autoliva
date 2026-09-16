@@ -56,6 +56,9 @@ const savSettingsSchema = new mongoose.Schema(
     // véhicule client immobilisé. 0,5 = deux fois plus rapide qu'un particulier,
     // 1 = pas de différence. Plancher appliqué à la pose : 1 h ou 1 jour ouvré.
     proSlaFactor: { type: Number, default: 0.5, min: 0.1, max: 1 },
+    // Date de la copie unique des modèles de message livrés avec le site :
+    // une fois posée, un modèle supprimé par l'équipe ne revient pas.
+    messageTemplatesSeededAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
