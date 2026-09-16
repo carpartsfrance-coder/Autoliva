@@ -460,6 +460,66 @@
     var state = { page: 1, perPage: 20, sort: 'createdAt', dir: 'desc', search: '' };
     var teamCache = [];
     var selected = new Set();
+    var DEFAULT_STATE = { page: 1, perPage: 20, sort: 'createdAt', dir: 'desc' };
+    var pendingAssignee = '';
+
+    function ticketUrl(n) { return '/admin/sav/tickets/' + encodeURIComponent(n); }
+    function openInNewTab(n) { window.open(ticketUrl(n), '_blank', 'noopener'); }
+
+    // L'état de la liste (filtres, tri, page) vit dans l'adresse : revenir d'une fiche,
+    // recharger ou partager le lien redonne exactement la même vue.
+    function uiParams() {
+      var qs = new URLSearchParams();
+      var multi = {};
+      new FormData(form).forEach(function (v, k) {
+        if (!v) return;
+        if (k === 'statut' || k === 'pieceType') { (multi[k] = multi[k] || []).push(v); return; }
+        qs.set(k, v);
+      });
+      Object.keys(multi).forEach(function (k) { qs.set(k, multi[k].join(',')); });
+      ['page', 'perPage', 'sort', 'dir'].forEach(function (k) {
+        if (String(state[k]) !== String(DEFAULT_STATE[k])) qs.set(k, state[k]);
+      });
+      if (viewMode === 'kanban') qs.set('vue', 'colonnes');
+      return qs;
+    }
+    function applyUiParams(params) {
+      form.reset();
+      form.querySelectorAll('input[type="hidden"]').forEach(function (h) { h.value = ''; });
+      form.querySelectorAll('[data-multiselect] input:checked').forEach(function (cb) { cb.checked = false; });
+      state.page = DEFAULT_STATE.page; state.perPage = DEFAULT_STATE.perPage;
+      state.sort = DEFAULT_STATE.sort; state.dir = DEFAULT_STATE.dir;
+      params.forEach(function (v, k) {
+        if (k === 'page' || k === 'perPage') { state[k] = Math.max(1, parseInt(v, 10) || DEFAULT_STATE[k]); return; }
+        if (k === 'sort' || k === 'dir') { state[k] = v; return; }
+        if (k === 'vue') return;
+        if (k === 'statut' || k === 'pieceType') {
+          v.split(',').forEach(function (val) {
+            var cb = form.querySelector('[data-multiselect="' + k + '"] input[value="' + val.replace(/"/g, '') + '"]');
+            if (cb) cb.checked = true;
+          });
+          return;
+        }
+        var el = form.querySelector('[name="' + k + '"]');
+        if (!el) return;
+        if (el.type === 'checkbox') el.checked = v === 'true';
+        else {
+          el.value = v;
+          if (k === 'assignedToUserId' && el.value !== v) pendingAssignee = v; // options pas encore chargées
+        }
+      });
+      var ps = document.getElementById('sav-page-size');
+      if (ps) ps.value = String(state.perPage);
+      document.querySelectorAll('[data-mini-kpi-filter]').forEach(function (b) {
+        b.classList.toggle('sav-mini-kpi--active', !!b.getAttribute('data-mini-kpi-filter') && sameFilter(b.getAttribute('data-mini-kpi-filter'), params));
+      });
+    }
+    function sameFilter(f, params) {
+      var want = new URLSearchParams(f);
+      var ok = true;
+      want.forEach(function (v, k) { if (k !== 'sort' && k !== 'dir' && params.get(k) !== v) ok = false; });
+      return ok;
+    }
 
     function buildQs() {
       var fd = new FormData(form);
@@ -476,6 +536,7 @@
       });
       qs.append('page', state.page);
       qs.append('perPage', state.perPage);
+      qs.append('lite', '1');
       // Mode priorité : override le tri
       var priorityOn = fd.get('priority') === 'true';
       if (priorityOn) {
@@ -490,10 +551,18 @@
       return qs;
     }
 
-    function load() {
-      tbody.innerHTML = '<tr><td colspan="9" class="px-4 py-10 text-center text-slate-500">Chargement…</td></tr>';
+    var loadSeq = 0;
+    function load(opts) {
+      var seq = ++loadSeq;
+      if (!(opts && opts.silent)) tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-10 text-center text-slate-500">Chargement…</td></tr>';
+      var ui = uiParams().toString();
+      try { history.replaceState(null, '', location.pathname + (ui ? '?' + ui : '')); } catch (_) {}
+      if (viewMode === 'kanban') loadKanban();
       var qs = buildQs();
       api('/tickets?' + qs.toString()).then(function (res) {
+        // Plusieurs chargements peuvent partir d'un coup (clic compteur, frappe) : seul le dernier s'affiche.
+        if (seq !== loadSeq) return;
+        document.getElementById('sav-tickets-error').classList.add('hidden');
         if (!res.ok || !res.j.success) {
           var err = document.getElementById('sav-tickets-error');
           err.textContent = (res.j && res.j.error) || 'Erreur de chargement.';
@@ -503,8 +572,11 @@
         }
         var data = res.j.data;
         var list = data.tickets || [];
+        saveQueue(list, data, ui);
         if (!list.length) {
           tbody.innerHTML = '<tr><td colspan="10" class="px-4 py-10 text-center text-slate-500">Aucun ticket.</td></tr>';
+          var emptyCards = document.getElementById('sav-tickets-cards');
+          if (emptyCards) emptyCards.innerHTML = '<div class="p-6 text-center text-slate-500 text-sm">Aucun ticket.</div>';
           updatePagination(data);
           return;
         }
@@ -515,7 +587,7 @@
             var sla2 = slaState(t.sla && t.sla.dateLimite, { dateOuverture: t.sla && t.sla.dateOuverture });
             var v2 = t.vehicule || {};
             var vstr2 = [v2.marque, v2.modele].filter(Boolean).join(' ') + (v2.annee ? ' ' + v2.annee : '');
-            return '<a href="/admin/sav/tickets/' + encodeURIComponent(t.numero) + '" class="block p-4 hover:bg-slate-50 ' + (sla2.cls === 'late' ? 'sav-pulse-row' : '') + '">' +
+            return '<a href="' + ticketUrl(t.numero) + '" class="block p-4 hover:bg-slate-50 ' + (sla2.cls === 'late' ? 'sav-pulse-row' : '') + '">' +
               '<div class="flex items-center justify-between mb-1">' +
                 '<span class="font-mono font-bold text-sm">' + escapeHtml(t.numero) + '</span>' +
                 '<span class="sav-sla-badge sav-sla-badge--' + sla2.cls + '"' +
@@ -526,6 +598,7 @@
               '<div class="text-xs text-slate-700 truncate">' + escapeHtml((t.client && t.client.email) || '') + '</div>' +
               (clientTypeBadge(t.client && t.client.type) ? '<div class="mt-1">' + clientTypeBadge(t.client && t.client.type) + '</div>' : '') +
               (convBadge(convState(t)) ? '<div class="mt-1">' + convBadge(convState(t)) + '</div>' : '') +
+              lastClientExcerpt(t, convState(t)) +
               '<div class="mt-1 flex items-center gap-2 flex-wrap">' + pieceBadge(t.pieceType) +
                 statutBadge(t.statut) +
               '</div>' +
@@ -578,8 +651,8 @@
           var rowClientBadge = clientTypeBadge(t.client && t.client.type);
           return '<tr class="hover:bg-slate-50 cursor-pointer ' + rowPulse + ' ' + rowTint + '" data-row="' + i + '" data-numero="' + escapeHtml(t.numero) + '">' +
             '<td class="px-3 py-2 sav-col-sticky-l"><input type="checkbox" class="rounded sav-row-cb" data-numero="' + escapeHtml(t.numero) + '" ' + (selected.has(t.numero) ? 'checked' : '') + '></td>' +
-            '<td class="px-3 py-2 font-mono text-xs font-semibold sav-col-sticky-l2">' + pinDot + escapeHtml(t.numero) + '</td>' +
-            '<td class="px-3 py-2"><div class="flex items-center gap-1 flex-wrap"><span class="text-xs font-medium">' + escapeHtml((t.client && t.client.nom) || '') + '</span>' + rowClientBadge + '</div><div class="text-[10px] text-slate-500">' + escapeHtml((t.client && t.client.email) || '') + '</div>' + (convBadgeHtml ? '<div class="mt-1">' + convBadgeHtml + '</div>' : '') + '</td>' +
+            '<td class="px-3 py-2 font-mono text-xs font-semibold sav-col-sticky-l2">' + pinDot + '<a href="' + ticketUrl(t.numero) + '" class="sav-row-link">' + escapeHtml(t.numero) + '</a></td>' +
+            '<td class="px-3 py-2"><div class="flex items-center gap-1 flex-wrap"><span class="text-xs font-medium">' + escapeHtml((t.client && t.client.nom) || '') + '</span>' + rowClientBadge + '</div><div class="text-[10px] text-slate-500">' + escapeHtml((t.client && t.client.email) || '') + '</div>' + (convBadgeHtml ? '<div class="mt-1">' + convBadgeHtml + '</div>' : '') + lastClientExcerpt(t, convSt) + '</td>' +
             '<td class="px-3 py-2"><div class="flex flex-col gap-0.5">' + motifBadge + (t.pieceType ? pieceBadge(t.pieceType) : '') + '</div></td>' +
             '<td class="px-3 py-2 text-xs">' + (vstr ? escapeHtml(vstr) : '<span class="text-slate-400">—</span>') + (v.vin ? '<div class="text-[10px] font-mono text-slate-400">' + escapeHtml(v.vin) + '</div>' : '') + '</td>' +
             '<td class="px-3 py-2">' + assignHtml + '</td>' +
@@ -609,6 +682,27 @@
       });
     }
 
+    // Ce que le client a écrit en dernier, lisible sans ouvrir la fiche.
+    function lastClientExcerpt(t, convSt) {
+      var m = t.lastClientMessage;
+      if (!m || !m.extrait || convSt !== 'clientReplied') return '';
+      return '<div class="sav-row-excerpt" title="' + escapeHtml(m.extrait) + '">' +
+        '<span class="sav-row-excerpt__age">' + escapeHtml(fmtRelative(m.date)) + '</span> ' + escapeHtml(m.extrait) + '</div>';
+    }
+
+    // File de traitement : la fiche s'en sert pour « ticket suivant » et le retour à la liste.
+    function saveQueue(list, data, ui) {
+      try {
+        sessionStorage.setItem('savQueue', JSON.stringify({
+          numeros: list.map(function (t) { return t.numero; }),
+          listSearch: ui ? '?' + ui : '',
+          page: data.page || 1,
+          totalPages: data.totalPages || 1,
+          apiQs: buildQs().toString(),
+        }));
+      } catch (_) {}
+    }
+
     function updatePagination(data) {
       document.getElementById('sav-pagination-info').textContent = (data.total || 0) + ' ticket(s) au total';
       document.getElementById('sav-page-current').textContent = data.page || 1;
@@ -632,8 +726,17 @@
       var rows = tbody.querySelectorAll('[data-row]');
       rows.forEach(function (r) {
         r.addEventListener('click', function (e) {
-          if (e.target.matches('.sav-row-cb')) return;
-          window.location.href = '/admin/sav/tickets/' + encodeURIComponent(r.getAttribute('data-numero'));
+          if (e.target.closest('.sav-row-cb, button')) return;
+          if (e.target.closest('a')) return; // le lien gère seul clic, ⌘/Ctrl-clic et clic molette
+          var n = r.getAttribute('data-numero');
+          if (e.metaKey || e.ctrlKey || e.shiftKey) { openInNewTab(n); return; }
+          window.location.href = ticketUrl(n);
+        });
+        // Clic molette n'importe où sur la ligne → nouvel onglet
+        r.addEventListener('auxclick', function (e) {
+          if (e.button !== 1 || e.target.closest('a, button, .sav-row-cb')) return;
+          e.preventDefault();
+          openInNewTab(r.getAttribute('data-numero'));
         });
       });
       tbody.querySelectorAll('.sav-row-cb').forEach(function (cb) {
@@ -732,10 +835,19 @@
       if (!confirm('Passer ' + selected.size + ' ticket(s) au statut "' + st + '" ?')) return;
       var arr = Array.from(selected);
       Promise.all(arr.map(function (n) {
-        return api('/tickets/' + encodeURIComponent(n) + '/statut', { method: 'PATCH', body: JSON.stringify({ statut: st, auteur: 'admin' }) });
-      })).then(function () {
-        toast(arr.length + ' tickets mis à jour', 'success');
-        selected.clear(); updateBulkBar(); load();
+        return api('/tickets/' + encodeURIComponent(n) + '/statut', { method: 'PATCH', body: JSON.stringify({ statut: st, auteur: 'admin' }) })
+          .then(function (r) { return { n: n, ok: r.ok && r.j && r.j.success, err: r.j && r.j.error }; })
+          .catch(function () { return { n: n, ok: false, err: 'Erreur réseau' }; });
+      })).then(function (results) {
+        var failed = results.filter(function (r) { return !r.ok; });
+        var done = results.length - failed.length;
+        if (done) toast(done + ' ticket(s) mis à jour', 'success');
+        if (failed.length) {
+          toast(failed.length + ' refusé(s) : ' + failed.slice(0, 3).map(function (r) { return r.n + ' (' + (r.err || 'erreur') + ')'; }).join(', '), 'error');
+        }
+        // On garde cochés ceux qui ont échoué pour pouvoir les traiter autrement.
+        selected = new Set(failed.map(function (r) { return r.n; }));
+        updateBulkBar(); load(); loadMiniKpis();
       });
     });
     document.getElementById('sav-bulk-assign-apply').addEventListener('click', function () {
@@ -841,7 +953,10 @@
     });
 
     form.addEventListener('submit', function (e) { e.preventDefault(); state.page = 1; load(); });
-    form.addEventListener('change', function () { refreshBulkArchiveLabel(); state.page = 1; load(); });
+    form.addEventListener('change', function () {
+      document.querySelectorAll('.sav-mini-kpi--active').forEach(function (b) { b.classList.remove('sav-mini-kpi--active'); });
+      refreshBulkArchiveLabel(); state.page = 1; load();
+    });
     refreshBulkArchiveLabel();
 
     // CSV export
@@ -866,7 +981,8 @@
         fa.innerHTML = '<option value="">Assigné : tous</option>' +
           '<option value="__none__">Non assigné</option>' +
           teamCache.map(function (u) { return '<option value="' + u._id + '">' + escapeHtml((u.firstName || '') + ' ' + (u.lastName || '')) + '</option>'; }).join('');
-        fa.value = current;
+        fa.value = pendingAssignee || current;
+        if (pendingAssignee && fa.value === pendingAssignee) { pendingAssignee = ''; load(); }
       }
     });
 
@@ -886,17 +1002,17 @@
       if (btnKanban) {
         btnKanban.className = 'px-3 py-1.5 font-semibold ' + (isKan ? 'bg-primary text-white' : 'text-slate-700 hover:bg-slate-50');
       }
-      if (isKan) loadKanban();
     }
-    if (btnTable) btnTable.addEventListener('click', function () { viewMode = 'table'; applyView(); });
-    if (btnKanban) btnKanban.addEventListener('click', function () { viewMode = 'kanban'; applyView(); });
+    if (btnTable) btnTable.addEventListener('click', function () { viewMode = 'table'; applyView(); load(); });
+    if (btnKanban) btnKanban.addEventListener('click', function () { viewMode = 'kanban'; applyView(); load(); });
 
     function loadKanban() {
       var host = document.getElementById('sav-kanban-columns');
       if (!host) return;
       host.innerHTML = '<div class="text-slate-500 text-sm p-4">Chargement…</div>';
       var qs = buildQs();
-      qs.set('perPage', '200');
+      qs.set('page', '1'); // les colonnes montrent tout : la page du tableau ne s'applique pas
+      qs.set('perPage', '100'); // plafond serveur
       api('/tickets?' + qs.toString()).then(function (res) {
         if (!res.ok || !res.j.success) { host.innerHTML = '<div class="text-red-600 text-sm p-4">Erreur de chargement.</div>'; return; }
         var list = (res.j.data && res.j.data.tickets) || [];
@@ -942,7 +1058,12 @@
       if (e.key === 'j') { rowIdx = Math.min(rowIdx + 1, rows.length - 1); }
       else if (e.key === 'k') { rowIdx = Math.max(rowIdx - 1, 0); }
       else if (e.key === 'Enter' && rowIdx >= 0) {
-        window.location.href = '/admin/sav/tickets/' + encodeURIComponent(rows[rowIdx].getAttribute('data-numero'));
+        var num = rows[rowIdx].getAttribute('data-numero');
+        if (e.metaKey || e.ctrlKey) openInNewTab(num);
+        else window.location.href = ticketUrl(num);
+        return;
+      } else if (e.key === 'o' && rowIdx >= 0) {
+        openInNewTab(rows[rowIdx].getAttribute('data-numero'));
         return;
       } else if (e.key === 'x' && rowIdx >= 0) {
         var cb = rows[rowIdx].querySelector('.sav-row-cb');
@@ -954,6 +1075,8 @@
     });
 
     // -------- Multi-select custom --------
+    var multiLabelUpdaters = [];
+    function refreshMultiLabels() { multiLabelUpdaters.forEach(function (fn) { fn(); }); }
     document.querySelectorAll('[data-multiselect]').forEach(function (ms) {
       var btn = ms.querySelector('.sav-multiselect__btn');
       var dd = ms.querySelector('.sav-multiselect__dropdown');
@@ -983,12 +1106,11 @@
         else btn.setAttribute('aria-expanded', 'false');
       });
       dd.addEventListener('click', function (e) { e.stopPropagation(); });
+      // Le changement remonte jusqu'au formulaire, dont l'écouteur recharge déjà la liste.
       dd.querySelectorAll('input').forEach(function (input) {
-        input.addEventListener('change', function () {
-          updateLabel();
-          state.page = 1; load();
-        });
+        input.addEventListener('change', updateLabel);
       });
+      multiLabelUpdaters.push(updateLabel);
       updateLabel();
     });
     document.addEventListener('click', function () {
@@ -1016,10 +1138,11 @@
           var el = document.querySelector('[data-mini-kpi="' + key + '"]');
           if (el) el.textContent = val == null ? '0' : String(val);
         }
-        setV('total', d.total || 0);
+        // Les clés lues ici n'existaient pas côté serveur : Total et les deux « attente » affichaient 0 en permanence.
+        setV('total', d.total_liste || 0);
         setV('ouverts', d.ouverts || 0);
-        setV('attenteClient', d.enAttenteClient || d.enAttenteDoc || 0);
-        setV('attenteFournisseur', d.enAttenteFournisseur || 0);
+        setV('attenteClient', d.en_attente_client || 0);
+        setV('attenteFournisseur', d.en_attente_fournisseur || 0);
         setV('slaDepasse', d.slaDepasse || d.sla_depasse || 0);
         setV('awaitingClient', d.awaiting_client || 0);
         setV('waitingForClient', d.waiting_for_client || 0);
@@ -1035,30 +1158,12 @@
     document.querySelectorAll('[data-mini-kpi-filter]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var f = btn.getAttribute('data-mini-kpi-filter') || '';
-        // Parse & apply to form
-        form.reset();
-        // clear checked state in multi-selects
-        document.querySelectorAll('[data-multiselect] input:checked').forEach(function (cb) { cb.checked = false; });
-        if (f) {
-          var params = new URLSearchParams(f);
-          params.forEach(function (v, k) {
-            if (k === 'statut') {
-              v.split(',').forEach(function (val) {
-                var cb = document.querySelector('[data-multiselect="statut"] input[value="' + val + '"]');
-                if (cb) cb.checked = true;
-              });
-            } else {
-              var el = form.querySelector('[name="' + k + '"]');
-              if (el) { if (el.type === 'checkbox') el.checked = v === 'true'; else el.value = v; }
-            }
-          });
-        }
-        // Refresh labels of multi-selects
-        document.querySelectorAll('[data-multiselect]').forEach(function (ms) {
-          var evt = new Event('change', { bubbles: true });
-          var cb = ms.querySelector('input'); if (cb) cb.dispatchEvent(evt);
-        });
-        state.page = 1; load();
+        // applyUiParams remet aussi à zéro les filtres cachés (« Client a répondu »…),
+        // qui restaient actifs sans être visibles après un form.reset().
+        applyUiParams(new URLSearchParams(f));
+        refreshMultiLabels();
+        refreshBulkArchiveLabel();
+        load();
       });
     });
 
@@ -1093,7 +1198,17 @@
       });
     }
 
+    var initialParams = new URLSearchParams(location.search);
+    if (initialParams.get('vue') === 'colonnes') { viewMode = 'kanban'; applyView(); }
+    applyUiParams(initialParams);
+    refreshMultiLabels();
+    refreshBulkArchiveLabel();
     load();
+
+    // Revenir sur l'onglet de la liste (après avoir traité des tickets ailleurs) la remet à jour.
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') { load({ silent: true }); loadMiniKpis(); }
+    });
   }
 
   // ============================================================
@@ -1103,6 +1218,75 @@
   if (detailEl) {
     var numero = detailEl.getAttribute('data-sav-numero');
     var ticket = null;
+
+    // -------- File de traitement (précédent / suivant) --------
+    // La liste enregistre les tickets affichés ; on s'en sert pour enchaîner sans y revenir.
+    var queue = null;
+    try { queue = JSON.parse(sessionStorage.getItem('savQueue') || 'null'); } catch (_) { queue = null; }
+    var queueIdx = queue && Array.isArray(queue.numeros) ? queue.numeros.indexOf(numero) : -1;
+    var listHref = '/admin/sav/tickets' + ((queue && queue.listSearch) || '');
+    document.querySelectorAll('[data-back-to-list]').forEach(function (a) { a.setAttribute('href', listHref); });
+
+    function goToTicket(n) { window.location.href = '/admin/sav/tickets/' + encodeURIComponent(n); }
+    function queuePage(page) {
+      // Page voisine de la liste, avec exactement les mêmes filtres et le même tri.
+      var qs = new URLSearchParams(queue.apiQs || '');
+      qs.set('page', page);
+      return api('/tickets?' + qs.toString()).then(function (res) {
+        if (!res.ok || !res.j.success) return null;
+        var d = res.j.data;
+        var ls = new URLSearchParams((queue.listSearch || '').replace(/^\?/, ''));
+        if (page > 1) ls.set('page', page); else ls.delete('page');
+        queue = {
+          numeros: (d.tickets || []).map(function (t) { return t.numero; }),
+          listSearch: ls.toString() ? '?' + ls.toString() : '',
+          page: d.page || page, totalPages: d.totalPages || 1, apiQs: qs.toString(),
+        };
+        try { sessionStorage.setItem('savQueue', JSON.stringify(queue)); } catch (_) {}
+        return queue.numeros;
+      });
+    }
+    function goNeighbor(dir, opts) {
+      if (queueIdx < 0) {
+        if (opts && opts.fromSend) window.location.href = listHref;
+        return;
+      }
+      var target = queue.numeros[queueIdx + dir];
+      if (target) return goToTicket(target);
+      var nextPage = (queue.page || 1) + dir;
+      if (nextPage >= 1 && nextPage <= (queue.totalPages || 1)) {
+        return queuePage(nextPage).then(function (nums) {
+          if (nums && nums.length) goToTicket(dir > 0 ? nums[0] : nums[nums.length - 1]);
+          else window.location.href = listHref;
+        });
+      }
+      if (dir > 0) {
+        toast('Dernier ticket de la liste');
+        if (opts && opts.fromSend) setTimeout(function () { window.location.href = listHref; }, 800);
+      }
+    }
+    (function renderQueueNav() {
+      var nav = document.getElementById('sav-queue-nav');
+      if (!nav || queueIdx < 0) return;
+      var pageSize = queue.numeros.length;
+      var hasPrev = queueIdx > 0 || (queue.page || 1) > 1;
+      var hasNext = queueIdx < pageSize - 1 || (queue.page || 1) < (queue.totalPages || 1);
+      function btn(dir, icon, label, enabled) {
+        return enabled
+          ? '<a href="#" data-queue-dir="' + dir + '" title="' + label + '" aria-label="' + label + '"><span class="material-symbols-outlined" style="font-size:18px;">' + icon + '</span></a>'
+          : '<span class="sav-queue-nav__btn" aria-hidden="true"><span class="material-symbols-outlined" style="font-size:18px;">' + icon + '</span></span>';
+      }
+      nav.innerHTML = btn(-1, 'chevron_left', 'Ticket précédent (k)', hasPrev) +
+        '<span class="sav-queue-nav__pos">' + (queueIdx + 1) + '/' + pageSize + '</span>' +
+        btn(1, 'chevron_right', 'Ticket suivant (j)', hasNext);
+      nav.classList.remove('hidden');
+      nav.addEventListener('click', function (e) {
+        var a = e.target.closest('[data-queue-dir]');
+        if (!a) return;
+        e.preventDefault();
+        goNeighbor(parseInt(a.getAttribute('data-queue-dir'), 10));
+      });
+    })();
     var teamUsers = [];
 
     function renderRefundPanel() {
@@ -4235,7 +4419,7 @@
       return fetch('/admin/api/sav/tickets/' + encodeURIComponent(numero) + '/communication', fetchOpts)
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
-        if (!(res.ok && res.j.success)) { toast(res.j.error || 'Erreur', 'error'); return; }
+        if (!(res.ok && res.j.success)) { toast(res.j.error || 'Erreur', 'error'); return false; }
         toast('Message envoyé via ' + canal + (hasFiles ? ' (+' + attachFiles.length + ' PJ)' : ''));
         editor.innerHTML = '';
         syncContenu();
@@ -4248,7 +4432,13 @@
         if (action === 'send_and_status' && nextStatut) {
           return api('/tickets/' + encodeURIComponent(numero) + '/statut', {
             method: 'PATCH', body: JSON.stringify({ statut: nextStatut, auteur: 'admin' }),
-          }).then(function () { toast('Statut → ' + nextStatut); loadTicket(); });
+          }).then(function (r) {
+            // Le message part même si la transition est refusée : il faut le dire.
+            if (r.ok && r.j.success) toast('Statut → ' + nextStatut);
+            else toast('Message envoyé, mais statut non changé : ' + ((r.j && r.j.error) || 'refusé'), 'error');
+            loadTicket();
+            return true;
+          });
         }
         // Si une macro playbook est en attente, applique son statut cible
         var pbNext = (typeof consumePlaybookPendingStatut === 'function') ? consumePlaybookPendingStatut() : null;
@@ -4259,9 +4449,11 @@
             if (r.ok && r.j.success) toast('Statut → ' + pbNext);
             else if (r.j && r.j.error) toast(r.j.error, 'error');
             loadTicket();
+            return true;
           });
         }
         loadTicket();
+        return true;
       });
     }
     if (msgForm) msgForm.addEventListener('submit', function (e) {
@@ -4272,7 +4464,11 @@
         nextStatut = btn && btn.getAttribute('data-next-statut');
         if (sendMenu) sendMenu.classList.add('hidden');
       }
-      doSend(pendingAction, nextStatut);
+      var action = pendingAction;
+      if (action === 'send_and_next' && sendMenu) sendMenu.classList.add('hidden');
+      Promise.resolve(doSend(action, nextStatut)).then(function (sent) {
+        if (sent && action === 'send_and_next') goNeighbor(1, { fromSend: true });
+      });
       pendingAction = 'send';
     });
 
@@ -4281,7 +4477,7 @@
       editor.addEventListener('keydown', function (e) {
         var meta = e.metaKey || e.ctrlKey;
         if (!meta) return;
-        if (e.key === 'Enter') { e.preventDefault(); pendingAction = 'send'; if (msgForm) msgForm.requestSubmit(); }
+        if (e.key === 'Enter') { e.preventDefault(); pendingAction = e.shiftKey ? 'send_and_next' : 'send'; if (msgForm) msgForm.requestSubmit(); }
         else if (e.key === 's' || e.key === 'S') { e.preventDefault(); persistDraft(); toast('Brouillon sauvegardé'); }
       });
     }
@@ -4853,6 +5049,11 @@
           tgt.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      var modalOpen = document.querySelector('.fixed.inset-0:not(.hidden)');
+      if (!modalOpen && e.key === 'j') { goNeighbor(1); return; }
+      if (!modalOpen && e.key === 'k') { goNeighbor(-1); return; }
+      if (!modalOpen && e.key === 'u') { window.location.href = listHref; return; }
       if (e.key === 'a') { openAssign(); }
       if (e.key === 'e') { var c = document.querySelector('#sav-diag-form [name="conclusion"]'); if (c) { var det = c.closest('details.sav-sidebar-accordion'); if (det) det.open = true; c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.focus(); } }
       if (e.key === 's') { var b = document.querySelector('[data-action-statut]'); if (b) b.focus(); }

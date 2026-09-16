@@ -1,5 +1,5 @@
 <%- include('./partials/head') %>
-<link rel="stylesheet" href="/css/sav.css?v=32">
+<link rel="stylesheet" href="/css/sav.css?v=33">
 <%- include('./partials/sidebar', { active: 'sav' }) %>
 
 <main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>" data-sav-numero="<%= numero %>" data-current-statut="" data-current-user-id="<%= (typeof currentAdmin !== 'undefined' && currentAdmin && currentAdmin.adminUserId) || '' %>">
@@ -16,7 +16,7 @@
         <span class="text-slate-300">/</span>
         <a href="/admin/sav" class="hover:text-slate-900">SAV</a>
         <span class="text-slate-300">/</span>
-        <a href="/admin/sav/tickets" class="hover:text-slate-900">Tickets</a>
+        <a href="/admin/sav/tickets" data-back-to-list class="hover:text-slate-900">Tickets</a>
         <span class="text-slate-300">/</span>
         <span class="font-mono text-slate-700"><%= numero %></span>
       </nav>
@@ -46,10 +46,11 @@
     <div class="px-6 lg:px-10 py-2">
       <div class="flex items-center justify-between gap-3 flex-wrap">
         <div class="flex items-center gap-2 min-w-0">
-          <a href="/admin/sav/tickets" title="Retour à la liste" aria-label="Retour"
+          <a href="/admin/sav/tickets" data-back-to-list title="Retour à la liste (u)" aria-label="Retour"
              class="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition">
             <span class="material-symbols-outlined" style="font-size:18px;" aria-hidden="true">arrow_back</span>
           </a>
+          <span id="sav-queue-nav" class="sav-queue-nav hidden" aria-label="Naviguer dans la liste"></span>
           <h1 class="text-base font-mono font-bold text-slate-900 truncate"><%= numero %></h1>
           <button type="button" id="sav-copy-numero" data-copy="<%= numero %>" title="Copier le numéro" aria-label="Copier"
             class="inline-flex items-center justify-center w-6 h-6 rounded-md text-slate-400 hover:text-primary hover:bg-slate-100 transition">
@@ -269,6 +270,10 @@
                       <span class="material-symbols-outlined" style="font-size:16px;">arrow_drop_down</span>
                     </button>
                     <div id="sav-send-menu" class="hidden absolute right-0 bottom-full mb-1 w-72 rounded-xl border border-slate-200 bg-white shadow-lg z-20 py-1" role="menu">
+                      <button type="button" data-send-action="send_and_next" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" title="⌘⇧↵">
+                        <span class="material-symbols-outlined" style="font-size:16px;">fast_forward</span>
+                        Envoyer et ticket suivant
+                      </button>
                       <button type="button" data-send-action="send_and_status" data-next-statut="analyse_terminee" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2">
                         <span class="material-symbols-outlined" style="font-size:16px;">flag</span>
                         Envoyer et passer en « Analyse terminee »
@@ -909,6 +914,10 @@
       <button type="button" data-close-kbd aria-label="Fermer" class="text-slate-400 text-2xl leading-none">×</button>
     </div>
     <ul class="text-sm space-y-2">
+      <li class="flex justify-between"><span>Ticket suivant / précédent</span><span><kbd class="px-2 py-0.5 rounded border bg-slate-50">j</kbd> / <kbd class="px-2 py-0.5 rounded border bg-slate-50">k</kbd></span></li>
+      <li class="flex justify-between"><span>Retour à la liste</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">u</kbd></li>
+      <li class="flex justify-between"><span>Envoyer</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">⌘↵</kbd></li>
+      <li class="flex justify-between"><span>Envoyer et ticket suivant</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">⌘⇧↵</kbd></li>
       <li class="flex justify-between"><span>Composer un message</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">c</kbd></li>
       <li class="flex justify-between"><span>Statut suivant</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">s</kbd></li>
       <li class="flex justify-between"><span>Assigner</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">a</kbd></li>
@@ -1002,6 +1011,6 @@
 </div>
 
 <div class="sav-toast-root" id="sav-toast-root" aria-live="polite"></div>
-<script src="/js/sav-labels.js?v=4" defer></script>
-<script src="/js/sav-admin.js?v=39" defer></script>
+<script src="/js/sav-labels.js?v=5" defer></script>
+<script src="/js/sav-admin.js?v=41" defer></script>
 <%- include('./partials/footer') %>
