@@ -220,6 +220,9 @@ router.get('/preparation', requireAdminAuth, adminController.getAdminPreparation
 router.get('/consignes', requireAdminAuth, adminController.getAdminConsignes);
 router.get('/commandes', requireAdminAuth, adminController.getAdminOrdersPage);
 router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteOrders);
+// Liste « files » : corbeille groupée (restaurable) et étiquettes réunies en un PDF.
+router.post('/commandes/corbeille-multi', requireAdminAuth, adminController.postAdminBulkTrashOrders);
+router.get('/commandes/etiquettes.pdf', requireAdminAuth, adminController.getAdminOrdersLabelsPdf);
 // Demande d'avis Skeepers sur une sélection de commandes (≤ 50).
 router.post('/commandes/demande-avis-multi', requireAdminAuth, require('../controllers/reviewsAdminController').postRequestReviewBulk);
 router.post('/commandes/sync-suivi', requireAdminAuth, adminController.postAdminSyncShipmentTracking);
@@ -227,6 +230,9 @@ router.get('/commandes/jumingo-debug', requireAdminAuth, adminController.getAdmi
 router.get('/commandes/nouvelle', requireAdminAuth, adminController.getAdminNewOrderPage);
 router.get('/commandes/:orderId', requireAdminAuth, adminController.getAdminOrderDetailPage);
 router.post('/commandes/:orderId/statut', requireAdminAuth, adminController.postAdminUpdateOrderStatus);
+// Action suivante en un clic depuis la liste, et ligne à jour après une saisie dans le panneau.
+router.post('/commandes/:orderId/avancer', requireAdminAuth, adminController.postAdminAvancerCommande);
+router.get('/commandes/:orderId/ligne', requireAdminAuth, adminController.getAdminOrderRow);
 router.post('/commandes/:orderId/type', requireAdminAuth, adminController.postAdminUpdateOrderType);
 // Demande d'avis Skeepers sur UNE commande (bouton du détail).
 router.post('/commandes/:orderId/demande-avis', requireAdminAuth, require('../controllers/reviewsAdminController').postRequestReviewSingle);

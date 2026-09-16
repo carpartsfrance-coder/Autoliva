@@ -2,1027 +2,332 @@
 
 <%- include('./partials/sidebar', { active: 'orders' }) %>
 
-<main class="flex-1 relative">
+<%
+  /* Liste des commandes — conçue pour TRAITER une série de commandes, pas pour
+     en chercher une : files de traitement, une action suivante par commande,
+     annulation pendant 6 secondes, raccourcis clavier. Maquette :
+     design_handoff_admin_commandes (16/09/2026). La logique vit dans
+     src/services/commandesFiles.js, le comportement dans
+     public/js/admin-commandes.js. */
+  const _view = typeof view !== 'undefined' ? view : 'active';
+  const _filters = typeof filters !== 'undefined' && filters ? filters : {};
+  const isDraftView = _filters.status === 'draft' && _view === 'active';
+  const isArchivedView = _view === 'archived';
+  const isTrashView = _view === 'trash';
+  const isActiveView = _view === 'active' && !isDraftView;
+  const _vueLigne = isTrashView ? 'trash' : isArchivedView ? 'archived' : isDraftView ? 'draft' : 'active';
+  const _vueFiles = typeof vueFiles !== 'undefined' && vueFiles;
+  const _fileActive = typeof fileActive !== 'undefined' ? fileActive : 'all';
+  const _files = typeof filesCommandes !== 'undefined' ? filesCommandes : [];
+  const _fileInfo = _files.find(function (f) { return f.id === _fileActive; }) || null;
+  const _enFile = _vueFiles && _fileActive !== 'all';
+  const _autres = typeof autresSuivis !== 'undefined' ? autresSuivis : [];
+  const _draftsCount = typeof draftsCount !== 'undefined' ? draftsCount : 0;
+  const _archivedCount = typeof archivedCount !== 'undefined' ? archivedCount : 0;
+  const _trashCount = typeof trashCount !== 'undefined' ? trashCount : 0;
+  const _pagination = typeof pagination !== 'undefined' && pagination ? pagination : { totalItems: 0, totalPages: 1, page: 1 };
+  const _avances = ['type', 'source', 'utmCampaign', 'utmSource', 'returnFilter', 'status', 'orderType', 'cloningStatus', 'sourcing', 'period', 'product', 'category'];
+  const _nbFiltres = _avances.filter(function (k) { return _filters[k]; }).length;
+
+  /* Adresse courante (retour après restaurer/désarchiver). */
+  const _qp = [];
+  if (isArchivedView) _qp.push('view=archived');
+  if (isTrashView) _qp.push('view=trash');
+  ['q', 'status', 'type', 'orderType', 'cloningStatus', 'returnFilter', 'source', 'period', 'product', 'category', 'sourcing', 'utmCampaign', 'utmSource'].forEach(function (k) {
+    if (_filters[k]) _qp.push(k + '=' + encodeURIComponent(_filters[k]));
+  });
+  if (_vueFiles) _qp.push('file=' + encodeURIComponent(_fileActive));
+  if (_pagination.page > 1) _qp.push('page=' + _pagination.page);
+  const _returnTo = '/admin/commandes' + (_qp.length ? '?' + _qp.join('&') : '');
+
+  let _sousTitre = 'Gérez et suivez les commandes clients.';
+  if (_vueFiles && typeof resumeFiles !== 'undefined' && resumeFiles) _sousTitre = resumeFiles;
+  if (isDraftView) _sousTitre = 'Commandes en cours de saisie, pas encore validées.';
+  if (isArchivedView) _sousTitre = 'Masquées de la liste principale et exclues des statistiques. Réversible.';
+  if (isTrashView) _sousTitre = 'Restaurables pendant 30 jours.';
+
+  const _titreTableau = isDraftView ? 'Brouillons' : isArchivedView ? 'Commandes archivées' : isTrashView ? 'Corbeille'
+    : (_fileInfo && _fileActive !== 'all' ? _fileInfo.label : (_filters.q ? 'Résultats pour « ' + _filters.q + ' »' : 'Toutes les commandes'));
+  const _nbLignes = _enFile ? (orders || []).length : _pagination.totalItems;
+%>
+
+<link rel="stylesheet" href="/admin/commandes.css?v=<%= (typeof assetVersions !== 'undefined' && assetVersions.adminCommandesCss) || '' %>" />
+
+<main class="flex-1 relative cmd-page" data-file-active="<%= _fileActive %>" data-vue="<%= _vueLigne %>">
   <%- include('./partials/skeleton-table') %>
-  <div class="px-6 lg:px-10 py-8">
-    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+  <div class="cmd-conteneur">
+
+    <div class="cmd-entete">
       <div>
-        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Commandes'}] }) %>
-        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Commandes</div>
-        <div class="mt-1 text-sm text-slate-500">Gérez et suivez les commandes clients.</div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{ label: 'Commandes' }] }) %>
+        <h1 class="cmd-titre">Commandes</h1>
+        <p class="cmd-sous-titre" data-resume><%= _sousTitre %></p>
       </div>
-      <div class="flex items-center gap-2 shrink-0">
-        <form action="/admin/commandes/sync-suivi" method="POST" data-confirm="Synchroniser les statuts d'expédition depuis Jumingo maintenant ?">
-          <button type="submit" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition" title="Met à jour les statuts depuis le suivi Jumingo : « Étiquette créée » → « Expédiée » au scan transporteur, et corrige le backlog.">
-            <span class="material-symbols-outlined text-lg">sync</span>
-            <span class="hidden sm:inline">Synchroniser les suivis</span>
+      <div class="cmd-entete-actions">
+        <form action="/admin/commandes/sync-suivi" method="POST" data-confirmer="Synchroniser les statuts d'expédition depuis Jumingo maintenant ?">
+          <button type="submit" class="cmd-bouton" title="Met à jour les statuts depuis le suivi Jumingo : « Étiquette créée » → « Expédiée » au scan transporteur.">
+            <span class="ms" aria-hidden="true">sync</span>Synchroniser les suivis
           </button>
         </form>
-        <a href="/admin/commandes/nouvelle" class="btn btn-primary flex items-center gap-2">
-          <span class="material-symbols-outlined text-lg">add</span>
-          Nouvelle commande
+        <a href="/admin/commandes/nouvelle" class="cmd-bouton is-primaire">
+          <span class="ms" aria-hidden="true">add</span>Nouvelle commande
         </a>
       </div>
     </div>
 
-    <%
-      // Compteur de filtres actifs (hors recherche & pagination)
-      const _activeFilterKeys = ['status','orderType','cloningStatus','returnFilter','type','source','period','utmCampaign','utmSource','product','category'];
-      let _activeFiltersCount = 0;
-      _activeFilterKeys.forEach(function(k){ if (filters && filters[k]) _activeFiltersCount++; });
-      const _hasAdvancedActive = !!(filters && (filters.type || filters.source || filters.utmCampaign || filters.utmSource || filters.returnFilter));
-      const _isCloningOrderType = filters && (filters.orderType === 'exchange_cloning' || filters.orderType === 'standalone_cloning');
-    %>
-    <form action="/admin/commandes" class="lg:sticky lg:top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET" id="ordersFilterForm">
-      <%/* Ligne 1 : recherche + actions */%>
-      <div class="flex flex-col lg:flex-row lg:items-center gap-3">
-        <div class="flex-1 relative">
-          <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xl">search</span>
-          <input class="w-full rounded-xl border border-slate-200 bg-white pl-11 pr-10 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-300 transition" name="q" placeholder="Rechercher : n° commande, email, nom client…" type="text" value="<%= filters && filters.q ? filters.q : '' %>" />
-          <% if (filters && filters.q) { %>
-            <button type="button" id="ordersClearSearch" class="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Effacer la recherche">
-              <span class="material-symbols-outlined text-base">close</span>
-            </button>
-          <% } %>
+    <% if (_vueFiles) { %>
+      <nav class="cmd-files" aria-label="Files de traitement">
+        <% _files.forEach(function (f) { %>
+          <a class="cmd-file<%= f.id === _fileActive ? ' is-active' : '' %>" href="/admin/commandes?file=<%= f.id %>" data-file="<%= f.id %>"<%= f.id === _fileActive ? ' aria-current="page"' : '' %>>
+            <span class="ms" aria-hidden="true"><%= f.icon %></span><%= f.label %>
+            <span class="cmd-file-n" data-file-total><%= f.total %></span>
+            <span class="cmd-file-r" data-file-retard<%= f.enRetard > 0 ? '' : ' hidden' %>><span class="ms" aria-hidden="true">error</span><span data-file-retard-n><%= f.enRetard %></span> en retard</span>
+          </a>
+        <% }) %>
+      </nav>
+      <% if (_autres.length) { %>
+        <div class="cmd-autres">
+          <span class="cmd-autres-titre">Autres suivis</span>
+          <% _autres.forEach(function (a) { %>
+            <a class="cmd-autre is-<%= a.ton %>" href="<%= a.href %>"><span class="ms" aria-hidden="true"><%= a.icon %></span><%= a.texte %></a>
+          <% }) %>
         </div>
-        <div class="flex items-center gap-2">
-          <button type="button" id="toggleAdvancedFilters" class="inline-flex items-center gap-2 px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 transition" aria-expanded="<%= _hasAdvancedActive ? 'true' : 'false' %>" aria-controls="ordersAdvancedFilters">
-            <span class="material-symbols-outlined text-base">tune</span>
-            <span class="hidden sm:inline">Filtres avancés</span>
-            <span class="sm:hidden">Avancés</span>
-            <% if (_hasAdvancedActive) { %>
-              <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold bg-slate-900 text-white">●</span>
-            <% } %>
-          </button>
-          <% if (_activeFiltersCount > 0 || (filters && filters.q)) { %>
-            <a href="/admin/commandes" class="inline-flex items-center gap-1.5 px-3 py-3 rounded-xl text-sm font-bold text-slate-500 hover:text-red-600 hover:bg-red-50 transition" title="Réinitialiser tous les filtres">
-              <span class="material-symbols-outlined text-base">restart_alt</span>
-              <span class="hidden sm:inline">Réinitialiser</span>
-            </a>
-          <% } %>
-          <button class="btn btn-primary inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold" type="submit">
-            <span class="material-symbols-outlined text-base">filter_alt</span>
-            Filtrer
-          </button>
-        </div>
-      </div>
+      <% } %>
+    <% } %>
 
-      <%/* Ligne 2 : filtres rapides (toujours visibles) */%>
-      <div class="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-        <%/* Recherche par nom de produit */%>
-        <label class="orders-filter relative block <%= filters && filters.product ? 'is-active' : '' %>">
-          <span class="material-symbols-outlined orders-filter-icon">inventory_2</span>
-          <input class="orders-filter-input" name="product" type="text" placeholder="Nom de produit…" value="<%= filters && filters.product ? filters.product : '' %>" aria-label="Rechercher par nom de produit" />
+    <form id="cmdRecherche" class="cmd-recherche" action="/admin/commandes" method="GET" role="search">
+      <% if (isArchivedView || isTrashView) { %><input type="hidden" name="view" value="<%= _view %>" /><% } %>
+      <% if (isDraftView) { %><input type="hidden" name="status" value="draft" /><% } %>
+      <% if (_vueFiles) { %><input type="hidden" name="file" value="all" /><% } %>
+      <div class="cmd-recherche-l">
+        <label class="cmd-recherche-champ">
+          <span class="ms" aria-hidden="true">search</span>
+          <span class="sr-only">Rechercher une commande</span>
+          <input id="cmdRechercheInput" type="search" name="q" value="<%= _filters.q || '' %>" autocomplete="off"
+            placeholder="Rechercher : n° commande, client, réf OE, n° de suivi…" />
+          <kbd class="cmd-kbd" aria-hidden="true">/</kbd>
         </label>
+        <button type="button" class="cmd-bouton" id="cmdFiltresToggle" aria-expanded="<%= _nbFiltres ? 'true' : 'false' %>" aria-controls="cmdFiltres">
+          <span class="ms" aria-hidden="true">tune</span>Filtres avancés<% if (_nbFiltres) { %><span class="cmd-pastille"><%= _nbFiltres %></span><% } %>
+        </button>
+        <% if (_nbFiltres || _filters.q) { %>
+          <a class="cmd-lien-discret" href="/admin/commandes<%= isArchivedView ? '?view=archived' : isTrashView ? '?view=trash' : isDraftView ? '?status=draft' : '' %>"><span class="ms" aria-hidden="true">restart_alt</span>Réinitialiser</a>
+        <% } %>
+      </div>
+      <p class="cmd-recherche-aide" id="cmdRechercheAide" hidden></p>
 
-        <%/* Catégorie de produit */%>
-        <label class="orders-filter relative block <%= filters && filters.category ? 'is-active' : '' %>">
-          <span class="material-symbols-outlined orders-filter-icon">category</span>
-          <select class="orders-filter-select" name="category" aria-label="Filtrer par catégorie de produit">
-            <option value="">Toutes les catégories</option>
-            <% (typeof productCategories !== 'undefined' ? productCategories : []).forEach(function(c){ %>
-              <option value="<%= c %>" <%= filters && filters.category === c ? 'selected' : '' %>><%= c %></option>
+      <div id="cmdFiltres" class="cmd-filtres"<%= _nbFiltres ? '' : ' hidden' %>>
+        <select name="status" aria-label="Statut">
+          <option value="">Tous les statuts</option>
+          <% [['pending_payment', 'En attente paiement'], ['paid', 'Payée'], ['processing', 'En préparation'], ['label_created', 'Étiquette créée'], ['shipped', 'Expédiée'], ['delivered', 'Livrée'], ['completed', 'Terminée'], ['cancelled', 'Annulée'], ['refunded', 'Remboursée']].forEach(function (s) { %>
+            <option value="<%= s[0] %>"<%= _filters.status === s[0] ? ' selected' : '' %>><%= s[1] %></option>
+          <% }) %>
+        </select>
+        <select name="orderType" aria-label="Type de commande">
+          <option value="">Type de commande</option>
+          <% [['standard', 'Vente simple'], ['exchange', 'Échange standard'], ['exchange_cloning', 'Échange + Clonage'], ['standalone_cloning', 'Service Clonage TCU']].forEach(function (s) { %>
+            <option value="<%= s[0] %>"<%= _filters.orderType === s[0] ? ' selected' : '' %>><%= s[1] %></option>
+          <% }) %>
+        </select>
+        <select name="cloningStatus" aria-label="Statut clonage">
+          <option value="">Statut clonage</option>
+          <% [['pending_label', 'Attente étiquette'], ['label_sent', 'Étiquette envoyée'], ['client_piece_in_transit', 'Pièce en transit'], ['client_piece_received', 'Pièce reçue'], ['cloning_in_progress', 'Clonage en cours'], ['cloning_done', 'Clonage terminé'], ['cloning_failed', 'Clonage échoué']].forEach(function (s) { %>
+            <option value="<%= s[0] %>"<%= _filters.cloningStatus === s[0] ? ' selected' : '' %>><%= s[1] %></option>
+          <% }) %>
+        </select>
+        <select name="sourcing" aria-label="Appro pièce">
+          <option value="">Appro pièce</option>
+          <% [['a_verifier', 'À vérifier'], ['a_commander', 'À commander'], ['commandee', 'Commandée (fournisseur)'], ['overdue', 'Commandée — en retard'], ['en_stock', 'En stock / reçue']].forEach(function (s) { %>
+            <option value="<%= s[0] %>"<%= _filters.sourcing === s[0] ? ' selected' : '' %>><%= s[1] %></option>
+          <% }) %>
+        </select>
+        <select name="category" aria-label="Catégorie de produit">
+          <option value="">Toutes les catégories</option>
+          <% (typeof productCategories !== 'undefined' ? productCategories : []).forEach(function (c) { %>
+            <option value="<%= c %>"<%= _filters.category === c ? ' selected' : '' %>><%= c %></option>
+          <% }) %>
+        </select>
+        <select name="type" aria-label="Type de client">
+          <option value="">Tous les clients</option>
+          <option value="particulier"<%= _filters.type === 'particulier' ? ' selected' : '' %>>Particulier</option>
+          <option value="pro"<%= _filters.type === 'pro' ? ' selected' : '' %>>Professionnel</option>
+        </select>
+        <select name="period" aria-label="Période">
+          <option value="">Toutes périodes</option>
+          <% [['7d', '7 derniers jours'], ['30d', '30 derniers jours'], ['90d', '90 derniers jours'], ['365d', '12 derniers mois']].forEach(function (s) { %>
+            <option value="<%= s[0] %>"<%= _filters.period === s[0] ? ' selected' : '' %>><%= s[1] %></option>
+          <% }) %>
+        </select>
+        <select name="source" aria-label="Source">
+          <option value="">Toutes les sources</option>
+          <% [['website', 'Site web'], ['phone', 'Téléphone'], ['email', 'Email'], ['whatsapp', 'WhatsApp'], ['leboncoin', 'Leboncoin'], ['marketplace', 'Marketplace'], ['salon', 'Salon'], ['other', 'Autre']].forEach(function (s) { %>
+            <option value="<%= s[0] %>"<%= _filters.source === s[0] ? ' selected' : '' %>><%= s[1] %></option>
+          <% }) %>
+        </select>
+        <select name="returnFilter" aria-label="Retour">
+          <option value="">Retour (tous)</option>
+          <option value="pending"<%= _filters.returnFilter === 'pending' ? ' selected' : '' %>>Retour attendu</option>
+          <option value="overdue"<%= _filters.returnFilter === 'overdue' ? ' selected' : '' %>>Retour en retard</option>
+        </select>
+        <select name="utmSource" aria-label="Origine publicitaire">
+          <option value="">Toute origine pub</option>
+          <% ['google', 'facebook', 'instagram', 'bing', 'newsletter'].forEach(function (s) { %>
+            <option value="<%= s %>"<%= _filters.utmSource === s ? ' selected' : '' %>><%= s.charAt(0).toUpperCase() + s.slice(1) %></option>
+          <% }) %>
+        </select>
+        <input type="text" name="product" value="<%= _filters.product || '' %>" placeholder="Nom de produit…" aria-label="Nom de produit" />
+        <input type="text" name="utmCampaign" value="<%= _filters.utmCampaign || '' %>" placeholder="Campagne (utm_campaign)" aria-label="Campagne" />
+        <% if (!_enFile) { %>
+          <select name="limit" aria-label="Commandes par page">
+            <% [20, 50, 100].forEach(function (n) { %>
+              <option value="<%= n %>"<%= Number(_filters.limit || 20) === n ? ' selected' : '' %>><%= n %> par page</option>
             <% }) %>
           </select>
-          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-        </label>
-
-        <%/* Statut */%>
-        <label class="orders-filter relative block <%= filters && filters.status ? 'is-active' : '' %>">
-          <span class="material-symbols-outlined orders-filter-icon">flag</span>
-          <select class="orders-filter-select" name="status" aria-label="Filtrer par statut">
-            <option value="">Tous les statuts</option>
-            <option value="pending_payment" <%= filters && filters.status === 'pending_payment' ? 'selected' : '' %>>En attente paiement</option>
-            <option value="paid" <%= filters && filters.status === 'paid' ? 'selected' : '' %>>Payée</option>
-            <option value="processing" <%= filters && filters.status === 'processing' ? 'selected' : '' %>>En préparation</option>
-            <option value="label_created" <%= filters && filters.status === 'label_created' ? 'selected' : '' %>>Étiquette créée (pas encore partie)</option>
-            <option value="shipped" <%= filters && filters.status === 'shipped' ? 'selected' : '' %>>Expédiée</option>
-            <option value="delivered" <%= filters && filters.status === 'delivered' ? 'selected' : '' %>>Livrée</option>
-            <option value="completed" <%= filters && filters.status === 'completed' ? 'selected' : '' %>>Terminée</option>
-            <option value="cancelled" <%= filters && filters.status === 'cancelled' ? 'selected' : '' %>>Annulée</option>
-            <option value="refunded" <%= filters && filters.status === 'refunded' ? 'selected' : '' %>>Remboursée</option>
-          </select>
-          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-        </label>
-
-        <%/* Type de commande */%>
-        <label class="orders-filter relative block <%= filters && filters.orderType ? 'is-active' : '' %>">
-          <span class="material-symbols-outlined orders-filter-icon">shopping_bag</span>
-          <select class="orders-filter-select" name="orderType" id="orderTypeFilter" aria-label="Filtrer par type de commande">
-            <option value="">Type de commande</option>
-            <option value="standard" <%= filters && filters.orderType === 'standard' ? 'selected' : '' %>>Vente simple</option>
-            <option value="exchange" <%= filters && filters.orderType === 'exchange' ? 'selected' : '' %>>Échange standard</option>
-            <option value="exchange_cloning" <%= filters && filters.orderType === 'exchange_cloning' ? 'selected' : '' %>>Échange + Clonage</option>
-            <option value="standalone_cloning" <%= filters && filters.orderType === 'standalone_cloning' ? 'selected' : '' %>>Service Clonage TCU</option>
-          </select>
-          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-        </label>
-
-        <%/* Statut clonage (visible uniquement si type de commande lié au clonage) */%>
-        <label class="orders-filter relative block <%= filters && filters.cloningStatus ? 'is-active' : '' %> <%= _isCloningOrderType ? '' : 'hidden' %>" id="cloningStatusFilterWrap">
-          <span class="material-symbols-outlined orders-filter-icon">memory</span>
-          <select class="orders-filter-select" name="cloningStatus" id="cloningStatusFilter" aria-label="Filtrer par statut clonage">
-            <option value="">Statut clonage</option>
-            <option value="pending_label" <%= filters && filters.cloningStatus === 'pending_label' ? 'selected' : '' %>>Attente étiquette</option>
-            <option value="label_sent" <%= filters && filters.cloningStatus === 'label_sent' ? 'selected' : '' %>>Étiquette envoyée</option>
-            <option value="client_piece_in_transit" <%= filters && filters.cloningStatus === 'client_piece_in_transit' ? 'selected' : '' %>>Pièce en transit</option>
-            <option value="client_piece_received" <%= filters && filters.cloningStatus === 'client_piece_received' ? 'selected' : '' %>>Pièce reçue</option>
-            <option value="cloning_in_progress" <%= filters && filters.cloningStatus === 'cloning_in_progress' ? 'selected' : '' %>>Clonage en cours</option>
-            <option value="cloning_done" <%= filters && filters.cloningStatus === 'cloning_done' ? 'selected' : '' %>>Clonage terminé</option>
-            <option value="cloning_failed" <%= filters && filters.cloningStatus === 'cloning_failed' ? 'selected' : '' %>>Clonage échoué</option>
-          </select>
-          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-        </label>
-
-        <%/* Approvisionnement de la pièce */%>
-        <label class="orders-filter relative block <%= filters && filters.sourcing ? 'is-active' : '' %>">
-          <span class="material-symbols-outlined orders-filter-icon">inventory</span>
-          <select class="orders-filter-select" name="sourcing" aria-label="Filtrer par approvisionnement pièce">
-            <option value="">Appro pièce</option>
-            <option value="a_verifier" <%= filters && filters.sourcing === 'a_verifier' ? 'selected' : '' %>>À vérifier</option>
-            <option value="a_commander" <%= filters && filters.sourcing === 'a_commander' ? 'selected' : '' %>>À commander</option>
-            <option value="commandee" <%= filters && filters.sourcing === 'commandee' ? 'selected' : '' %>>Commandée (fournisseur)</option>
-            <option value="overdue" <%= filters && filters.sourcing === 'overdue' ? 'selected' : '' %>>Commandée — en retard</option>
-            <option value="en_stock" <%= filters && filters.sourcing === 'en_stock' ? 'selected' : '' %>>En stock / reçue</option>
-          </select>
-          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-        </label>
-
-        <%/* Période */%>
-        <label class="orders-filter relative block <%= filters && filters.period ? 'is-active' : '' %>">
-          <span class="material-symbols-outlined orders-filter-icon">calendar_month</span>
-          <select class="orders-filter-select" name="period" aria-label="Filtrer par période">
-            <option value="">Toutes périodes</option>
-            <option value="7d" <%= filters && filters.period === '7d' ? 'selected' : '' %>>7 derniers jours</option>
-            <option value="30d" <%= filters && filters.period === '30d' ? 'selected' : '' %>>30 derniers jours</option>
-            <option value="90d" <%= filters && filters.period === '90d' ? 'selected' : '' %>>90 derniers jours</option>
-            <option value="365d" <%= filters && filters.period === '365d' ? 'selected' : '' %>>12 derniers mois</option>
-          </select>
-          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-        </label>
-
-        <%/* Pagination */%>
-        <label class="orders-filter relative block">
-          <span class="material-symbols-outlined orders-filter-icon">view_list</span>
-          <select class="orders-filter-select" name="limit" aria-label="Nombre de commandes par page">
-            <% const oLimitCurrent = filters && filters.limit ? filters.limit : 20; %>
-            <option value="20" <%= oLimitCurrent === 20 ? 'selected' : '' %>>20 par page</option>
-            <option value="50" <%= oLimitCurrent === 50 ? 'selected' : '' %>>50 par page</option>
-            <option value="100" <%= oLimitCurrent === 100 ? 'selected' : '' %>>100 par page</option>
-          </select>
-          <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-        </label>
-      </div>
-
-      <%/* Ligne 3 : filtres avancés (repliés par défaut, ouverts si actifs) */%>
-      <div id="ordersAdvancedFilters" class="<%= _hasAdvancedActive ? '' : 'hidden' %> mt-3 pt-3 border-t border-dashed border-slate-200">
-        <div class="text-[11px] font-bold uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
-          <span class="material-symbols-outlined text-sm">tune</span>
-          Filtres avancés
-        </div>
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2">
-          <%/* Type client */%>
-          <label class="orders-filter relative block <%= filters && filters.type ? 'is-active' : '' %>">
-            <span class="material-symbols-outlined orders-filter-icon">person</span>
-            <select class="orders-filter-select" name="type" aria-label="Filtrer par type de client">
-              <option value="">Tous les clients</option>
-              <option value="particulier" <%= filters && filters.type === 'particulier' ? 'selected' : '' %>>Particulier</option>
-              <option value="pro" <%= filters && filters.type === 'pro' ? 'selected' : '' %>>Professionnel</option>
-            </select>
-            <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-          </label>
-
-          <%/* Source */%>
-          <label class="orders-filter relative block <%= filters && filters.source ? 'is-active' : '' %>">
-            <span class="material-symbols-outlined orders-filter-icon">hub</span>
-            <select class="orders-filter-select" name="source" aria-label="Filtrer par source">
-              <option value="">Toutes les sources</option>
-              <option value="website" <%= filters && filters.source === 'website' ? 'selected' : '' %>>Site web</option>
-              <option value="phone" <%= filters && filters.source === 'phone' ? 'selected' : '' %>>T&eacute;l&eacute;phone</option>
-              <option value="email" <%= filters && filters.source === 'email' ? 'selected' : '' %>>Email</option>
-              <option value="whatsapp" <%= filters && filters.source === 'whatsapp' ? 'selected' : '' %>>WhatsApp</option>
-              <option value="leboncoin" <%= filters && filters.source === 'leboncoin' ? 'selected' : '' %>>Leboncoin</option>
-              <option value="marketplace" <%= filters && filters.source === 'marketplace' ? 'selected' : '' %>>Marketplace</option>
-              <option value="salon" <%= filters && filters.source === 'salon' ? 'selected' : '' %>>Salon</option>
-              <option value="other" <%= filters && filters.source === 'other' ? 'selected' : '' %>>Autre</option>
-            </select>
-            <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-          </label>
-
-          <%/* Retour */%>
-          <label class="orders-filter relative block <%= filters && filters.returnFilter ? 'is-active' : '' %>">
-            <span class="material-symbols-outlined orders-filter-icon">assignment_return</span>
-            <select class="orders-filter-select" name="returnFilter" aria-label="Filtrer par retour">
-              <option value="">Retour (tous)</option>
-              <option value="pending" <%= filters && filters.returnFilter === 'pending' ? 'selected' : '' %>>Retour attendu</option>
-              <option value="overdue" <%= filters && filters.returnFilter === 'overdue' ? 'selected' : '' %>>Retour en retard</option>
-            </select>
-            <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-          </label>
-
-          <%/* UTM source */%>
-          <label class="orders-filter relative block <%= filters && filters.utmSource ? 'is-active' : '' %>">
-            <span class="material-symbols-outlined orders-filter-icon">campaign</span>
-            <select class="orders-filter-select" name="utmSource" aria-label="Filtrer par origine publicitaire">
-              <option value="">Toute origine pub</option>
-              <option value="google" <%= filters && filters.utmSource === 'google' ? 'selected' : '' %>>Google</option>
-              <option value="facebook" <%= filters && filters.utmSource === 'facebook' ? 'selected' : '' %>>Facebook</option>
-              <option value="instagram" <%= filters && filters.utmSource === 'instagram' ? 'selected' : '' %>>Instagram</option>
-              <option value="bing" <%= filters && filters.utmSource === 'bing' ? 'selected' : '' %>>Bing</option>
-              <option value="newsletter" <%= filters && filters.utmSource === 'newsletter' ? 'selected' : '' %>>Newsletter</option>
-            </select>
-            <span class="material-symbols-outlined orders-filter-chevron">expand_more</span>
-          </label>
-
-          <%/* UTM campaign */%>
-          <label class="orders-filter relative block <%= filters && filters.utmCampaign ? 'is-active' : '' %>">
-            <span class="material-symbols-outlined orders-filter-icon">sell</span>
-            <input class="orders-filter-input" name="utmCampaign" type="text" placeholder="Nom de campagne (utm_campaign)" value="<%= filters && filters.utmCampaign ? filters.utmCampaign : '' %>" aria-label="Filtrer par nom de campagne" />
-          </label>
-        </div>
+        <% } %>
       </div>
     </form>
 
-    <script>
-      (function(){
-        // Toggle filtres avancés
-        var advToggle = document.getElementById('toggleAdvancedFilters');
-        var advPanel = document.getElementById('ordersAdvancedFilters');
-        if (advToggle && advPanel) {
-          advToggle.addEventListener('click', function(){
-            var isOpen = !advPanel.classList.contains('hidden');
-            if (isOpen) {
-              advPanel.classList.add('hidden');
-              advToggle.setAttribute('aria-expanded', 'false');
-            } else {
-              advPanel.classList.remove('hidden');
-              advToggle.setAttribute('aria-expanded', 'true');
-            }
-          });
-        }
-
-        // Affiche/masque le statut clonage selon le type de commande
-        var orderTypeSel = document.getElementById('orderTypeFilter');
-        var cloningWrap = document.getElementById('cloningStatusFilterWrap');
-        var cloningSel = document.getElementById('cloningStatusFilter');
-        if (orderTypeSel && cloningWrap) {
-          orderTypeSel.addEventListener('change', function(){
-            var v = orderTypeSel.value;
-            if (v === 'exchange_cloning' || v === 'standalone_cloning') {
-              cloningWrap.classList.remove('hidden');
-            } else {
-              cloningWrap.classList.add('hidden');
-              if (cloningSel) cloningSel.value = '';
-            }
-          });
-        }
-
-        // Effacer la recherche
-        var clearSearch = document.getElementById('ordersClearSearch');
-        if (clearSearch) {
-          clearSearch.addEventListener('click', function(){
-            var input = document.querySelector('#ordersFilterForm input[name="q"]');
-            if (input) {
-              input.value = '';
-              document.getElementById('ordersFilterForm').submit();
-            }
-          });
-        }
-
-        // Auto-submit sur changement de select (UX plus fluide)
-        var form = document.getElementById('ordersFilterForm');
-        if (form) {
-          form.querySelectorAll('select').forEach(function(sel){
-            sel.addEventListener('change', function(){ form.submit(); });
-          });
-        }
-      })();
-    </script>
-
-    <!-- Alert banner -->
-    <%
-      var _oa = typeof orderAlerts !== 'undefined' && orderAlerts ? orderAlerts : {};
-      var _hasAlerts = (_oa.overdueReturns > 0) || (_oa.failedClonings > 0) || (_oa.pieceWaiting > 0) || (_oa.cloningLong > 0) || (_oa.readyToShip > 0)
-        || (_oa.sourcingOverdue > 0) || (_oa.sourcingToOrder > 0) || (_oa.sourcingToVerify > 0) || (_oa.sourcingOrdered > 0);
-    %>
-    <% if (_hasAlerts) { %>
-      <div class="mt-6 rounded-2xl border border-slate-200 bg-white p-4 flex flex-wrap gap-3">
-        <% if (_oa.overdueReturns > 0) { %>
-          <a href="/admin/commandes?orderType=exchange&returnFilter=overdue" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold hover:bg-red-100 transition">
-            <span class="material-symbols-outlined text-base">error</span>
-            <%= _oa.overdueReturns %> retour<%= _oa.overdueReturns > 1 ? 's' : '' %> en retard
-          </a>
-        <% } %>
-        <% if (_oa.failedClonings > 0) { %>
-          <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=cloning_failed" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold hover:bg-red-100 transition">
-            <span class="material-symbols-outlined text-base">warning</span>
-            <%= _oa.failedClonings %> clonage<%= _oa.failedClonings > 1 ? 's' : '' %> échoué<%= _oa.failedClonings > 1 ? 's' : '' %> à traiter
-          </a>
-        <% } %>
-        <% if (_oa.pieceWaiting > 0) { %>
-          <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=label_sent" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-orange-50 border border-orange-200 text-orange-700 text-sm font-semibold hover:bg-orange-100 transition">
-            <span class="material-symbols-outlined text-base">schedule</span>
-            <%= _oa.pieceWaiting %> pièce<%= _oa.pieceWaiting > 1 ? 's' : '' %> client en attente (&gt; 10j)
-          </a>
-        <% } %>
-        <% if (_oa.cloningLong > 0) { %>
-          <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=cloning_in_progress" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm font-semibold hover:bg-amber-100 transition">
-            <span class="material-symbols-outlined text-base">hourglass_top</span>
-            <%= _oa.cloningLong %> clonage<%= _oa.cloningLong > 1 ? 's' : '' %> en cours &gt; 5j
-          </a>
-        <% } %>
-        <% if (_oa.readyToShip > 0) { %>
-          <a href="/admin/commandes?orderType=exchange_cloning&cloningStatus=cloning_done" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm font-semibold hover:bg-green-100 transition">
-            <span class="material-symbols-outlined text-base">inventory_2</span>
-            <%= _oa.readyToShip %> commande<%= _oa.readyToShip > 1 ? 's' : '' %> prête<%= _oa.readyToShip > 1 ? 's' : '' %> à expédier
-          </a>
-        <% } %>
-        <%/* ── Approvisionnement pièce ── */%>
-        <% if (_oa.sourcingOverdue > 0) { %>
-          <a href="/admin/commandes?sourcing=overdue" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm font-semibold hover:bg-red-100 transition">
-            <span class="material-symbols-outlined text-base">local_shipping</span>
-            <%= _oa.sourcingOverdue %> pièce<%= _oa.sourcingOverdue > 1 ? 's' : '' %> fournisseur en retard
-          </a>
-        <% } %>
-        <% if (_oa.sourcingToOrder > 0) { %>
-          <a href="/admin/commandes?sourcing=a_commander" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm font-semibold hover:bg-rose-100 transition">
-            <span class="material-symbols-outlined text-base">shopping_cart</span>
-            <%= _oa.sourcingToOrder %> pièce<%= _oa.sourcingToOrder > 1 ? 's' : '' %> à commander
-          </a>
-        <% } %>
-        <% if (_oa.sourcingToVerify > 0) { %>
-          <a href="/admin/commandes?sourcing=a_verifier" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-100 transition">
-            <span class="material-symbols-outlined text-base">help</span>
-            <%= _oa.sourcingToVerify %> appro à vérifier
-          </a>
-        <% } %>
-        <% if (_oa.sourcingOrdered > 0) { %>
-          <a href="/admin/commandes?sourcing=commandee" class="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-sm font-semibold hover:bg-blue-100 transition">
-            <span class="material-symbols-outlined text-base">pending</span>
-            <%= _oa.sourcingOrdered %> pièce<%= _oa.sourcingOrdered > 1 ? 's' : '' %> commandée<%= _oa.sourcingOrdered > 1 ? 's' : '' %> (attente)
-          </a>
-        <% } %>
-      </div>
-    <% } %>
-
-    <!-- Vue tabs : Actives / Brouillons / Archivées / Corbeille -->
-    <% const _view = typeof view !== 'undefined' ? view : 'active'; %>
-    <% const isDraftView = filters && filters.status === 'draft' && _view === 'active'; %>
-    <% const isArchivedView = _view === 'archived'; %>
-    <% const isTrashView = _view === 'trash'; %>
-    <% const isActiveView = _view === 'active' && !isDraftView; %>
-    <% const _draftsCount = typeof draftsCount !== 'undefined' ? draftsCount : 0; %>
-    <% const _archivedCount = typeof archivedCount !== 'undefined' ? archivedCount : 0; %>
-    <% const _trashCount = typeof trashCount !== 'undefined' ? trashCount : 0; %>
-    <div class="mt-6 flex items-center gap-3 flex-wrap">
-      <a href="/admin/commandes" class="px-4 py-2 rounded-xl text-sm font-bold transition-colors <%= isActiveView ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' %>">
-        Commandes actives
-      </a>
-      <a href="/admin/commandes?status=draft" class="px-4 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 <%= isDraftView ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' %>">
-        Brouillons
-        <% if (_draftsCount > 0) { %>
-          <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold <%= isDraftView ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700' %>"><%= _draftsCount %></span>
-        <% } %>
-      </a>
-      <a href="/admin/commandes?view=archived" class="px-4 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 <%= isArchivedView ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' %>">
-        <span class="material-symbols-outlined text-base">inventory_2</span>
-        Archivées
-        <% if (_archivedCount > 0) { %>
-          <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold <%= isArchivedView ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700' %>"><%= _archivedCount %></span>
-        <% } %>
-      </a>
-      <a href="/admin/commandes?view=trash" class="px-4 py-2 rounded-xl text-sm font-bold transition-colors flex items-center gap-2 <%= isTrashView ? 'bg-red-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50' %>">
-        <span class="material-symbols-outlined text-base">delete</span>
-        Corbeille
-        <% if (_trashCount > 0) { %>
-          <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold <%= isTrashView ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700' %>"><%= _trashCount %></span>
-        <% } %>
-      </a>
+    <div class="cmd-vues">
+      <a href="/admin/commandes" class="cmd-vue<%= isActiveView ? ' is-active' : '' %>">Commandes actives</a>
+      <a href="/admin/commandes?status=draft" class="cmd-vue<%= isDraftView ? ' is-active' : '' %>">Brouillons<% if (_draftsCount > 0) { %><span class="cmd-pastille"><%= _draftsCount %></span><% } %></a>
+      <a href="/admin/commandes?view=archived" class="cmd-vue<%= isArchivedView ? ' is-active' : '' %>"><span class="ms" aria-hidden="true">inventory_2</span>Archivées<% if (_archivedCount > 0) { %><span class="cmd-pastille"><%= _archivedCount %></span><% } %></a>
+      <a href="/admin/commandes?view=trash" class="cmd-vue<%= isTrashView ? ' is-active is-danger' : '' %>"><span class="ms" aria-hidden="true">delete</span>Corbeille<% if (_trashCount > 0) { %><span class="cmd-pastille"><%= _trashCount %></span><% } %></a>
     </div>
 
-    <% if (isTrashView) { %>
-      <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        <div class="flex items-start gap-3">
-          <span class="material-symbols-outlined">schedule</span>
-          <div>
-            <div class="font-bold">Corbeille — purge automatique à J+30</div>
-            <div class="mt-1">Les commandes non payées y séjournent 30 jours avant suppression définitive automatique. Les commandes payées ne sont <strong>jamais purgées automatiquement</strong> (obligation comptable).</div>
-          </div>
-        </div>
-      </div>
-    <% } else if (isArchivedView) { %>
-      <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-        <div class="flex items-start gap-3">
-          <span class="material-symbols-outlined">info</span>
-          <div>
-            <div class="font-bold">Commandes archivées</div>
-            <div class="mt-1">Ces commandes sont masquées de la liste principale et <strong>exclues des statistiques</strong> (CA, nombre de commandes). Réversible à tout moment.</div>
-          </div>
-        </div>
-      </div>
-    <% } %>
-
-    <div class="mt-4 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
-        <div class="font-semibold text-slate-900"><%= isDraftView ? 'Brouillons' : 'Commandes' %></div>
-        <% if (typeof pagination !== 'undefined' && pagination && pagination.totalItems) { %>
-          <div class="text-xs font-bold text-slate-500">
-            <%= pagination.totalItems %> commande<%= pagination.totalItems > 1 ? 's' : '' %>
+    <div class="cmd-tableau" role="table" aria-label="<%= _titreTableau %>">
+      <div class="cmd-tableau-tete">
+        <div class="cmd-tableau-titre"><%= _titreTableau %></div>
+        <div class="cmd-tableau-compte" data-compte-lignes><%= _nbLignes %> commande<%= _nbLignes > 1 ? 's' : '' %></div>
+        <% if (isActiveView) { %>
+          <%/* Par-dessus l'en-tête, pas au-dessus du tableau : cocher une case ne
+              décale aucune ligne (sinon le clic suivant tombe à côté). */%>
+          <div class="cmd-selection" id="cmdSelection" hidden>
+            <button type="button" class="cmd-act" data-groupe="avancer"><span class="ms" aria-hidden="true">done_all</span>Avancer d’une étape</button>
+            <button type="button" class="cmd-bouton is-petit" data-groupe="etiquettes"><span class="ms" aria-hidden="true">print</span>Imprimer les étiquettes</button>
+            <button type="button" class="cmd-bouton is-petit is-avis" data-groupe="avis"><span class="ms" aria-hidden="true">reviews</span>Demander un avis</button>
+            <button type="button" class="cmd-bouton is-petit is-danger" data-groupe="corbeille" title="Met à la corbeille, restaurable 30 jours"><span class="ms" aria-hidden="true">delete</span>Supprimer</button>
+            <span class="cmd-selection-n" data-selection-n>0 sélectionnée</span>
           </div>
         <% } %>
       </div>
 
-      <% if (orders && orders.length) { %>
-        <%
-          const oPerPage = pagination && pagination.perPage ? pagination.perPage : 20;
-          function buildOrderPageUrl(p) {
-            const parts = [];
-            if (filters.q) parts.push('q=' + encodeURIComponent(filters.q));
-            if (filters.status) parts.push('status=' + encodeURIComponent(filters.status));
-            if (filters.type) parts.push('type=' + encodeURIComponent(filters.type));
-            if (filters.source) parts.push('source=' + encodeURIComponent(filters.source));
-            if (filters.orderType) parts.push('orderType=' + encodeURIComponent(filters.orderType));
-            if (filters.cloningStatus) parts.push('cloningStatus=' + encodeURIComponent(filters.cloningStatus));
-            if (filters.returnFilter) parts.push('returnFilter=' + encodeURIComponent(filters.returnFilter));
-            if (filters.period) parts.push('period=' + encodeURIComponent(filters.period));
-            if (filters.sort) parts.push('sort=' + filters.sort);
-            if (filters.order) parts.push('order=' + filters.order);
-            if (oPerPage !== 20) parts.push('limit=' + oPerPage);
-            parts.push('page=' + p);
-            return '/admin/commandes?' + parts.join('&');
-          }
-          function buildOrderPageItems(currentPage, totalPages) {
-            if (totalPages <= 7) {
-              const r = [];
-              for (let i = 1; i <= totalPages; i++) r.push({ type: 'page', page: i });
-              return r;
-            }
-            const lo = Math.max(2, currentPage - 1);
-            const hi = Math.min(totalPages - 1, currentPage + 1);
-            const r = [{ type: 'page', page: 1 }];
-            if (lo > 2) r.push({ type: 'ellipsis' });
-            for (let pp = lo; pp <= hi; pp++) r.push({ type: 'page', page: pp });
-            if (hi < totalPages - 1) r.push({ type: 'ellipsis' });
-            r.push({ type: 'page', page: totalPages });
-            return r;
-          }
-          const oPageItems = buildOrderPageItems(pagination.page, pagination.totalPages);
-          const oPageUrls = {};
-          oPageItems.forEach(function(i) { if (i.type === 'page') oPageUrls[i.page] = buildOrderPageUrl(i.page); });
-          const oTotalLabel = pagination.totalItems + ' commande' + (pagination.totalItems > 1 ? 's' : '');
-          var ordersPb = {
-            pagination: pagination,
-            totalLabel: oTotalLabel,
-            pageItems: oPageItems,
-            pageUrls: oPageUrls,
-            prevUrl: buildOrderPageUrl(pagination.prevPage),
-            nextUrl: buildOrderPageUrl(pagination.nextPage),
-          };
-        %>
-        <% if (pagination.totalPages > 1) { %>
-          <div class="border-b border-slate-100">
-            <%- include('./partials/pagination', { pb: ordersPb }) %>
-          </div>
-        <% } %>
-      <% } %>
-
-      <% if (orders && orders.length) { %>
-        <form id="bulkOrdersForm" action="/admin/commandes/supprimer-multi" method="POST" data-ajax="true">
-        <div class="px-6 py-3 bg-white border-b border-slate-100 flex flex-wrap items-center gap-3">
-          <button id="bulkDeleteOrdersBtn" class="btn btn-secondary text-red-600 hover:bg-red-50 hover:border-red-200 disabled:opacity-50" type="submit" disabled>
-            <span class="material-symbols-outlined mr-2 text-base">delete</span>
-            Supprimer la sélection
-          </button>
-          <button id="bulkReviewRequestBtn" class="btn btn-secondary text-amber-600 hover:bg-amber-50 hover:border-amber-200 disabled:opacity-50" type="button" disabled>
-            <span class="material-symbols-outlined mr-2 text-base">reviews</span>
-            Demander un avis
-          </button>
-          <div id="selectedOrdersCount" class="text-xs font-bold text-slate-500">0 sélectionné</div>
+      <div class="cmd-grille cmd-colonnes" role="row">
+        <div class="cmd-c cmd-c-check" role="columnheader">
+          <% if (isActiveView) { %><input type="checkbox" id="cmdToutCocher" aria-label="Tout sélectionner" /><% } %>
         </div>
-        <%/* ── Mobile : cards stack ─────────────────────────────────── */%>
-        <ul class="md:hidden divide-y divide-slate-100">
-          <% (Array.isArray(orders) ? orders : []).forEach(function(o) {
-               var _oCh = o.sourceChannel || 'website';
-               var _isMobileWeb = _oCh === 'website' && !o.isManual;
-          %>
-            <li>
-              <a href="/admin/commandes/<%= o.id %>" class="block px-5 py-4 hover:bg-slate-50 active:bg-slate-100 transition">
-                <%/* Ligne 1 : numéro + statut */%>
-                <div class="flex items-center justify-between gap-2">
-                  <div class="font-semibold text-slate-900 text-sm truncate"><%= o.number %></div>
-                  <span class="<%= o.statusBadge.className %> shrink-0"><%= o.statusBadge.label %></span>
-                </div>
-                <%/* Ligne 2 : montant + date + client */%>
-                <div class="mt-1.5 flex items-center justify-between gap-2">
-                  <div class="text-base font-bold text-slate-900"><%= o.total %></div>
-                  <div class="text-[11px] text-slate-500"><%= o.date %></div>
-                </div>
-                <div class="mt-1 text-xs text-slate-700 truncate"><%= o.customer %></div>
-                <% if (o.customerEmail) { %>
-                  <div class="text-[11px] text-slate-400 truncate"><%= o.customerEmail %></div>
-                <% } %>
-                <%/* Ligne 3 : badges (type, source, attribution, items count) */%>
-                <div class="mt-2 flex items-center gap-1.5 flex-wrap text-[11px]">
-                  <% if (o.orderType === 'exchange_cloning') { %>
-                    <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">Éch.+Clonage</span>
-                  <% } else if (o.orderType === 'exchange') { %>
-                    <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Échange</span>
-                  <% } %>
-                  <% if (o.attribution && o.attribution.hasAttribution) {
-                       var _ac = { amber: 'bg-amber-50 text-amber-700 border-amber-200', blue: 'bg-blue-50 text-blue-700 border-blue-200', sky: 'bg-sky-50 text-sky-700 border-sky-200', emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200', purple: 'bg-purple-50 text-purple-700 border-purple-200', slate: 'bg-slate-100 text-slate-600 border-slate-200' };
-                       var _abc = _ac[o.attribution.primary.badge] || _ac.slate;
-                  %>
-                    <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full border <%= _abc %>" title="<%= o.attribution.primary.sourceLabel %>">
-                      <% if (o.attribution.primary.campaign) { %><%= o.attribution.primary.campaignShort %><% } else { %><%= o.attribution.primary.sourceLabel %><% } %>
-                    </span>
-                  <% } else if (_isMobileWeb) { %>
-                    <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">Web</span>
-                  <% } else { %>
-                    <span class="inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600"><%= _oCh %></span>
-                  <% } %>
-                  <span class="ml-auto text-slate-500"><%= o.itemCount %> art.</span>
-                </div>
-              </a>
-            </li>
-          <% }); %>
-        </ul>
+        <div class="cmd-c" role="columnheader">Commande</div>
+        <div class="cmd-c" role="columnheader">Client</div>
+        <div class="cmd-c" role="columnheader">Pièces</div>
+        <div class="cmd-c" role="columnheader">Statut</div>
+        <div class="cmd-c" role="columnheader">Appro pièce</div>
+        <div class="cmd-c cmd-c-actions" role="columnheader">Actions</div>
+      </div>
 
-        <%/* ── Desktop : tableau classique ─────────────────────────── */%>
-        <div class="overflow-x-auto hidden md:block">
-          <table class="w-full text-left admin-table">
-            <%
-              const oSort = filters.sort || 'date';
-              const oOrder = filters.order || 'desc';
-              function oSortUrl(field) {
-                const nextOrder = (oSort === field && oOrder === 'asc') ? 'desc' : 'asc';
-                const p = [];
-                if (filters.q) p.push('q=' + encodeURIComponent(filters.q));
-                if (filters.status) p.push('status=' + encodeURIComponent(filters.status));
-                if (filters.type) p.push('type=' + encodeURIComponent(filters.type));
-                if (filters.source) p.push('source=' + encodeURIComponent(filters.source));
-                if (filters.orderType) p.push('orderType=' + encodeURIComponent(filters.orderType));
-                if (filters.cloningStatus) p.push('cloningStatus=' + encodeURIComponent(filters.cloningStatus));
-                if (filters.returnFilter) p.push('returnFilter=' + encodeURIComponent(filters.returnFilter));
-                if (filters.period) p.push('period=' + encodeURIComponent(filters.period));
-                p.push('sort=' + field, 'order=' + nextOrder);
-                return '/admin/commandes?' + p.join('&');
-              }
-              function oSortIcon(field) {
-                if (oSort !== field) return 'unfold_more';
-                return oOrder === 'asc' ? 'arrow_upward' : 'arrow_downward';
-              }
-            %>
-            <thead>
-              <tr class="text-xs font-semibold text-slate-400 uppercase tracking-widest bg-white">
-                <th class="px-6 py-4 w-10">
-                  <input id="selectAllOrders" type="checkbox" class="h-4 w-4 rounded border-slate-300" />
-                </th>
-                <th class="px-6 py-4">Commande</th>
-                <th class="px-6 py-4 th-sortable <%= oSort === 'date' ? 'sort-active' : '' %>">
-                  <a href="<%= oSortUrl('date') %>" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:2px;">
-                    Date<span class="sort-icon material-symbols-outlined"><%= oSortIcon('date') %></span>
-                  </a>
-                </th>
-                <th class="px-6 py-4">Client</th>
-                <th class="px-6 py-4">Type client</th>
-                <th class="px-6 py-4">Type commande</th>
-                <th class="px-6 py-4">Articles</th>
-                <th class="px-6 py-4 th-sortable <%= oSort === 'total' ? 'sort-active' : '' %>">
-                  <a href="<%= oSortUrl('total') %>" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:2px;">
-                    Total<span class="sort-icon material-symbols-outlined"><%= oSortIcon('total') %></span>
-                  </a>
-                </th>
-                <th class="px-6 py-4 th-sortable <%= oSort === 'status' ? 'sort-active' : '' %>">
-                  <a href="<%= oSortUrl('status') %>" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:2px;">
-                    Statut<span class="sort-icon material-symbols-outlined"><%= oSortIcon('status') %></span>
-                  </a>
-                </th>
-                <th class="px-6 py-4">Appro pièce</th>
-                <th class="px-6 py-4 th-sortable <%= oSort === 'urgency' ? 'sort-active' : '' %>">
-                  <a href="<%= oSortUrl('urgency') %>" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:2px;">
-                    <span class="material-symbols-outlined" style="font-size:14px">priority_high</span>Urgence<span class="sort-icon material-symbols-outlined"><%= oSortIcon('urgency') %></span>
-                  </a>
-                </th>
-                <th class="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              <% orders.forEach((o) => { %>
-                <tr data-row-id="<%= o.id %>" class="<%= o.statusBadge && o.statusBadge.label === 'Brouillon' ? 'bg-slate-50/70' : '' %>">
-                  <td class="px-6 py-4">
-                    <input class="rowSelectOrder h-4 w-4 rounded border-slate-300" type="checkbox" name="orderIds" value="<%= o.id %>" />
-                  </td>
-                  <td class="px-6 py-4 font-semibold text-slate-900">
-                    <div class="flex items-center gap-1.5">
-                      <%= o.number %>
-                      <%
-                        var _srcIcons = { phone: 'call', email: 'mail', whatsapp: 'chat', leboncoin: '', marketplace: 'storefront', salon: 'groups', manual: 'edit_note', other: 'more_horiz', website: 'language' };
-                        var _srcLabels = { phone: 'T\u00e9l', email: 'Email', whatsapp: 'WA', leboncoin: 'LBC', marketplace: 'Mktp', salon: 'Salon', manual: 'Manuel', other: 'Autre', website: 'Web' };
-                        var _ch = o.sourceChannel || 'website';
-                        var _isWeb = _ch === 'website' && !o.isManual;
-                      %>
-                      <% if (_isWeb) { %>
-                        <span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600"><span class="material-symbols-outlined" style="font-size:12px">language</span>Web</span>
-                      <% } else if (o.isManual || _ch !== 'website') { %>
-                        <span class="inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600"><% if (_srcIcons[_ch]) { %><span class="material-symbols-outlined" style="font-size:12px"><%= _srcIcons[_ch] %></span><% } %><%= _srcLabels[_ch] || _ch %></span>
-                      <% } %>
-                      <%/* Badge marketing : campagne + source du dernier clic attribué */%>
-                      <% if (o.attribution && o.attribution.hasAttribution) {
-                           var _attrBadge = o.attribution.primary.badge || 'slate';
-                           var _attrColors = {
-                             amber: 'bg-amber-50 text-amber-700 border-amber-200',
-                             blue: 'bg-blue-50 text-blue-700 border-blue-200',
-                             sky: 'bg-sky-50 text-sky-700 border-sky-200',
-                             emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                             purple: 'bg-purple-50 text-purple-700 border-purple-200',
-                             slate: 'bg-slate-100 text-slate-600 border-slate-200',
-                           };
-                           var _attrCls = _attrColors[_attrBadge] || _attrColors.slate;
-                      %>
-                        <span class="relative group cursor-default inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full border <%= _attrCls %>" title="<%= o.attribution.primary.sourceLabel %><% if (o.attribution.primary.campaign) { %> · <%= o.attribution.primary.campaign %><% } %>">
-                          <span class="material-symbols-outlined" style="font-size:12px"><%= o.attribution.primary.icon || 'ads_click' %></span>
-                          <% if (o.attribution.primary.campaign) { %>
-                            <%= o.attribution.primary.campaignShort %>
-                          <% } else { %>
-                            <%= o.attribution.primary.sourceLabel %>
-                          <% } %>
-                        </span>
-                      <% } %>
-                      <% if (o.notesCount > 0) { %>
-                        <span class="relative group cursor-default">
-                          <span class="material-symbols-outlined text-base <%= o.hasImportantNote ? 'text-red-500' : 'text-slate-400' %>">comment</span>
-                          <span class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 rounded-xl border border-slate-200 bg-white p-3 shadow-xl opacity-0 group-hover:opacity-100 transition z-50 text-left">
-                            <span class="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider"><%= o.notesCount %> note<%= o.notesCount > 1 ? 's' : '' %></span>
-                            <% if (o.lastNotePreview) { %>
-                              <span class="block mt-1 text-xs text-slate-700 font-normal leading-relaxed"><%= o.lastNotePreview %><%= o.lastNotePreview.length >= 100 ? '...' : '' %></span>
-                              <span class="block mt-1 text-[10px] text-slate-400 font-normal"><%= o.lastNoteAuthor %> &middot; <%= o.lastNoteDate %></span>
-                            <% } %>
-                          </span>
-                        </span>
-                      <% } %>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4 text-sm text-slate-500"><%= o.date %></td>
-                  <td class="px-6 py-4">
-                    <div class="text-sm font-semibold text-slate-500"><%= o.customer %></div>
-                    <% if (o.customerEmail) { %>
-                      <div class="mt-1 text-xs text-slate-400"><%= o.customerEmail %></div>
-                    <% } %>
-                  </td>
-                  <td class="px-6 py-4">
-                    <span class="badge <%= o.accountType === 'pro' ? 'badge-pro' : 'badge-particulier' %>">
-                      <%= o.accountType === 'pro' ? 'PRO' : 'PARTICULIER' %>
-                    </span>
-                  </td>
-                  <td class="px-6 py-4">
-                    <% if (o.orderType === 'exchange_cloning') { %>
-                      <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
-                        <span class="material-symbols-outlined" style="font-size:13px">science</span>Éch. + Clonage
-                      </span>
-                    <% } else if (o.orderType === 'standalone_cloning') { %>
-                      <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200">
-                        <span class="material-symbols-outlined" style="font-size:13px">memory</span>Service Clonage
-                      </span>
-                    <% } else if (o.orderType === 'exchange') { %>
-                      <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                        Échange std
-                      </span>
-                    <% } else { %>
-                      <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200">
-                        Vente simple
-                      </span>
-                    <% } %>
-                  </td>
-                  <td class="px-6 py-4">
-                    <span class="text-sm font-semibold text-slate-900"><%= typeof o.itemCount !== 'undefined' ? o.itemCount : 0 %></span>
-                    <% if (o.hasCloningItem) { %>
-                      <span class="ml-1 inline-flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600 border border-purple-200"><span class="material-symbols-outlined" style="font-size:11px">science</span>Clonage</span>
-                    <% } %>
-                  </td>
-                  <td class="px-6 py-4 font-semibold text-slate-900"><%= o.total %></td>
-                  <td class="px-6 py-4">
-                    <div class="flex flex-col gap-1">
-                      <div class="flex items-center gap-2">
-                        <span class="<%= o.statusBadge.className %>"><%= o.statusBadge.label %></span>
-                        <% if (o.hasShippingLabel) { %>
-                          <span class="material-symbols-outlined text-base text-green-500" title="Étiquette d'envoi attachée">local_shipping</span>
-                        <% } else if (o.docCount > 0) { %>
-                          <span class="material-symbols-outlined text-base text-slate-400" title="<%= o.docCount %> document(s) attaché(s)">attach_file</span>
-                        <% } %>
-                      </div>
-                      <%/* Sous-statut clonage pour exchange_cloning et standalone_cloning */ %>
-                      <% if ((o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') && o.cloningStatusBadge) { %>
-                        <div class="flex items-center gap-1 text-[11px] font-semibold">
-                          <% if (o.cloningStatus === 'pending_label') { %>
-                            <span class="inline-flex items-center gap-1 text-amber-600"><span style="font-size:12px">&#x1F7E1;</span> Étiquette récup à envoyer</span>
-                          <% } else if (o.cloningStatus === 'label_sent') { %>
-                            <span class="inline-flex items-center gap-1 text-blue-600"><span class="material-symbols-outlined" style="font-size:13px">mail</span> Étiquette récup envoyée</span>
-                          <% } else if (o.cloningStatus === 'client_piece_in_transit') { %>
-                            <span class="inline-flex items-center gap-1 text-indigo-600"><span class="material-symbols-outlined" style="font-size:13px">local_shipping</span> Pièce client en transit<% if (o.cloningTrackingNumber) { %> <span class="text-[10px] text-slate-400">(<%= o.cloningTrackingNumber %>)</span><% } %></span>
-                          <% } else if (o.cloningStatus === 'client_piece_received') { %>
-                            <span class="inline-flex items-center gap-1 text-cyan-600"><span class="material-symbols-outlined" style="font-size:13px">inventory_2</span> Pièce client reçue</span>
-                          <% } else if (o.cloningStatus === 'cloning_in_progress') { %>
-                            <span class="inline-flex items-center gap-1 text-purple-600"><span class="material-symbols-outlined" style="font-size:13px">settings</span> Clonage en cours</span>
-                          <% } else if (o.cloningStatus === 'cloning_done') { %>
-                            <span class="inline-flex items-center gap-1 text-green-600"><span class="material-symbols-outlined" style="font-size:13px">check_circle</span> Clonage terminé, prête à expédier</span>
-                          <% } else if (o.cloningStatus === 'cloning_failed') { %>
-                            <span class="inline-flex items-center gap-1 text-red-600 font-bold"><span class="material-symbols-outlined" style="font-size:13px">warning</span> Clonage échoué</span>
-                          <% } %>
-                        </div>
-                      <% } %>
-                      <%/* Indicateur retour pour exchange (PAS exchange_cloning) */ %>
-                      <% if (o.orderType === 'exchange' && o.returnStatus === 'pending' && o.returnDaysLeft !== null) { %>
-                        <% if (o.returnDaysLeft <= 0) { %>
-                          <div class="text-[11px] font-bold text-red-600 flex items-center gap-1">
-                            <span class="material-symbols-outlined" style="font-size:13px">error</span> Retour en retard !
-                          </div>
-                        <% } else if (o.returnDaysLeft <= 10) { %>
-                          <div class="text-[11px] font-bold text-orange-600 flex items-center gap-1">
-                            <span class="material-symbols-outlined" style="font-size:13px">schedule</span> Retour J+<%= 30 - o.returnDaysLeft %>/30
-                          </div>
-                        <% } %>
-                      <% } else if (o.orderType === 'exchange' && o.returnStatus === 'overdue') { %>
-                        <div class="text-[11px] font-bold text-red-600 flex items-center gap-1">
-                          <span class="material-symbols-outlined" style="font-size:13px">error</span> Retour en retard !
-                        </div>
-                      <% } %>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4">
-                    <% if (o.sourcing && o.sourcing.relevant) { %>
-                      <div class="flex flex-col gap-1 min-w-[8rem]" data-sourcing-cell data-order-id="<%= o.id %>">
-                        <select class="orders-filter-select text-xs py-1" data-sourcing-select aria-label="Approvisionnement de la pièce">
-                          <% (typeof sourcingOptions !== 'undefined' ? sourcingOptions : []).forEach(function (opt) { %>
-                            <option value="<%= opt.key %>" <%= o.sourcing.status === opt.key ? 'selected' : '' %>><%= opt.label %></option>
-                          <% }) %>
-                        </select>
-                        <span class="text-[10px] leading-tight <%= o.sourcing.overdue ? 'text-red-600 font-bold' : 'text-slate-400' %>" data-sourcing-hint>
-                          <% if (o.sourcing.status === 'commandee') { %><%= o.sourcing.overdue ? '⚠ Réception en retard' : (o.sourcing.dueDate ? 'Reçue avant le ' + o.sourcing.dueDate : '') %><% } %>
-                        </span>
-                      </div>
-                    <% } else { %>
-                      <span class="text-slate-300 text-xs">—</span>
-                    <% } %>
-                  </td>
-                  <td class="px-6 py-4 text-center">
-                    <%
-                      var _urgencyLevel = 4;
-                      var _urgencyLabel = '';
-                      var _urgencyClass = 'text-slate-300';
-                      if (o.returnStatus === 'overdue') { _urgencyLevel = 0; _urgencyLabel = 'Retour en retard'; _urgencyClass = 'text-red-500'; }
-                      else if ((o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') && (o.cloningStatus === 'pending_label' || o.cloningStatus === 'label_sent' || o.cloningStatus === 'client_piece_in_transit')) { _urgencyLevel = 1; _urgencyLabel = 'Attente pièce'; _urgencyClass = 'text-orange-500'; }
-                      else if ((o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') && o.cloningStatus === 'cloning_in_progress') { _urgencyLevel = 2; _urgencyLabel = 'Clonage en cours'; _urgencyClass = 'text-purple-500'; }
-                      else if (o.statusBadge && o.statusBadge.label === 'En attente paiement') { _urgencyLevel = 3; _urgencyLabel = 'Attente paiement'; _urgencyClass = 'text-amber-500'; }
-                    %>
-                    <% if (_urgencyLevel < 4) { %>
-                      <span class="material-symbols-outlined text-base <%= _urgencyClass %>" title="<%= _urgencyLabel %>">
-                        <%= _urgencyLevel <= 1 ? 'priority_high' : 'radio_button_checked' %>
-                      </span>
-                    <% } else { %>
-                      <span class="text-slate-200">&mdash;</span>
-                    <% } %>
-                  </td>
-                  <td class="px-6 py-4 text-right">
-                    <div class="flex items-center justify-end gap-1 flex-wrap">
-                      <% if (!isTrashView && o.lastShippingLabelUrl) { %>
-                        <button type="button" class="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-slate-100 transition" title="Imprimer l'étiquette" onclick="(function(){ var w = window.open('<%= o.lastShippingLabelUrl %>', '_blank', 'width=800,height=600'); if(w){ w.addEventListener('load', function(){ setTimeout(function(){ w.print(); }, 500); }); } })()">
-                          <span class="material-symbols-outlined text-lg text-slate-500">print</span>
-                        </button>
-                      <% } %>
+      <div class="cmd-lignes" id="cmdLignes" role="rowgroup">
+        <% (orders || []).forEach(function (o) { %>
+          <%- include('./partials/commande-ligne', { o: o, contexteListe: { vue: _vueLigne, fileActive: _fileActive, returnTo: _returnTo } }) %>
+        <% }) %>
+      </div>
 
-                      <%
-                        // URL courante pour revenir au même endroit après l'action
-                        var _currentUrl = '/admin/commandes';
-                        var _qp = [];
-                        if (_view === 'archived') _qp.push('view=archived');
-                        else if (_view === 'trash') _qp.push('view=trash');
-                        if (filters.q) _qp.push('q=' + encodeURIComponent(filters.q));
-                        if (filters.status) _qp.push('status=' + encodeURIComponent(filters.status));
-                        if (filters.type) _qp.push('type=' + encodeURIComponent(filters.type));
-                        if (filters.orderType) _qp.push('orderType=' + encodeURIComponent(filters.orderType));
-                        if (filters.cloningStatus) _qp.push('cloningStatus=' + encodeURIComponent(filters.cloningStatus));
-                        if (filters.returnFilter) _qp.push('returnFilter=' + encodeURIComponent(filters.returnFilter));
-                        if (filters.source) _qp.push('source=' + encodeURIComponent(filters.source));
-                        if (filters.period) _qp.push('period=' + encodeURIComponent(filters.period));
-                        if (filters.sort) _qp.push('sort=' + encodeURIComponent(filters.sort));
-                        if (filters.order) _qp.push('order=' + encodeURIComponent(filters.order));
-                        if (filters.limit && filters.limit !== 20) _qp.push('limit=' + encodeURIComponent(filters.limit));
-                        if (typeof pagination !== 'undefined' && pagination && pagination.page && pagination.page > 1) _qp.push('page=' + encodeURIComponent(pagination.page));
-                        if (_qp.length) _currentUrl += '?' + _qp.join('&');
-                      %>
-                      <% if (o.id && isTrashView) { %>
-                        <form action="/admin/commandes/<%= o.id %>/restaurer" method="POST" class="inline">
-                          <input type="hidden" name="returnTo" value="<%= _currentUrl %>" />
-                          <button type="submit" class="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 transition" title="Restaurer la commande">
-                            <span class="material-symbols-outlined text-base">restore</span>
-                            Restaurer
-                          </button>
-                        </form>
-                        <form action="/admin/commandes/<%= o.id %>/supprimer-definitivement" method="POST" class="inline" onsubmit="return confirm('Supprimer définitivement la commande <%= o.number %> ? Cette action est irréversible.')">
-                          <input type="hidden" name="returnTo" value="<%= _currentUrl %>" />
-                          <button type="submit" class="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-red-600 hover:bg-red-50 transition" title="Supprimer définitivement">
-                            <span class="material-symbols-outlined text-base">delete_forever</span>
-                            Supprimer
-                          </button>
-                        </form>
-                      <% } else if (o.id && isArchivedView) { %>
-                        <form action="/admin/commandes/<%= o.id %>/desarchiver" method="POST" class="inline">
-                          <input type="hidden" name="returnTo" value="<%= _currentUrl %>" />
-                          <button type="submit" class="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-100 transition" title="Désarchiver">
-                            <span class="material-symbols-outlined text-base">unarchive</span>
-                            Désarchiver
-                          </button>
-                        </form>
-                      <% } else if (o.id) { %>
-                        <form action="/admin/commandes/<%= o.id %>/archiver" method="POST" class="inline">
-                          <input type="hidden" name="returnTo" value="<%= _currentUrl %>" />
-                          <button type="submit" class="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-slate-100 transition" title="Archiver la commande">
-                            <span class="material-symbols-outlined text-lg text-slate-500">inventory_2</span>
-                          </button>
-                        </form>
-                        <form action="/admin/commandes/<%= o.id %>/supprimer" method="POST" class="inline" onsubmit="return confirm('Envoyer la commande <%= o.number %> à la corbeille ?')">
-                          <input type="hidden" name="returnTo" value="<%= _currentUrl %>" />
-                          <button type="submit" class="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-red-50 transition" title="Mettre à la corbeille">
-                            <span class="material-symbols-outlined text-lg text-red-500">delete</span>
-                          </button>
-                        </form>
-                      <% } %>
-
-                      <% if (o.id) { %>
-                        <a class="btn btn-ghost" href="/admin/commandes/<%= o.id %>">
-                          <span class="material-symbols-outlined mr-2 text-base">visibility</span>
-                          Détails
-                        </a>
-                        <form data-ajax="true" data-confirm="Supprimer définitivement la commande <%= o.number %> ? Cette action est irréversible." action="/admin/commandes/<%= o.id %>/supprimer" method="POST" class="inline">
-                          <button class="inline-flex items-center justify-center w-9 h-9 rounded-lg hover:bg-red-50 transition" type="submit" title="Supprimer la commande">
-                            <span class="material-symbols-outlined text-lg text-red-500">delete</span>
-                          </button>
-                        </form>
-                      <% } %>
-                    </div>
-                  </td>
-                </tr>
-              <% }) %>
-            </tbody>
-          </table>
-        </div>
-
-        <% if (pagination.totalPages > 1) { %>
-          <div class="border-t border-slate-100">
-            <%- include('./partials/pagination', { pb: ordersPb }) %>
-          </div>
-        <% } %>
-        </form>
-      <% } else if (!dbConnected) { %>
-        <div class="px-6 py-4 space-y-3">
-          <% for (let i = 0; i < 5; i++) { %>
-            <div class="animate-pulse bg-gray-200 h-12 rounded-xl"></div>
-          <% } %>
+      <% if (!dbConnected) { %>
+        <div class="cmd-vide">
+          <span class="ms is-attention" aria-hidden="true">cloud_off</span>
+          <p class="cmd-vide-titre">Base de données indisponible</p>
+          <p class="cmd-vide-texte">La liste des commandes reviendra dès que la base répond.</p>
         </div>
       <% } else { %>
-        <div class="text-center py-12">
-          <span class="material-symbols-outlined text-6xl text-slate-400">inbox</span>
-          <p class="text-lg font-semibold text-slate-500 mt-4">Aucune commande</p>
-          <p class="text-slate-400">Les commandes apparaitront ici.</p>
+        <div class="cmd-vide" id="cmdVide"<%= (orders || []).length ? ' hidden' : '' %>>
+          <% if (_enFile) { %>
+            <span class="ms" aria-hidden="true">task_alt</span>
+            <p class="cmd-vide-titre">Rien à traiter dans cette file</p>
+            <p class="cmd-vide-texte">Passe à la file suivante, tout est à jour ici.</p>
+          <% } else { %>
+            <span class="ms is-neutre" aria-hidden="true">inbox</span>
+            <p class="cmd-vide-titre">Aucune commande</p>
+            <p class="cmd-vide-texte"><%= _nbFiltres || _filters.q ? 'Aucune commande ne correspond à cette recherche.' : 'Les commandes apparaîtront ici.' %></p>
+          <% } %>
+        </div>
+        <div class="cmd-vide" id="cmdVideRecherche" hidden>
+          <span class="ms is-neutre" aria-hidden="true">search_off</span>
+          <p class="cmd-vide-titre">Aucune commande de cette liste ne correspond</p>
+          <p class="cmd-vide-texte">Appuie sur Entrée pour chercher dans toutes les commandes.</p>
+        </div>
+      <% } %>
+
+      <% if (!_enFile && _pagination.totalPages > 1) { %>
+        <%
+          const _base = '/admin/commandes?' + _qp.filter(function (p) { return p.indexOf('page=') !== 0; }).concat(Number(_filters.limit || 20) !== 20 ? ['limit=' + _filters.limit] : []).join('&');
+          const _url = function (p) { return _base + (_base.slice(-1) === '?' ? '' : '&') + 'page=' + p; };
+          const _items = (function (cur, tot) {
+            if (tot <= 7) { const r = []; for (let i = 1; i <= tot; i++) r.push({ type: 'page', page: i }); return r; }
+            const lo = Math.max(2, cur - 1); const hi = Math.min(tot - 1, cur + 1);
+            const r = [{ type: 'page', page: 1 }];
+            if (lo > 2) r.push({ type: 'ellipsis' });
+            for (let p = lo; p <= hi; p++) r.push({ type: 'page', page: p });
+            if (hi < tot - 1) r.push({ type: 'ellipsis' });
+            r.push({ type: 'page', page: tot });
+            return r;
+          })(_pagination.page, _pagination.totalPages);
+          const _urls = {}; _items.forEach(function (i) { if (i.type === 'page') _urls[i.page] = _url(i.page); });
+        %>
+        <div class="cmd-pagination">
+          <%- include('./partials/pagination', { pb: { pagination: _pagination, totalLabel: _pagination.totalItems + ' commande' + (_pagination.totalItems > 1 ? 's' : ''), pageItems: _items, pageUrls: _urls, prevUrl: _url(_pagination.prevPage), nextUrl: _url(_pagination.nextPage) } }) %>
         </div>
       <% } %>
     </div>
 
-    <% if (!dbConnected) { %>
-      <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
-        <div class="font-bold">Mode démo</div>
-        <div class="mt-1 text-sm">La base de données est indisponible : la liste des commandes n’est pas disponible.</div>
+    <% if (isActiveView && dbConnected) { %>
+      <div class="cmd-clavier" aria-label="Raccourcis clavier">
+        <span><kbd>/</kbd>rechercher</span>
+        <span><kbd>J</kbd><kbd>K</kbd>naviguer</span>
+        <span><kbd>Entrée</kbd>ouvrir le panneau</span>
+        <span><kbd>A</kbd>action suivante</span>
+        <span><kbd>Échap</kbd>fermer</span>
       </div>
     <% } %>
+  </div>
+
+  <% if (isActiveView) { %>
+    <div class="cmd-voile" id="cmdVoile" hidden></div>
+    <aside class="cmd-panneau" id="cmdPanneau" aria-labelledby="cmdPanneauTitre" role="dialog" aria-modal="false" hidden>
+      <div class="cmd-panneau-tete">
+        <div>
+          <div class="cmd-panneau-titre-l">
+            <h2 id="cmdPanneauTitre" data-p="number"></h2>
+            <span class="cmd-statut" data-p="statut"></span>
+          </div>
+          <p class="cmd-panneau-sous" data-p="subline"></p>
+        </div>
+        <button type="button" class="cmd-ico" data-fermer aria-label="Fermer le panneau"><span class="ms" aria-hidden="true">close</span></button>
+      </div>
+
+      <div class="cmd-panneau-corps" data-p="corps"></div>
+
+      <div class="cmd-panneau-pied">
+        <button type="button" class="cmd-bouton is-petit" data-panneau-nav="-1"><span class="ms" aria-hidden="true">keyboard_arrow_up</span>Précédente</button>
+        <div class="cmd-panneau-pied-c">
+          <span class="cmd-panneau-position" data-p="position"></span>
+          <button type="button" class="cmd-bouton is-primaire" data-p="primaire" hidden></button>
+        </div>
+        <button type="button" class="cmd-bouton is-petit" data-panneau-nav="1">Suivante<span class="ms" aria-hidden="true">keyboard_arrow_down</span></button>
+      </div>
+    </aside>
+  <% } %>
+
+  <div class="cmd-toast" id="cmdToast" role="status" aria-live="polite" hidden>
+    <span class="ms" data-toast-icone aria-hidden="true">check_circle</span>
+    <span data-toast-texte></span>
+    <button type="button" class="cmd-toast-annuler" data-toast-annuler hidden><span class="ms" aria-hidden="true">undo</span>Annuler</button>
   </div>
 </main>
 
 <script>
   (function () {
-    function revealPage() {
-      var sk = document.getElementById('page-skeleton');
-      if (!sk) return;
-      sk.classList.add('is-hidden');
-      setTimeout(function () { sk.remove(); }, 200);
-    }
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', revealPage);
-    } else {
-      revealPage();
-    }
-
-    // Show/hide cloning status filter based on order type
-    var otSelect = document.getElementById('orderTypeFilter');
-    var csSelect = document.getElementById('cloningStatusFilter');
-    if (otSelect && csSelect) {
-      function toggleCloningFilter() {
-        if (otSelect.value === 'exchange_cloning') {
-          csSelect.classList.remove('hidden');
-        } else {
-          csSelect.classList.add('hidden');
-          csSelect.value = '';
-        }
-      }
-      otSelect.addEventListener('change', toggleCloningFilter);
-    }
-
-    // Bulk select for orders
-    var selectAllOrders = document.getElementById('selectAllOrders');
-    var bulkDeleteOrdersBtn = document.getElementById('bulkDeleteOrdersBtn');
-    var bulkReviewRequestBtn = document.getElementById('bulkReviewRequestBtn');
-    var selectedOrdersCount = document.getElementById('selectedOrdersCount');
-    var orderCheckboxes = Array.prototype.slice.call(document.querySelectorAll('.rowSelectOrder'));
-
-    if (bulkDeleteOrdersBtn) {
-      bulkDeleteOrdersBtn.setAttribute('data-confirm', 'Supprimer définitivement les commandes sélectionnées ? Cette action est irréversible.');
-    }
-
-    function updateOrdersSelectionState() {
-      var count = orderCheckboxes.filter(function (c) { return c && c.checked; }).length;
-      if (selectedOrdersCount) selectedOrdersCount.textContent = count + ' sélectionné' + (count > 1 ? 's' : '');
-      if (bulkDeleteOrdersBtn) bulkDeleteOrdersBtn.disabled = count === 0;
-      if (bulkReviewRequestBtn) bulkReviewRequestBtn.disabled = count === 0;
-      if (selectAllOrders) {
-        selectAllOrders.checked = count > 0 && count === orderCheckboxes.length;
-        selectAllOrders.indeterminate = count > 0 && count < orderCheckboxes.length;
-      }
-    }
-
-    if (selectAllOrders) {
-      selectAllOrders.addEventListener('change', function () {
-        var isChecked = !!selectAllOrders.checked;
-        orderCheckboxes.forEach(function (c) { c.checked = isChecked; });
-        updateOrdersSelectionState();
-      });
-    }
-
-    orderCheckboxes.forEach(function (c) {
-      c.addEventListener('change', updateOrdersSelectionState);
-    });
-
-    // Envoi groupé de demandes d'avis Skeepers sur la sélection (POST same-origin, pas de CSRF).
-    if (bulkReviewRequestBtn) {
-      bulkReviewRequestBtn.addEventListener('click', function () {
-        var ids = orderCheckboxes.filter(function (c) { return c && c.checked; }).map(function (c) { return c.value; });
-        if (!ids.length) return;
-        if (ids.length > 50) { alert('Skeepers accepte 50 commandes maximum par envoi. Sélectionnez-en 50 ou moins.'); return; }
-        if (!confirm('Envoyer une demande d\'avis à ' + ids.length + ' client' + (ids.length > 1 ? 's' : '') + ' via Avis Vérifiés ?')) return;
-        bulkReviewRequestBtn.disabled = true;
-        fetch('/admin/commandes/demande-avis-multi', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-          body: JSON.stringify({ orderIds: ids }),
-        }).then(function (r) { return r.json().catch(function () { return {}; }); }).then(function (j) {
-          if (j && j.ok) {
-            var msg = (j.sent || 0) + " demande(s) d'avis envoyée(s).";
-            if (j.skipped && j.skipped.length) {
-              msg += '\n\n' + j.skipped.length + ' ignorée(s) :\n' + j.skipped.map(function (s) { return '• ' + s.number + ' — ' + s.reason; }).join('\n');
-            }
-            alert(msg);
-          } else {
-            alert('Échec : ' + ((j && j.error) || 'erreur inconnue'));
-          }
-        }).catch(function () { alert('Erreur réseau.'); }).then(function () {
-          bulkReviewRequestBtn.disabled = false;
-          updateOrdersSelectionState();
-        });
-      });
-    }
-
-    updateOrdersSelectionState();
+    var sk = document.getElementById('page-skeleton');
+    function reveler() { if (!sk) return; sk.classList.add('is-hidden'); setTimeout(function () { sk.remove(); }, 200); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', reveler); else reveler();
   })();
 </script>
-
-<script>
-  /* Édition inline du statut d'approvisionnement (colonne « Appro pièce »).
-     POST same-origin → pas de token CSRF requis (protection par origine). */
-  (function () {
-    document.querySelectorAll('[data-sourcing-select]').forEach(function (sel) {
-      sel.addEventListener('change', function () {
-        var cell = sel.closest('[data-sourcing-cell]');
-        var orderId = cell && cell.getAttribute('data-order-id');
-        if (!orderId) return;
-        sel.disabled = true;
-        fetch('/admin/commandes/' + encodeURIComponent(orderId) + '/sourcing', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-          body: JSON.stringify({ status: sel.value }),
-        }).then(function (r) { return r.json(); }).then(function (j) {
-          sel.disabled = false;
-          if (!j || !j.ok || !j.sourcing) return;
-          var hint = cell.querySelector('[data-sourcing-hint]');
-          if (hint) {
-            if (j.sourcing.status === 'commandee') {
-              hint.textContent = j.sourcing.overdue ? '⚠ Réception en retard' : (j.sourcing.dueDate ? 'Reçue avant le ' + j.sourcing.dueDate : '');
-            } else {
-              hint.textContent = '';
-            }
-            hint.className = 'text-[10px] leading-tight ' + (j.sourcing.overdue ? 'text-red-600 font-bold' : 'text-slate-400');
-          }
-        }).catch(function () { sel.disabled = false; });
-      });
-    });
-  })();
-</script>
+<script src="/js/admin-commandes.js?v=<%= (typeof assetVersions !== 'undefined' && assetVersions.adminCommandesJs) || '' %>" defer></script>
 
 <%- include('./partials/footer') %>

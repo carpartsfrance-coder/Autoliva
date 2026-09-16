@@ -520,6 +520,8 @@ function _safeMtime(relPath) {
 const ASSET_VERSIONS = {
   mainCss: _safeMtime('css/styles.css'),
   adminCss: _safeMtime('admin/style.css'),
+  adminCommandesCss: _safeMtime('admin/commandes.css'),
+  adminCommandesJs: _safeMtime('js/admin-commandes.js'),
 };
 /* Polices servies depuis notre domaine (CSS inline + préchargements du
    gabarit) — lues une fois, voir services/policesLocales.js. */
