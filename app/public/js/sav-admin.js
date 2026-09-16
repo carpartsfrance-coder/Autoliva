@@ -457,10 +457,11 @@
   if (document.getElementById('sav-tickets-tbody')) {
     var tbody = document.getElementById('sav-tickets-tbody');
     var form = document.getElementById('sav-filters');
-    var state = { page: 1, perPage: 20, sort: 'createdAt', dir: 'desc', search: '' };
+    var state = { page: 1, perPage: 20, sort: 'reponse', dir: 'desc', search: '' };
     var teamCache = [];
     var selected = new Set();
-    var DEFAULT_STATE = { page: 1, perPage: 20, sort: 'createdAt', dir: 'desc' };
+    // Par défaut : les clients qui ont répondu en haut, le plus récent d'abord.
+    var DEFAULT_STATE = { page: 1, perPage: 20, sort: 'reponse', dir: 'desc' };
     var pendingAssignee = '';
 
     function ticketUrl(n) { return '/admin/sav/tickets/' + encodeURIComponent(n); }
