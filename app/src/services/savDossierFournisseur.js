@@ -144,6 +144,78 @@ function filesWithRoles(ticket) {
 }
 
 // ---------------------------------------------------------------------------
+// Noms de fichiers et libellés : dans un groupe WhatsApp chargé, chaque fichier
+// doit dire seul de quel dossier il vient et ce qu'il montre.
+// ---------------------------------------------------------------------------
+
+const PART_SHORT = {
+  mecatronique: 'MECHATRONIC',
+  mecatronique_dq200: 'DQ200',
+  mecatronique_dq250: 'DQ250',
+  mecatronique_dq381: 'DQ381',
+  mecatronique_dq500: 'DQ500',
+  boite_vitesses: 'GEARBOX',
+  boite_transfert: 'TRANSFER-CASE',
+  pont: 'AXLE',
+  differentiel: 'DIFFERENTIAL',
+  haldex: 'HALDEX',
+  reducteur: 'REDUCTION-GEAR',
+  cardan: 'DRIVESHAFT',
+  arbre_transmission: 'PROPSHAFT',
+  visco_coupleur: 'VISCOUS-COUPLING',
+  moteur: 'ENGINE',
+  turbo: 'TURBO',
+  injecteur: 'INJECTOR',
+};
+
+// Code court de la pièce : le code boîte s'il est connu (DQ200, DL501…), trouvé dans
+// le type, la référence ou l'article commandé, sinon le type de pièce en anglais.
+function partCode(ticket, order) {
+  const sources = [ticket.pieceType, ticket.referencePiece]
+    .concat(order && Array.isArray(order.items) ? order.items.map((it) => `${it.name || ''} ${it.sku || ''}`) : []);
+  for (const src of sources) {
+    const m = String(src || '').match(/\b(DQ\d{3}|DL\d{3}|DQ\d{3}-\d)\b/i);
+    if (m) return m[1].toUpperCase();
+  }
+  return PART_SHORT[ticket.pieceType] || 'PART';
+}
+
+const ROLE_FILE = {
+  obd: { slug: 'fault-codes', label: 'Fault codes' },
+  reglage: { slug: 'basic-settings', label: 'Basic settings' },
+  autre: { slug: 'photo', label: 'Photo' },
+  exclu: { slug: 'document', label: 'Document' },
+};
+
+function extensionOf(file) {
+  const mime = String(file.mime || '').toLowerCase();
+  if (mime === 'image/jpeg') return 'jpg';
+  if (mime === 'image/png') return 'png';
+  if (mime === 'application/pdf') return 'pdf';
+  if (mime === 'image/heic' || mime === 'image/heif') return 'heic';
+  const m = String(file.originalName || '').match(/\.([a-z0-9]{2,5})$/i);
+  return m ? m[1].toLowerCase() : 'bin';
+}
+
+// Noms et libellés pour le PDF et chaque fichier, numérotés dans l'ordre du dossier
+// (codes défaut, réglage de base, autres photos, puis fichiers non envoyés).
+function fileNaming(ticket, order) {
+  const code = partCode(ticket, order);
+  const base = `${String(ticket.numero || 'SAV').replace(/[^A-Za-z0-9-]/g, '')}_${code}`;
+  const order_ = ['obd', 'reglage', 'autre', 'exclu'];
+  const files = filesWithRoles(ticket).slice().sort((a, b) => order_.indexOf(a.role) - order_.indexOf(b.role));
+  const byUrl = {};
+  files.forEach((f, i) => {
+    const r = ROLE_FILE[f.role] || ROLE_FILE.autre;
+    byUrl[f.url] = {
+      fileName: `${base}_${i + 1}-${r.slug}.${extensionOf(f)}`,
+      label: `${ticket.numero} · ${code} · ${r.label}`,
+    };
+  });
+  return { partCode: code, pdfFileName: `${base}_claim.pdf`, files: byUrl };
+}
+
+// ---------------------------------------------------------------------------
 // Contenu
 // ---------------------------------------------------------------------------
 
@@ -374,6 +446,7 @@ function pdfText(text) {
 async function buildPdf(ticket, order, opts) {
   const baseUrl = (opts && opts.baseUrl) || '';
   const s = summary(ticket, order);
+  const naming = fileNaming(ticket, order);
   const files = filesWithRoles(ticket).filter((f) => f.role !== 'exclu');
   const token = signature(ticket.numero);
 
@@ -406,7 +479,7 @@ async function buildPdf(ticket, order, opts) {
 
     doc.fillColor('#ec1313').font('Helvetica-Bold').fontSize(18).text(pdfText(brand.NAME));
     doc.moveDown(0.3);
-    doc.fillColor('#0f172a').fontSize(15).text(`Warranty claim – ${pdfText(s.numero)}`);
+    doc.fillColor('#0f172a').fontSize(15).text(`Warranty claim – ${pdfText(s.numero)} · ${pdfText(naming.partCode)}`);
     doc.fillColor('#64748b').font('Helvetica').fontSize(9).text(`Issued on ${fmtDateEn(new Date())}`);
     doc.moveDown(0.8);
 
@@ -482,20 +555,25 @@ async function buildPdf(ticket, order, opts) {
     groups.forEach((g) => {
       const list = loaded.filter((f) => f.role === g.role);
       list.forEach((f) => { f.box = imageBox(f); });
-      section(g.title, list.length && list[0].box ? list[0].box.h : 30);
+      // Place gardée sous le titre : légende (~16 pt) + première image.
+      section(g.title, list.length && list[0].box ? list[0].box.h + 20 : 30);
       if (!list.length) {
         doc.fillColor('#b45309').font('Helvetica-Oblique').fontSize(10).text('Not provided yet.', left, doc.y, { width });
         doc.moveDown(0.3);
         return;
       }
       list.forEach((f) => {
+        const named = naming.files[f.url] || {};
         if (f.box) {
-          if (doc.y + f.box.h > bottom()) doc.addPage();
+          if (doc.y + f.box.h + 16 > bottom()) doc.addPage();
+          // Même libellé que le bandeau des photos partagées, pour s'y retrouver.
+          doc.fillColor('#64748b').font('Helvetica').fontSize(8).text(pdfText(named.label || ''), left, doc.y, { width });
+          doc.moveDown(0.2);
           doc.image(f.box.img, left, doc.y, { fit: [width, f.box.h], align: 'center' });
           doc.y += f.box.h + 10;
         } else {
           if (doc.y + 16 > bottom()) doc.addPage();
-          const name = pdfText(f.originalName) || 'file';
+          const name = pdfText(named.fileName || f.originalName) || 'file';
           if (f.link) {
             doc.fillColor('#2563eb').font('Helvetica').fontSize(10)
               .text(`Open attached file: ${name}`, left, doc.y, { width, link: f.link, underline: true });
@@ -520,6 +598,8 @@ function fileSharedWithSupplier(ticket, fileId, token) {
 
 module.exports = {
   ROLES,
+  partCode,
+  fileNaming,
   scrubPersonal,
   signature,
   verifySignature,

@@ -107,3 +107,26 @@ test('le PDF et le message n’utilisent que la description nettoyée', () => {
   assert.doesNotMatch(s.description, /Jean|Dupont|06 00/);
   assert.match(s.description, /mode dégradé/);
 });
+
+test('noms de fichiers : numéro SAV, code boîte et contenu, dans l’ordre du dossier', () => {
+  const t = ticket({
+    documentsList: [
+      { kind: 'client_message', url: PHOTO_MESSAGE, mime: 'image/jpeg' },
+      { kind: 'photoObd', url: OBD, mime: 'image/jpeg' },
+      { kind: 'factureMontage', url: FACTURE, mime: 'application/pdf' },
+    ],
+    fournisseur: { photosDossier: [{ url: PHOTO_MESSAGE, role: 'reglage' }] },
+  });
+  const order = { items: [{ name: 'Mécatronique DSG7 DQ200 (0AM/0CW) reconditionnée', sku: 'MECA-1' }] };
+  const n = dossier.fileNaming(t, order);
+  assert.equal(n.partCode, 'DQ200');
+  assert.equal(n.pdfFileName, 'SAV-2026-0001_DQ200_claim.pdf');
+  assert.equal(n.files[OBD].fileName, 'SAV-2026-0001_DQ200_1-fault-codes.jpg');
+  assert.equal(n.files[PHOTO_MESSAGE].fileName, 'SAV-2026-0001_DQ200_2-basic-settings.jpg');
+  assert.equal(n.files[OBD].label, 'SAV-2026-0001 · DQ200 · Fault codes');
+});
+
+test('code pièce : type de pièce en anglais quand aucun code boîte n’est connu', () => {
+  assert.equal(dossier.partCode(ticket({ pieceType: 'pont' }), null), 'AXLE');
+  assert.equal(dossier.partCode(ticket({ pieceType: 'mecatronique_dq250' }), null), 'DQ250');
+});
