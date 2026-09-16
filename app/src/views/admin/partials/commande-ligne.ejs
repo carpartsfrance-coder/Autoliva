@@ -1,0 +1,142 @@
+<%/*
+  Une ligne de la liste des commandes — partagée par la page (orders.ejs) et
+  par les endpoints qui renvoient une ligne à jour après une action
+  (/admin/commandes/:id/avancer, /admin/commandes/:id/ligne).
+
+  Locales : o (construireLigneCommande), contexteListe { vue, fileActive, returnTo }.
+  Toutes les décisions (file, retard, action suivante) sont prises côté
+  serveur par src/services/commandesFiles.js : ce gabarit n'en prend aucune.
+*/%>
+<%
+  const _ctx = typeof contexteListe !== 'undefined' && contexteListe ? contexteListe : {};
+  const _vue = _ctx.vue || 'active';
+  const _actif = _vue === 'active';
+  const _action = o.action || null;
+  const _donnees = {
+    id: o.id,
+    number: o.number,
+    etat: o.etat,
+    files: o.files,
+    action: _action,
+    actionsPossibles: o.actionsPossibles || [],
+    filesApres: o.filesApres || {},
+    etiquette: o.lastShippingLabelUrl || '',
+    panneau: o.panneau,
+  };
+  const _statutTon = {
+    draft: 'gris', pending_payment: 'ambre', paid: 'vert', processing: 'bleu', label_created: 'ambre',
+    shipped: 'bleu', delivered: 'vert', completed: 'gris', cancelled: 'rouge', refunded: 'gris', partially_refunded: 'gris',
+  }[o.statusKey] || 'gris';
+%>
+<div class="cmd-ligne<%= o.retard && o.retard.enRetard ? ' is-retard' : '' %>" role="row" data-ligne="<%= JSON.stringify(_donnees) %>" data-id="<%= o.id %>" data-recherche="<%= o.recherche || '' %>">
+  <div class="cmd-c cmd-c-check" role="cell">
+    <% if (_actif) { %>
+      <input type="checkbox" class="cmd-check" value="<%= o.id %>" aria-label="Sélectionner <%= o.number %>" />
+    <% } %>
+  </div>
+
+  <div class="cmd-c cmd-c-num" role="cell">
+    <div class="cmd-num-l">
+      <a class="cmd-num" href="/admin/commandes/<%= o.id %>"><%= o.number %></a>
+      <span class="cmd-canal<%= o.canal && o.canal.label === 'Web' ? ' is-web' : '' %>"><span class="ms" aria-hidden="true"><%= o.canal ? o.canal.icon : 'language' %></span><%= o.canal ? o.canal.label : 'Web' %></span>
+      <% if (o.notesCount > 0) { %>
+        <span class="ms cmd-note<%= o.hasImportantNote ? ' is-importante' : '' %>" title="<%= o.notesCount %> note<%= o.notesCount > 1 ? 's' : '' %><%= o.lastNotePreview ? ' — ' + o.lastNotePreview : '' %>" aria-label="<%= o.notesCount %> note<%= o.notesCount > 1 ? 's' : '' %>">comment</span>
+      <% } %>
+    </div>
+    <div class="cmd-meta"><%= o.date %></div>
+  </div>
+
+  <div class="cmd-c cmd-c-client" role="cell">
+    <div class="cmd-client"><%= o.customer %></div>
+    <% if (o.customerEmail) { %><div class="cmd-email"><%= o.customerEmail %></div><% } %>
+    <div class="cmd-montant"><%= o.total %></div>
+    <span class="cmd-type<%= o.accountType === 'pro' ? ' is-pro' : '' %>"><%= o.accountType === 'pro' ? 'PRO' : 'PARTICULIER' %></span>
+  </div>
+
+  <div class="cmd-c cmd-c-pieces" role="cell">
+    <div class="cmd-piece"><%= o.pieceResume %></div>
+    <% if (o.reference) { %><div class="cmd-ref"><%= o.reference %></div><% } %>
+    <div class="cmd-meta cmd-otype"><%= o.orderTypeLabel %></div>
+  </div>
+
+  <div class="cmd-c cmd-c-statut" role="cell">
+    <span class="cmd-statut is-<%= _statutTon %>"><%= o.statusBadge.label %></span>
+    <% if (o.retard && o.retard.enRetard) { %>
+      <div class="cmd-retard"><span class="ms" aria-hidden="true">schedule</span>Retard <%= o.retard.jours %>j</div>
+    <% } %>
+    <% if (o.sousStatut) { %>
+      <div class="cmd-sous is-<%= o.sousStatut.ton %>"><span class="ms" aria-hidden="true"><%= o.sousStatut.icon %></span><span><%= o.sousStatut.texte %></span></div>
+    <% } %>
+  </div>
+
+  <div class="cmd-c cmd-c-appro" role="cell">
+    <% if (_actif && _action && _action.besoin === 'decision') { %>
+      <div class="cmd-decision">
+        <div class="cmd-decision-q">Pièce en stock ?</div>
+        <div class="cmd-decision-b">
+          <button type="button" class="cmd-choix is-oui" data-action="en_stock"><span class="ms" aria-hidden="true">check_circle</span>Oui</button>
+          <button type="button" class="cmd-choix is-commander" data-action="a_commander"><span class="ms" aria-hidden="true">shopping_cart</span>À commander</button>
+        </div>
+      </div>
+    <% } else if (o.appro) { %>
+      <% if (_actif) { %>
+        <button type="button" class="cmd-appro is-<%= o.appro.ton %>" data-ouvrir="appro">
+          <span class="cmd-appro-l"><span class="ms" aria-hidden="true"><%= o.appro.icon %></span><%= o.appro.label %></span>
+          <span class="cmd-appro-s"><%= o.appro.suite %></span>
+          <% if (o.appro.pertinente) { %><span class="cmd-appro-m">Mettre à jour →</span><% } %>
+        </button>
+      <% } else { %>
+        <div class="cmd-appro is-neutre-fin is-statique">
+          <span class="cmd-appro-l"><span class="ms" aria-hidden="true"><%= o.appro.icon %></span><%= o.appro.label %></span>
+        </div>
+      <% } %>
+    <% } %>
+    <% if (_actif && o.alerteAppro) { %>
+      <div class="cmd-alerte"><%= o.alerteAppro %></div>
+    <% } %>
+  </div>
+
+  <div class="cmd-c cmd-c-actions" role="cell">
+    <% if (_vue === 'trash') { %>
+      <form action="/admin/commandes/<%= o.id %>/restaurer" method="POST">
+        <input type="hidden" name="returnTo" value="<%= _ctx.returnTo || '/admin/commandes?view=trash' %>" />
+        <button type="submit" class="cmd-act is-doux"><span class="ms" aria-hidden="true">restore</span>Restaurer</button>
+      </form>
+      <form action="/admin/commandes/<%= o.id %>/supprimer-definitivement" method="POST" data-confirmer="Supprimer définitivement la commande <%= o.number %> ? Cette action est irréversible.">
+        <input type="hidden" name="returnTo" value="<%= _ctx.returnTo || '/admin/commandes?view=trash' %>" />
+        <button type="submit" class="cmd-ico is-danger" title="Supprimer définitivement" aria-label="Supprimer définitivement <%= o.number %>"><span class="ms" aria-hidden="true">delete_forever</span></button>
+      </form>
+    <% } else if (_vue === 'archived') { %>
+      <form action="/admin/commandes/<%= o.id %>/desarchiver" method="POST">
+        <input type="hidden" name="returnTo" value="<%= _ctx.returnTo || '/admin/commandes?view=archived' %>" />
+        <button type="submit" class="cmd-act is-doux"><span class="ms" aria-hidden="true">unarchive</span>Désarchiver</button>
+      </form>
+      <a class="cmd-ico" href="/admin/commandes/<%= o.id %>" title="Ouvrir la fiche" aria-label="Ouvrir la fiche <%= o.number %>"><span class="ms" aria-hidden="true">open_in_full</span></a>
+    <% } else if (_vue === 'draft') { %>
+      <a class="cmd-act" href="/admin/commandes/<%= o.id %>"><span class="ms" aria-hidden="true">edit</span>Reprendre</a>
+    <% } else { %>
+      <% if (_action && _action.besoin !== 'decision') { %>
+        <% if (_action.besoin === 'retour') { %>
+          <span class="cmd-act is-attente" title="L’ancienne pièce n’est pas revenue : le dossier reste ouvert"><span class="ms" aria-hidden="true">assignment_return</span><%= _action.label %></span>
+        <% } else if (_action.besoin === 'etiquette' || _action.besoin === 'suivi') { %>
+          <button type="button" class="cmd-act<%= _action.style === 'doux' ? ' is-doux' : '' %>" data-ouvrir="expedition"<% if (_action.besoin === 'suivi') { %> data-message="<%= o.number %> — renseigne le numéro de suivi avant de passer en expédiée"<% } %>><span class="ms" aria-hidden="true"><%= _action.icon %></span><%= _action.label %></button>
+        <% } else if (_action.id) { %>
+          <button type="button" class="cmd-act<%= _action.style === 'doux' ? ' is-doux' : '' %>" data-action="<%= _action.id %>"><span class="ms" aria-hidden="true"><%= _action.icon %></span><%= _action.label %></button>
+        <% } %>
+      <% } %>
+      <% if (o.lastShippingLabelUrl && ['label_created', 'shipped', 'delivered'].includes(o.statusKey)) { %>
+        <a class="cmd-ico" href="<%= o.lastShippingLabelUrl %>" data-imprimer title="Imprimer l’étiquette" aria-label="Imprimer l’étiquette de <%= o.number %>" target="_blank" rel="noopener"><span class="ms" aria-hidden="true">print</span></a>
+      <% } %>
+      <button type="button" class="cmd-ico" data-ouvrir="panneau" title="Ouvrir le panneau" aria-label="Ouvrir le panneau de <%= o.number %>"><span class="ms" aria-hidden="true">open_in_full</span></button>
+      <div class="cmd-menu">
+        <button type="button" class="cmd-plus" aria-haspopup="menu" aria-expanded="false" aria-label="Plus d’actions pour <%= o.number %>">•••</button>
+        <div class="cmd-menu-l" role="menu" hidden>
+          <a role="menuitem" href="/admin/commandes/<%= o.id %>"><span class="ms" aria-hidden="true">description</span>Fiche complète</a>
+          <button type="button" role="menuitem" data-menu="avis"><span class="ms" aria-hidden="true">reviews</span>Demander un avis</button>
+          <button type="button" role="menuitem" data-menu="archiver"><span class="ms" aria-hidden="true">inventory_2</span>Archiver</button>
+          <button type="button" role="menuitem" data-menu="corbeille" class="is-danger"><span class="ms" aria-hidden="true">delete</span>Mettre à la corbeille</button>
+        </div>
+      </div>
+    <% } %>
+  </div>
+</div>

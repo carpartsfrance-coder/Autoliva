@@ -39,6 +39,7 @@ const { listRecentSessions, getSessionTimeline } = require('../services/visitorT
 const { hasAbility, getRoleLabel, isComptable, defaultLandingForRole, ROLES } = require('../permissions');
 const brand = require('../config/brand');
 const sourcingStatus = require('../config/sourcingStatus');
+const commandesFiles = require('../services/commandesFiles');
 const vatScheme = require('../services/vatScheme');
 const purchaseInvoice = require('../services/purchaseInvoice');
 /* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.7) :
@@ -2468,6 +2469,349 @@ async function getAdminDashboard(req, res, next) {
   }
 }
 
+/* ─── Files de traitement des commandes (liste /admin/commandes) ───────────── */
+
+const LIBELLES_CLONAGE = {
+  pending_label: 'Étiquette récup à envoyer',
+  label_sent: 'Étiquette récup envoyée',
+  client_piece_in_transit: 'Pièce client en transit',
+  client_piece_received: 'Pièce client reçue',
+  cloning_in_progress: 'Clonage en cours',
+  cloning_done: 'Clonage terminé',
+  cloning_failed: 'Clonage échoué',
+};
+
+const CANAUX_COMMANDE = {
+  website: { label: 'Web', icon: 'language' },
+  phone: { label: 'Tél', icon: 'call' },
+  email: { label: 'Email', icon: 'mail' },
+  whatsapp: { label: 'WA', icon: 'chat' },
+  leboncoin: { label: 'LBC', icon: 'sell' },
+  marketplace: { label: 'Mktp', icon: 'storefront' },
+  salon: { label: 'Salon', icon: 'groups' },
+  manual: { label: 'Manuel', icon: 'edit_note' },
+  other: { label: 'Autre', icon: 'more_horiz' },
+};
+
+/** « 2026-09-16 » en heure de Paris, pour un <input type="date">. */
+function dateSaisie(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+}
+
+/** « 16/09 » en heure de Paris. */
+function dateCourte(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Paris' });
+}
+
+function envoisClient(o) {
+  return (Array.isArray(o.shipments) ? o.shipments : [])
+    .filter((s) => s && String(s.trackingNumber || '').trim() && !/r[ée]cup[ée]ration clonage/i.test(String(s.label || '')));
+}
+
+function dernierPassage(o, statut) {
+  const h = Array.isArray(o.statusHistory) ? o.statusHistory : [];
+  for (let i = h.length - 1; i >= 0; i--) if (h[i] && h[i].status === statut && h[i].changedAt) return h[i].changedAt;
+  return null;
+}
+
+/**
+ * Ce que la liste « files » ajoute à une ligne : file, retard, appro, action
+ * suivante, et les données du panneau latéral. Tout est calculé ici, côté
+ * serveur, par commandesFiles : le JavaScript de la page ne fait qu'afficher.
+ */
+function champsFilesCommande(o, { user = null, noteInfo = null, maintenant = new Date(), total = '', date = '' } = {}) {
+  const id = String(o._id);
+  const appro = commandesFiles.approEffectif(o);
+  const infoAppro = commandesFiles.APPRO[appro];
+  const action = commandesFiles.actionSuivante(o);
+  const possibles = commandesFiles.actionsPossibles(o);
+  const retard = commandesFiles.retard(o, maintenant);
+  const partie = ['shipped', 'delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded'].includes(o.status);
+  const serviceClonage = o.orderType === 'standalone_cloning';
+  const envois = envoisClient(o);
+  const dernierEnvoi = envois.length ? envois[envois.length - 1] : null;
+  const items = (Array.isArray(o.items) ? o.items : []).filter(Boolean);
+  const premier = items[0] || null;
+  const autres = items.length - 1;
+  const statusBadge = getOrderStatusBadge(o.status);
+  const orderTypeLabel = getOrderTypeLabel(o.orderType);
+
+  let sousStatut = null;
+  if (o.status === 'label_created') {
+    sousStatut = { texte: 'Étiquette prête, pas encore partie', icon: 'label', ton: 'ambre' };
+  } else if (o.status === 'shipped' && dernierEnvoi) {
+    sousStatut = { texte: [dernierEnvoi.carrier, dernierEnvoi.trackingNumber].filter(Boolean).join(' · '), icon: 'local_shipping', ton: 'bleu' };
+  } else if (commandesFiles.retourAttendu(o) && ['delivered', 'completed'].includes(o.status)) {
+    const echeance = o.returnDates && o.returnDates.returnDueDate ? new Date(o.returnDates.returnDueDate) : null;
+    const enRetard = o.returnStatus === 'overdue' || (echeance && echeance.getTime() < maintenant.getTime());
+    sousStatut = enRetard
+      ? { texte: 'Retour consigne en retard', icon: 'assignment_return', ton: 'rouge' }
+      : { texte: echeance ? `Retour consigne attendu avant le ${dateCourte(echeance)}` : 'Retour consigne attendu', icon: 'assignment_return', ton: 'ambre' };
+  } else if ((o.orderType === 'exchange_cloning' || serviceClonage) && LIBELLES_CLONAGE[o.cloningStatus]) {
+    sousStatut = { texte: LIBELLES_CLONAGE[o.cloningStatus], icon: 'memory', ton: o.cloningStatus === 'cloning_failed' ? 'rouge' : 'violet' };
+  }
+
+  const telephone = (user && user.phone) || (o.shippingAddress && o.shippingAddress.phone) || '';
+  const nomClient = user
+    ? (user.accountType === 'pro' ? (user.companyName || `${user.firstName} ${user.lastName}`) : `${user.firstName} ${user.lastName}`)
+    : ((o.shippingAddress && o.shippingAddress.fullName) || 'Client');
+  const canal = CANAUX_COMMANDE[(o.source && o.source.channel) || 'website'] || CANAUX_COMMANDE.other;
+  const s = o.sourcing || {};
+  const echeanceFournisseur = sourcingStatus.dueDate({ ...s, status: s.status });
+
+  /* Avancement : Payée → Appro tranchée → Pièce reçue → Étiquette → Expédiée → Livrée. */
+  const atteint = {
+    paid: !['draft', 'pending_payment'].includes(o.status),
+    sourced: appro !== 'a_verifier' || serviceClonage,
+    received: appro === 'en_stock' || serviceClonage,
+    label_created: ['label_created', 'shipped', 'delivered', 'completed'].includes(o.status),
+    shipped: ['shipped', 'delivered', 'completed'].includes(o.status),
+    delivered: ['delivered', 'completed'].includes(o.status),
+  };
+  const dates = {
+    paid: dernierPassage(o, 'paid') || o.createdAt,
+    sourced: s.updatedAt,
+    received: appro === 'en_stock' ? s.updatedAt : null,
+    label_created: dernierPassage(o, 'label_created'),
+    shipped: dernierPassage(o, 'shipped'),
+    delivered: dernierPassage(o, 'delivered'),
+  };
+  const etapes = [
+    ['paid', 'Payée'], ['sourced', 'Appro tranchée'], ['received', 'Pièce reçue atelier'],
+    ['label_created', 'Étiquette créée'], ['shipped', 'Expédiée'], ['delivered', 'Livrée'],
+  ];
+  const premiereNonAtteinte = etapes.findIndex(([cle]) => !atteint[cle]);
+  const avancement = etapes.map(([cle, label], i) => ({
+    label,
+    etat: atteint[cle] ? 'fait' : (i === premiereNonAtteinte ? 'courant' : 'avenir'),
+    meta: atteint[cle] ? (dateCourte(dates[cle]) || 'fait') : (i === premiereNonAtteinte ? 'en cours' : ''),
+  }));
+
+  const filesApres = {};
+  for (const idAction of possibles) filesApres[idAction] = commandesFiles.filesApres(o, idAction);
+
+  const reference = premier ? String(premier.sku || '').trim() : '';
+  const recherche = [
+    o.number, nomClient, user && user.email, reference,
+    ...items.map((it) => `${it.name} ${it.sku || ''}`),
+    ...envois.map((e) => e.trackingNumber),
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  return {
+    statusKey: o.status,
+    files: commandesFiles.files(o),
+    etat: { status: o.status, appro },
+    retard,
+    action,
+    actionsPossibles: possibles,
+    filesApres,
+    appro: {
+      cle: appro,
+      label: serviceClonage ? 'Service clonage' : infoAppro.label,
+      icon: serviceClonage ? 'memory' : infoAppro.icon,
+      ton: (partie || serviceClonage) ? 'neutre-fin' : infoAppro.ton,
+      suite: partie ? 'Rien à faire côté appro' : (serviceClonage ? 'Pas de pièce à sourcer' : infoAppro.suite),
+      pertinente: !partie && !serviceClonage && commandesFiles.AVANT_EXPEDITION.includes(o.status),
+    },
+    alerteAppro: commandesFiles.alerteAppro(o, maintenant),
+    sousStatut,
+    canal,
+    pieceResume: premier ? `${premier.quantity || 1} × ${premier.name}${autres > 0 ? ` + ${autres} autre${autres > 1 ? 's' : ''}` : ''}` : '—',
+    reference,
+    recherche,
+    panneau: {
+      id,
+      number: o.number,
+      statusLabel: statusBadge.label,
+      statusKey: o.status,
+      subline: [date, o.accountType === 'pro' ? 'Professionnel' : 'Particulier', orderTypeLabel].filter(Boolean).join(' · '),
+      avancement,
+      appro: {
+        cle: appro,
+        brut: sourcingStatus.normalizeStatus(s.status),
+        pertinente: !partie && !serviceClonage,
+        commandeeLe: dateSaisie(s.orderedAt),
+        receptionPrevue: dateSaisie(echeanceFournisseur),
+        delaiJours: Number.isFinite(s.expectedDays) ? s.expectedDays : null,
+        note: s.note || '',
+        fournisseur: (o.purchase && o.purchase.supplier) || '',
+        majLe: dateCourte(s.updatedAt),
+        majPar: s.updatedBy || '',
+      },
+      pieces: items.map((it) => ({ qte: it.quantity || 1, nom: it.name, sku: it.sku || '' })),
+      montant: total,
+      paiement: statusBadge.label,
+      envois: envois.map((e) => ({ label: e.label || '', transporteur: e.carrier || '', suivi: e.trackingNumber, le: dateCourte(e.createdAt) })),
+      client: { nom: nomClient, email: (user && user.email) || '', telephone },
+      notes: noteInfo ? noteInfo.count : 0,
+      clonage: o.orderType === 'exchange_cloning' || serviceClonage,
+      action,
+      actionsPossibles: possibles,
+      etat: { status: o.status, appro },
+      filesApres,
+    },
+  };
+}
+
+/**
+ * Compteurs des files, résumé et identifiants par file, à partir des seules
+ * commandes EN COURS (avant expédition, expédiées, livrées) — une projection
+ * légère : quelques centaines de commandes, pas le catalogue. « Toutes »
+ * compte, elle, toutes les commandes actives.
+ */
+async function chargerFilesCommandes(maintenant = new Date()) {
+  const base = { archived: { $ne: true }, deletedAt: null };
+  const [enCours, toutesActives] = await Promise.all([
+    Order.find({ ...base, status: { $in: [...commandesFiles.AVANT_EXPEDITION, 'shipped', 'delivered'] } })
+      .select('_id status orderType sourcing statusHistory.status statusHistory.changedAt shipments.label shipments.trackingNumber shipments.createdAt returnStatus cloningStatus purchase.supplier createdAt')
+      .lean(),
+    Order.countDocuments({ ...base, status: { $ne: 'draft' } }),
+  ]);
+  const compteurs = commandesFiles.compter(enCours, maintenant);
+  compteurs.all.total = toutesActives;
+  const idsParFile = {};
+  for (const id of commandesFiles.IDS_FILES) idsParFile[id] = [];
+  for (const o of enCours) for (const f of commandesFiles.files(o)) idsParFile[f].push(o._id);
+  return { compteurs, resume: commandesFiles.resume(enCours, maintenant), idsParFile };
+}
+
+/**
+ * Une ligne de la liste des commandes (et le panneau latéral qui la détaille).
+ * Partagée par la page et par les endpoints qui renvoient une ligne à jour
+ * après une action.
+ */
+function construireLigneCommande(o, { userMap = new Map(), noteMap = new Map(), maintenant = new Date() } = {}) {
+  const u = o.userId ? userMap.get(String(o.userId)) : null;
+  const customer = u
+    ? u.accountType === 'pro'
+      ? u.companyName || `${u.firstName} ${u.lastName}`
+      : `${u.firstName} ${u.lastName}`
+    : 'Client';
+
+  const itemCount = Array.isArray(o.items)
+    ? o.items.reduce((sum, it) => {
+        if (!it || !Number.isFinite(it.quantity)) return sum;
+        return sum + it.quantity;
+      }, 0)
+    : 0;
+
+  const hasCloningItem = Array.isArray(o.items) && o.items.some((it) => it && it.itemType === 'exchange_cloning');
+
+  const noteInfo = noteMap.get(String(o._id));
+
+  // Compute return days info for exchange orders (NOT exchange_cloning)
+  let returnDaysLeft = null;
+  let returnDaysTotal = 30;
+  if (o.orderType === 'exchange' && o.returnStatus === 'pending' && o.returnDates && o.returnDates.returnDueDate) {
+    const now = new Date();
+    const due = new Date(o.returnDates.returnDueDate);
+    returnDaysLeft = Math.ceil((due.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+  }
+
+  // Cloning tracking info
+  const cloningTrackingNumber = o.cloningTracking && o.cloningTracking.trackingNumber ? o.cloningTracking.trackingNumber : '';
+
+  return {
+    id: String(o._id),
+    number: o.number,
+    date: formatDateTimeFR(o.createdAt),
+    archived: !!o.archived,
+    archivedAt: o.archivedAt ? formatDateTimeFR(o.archivedAt) : '',
+    archivedBy: o.archivedBy || '',
+    deletedAt: o.deletedAt ? formatDateTimeFR(o.deletedAt) : '',
+    deletedAtRaw: o.deletedAt || null,
+    deletedBy: o.deletedBy || '',
+    deleteReason: o.deleteReason || '',
+    customer,
+    customerEmail: u && u.email ? u.email : '',
+    accountType: o.accountType,
+    itemCount,
+    hasCloningItem,
+    total: formatEuro(o.totalCents),
+    statusBadge: getOrderStatusBadge(o.status),
+    orderType: o.orderType || 'standard',
+    orderTypeLabel: getOrderTypeLabel(o.orderType),
+    cloningStatus: o.cloningStatus || null,
+    cloningStatusBadge: (o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') ? getCloningStatusBadge(o.cloningStatus) : null,
+    cloningTrackingNumber,
+    returnStatus: o.returnStatus || 'not_applicable',
+    returnDaysLeft,
+    sourcing: (() => {
+      const s = o.sourcing || {};
+      const st = sourcingStatus.normalizeStatus(s.status);
+      const lbl = sourcingStatus.LABELS[st];
+      const due = sourcingStatus.dueDate(s);
+      return {
+        status: st,
+        label: lbl.label,
+        badge: lbl.badge,
+        dot: lbl.dot,
+        orderedAt: s.orderedAt ? formatDateTimeFR(s.orderedAt) : '',
+        expectedDays: Number.isFinite(s.expectedDays) ? s.expectedDays : null,
+        dueDate: due ? formatDateTimeFR(due) : '',
+        overdue: sourcingStatus.isOverdue(s),
+        note: s.note || '',
+        // Sourcing pertinent uniquement avant expédition.
+        relevant: sourcingStatus.PRESHIP_STATUSES.indexOf(o.status) !== -1,
+      };
+    })(),
+    notesCount: noteInfo ? noteInfo.count : 0,
+    hasImportantNote: noteInfo ? !!noteInfo.hasImportant : false,
+    lastNotePreview: noteInfo && noteInfo.lastContent ? noteInfo.lastContent.substring(0, 100) : '',
+    lastNoteAuthor: noteInfo ? noteInfo.lastAuthor || '' : '',
+    lastNoteDate: noteInfo && noteInfo.lastDate ? formatDateTimeFR(noteInfo.lastDate) : '',
+    isManual: !!o.isManual,
+    sourceChannel: o.source && o.source.channel ? o.source.channel : 'website',
+    attribution: formatAttribution(o.attribution, formatDateTimeFR),
+    docCount: (Array.isArray(o.documents) ? o.documents.length : 0)
+      + (Array.isArray(o.shipments) ? o.shipments.filter((s) => s && s.document).length : 0),
+    hasShippingLabel: Array.isArray(o.documents) && o.documents.some((d) => d && d.docType === 'etiquette_envoi'),
+    lastShippingLabelUrl: (function() {
+      // Check direct documents for etiquette_envoi first (most recent)
+      if (Array.isArray(o.documents)) {
+        const labels = o.documents.filter((d) => d && d.docType === 'etiquette_envoi');
+        if (labels.length) {
+          const last = labels[labels.length - 1];
+          return `/admin/commandes/${String(o._id)}/documents/${String(last._id)}/view`;
+        }
+      }
+      // Fallback: shipment documents with "Envoi" label
+      if (Array.isArray(o.shipments)) {
+        const withDoc = o.shipments.filter((s) => s && s.document && (s.label === 'Envoi' || s.label === 'Envoi partiel'));
+        if (withDoc.length) {
+          const last = withDoc[withDoc.length - 1];
+          return `/admin/commandes/${String(o._id)}/suivi/${String(last._id)}/document`;
+        }
+      }
+      return '';
+    })(),
+  ...champsFilesCommande(o, { user: u, noteInfo, maintenant, total: formatEuro(o.totalCents), date: formatDateTimeFR(o.createdAt) }),
+  };
+}
+
+/**
+ * Ce que les files ne portent pas et que le bandeau d'alertes disait : retours
+ * de consigne en retard et étapes de clonage bloquées. Les alertes d'appro,
+ * elles, sont devenues les files.
+ */
+function autresSuivisCommandes(alertes) {
+  const a = alertes || {};
+  const pluriel = (n, un, plusieurs) => (n > 1 ? plusieurs : un);
+  return [
+    a.overdueReturns > 0 && { href: '/admin/commandes?file=all&orderType=exchange&returnFilter=overdue', ton: 'rouge', icon: 'assignment_return', texte: `${a.overdueReturns} ${pluriel(a.overdueReturns, 'retour consigne en retard', 'retours consigne en retard')}` },
+    a.failedClonings > 0 && { href: '/admin/commandes?file=all&orderType=exchange_cloning&cloningStatus=cloning_failed', ton: 'rouge', icon: 'warning', texte: `${a.failedClonings} ${pluriel(a.failedClonings, 'clonage échoué', 'clonages échoués')}` },
+    a.pieceWaiting > 0 && { href: '/admin/commandes?file=all&orderType=exchange_cloning&cloningStatus=label_sent', ton: 'ambre', icon: 'schedule', texte: `${a.pieceWaiting} ${pluriel(a.pieceWaiting, 'pièce client attendue', 'pièces client attendues')} depuis plus de 10 j` },
+    a.cloningLong > 0 && { href: '/admin/commandes?file=all&orderType=exchange_cloning&cloningStatus=cloning_in_progress', ton: 'ambre', icon: 'hourglass_top', texte: `${a.cloningLong} ${pluriel(a.cloningLong, 'clonage', 'clonages')} en cours depuis plus de 5 j` },
+    a.readyToShip > 0 && { href: '/admin/commandes?file=all&orderType=exchange_cloning&cloningStatus=cloning_done', ton: 'vert', icon: 'inventory_2', texte: `${a.readyToShip} ${pluriel(a.readyToShip, 'clonage terminé', 'clonages terminés')} à expédier` },
+  ].filter(Boolean);
+}
+
 async function getAdminOrdersPage(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -2504,6 +2848,21 @@ async function getAdminOrdersPage(req, res, next) {
     const viewRaw = typeof req.query.view === 'string' ? req.query.view.trim() : '';
     const view = ['archived', 'trash'].includes(viewRaw) ? viewRaw : 'active';
 
+    /* File de traitement (« qu'est-ce que je traite maintenant ? »). Sans file
+       demandée, la page s'ouvre sur « Appro à vérifier » — sauf si l'adresse
+       porte déjà un filtre ou une page (liens du tableau de bord, anciens
+       favoris) : elle cherche alors dans « Toutes », comme avant. */
+    const maintenant = new Date();
+    const fileDemandee = typeof req.query.file === 'string' ? req.query.file.trim() : '';
+    const vueFiles = view === 'active' && status !== 'draft';
+    const filtresHerites = [q, status, type, period, sourceFilter, utmCampaignFilter, utmSourceFilter, orderTypeFilter,
+      cloningStatusFilter, returnFilter, productFilter, categoryFilter, sourcingFilter, rawPage].some(Boolean);
+    let file = 'all';
+    if (vueFiles) {
+      if (commandesFiles.IDS_FILES.includes(fileDemandee)) file = fileDemandee;
+      else if (!filtresHerites) file = 'a_verifier';
+    }
+
     /* Count drafts for the tab badge */
     let draftsCount = 0;
     let archivedCount = 0;
@@ -2518,6 +2877,11 @@ async function getAdminOrdersPage(req, res, next) {
         archivedCount: 0,
         trashCount: 0,
         view,
+        vueFiles: false,
+        fileActive: 'all',
+        filesCommandes: [],
+        resumeFiles: '',
+        autresSuivis: [],
         productCategories: [],
         filters: { q, status, type, period, source: sourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, product: productFilter, category: categoryFilter },
         pagination: { page: 1, perPage, totalItems: 0, totalPages: 1, from: 0, to: 0, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1 },
@@ -2533,6 +2897,8 @@ async function getAdminOrdersPage(req, res, next) {
     try {
       orderAlerts = await computeOrderAlerts();
     } catch (_) { /* ignore */ }
+
+    const filesEtat = vueFiles ? await chargerFilesCommandes(maintenant) : null;
 
     const query = {};
 
@@ -2674,15 +3040,22 @@ async function getAdminOrdersPage(req, res, next) {
       query.$and = (query.$and || []).concat(attributionAndClauses);
     }
 
+    /* Une file est courte (moins de 10 commandes par jour) : tout sur une page,
+       la plus ancienne en premier — c'est la plus en retard. Plafond de
+       sécurité à 300 lignes. */
+    const enFile = vueFiles && file !== 'all';
+    if (enFile) query._id = { $in: filesEtat.idsParFile[file] };
+    const parPage = enFile ? 300 : perPage;
+
     const totalItems = await Order.countDocuments(query);
-    const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
-    const page = Math.min(requestedPage, totalPages);
-    const skip = (page - 1) * perPage;
+    const totalPages = Math.max(1, Math.ceil(totalItems / parPage));
+    const page = enFile ? 1 : Math.min(requestedPage, totalPages);
+    const skip = (page - 1) * parPage;
 
     const orders = await Order.find(query)
-      .sort(mongoOrderSort)
+      .sort(enFile ? { createdAt: 1 } : mongoOrderSort)
       .skip(skip)
-      .limit(perPage)
+      .limit(parPage)
       .lean();
 
     const userIds = orders
@@ -2691,7 +3064,7 @@ async function getAdminOrdersPage(req, res, next) {
       .filter((id) => mongoose.Types.ObjectId.isValid(id));
 
     const users = await User.find({ _id: { $in: userIds } })
-      .select('_id accountType firstName lastName email companyName')
+      .select('_id accountType firstName lastName email companyName phone')
       .lean();
     const userMap = new Map(users.map((u) => [String(u._id), u]));
 
@@ -2720,113 +3093,10 @@ async function getAdminOrdersPage(req, res, next) {
       } catch (_) { /* ignore */ }
     }
 
-    const viewOrders = orders.map((o) => {
-      const u = o.userId ? userMap.get(String(o.userId)) : null;
-      const customer = u
-        ? u.accountType === 'pro'
-          ? u.companyName || `${u.firstName} ${u.lastName}`
-          : `${u.firstName} ${u.lastName}`
-        : 'Client';
-
-      const itemCount = Array.isArray(o.items)
-        ? o.items.reduce((sum, it) => {
-            if (!it || !Number.isFinite(it.quantity)) return sum;
-            return sum + it.quantity;
-          }, 0)
-        : 0;
-
-      const hasCloningItem = Array.isArray(o.items) && o.items.some((it) => it && it.itemType === 'exchange_cloning');
-
-      const noteInfo = noteMap.get(String(o._id));
-
-      // Compute return days info for exchange orders (NOT exchange_cloning)
-      let returnDaysLeft = null;
-      let returnDaysTotal = 30;
-      if (o.orderType === 'exchange' && o.returnStatus === 'pending' && o.returnDates && o.returnDates.returnDueDate) {
-        const now = new Date();
-        const due = new Date(o.returnDates.returnDueDate);
-        returnDaysLeft = Math.ceil((due.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-      }
-
-      // Cloning tracking info
-      const cloningTrackingNumber = o.cloningTracking && o.cloningTracking.trackingNumber ? o.cloningTracking.trackingNumber : '';
-
-      return {
-        id: String(o._id),
-        number: o.number,
-        date: formatDateTimeFR(o.createdAt),
-        archived: !!o.archived,
-        archivedAt: o.archivedAt ? formatDateTimeFR(o.archivedAt) : '',
-        archivedBy: o.archivedBy || '',
-        deletedAt: o.deletedAt ? formatDateTimeFR(o.deletedAt) : '',
-        deletedAtRaw: o.deletedAt || null,
-        deletedBy: o.deletedBy || '',
-        deleteReason: o.deleteReason || '',
-        customer,
-        customerEmail: u && u.email ? u.email : '',
-        accountType: o.accountType,
-        itemCount,
-        hasCloningItem,
-        total: formatEuro(o.totalCents),
-        statusBadge: getOrderStatusBadge(o.status),
-        orderType: o.orderType || 'standard',
-        orderTypeLabel: getOrderTypeLabel(o.orderType),
-        cloningStatus: o.cloningStatus || null,
-        cloningStatusBadge: (o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') ? getCloningStatusBadge(o.cloningStatus) : null,
-        cloningTrackingNumber,
-        returnStatus: o.returnStatus || 'not_applicable',
-        returnDaysLeft,
-        sourcing: (() => {
-          const s = o.sourcing || {};
-          const st = sourcingStatus.normalizeStatus(s.status);
-          const lbl = sourcingStatus.LABELS[st];
-          const due = sourcingStatus.dueDate(s);
-          return {
-            status: st,
-            label: lbl.label,
-            badge: lbl.badge,
-            dot: lbl.dot,
-            orderedAt: s.orderedAt ? formatDateTimeFR(s.orderedAt) : '',
-            expectedDays: Number.isFinite(s.expectedDays) ? s.expectedDays : null,
-            dueDate: due ? formatDateTimeFR(due) : '',
-            overdue: sourcingStatus.isOverdue(s),
-            note: s.note || '',
-            // Sourcing pertinent uniquement avant expédition.
-            relevant: sourcingStatus.PRESHIP_STATUSES.indexOf(o.status) !== -1,
-          };
-        })(),
-        notesCount: noteInfo ? noteInfo.count : 0,
-        hasImportantNote: noteInfo ? !!noteInfo.hasImportant : false,
-        lastNotePreview: noteInfo && noteInfo.lastContent ? noteInfo.lastContent.substring(0, 100) : '',
-        lastNoteAuthor: noteInfo ? noteInfo.lastAuthor || '' : '',
-        lastNoteDate: noteInfo && noteInfo.lastDate ? formatDateTimeFR(noteInfo.lastDate) : '',
-        isManual: !!o.isManual,
-        sourceChannel: o.source && o.source.channel ? o.source.channel : 'website',
-        attribution: formatAttribution(o.attribution, formatDateTimeFR),
-        docCount: (Array.isArray(o.documents) ? o.documents.length : 0)
-          + (Array.isArray(o.shipments) ? o.shipments.filter((s) => s && s.document).length : 0),
-        hasShippingLabel: Array.isArray(o.documents) && o.documents.some((d) => d && d.docType === 'etiquette_envoi'),
-        lastShippingLabelUrl: (function() {
-          // Check direct documents for etiquette_envoi first (most recent)
-          if (Array.isArray(o.documents)) {
-            const labels = o.documents.filter((d) => d && d.docType === 'etiquette_envoi');
-            if (labels.length) {
-              const last = labels[labels.length - 1];
-              return `/admin/commandes/${String(o._id)}/documents/${String(last._id)}/view`;
-            }
-          }
-          // Fallback: shipment documents with "Envoi" label
-          if (Array.isArray(o.shipments)) {
-            const withDoc = o.shipments.filter((s) => s && s.document && (s.label === 'Envoi' || s.label === 'Envoi partiel'));
-            if (withDoc.length) {
-              const last = withDoc[withDoc.length - 1];
-              return `/admin/commandes/${String(o._id)}/suivi/${String(last._id)}/document`;
-            }
-          }
-          return '';
-        })(),
-      };
-    });
+    const viewOrders = orders.map((o) => construireLigneCommande(o, { userMap, noteMap, maintenant }));
+    /* Dans une file : les plus en retard d'abord (tri stable : à retard égal,
+       la plus ancienne reste devant). */
+    if (enFile) viewOrders.sort((a, b) => (b.retard.jours - a.retard.jours));
 
     // Urgency sort (client-side reorder after DB fetch)
     if (isUrgencySort) {
@@ -2842,7 +3112,7 @@ async function getAdminOrdersPage(req, res, next) {
 
     const pagination = {
       page,
-      perPage,
+      perPage: parPage,
       totalItems,
       totalPages,
       from: totalItems ? skip + 1 : 0,
@@ -2866,13 +3136,250 @@ async function getAdminOrdersPage(req, res, next) {
       trashCount,
       view,
       orderAlerts,
+      vueFiles,
+      fileActive: file,
+      filesCommandes: commandesFiles.FILES.map((f) => ({
+        ...f,
+        total: filesEtat ? filesEtat.compteurs[f.id].total : 0,
+        enRetard: filesEtat ? filesEtat.compteurs[f.id].enRetard : 0,
+      })),
+      resumeFiles: filesEtat ? filesEtat.resume : '',
+      autresSuivis: autresSuivisCommandes(orderAlerts),
       productCategories,
       sourcingOptions: sourcingStatus.options(),
-      filters: { q, status, type, period, source: sourceFilter, utmCampaign: utmCampaignFilter, utmSource: utmSourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, product: productFilter, category: categoryFilter, sourcing: sourcingFilter, sort: activeSortField, order: activeSortDir === 1 ? 'asc' : 'desc', limit: perPage },
+      filters: { q, status, type, period, source: sourceFilter, utmCampaign: utmCampaignFilter, utmSource: utmSourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, product: productFilter, category: categoryFilter, sourcing: sourcingFilter, sort: activeSortField, order: activeSortDir === 1 ? 'asc' : 'desc', limit: perPage, file },
       pagination,
     });
   } catch (err) {
     return next(err);
+  }
+}
+
+/* ─── Actions en un clic de la liste des commandes ─────────────────────────── */
+
+/** Recharge UNE commande sous forme de ligne de liste (avec son panneau). */
+async function chargerLigneCommande(orderId, maintenant = new Date()) {
+  const o = await Order.findById(orderId).lean();
+  if (!o) return null;
+  const user = o.userId && mongoose.Types.ObjectId.isValid(String(o.userId))
+    ? await User.findById(o.userId).select('_id accountType firstName lastName email companyName phone').lean()
+    : null;
+  const userMap = new Map(user ? [[String(user._id), user]] : []);
+  const noteMap = new Map();
+  try {
+    const [n] = await InternalNote.aggregate([
+      { $match: { entityType: 'order', entityId: o._id } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: '$entityId', count: { $sum: 1 }, hasImportant: { $max: { $cond: ['$isImportant', true, false] } }, lastContent: { $first: '$content' }, lastAuthor: { $first: '$authorName' }, lastDate: { $first: '$createdAt' } } },
+    ]);
+    if (n) noteMap.set(String(n._id), n);
+  } catch (_) { /* les notes ne bloquent pas la ligne */ }
+  return construireLigneCommande(o, { userMap, noteMap, maintenant });
+}
+
+/** HTML d'une ligne, par le même partiel que la page. */
+function rendreLigneCommande(res, ligne, { fileActive = 'all' } = {}) {
+  return new Promise((resolve, reject) => {
+    res.render('admin/partials/commande-ligne', { o: ligne, contexteListe: { vue: 'active', fileActive } }, (err, html) => (err ? reject(err) : resolve(html)));
+  });
+}
+
+function nomAdminPourAppro(req) {
+  return (req.session && req.session.admin && (req.session.admin.displayName || req.session.admin.email)) || 'Admin';
+}
+
+/**
+ * POST /admin/commandes/:orderId/avancer — { action, attendu: { status, appro }, file }
+ *
+ * Applique l'action suivante d'une commande depuis la liste. La page attend
+ * 6 secondes (bouton « Annuler ») AVANT d'appeler cet endpoint : c'est ce
+ * délai, et non un retour arrière après coup, qui rend l'action annulable —
+ * un e-mail parti au client ne se rattrape pas.
+ *
+ * Garde-fous :
+ *   409 — la commande a changé entre-temps (deux personnes sur la même file) ;
+ *   422 — l'action ne s'applique pas à son étape : « expédiée » sans numéro de
+ *         suivi (le client recevrait un suivi vide), « terminer » alors que
+ *         l'ancienne pièce n'est pas revenue.
+ */
+async function postAdminAvancerCommande(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'Base indisponible.' });
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+
+    const b = req.body || {};
+    const actionId = typeof b.action === 'string' ? b.action.trim() : '';
+    const fileActive = commandesFiles.IDS_FILES.includes(b.file) ? b.file : 'all';
+    if (!commandesFiles.IDS_ACTIONS.includes(actionId)) return res.status(400).json({ ok: false, error: 'Action inconnue.' });
+
+    const maintenant = new Date();
+    const order = await Order.findById(orderId)
+      .select('_id number status orderType sourcing shipments.label shipments.trackingNumber returnStatus cloningStatus deletedAt archived')
+      .lean();
+    if (!order || order.deletedAt) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+
+    const etat = { status: order.status, appro: commandesFiles.approEffectif(order) };
+    const attendu = b.attendu && typeof b.attendu === 'object' ? b.attendu : {};
+    if (attendu.status !== etat.status || attendu.appro !== etat.appro) {
+      const ligne = await chargerLigneCommande(orderId, maintenant);
+      return res.status(409).json({
+        ok: false,
+        code: 'etat_change',
+        error: `${order.number} a changé entre-temps : la ligne est à jour.`,
+        ligne: { html: await rendreLigneCommande(res, ligne, { fileActive }), files: ligne.files },
+      });
+    }
+
+    if (!commandesFiles.actionsPossibles(order).includes(actionId)) {
+      const suivante = commandesFiles.actionSuivante(order);
+      const besoin = suivante && suivante.besoin;
+      if (actionId === 'expediee' && besoin === 'suivi') {
+        return res.status(422).json({ ok: false, code: 'suivi_manquant', error: `${order.number} — renseigne le numéro de suivi avant de passer en expédiée` });
+      }
+      if (actionId === 'terminer' && besoin === 'retour') {
+        return res.status(422).json({ ok: false, code: 'retour_attendu', error: `${order.number} — l’ancienne pièce n’est pas revenue : le dossier reste ouvert` });
+      }
+      return res.status(422).json({ ok: false, code: 'action_impossible', error: `${order.number} — cette action ne correspond pas à son étape` });
+    }
+
+    const apres = commandesFiles.etatApres(order, actionId);
+    if (['en_stock', 'a_commander', 'commandee', 'recue'].includes(actionId)) {
+      await appliquerApproCommande(orderId, apres.sourcingStatus, { adminName: nomAdminPourAppro(req) });
+    }
+    if (apres.status !== order.status) {
+      const changedBy = req.session && req.session.admin && req.session.admin.email ? String(req.session.admin.email) : 'admin';
+      await appliquerStatutCommande(orderId, apres.status, { changedBy });
+    }
+
+    const [ligne, filesEtat] = await Promise.all([chargerLigneCommande(orderId, maintenant), chargerFilesCommandes(maintenant)]);
+    return res.json({
+      ok: true,
+      message: `${order.number} → ${commandesFiles.ACTIONS[actionId].message}`,
+      ligne: { html: await rendreLigneCommande(res, ligne, { fileActive }), files: ligne.files },
+      compteurs: filesEtat.compteurs,
+      resume: filesEtat.resume,
+    });
+  } catch (err) {
+    console.error('[admin] postAdminAvancerCommande:', err && err.message ? err.message : err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur : rien n’a été modifié ou la modification est partielle, recharge la page.' });
+  }
+}
+
+/**
+ * GET /admin/commandes/:orderId/ligne?file=… — la ligne à jour (HTML + files)
+ * et les compteurs, après une modification faite depuis le panneau latéral
+ * (appro, étiquette, suivi).
+ */
+async function getAdminOrderRow(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'Base indisponible.' });
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+    const fileActive = commandesFiles.IDS_FILES.includes(req.query.file) ? req.query.file : 'all';
+    const maintenant = new Date();
+    const [ligne, filesEtat] = await Promise.all([chargerLigneCommande(orderId, maintenant), chargerFilesCommandes(maintenant)]);
+    if (!ligne) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+    return res.json({
+      ok: true,
+      ligne: { html: await rendreLigneCommande(res, ligne, { fileActive }), files: ligne.files },
+      compteurs: filesEtat.compteurs,
+      resume: filesEtat.resume,
+    });
+  } catch (err) {
+    console.error('[admin] getAdminOrderRow:', err && err.message ? err.message : err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur.' });
+  }
+}
+
+/**
+ * POST /admin/commandes/corbeille-multi — { orderIds: [] }
+ *
+ * La suppression groupée de la liste met à la CORBEILLE (restaurable 30 jours),
+ * comme la suppression unitaire. L'ancien bouton faisait un deleteMany
+ * définitif, y compris sur des commandes payées — que la loi oblige à garder.
+ */
+async function postAdminBulkTrashOrders(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'Base indisponible.' });
+    const brut = req.body && req.body.orderIds;
+    const ids = Array.from(new Set((Array.isArray(brut) ? brut : (brut ? [brut] : []))
+      .map((v) => String(v).trim())
+      .filter((v) => mongoose.Types.ObjectId.isValid(v))));
+    if (!ids.length) return res.status(400).json({ ok: false, error: 'Aucune commande sélectionnée.' });
+
+    const resultat = await Order.updateMany(
+      { _id: { $in: ids }, deletedAt: null },
+      { $set: { deletedAt: new Date(), deletedBy: getAdminActorLabel(req), deleteReason: 'Mise à la corbeille depuis la liste', archived: false, archivedAt: null } }
+    );
+    const n = resultat && Number.isFinite(resultat.modifiedCount) ? resultat.modifiedCount : 0;
+    const filesEtat = await chargerFilesCommandes();
+    return res.json({
+      ok: true,
+      message: `${n} commande${n > 1 ? 's' : ''} mise${n > 1 ? 's' : ''} à la corbeille (restaurable${n > 1 ? 's' : ''} 30 jours)`,
+      ids,
+      compteurs: filesEtat.compteurs,
+      resume: filesEtat.resume,
+    });
+  } catch (err) {
+    console.error('[admin] postAdminBulkTrashOrders:', err && err.message ? err.message : err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur.' });
+  }
+}
+
+/**
+ * GET /admin/commandes/etiquettes.pdf?ids=a,b,c — les étiquettes d'envoi des
+ * commandes choisies, réunies dans UN PDF à imprimer d'un coup (le navigateur
+ * bloque l'ouverture de plusieurs fenêtres). Même source que le bouton
+ * « imprimer » d'une ligne : dernière étiquette d'envoi jointe, sinon document
+ * du dernier envoi.
+ */
+async function getAdminOrdersLabelsPdf(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).send('Base indisponible.');
+    const ids = String(req.query.ids || '').split(',').map((v) => v.trim())
+      .filter((v) => mongoose.Types.ObjectId.isValid(v)).slice(0, 100);
+    if (!ids.length) return res.status(400).send('Aucune commande.');
+
+    const commandes = await Order.collection.find(
+      { _id: { $in: ids.map((v) => new mongoose.Types.ObjectId(v)) } },
+      { projection: { number: 1, documents: 1, shipments: 1 } }
+    ).toArray();
+    const parId = new Map(commandes.map((c) => [String(c._id), c]));
+
+    const { PDFDocument } = require('pdf-lib');
+    const fusion = await PDFDocument.create();
+    const sansEtiquette = [];
+    const enBuffer = (d) => (d && d.fileData ? Buffer.from(d.fileData.buffer || d.fileData) : null);
+
+    for (const id of ids) {
+      const c = parId.get(id);
+      if (!c) continue;
+      const etiquettes = (c.documents || []).filter((d) => d && d.docType === 'etiquette_envoi');
+      let fichier = etiquettes.length ? enBuffer(etiquettes[etiquettes.length - 1]) : null;
+      if (!fichier) {
+        const envois = (c.shipments || []).filter((sh) => sh && sh.document && (sh.label === 'Envoi' || sh.label === 'Envoi partiel'));
+        fichier = envois.length ? enBuffer(envois[envois.length - 1].document) : null;
+      }
+      if (!fichier) { sansEtiquette.push(c.number); continue; }
+      try {
+        const source = await PDFDocument.load(fichier, { ignoreEncryption: true });
+        const pages = await fusion.copyPages(source, source.getPageIndices());
+        pages.forEach((pg) => fusion.addPage(pg));
+      } catch (_) {
+        sansEtiquette.push(c.number);
+      }
+    }
+
+    if (!fusion.getPageCount()) return res.status(404).send(`Aucune étiquette PDF jointe (${sansEtiquette.join(', ') || 'sélection'}).`);
+    if (sansEtiquette.length) res.setHeader('X-Sans-Etiquette', encodeURIComponent(sansEtiquette.join(',')));
+    const octets = await fusion.save();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="etiquettes.pdf"');
+    return res.send(Buffer.from(octets));
+  } catch (err) {
+    console.error('[admin] getAdminOrdersLabelsPdf:', err && err.message ? err.message : err);
+    return res.status(500).send('Erreur lors de la préparation des étiquettes.');
   }
 }
 
@@ -3423,6 +3930,125 @@ async function getAdminOrderDetailPage(req, res, next) {
   }
 }
 
+/**
+ * Change le statut d'une commande, avec TOUT ce qui s'y rattache : historique,
+ * lignes de consigne à la livraison, décrément de stock à la sortie du
+ * brouillon, e-mails et SMS au client, rapprochement des leads.
+ *
+ * Partagé par le formulaire de la fiche (postAdminUpdateOrderStatus) et les
+ * actions en un clic de la liste (postAdminAvancerCommande) : un changement de
+ * statut produit les mêmes effets, d'où qu'il vienne.
+ *
+ * @returns {Promise<{ changed: boolean, existing: object|null }>}
+ */
+async function appliquerStatutCommande(orderId, status, { changedBy = 'admin' } = {}) {
+  const existing = await Order.findById(orderId)
+    .select('_id number userId status items consigne notifications')
+    .lean();
+  if (!existing) return { changed: false, existing: null };
+  if (existing.status === status) return { changed: false, existing };
+
+  const setPatch = { status };
+  if (status === 'delivered') {
+    const lines = existing && existing.consigne && Array.isArray(existing.consigne.lines)
+      ? existing.consigne.lines
+      : [];
+
+    if (lines.length) {
+      const now = new Date();
+      const updatedLines = lines.map((l) => {
+        if (!l) return l;
+        if (l.receivedAt) return l;
+        if (l.startAt && l.dueAt) return l;
+        const delayDays = Number.isFinite(l.delayDays) ? Math.max(0, Math.floor(l.delayDays)) : 30;
+        const dueAt = new Date(now);
+        dueAt.setDate(dueAt.getDate() + delayDays);
+        /* Spread pour PRÉSERVER les champs d'encaissement (charged,
+         * chargedCents, refundedAt, refundedCents) — sinon le passage en
+         * « delivered » effacerait l'info de consigne encaissée. */
+        return {
+          ...l,
+          delayDays,
+          startAt: now,
+          dueAt,
+        };
+      });
+      /* Chemin pointé : ne PAS écraser le reste de l'objet consigne
+       * (chargedTotalCents, refundedTotalCents…). */
+      setPatch['consigne.lines'] = updatedLines;
+    }
+  }
+
+  await Order.findByIdAndUpdate(orderId, {
+    $set: setPatch,
+    $push: {
+      statusHistory: {
+        status,
+        changedAt: new Date(),
+        changedBy,
+      },
+    },
+  });
+
+  /* When transitioning FROM draft to any active status, decrement stock */
+  if (existing.status === 'draft' && status !== 'draft' && status !== 'cancelled') {
+    const items = Array.isArray(existing.items) ? existing.items : [];
+    for (const item of items) {
+      if (item && item.productId) {
+        await Product.updateOne(
+          { _id: item.productId, stockQty: { $ne: null } },
+          { $inc: { stockQty: -item.quantity } }
+        );
+      }
+    }
+  }
+
+  if (status === 'delivered') {
+    /* Consigne (retour ancienne pièce) + confirmation de livraison —
+       factorisé dans un service, aussi appelé par le robot de suivi
+       (jobs/syncShipmentTracking) quand la livraison est détectée
+       automatiquement. Idempotent (anti-doublon notifications.*SentAt). */
+    const { sendDeliveredNotifications } = require('../services/orderDeliveredNotifications');
+    await sendDeliveredNotifications(orderId);
+  } else if (status === 'paid' || status === 'processing') {
+    // Send status change notification for paid/processing orders
+    try {
+      const user = existing && existing.userId
+        ? await User.findById(existing.userId).select('_id email firstName').lean()
+        : null;
+
+      if (user && user.email) {
+        const sent = await emailService.sendOrderStatusChangeEmail({
+          order: existing,
+          user,
+          newStatus: status,
+          message: 'Votre commande a été validée et va être préparée dans les meilleurs délais.',
+        });
+        emailService.logEmailSent({ orderId: existing._id, emailType: 'status_change', recipientEmail: user.email, result: sent });
+        smsService.sendOrderStatusChangeSms({ order: existing, user, newStatus: status }).catch(() => {});
+        if (sent && sent.ok) {
+          await Order.updateOne(
+            { _id: existing._id },
+            { $set: { 'notifications.statusChangeSentAt': new Date() } }
+          );
+        }
+      }
+    } catch (err) {
+      console.error('Erreur email changement statut (admin) :', err && err.message ? err.message : err);
+    }
+
+    /* Rapprochement leads : commande passée « payée » À LA MAIN (virement,
+       téléphone…) → sortir les leads du client de « À traiter » et poser
+       le badge « A commandé ». Le checkout en ligne le fait déjà ; sans
+       cet appel, un client encaissé manuellement restait « à relancer ». */
+    try {
+      const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
+      await markLeadsRecoveredForOrder(existing);
+    } catch (_) { /* non-bloquant */ }
+  }
+  return { changed: true, existing };
+}
+
 async function postAdminUpdateOrderStatus(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -3437,118 +4063,14 @@ async function postAdminUpdateOrderStatus(req, res, next) {
       return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
     }
 
-    const existing = await Order.findById(orderId)
-      .select('_id number userId status items consigne notifications')
-      .lean();
+    const changedBy = req.session && req.session.admin && req.session.admin.email
+      ? String(req.session.admin.email)
+      : 'admin';
+    const { existing } = await appliquerStatutCommande(orderId, status, { changedBy });
     if (!existing) {
       if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: 'Commande introuvable.' });
       req.session.adminOrderError = 'Commande introuvable.';
       return res.redirect('/admin/commandes');
-    }
-
-    if (existing.status !== status) {
-      const changedBy = req.session && req.session.admin && req.session.admin.email
-        ? String(req.session.admin.email)
-        : 'admin';
-
-      const setPatch = { status };
-      if (status === 'delivered') {
-        const lines = existing && existing.consigne && Array.isArray(existing.consigne.lines)
-          ? existing.consigne.lines
-          : [];
-
-        if (lines.length) {
-          const now = new Date();
-          const updatedLines = lines.map((l) => {
-            if (!l) return l;
-            if (l.receivedAt) return l;
-            if (l.startAt && l.dueAt) return l;
-            const delayDays = Number.isFinite(l.delayDays) ? Math.max(0, Math.floor(l.delayDays)) : 30;
-            const dueAt = new Date(now);
-            dueAt.setDate(dueAt.getDate() + delayDays);
-            /* Spread pour PRÉSERVER les champs d'encaissement (charged,
-             * chargedCents, refundedAt, refundedCents) — sinon le passage en
-             * « delivered » effacerait l'info de consigne encaissée. */
-            return {
-              ...l,
-              delayDays,
-              startAt: now,
-              dueAt,
-            };
-          });
-          /* Chemin pointé : ne PAS écraser le reste de l'objet consigne
-           * (chargedTotalCents, refundedTotalCents…). */
-          setPatch['consigne.lines'] = updatedLines;
-        }
-      }
-
-      await Order.findByIdAndUpdate(orderId, {
-        $set: setPatch,
-        $push: {
-          statusHistory: {
-            status,
-            changedAt: new Date(),
-            changedBy,
-          },
-        },
-      });
-
-      /* When transitioning FROM draft to any active status, decrement stock */
-      if (existing.status === 'draft' && status !== 'draft' && status !== 'cancelled') {
-        const items = Array.isArray(existing.items) ? existing.items : [];
-        for (const item of items) {
-          if (item && item.productId) {
-            await Product.updateOne(
-              { _id: item.productId, stockQty: { $ne: null } },
-              { $inc: { stockQty: -item.quantity } }
-            );
-          }
-        }
-      }
-
-      if (status === 'delivered') {
-        /* Consigne (retour ancienne pièce) + confirmation de livraison —
-           factorisé dans un service, aussi appelé par le robot de suivi
-           (jobs/syncShipmentTracking) quand la livraison est détectée
-           automatiquement. Idempotent (anti-doublon notifications.*SentAt). */
-        const { sendDeliveredNotifications } = require('../services/orderDeliveredNotifications');
-        await sendDeliveredNotifications(orderId);
-      } else if (status === 'paid' || status === 'processing') {
-        // Send status change notification for paid/processing orders
-        try {
-          const user = existing && existing.userId
-            ? await User.findById(existing.userId).select('_id email firstName').lean()
-            : null;
-
-          if (user && user.email) {
-            const sent = await emailService.sendOrderStatusChangeEmail({
-              order: existing,
-              user,
-              newStatus: status,
-              message: 'Votre commande a été validée et va être préparée dans les meilleurs délais.',
-            });
-            emailService.logEmailSent({ orderId: existing._id, emailType: 'status_change', recipientEmail: user.email, result: sent });
-            smsService.sendOrderStatusChangeSms({ order: existing, user, newStatus: status }).catch(() => {});
-            if (sent && sent.ok) {
-              await Order.updateOne(
-                { _id: existing._id },
-                { $set: { 'notifications.statusChangeSentAt': new Date() } }
-              );
-            }
-          }
-        } catch (err) {
-          console.error('Erreur email changement statut (admin) :', err && err.message ? err.message : err);
-        }
-
-        /* Rapprochement leads : commande passée « payée » À LA MAIN (virement,
-           téléphone…) → sortir les leads du client de « À traiter » et poser
-           le badge « A commandé ». Le checkout en ligne le fait déjà ; sans
-           cet appel, un client encaissé manuellement restait « à relancer ». */
-        try {
-          const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
-          await markLeadsRecoveredForOrder(existing);
-        } catch (_) { /* non-bloquant */ }
-      }
     }
 
     req.session.adminOrderSuccess = 'Statut mis à jour.';
@@ -3557,6 +4079,39 @@ async function postAdminUpdateOrderStatus(req, res, next) {
   } catch (err) {
     return next(err);
   }
+}
+
+/**
+ * Met à jour l'approvisionnement de la pièce (order.sourcing). Partagé par le
+ * formulaire (postAdminUpdateOrderSourcing) et les actions en un clic de la
+ * liste (postAdminAvancerCommande). Au passage en « commandée », horodate la
+ * commande fournisseur et pose un délai attendu (saisi, sinon le précédent,
+ * sinon le défaut) : c'est ce qui alimente l'alerte de retard fournisseur.
+ *
+ * @returns {Promise<boolean>} false si la commande n'existe pas
+ */
+async function appliquerApproCommande(orderId, status, { adminName = 'Admin', orderedAt, expectedDays, note } = {}) {
+  const order = await Order.findById(orderId).select('sourcing').lean();
+  if (!order) return false;
+  const prev = order.sourcing || {};
+
+  const set = { 'sourcing.status': status, 'sourcing.updatedAt': new Date(), 'sourcing.updatedBy': adminName };
+
+  if (status === 'commandee') {
+    let dateCommande = prev.orderedAt ? new Date(prev.orderedAt) : null;
+    if (orderedAt) { const d = new Date(orderedAt); if (!Number.isNaN(d.getTime())) dateCommande = d; }
+    if (!dateCommande) dateCommande = new Date();
+    set['sourcing.orderedAt'] = dateCommande;
+    let days = Number.parseInt(expectedDays, 10);
+    if (!Number.isFinite(days) || days <= 0) {
+      days = (Number.isFinite(prev.expectedDays) && prev.expectedDays > 0) ? prev.expectedDays : sourcingStatus.DEFAULT_EXPECTED_DAYS;
+    }
+    set['sourcing.expectedDays'] = Math.min(3650, days);
+  }
+  if (typeof note === 'string') set['sourcing.note'] = note.trim().slice(0, 1000);
+
+  await Order.updateOne({ _id: orderId }, { $set: set });
+  return true;
 }
 
 /* Approvisionnement de la pièce : édition inline (liste) + formulaire (détail).
@@ -3582,30 +4137,14 @@ async function postAdminUpdateOrderSourcing(req, res) {
       return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
     }
 
-    const order = await Order.findById(orderId).select('sourcing').lean();
-    if (!order) {
+    const adminName = (req.session && req.session.admin && (req.session.admin.displayName || req.session.admin.email)) || 'Admin';
+    const trouvee = await appliquerApproCommande(orderId, status, {
+      adminName, orderedAt: b.orderedAt, expectedDays: b.expectedDays, note: b.note,
+    });
+    if (!trouvee) {
       if (wantsJsonResponse(req)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
       return res.redirect('/admin/commandes');
     }
-    const prev = order.sourcing || {};
-    const adminName = (req.session && req.session.admin && (req.session.admin.displayName || req.session.admin.email)) || 'Admin';
-
-    const set = { 'sourcing.status': status, 'sourcing.updatedAt': new Date(), 'sourcing.updatedBy': adminName };
-
-    if (status === 'commandee') {
-      let orderedAt = prev.orderedAt ? new Date(prev.orderedAt) : null;
-      if (b.orderedAt) { const d = new Date(b.orderedAt); if (!Number.isNaN(d.getTime())) orderedAt = d; }
-      if (!orderedAt) orderedAt = new Date();
-      set['sourcing.orderedAt'] = orderedAt;
-      let days = Number.parseInt(b.expectedDays, 10);
-      if (!Number.isFinite(days) || days <= 0) {
-        days = (Number.isFinite(prev.expectedDays) && prev.expectedDays > 0) ? prev.expectedDays : sourcingStatus.DEFAULT_EXPECTED_DAYS;
-      }
-      set['sourcing.expectedDays'] = Math.min(3650, days);
-    }
-    if (typeof b.note === 'string') set['sourcing.note'] = b.note.trim().slice(0, 1000);
-
-    await Order.updateOne({ _id: orderId }, { $set: set });
 
     const fresh = await Order.findById(orderId).select('sourcing').lean();
     const s = fresh.sourcing || {};
@@ -3901,11 +4440,13 @@ async function postAdminAddOrderShipment(req, res, next) {
       .select('_id number userId notifications')
       .lean();
     if (!existing) {
+      if (wantsJsonResponse(req)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
       req.session.adminOrderError = 'Commande introuvable.';
       return res.redirect('/admin/commandes');
     }
 
     if (req.uploadError) {
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: req.uploadError });
       req.session.adminOrderError = req.uploadError;
       return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
     }
@@ -3917,6 +4458,7 @@ async function postAdminAddOrderShipment(req, res, next) {
     const stampDocument = req.body.stampDocument === 'on' || req.body.stampDocument === 'true' || req.body.stampDocument === '1';
 
     if (!trackingNumber) {
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: 'Merci de renseigner un numéro de suivi.' });
       req.session.adminOrderError = 'Merci de renseigner un numéro de suivi.';
       return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
     }
@@ -12909,6 +13451,10 @@ module.exports = {
   getAdminOrderDetailPage,
   postAdminUpdateOrderStatus,
   postAdminUpdateOrderSourcing,
+  postAdminAvancerCommande,
+  getAdminOrderRow,
+  postAdminBulkTrashOrders,
+  getAdminOrdersLabelsPdf,
   postAdminUpdateOrderVatScheme,
   getAdminOrderPurchaseInvoice,
   postAdminDeleteOrderPurchaseInvoice,
