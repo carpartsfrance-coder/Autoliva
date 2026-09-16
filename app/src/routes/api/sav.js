@@ -151,7 +151,7 @@ publicRouter.get('/dossier-fournisseur/:numero.pdf', async (req, res) => {
       : null;
     const pdf = await dossier.buildPdf(ticket, order, { baseUrl: `${req.protocol}://${req.get('host')}` });
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="warranty-claim-${ticket.numero}.pdf"`);
+    res.setHeader('Content-Disposition', `inline; filename="${dossier.fileNaming(ticket, order).pdfFileName}"`);
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('X-Robots-Tag', 'noindex');
     return res.end(pdf);
@@ -794,15 +794,20 @@ async function dossierFournisseurPayload(req, ticket, phone) {
   const cleanPhone = String(phone || '').replace(/[^\d]/g, '');
   const checklist = dossier.checklist(ticket);
   const f = ticket.fournisseur || {};
+  const naming = dossier.fileNaming(ticket, order);
   return {
     text,
     waUrl: cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}` : '',
     phone: phone || '',
     pdfUrl,
+    pdfFileName: naming.pdfFileName,
+    partCode: naming.partCode,
     checklist,
     complete: checklist.filter((i) => i.photo).every((i) => i.ok),
     photos: dossier.filesWithRoles(ticket).map((p) => ({
       url: p.url, kind: p.kind, role: p.role, isImage: p.isImage, name: p.originalName || '', mime: p.mime || '',
+      fileName: (naming.files[p.url] || {}).fileName || p.originalName || '',
+      label: (naming.files[p.url] || {}).label || '',
     })),
     clientRequest: dossier.clientRequestText(ticket),
     descriptionTranslated: !!(f.descriptionEn),

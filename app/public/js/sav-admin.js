@@ -4861,13 +4861,13 @@
           var options = ['obd', 'reglage', 'autre', 'exclu'].map(function (r) {
             return '<option value="' + r + '"' + (p.role === r ? ' selected' : '') + '>' + ROLE_LABELS[r] + '</option>';
           }).join('');
-          var fileName = p.name || ('photo-' + (i + 1) + (p.isImage ? '.jpg' : '.pdf'));
+          var fileName = p.fileName || p.name || ('photo-' + (i + 1) + (p.isImage ? '.jpg' : '.pdf'));
           return '<div class="rounded-xl border ' + (p.role === 'exclu' ? 'border-slate-200 opacity-60' : 'border-emerald-300') + ' p-1.5">' +
             '<a href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener" title="' + escapeHtml(p.name || '') + '">' + thumb + '</a>' +
             '<select data-wa-photo="' + i + '" class="mt-1.5 w-full rounded-lg border border-slate-300 px-1.5 py-1 text-xs">' + options + '</select>' +
             '<div class="mt-1.5 flex gap-1">' +
               (p.isImage ? '<button type="button" data-wa-copy-photo="' + i + '" class="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-slate-300 px-1.5 py-1 text-xs hover:bg-slate-50" title="Copier la photo pour la coller dans WhatsApp"><span class="material-symbols-outlined" style="font-size:14px;">content_copy</span>Copier</button>' : '') +
-              '<a href="' + escapeHtml(p.url) + '" download="' + escapeHtml(fileName) + '" class="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-slate-300 px-1.5 py-1 text-xs hover:bg-slate-50" title="Télécharger"><span class="material-symbols-outlined" style="font-size:14px;">download</span>Télécharger</a>' +
+              '<button type="button" data-wa-download-photo="' + i + '" class="flex-1 inline-flex items-center justify-center gap-1 rounded-lg border border-slate-300 px-1.5 py-1 text-xs hover:bg-slate-50" title="' + escapeHtml(fileName) + '"><span class="material-symbols-outlined" style="font-size:14px;">download</span>Télécharger</button>' +
             '</div>' +
           '</div>';
         }).join('') : '<p class="text-xs text-slate-500 col-span-full">Aucun fichier sur ce ticket.</p>';
@@ -4881,7 +4881,7 @@
       if (waText) waText.value = d.text || '';
       if (waPdf) waPdf.href = d.pdfUrl || '#';
       var pdfDl = document.getElementById('sav-wa-pdf-download');
-      if (pdfDl) { pdfDl.href = d.pdfUrl || '#'; pdfDl.setAttribute('download', 'warranty-claim-' + numero + '.pdf'); }
+      if (pdfDl) { pdfDl.href = d.pdfUrl || '#'; pdfDl.setAttribute('download', d.pdfFileName || ('warranty-claim-' + numero + '.pdf')); }
       prepareShare(d);
       if (waClientScript && !waClientScript.value) waClientScript.value = d.clientScript || '';
       var reply = document.getElementById('sav-wa-reply');
@@ -4904,16 +4904,12 @@
       btn.classList.remove('hidden');
       btn.disabled = true;
       btn.lastChild.textContent = 'Préparation…';
-      var wanted = [{ url: d.pdfUrl, name: 'warranty-claim-' + numero + '.pdf', mime: 'application/pdf' }].concat(
-        (d.photos || []).filter(function (p) { return p.role !== 'exclu'; }).map(function (p, i) {
-          return { url: p.url, name: p.name || ('photo-' + (i + 1)), mime: p.mime || '' };
-        })
-      );
-      Promise.all(wanted.map(function (w) {
-        return fetch(w.url, { credentials: 'same-origin' })
-          .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.blob(); })
-          .then(function (b) { return new File([b], w.name, { type: w.mime || b.type }); });
-      })).then(function (files) {
+      var pdfName = d.pdfFileName || ('warranty-claim-' + numero + '.pdf');
+      var pdfFile = fetch(d.pdfUrl, { credentials: 'same-origin' })
+        .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.blob(); })
+        .then(function (b) { return new File([b], pdfName, { type: 'application/pdf' }); });
+      var photoFiles = (d.photos || []).filter(function (p) { return p.role !== 'exclu'; }).map(stampedPhotoFile);
+      Promise.all([pdfFile].concat(photoFiles)).then(function (files) {
         if (seq !== shareSeq) return;
         var ok = false;
         try { ok = navigator.canShare({ files: files }); } catch (_) { ok = false; }
@@ -4931,6 +4927,51 @@
         btn.classList.add('hidden');
       });
     }
+    // Bandeau « SAV-2026-0134 · DQ200 · Fault codes » ajouté au-dessus de chaque photo
+    // partagée, copiée ou téléchargée : dans un groupe WhatsApp, c'est la photo qui
+    // défile, pas son nom de fichier. Le bandeau s'ajoute au-dessus sans rien masquer.
+    function stampPhotoBlob(p, type) {
+      return fetch(p.url, { credentials: 'same-origin' })
+        .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.blob(); })
+        .then(function (blob) {
+          if (!p.isImage || !p.label || typeof createImageBitmap !== 'function') return blob;
+          return createImageBitmap(blob, { imageOrientation: 'from-image' }).then(function (bmp) {
+            var bandH = Math.max(44, Math.round(bmp.width * 0.06));
+            var canvas = document.createElement('canvas');
+            canvas.width = bmp.width;
+            canvas.height = bmp.height + bandH;
+            var ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, canvas.width, bandH);
+            var size = Math.round(bandH * 0.5);
+            ctx.font = 'bold ' + size + 'px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
+            ctx.fillStyle = '#ffffff';
+            ctx.textBaseline = 'middle';
+            var text = p.label;
+            var maxW = canvas.width - bandH * 0.8;
+            while (ctx.measureText(text).width > maxW && size > 10) {
+              size -= 1;
+              ctx.font = 'bold ' + size + 'px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
+            }
+            ctx.fillText(text, Math.round(bandH * 0.4), Math.round(bandH / 2));
+            ctx.drawImage(bmp, 0, bandH);
+            return new Promise(function (resolve) {
+              canvas.toBlob(function (b) { resolve(b || blob); }, type || 'image/jpeg', 0.9);
+            });
+          }).catch(function () { return blob; }); // format non décodable (HEIC…) : photo d'origine
+        });
+    }
+    function stampedName(p, blob) {
+      var name = p.fileName || p.name || 'photo';
+      if (blob && blob.type === 'image/jpeg') name = name.replace(/\.[a-z0-9]+$/i, '') + '.jpg';
+      return name;
+    }
+    function stampedPhotoFile(p) {
+      return stampPhotoBlob(p, 'image/jpeg').then(function (b) {
+        return new File([b], stampedName(p, b), { type: b.type || p.mime || '' });
+      });
+    }
+
     function markSentToGroup(silent) {
       return api('/tickets/' + encodeURIComponent(numero) + '/whatsapp-fournisseur/send', {
         method: 'POST', body: JSON.stringify({ mode: 'groupe' }),
@@ -4978,21 +5019,28 @@
       var p = waDossier.photos[parseInt(copyBtn.getAttribute('data-wa-copy-photo'), 10)];
       if (!p) return;
       if (!navigator.clipboard || typeof ClipboardItem === 'undefined') { toast('Copie d\'image non prise en charge par ce navigateur : téléchargez-la', 'error'); return; }
-      // Le presse-papiers n'accepte que le PNG : conversion via un canvas.
-      var pngPromise = fetch(p.url, { credentials: 'same-origin' })
-        .then(function (r) { return r.blob(); })
-        .then(function (blob) { return createImageBitmap(blob); })
-        .then(function (bmp) {
-          var canvas = document.createElement('canvas');
-          canvas.width = bmp.width; canvas.height = bmp.height;
-          canvas.getContext('2d').drawImage(bmp, 0, 0);
-          return new Promise(function (resolve, reject) {
-            canvas.toBlob(function (b) { if (b) resolve(b); else reject(new Error('png')); }, 'image/png');
-          });
-        });
+      // Le presse-papiers n'accepte que le PNG : la photo (avec son bandeau) est convertie.
+      var pngPromise = stampPhotoBlob(p, 'image/png').then(function (b) {
+        if (b.type !== 'image/png') throw new Error('png');
+        return b;
+      });
       navigator.clipboard.write([new ClipboardItem({ 'image/png': pngPromise })])
         .then(function () { toast('Photo copiée : collez-la dans WhatsApp (⌘V)'); })
         .catch(function () { toast('Impossible de copier cette photo : téléchargez-la', 'error'); });
+    });
+    if (waModal) waModal.addEventListener('click', function (e) {
+      var dlBtn = e.target.closest && e.target.closest('[data-wa-download-photo]');
+      if (!dlBtn || !waDossier) return;
+      var p = waDossier.photos[parseInt(dlBtn.getAttribute('data-wa-download-photo'), 10)];
+      if (!p) return;
+      stampPhotoBlob(p, 'image/jpeg').then(function (b) {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = stampedName(p, b);
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      }).catch(function () { toast('Téléchargement impossible', 'error'); });
     });
 
     function openWa() {
