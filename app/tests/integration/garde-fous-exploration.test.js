@@ -367,9 +367,10 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
     assert.ok(!r.corps.includes(MARQUE_REDATE), 'la date de l’écriture en masse ressort');
     const e = entrees(r.corps);
     const listees = FIXTURE.produits.filter((p) => FICHES_A3.ids.includes(p._id));
-    assert.equal(listees.length, 8, 'les 8 fiches du jeu d’essai qui ont regagné leur description');
+    assert.equal(listees.length, 9, 'les 9 fiches du jeu d’essai qui ont regagné leur description — dont l’Alibaba, rendue le 16/09/2026');
+    assert.ok(listees.includes(ALIBABA), 'la fiche Alibaba fait partie des fiches datées');
     for (const p of listees) assert.equal(e.get(urlFiche(p)), '2026-09-10', `${p.sku} : lastmod A3 attendu`);
-    for (const p of [DM, ALIBABA, HORS_LISTE]) {
+    for (const p of [DM, HORS_LISTE]) {
       assert.ok(e.has(urlFiche(p)), `${p.sku} reste dans le sitemap`);
       assert.equal(e.get(urlFiche(p)), '', `${p.sku} : aucun lastmod — son contenu n’a pas changé`);
     }
