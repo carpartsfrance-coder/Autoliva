@@ -806,6 +806,44 @@ kbd, .cmd-kbd {
 .cmd-panneau-titre-l { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .cmd-panneau-titre-l h2 { font-size: 18px; font-weight: 700; margin: 0; }
 .cmd-panneau-sous { font-size: 13px; margin: 4px 0 0; color: var(--cmd-texte-2); }
+.cmd-panneau-vehicule { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cmd-vehicule {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 3px 3px 3px 10px;
+  border: 1px solid var(--cmd-bordure-ctrl);
+  border-radius: 8px;
+  background: #FFFFFF;
+  font-size: 12px;
+}
+.cmd-vehicule-l { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--cmd-texte-3); white-space: nowrap; }
+.cmd-vehicule-v {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: var(--cmd-texte);
+  overflow-wrap: anywhere;
+}
+.cmd-vehicule-copier {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cmd-texte-2);
+  cursor: pointer;
+  flex: none;
+}
+.cmd-vehicule-copier:hover { background: var(--cmd-separateur); color: var(--cmd-texte); }
+.cmd-vehicule-copier .ms { font-size: 16px; }
+.cmd-vehicule.is-vide { padding: 5px 10px; gap: 6px; border-style: dashed; color: var(--cmd-texte-3); font-size: 12px; }
+.cmd-vehicule.is-vide .ms { font-size: 15px; }
 .cmd-panneau-corps {
   flex: 1;
   overflow-y: auto;

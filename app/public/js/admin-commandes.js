@@ -518,6 +518,20 @@
       + '</div></form></section>';
   }
 
+  /* Plaque et VIN en tête du panneau : c'est ce qu'on recopie chez le
+     fournisseur pour vérifier la compatibilité de la pièce. */
+  function blocVehicule(p) {
+    var v = p.vehicule || {};
+    var puce = function (libelle, valeur, genre) {
+      return '<span class="cmd-vehicule"><span class="cmd-vehicule-l">' + esc(libelle) + '</span>'
+        + '<strong class="cmd-vehicule-v">' + esc(valeur) + '</strong>'
+        + '<button type="button" class="cmd-vehicule-copier" data-copier="' + esc(valeur) + '" data-copier-libelle="' + esc(libelle) + '" data-copier-genre="' + genre + '" title="Copier" aria-label="Copier ' + esc(libelle) + ' ' + esc(valeur) + '"><span class="ms" aria-hidden="true">content_copy</span></button></span>';
+    };
+    var html = (v.plaque ? puce('Plaque', v.plaque, 'f') : '') + (v.vin ? puce('VIN', v.vin, 'm') : '')
+      + (v.saisie ? puce('Plaque / VIN saisi', v.saisie, 'm') : '');
+    return html || '<span class="cmd-vehicule is-vide"><span class="ms" aria-hidden="true">directions_car</span>Plaque / VIN non renseignés</span>';
+  }
+
   function remplirPanneau(el, section) {
     var d = donnees(el);
     var p = d.panneau || {};
@@ -526,6 +540,8 @@
     statut.textContent = p.statusLabel || '';
     statut.className = 'cmd-statut is-' + (TONS_STATUT[p.statusKey] || 'gris');
     champPanneau('subline').textContent = p.subline || '';
+    var vehicule = champPanneau('vehicule');
+    if (vehicule) vehicule.innerHTML = blocVehicule(p);
 
     var corps = champPanneau('corps');
     var action = p.action || {};
@@ -768,7 +784,9 @@
       var copier = t.closest('[data-copier]');
       if (copier) {
         var ref = copier.getAttribute('data-copier');
-        if (navigator.clipboard) navigator.clipboard.writeText(ref).then(function () { notifier('Référence ' + ref + ' copiée'); });
+        var libelle = copier.getAttribute('data-copier-libelle') || 'Référence';
+        var accord = copier.getAttribute('data-copier-genre') === 'm' ? ' copié' : ' copiée';
+        if (navigator.clipboard) navigator.clipboard.writeText(ref).then(function () { notifier(libelle + ' ' + ref + accord); });
         return;
       }
       var imprimer = t.closest('[data-imprimer]');

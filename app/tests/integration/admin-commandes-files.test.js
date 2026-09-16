@@ -100,7 +100,7 @@ test('liste des commandes en files de traitement', async (t) => {
   const ids = {
     aVerifier: await commande({ status: 'paid', sourcing: { status: 'a_verifier' }, statusHistory: [{ status: 'paid', changedAt: ilYa(3), changedBy: 'test' }], createdAt: ilYa(3) }),
     aCommander: await commande({ status: 'processing', sourcing: { status: 'a_commander', updatedAt: ilYa(1) } }),
-    commandee: await commande({ status: 'processing', sourcing: { status: 'commandee', orderedAt: ilYa(10), expectedDays: 7 } }),
+    commandee: await commande({ status: 'processing', sourcing: { status: 'commandee', orderedAt: ilYa(10), expectedDays: 7 }, vehicle: { identifierType: 'plate', plate: 'DP401HF', vin: 'WAUZZZ8R4GA091182' } }),
     enStock: await commande({ status: 'processing', sourcing: { status: 'en_stock' } }),
     etiquetteSansSuivi: await commande({ status: 'label_created', sourcing: { status: 'a_verifier' } }),
     etiquetteAvecSuivi: await commande({
@@ -302,6 +302,15 @@ test('liste des commandes en files de traitement', async (t) => {
     assert.equal(r.status, 200);
     assert.deepEqual(r.corps.ligne.files, ['commandee', 'all']);
     assert.ok(r.corps.compteurs && r.corps.compteurs.commandee.total >= 1);
+  });
+
+  await t.test('le panneau reçoit la plaque et le VIN du véhicule', async () => {
+    const r = await requete(`/admin/commandes/${ids.commandee}/ligne?file=commandee`);
+    const m = r.corps.ligne.html.match(/data-ligne="([^"]*)"/);
+    const donnees = JSON.parse(m[1].replace(/&#34;/g, '"').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
+    assert.deepEqual(donnees.panneau.vehicule, { plaque: 'DP-401-HF', vin: 'WAUZZZ8R4GA091182', saisie: '' });
+    const page = (await requete('/admin/commandes?file=commandee')).corps;
+    assert.match(page, /data-p="vehicule"/);
   });
 
   await t.test('étiquettes réunies en un seul PDF', async () => {

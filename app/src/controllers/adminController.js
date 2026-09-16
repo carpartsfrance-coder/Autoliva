@@ -40,6 +40,7 @@ const { hasAbility, getRoleLabel, isComptable, defaultLandingForRole, ROLES } = 
 const brand = require('../config/brand');
 const sourcingStatus = require('../config/sourcingStatus');
 const commandesFiles = require('../services/commandesFiles');
+const { identifiantsVehicule } = require('../services/vehiculeCommande');
 const vatScheme = require('../services/vatScheme');
 const purchaseInvoice = require('../services/purchaseInvoice');
 /* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.7) :
@@ -2654,6 +2655,7 @@ function champsFilesCommande(o, { user = null, noteInfo = null, maintenant = new
       statusLabel: statusBadge.label,
       statusKey: o.status,
       subline: [date, o.accountType === 'pro' ? 'Professionnel' : 'Particulier', orderTypeLabel].filter(Boolean).join(' · '),
+      vehicule: identifiantsVehicule(o),
       avancement,
       appro: {
         cle: appro,
