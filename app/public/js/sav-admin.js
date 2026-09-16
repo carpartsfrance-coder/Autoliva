@@ -4925,7 +4925,7 @@
         if (!ok) { btn.classList.add('hidden'); return; }
         shareFiles = files;
         btn.disabled = false;
-        btn.lastChild.textContent = files.length > 1 ? 'Partager (PDF + ' + (files.length - 1) + ' photo' + (files.length > 2 ? 's' : '') + ')' : 'Partager le PDF';
+        btn.lastChild.textContent = (files.length > 1 ? 'Partager PDF + ' + (files.length - 1) + ' photo' + (files.length > 2 ? 's' : '') : 'Partager le PDF') + ' et copier le message';
       }).catch(function () {
         if (seq !== shareSeq) return;
         btn.classList.add('hidden');
@@ -4942,10 +4942,29 @@
       });
     }
     var waShare = document.getElementById('sav-wa-share');
+    // Message à coller après le partage : le lien vers le PDF est retiré, le PDF
+    // étant déjà joint (sinon WhatsApp affiche l'aperçu du lien, comme un 2e PDF).
+    function shareMessageText() {
+      return (waText ? waText.value : '')
+        .split('\n')
+        .map(function (l) { return /\/api\/sav\/dossier-fournisseur\//.test(l) ? 'Full file attached (PDF with photos).' : l; })
+        .join('\n');
+    }
     if (waShare) waShare.addEventListener('click', function () {
       if (!shareFiles) return;
-      navigator.share({ files: shareFiles, text: waText ? waText.value : '', title: 'Warranty claim ' + numero })
-        .then(function () { markSentToGroup(true); })
+      // Un seul clic : le message part dans le presse-papiers, les fichiers dans la
+      // feuille de partage. Seuls les fichiers sont partagés : texte et titre y étaient
+      // envoyés en plus par WhatsApp, ce qui dédoublait l'envoi.
+      var copied = navigator.clipboard && navigator.clipboard.writeText
+        ? navigator.clipboard.writeText(shareMessageText()).then(function () { return true; }, function () { return false; })
+        : Promise.resolve(false);
+      navigator.share({ files: shareFiles })
+        .then(function () {
+          copied.then(function (ok) {
+            toast(ok ? 'Fichiers envoyés. Message copié : collez-le dans le groupe (⌘V)' : 'Fichiers envoyés. Copiez le message avec « Copier le message »');
+          });
+          markSentToGroup(true);
+        })
         .catch(function (err) {
           if (err && err.name === 'AbortError') return; // partage annulé
           toast('Partage impossible ici : copiez le message et téléchargez le PDF', 'error');
