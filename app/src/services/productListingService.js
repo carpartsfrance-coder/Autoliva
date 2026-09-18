@@ -133,10 +133,18 @@ const REPLI_MAX_PRODUITS = 1500;
 
 /* Champs sur lesquels le classement JS travaille — donc les seuls qui valent
    la peine d'être préfiltrés. */
-const REPLI_CHAMPS = ['name', 'sku', 'engineCode', 'brand', 'category', 'description'];
+/* `compatibleReferences` et `searchSynonyms` manquaient : une référence OEM
+   qui ne figure QUE dans la liste des références compatibles n'était ramenée
+   par aucun des deux chemins de recherche, ni Atlas ni le repli. Le classement
+   avait beau savoir la reconnaître, la fiche ne lui arrivait jamais. */
+const REPLI_CHAMPS = ['name', 'sku', 'engineCode', 'brand', 'category', 'description', 'compatibleReferences', 'searchSynonyms'];
 /* Sous /de, la recherche ne voyait que le français : « Getriebe » ne ramenait
    rien alors que 3 327 fiches portent ce mot dans leur version allemande. Le
    préfiltre interroge donc aussi les champs traduits. */
+/* Les champs où une référence a un sens. On n'y met pas `description` : le
+   motif sans séparateurs y ferait des rapprochements hasardeux. */
+const REF_CHAMPS = ['name', 'sku', 'engineCode', 'compatibleReferences', 'searchSynonyms'];
+
 const REPLI_CHAMPS_DE = ['localizations.de.name', 'localizations.de.shortDescription', 'localizations.de.description'];
 
 /* Mots vides français. Sans eux, « boîte de vitesses » remontait 13 094 fiches
@@ -192,6 +200,38 @@ function motifSansAccent(mot) {
  * [a-z0-9] et les classes qu'il fabrique lui-même. Un échappement en plus
  * n'ajouterait rien et laisserait croire qu'il protège quelque chose.
  */
+/* Une référence constructeur s'écrit « 0AM 325 025 D » dans le catalogue et
+ * « 0am325025d » sous les doigts du client. Un `$regex` sur l'un ne trouve
+ * jamais l'autre. On fabrique donc un motif qui accepte n'importe quel
+ * séparateur entre deux caractères, et qui tolère la lettre O à la place du
+ * zéro initial — la confusion se produit là et nulle part ailleurs.
+ *
+ * Réservé aux mots qui ressemblent à une référence (lettres ET chiffres, au
+ * moins 5 caractères) : sur un mot ordinaire ce motif ramènerait n'importe
+ * quoi, puisqu'il ignore les séparateurs.
+ */
+const REF_LONGUEUR_MIN = 5;
+
+function motifReference(mot) {
+  /* Volontairement sans `motifSansAccent` : celui-ci remplace chaque lettre
+     par une classe accentuée, qu'on ne peut plus découper caractère par
+     caractère. Une référence constructeur est de l'ASCII pur, donc un simple
+     filtrage [a-z0-9] suffit — et il garantit qu'aucun métacaractère ne passe. */
+  const base = String(mot)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  if (base.length < REF_LONGUEUR_MIN) return '';
+  if (!/[a-z]/.test(base) || !/\d/.test(base)) return '';
+
+  const premier = base[0] === '0' || base[0] === 'o' ? '[0o]' : base[0];
+  const reste = base.slice(1).split('').join('[^a-z0-9]*');
+
+  return reste ? `${premier}[^a-z0-9]*${reste}` : premier;
+}
+
 function filtreTexteRepli(filter, searchQuery, lang) {
   const tous = String(searchQuery || '')
     .split(/[^\p{L}\p{N}]+/u)
@@ -209,6 +249,17 @@ function filtreTexteRepli(filter, searchQuery, lang) {
     const rx = { $regex: motif, $options: 'i' };
     for (const champ of REPLI_CHAMPS) ou.push({ [champ]: rx });
     if (lang === 'de') for (const champ of REPLI_CHAMPS_DE) ou.push({ [champ]: rx });
+  }
+
+  /* Les motifs de référence : sur chaque mot, et sur la requête entière
+     recollée (« 0am 325 025 d » et « 0am325025d » désignent la même pièce). */
+  const candidatsRef = mots.slice();
+  if (mots.length > 1) candidatsRef.push(mots.join(''));
+  for (const candidat of candidatsRef) {
+    const motif = motifReference(candidat);
+    if (!motif) continue;
+    const rx = { $regex: motif, $options: 'i' };
+    for (const champ of REF_CHAMPS) ou.push({ [champ]: rx });
   }
   /* Aucun mot exploitable après nettoyage → on ne restreint rien, et c'est le
      plafond qui protège. Mieux vaut un résultat large qu'un résultat vide. */
@@ -261,7 +312,12 @@ async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, per
         should: [
           { text: { query: q, path: 'name', score: { boost: { value: 10 } }, fuzzy: { maxEdits: 1, prefixLength: 1 } } },
           { autocomplete: { query: q, path: 'name', score: { boost: { value: 6 } } } },
-          { text: { query: q, path: ['sku', 'engineCode', 'reference', 'oemRef'], score: { boost: { value: 9 } } } },
+          /* `compatibleReferences` / `searchSynonyms` : sans eux, une pièce dont
+             la référence cherchée ne figure que dans ses références compatibles
+             restait introuvable. Un chemin absent de l'index Atlas ne fait rien
+             — il ne casse pas la requête — donc si ces champs n'y sont pas
+             encore mappés, c'est le repli qui les couvre. */
+          { text: { query: q, path: ['sku', 'engineCode', 'reference', 'oemRef', 'compatibleReferences', 'searchSynonyms'], score: { boost: { value: 9 } } } },
           { text: { query: q, path: ['brand', 'category', 'compatibility.make', 'compatibility.model', 'compatibility.engine'], score: { boost: { value: 4 } }, fuzzy: { maxEdits: 1 } } },
           { text: { query: q, path: 'description', score: { boost: { value: 1 } }, fuzzy: { maxEdits: 1 } } },
         ],
@@ -1096,6 +1152,7 @@ module.exports = {
   searchProductsViaAtlas,
   filtreTexteRepli,
   motifSansAccent,
+  motifReference,
   reinitialiserDisjoncteur,
   REPLI_MAX_PRODUITS,
   PER_PAGE,
