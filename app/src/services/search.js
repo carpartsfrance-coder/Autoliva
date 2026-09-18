@@ -1,4 +1,6 @@
 const { buildProductPublicPath } = require('./productPublic');
+const productI18n = require('./productI18n');
+const { t } = require('./i18n');
 const brand = require('../config/brand');
 
 const STOP_WORDS = new Set([
@@ -533,7 +535,10 @@ function parseCategoryPath(value) {
   };
 }
 
-function buildProductsUrl(params) {
+/* Le préfixe suit la langue de la page qui a lancé la suggestion : les valeurs
+   de filtre (catégorie, marque) restent FRANÇAISES — elles sont stockées telles
+   quelles sur les fiches — seule l'URL change de langue. */
+function buildProductsUrl(params, langPrefix = '') {
   const searchParams = new URLSearchParams();
 
   if (params && params.q) searchParams.set('q', trimString(params.q));
@@ -542,7 +547,7 @@ function buildProductsUrl(params) {
   if (params && params.vehicleMake) searchParams.set('vehicleMake', trimString(params.vehicleMake));
 
   const qs = searchParams.toString();
-  return qs ? `/produits?${qs}` : '/produits';
+  return qs ? `${langPrefix}/produits?${qs}` : `${langPrefix}/produits`;
 }
 
 function formatMoney(cents) {
@@ -552,10 +557,16 @@ function formatMoney(cents) {
   }).format(Math.round(Number(cents) || 0) / 100);
 }
 
-function toProductSuggestItem(product) {
+function toProductSuggestItem(product, lang) {
   if (!product) return null;
 
-  const name = trimString(product.name) || 'Produit';
+  /* Menu déroulant du header : sur une page /de il affichait des noms français
+     et renvoyait vers la fiche FR, dont le GET remettait la session — donc la
+     commande et les e-mails — en français. Même calque que les cartes du
+     catalogue allemand (productController, homeController). */
+  const localise = lang === 'de' ? productI18n.localizeProduct(product, 'de') : product;
+
+  const name = trimString(localise.name) || 'Produit';
   const sku = trimString(product.sku);
   const brand = trimString(product.brand);
   const imageUrl = trimString(product.imageUrl) || (Array.isArray(product.galleryUrls) && product.galleryUrls[0] ? trimString(product.galleryUrls[0]) : '');
@@ -568,13 +579,15 @@ function toProductSuggestItem(product) {
     sku,
     brand,
     imageUrl,
-    publicPath: buildProductPublicPath(product),
+    publicPath: lang === 'de'
+      ? `/de/produits/${encodeURIComponent(productI18n.localizedSlug(product, 'de'))}-${product._id}`
+      : buildProductPublicPath(product),
     priceCents,
     price: `${formatMoney(priceCents)} €`,
   };
 }
 
-function buildCategorySuggestions(rankedProducts, query, limit) {
+function buildCategorySuggestions(rankedProducts, query, limit, langPrefix = '') {
   const map = new Map();
 
   for (const entry of rankedProducts.slice(0, 24)) {
@@ -589,7 +602,7 @@ function buildCategorySuggestions(rankedProducts, query, limit) {
         q: query,
         mainCategory: category.mainCategory,
         subCategory: category.subCategory,
-      }),
+      }, langPrefix),
       count: 0,
       score: 0,
     };
@@ -608,7 +621,7 @@ function buildCategorySuggestions(rankedProducts, query, limit) {
     .slice(0, limit);
 }
 
-function buildBrandSuggestions(rankedProducts, query, limit) {
+function buildBrandSuggestions(rankedProducts, query, limit, langPrefix = '') {
   const map = new Map();
 
   for (const entry of rankedProducts.slice(0, 24)) {
@@ -627,7 +640,7 @@ function buildBrandSuggestions(rankedProducts, query, limit) {
         type: 'brand',
         name: displayName,
         label: displayName,
-        href: buildProductsUrl({ q: query, vehicleMake: displayName }),
+        href: buildProductsUrl({ q: query, vehicleMake: displayName }, langPrefix),
         count: 0,
         score: 0,
       };
@@ -656,18 +669,21 @@ function buildSuggestPayload(products, query, options = {}) {
   const categoryLimit = Number.isFinite(options.categoryLimit) ? options.categoryLimit : 2;
   const brandLimit = Number.isFinite(options.brandLimit) ? options.brandLimit : 2;
 
+  const lang = options.lang === 'de' ? 'de' : 'fr';
+  const langPrefix = lang === 'de' ? '/de' : '';
+
   const productItems = ranked
     .slice(0, productLimit)
-    .map((entry) => toProductSuggestItem(entry.product))
+    .map((entry) => toProductSuggestItem(entry.product, lang))
     .filter(Boolean);
 
-  const categoryItems = buildCategorySuggestions(ranked, query, categoryLimit);
-  const brandItems = buildBrandSuggestions(ranked, query, brandLimit);
+  const categoryItems = buildCategorySuggestions(ranked, query, categoryLimit, langPrefix);
+  const brandItems = buildBrandSuggestions(ranked, query, brandLimit, langPrefix);
 
   const sections = [];
-  if (productItems.length) sections.push({ type: 'products', title: 'Produits', items: productItems });
-  if (categoryItems.length) sections.push({ type: 'categories', title: 'Catégories', items: categoryItems });
-  if (brandItems.length) sections.push({ type: 'brands', title: 'Marques', items: brandItems });
+  if (productItems.length) sections.push({ type: 'products', title: t(lang, 'search.sectionProducts'), items: productItems });
+  if (categoryItems.length) sections.push({ type: 'categories', title: t(lang, 'search.sectionCategories'), items: categoryItems });
+  if (brandItems.length) sections.push({ type: 'brands', title: t(lang, 'search.sectionBrands'), items: brandItems });
 
   return {
     results: productItems,

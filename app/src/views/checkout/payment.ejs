@@ -24,6 +24,9 @@
       <div class="mt-8 rounded-xl border border-red-200 bg-red-50 p-5 text-red-900">
         <div class="font-bold"><%= t('checkout.errorShort') %></div>
         <div class="mt-1 text-sm"><%= errorMessage %></div>
+        <% if (typeof errorLoginHref !== 'undefined' && errorLoginHref) { %>
+          <a class="mt-2 inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline" href="<%= errorLoginHref %>" data-error-login><%= t('checkout.loginToFinish') %> <span class="material-symbols-outlined text-[16px]">arrow_forward</span></a>
+        <% } %>
       </div>
     <% } %>
 
@@ -49,7 +52,7 @@
                 <% if (address.fullName) { %><div class="font-black text-slate-900"><%= address.fullName %></div><% } %>
                 <div class="text-sm text-slate-600"><%= address.line1 %></div>
                 <% if (address.line2) { %><div class="text-sm text-slate-600"><%= address.line2 %></div><% } %>
-                <div class="text-sm text-slate-600"><%= address.postalCode %> <%= address.city %> • <%= address.country || 'France' %></div>
+                <div class="text-sm text-slate-600"><%= address.postalCode %> <%= address.city %> • <%= libellePays(address.country || 'France') %></div>
                 <% if (address.phone) { %><div class="mt-1 text-xs text-slate-500"><%= t('checkout.phoneColon') %> <%= address.phone %></div><% } %>
               </div>
             </div>
@@ -65,7 +68,7 @@
                   <% if (billingAddress.fullName) { %><div class="font-black text-slate-900"><%= billingAddress.fullName %></div><% } %>
                   <div class="text-sm text-slate-600"><%= billingAddress.line1 %></div>
                   <% if (billingAddress.line2) { %><div class="text-sm text-slate-600"><%= billingAddress.line2 %></div><% } %>
-                  <div class="text-sm text-slate-600"><%= billingAddress.postalCode %> <%= billingAddress.city %> • <%= billingAddress.country || 'France' %></div>
+                  <div class="text-sm text-slate-600"><%= billingAddress.postalCode %> <%= billingAddress.city %> • <%= libellePays(billingAddress.country || 'France') %></div>
                   <% if (billingAddress.phone) { %><div class="mt-1 text-xs text-slate-500"><%= t('checkout.phoneColon') %> <%= billingAddress.phone %></div><% } %>
                 </div>
               <% } %>
@@ -218,7 +221,7 @@
                 <label class="flex items-start gap-3">
                   <input class="mt-1 rounded border-slate-300 text-primary focus:ring-primary" name="acceptCgv" required type="checkbox" value="true" />
                   <span class="text-xs text-slate-600 leading-normal">
-                    <%= t('checkout.acceptCgvPre') %> <a class="text-primary font-black hover:underline" href="/legal/cgv" target="_blank" rel="noreferrer"><%= t('checkout.cgvLink') %></a>.
+                    <%= t('checkout.acceptCgvPre') %> <a class="text-primary font-black hover:underline" href="<%= lang === 'de' ? '/de/legal/cgv' : '/legal/cgv' %>" target="_blank" rel="noreferrer"><%= t('checkout.cgvLink') %></a>.
                   </span>
                 </label>
               </div>
@@ -233,8 +236,73 @@
                 </label>
               </div>
 
+              <%# Ce bouton passe la commande (redirection vers le paiement). La loi
+                  exige DEUX choses juste avant lui : un libellé sans ambiguïté
+                  — « Zahlungspflichtig bestellen » (§ 312j Abs. 3 BGB), « commande
+                  avec obligation de paiement » (art. L221-14 C. conso) — ET le
+                  récapitulatif mis en évidence (articles, port, Pfand, total :
+                  § 312j Abs. 2 BGB). Sur ordinateur, la colonne « Bestellübersicht »
+                  est à côté du bouton ; sur mobile elle passait SOUS le bouton
+                  (et sous « Zurück zur Lieferung ») : on la reprend ici, masquée
+                  à partir de lg. %>
+              <% const _euros = (cents) => ((Number(cents) || 0) / 100).toFixed(2).replace('.', ',') + ' €'; %>
+              <% const _recapRC = (typeof vatRC !== 'undefined' && vatRC && vatRC.active); %>
+              <div class="lg:hidden mt-4 rounded-2xl border border-slate-200 bg-white p-4" data-recap-mobile>
+                <div class="text-xs font-black uppercase tracking-widest text-slate-400"><%= t('checkout.orderSummary') %></div>
+                <div class="mt-3 space-y-2 text-sm">
+                  <% items.forEach((it) => { %>
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0 text-slate-700"><%= it.quantity %> × <%= it.product.name %><% if (it.optionsSummary) { %> <span class="text-slate-500">(<%= it.optionsSummary %>)</span><% } %></div>
+                      <div class="shrink-0 font-black text-slate-900"><%= _euros(it.lineTotalCents) %></div>
+                    </div>
+                  <% }) %>
+                  <% if (typeof clientDiscountCents !== 'undefined' && clientDiscountCents > 0) { %>
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="text-slate-600"><%= t('cart.accountDiscount', { pct: (typeof clientDiscountPercent !== 'undefined' ? String(clientDiscountPercent).replace('.', ',') : '') }) %></div>
+                      <div class="shrink-0 font-black text-slate-900">- <%= _euros(clientDiscountCents) %></div>
+                    </div>
+                  <% } %>
+                  <% if (typeof promoDiscountCents !== 'undefined' && promoDiscountCents > 0) { %>
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="text-slate-600"><%= t('cart.promoCodeLabel') %></div>
+                      <div class="shrink-0 font-black text-slate-900">- <%= _euros(promoDiscountCents) %></div>
+                    </div>
+                  <% } %>
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="text-slate-600"><%= t('product.shipping') %></div>
+                    <div class="shrink-0 font-black text-slate-900"><%= shippingCostCents === 0 ? t('checkout.free').toUpperCase() : _euros(shippingCostCents) %></div>
+                  </div>
+                  <% if (typeof consigneChargeCents !== 'undefined' && consigneChargeCents > 0) { %>
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="text-slate-600"><%= t('cart.consigne') %> <span class="block text-[11px] text-emerald-600"><%= t('cart.consigneRefund') %></span></div>
+                      <div class="shrink-0 font-black text-slate-900"><%= _euros(consigneChargeCents) %></div>
+                    </div>
+                  <% } %>
+                  <% if (_recapRC) { %>
+                    <div class="flex items-start justify-between gap-3 text-indigo-700">
+                      <div><%= t('checkout.vatReverseCharged') %></div>
+                      <div class="shrink-0 font-black">− <%= _euros(vatRC.vatAmountCents) %></div>
+                    </div>
+                  <% } %>
+                </div>
+                <%# Total TTC explicite, pas « Total » nu : le récapitulatif exigé juste
+                    avant « Zahlungspflichtig bestellen » (§ 312j Abs. 2 BGB, art. 246a
+                    § 1 Abs. 1 Nr. 4 EGBGB, PAngV § 3) doit annoncer le prix total
+                    « einschließlich aller Steuern ». Le mot MwSt. n'apparaissait nulle
+                    part sur la page de paiement allemande, alors que le panier, l'étape
+                    livraison et la confirmation écrivent tous « Gesamt inkl. MwSt. ».
+                    En autoliquidation (vatRC) le total est bien HT : on garde totalHT. %>
+                <div class="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-3">
+                  <div class="font-black text-slate-900"><%= _recapRC ? t('checkout.totalHT') : t('checkout.totalTTC') %></div>
+                  <div class="text-lg font-black text-primary"><%= _euros(_recapRC ? vatRC.totalCents : totalCents) %></div>
+                </div>
+                <%# Consigne non encaissée : pas dans le total, mais un coût conditionnel à
+                    rappeler juste au-dessus du bouton. %>
+                <%- include('../partials/consigne-conditionnelle', { lignes: (typeof consigneConditionnelle !== 'undefined' ? consigneConditionnelle : []), classes: 'mt-3' }) %>
+              </div>
+
               <button class="w-full mt-3 inline-flex items-center justify-center rounded-xl bg-primary text-white px-6 py-3 font-black hover:bg-red-700 transition" type="submit">
-                <%= t('checkout.continue') %>
+                <%= t('checkout.placeOrder') %>
               </button>
             </form>
           </div>
@@ -310,21 +378,28 @@
             <% } %>
             <% if (typeof vatRC !== 'undefined' && vatRC && vatRC.active) { %>
               <div class="flex items-center justify-between text-indigo-700">
-                <div>TVA — autoliquidée <span class="text-slate-400 font-normal">(pro UE)</span></div>
+                <div><%= t('checkout.vatReverseCharged') %> <span class="text-slate-400 font-normal"><%= t('checkout.vatReverseChargedPro') %></span></div>
                 <div class="font-black">− <%= (vatRC.vatAmountCents / 100).toFixed(2).replace('.', ',') %> €</div>
               </div>
             <% } %>
           </div>
 
           <% var _rc = (typeof vatRC !== 'undefined' && vatRC && vatRC.active); %>
+          <%# Idem colonne de droite : « Gesamt inkl. MwSt. » / « Total TTC », comme
+              l'étape livraison (shipping.ejs) et la confirmation (account/order.ejs). %>
           <div class="mt-4 pt-4 border-t border-slate-200 flex items-center justify-between">
-            <div class="text-slate-600 font-black"><%= _rc ? 'Total HT' : t('checkout.total') %></div>
+            <div class="text-slate-600 font-black"><%= _rc ? t('checkout.totalHT') : t('checkout.totalTTC') %></div>
             <div class="text-primary font-black text-2xl"><%= ((_rc ? vatRC.totalCents : totalCents) / 100).toFixed(2).replace('.', ',') %> €</div>
           </div>
           <% if (_rc) { %>
             <div class="mt-2 flex items-start gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-[12px] leading-snug text-indigo-700">
               <span class="material-symbols-outlined text-[16px] shrink-0">verified</span>
-              <span>Autoliquidation de la TVA — n° <strong><%= vatRC.vatNumber %></strong> validé. Montant facturé <strong>HT</strong> (livraison intracommunautaire, art. 262 ter I du CGI).</span>
+              <%# Le n° passe par une clé : le récapitulatif exigé juste avant
+                  « Zahlungspflichtig bestellen » (§ 312j Abs. 2 BGB) annonçait le
+                  TOTAL du contrat en français sur une page allemande. Le numéro
+                  saisi est échappé avant d'entrer dans un texte rendu en HTML. %>
+              <% var _rcNum = String(vatRC.vatNumber || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); %>
+              <span><%- t('checkout.vatReverseChargeNote', { vat: _rcNum }) %></span>
             </div>
           <% } %>
 
@@ -334,6 +409,7 @@
               <span><%- t('checkout.consigneNotePayment', { amount: (consigneChargeCents / 100).toFixed(2).replace('.', ',') }) %></span>
             </div>
           <% } %>
+          <%- include('../partials/consigne-conditionnelle', { lignes: (typeof consigneConditionnelle !== 'undefined' ? consigneConditionnelle : []), classes: 'mt-2' }) %>
 
           <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 space-y-2">
             <div class="flex items-center gap-2 text-xs font-black text-slate-700">

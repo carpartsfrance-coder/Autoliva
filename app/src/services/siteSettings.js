@@ -211,6 +211,11 @@ function sanitizeHeroSlidesArray(slides) {
  * Slides hero par défaut en ALLEMAND (mêmes visuels que la version FR, texte
  * DE). Servies sur la home allemande tant qu'aucune slide DE custom n'est
  * gérée en admin — un visiteur allemand voit un hero soigné et cohérent.
+ *
+ * Les URL internes sont préfixées /de : le bouton le plus visible de la page
+ * menait à /devis (français), dont le GET remettait la session en « fr » —
+ * panier, paiement, Order.lang et e-mails compris. La vue ne peut pas préfixer
+ * à l'affichage, ctaSecondaryUrl vaut déjà /de/produits.
  */
 function getDefaultHeroSlidesDe() {
   return [
@@ -221,7 +226,7 @@ function getDefaultHeroSlidesDe() {
       title: 'Aufbereitete, gebrauchte und geprüfte Autoteile',
       description: `${brand.NAME} unterstützt Privat- und Geschäftskunden mit zuverlässigen Teilen, schnellem Angebot und Expressversand in 48/72 Std.`,
       ctaPrimaryText: 'Kostenloses Angebot anfordern',
-      ctaPrimaryUrl: '/devis',
+      ctaPrimaryUrl: '/de/devis',
       ctaSecondaryText: 'Katalog durchsuchen',
       ctaSecondaryUrl: '/de/produits',
       sortOrder: 0,
@@ -234,7 +239,7 @@ function getDefaultHeroSlidesDe() {
       title: 'Aufbereitete Verteilergetriebe & Differenziale',
       description: 'Unser aufbereitetes Sortiment wird vor dem Versand geprüft, mit der auf jeder Produktseite angegebenen Garantie.',
       ctaPrimaryText: 'Kostenloses Angebot anfordern',
-      ctaPrimaryUrl: '/devis',
+      ctaPrimaryUrl: '/de/devis',
       ctaSecondaryText: 'Katalog durchsuchen',
       ctaSecondaryUrl: '/de/produits',
       sortOrder: 1,
@@ -247,7 +252,7 @@ function getDefaultHeroSlidesDe() {
       title: 'Austauschmotoren: Leistung & Sicherheit',
       description: 'Porsche, Range Rover, BMW… mit höchstem Anspruch geprüfte und aufbereitete Motoren, schnell verfügbar.',
       ctaPrimaryText: 'Kostenloses Angebot anfordern',
-      ctaPrimaryUrl: '/devis',
+      ctaPrimaryUrl: '/de/devis',
       ctaSecondaryText: 'Katalog durchsuchen',
       ctaSecondaryUrl: '/de/produits',
       sortOrder: 2,

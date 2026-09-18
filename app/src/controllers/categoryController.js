@@ -10,7 +10,7 @@ const {
   buildCategoryPublicUrl,
   getPublicBaseUrlFromReq,
 } = require('../services/categoryPublic');
-const { buildHreflangSet, t } = require('../services/i18n');
+const { buildHreflangSet, t, redirectionFrGardantLaLangue } = require('../services/i18n');
 const { formatCategoryDisplayName } = require('../services/brandSanitizer');
 const internalLinking = require('../services/internalLinking');
 const productI18n = require('../services/productI18n');
@@ -222,7 +222,9 @@ async function getCategory(req, res, next) {
     const isDe = req.lang === 'de' && productI18n.isSupportedLang('de');
     const deLoc = category.localizations && category.localizations.de;
     if (isDe && !(deLoc && deLoc.translatedAt)) {
-      return res.redirect(301, '/categorie/' + encodeURIComponent(category.slug));
+      /* Même règle que la fiche : la page française d'arrivée ne doit pas
+         remettre la session — donc la commande et les e-mails — en français. */
+      return res.redirect(301, redirectionFrGardantLaLangue(req, '/categorie/' + encodeURIComponent(category.slug)));
     }
     const deCatSlug = (isDe && deLoc && deLoc.slug && deLoc.slug.trim()) ? deLoc.slug.trim() : category.slug;
     /* Une catégorie allemande = UNE URL. Arrivé par le slug français sous /de,

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const Category = require('../models/Category');
 const ShippingClass = require('../models/ShippingClass');
-const { resolveZone, ZONE_IDS } = require('../config/shippingZones');
+const { resolveZone, ZONE_IDS, normalizeCountryCode } = require('../config/shippingZones');
 
 /** Prix (centimes) d'une classe d'expédition pour une zone donnée.
  *  zonePricesCents[zone] si défini, sinon prix métropole, sinon domicilePriceCents (legacy). */
@@ -187,18 +187,32 @@ async function computeShippingPricesCents(dbConnected, products, zoneOrAddress) 
   return { domicile };
 }
 
+/**
+ * Clé de traduction du délai de livraison à domicile pour une destination.
+ *
+ * Le délai annoncé était la même phrase pour toutes les zones : « 2-3 jours
+ * ouvrés » promis à Berlin comme à Lyon, pour une palette partie de Nice.
+ * Hors métropole on annonce 4-6 jours ouvrés — à confirmer avec le
+ * transporteur, mais une estimation prudente vaut mieux qu'une promesse
+ * fausse. Allemagne : 2 à 4 jours ouvrés APRÈS EXPÉDITION (confirmé par
+ * Killian le 17/09/2026) : le tunnel ne connaît pas le délai d'expédition de
+ * chaque pièce (la fiche ne promet un délai total qu'en expédition 24/48 h),
+ * il ne peut donc promettre que le transport. Partagée avec le bandeau
+ * « expédiée » de la page commande, qui suivait la LANGUE et non le pays.
+ */
+function cleDelaiLivraison(zoneOrAddress) {
+  const zoneLivraison = toZone(zoneOrAddress);
+  if (zoneLivraison === 'metropole') return 'shipping.homeDesc';
+  const pays = zoneOrAddress && typeof zoneOrAddress === 'object' ? normalizeCountryCode(zoneOrAddress.country) : '';
+  return pays === 'DE' ? 'shipping.homeDescGermany' : 'shipping.homeDescEurope';
+}
+
 /* Les libellés de livraison s'affichent dans le panier ET dans l'e-mail de
    confirmation : « Livraison à domicile » restait français sur toute la
    chaîne allemande. L'`id` ne bouge pas — c'est lui qui porte le tarif. */
 async function getShippingMethods(dbConnected, products, zoneOrAddress, lang) {
   const { t } = require('./i18n');
-  /* Le délai annoncé était la même phrase pour toutes les zones : « 2-3 jours
-     ouvrés » promis à Berlin comme à Lyon, pour une palette partie de Nice.
-     Hors métropole on annonce 4-6 jours ouvrés — à confirmer avec le
-     transporteur, mais une estimation prudente vaut mieux qu'une promesse
-     fausse. */
-  const zoneLivraison = toZone(zoneOrAddress);
-  const cleDelai = zoneLivraison === 'metropole' ? 'shipping.homeDesc' : 'shipping.homeDescEurope';
+  const cleDelai = cleDelaiLivraison(zoneOrAddress);
   const list = Array.isArray(products) ? products : [];
   const onlyStandaloneCloning = list.length > 0 && list.every((p) => p && p.serviceType === 'standalone_cloning');
 
@@ -233,6 +247,7 @@ async function getShippingMethods(dbConnected, products, zoneOrAddress, lang) {
 }
 
 module.exports = {
+  cleDelaiLivraison,
   computeShippingPricesCents,
   getShippingMethods,
   priceForZone,

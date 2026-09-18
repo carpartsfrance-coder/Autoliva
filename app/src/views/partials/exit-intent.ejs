@@ -106,7 +106,11 @@
       </div>
       <p class="mt-1 text-[10px] text-slate-400 text-center">
         <span class="block"><%= t('exit.warrantyNote') %></span>
-        <%= t('exit.noSpam') %> <a href="/legal/confidentialite" target="_blank" class="underline hover:text-slate-600"><%= t('exit.privacy') %></a>.
+        <%= t('exit.noSpam') %> <%# Préfixe pris sur la LANGUE RENDUE (comme _flpLegal du pied de page) : le
+    popup s'affiche aussi sur les pages du tunnel, servies en allemand sous des
+    URL françaises. Un lien FR y remettait la session — donc la commande et les
+    e-mails — en français. %>
+<a href="<%= (typeof lang !== 'undefined' && lang === 'de') ? '/de' : '' %>/legal/confidentialite" target="_blank" class="underline hover:text-slate-600"><%= t('exit.privacy') %></a>.
       </p>
 
       <div id="ei-result" class="mt-2 text-sm text-center"></div>

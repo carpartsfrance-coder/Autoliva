@@ -1,11 +1,21 @@
 <%- include('../partials/head') %>
 <%- include('../partials/header') %>
+<%# Libellé des adresses enregistrées : « Livraison » est posé par défaut sur l'adresse
+    d'un ancien invité et restait en français dans le tunnel allemand. %>
+<%# Pays d'adresse = France ? La valeur du <select> est le libellé FRANÇAIS
+    (« France », « Allemagne ») : c'est la clé de zone de livraison, indépendante
+    de la langue d'affichage. Sert à ne poser maxlength="5" (format FR) que sur
+    un formulaire français ; le JS en bas de page refait le même test au 'change'. %>
+<% const _paysFR = function (pays) {
+  const _p = String(pays == null ? '' : pays).trim().toLowerCase();
+  return _p === '' || _p === 'france' || _p === 'fr';
+}; %>
 
 <main class="flex-1 bg-slate-50">
   <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-6 md:py-10">
 
     <%/* ── Stepper ───────────────────────────────────────────── */%>
-    <nav class="flex items-center justify-center gap-2 sm:gap-4 text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400" aria-label="Étapes de commande">
+    <nav class="flex items-center justify-center gap-2 sm:gap-4 text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400" aria-label="<%= t('a11y.checkoutSteps') %>">
       <a href="/panier" class="flex items-center gap-2 sm:gap-3 hover:text-slate-600 transition">
         <span class="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs">
           <span class="material-symbols-outlined text-[16px]">check</span>
@@ -30,6 +40,9 @@
         <div>
           <div class="font-bold text-sm"><%= t('checkout.errorOccurred') %></div>
           <div class="mt-1 text-sm"><%= errorMessage %></div>
+          <% if (typeof errorLoginHref !== 'undefined' && errorLoginHref) { %>
+            <a class="mt-2 inline-flex items-center gap-1 text-sm font-bold text-primary hover:underline" href="<%= errorLoginHref %>" data-error-login><%= t('checkout.loginToFinish') %> <span class="material-symbols-outlined text-[16px]">arrow_forward</span></a>
+          <% } %>
         </div>
       </div>
     <% } %>
@@ -92,42 +105,46 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div class="sm:col-span-2">
                     <label class="block text-sm font-semibold text-slate-700" for="email"><%= t('checkout.email') %></label>
-                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="email" name="email" required type="email" placeholder="votre@email.com" value="<%= guestForm ? guestForm.email : '' %>" />
+                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="email" name="email" required type="email" placeholder="<%= t('checkout.phEmail') %>" value="<%= guestForm ? guestForm.email : '' %>" />
                   </div>
 
                   <div>
                     <label class="block text-sm font-semibold text-slate-700" for="firstName"><%= t('checkout.firstName') %></label>
-                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="firstName" name="firstName" required type="text" placeholder="Jean" value="<%= guestForm ? guestForm.firstName : '' %>" />
+                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="firstName" name="firstName" required type="text" placeholder="<%= t('checkout.phFirstName') %>" value="<%= guestForm ? guestForm.firstName : '' %>" />
                   </div>
 
                   <div>
                     <label class="block text-sm font-semibold text-slate-700" for="lastName"><%= t('checkout.lastName') %></label>
-                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="lastName" name="lastName" required type="text" placeholder="Dupont" value="<%= guestForm ? guestForm.lastName : '' %>" />
+                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="lastName" name="lastName" required type="text" placeholder="<%= t('checkout.phLastName') %>" value="<%= guestForm ? guestForm.lastName : '' %>" />
                   </div>
 
                   <div class="sm:col-span-2">
                     <label class="block text-sm font-semibold text-slate-700" for="line1"><%= t('checkout.address') %></label>
-                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="line1" name="line1" required type="text" placeholder="12 rue de la Paix" value="<%= guestForm ? guestForm.line1 : '' %>" />
+                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="line1" name="line1" required type="text" placeholder="<%= t('checkout.phLine1') %>" value="<%= guestForm ? guestForm.line1 : '' %>" />
                   </div>
 
                   <div class="sm:col-span-2">
                     <label class="block text-sm font-semibold text-slate-700" for="line2"><%= t('checkout.addressLine2') %></label>
-                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="line2" name="line2" type="text" placeholder="Bâtiment, étage, code..." value="<%= guestForm ? guestForm.line2 : '' %>" />
+                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="line2" name="line2" type="text" placeholder="<%= t('checkout.phLine2') %>" value="<%= guestForm ? guestForm.line2 : '' %>" />
                   </div>
 
                   <div>
                     <label class="block text-sm font-semibold text-slate-700" for="postalCode"><%= t('checkout.postalCode') %></label>
-                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="postalCode" name="postalCode" required type="text" placeholder="75001" maxlength="5" value="<%= guestForm ? guestForm.postalCode : '' %>" data-autocomplete-postal />
+                    <%# maxlength=5 = format FRANÇAIS. Rendu conditionnellement (et
+                        resynchronisé en JS au 'change' du pays) : hors France, les codes
+                        postaux irlandais, néerlandais, portugais ou polonais dépassent
+                        5 caractères et étaient tronqués à la saisie. %>
+                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="postalCode" name="postalCode" required type="text" placeholder="<%= t('checkout.phPostalCode') %>" <%- _paysFR(guestForm ? guestForm.country : 'France') ? 'maxlength="5"' : '' %> value="<%= guestForm ? guestForm.postalCode : '' %>" data-autocomplete-postal />
                   </div>
 
                   <div>
                     <label class="block text-sm font-semibold text-slate-700" for="city"><%= t('checkout.city') %></label>
-                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="city" name="city" required type="text" placeholder="Paris" value="<%= guestForm ? guestForm.city : '' %>" data-autocomplete-city />
+                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="city" name="city" required type="text" placeholder="<%= t('checkout.phCity') %>" value="<%= guestForm ? guestForm.city : '' %>" data-autocomplete-city />
                   </div>
 
                   <div>
                     <label class="block text-sm font-semibold text-slate-700" for="phone"><%= t('checkout.phone') %></label>
-                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="phone" name="phone" required type="tel" placeholder="06 12 34 56 78" value="<%= guestForm ? guestForm.phone : '' %>" />
+                    <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="phone" name="phone" required type="tel" placeholder="<%= t('checkout.phPhone') %>" value="<%= guestForm ? guestForm.phone : '' %>" />
                   </div>
 
                   <div>
@@ -139,7 +156,7 @@
                 <%# N° TVA intracommunautaire — affiché si pays ≠ France (pros UE, autoliquidation). %>
                 <div class="mt-4" data-vat-field hidden>
                   <label class="block text-sm font-semibold text-slate-700" for="vatNumberEu"><%= t('checkout.vatEuLabel') %> <span class="font-normal text-slate-400"><%= t('checkout.vatEuHint') %></span></label>
-                  <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm uppercase focus:border-primary focus:ring-1 focus:ring-primary transition" id="vatNumberEu" name="vatNumberEu" type="text" placeholder="Ex : DE123456789" value="" />
+                  <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm uppercase focus:border-primary focus:ring-1 focus:ring-primary transition" id="vatNumberEu" name="vatNumberEu" type="text" placeholder="<%= t('checkout.phVatEu') %>" value="" />
                 </div>
                 <script>
                   (function () {
@@ -194,7 +211,7 @@
                           </div>
                           <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">
-                              <span class="font-bold text-sm text-slate-900 truncate"><%= a.label || t('checkout.addressLabel') %></span>
+                              <span class="font-bold text-sm text-slate-900 truncate"><%= (lang === 'de' && /^livraison$/i.test(String(a.label || '').trim())) ? t('checkout.addressLabel') : (a.label || t('checkout.addressLabel')) %></span>
                               <% if (a.isDefault) { %>
                                 <span class="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider flex-shrink-0"><%= t('checkout.default') %></span>
                               <% } %>
@@ -247,7 +264,7 @@
                           </div>
                           <div class="flex-1 min-w-0">
                             <div class="flex items-center gap-2">
-                              <span class="font-bold text-sm text-slate-900 truncate"><%= a.label || t('checkout.addressLabel') %></span>
+                              <span class="font-bold text-sm text-slate-900 truncate"><%= (lang === 'de' && /^livraison$/i.test(String(a.label || '').trim())) ? t('checkout.addressLabel') : (a.label || t('checkout.addressLabel')) %></span>
                               <% if (a.isDefault) { %>
                                 <span class="inline-flex items-center rounded-full bg-primary/10 text-primary px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider flex-shrink-0"><%= t('checkout.default') %></span>
                               <% } %>
@@ -363,6 +380,7 @@
               <span><%- t('cart.consigneNoteTop', { amount: (consigneChargeCents / 100).toFixed(2).replace('.', ',') }) %></span>
             </div>
           <% } %>
+          <%- include('../partials/consigne-conditionnelle', { lignes: (typeof consigneConditionnelle !== 'undefined' ? consigneConditionnelle : []), classes: 'mt-2' }) %>
 
           <div class="mt-4 flex items-center gap-2 text-xs text-slate-400">
             <span class="material-symbols-outlined text-[14px]">lock</span>
@@ -403,18 +421,18 @@
       <div class="space-y-4">
         <div>
           <label class="block text-sm font-semibold text-slate-700" for="modal-label"><%= t('checkout.addressName') %></label>
-          <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-label" name="label" type="text" placeholder="Ex : Maison, Bureau, Atelier..." value="<%= form ? form.label : '' %>" />
+          <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-label" name="label" type="text" placeholder="<%= t('checkout.phAddressName') %>" value="<%= form ? form.label : '' %>" />
         </div>
 
         <div>
           <label class="block text-sm font-semibold text-slate-700" for="modal-fullName"><%= t('checkout.fullName') %></label>
-          <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-fullName" name="fullName" type="text" placeholder="Jean Dupont" value="<%= form ? form.fullName : '' %>" />
+          <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-fullName" name="fullName" type="text" placeholder="<%= t('checkout.phFullName') %>" value="<%= form ? form.fullName : '' %>" />
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-semibold text-slate-700" for="modal-phone"><%= t('checkout.phoneOpt') %></label>
-            <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-phone" name="phone" type="tel" placeholder="06 12 34 56 78" value="<%= form ? form.phone : '' %>" />
+            <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-phone" name="phone" type="tel" placeholder="<%= t('checkout.phPhone') %>" value="<%= form ? form.phone : '' %>" />
           </div>
           <div>
             <label class="block text-sm font-semibold text-slate-700" for="modal-country"><%= t('checkout.country') %></label>
@@ -424,22 +442,22 @@
 
         <div>
           <label class="block text-sm font-semibold text-slate-700" for="modal-line1"><%= t('checkout.address') %></label>
-          <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-line1" name="line1" required type="text" placeholder="12 rue de la Paix" value="<%= form ? form.line1 : '' %>" />
+          <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-line1" name="line1" required type="text" placeholder="<%= t('checkout.phLine1') %>" value="<%= form ? form.line1 : '' %>" />
         </div>
 
         <div>
           <label class="block text-sm font-semibold text-slate-700" for="modal-line2"><%= t('checkout.addressLine2') %></label>
-          <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-line2" name="line2" type="text" placeholder="Bâtiment, étage, code..." value="<%= form ? form.line2 : '' %>" />
+          <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-line2" name="line2" type="text" placeholder="<%= t('checkout.phLine2') %>" value="<%= form ? form.line2 : '' %>" />
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-semibold text-slate-700" for="modal-postalCode"><%= t('checkout.postalCode') %></label>
-            <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-postalCode" name="postalCode" required type="text" placeholder="75001" maxlength="5" value="<%= form ? form.postalCode : '' %>" data-autocomplete-postal />
+            <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-postalCode" name="postalCode" required type="text" placeholder="<%= t('checkout.phPostalCode') %>" <%- _paysFR(form ? form.country : 'France') ? 'maxlength="5"' : '' %> value="<%= form ? form.postalCode : '' %>" data-autocomplete-postal />
           </div>
           <div>
             <label class="block text-sm font-semibold text-slate-700" for="modal-city"><%= t('checkout.city') %></label>
-            <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-city" name="city" required type="text" placeholder="Paris" value="<%= form ? form.city : '' %>" data-autocomplete-city />
+            <input class="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-primary focus:ring-1 focus:ring-primary transition" id="modal-city" name="city" required type="text" placeholder="<%= t('checkout.phCity') %>" value="<%= form ? form.city : '' %>" data-autocomplete-city />
           </div>
         </div>
 
@@ -635,20 +653,62 @@
 
 <script>
 (function () {
-  /* Postal code → city auto-completion (API geo.api.gouv.fr) */
+  /* Auto-complétion « code postal → ville » (API geo.api.gouv.fr).
+
+     geo.api.gouv.fr ne connaît QUE les communes françaises, mais le script se
+     déclenchait sur n'importe quelle saisie de 5 chiffres — exactement le
+     format d'une PLZ allemande. La ville tapée par l'acheteur était alors
+     écrasée en silence par une commune française : 38100 Braunschweig →
+     « Grenoble », 40210 Düsseldorf → « Commensacq », 54290 Trier →
+     « Bainville-aux-Miroirs » (652 des 10 813 PLZ allemandes entrent en
+     collision avec un code postal français). Le port et la zone restaient
+     corrects, donc rien ne signalait l'anomalie : seul le nom de ville de
+     l'adresse de livraison et de la facture était faux.
+
+     On n'interroge donc l'API que si le pays choisi dans le MÊME formulaire est
+     la France, et on relâche maxlength=5 hors France (IE/NL/PT/PL ont des codes
+     plus longs). Le select est relu à chaque 'change' : changer de pays met à
+     jour le comportement sans recharger la page. */
+  var MAXLEN_FR = '5';
+
+  /* La valeur du <select> est le libellé FRANÇAIS du pays (« France »,
+     « Allemagne ») — c'est la clé de zone de livraison, elle ne change pas avec
+     la langue d'affichage (voir config/shippingZones.js). On tolère « FR » au
+     cas où une valeur libre/ISO serait stockée sur une adresse existante. */
+  function estFrance(select) {
+    /* Formulaire sans sélecteur de pays : comportement historique (FR). */
+    if (!select) return true;
+    var v = String(select.value || '').trim().toLowerCase();
+    return v === 'france' || v === 'fr';
+  }
+
   document.querySelectorAll('[data-autocomplete-postal]').forEach(function (postalInput) {
     var form = postalInput.closest('form');
     if (!form) return;
     var cityInput = form.querySelector('[data-autocomplete-city]');
     if (!cityInput) return;
+    var countrySelect = form.querySelector('select[name="country"]');
+
+    function syncMaxLength() {
+      if (estFrance(countrySelect)) postalInput.setAttribute('maxlength', MAXLEN_FR);
+      else postalInput.removeAttribute('maxlength');
+    }
+
+    if (countrySelect) countrySelect.addEventListener('change', syncMaxLength);
+    syncMaxLength();
 
     postalInput.addEventListener('input', function () {
+      /* Relu à chaque frappe : le pays a pu changer depuis le chargement. */
+      if (!estFrance(countrySelect)) return;
+
       var code = postalInput.value.trim();
       if (code.length !== 5 || !/^\d{5}$/.test(code)) return;
 
       fetch('https://geo.api.gouv.fr/communes?codePostal=' + code + '&fields=nom&limit=5')
         .then(function (res) { return res.ok ? res.json() : []; })
         .then(function (data) {
+          /* Le pays a pu changer pendant la requête : on revérifie avant d'écrire. */
+          if (!estFrance(countrySelect)) return;
           if (data.length === 1) {
             cityInput.value = data[0].nom;
           } else if (data.length > 1) {

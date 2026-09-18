@@ -74,7 +74,12 @@
         <div style="font-size:11px;color:#FAC775;text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px;font-weight:600;"><%= t('security.doubtTitle') %></div>
         <div style="font-size:12.5px;color:#C9CFDA;line-height:1.9;">
           <%= t('security.paymentLinks') %><br>
-          <a href="/securite" style="color:#FAC775;text-decoration:underline;"><%= t('security.howToRecognize') %></a>
+          <%# /securite n'existe qu'en français : on garde au moins la langue du
+              visiteur (?lang=de). Le bandeau est rendu en allemand sur TOUTES
+              les pages du tunnel ; sans ce paramètre, déplier le bandeau et
+              cliquer ici faisait repasser la commande, Order.lang et les
+              e-mails en français. %>
+          <a href="<%= typeof lienFr === 'function' ? lienFr('/securite') : '/securite' %>" style="color:#FAC775;text-decoration:underline;"><%= t('security.howToRecognize') %></a>
         </div>
         <button type="button" id="security-alert-close" style="margin-top:10px;background:none;border:1px solid #3A465C;color:#8A93A5;font-size:11.5px;padding:4px 10px;border-radius:4px;cursor:pointer;"><%= t('security.hide7days') %></button>
       </div>

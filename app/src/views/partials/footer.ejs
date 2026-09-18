@@ -7,6 +7,17 @@
 <span class="text-2xl font-black uppercase tracking-tight"><%= brand.NAME %></span>
 </div>
 <% const _flp = typeof langPrefix !== 'undefined' ? langPrefix : ''; %>
+<%# Pages légales : dans le tunnel (panier, connexion, paiement), la page est en
+    allemand sur une URL française (langPrefix vide). Les AGB, l'Impressum et la
+    Datenschutzerklärung du pied de page menaient alors aux versions françaises,
+    alors que la case AGB au-dessus du bouton ouvre /de/legal/cgv. %>
+<% const _flpLegal = (typeof lang !== 'undefined' && lang === 'de') ? '/de' : _flp; %>
+<%# Même raison pour la navigation de contenu (notre histoire, contact, catalogue,
+    recherche) : sur une page allemande en URL française, ces liens menaient aux
+    pages françaises, dont le GET remet la session en « fr » — toute la suite
+    de la commande repassait en français. Panier et compte gardent _flp : ce
+    sont des URL neutres qui suivent la langue de session. %>
+<% const _flpNav = _flpLegal; %>
 <p class="text-white/70 text-sm leading-relaxed"><%= t('footer.description') %></p>
 <% const _socialSettings = siteSettings && typeof siteSettings === 'object' ? siteSettings : {}; %>
 <div class="flex gap-4">
@@ -24,12 +35,12 @@
 <div>
 <h4 class="font-bold mb-6 uppercase tracking-widest text-sm text-white"><%= t('footer.navigation') %></h4>
 <ul class="text-sm text-white/70 space-y-4">
-<li><a class="hover:text-white transition-colors" href="<%= _flp %>/notre-histoire"><%= t('footer.ourHistory') %></a></li>
+<li><a class="hover:text-white transition-colors" href="<%= _flpNav %>/notre-histoire"><%= t('footer.ourHistory') %></a></li>
 <li><a class="hover:text-white transition-colors" href="<%= _flp %>/compte"><%= t('nav.account') %></a></li>
 <li><a class="hover:text-white transition-colors" href="<%= _flp %>/compte/garage"><%= t('nav.myGarage') %></a></li>
 <li><a class="hover:text-white transition-colors" href="<%= _flp %>/compte/commandes"><%= t('nav.trackOrder') %></a></li>
-<li><a class="hover:text-white transition-colors" href="<%= _flp %>/contact"><%= t('nav.contact') %></a></li>
-<li><a class="hover:text-white transition-colors" href="<%= _flp %>/devis"><%= t('footer.quoteRequest') %></a></li>
+<li><a class="hover:text-white transition-colors" href="<%= _flpNav %>/contact"><%= t('nav.contact') %></a></li>
+<li><a class="hover:text-white transition-colors" href="<%= _flpNav %>/devis"><%= t('footer.quoteRequest') %></a></li>
 </ul>
 </div>
 <div>
@@ -52,8 +63,8 @@
 <% } %>
 <form action="/newsletter" class="flex gap-2" method="POST">
 <input name="returnTo" type="hidden" value="<%= typeof currentPath === 'string' && currentPath ? currentPath : '/' %>"/>
-<input class="w-full bg-white/10 border-white/20 rounded-lg text-sm px-4 focus:ring-white placeholder:text-white/40" name="email" placeholder="votre@email.com" required type="email"/>
-<button class="bg-white text-slate-900 px-4 py-2.5 rounded-lg font-bold hover:bg-white/90 transition-colors" type="submit" aria-label="S'inscrire à la newsletter">
+<input class="w-full bg-white/10 border-white/20 rounded-lg text-sm px-4 focus:ring-white placeholder:text-white/40" name="email" placeholder="<%= t('footer.emailPlaceholder') %>" required type="email"/>
+<button class="bg-white text-slate-900 px-4 py-2.5 rounded-lg font-bold hover:bg-white/90 transition-colors" type="submit" aria-label="<%= t('footer.newsletterSubscribe') %>">
 <span class="material-symbols-outlined">send</span>
 </button>
 </form>
@@ -64,21 +75,23 @@
 <div class="text-xs text-white/50">
                     <%= t('footer.copyright', { year: String(_currentYear) }) %>
                 </div>
-<div class="flex gap-6 text-xs text-white/50">
-<a class="hover:text-white" href="<%= _flp %>/legal/confidentialite"><%= t('footer.privacy') %></a>
-<a class="hover:text-white" href="<%= _flp %>/legal/mentions-legales"><%= t('footer.legal') %></a>
-<a class="hover:text-white" href="<%= _flp %>/legal/cgu"><%= t('footer.cgu') %></a>
-<a class="hover:text-white" href="<%= _flp %>/legal/cgv"><%= t('footer.cgv') %></a>
+<%# flex-wrap : en allemand (« Datenschutzerklärung », « Nutzungsbedingungen »…)
+    la ligne faisait 493 px et élargissait toute la page mobile à 434 px. %>
+<div class="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-white/50">
+<a class="hover:text-white" href="<%= _flpLegal %>/legal/confidentialite"><%= t('footer.privacy') %></a>
+<a class="hover:text-white" href="<%= _flpLegal %>/legal/mentions-legales"><%= t('footer.legal') %></a>
+<a class="hover:text-white" href="<%= _flpLegal %>/legal/cgu"><%= t('footer.cgu') %></a>
+<a class="hover:text-white" href="<%= _flpLegal %>/legal/cgv"><%= t('footer.cgv') %></a>
 <button type="button" class="hover:text-white" onclick="window.cpfConsent && window.cpfConsent.open()"><%= t('footer.cookies') %></button>
 </div>
 </div>
 </div>
 </footer>
 <script>
-window.CPF_CONSENT_PRIVACY_URL = <%- JSON.stringify(_flp + '/legal/confidentialite') %>;
+window.CPF_CONSENT_PRIVACY_URL = <%- JSON.stringify(_flpLegal + '/legal/confidentialite') %>;
 window.CPF_CONSENT_I18N = {
   'consent.banner.title': <%- JSON.stringify(t('consent.banner.title')) %>,
-  'consent.banner.body': <%- JSON.stringify(t('consent.banner.body', { url: _flp + '/legal/confidentialite' })) %>,
+  'consent.banner.body': <%- JSON.stringify(t('consent.banner.body', { url: _flpLegal + '/legal/confidentialite' })) %>,
   'consent.banner.acceptAll': <%- JSON.stringify(t('consent.banner.acceptAll')) %>,
   'consent.banner.rejectAll': <%- JSON.stringify(t('consent.banner.rejectAll')) %>,
   'consent.banner.customize': <%- JSON.stringify(t('consent.banner.customize')) %>,
@@ -120,7 +133,7 @@ window.CPF_CONSENT_I18N = {
     <div class="absolute bottom-[calc(100%+12px)] right-0 opacity-0 pointer-events-none scale-95 origin-bottom-right transition-all duration-200" data-cpf-contact-menu>
       <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden w-56">
         <div class="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-          <p class="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Besoin d'aide ?</p>
+          <p class="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider"><%= t('footer.needHelp') %></p>
         </div>
         <div class="py-1">
           <a class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="tel:<%= brand.PHONE_INTL %>">
@@ -128,7 +141,7 @@ window.CPF_CONSENT_I18N = {
               <span class="material-symbols-outlined text-lg">call</span>
             </span>
             <div>
-              <p class="text-sm font-semibold text-slate-900 dark:text-white">Appeler</p>
+              <p class="text-sm font-semibold text-slate-900 dark:text-white"><%= t('footer.call') %></p>
               <p class="text-[10px] text-slate-400"><%= brand.PHONE %></p>
             </div>
           </a>
@@ -141,16 +154,18 @@ window.CPF_CONSENT_I18N = {
             </span>
             <div>
               <p class="text-sm font-semibold text-slate-900 dark:text-white">WhatsApp</p>
-              <p class="text-[10px] text-slate-400">Réponse rapide</p>
+              <p class="text-[10px] text-slate-400"><%= t('footer.quickReply') %></p>
             </div>
           </a>
-          <a class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="<%= (locals.currentUser ? '/compte/sav' : '/sav/suivi') %>">
+          <%# Même règle que le bandeau de sécurité : /sav/suivi n'existe qu'en français,
+    on conserve au moins la langue du visiteur (lienFr → ?lang=de). %>
+<a class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="<%= (locals.currentUser ? '/compte/sav' : (typeof lienFr === 'function' ? lienFr('/sav/suivi') : '/sav/suivi')) %>">
             <span class="flex h-9 w-9 items-center justify-center rounded-full bg-red-100 text-primary shrink-0">
               <span class="material-symbols-outlined text-lg">support_agent</span>
             </span>
             <div>
-              <p class="text-sm font-semibold text-slate-900 dark:text-white">Suivre mon SAV</p>
-              <p class="text-[10px] text-slate-400">Conversation &amp; statut</p>
+              <p class="text-sm font-semibold text-slate-900 dark:text-white"><%= t('footer.trackSav') %></p>
+              <p class="text-[10px] text-slate-400"><%= t('footer.savConversation') %></p>
             </div>
           </a>
         </div>
@@ -159,10 +174,10 @@ window.CPF_CONSENT_I18N = {
 
     <!-- Main FAB button -->
     <button
-      aria-label="Contactez-nous"
+      aria-label="<%= t('footer.contactUs') %>"
       class="relative flex h-14 w-14 items-center justify-center rounded-full bg-primary shadow-xl shadow-primary/30 transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-primary/20"
       data-cpf-contact-toggle
-      title="Contactez-nous"
+      title="<%= t('footer.contactUs') %>"
       type="button"
     >
       <span class="material-symbols-outlined text-3xl text-white transition-opacity duration-200" data-cpf-logo>support_agent</span>
@@ -214,20 +229,20 @@ window.CPF_CONSENT_I18N = {
 <% } %>
 
 <% if (_showMobileNav) { %>
-  <nav aria-label="Navigation rapide" class="fixed bottom-0 left-0 right-0 z-50 md:hidden">
+  <nav aria-label="<%= t('a11y.quickNav') %>" class="fixed bottom-0 left-0 right-0 z-50 md:hidden">
     <div class="mx-auto max-w-[1440px] px-3 pb-[env(safe-area-inset-bottom)]">
       <div class="grid grid-cols-5 rounded-2xl border border-slate-200 bg-white shadow-lg">
-        <a class="flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flp %>/" <% if (_isActive('/')) { %>aria-current="page"<% } %>>
+        <a class="flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flpNav %>/" <% if (_isActive('/')) { %>aria-current="page"<% } %>>
           <span class="material-symbols-rounded text-[22px]">home</span>
           <span><%= t('mobile.home') %></span>
         </a>
 
-        <a class="flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/rechercher') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flp %>/rechercher" <% if (_isActive('/rechercher')) { %>aria-current="page"<% } %>>
+        <a class="flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/rechercher') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flpNav %>/rechercher" <% if (_isActive('/rechercher')) { %>aria-current="page"<% } %>>
           <span class="material-symbols-rounded text-[22px]">search</span>
           <span><%= t('mobile.search') %></span>
         </a>
 
-        <a class="flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/produits') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flp %>/produits" <% if (_isActive('/produits')) { %>aria-current="page"<% } %>>
+        <a class="flex flex-col items-center justify-center gap-1 py-3 text-[10px] font-semibold transition-colors <%= _isActive('/produits') ? 'text-primary' : 'text-slate-600' %>" href="<%= _flpNav %>/produits" <% if (_isActive('/produits')) { %>aria-current="page"<% } %>>
           <span class="material-symbols-rounded text-[22px]">storefront</span>
           <span><%= t('mobile.catalog') %></span>
         </a>
@@ -361,6 +376,19 @@ window.CPF_CONSENT_I18N = {
 
     var activeToast = null;
     var hideTimer = null;
+    /* Textes du toast « ajouté au panier » dans la langue de la page : sur les
+       cartes des pages /de, il disait « Produit ajouté au panier / Voir le
+       panier ». Le lien suit le préfixe de langue affiché (/de/panier redirige
+       vers /panier en gardant la session allemande). */
+    var CART_TOAST_I18N = <%- JSON.stringify({
+      added: t('cart.addedToCart'),
+      viewCart: t('cart.viewCart'),
+      error: t('checkout.errorOccurred'),
+      addError: t('cart.error'),
+      addErrorNow: t('cart.addError'),
+      product: t('cart.productFallback'),
+      cartHref: _flpNav + '/panier',
+    }).replace(/</g, '\\u003c') %>;
 
     function formatCount(count) {
       var n = Number(count) || 0;
@@ -422,7 +450,7 @@ window.CPF_CONSENT_I18N = {
 
     function buildThumb(imageUrl, isError) {
       if (imageUrl && !isError) {
-        return '<div class="cart-feedback-thumb"><img alt="Produit" src="' + imageUrl.replace(/"/g, '&quot;') + '" /></div>';
+        return '<div class="cart-feedback-thumb"><img alt="' + CART_TOAST_I18N.product.replace(/"/g, '&quot;') + '" src="' + imageUrl.replace(/"/g, '&quot;') + '" /></div>';
       }
       return '<div class="cart-feedback-thumb"><span class="material-symbols-outlined ' + (isError ? 'text-red-500' : 'text-emerald-500') + '">' + (isError ? 'error' : 'check_circle') + '</span></div>';
     }
@@ -430,11 +458,11 @@ window.CPF_CONSENT_I18N = {
     function showToast(options) {
       var config = options && typeof options === 'object' ? options : {};
       var isError = config.type === 'error';
-      var message = config.message ? String(config.message) : (isError ? 'Une erreur est survenue.' : 'Produit ajouté au panier');
+      var message = config.message ? String(config.message) : (isError ? CART_TOAST_I18N.error : CART_TOAST_I18N.added);
       var productName = config.productName ? String(config.productName) : '';
       var imageUrl = config.imageUrl ? String(config.imageUrl) : '';
-      var actionHref = config.actionHref ? String(config.actionHref) : '/panier';
-      var actionLabel = config.actionLabel ? String(config.actionLabel) : 'Voir le panier';
+      var actionHref = config.actionHref ? String(config.actionHref) : CART_TOAST_I18N.cartHref;
+      var actionLabel = config.actionLabel ? String(config.actionLabel) : CART_TOAST_I18N.viewCart;
       var duration = Number.isFinite(Number(config.duration)) ? Number(config.duration) : 4000;
 
       if (hideTimer) {
@@ -486,18 +514,18 @@ window.CPF_CONSENT_I18N = {
         animateCartIcon();
         showToast({
           type: 'success',
-          message: 'Produit ajouté au panier',
+          message: CART_TOAST_I18N.added,
           productName: data.productName,
           imageUrl: data.imageUrl,
-          actionHref: '/panier',
-          actionLabel: 'Voir le panier',
+          actionHref: CART_TOAST_I18N.cartHref,
+          actionLabel: CART_TOAST_I18N.viewCart,
           duration: 4000,
         });
       },
       notifyError: function (message) {
         showToast({
           type: 'error',
-          message: message || 'Impossible d’ajouter le produit au panier.',
+          message: message || CART_TOAST_I18N.addError,
           duration: 4000,
         });
       },
@@ -558,7 +586,7 @@ window.CPF_CONSENT_I18N = {
                 return null;
               }).then(function (data) {
                 if (!response.ok || !data || data.ok !== true) {
-                  throw new Error(data && data.error ? data.error : 'Impossible d’ajouter le produit au panier pour le moment.');
+                  throw new Error(data && data.error ? data.error : CART_TOAST_I18N.addErrorNow);
                 }
                 return data;
               });
@@ -569,7 +597,7 @@ window.CPF_CONSENT_I18N = {
 
               window.CPFCartFeedback.notifyAdded({
                 cartItemCount: payload.cartItemCount,
-                productName: productData.name || 'Produit',
+                productName: productData.name || CART_TOAST_I18N.product,
                 imageUrl: productData.imageUrl || ''
               });
 
@@ -585,7 +613,7 @@ window.CPF_CONSENT_I18N = {
             })
             .catch(function (err) {
               var minDisableRemaining = Math.max(0, 1000 - (Date.now() - startedAt));
-              window.CPFCartFeedback.notifyError(err && err.message ? err.message : 'Impossible d’ajouter le produit au panier pour le moment.');
+              window.CPFCartFeedback.notifyError(err && err.message ? err.message : CART_TOAST_I18N.addErrorNow);
               window.setTimeout(function () {
                 resetButton();
                 pending = false;
@@ -601,13 +629,13 @@ window.CPF_CONSENT_I18N = {
         window.setTimeout(function () {
           window.CPFCartFeedback.notifyAdded({
             cartItemCount: initialCartFeedback.cartItemCount,
-            productName: initialProduct.name || 'Produit',
+            productName: initialProduct.name || CART_TOAST_I18N.product,
             imageUrl: initialProduct.imageUrl || ''
           });
         }, 80);
       } else if (initialCartFeedback.type === 'error') {
         window.setTimeout(function () {
-          window.CPFCartFeedback.notifyError(initialCartFeedback.message || 'Impossible d’ajouter le produit au panier.');
+          window.CPFCartFeedback.notifyError(initialCartFeedback.message || CART_TOAST_I18N.addError);
         }, 80);
       }
     }

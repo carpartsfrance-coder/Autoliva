@@ -8,7 +8,7 @@ const wpRedirects = require('./middlewares/wpRedirects');
 const wwwCanonical = require('./middlewares/wwwCanonical');
 const cpfRedirects = require('./middlewares/cpfRedirects');
 const i18nMiddleware = require('./middlewares/i18n');
-const { t } = require('./services/i18n');
+const { t, redirectionFrGardantLaLangue } = require('./services/i18n');
 const captureAttribution = require('./middlewares/captureAttribution');
 const brand = require('./config/brand');
 
@@ -394,6 +394,23 @@ app.get('/favicon.ico', (req, res) => {
  *     inverse puis direct, en cache, attente bornée) passent sans compter.
  *     Un faux Googlebot reste sous la limite. Voir services/robotsVerifies.js. */
 const robotsVerifies = require('./services/robotsVerifies');
+
+/* Langue du visiteur AVANT le middleware i18n (les limiteurs s'exécutent plus
+   haut) : préfixe d'URL, sinon la préférence mémorisée — la même que lit le
+   tunnel, dont les URL sont françaises. */
+function langueAvantI18n(req) {
+  const chemin = String((req && req.path) || '').toLowerCase();
+  if (chemin === '/de' || chemin.startsWith('/de/')) return 'de';
+  return (req && req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
+}
+
+/** L'appel attend-il du JSON (fetch de l'ajout au panier) plutôt qu'une page ? */
+function attendDuJson(req) {
+  const h = (req && req.headers) || {};
+  if (h['x-requested-with']) return true;
+  return typeof h.accept === 'string' && /application\/json/i.test(h.accept);
+}
+
 const crawlerRoutesLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
   /* Une passe complète = l'index + ses 8 sous-sitemaps, soit ~9 requêtes.
@@ -403,7 +420,7 @@ const crawlerRoutesLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => robotsVerifies.cleLimiteur(req),
   skip: (req) => robotsVerifies.estRobotVerifie(req),
-  handler: (req, res) => res.status(429).type('text/plain').send('Trop de requêtes sur cette ressource, réessayez dans quelques minutes.'),
+  handler: (req, res) => res.status(429).type('text/plain').send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
 });
 app.use(['/sitemap.xml', /^\/sitemap-.*\.xml$/, '/google-merchant-feed.xml', '/google-merchant-feed-de.xml'], crawlerRoutesLimiter);
 
@@ -541,6 +558,10 @@ app.use((req, res, next) => {
      liste en français. */
   const _langPays = (req.lang === 'de' || (req.session && req.session.preferredLang === 'de')) ? 'de' : req.lang;
   res.locals.shippingCountryOptions = require('./config/shippingZones').countryOptionsFor(_langPays);
+  /* Pays d'une adresse dans la langue du RENDU. Lue à l'affichage (pas ici) :
+     le tunnel et les pages commande ne passent en allemand qu'ensuite, dans
+     applyCheckoutLocale. */
+  res.locals.libellePays = (pays) => require('./config/shippingZones').countryLabelFor(pays, res.locals.lang);
   /* Le paiement en plusieurs fois est-il proposé ? Exposé à TOUTES les vues :
      les mentions « 3x sans frais » vivent aussi bien sur les fiches produit que
      sur les pages véhicule, et une seule d'entre elles laissée en place
@@ -695,7 +716,15 @@ const publicSiteLimiter = rateLimit({
     const ua = (req.headers['user-agent'] || '').toLowerCase();
     return /googlebot|adsbot-google|storebot-google|google-inspectiontool|bingbot|slurp|duckduckbot|applebot|yandexbot|facebookexternalhit|twitterbot|linkedinbot/.test(ua);
   },
-  handler: (req, res) => res.status(429).type('text/plain').send('Trop de requêtes, réessayez dans une minute.'),
+  /* Le toast d'ajout au panier lit `error` dans la réponse JSON ; un corps
+     text/plain le faisait tomber sur son repli écrit en dur. On répond donc en
+     JSON quand l'appel en demande, et dans la langue du visiteur — ce limiteur
+     s'exécute AVANT le middleware i18n, d'où la lecture directe. */
+  handler: (req, res) => {
+    const message = t(langueAvantI18n(req), 'error.tooManyRequests');
+    if (attendDuJson(req)) return res.status(429).json({ ok: false, error: message });
+    return res.status(429).type('text/plain').send(message);
+  },
 });
 app.use(publicSiteLimiter);
 
@@ -827,6 +856,13 @@ app.use('/de/categorie', require('./routes/categoriesDe'));
  * allemande (« Impressum », « AGB »). */
 app.use('/de/legal', require('./routes/legal'));
 
+/* Page de recherche allemande — MÊME contrôleur, lang-aware. La loupe du
+ * header et l'onglet « Suchen » de la barre mobile pointent vers
+ * /de/rechercher sur CHAQUE page allemande : sans routeur, elles tombaient
+ * dans le catchall, ramenaient la page française et faisaient basculer tout
+ * le reste de la commande en français. */
+app.use('/de/rechercher', require('./routes/search'));
+
 /* Accueil allemand (/de) — MÊME contrôleur que la home FR, lang-aware
  * (hero DE, produits vedette + catégories localisés, libellés via t()).
  * Déclaré AVANT le catchall /de. */
@@ -854,7 +890,16 @@ app.use('/de', (req, res) => {
   // ci-dessus sont déclarées AVANT ce catchall, donc le blog DE reste
   // accessible. Quand on ajoutera des produits/catégories DE, on déclarera
   // simplement leur router au-dessus, ils auront la priorité sur ce 301.
-  res.redirect(301, targetPath);
+  /* …mais la redirection ne doit PAS coûter la langue. Le menu allemand pointe
+     vers /de/rechercher (la loupe mobile et l'onglet « Suchen »), /de/moteurs
+     et /de/notre-histoire : trois URL sans routeur DE. Le 301 amenait sur la
+     page française, dont le GET remettait `preferredLang = 'fr'` — et le
+     panier, le paiement, Order.lang puis les e-mails d'un acheteur allemand
+     repassaient en français d'un simple clic sur la loupe. On garde donc la
+     langue dans la cible (?lang=de, que le middleware i18n sait lire).
+     Jamais pour un ROBOT : Googlebot doit voir l'URL française nue, sans
+     paramètre à explorer ni à indexer. */
+  res.redirect(301, redirectionFrGardantLaLangue(req, targetPath));
 });
 
 app.use((req, res) => {
@@ -874,3 +919,6 @@ app.use((err, req, res, next) => {
 });
 
 module.exports = app;
+/* Pour les tests : la langue et le format de réponse des limiteurs, qui
+   s'exécutent AVANT le middleware i18n. */
+module.exports.__limiteurs = { langueAvantI18n, attendDuJson };

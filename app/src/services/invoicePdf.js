@@ -8,6 +8,15 @@ const fs = require('fs');
 const path = require('path');
 const invoiceSettings = require('./invoiceSettings');
 const mediaStorage = require('./mediaStorage');
+const { estFormatTvaUe } = require('./viesValidator');
+
+/* Le champ « numéro d'entreprise » de l'inscription accepte un SIRET (France)
+   comme une USt-IdNr. (Allemagne, formulaire « SIRET oder USt-IdNr. »). On
+   imprime l'intitulé qui correspond à ce qui a été saisi, plutôt que « SIRET :
+   DE123456789 ». */
+function intituleNumeroEntreprise(valeur) {
+  return estFormatTvaUe(valeur) ? 'N° TVA' : 'SIRET';
+}
 
 function formatDateFR(value) {
   if (!value) return '—';
@@ -249,7 +258,7 @@ async function buildOrderInvoicePdfBuffer({ order, user } = {}) {
       doc.fontSize(11).font('Helvetica-Bold').text('Client');
       doc.font('Helvetica').text(customerName || '—');
       if (isPro && customerCompanyName) doc.text(customerCompanyName);
-      if (isPro && customerSiret) doc.text(`SIRET : ${customerSiret}`);
+      if (isPro && customerSiret) doc.text(`${intituleNumeroEntreprise(customerSiret)} : ${customerSiret}`);
       if (customerEmail) doc.text(customerEmail);
 
       doc.moveDown(0.8);
@@ -416,4 +425,5 @@ async function buildOrderInvoicePdfBuffer({ order, user } = {}) {
 module.exports = {
   buildOrderInvoicePdfBuffer,
   computeTotals,
+  intituleNumeroEntreprise,
 };

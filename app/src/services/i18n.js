@@ -4,6 +4,7 @@ const fr = require('../locales/fr.json');
 const en = require('../locales/en.json');
 const de = require('../locales/de.json');
 const brand = require('../config/brand');
+const { estRobot } = require('./robots');
 
 const dictionaries = { fr, en, de };
 const SUPPORTED_LANGS = ['fr', 'en', 'de'];
@@ -81,4 +82,24 @@ function applyCheckoutLocale(req, res) {
   return lang;
 }
 
-module.exports = { t, buildHreflangSet, SUPPORTED_LANGS, DEFAULT_LANG, applyCheckoutLocale };
+/**
+ * Cible d'une redirection depuis une URL /de vers la page FRANÇAISE (page pas
+ * encore traduite, catchall /de).
+ *
+ * Le 301 nu coûtait la LANGUE : le GET de la page française d'arrivée remettait
+ * `preferredLang = 'fr'` (middlewares/i18n.js), et le panier, le paiement,
+ * Order.lang puis les e-mails d'un acheteur allemand repassaient en français —
+ * pour avoir cliqué sur la loupe du menu ou ouvert les AGB avant de commander.
+ * On garde donc la langue dans la cible ; ?lang=de est déjà compris par le
+ * middleware.
+ *
+ * Jamais pour un ROBOT : Googlebot doit voir l'URL française nue, sans
+ * paramètre à explorer ni à indexer.
+ */
+function redirectionFrGardantLaLangue(req, chemin) {
+  const cible = String(chemin || '/');
+  if (estRobot(req && req.headers ? req.headers['user-agent'] : '')) return cible;
+  return cible + (cible.includes('?') ? '&' : '?') + 'lang=de';
+}
+
+module.exports = { t, buildHreflangSet, SUPPORTED_LANGS, DEFAULT_LANG, applyCheckoutLocale, redirectionFrGardantLaLangue };
