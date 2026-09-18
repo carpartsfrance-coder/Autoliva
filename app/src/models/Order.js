@@ -576,6 +576,13 @@ const orderSchema = new mongoose.Schema(
       /* Erreur qui ne passera jamais en réessayant (400 montant, 401 clé) :
          le rattrapage cesse de la reprendre. */
       permanentError: { type: Boolean, default: false },
+      /* Dernier statut Comptoir ('preparation' | 'livree' | 'retour') accepté
+         par leur API pour cette vente. Vide = jamais confirmé : l'envoi initial
+         valait 'preparation'. Sert à ne renvoyer que ce qui a bougé. */
+      statusSentFor: { type: String, default: '', trim: true },
+      statusSyncedAt: { type: Date, default: null },
+      statusAttempts: { type: Number, default: 0, min: 0 },
+      statusError: { type: String, default: '', trim: true },
     },
   },
   {

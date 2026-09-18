@@ -72,4 +72,14 @@ async function syncComptoirOrders({ limit = 100, windowDays = DEFAULT_WINDOW_DAY
   return out;
 }
 
-module.exports = { syncComptoirOrders, DEFAULT_WINDOW_DAYS };
+/**
+ * Second passage : les ventes déjà envoyées dont le statut a changé depuis
+ * (livrée, retour). Tout le travail est dans le service, qui n'envoie qu'un
+ * seul appel groupé.
+ */
+async function syncComptoirStatuses(options = {}) {
+  if (!comptoir.isConfigured()) return { skipped: true, reason: 'COMPTOIR_API_KEY absente' };
+  return comptoir.syncStatuses(options);
+}
+
+module.exports = { syncComptoirOrders, syncComptoirStatuses, DEFAULT_WINDOW_DAYS };

@@ -108,20 +108,28 @@ Payload envoyé :
 
 ---
 
-## Deux limites qui viennent de leur API
+## Ce que leur API accepte
 
-**1. Création seulement.** Comptoir ignore un `externalId` déjà connu — c'est
-l'anti-doublon documenté. Conséquence : **le statut est figé à l'envoi**. Une
-commande poussée au paiement reste « preparation » chez Comptoir même une fois
-livrée ou remboursée. Renvoyer la commande n'y changerait rien.
+**1. L'appel unitaire crée, il ne met pas à jour.** Comptoir ignore un
+`externalId` déjà connu — c'est l'anti-doublon documenté. Une vente poussée au
+paiement y resterait donc « preparation » pour toujours.
 
-*Si ça devient gênant :* leur demander un endpoint de mise à jour, ou décaler
-l'envoi à la livraison — mais on perdrait alors le temps réel sur les ventes du
-jour.
+**2. L'envoi GROUPÉ, lui, met à jour** (leur guide du 18/09/2026 :
+`POST <endpoint>/bulk`, 500 commandes maximum, « une commande déjà connue est
+mise à jour si son statut a changé, jamais dupliquée »). D'où le second passage
+horaire `comptoir.syncStatuses()` : il ne renvoie que les ventes dont le statut
+a bougé depuis ce que Comptoir sait déjà (`order.comptoir.statusSentFor`), en
+un seul appel.
 
-**2. Réessai toujours sûr.** La même protection rend tout renvoi inoffensif :
-d'où le rattrapage horaire plutôt qu'un envoi unique qu'un incident réseau
-perdrait en silence.
+Leur réponse annonce un décompte (créées / mises à jour / inchangées / en
+échec) sans forme documentée. On lit ce qu'on trouve : une liste d'échecs
+détaillée ne fait réessayer que les ventes citées ; un simple compteur non nul
+fait réessayer tout le lot à l'heure suivante. Le doute va toujours vers le
+renvoi, jamais vers un « à jour » à tort.
+
+**3. Réessai toujours sûr.** L'anti-doublon rend tout renvoi inoffensif : d'où
+le rattrapage horaire plutôt qu'un envoi unique qu'un incident réseau perdrait
+en silence.
 
 ---
 
