@@ -55,12 +55,22 @@ const PHRASE_ALIASES = new Map([
   ['pont avant', ['pont', 'differentiel']],
 ]);
 
+// Longueur minimale pour qu'un token soit traité comme une référence OEM.
+// En dessous on retomberait sur des fragments ambigus (« o2 » → « 02 ») qui
+// ramèneraient des pièces sans rapport.
+const MIN_REFERENCE_TOKEN_LENGTH = 5;
+
+// Un fragment de référence reste court (« 0am », « 325 », « 025 », « d »).
+const MAX_REFERENCE_FRAGMENT_LENGTH = 6;
+const MIN_GLUED_REFERENCE_LENGTH = 6;
+
 const FIELD_WEIGHTS = [
   ['name', 14],
   ['engineCode', 13],
   ['sku', 12],
   ['compatibleReferences', 11],
   ['compatibility', 10],
+  ['searchSynonyms', 9],
   ['category', 8],
   ['brand', 7],
   ['shortDescription', 5],
@@ -119,18 +129,51 @@ function isCodeLikeToken(value) {
   return /[a-z]/.test(token) && /\d/.test(token);
 }
 
+// Les références OEM du groupe VAG commencent par un zéro (0AM325065,
+// 0GC927711H). Les clients le saisissent très souvent avec la lettre O, et
+// certains imports fournisseurs les stockent ainsi. On génère donc les deux
+// graphies du PREMIER caractère pour les tokens de type code : c'est la seule
+// position où la confusion se produit, donc aucune variante parasite ailleurs.
+function getReferenceGraphyVariants(token) {
+  if (!token || token.length < MIN_REFERENCE_TOKEN_LENGTH) return [];
+  if (token.startsWith('o')) return [`0${token.slice(1)}`];
+  if (token.startsWith('0')) return [`o${token.slice(1)}`];
+  return [];
+}
+
 function getAliasVariants(term) {
   const normalized = normalizeSearchText(term);
   if (!normalized) return [];
 
   const singular = singularizeToken(normalized);
   if (isCodeLikeToken(normalized) || isCodeLikeToken(singular)) {
-    return uniqueStrings([normalized, singular]);
+    return uniqueStrings([
+      normalized,
+      singular,
+      ...getReferenceGraphyVariants(normalized),
+      ...getReferenceGraphyVariants(singular),
+    ]);
   }
 
   const aliases = TOKEN_ALIASES.get(normalized) || TOKEN_ALIASES.get(singular) || [];
 
   return uniqueStrings([normalized, singular, ...aliases]);
+}
+
+// Recolle une requête écrite en fragments (« 0am 325 025 d ») en une référence
+// unique. On n'y touche que si tous les fragments sont courts : dès que la
+// requête contient un vrai mot (« mecatronique dq200 »), il n'y a rien à
+// recoller.
+function buildGluedReference(tokens) {
+  const list = Array.isArray(tokens) ? tokens : [];
+  if (list.length < 2) return '';
+  if (list.some((token) => token.length > MAX_REFERENCE_FRAGMENT_LENGTH)) return '';
+
+  const glued = list.join('');
+  if (glued.length < MIN_GLUED_REFERENCE_LENGTH) return '';
+  if (!isCodeLikeToken(glued)) return '';
+
+  return glued;
 }
 
 function buildQueryAnalysis(query) {
@@ -159,10 +202,30 @@ function buildQueryAnalysis(query) {
     });
   }
 
+  // « 0AM 325 025 D » et « 0am325025d » désignent la même pièce : on recolle
+  // les fragments pour que la référence complète pèse dans le score, sinon
+  // seuls les bouts (« 325 », « 025 ») matchent et remontent n'importe quoi.
+  const gluedReference = buildGluedReference(rawTokens);
+  if (gluedReference) {
+    phraseGroups.push({
+      key: gluedReference,
+      variants: uniqueStrings([gluedReference, ...getReferenceGraphyVariants(gluedReference)]),
+    });
+  }
+
   const allVariants = uniqueStrings([
     normalizedQuery,
     ...tokenGroups.flatMap((group) => group.variants),
     ...phraseGroups.flatMap((group) => group.variants),
+  ]);
+
+  // Les autres graphies de la requête entière valent la graphie tapée : sans
+  // ça, « oam927769d » perdrait la prime de correspondance complète que
+  // « 0am927769d » reçoit, et une fiche citant juste « 0AM » passerait devant.
+  const wholeQueryVariants = uniqueStrings([
+    normalizedQuery,
+    ...getReferenceGraphyVariants(normalizedQuery),
+    ...(gluedReference ? [gluedReference, ...getReferenceGraphyVariants(gluedReference)] : []),
   ]);
 
   return {
@@ -170,7 +233,27 @@ function buildQueryAnalysis(query) {
     tokenGroups,
     phraseGroups,
     allVariants,
+    wholeQueryVariants,
   };
+}
+
+// Une même référence circule en deux graphies : « 0AM 325 025 D » sur les
+// catalogues constructeur, « 0AM325025D » dans ce que tape le client. On
+// indexe les deux, sinon la fiche n'est trouvable que dans la graphie où elle
+// a été saisie.
+function withGluedReferences(values) {
+  const list = Array.isArray(values) ? values : [];
+  const out = [];
+
+  for (const value of list) {
+    const normalized = normalizeSearchText(value);
+    if (!normalized) continue;
+    out.push(normalized);
+    const glued = normalized.replace(/ /g, '');
+    if (glued && glued !== normalized) out.push(glued);
+  }
+
+  return Array.from(new Set(out));
 }
 
 function toSearchableList(value) {
@@ -217,23 +300,27 @@ function buildSearchDocument(product) {
   const years = uniqueStrings(compatibility.map((item) => item.years));
   const compatibleReferences = toSearchableList(product && product.compatibleReferences);
   const keyPoints = toSearchableList(product && product.keyPoints);
+  // Renseignés par l'admin et par les termes de recherche remontés dans
+  // analyticsController, mais jamais lus jusqu'ici : ils ne servaient à rien.
+  const searchSynonyms = toSearchableList(product && product.searchSynonyms);
   const tags = toSearchableList(product && product.tags);
   const specs = toSpecList(product && product.specs);
 
   const fields = {
     name: normalizeSearchText(product && product.name),
-    sku: normalizeSearchText(product && product.sku),
+    sku: withGluedReferences([product && product.sku]).join(' '),
     engineCode: normalizeSearchText(product && product.engineCode),
     brand: normalizeSearchText(product && product.brand),
     category: normalizeSearchText(product && product.category),
     shortDescription: normalizeSearchText(product && product.shortDescription),
     description: normalizeSearchText(product && product.description),
-    compatibleReferences: normalizeSearchText(compatibleReferences.join(' ')),
+    compatibleReferences: withGluedReferences(compatibleReferences).join(' '),
     compatibility: normalizeSearchText(
       compatibility
         .map((item) => [item.make, item.model, item.years, item.engine].filter(Boolean).join(' '))
         .join(' ')
     ),
+    searchSynonyms: withGluedReferences(searchSynonyms).join(' '),
     specs: normalizeSearchText(specs.join(' ')),
     keyPoints: normalizeSearchText(keyPoints.join(' ')),
     tags: normalizeSearchText(tags.join(' ')),
@@ -357,7 +444,11 @@ function scoreSearchDocument(searchDoc, queryAnalysis) {
   let matchedGroups = 0;
   let matchedPhraseGroups = 0;
 
-  if (searchDoc.allText.includes(queryAnalysis.normalizedQuery)) {
+  const wholeQueryVariants = Array.isArray(queryAnalysis.wholeQueryVariants) && queryAnalysis.wholeQueryVariants.length
+    ? queryAnalysis.wholeQueryVariants
+    : [queryAnalysis.normalizedQuery];
+
+  if (wholeQueryVariants.some((variant) => variant && searchDoc.allText.includes(variant))) {
     score += 90;
   }
 
