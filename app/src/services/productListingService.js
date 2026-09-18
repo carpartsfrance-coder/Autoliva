@@ -907,7 +907,10 @@ async function prepareProductListingData(req, options = {}) {
   const metaRobots = hasAnyFilter ? 'noindex, follow' : defaultMetaRobots;
 
   const titleParts = [];
-  if (selectedCategoryLabel) titleParts.push(String(selectedCategoryLabel));
+  /* Le titre porte le libellé AFFICHÉ, pas la valeur de filtre : l'onglet du
+     catalogue allemand annonçait « Autoteile-Katalog (Mécatroniques &
+     calculateurs) » sous un H1 et une facette en allemand. */
+  if (selectedCategoryLabel) titleParts.push(String(categoryLabels[String(selectedCategoryLabel).trim()] || selectedCategoryLabel));
   if (searchQuery) titleParts.push(`${t(req.lang, 'catalog.searchPrefix')}: ${searchQuery}`);
   const titleSuffix = titleParts.length ? ` (${titleParts.join(' • ')})` : '';
   const title = t(req.lang, 'catalog.metaTitle', { suffix: titleSuffix });

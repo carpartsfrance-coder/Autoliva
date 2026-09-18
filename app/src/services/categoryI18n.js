@@ -27,6 +27,9 @@ const CACHE_TTL_MS = 60 * 60 * 1000;
 
 /* Map<langue, Map<nomFrançaisEnMinuscules, nomTraduit>> */
 let cache = null;
+/* Map<nomFrançaisEnMinuscules, { slug, slugDe, deTraduite }> — pour construire
+   le LIEN de la catégorie (fil d'Ariane de la fiche), pas seulement son nom. */
+let cacheLiens = null;
 let cacheExpire = 0;
 let chargementEnCours = null;
 
@@ -43,13 +46,21 @@ async function chargerCache() {
   chargementEnCours = (async () => {
     const mongoose = require('mongoose');
     const nouvelle = new Map([['de', new Map()]]);
+    const liens = new Map();
     try {
       if (mongoose.connection.readyState === 1) {
         const Category = require('../models/Category');
-        const cats = await Category.find({}).select('name localizations.de.name').lean();
+        const cats = await Category.find({}).select('name slug localizations.de.name localizations.de.slug localizations.de.translatedAt').lean();
         for (const c of cats) {
-          const de = c.localizations && c.localizations.de && c.localizations.de.name;
-          if (c.name && de) nouvelle.get('de').set(normaliser(c.name), de);
+          const loc = (c.localizations && c.localizations.de) || {};
+          if (c.name && loc.name) nouvelle.get('de').set(normaliser(c.name), loc.name);
+          if (c.name && c.slug) {
+            liens.set(normaliser(c.name), {
+              slug: c.slug,
+              slugDe: loc.slug || c.slug,
+              deTraduite: !!loc.translatedAt,
+            });
+          }
         }
       }
     } catch (err) {
@@ -58,6 +69,7 @@ async function chargerCache() {
       console.warn('[categoryI18n] chargement impossible, on reste en francais :', err && err.message);
     }
     cache = nouvelle;
+    cacheLiens = liens;
     cacheExpire = Date.now() + CACHE_TTL_MS;
     return cache;
   })();
@@ -94,11 +106,42 @@ async function traduire(nomFr, langue) {
   return brut;
 }
 
+/**
+ * Chemin de la page catégorie correspondant à un nom de catégorie de fiche.
+ *
+ * La fiche construisait ce lien en « slugifiant » le nom français
+ * (« Mécatroniques & calculateurs » → /categorie/mecatroniques-calculateurs) :
+ * ce slug n'existe pas, le fil d'Ariane renvoyait une 404 — en français comme
+ * en allemand. On lit donc le VRAI slug du document Category, et sous /de le
+ * slug allemand (l'URL FR avec un slug allemand répondait 404 elle aussi).
+ * Chaîne vide si la catégorie est inconnue : l'appelant n'affiche pas de lien.
+ */
+async function lienCategorie(nomFr, langue) {
+  const brut = String(nomFr || '').trim();
+  if (!brut) return '';
+  await chargerCache();
+  const table = cacheLiens;
+  if (!table || !table.size) return '';
+
+  const segments = brut.includes('>') ? brut.split('>').map((x) => x.trim()).filter(Boolean) : [brut];
+  /* Nom complet d'abord, puis le segment TERMINAL : c'est lui qui porte la
+     catégorie la plus précise (« Transmission > Mécatronique »). */
+  const candidats = [brut, segments[segments.length - 1]];
+  for (const candidat of candidats) {
+    const fiche = table.get(normaliser(candidat));
+    if (!fiche) continue;
+    if (langue === 'de' && fiche.deTraduite) return '/de/categorie/' + encodeURIComponent(fiche.slugDe);
+    return '/categorie/' + encodeURIComponent(fiche.slug);
+  }
+  return '';
+}
+
 /** Pour les tests : vide le cache. */
 function viderCache() {
   cache = null;
+  cacheLiens = null;
   cacheExpire = 0;
   chargementEnCours = null;
 }
 
-module.exports = { traduire, chargerCache, viderCache };
+module.exports = { traduire, lienCategorie, chargerCache, viderCache };

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
   
 const { getPublicBaseUrlFromReq } = require('../services/categoryPublic');
 const { listLegalPages, getLegalPageBySlug } = require('../services/legalPages');
-const { buildHreflangSet, t } = require('../services/i18n');
+const { buildHreflangSet, t, redirectionFrGardantLaLangue } = require('../services/i18n');
 const brand = require('../config/brand');
 
 function getTrimmedString(value) {
@@ -116,7 +116,13 @@ async function getLegalPage(req, res, next) {
        français : promettre un document légal dans une langue et en servir une
        autre est pire que d'assumer le français. */
     if (isDe && !pageBrute.deTraduite) {
-      return res.redirect(301, '/legal/' + encodeURIComponent(pageBrute.slug));
+      /* …sans perdre la langue du visiteur. Le lien « AGB » obligatoire, juste
+         au-dessus de « Zahlungspflichtig bestellen », mène ici : ouvrir les
+         conditions — le geste que la loi demande — remettait la session en
+         « fr », et la commande était créée en français (Order.lang, locale
+         Mollie, confirmation et e-mails) pour un acheteur allemand. Le
+         paramètre n'est posé que pour un humain : un robot suit l'URL nue. */
+      return res.redirect(301, redirectionFrGardantLaLangue(req, '/legal/' + encodeURIComponent(pageBrute.slug)));
     }
     const page = pageBrute;
 

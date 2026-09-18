@@ -1,5 +1,15 @@
 <%- include('../partials/head') %>
 <%- include('../partials/header') %>
+<%# Page d'arrivée après le paiement : suit la langue du tunnel (allemand si la
+    commande a été passée depuis /de). %>
+<% const _de = typeof lang !== 'undefined' && lang === 'de'; %>
+<%# Support en allemand : /sav est une page de contenu française, dont le GET remet
+    la session en « fr » (commandes, panier, e-mails). Comme la barre latérale,
+    on envoie vers le contact allemand. %>
+<% const _supportHref = _de ? '/de/contact' : '/sav'; %>
+<%# Libellé d'adresse : « Livraison » est le libellé posé par défaut sur l'adresse
+    d'un invité ; en allemand il s'affichait tel quel, et sous « Rechnung ». %>
+<% const _libelleAdresse = (label, repli) => { const l = String(label || '').trim(); if (!l || (_de && /^livraison$/i.test(l))) return repli; return l; }; %>
 
 <main class="flex-1">
   <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-8">
@@ -16,21 +26,21 @@
                 <span class="material-symbols-outlined text-slate-500">arrow_back</span>
               </a>
               <div>
-                <div class="text-2xl md:text-3xl font-black text-slate-900">Commande <span class="text-slate-900"><%= order.number %></span></div>
-                <div class="mt-1 text-sm text-slate-500">Passée le <%= order.dateTime || order.date %></div>
+                <div class="text-2xl md:text-3xl font-black text-slate-900"><%= _de ? "Bestellung" : "Commande" %> <span class="text-slate-900"><%= order.number %></span></div>
+                <div class="mt-1 text-sm text-slate-500"><%= _de ? "Bestellt am" : "Passée le" %> <%= order.dateTime || order.date %></div>
               </div>
             </div>
 
             <div class="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
               <% if (order.hasInvoice && order.invoiceUrl) { %>
                 <a class="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 transition" href="<%= order.invoiceUrl %>" target="_blank" rel="noopener">
-                  Facture PDF
+                  <%= _de ? "Rechnung (PDF)" : "Facture PDF" %>
                 </a>
               <% } %>
 
               <form action="/compte/commandes/<%= order.id %>/racheter" method="POST">
                 <button class="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-xs font-black uppercase tracking-wider text-white hover:bg-red-700 transition" type="submit">
-                  Racheter les articles
+                  <%= _de ? "Artikel erneut bestellen" : "Racheter les articles" %>
                 </button>
               </form>
             </div>
@@ -43,8 +53,8 @@
                   <span class="material-symbols-outlined text-2xl text-white/80 mt-1"><%= order.statusIcon %></span>
                 <% } %>
                 <div>
-                  <div class="text-[10px] font-black uppercase tracking-widest text-white/70">Statut actuel</div>
-                  <div class="mt-2 text-xl md:text-2xl font-black"><%= order.statusTitle || ('Statut : ' + order.status) %></div>
+                  <div class="text-[10px] font-black uppercase tracking-widest text-white/70"><%= _de ? "Aktueller Status" : "Statut actuel" %></div>
+                  <div class="mt-2 text-xl md:text-2xl font-black"><%= order.statusTitle || ((_de ? 'Status: ' : 'Statut : ') + order.status) %></div>
                   <div class="mt-1 text-sm text-white/90"><%= order.statusSubtitle || '' %></div>
                 </div>
               </div>
@@ -53,38 +63,38 @@
                   <% if (order.paymentRetryUrl) { %>
                     <a class="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-amber-700 hover:bg-slate-50 transition" href="<%= order.paymentRetryUrl %>">
                       <span class="material-symbols-outlined mr-2 text-base">payment</span>
-                      Réessayer le paiement
+                      <%= _de ? "Zahlung erneut versuchen" : "Réessayer le paiement" %>
                     </a>
                   <% } %>
                 <% } else if (order.statusKey === 'cancelled') { %>
                   <form action="/compte/commandes/<%= order.id %>/racheter" method="POST">
                     <button class="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-red-700 hover:bg-slate-50 transition" type="submit">
                       <span class="material-symbols-outlined mr-2 text-base">refresh</span>
-                      Recommander
+                      <%= _de ? "Erneut bestellen" : "Recommander" %>
                     </button>
                   </form>
                 <% } else if (order.orderType === 'exchange_cloning') { %>
                   <% if (['pending_label', 'label_sent', 'client_piece_in_transit', 'client_piece_received', 'cloning_in_progress', 'cloning_done'].includes(order.cloningStatus) && order.statusKey !== 'shipped' && order.statusKey !== 'delivered') { %>
                     <a class="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-violet-700 hover:bg-slate-50 transition" href="/compte/commandes/<%= order.id %>/suivi">
                       <span class="material-symbols-outlined mr-2 text-base">timeline</span>
-                      Suivre le parcours
+                      <%= _de ? "Ablauf verfolgen" : "Suivre le parcours" %>
                     </a>
                   <% } else { %>
                     <a class="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-green-700 hover:bg-slate-50 transition" href="/compte/commandes/<%= order.id %>/suivi">
                       <span class="material-symbols-outlined mr-2 text-base">local_shipping</span>
-                      Suivre le colis
+                      <%= _de ? "Sendung verfolgen" : "Suivre le colis" %>
                     </a>
                   <% } %>
                   <% if (order.cloningStatus === 'client_piece_in_transit' && order.cloningTracking && order.cloningTracking.trackingUrl) { %>
                     <a class="inline-flex items-center justify-center rounded-xl bg-white/20 px-5 py-3 text-xs font-black uppercase tracking-wider text-white hover:bg-white/30 transition" href="<%= order.cloningTracking.trackingUrl %>" target="_blank" rel="noopener">
                       <span class="material-symbols-outlined mr-2 text-base">package_2</span>
-                      Suivre mon envoi
+                      <%= _de ? "Meine Sendung verfolgen" : "Suivre mon envoi" %>
                     </a>
                   <% } %>
                 <% } else { %>
                   <a class="inline-flex items-center justify-center rounded-xl bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-blue-700 hover:bg-slate-50 transition" href="/compte/commandes/<%= order.id %>/suivi">
                     <span class="material-symbols-outlined mr-2 text-base">location_on</span>
-                    Suivre le colis
+                    <%= _de ? "Sendung verfolgen" : "Suivre le colis" %>
                   </a>
                 <% } %>
               </div>
@@ -97,8 +107,8 @@
               <div class="px-6 py-4 bg-violet-50 border-b border-violet-100 flex items-center gap-3">
                 <span class="material-symbols-outlined text-violet-600">science</span>
                 <div>
-                  <div class="font-black text-violet-900">Service clonage 1:1</div>
-                  <div class="text-xs text-violet-600">Votre ancienne pièce est nécessaire pour programmer la nouvelle</div>
+                  <div class="font-black text-violet-900"><%= _de ? "Klon-Service 1:1" : "Service clonage 1:1" %></div>
+                  <div class="text-xs text-violet-600"><%= _de ? "Ihr Altteil wird benötigt, um das neue Teil zu programmieren" : "Votre ancienne pièce est nécessaire pour programmer la nouvelle" %></div>
                 </div>
               </div>
               <div class="p-6 space-y-6">
@@ -107,22 +117,22 @@
                     <div class="w-10 h-10 rounded-full mx-auto flex items-center justify-center <%= ['client_piece_received','cloning_in_progress','cloning_done'].includes(order.cloningStatus) || order.statusKey === 'shipped' || order.statusKey === 'delivered' ? 'bg-green-500 text-white' : (['label_sent','client_piece_in_transit'].includes(order.cloningStatus) ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-500') %>">
                       <span class="material-symbols-outlined text-lg">package_2</span>
                     </div>
-                    <div class="mt-2 text-xs font-black uppercase tracking-widest text-slate-500">Étape 1</div>
-                    <div class="mt-1 text-sm font-bold text-slate-900">Vous nous envoyez votre pièce</div>
+                    <div class="mt-2 text-xs font-black uppercase tracking-widest text-slate-500"><%= _de ? "Schritt 1" : "Étape 1" %></div>
+                    <div class="mt-1 text-sm font-bold text-slate-900"><%= _de ? "Sie senden uns Ihr Teil" : "Vous nous envoyez votre pièce" %></div>
                   </div>
                   <div class="rounded-xl border p-4 text-center <%= order.cloningStatus === 'cloning_done' || order.statusKey === 'shipped' || order.statusKey === 'delivered' ? 'border-green-200 bg-green-50' : (order.cloningStatus === 'cloning_in_progress' ? 'border-violet-300 bg-violet-50' : 'border-slate-200 bg-slate-50') %>">
                     <div class="w-10 h-10 rounded-full mx-auto flex items-center justify-center <%= order.cloningStatus === 'cloning_done' || order.statusKey === 'shipped' || order.statusKey === 'delivered' ? 'bg-green-500 text-white' : (order.cloningStatus === 'cloning_in_progress' ? 'bg-violet-500 text-white' : 'bg-slate-200 text-slate-500') %>">
                       <span class="material-symbols-outlined text-lg">memory</span>
                     </div>
-                    <div class="mt-2 text-xs font-black uppercase tracking-widest text-slate-500">Étape 2</div>
-                    <div class="mt-1 text-sm font-bold text-slate-900">Nous clonons les données</div>
+                    <div class="mt-2 text-xs font-black uppercase tracking-widest text-slate-500"><%= _de ? "Schritt 2" : "Étape 2" %></div>
+                    <div class="mt-1 text-sm font-bold text-slate-900"><%= _de ? "Wir klonen die Daten" : "Nous clonons les données" %></div>
                   </div>
                   <div class="rounded-xl border p-4 text-center <%= order.statusKey === 'shipped' || order.statusKey === 'delivered' ? 'border-green-200 bg-green-50' : 'border-slate-200 bg-slate-50' %>">
                     <div class="w-10 h-10 rounded-full mx-auto flex items-center justify-center <%= order.statusKey === 'shipped' || order.statusKey === 'delivered' ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500' %>">
                       <span class="material-symbols-outlined text-lg">local_shipping</span>
                     </div>
-                    <div class="mt-2 text-xs font-black uppercase tracking-widest text-slate-500">Étape 3</div>
-                    <div class="mt-1 text-sm font-bold text-slate-900">Nous vous expédions la pièce</div>
+                    <div class="mt-2 text-xs font-black uppercase tracking-widest text-slate-500"><%= _de ? "Schritt 3" : "Étape 3" %></div>
+                    <div class="mt-1 text-sm font-bold text-slate-900"><%= _de ? "Wir senden Ihnen das Teil" : "Nous vous expédions la pièce" %></div>
                   </div>
                 </div>
 
@@ -130,30 +140,31 @@
                   <div class="rounded-2xl border-2 border-orange-300 bg-orange-50 p-5">
                     <div class="flex items-center gap-2 mb-3">
                       <span class="material-symbols-outlined text-orange-600">priority_high</span>
-                      <div class="font-black text-orange-900">Action requise : envoyez votre ancienne pièce</div>
+                      <div class="font-black text-orange-900"><%= _de ? "Ihre Aktion ist erforderlich: Senden Sie uns Ihr Altteil" : "Action requise : envoyez votre ancienne pièce" %></div>
                     </div>
                     <div class="space-y-3 text-sm text-slate-700">
                       <div class="flex items-start gap-3">
                         <span class="material-symbols-outlined text-orange-500 flex-shrink-0">print</span>
-                        <div><strong>1. Imprimez l'étiquette</strong> que vous avez reçue par email.
+                        <div><% if (_de) { %><strong>1. Drucken Sie das Etikett aus</strong>, das Sie per E-Mail erhalten haben.<% } else { %><strong>1. Imprimez l'étiquette</strong> que vous avez reçue par email.<% } %>
                           <% if (order.cloningLabel) { %>
-                            <a href="<%= order.cloningLabel.url %>" class="text-primary font-bold hover:underline ml-1" target="_blank" rel="noopener">Retélécharger l'étiquette</a>
+                            <a href="<%= order.cloningLabel.url %>" class="text-primary font-bold hover:underline ml-1" target="_blank" rel="noopener"><%= _de ? "Etikett erneut herunterladen" : "Retélécharger l'étiquette" %></a>
                           <% } %>
                         </div>
                       </div>
                       <div class="flex items-start gap-3">
                         <span class="material-symbols-outlined text-orange-500 flex-shrink-0">inventory_2</span>
-                        <div><strong>2. Emballez soigneusement</strong> votre pièce dans un sachet antistatique, entourée de mousse ou papier bulle, dans un carton rigide.</div>
+                        <div><% if (_de) { %><strong>2. Verpacken Sie Ihr Teil sorgfältig</strong> in einem Antistatikbeutel, mit Schaumstoff oder Luftpolsterfolie, in einem stabilen Karton.<% } else { %><strong>2. Emballez soigneusement</strong> votre pièce dans un sachet antistatique, entourée de mousse ou papier bulle, dans un carton rigide.<% } %></div>
                       </div>
                       <div class="flex items-start gap-3">
                         <span class="material-symbols-outlined text-orange-500 flex-shrink-0">local_shipping</span>
-                        <div><strong>3. Collez l'étiquette</strong> UPS sur le carton et déposez-le dans un
-                          <a href="https://www.ups.com/dropoff?loc=fr_FR" class="text-primary font-bold hover:underline" target="_blank" rel="noopener">Point Relais UPS</a>.
+                        <div><% if (_de) { %><strong>3. Kleben Sie das UPS-Etikett</strong> auf den Karton und geben Sie ihn in einem
+                          <a href="https://www.ups.com/dropoff?loc=de_DE" class="text-primary font-bold hover:underline" target="_blank" rel="noopener">UPS Access Point</a> ab.<% } else { %><strong>3. Collez l'étiquette</strong> UPS sur le carton et déposez-le dans un
+                          <a href="https://www.ups.com/dropoff?loc=fr_FR" class="text-primary font-bold hover:underline" target="_blank" rel="noopener">Point Relais UPS</a>.<% } %>
                         </div>
                       </div>
                     </div>
                     <% if (order.cloningDates.labelSentAt) { %>
-                      <div class="mt-3 text-xs text-slate-500">Étiquette envoyée le <%= order.cloningDates.labelSentAt %></div>
+                      <div class="mt-3 text-xs text-slate-500"><%= _de ? "Etikett gesendet am" : "Étiquette envoyée le" %> <%= order.cloningDates.labelSentAt %></div>
                     <% } %>
                   </div>
                 <% } %>
@@ -162,12 +173,12 @@
                   <div class="rounded-xl border border-blue-200 bg-blue-50 p-4">
                     <div class="flex items-center justify-between">
                       <div>
-                        <div class="text-xs font-black uppercase tracking-widest text-blue-500">Suivi de votre envoi</div>
+                        <div class="text-xs font-black uppercase tracking-widest text-blue-500"><%= _de ? "Verfolgung Ihrer Sendung" : "Suivi de votre envoi" %></div>
                         <div class="mt-1 font-bold text-slate-900"><%= order.cloningTracking.carrier || 'UPS' %> — <%= order.cloningTracking.trackingNumber %></div>
                       </div>
                       <% if (order.cloningTracking.trackingUrl) { %>
                         <a class="inline-flex items-center gap-1 rounded-xl bg-blue-600 px-4 py-2 text-xs font-black text-white hover:bg-blue-700 transition" href="<%= order.cloningTracking.trackingUrl %>" target="_blank" rel="noopener">
-                          <span class="material-symbols-outlined text-sm">open_in_new</span>Suivre
+                          <span class="material-symbols-outlined text-sm">open_in_new</span><%= _de ? "Verfolgen" : "Suivre" %>
                         </a>
                       <% } %>
                     </div>
@@ -180,10 +191,10 @@
                       <span class="material-symbols-outlined text-violet-600 animate-pulse">memory</span>
                     </div>
                     <div>
-                      <div class="font-black text-violet-900">Clonage en cours</div>
-                      <div class="text-sm text-slate-600">Nos techniciens lisent les données de votre pièce et les programment sur votre nouvelle mécatronique. Délai moyen : 2-5 jours ouvrés.</div>
+                      <div class="font-black text-violet-900"><%= _de ? "Klonen läuft" : "Clonage en cours" %></div>
+                      <div class="text-sm text-slate-600"><%= _de ? "Unsere Techniker lesen die Daten Ihres Teils aus und programmieren sie auf Ihre neue Mechatronik. Durchschnittliche Dauer: 2–5 Werktage." : "Nos techniciens lisent les données de votre pièce et les programment sur votre nouvelle mécatronique. Délai moyen : 2-5 jours ouvrés." %></div>
                       <% if (order.cloningDates.cloningStartedAt) { %>
-                        <div class="mt-1 text-xs text-slate-500">Démarré le <%= order.cloningDates.cloningStartedAt %></div>
+                        <div class="mt-1 text-xs text-slate-500"><%= _de ? "Gestartet am" : "Démarré le" %> <%= order.cloningDates.cloningStartedAt %></div>
                       <% } %>
                     </div>
                   </div>
@@ -195,8 +206,8 @@
                       <span class="material-symbols-outlined text-green-600">check_circle</span>
                     </div>
                     <div>
-                      <div class="font-black text-green-900">Clonage terminé avec succès !</div>
-                      <div class="text-sm text-slate-600">Votre pièce programmée sera expédiée sous 24-48h. Vous recevrez un email avec le numéro de suivi.</div>
+                      <div class="font-black text-green-900"><%= _de ? "Klonen erfolgreich abgeschlossen!" : "Clonage terminé avec succès !" %></div>
+                      <div class="text-sm text-slate-600"><%= _de ? "Ihr programmiertes Teil wird innerhalb von 24–48 Std. versendet. Sie erhalten eine E-Mail mit der Sendungsnummer." : "Votre pièce programmée sera expédiée sous 24-48h. Vous recevrez un email avec le numéro de suivi." %></div>
                     </div>
                   </div>
                 <% } %>
@@ -207,12 +218,12 @@
                       <span class="material-symbols-outlined text-red-600">error</span>
                     </div>
                     <div>
-                      <div class="font-black text-red-900">Un problème a été détecté</div>
-                      <div class="text-sm text-slate-700 mt-1">Nos techniciens ont rencontré un problème lors du clonage de votre pièce. Notre équipe vous contactera rapidement pour discuter des options disponibles.</div>
+                      <div class="font-black text-red-900"><%= _de ? "Es wurde ein Problem festgestellt" : "Un problème a été détecté" %></div>
+                      <div class="text-sm text-slate-700 mt-1"><%= _de ? "Beim Klonen Ihres Teils ist ein Problem aufgetreten. Unser Team meldet sich schnell bei Ihnen, um die möglichen Lösungen zu besprechen." : "Nos techniciens ont rencontré un problème lors du clonage de votre pièce. Notre équipe vous contactera rapidement pour discuter des options disponibles." %></div>
                       <div class="mt-3">
-                        <a class="inline-flex items-center gap-1 rounded-xl bg-primary px-4 py-2 text-xs font-black text-white hover:bg-red-700 transition" href="/sav">
+                        <a class="inline-flex items-center gap-1 rounded-xl bg-primary px-4 py-2 text-xs font-black text-white hover:bg-red-700 transition" href="<%= _supportHref %>">
                           <span class="material-symbols-outlined text-sm">support_agent</span>
-                          Contacter le support
+                          <%= _de ? "Kundenservice kontaktieren" : "Contacter le support" %>
                         </a>
                       </div>
                     </div>
@@ -225,7 +236,7 @@
           <%/* ═══════ DOCUMENTS TÉLÉCHARGEABLES ═══════ */ %>
           <% if (order.cloningLabel || order.returnLabel || order.shippingLabel) { %>
             <div class="mt-8 rounded-2xl border border-slate-200 p-6">
-              <div class="text-[10px] font-black uppercase tracking-widest text-slate-400">Vos documents</div>
+              <div class="text-[10px] font-black uppercase tracking-widest text-slate-400"><%= _de ? "Ihre Dokumente" : "Vos documents" %></div>
               <div class="mt-4 space-y-3">
                 <% if (order.cloningLabel) { %>
                   <a href="<%= order.cloningLabel.url %>" target="_blank" rel="noopener" class="flex items-center gap-4 p-4 rounded-xl border border-purple-200 bg-purple-50 hover:bg-purple-100 transition">
@@ -233,10 +244,10 @@
                       <span class="material-symbols-outlined text-purple-600">science</span>
                     </div>
                     <div class="flex-1 min-w-0">
-                      <div class="text-sm font-black text-purple-900">Étiquette de récupération (clonage)</div>
-                      <div class="text-xs text-purple-600">Imprimez et collez sur votre colis pour nous envoyer votre pièce</div>
+                      <div class="text-sm font-black text-purple-900"><%= _de ? "Etikett für die Rücksendung (Klonen)" : "Étiquette de récupération (clonage)" %></div>
+                      <div class="text-xs text-purple-600"><%= _de ? "Ausdrucken und auf Ihr Paket kleben, um uns Ihr Teil zu senden" : "Imprimez et collez sur votre colis pour nous envoyer votre pièce" %></div>
                       <% if (order.cloningLabel.uploadedAt) { %>
-                        <div class="text-[10px] text-slate-400 mt-1">Ajoutée le <%= order.cloningLabel.uploadedAt %></div>
+                        <div class="text-[10px] text-slate-400 mt-1"><%= _de ? "Hinzugefügt am" : "Ajoutée le" %> <%= order.cloningLabel.uploadedAt %></div>
                       <% } %>
                     </div>
                     <span class="material-symbols-outlined text-purple-400 flex-shrink-0">download</span>
@@ -248,10 +259,10 @@
                       <span class="material-symbols-outlined text-orange-600">assignment_return</span>
                     </div>
                     <div class="flex-1 min-w-0">
-                      <div class="text-sm font-black text-orange-900">Bon de retour (consigne)</div>
-                      <div class="text-xs text-orange-600">Pour retourner votre ancienne pièce dans le délai imparti</div>
+                      <div class="text-sm font-black text-orange-900"><%= _de ? "Rücksendeschein (Pfand)" : "Bon de retour (consigne)" %></div>
+                      <div class="text-xs text-orange-600"><%= _de ? "Für die fristgerechte Rücksendung Ihres Altteils" : "Pour retourner votre ancienne pièce dans le délai imparti" %></div>
                       <% if (order.returnLabel.uploadedAt) { %>
-                        <div class="text-[10px] text-slate-400 mt-1">Ajouté le <%= order.returnLabel.uploadedAt %></div>
+                        <div class="text-[10px] text-slate-400 mt-1"><%= _de ? "Hinzugefügt am" : "Ajouté le" %> <%= order.returnLabel.uploadedAt %></div>
                       <% } %>
                     </div>
                     <span class="material-symbols-outlined text-orange-400 flex-shrink-0">download</span>
@@ -263,10 +274,10 @@
                       <span class="material-symbols-outlined text-blue-600">local_shipping</span>
                     </div>
                     <div class="flex-1 min-w-0">
-                      <div class="text-sm font-black text-blue-900">Étiquette d'expédition</div>
-                      <div class="text-xs text-blue-600">Suivi de l'envoi de votre commande</div>
+                      <div class="text-sm font-black text-blue-900"><%= _de ? "Versandetikett" : "Étiquette d'expédition" %></div>
+                      <div class="text-xs text-blue-600"><%= _de ? "Sendungsverfolgung Ihrer Bestellung" : "Suivi de l'envoi de votre commande" %></div>
                       <% if (order.shippingLabel.uploadedAt) { %>
-                        <div class="text-[10px] text-slate-400 mt-1">Ajoutée le <%= order.shippingLabel.uploadedAt %></div>
+                        <div class="text-[10px] text-slate-400 mt-1"><%= _de ? "Hinzugefügt am" : "Ajoutée le" %> <%= order.shippingLabel.uploadedAt %></div>
                       <% } %>
                     </div>
                     <span class="material-symbols-outlined text-blue-400 flex-shrink-0">download</span>
@@ -280,13 +291,28 @@
             <div class="mt-8 rounded-2xl border border-slate-200 p-6">
               <div class="flex items-start justify-between gap-6">
                 <div>
-                  <div class="text-[10px] font-black uppercase tracking-widest text-slate-400">Consigne (ancienne pièce)</div>
-                  <div class="mt-2 font-black text-slate-900">Retour obligatoire pour conserver la garantie</div>
-                  <div class="mt-1 text-sm text-slate-600">La consigne n’est pas encaissée. Si l’ancienne pièce n’est pas reçue avant l’échéance, la garantie est annulée et le montant devient dû.</div>
+                  <div class="text-[10px] font-black uppercase tracking-widest text-slate-400"><%= _de ? "Pfand (Altteil)" : "Consigne (ancienne pièce)" %></div>
+                  <%# Le texte dépend de l'ENCAISSEMENT (lines[].charged) : une consigne payée à
+                      la commande était présentée comme « non encaissée », juste après le
+                      paiement qui venait de la débiter. %>
+                  <%# La seule conséquence annoncée AVANT la commande (fiche, carte,
+                      panier, livraison, paiement) est la FACTURATION du montant :
+                      « sonst berechnen wir X € ». La perte de la garantie n'y figure
+                      nulle part et n'est la règle appliquée ni par la FAQ ni par
+                      l'e-mail de consigne — elle apparaissait ici, après le paiement.
+                      On dit donc la même chose des deux côtés. %>
+                  <% if (order.consigne.hasUncharged !== false) { %>
+                    <div class="mt-2 font-black text-slate-900"><%= _de ? "Altteilrückgabe erforderlich" : "Retour de l’ancienne pièce obligatoire" %></div>
+                    <div class="mt-1 text-sm text-slate-600" data-consigne-uncharged><%= _de ? "Das Pfand wurde nicht berechnet. Trifft das Altteil nicht vor Fristende bei uns ein, berechnen wir den Betrag." : "La consigne n’est pas encaissée. Si l’ancienne pièce n’est pas reçue avant l’échéance, son montant vous sera facturé." %></div>
+                  <% } %>
+                  <% if (order.consigne.hasCharged) { %>
+                    <div class="mt-2 font-black text-slate-900"><%= _de ? "Rücksendung des Altteils für die Pfanderstattung" : "Retour de l’ancienne pièce pour le remboursement de la consigne" %></div>
+                    <div class="mt-1 text-sm text-slate-600" data-consigne-charged><%= _de ? ("Das Pfand von " + order.consigne.chargedTotal + " wurde bei der Bestellung berechnet. Es wird vollständig erstattet, wenn Ihr Altteil vor Fristende bei uns eintrifft.") : ("La consigne de " + order.consigne.chargedTotal + " a été encaissée à la commande. Elle vous est remboursée intégralement si l’ancienne pièce nous parvient avant l’échéance.") %></div>
+                  <% } %>
                 </div>
                 <% if (order.consigne.hasOverdue) { %>
                   <div class="text-right">
-                    <div class="text-xs font-black uppercase tracking-widest text-red-700">En retard</div>
+                    <div class="text-xs font-black uppercase tracking-widest text-red-700"><%= _de ? "Überfällig" : "En retard" %></div>
                     <div class="mt-2 font-black text-red-700"><%= order.consigne.totalDue %></div>
                   </div>
                 <% } %>
@@ -298,20 +324,25 @@
                     <div class="flex items-start justify-between gap-4">
                       <div class="min-w-0">
                         <div class="font-black text-slate-900 truncate"><%= l.name %></div>
-                        <% if (l.sku) { %><div class="mt-1 text-xs text-slate-500">Réf : <span class="font-black text-slate-700"><%= l.sku %></span></div><% } %>
-                        <div class="mt-2 text-xs text-slate-600">Quantité : <span class="font-black text-slate-700"><%= l.quantity %></span> • Total consigne : <span class="font-black text-slate-700"><%= l.total %></span></div>
+                        <% if (l.sku) { %><div class="mt-1 text-xs text-slate-500"><%= _de ? "Art.-Nr.:" : "Réf :" %> <span class="font-black text-slate-700"><%= l.sku %></span></div><% } %>
+                        <div class="mt-2 text-xs text-slate-600"><%= _de ? "Menge:" : "Quantité :" %> <span class="font-black text-slate-700"><%= l.quantity %></span> • <%= _de ? "Pfand gesamt:" : "Total consigne :" %> <span class="font-black text-slate-700"><%= l.total %></span></div>
                         <% if (l.isReceived) { %>
-                          <div class="mt-2 text-xs font-black uppercase tracking-widest text-green-700">Reçue</div>
+                          <div class="mt-2 text-xs font-black uppercase tracking-widest text-green-700"><%= _de ? "Eingegangen" : "Reçue" %><% if (l.charged && l.isRefunded) { %> • <%= _de ? "Pfand erstattet" : "Consigne remboursée" %><% } %></div>
+                        <% } else if (l.isOverdue && l.charged) { %>
+                          <%# Caution déjà encaissée : rien n'est dû, seul le remboursement est en jeu. %>
+                          <div class="mt-2 text-xs font-black uppercase tracking-widest text-red-700"><%= _de ? "Rückgabefrist überschritten" : "Délai de retour dépassé" %></div>
                         <% } else if (l.isOverdue) { %>
-                          <div class="mt-2 text-xs font-black uppercase tracking-widest text-red-700">En retard (garantie annulée)</div>
+                          <div class="mt-2 text-xs font-black uppercase tracking-widest text-red-700"><%= _de ? "Überfällig (Betrag fällig)" : "En retard (montant dû)" %></div>
                         <% } else if (l.daysLeft !== null) { %>
-                          <div class="mt-2 text-xs font-black uppercase tracking-widest text-amber-800">Jours restants : <%= l.daysLeft %></div>
+                          <div class="mt-2 text-xs font-black uppercase tracking-widest text-amber-800"><%= _de ? "Verbleibende Tage:" : "Jours restants :" %> <%= l.daysLeft %></div>
                         <% } else { %>
-                          <div class="mt-2 text-xs font-black uppercase tracking-widest text-slate-700">Échéance calculée après livraison</div>
+                          <%# Le délai en jours est affiché partout ailleurs (fiche, panier,
+                              livraison, paiement) : la page commande le taisait. %>
+                          <div class="mt-2 text-xs font-black uppercase tracking-widest text-slate-700"><%= _de ? ("Frist beginnt nach der Zustellung" + (l.delayDays ? " (" + l.delayDays + " Tage)" : "")) : ("Échéance calculée après livraison" + (l.delayDays ? " (" + l.delayDays + " jours)" : "")) %></div>
                         <% } %>
                       </div>
                       <div class="text-right">
-                        <% if (l.dueAt) { %><div class="text-xs text-slate-500">Échéance</div><div class="text-xs font-black text-slate-900"><%= l.dueAt %></div><% } %>
+                        <% if (l.dueAt) { %><div class="text-xs text-slate-500"><%= _de ? "Frist" : "Échéance" %></div><div class="text-xs font-black text-slate-900"><%= l.dueAt %></div><% } %>
                       </div>
                     </div>
                   </div>
@@ -320,8 +351,8 @@
 
               <% if (order.consigne.hasOverdue) { %>
                 <div class="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
-                  <div class="font-black">Montant de consigne dû : <%= order.consigne.totalDue %></div>
-                  <div class="mt-1 text-xs">Contactez-nous si vous avez besoin d’aide pour le renvoi.</div>
+                  <div class="font-black"><%= _de ? "Fälliger Pfandbetrag:" : "Montant de consigne dû :" %> <%= order.consigne.totalDue %></div>
+                  <div class="mt-1 text-xs"><%= _de ? "Kontaktieren Sie uns, wenn Sie Hilfe bei der Rücksendung benötigen." : "Contactez-nous si vous avez besoin d’aide pour le renvoi." %></div>
                 </div>
               <% } %>
             </div>
@@ -331,48 +362,48 @@
             <div class="rounded-2xl border border-slate-200 p-6">
               <div class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
                 <span class="material-symbols-outlined text-base text-primary">local_shipping</span>
-                Livraison
+                <%= _de ? "Lieferung" : "Livraison" %>
               </div>
               <% if (order.shippingAddress) { %>
                 <div class="mt-4">
-                  <div class="font-black text-slate-900"><%= order.shippingMethodLabel || 'Livraison' %></div>
+                  <div class="font-black text-slate-900"><%= order.shippingMethodLabel || (_de ? 'Lieferung' : 'Livraison') %></div>
                   <% if (order.shippingAddress.fullName) { %><div class="mt-1 text-sm font-semibold text-slate-700"><%= order.shippingAddress.fullName %></div><% } %>
                   <div class="mt-2 text-sm text-slate-600"><%= order.shippingAddress.line1 %></div>
                   <% if (order.shippingAddress.line2) { %><div class="text-sm text-slate-600"><%= order.shippingAddress.line2 %></div><% } %>
                   <div class="text-sm text-slate-600"><%= order.shippingAddress.postalCode %> <%= order.shippingAddress.city %></div>
-                  <div class="text-sm text-slate-600"><%= order.shippingAddress.country %></div>
-                  <% if (order.shippingAddress.phone) { %><div class="mt-1 text-xs text-slate-500">Téléphone : <%= order.shippingAddress.phone %></div><% } %>
+                  <div class="text-sm text-slate-600"><%= libellePays(order.shippingAddress.country) %></div>
+                  <% if (order.shippingAddress.phone) { %><div class="mt-1 text-xs text-slate-500"><%= _de ? "Telefon:" : "Téléphone :" %> <%= order.shippingAddress.phone %></div><% } %>
                 </div>
               <% } else { %>
-                <div class="mt-4 text-sm text-slate-600">Non renseignée</div>
+                <div class="mt-4 text-sm text-slate-600"><%= _de ? "Nicht angegeben" : "Non renseignée" %></div>
               <% } %>
             </div>
 
             <div class="rounded-2xl border border-slate-200 p-6">
               <div class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400">
                 <span class="material-symbols-outlined text-base text-primary">receipt_long</span>
-                Facturation
+                <%= _de ? "Rechnung" : "Facturation" %>
               </div>
               <% if (order.billingAddress) { %>
                 <div class="mt-4">
-                  <div class="font-black text-slate-900"><%= order.billingAddress.label || 'Adresse de facturation' %></div>
+                  <div class="font-black text-slate-900"><%= _libelleAdresse(order.billingAddress.label, _de ? 'Rechnungsadresse' : 'Adresse de facturation') %></div>
                   <% if (order.billingAddress.fullName) { %><div class="mt-1 text-sm font-semibold text-slate-700"><%= order.billingAddress.fullName %></div><% } %>
                   <div class="mt-2 text-sm text-slate-600"><%= order.billingAddress.line1 %></div>
                   <% if (order.billingAddress.line2) { %><div class="text-sm text-slate-600"><%= order.billingAddress.line2 %></div><% } %>
                   <div class="text-sm text-slate-600"><%= order.billingAddress.postalCode %> <%= order.billingAddress.city %></div>
-                  <div class="text-sm text-slate-600"><%= order.billingAddress.country %></div>
-                  <% if (order.billingAddress.phone) { %><div class="mt-1 text-xs text-slate-500">Téléphone : <%= order.billingAddress.phone %></div><% } %>
+                  <div class="text-sm text-slate-600"><%= libellePays(order.billingAddress.country) %></div>
+                  <% if (order.billingAddress.phone) { %><div class="mt-1 text-xs text-slate-500"><%= _de ? "Telefon:" : "Téléphone :" %> <%= order.billingAddress.phone %></div><% } %>
                 </div>
               <% } else { %>
-                <div class="mt-4 text-sm text-slate-600">Non renseignée</div>
+                <div class="mt-4 text-sm text-slate-600"><%= _de ? "Nicht angegeben" : "Non renseignée" %></div>
               <% } %>
             </div>
           </div>
 
           <div class="mt-8 rounded-2xl border border-slate-200 overflow-hidden">
             <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
-              <div class="font-black text-slate-900">Articles commandés (<%= order.items ? order.items.length : 0 %>)</div>
-              <div class="text-xs font-black uppercase tracking-widest text-slate-400">Détail</div>
+              <div class="font-black text-slate-900"><%= _de ? "Bestellte Artikel" : "Articles commandés" %> (<%= order.items ? order.items.length : 0 %>)</div>
+              <div class="text-xs font-black uppercase tracking-widest text-slate-400"><%= _de ? "Details" : "Détail" %></div>
             </div>
 
             <% if (order.items && order.items.length) { %>
@@ -392,24 +423,24 @@
                         <div class="min-w-0">
                           <div class="font-black text-slate-900 truncate"><%= it.name %></div>
                           <% if (it.sku) { %>
-                            <div class="mt-1 text-xs text-slate-500">Réf : <%= it.sku %></div>
+                            <div class="mt-1 text-xs text-slate-500"><%= _de ? "Art.-Nr.:" : "Réf :" %> <%= it.sku %></div>
                           <% } %>
                           <% if (it.optionsSummary) { %>
                             <div class="mt-1 text-xs text-slate-500"><%= it.optionsSummary %></div>
                           <% } %>
                           <div class="mt-2 flex items-center gap-2">
                             <% if (it.inStock === true) { %>
-                              <span class="inline-flex items-center rounded-full bg-green-50 text-green-700 px-3 py-1 text-[10px] font-black uppercase tracking-widest">En stock</span>
+                              <span class="inline-flex items-center rounded-full bg-green-50 text-green-700 px-3 py-1 text-[10px] font-black uppercase tracking-widest"><%= _de ? "Auf Lager" : "En stock" %></span>
                             <% } else if (it.inStock === false) { %>
-                              <span class="inline-flex items-center rounded-full bg-amber-50 text-amber-800 px-3 py-1 text-[10px] font-black uppercase tracking-widest">Stock limité</span>
+                              <span class="inline-flex items-center rounded-full bg-amber-50 text-amber-800 px-3 py-1 text-[10px] font-black uppercase tracking-widest"><%= _de ? "Begrenzter Bestand" : "Stock limité" %></span>
                             <% } %>
-                            <span class="text-xs text-slate-500">Quantité : <span class="font-black text-slate-700"><%= it.quantity %></span></span>
+                            <span class="text-xs text-slate-500"><%= _de ? "Menge:" : "Quantité :" %> <span class="font-black text-slate-700"><%= it.quantity %></span></span>
                           </div>
                         </div>
 
                         <div class="text-right flex-shrink-0">
                           <div class="font-black text-slate-900"><%= it.lineTotal %></div>
-                          <div class="mt-1 text-xs text-slate-500">PU : <%= it.unitPrice %></div>
+                          <div class="mt-1 text-xs text-slate-500"><%= _de ? "Stückpreis:" : "PU :" %> <%= it.unitPrice %></div>
                         </div>
                       </div>
                     </div>
@@ -417,65 +448,90 @@
                 <% }) %>
               </div>
             <% } else { %>
-              <div class="p-6 text-slate-600">Aucun article.</div>
+              <div class="p-6 text-slate-600"><%= _de ? "Keine Artikel." : "Aucun article." %></div>
             <% } %>
           </div>
 
           <div class="mt-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
             <div class="lg:col-span-7 rounded-2xl border border-slate-200 p-6 bg-slate-50">
-              <div class="font-black text-slate-900">Besoin d'aide avec cette commande ?</div>
-              <div class="mt-2 text-sm text-slate-600">Si vous rencontrez un problème, notre support peut vous aider rapidement.</div>
+              <div class="font-black text-slate-900"><%= _de ? "Brauchen Sie Hilfe zu dieser Bestellung?" : "Besoin d'aide avec cette commande ?" %></div>
+              <div class="mt-2 text-sm text-slate-600"><%= _de ? "Bei einem Problem hilft Ihnen unser Kundenservice schnell weiter." : "Si vous rencontrez un problème, notre support peut vous aider rapidement." %></div>
               <div class="mt-5 flex flex-col sm:flex-row gap-3">
-                <a class="inline-flex items-center justify-center rounded-xl bg-white border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 transition" href="/sav">
-                  Contacter le support
+                <a class="inline-flex items-center justify-center rounded-xl bg-white border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-50 transition" href="<%= _supportHref %>">
+                  <%= _de ? "Kundenservice kontaktieren" : "Contacter le support" %>
                 </a>
               </div>
             </div>
 
             <div class="lg:col-span-5 rounded-2xl border border-slate-200 p-6">
+              <%# Le bloc doit S'ADDITIONNER jusqu'au total : articles + port + consigne.
+                  Il commençait par « Sous-total HT », qui contient DÉJÀ le port net,
+                  puis réaffichait le port TTC : les lignes affichées faisaient 99 €
+                  de plus que le total annoncé. On suit maintenant l'ordre de la
+                  facture PDF (invoicePdf.js) — total d'abord, décomposition HT/TVA
+                  ensuite. %>
               <div class="space-y-3 text-sm">
                 <div class="flex items-center justify-between">
-                  <div class="text-slate-500">Sous-total HT</div>
-                  <div class="font-black text-slate-900"><%= order.ht %></div>
-                </div>
-                <div class="flex items-center justify-between">
-                  <div class="text-slate-500">TVA (20%)</div>
-                  <div class="font-black text-slate-900"><%= order.vat %></div>
+                  <div class="text-slate-500"><%= _de ? "Zwischensumme (Artikel)" : "Sous-total articles" %></div>
+                  <div class="font-black text-slate-900"><%= order.itemsSubtotal %></div>
                 </div>
                 <% if (typeof order.clientDiscountCents !== 'undefined' && order.clientDiscountCents > 0) { %>
                   <div class="flex items-center justify-between">
-                    <div class="text-slate-500">Remise compte (<%= typeof order.clientDiscountPercent !== 'undefined' ? String(order.clientDiscountPercent).replace('.', ',') : '' %>%)</div>
+                    <div class="text-slate-500"><%= _de ? "Kundenrabatt" : "Remise compte" %> (<%= typeof order.clientDiscountPercent !== 'undefined' ? String(order.clientDiscountPercent).replace('.', ',') : '' %>%)</div>
                     <div class="font-black text-slate-900">- <%= (order.clientDiscountCents / 100).toFixed(2).replace('.', ',') %> €</div>
                   </div>
                 <% } %>
                 <% if (typeof order.promoDiscountCents !== 'undefined' && order.promoDiscountCents > 0) { %>
                   <div class="flex items-center justify-between">
-                    <div class="text-slate-500">Code promo <%= order.promoCode ? '(' + order.promoCode + ')' : '' %></div>
+                    <div class="text-slate-500"><%= _de ? "Gutscheincode" : "Code promo" %> <%= order.promoCode ? '(' + order.promoCode + ')' : '' %></div>
                     <div class="font-black text-slate-900">- <%= (order.promoDiscountCents / 100).toFixed(2).replace('.', ',') %> €</div>
                   </div>
                 <% } %>
                 <% if ((typeof order.clientDiscountCents !== 'undefined' && order.clientDiscountCents > 0) || (typeof order.promoDiscountCents !== 'undefined' && order.promoDiscountCents > 0)) { %>
                   <div class="flex items-center justify-between">
-                    <div class="text-slate-500">Sous-total après remise</div>
+                    <div class="text-slate-500"><%= _de ? "Zwischensumme nach Rabatt" : "Sous-total après remise" %></div>
                     <div class="font-black text-slate-900"><%= typeof order.itemsTotalAfterDiscount !== 'undefined' ? order.itemsTotalAfterDiscount : order.itemsSubtotal %></div>
                   </div>
                 <% } %>
                 <div class="flex items-center justify-between">
-                  <div class="text-slate-500">Frais de livraison (<%= order.shippingMethodLabel || 'Livraison' %>)</div>
+                  <div class="text-slate-500"><%= _de ? "Versandkosten" : "Frais de livraison" %> (<%= order.shippingMethodLabel || (_de ? 'Lieferung' : 'Livraison') %>)</div>
                   <div class="font-black <%= order.shippingCostCents === 0 ? 'text-green-600' : 'text-slate-900' %>">
-                    <%= order.shippingCostCents === 0 ? 'OFFERT' : order.shippingCost %>
+                    <%= order.shippingCostCents === 0 ? (_de ? 'KOSTENLOS' : 'OFFERT') : order.shippingCost %>
                   </div>
                 </div>
+                <%# Consigne encaissée : hors base TVA (HT et TVA ci-dessus portent sur le reste,
+                    comme la facture PDF). Sans cette ligne, les totaux ne tombaient pas juste. %>
+                <% if (typeof order.consigneChargedCents !== 'undefined' && order.consigneChargedCents > 0) { %>
+                  <div class="flex items-center justify-between" data-total-consigne>
+                    <div class="text-slate-500"><%= _de ? "Pfand (ohne MwSt.)" : "Consigne (hors TVA)" %></div>
+                    <div class="font-black text-slate-900"><%= order.consigneCharged %></div>
+                  </div>
+                <% } %>
               </div>
 
               <div class="mt-6 pt-6 border-t border-slate-200 flex items-center justify-between">
-                <div class="font-black text-slate-900">Total TTC</div>
+                <div class="font-black text-slate-900"><%= _de ? "Gesamt inkl. MwSt." : "Total TTC" %></div>
                 <div class="text-primary font-black text-2xl"><%= order.total %></div>
+              </div>
+
+              <%# Décomposition, pas des termes d'addition : la consigne encaissée est
+                  une caution remboursable, hors base TVA (comme la facture PDF). %>
+              <div class="mt-3 space-y-1 text-xs text-slate-500" data-total-decomposition>
+                <div class="flex items-center justify-between">
+                  <div><%= (typeof order.consigneChargedCents !== 'undefined' && order.consigneChargedCents > 0)
+                    ? (_de ? "davon netto (ohne Pfand)" : "dont HT (hors consigne)")
+                    : (_de ? "davon netto" : "dont HT") %></div>
+                  <div class="font-bold text-slate-700"><%= order.ht %></div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <div><%= _de ? "MwSt. (20 %)" : "TVA (20%)" %></div>
+                  <div class="font-bold text-slate-700"><%= order.vat %></div>
+                </div>
               </div>
 
               <form action="/compte/commandes/<%= order.id %>/racheter" class="mt-6" method="POST">
                 <button class="w-full inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-xs font-black uppercase tracking-wider text-white hover:bg-red-700 transition" type="submit">
-                  Racheter les articles
+                  <%= _de ? "Artikel erneut bestellen" : "Racheter les articles" %>
                 </button>
               </form>
             </div>
@@ -485,10 +541,10 @@
             <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
               <div class="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
                 <span class="material-symbols-outlined text-primary">description</span>
-                <div class="font-black text-slate-900">Documents techniques</div>
+                <div class="font-black text-slate-900"><%= _de ? "Technische Unterlagen" : "Documents techniques" %></div>
               </div>
               <div class="p-6">
-                <p class="text-xs text-slate-500 mb-3">À consulter <strong>avant le montage</strong> (manuel, prérequis, conditions).</p>
+                <p class="text-xs text-slate-500 mb-3"><% if (_de) { %>Bitte <strong>vor dem Einbau</strong> lesen (Anleitung, Voraussetzungen, Bedingungen).<% } else { %>À consulter <strong>avant le montage</strong> (manuel, prérequis, conditions).<% } %></p>
                 <div class="space-y-2">
                   <% technicalDocs.forEach((d) => { %>
                     <a href="<%= d.url %>" target="_blank" rel="noopener" class="flex items-center gap-3 rounded-xl border border-slate-200 hover:border-primary hover:bg-slate-50 transition px-4 py-3">
@@ -504,8 +560,8 @@
 
           <% if (!dbConnected) { %>
             <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
-              <div class="font-bold">Mode démo</div>
-              <div class="mt-1 text-sm">La base de données est indisponible : impossible d’afficher le détail réel.</div>
+              <div class="font-bold"><%= _de ? "Demomodus" : "Mode démo" %></div>
+              <div class="mt-1 text-sm"><%= _de ? "Die Datenbank ist nicht verfügbar: Die Bestelldetails können nicht angezeigt werden." : "La base de données est indisponible : impossible d’afficher le détail réel." %></div>
             </div>
           <% } %>
         </div>

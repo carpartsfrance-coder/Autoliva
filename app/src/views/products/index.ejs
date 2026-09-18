@@ -7,12 +7,26 @@
 
 <%- include('../partials/header') %>
 
-<% const formatMoney = (cents) => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Math.round((Number(cents) || 0) / 100)); %>
+<% /* Les centimes comptent : la carte annonçait « 20 € » pour une pièce à
+      19,90 € affichée partout ailleurs (fiche, accueil, panier), et depuis la
+      mention allemande « inkl. MwSt., zzgl. Versand » ce prix arrondi passe
+      pour le prix TOTAL exact. Exactement le même format que home.ejs,
+      products/show.ejs et cart/index.ejs — un séparateur de milliers différent
+      d'un écran à l'autre du même parcours serait un nouveau défaut. */ %>
+<% const formatMoney = (cents) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.round(Number(cents) || 0) / 100); %>
 <% /* basePath = '/produits' (catalogue global) ou '/categorie/<slug>' (page catégorie).
       Permet à buildUrl et au form action de pointer sur la bonne URL. */ %>
 <% const _basePath = (typeof basePath === 'string' && basePath) ? basePath : '/produits'; %>
+<% /* Même raison que le fil d'Ariane de la fiche : sous /de, ces liens menaient
+      au site français et faisaient repasser la commande en français. */ %>
+<% const _lpList = typeof langPrefix !== 'undefined' ? langPrefix : ''; %>
 <% const _categoryContext = (typeof categoryContext !== 'undefined' && categoryContext) ? categoryContext : null; %>
 <% const _vehicleContext = (typeof vehicleContext !== 'undefined' && vehicleContext) ? vehicleContext : null; %>
+<% /* Compteur de résultats : le pluriel est porté par une clé (« 1 Teile
+      gefunden » / « 1 pièces trouvées » s'affichaient en haut de la page
+      d'atterrissage), et les milliers suivent la locale de la page. */ %>
+<% const _nbListe = (typeof totalCount !== 'undefined' && Number.isFinite(totalCount)) ? totalCount : (products ? products.length : 0); %>
+<% const _nbListeFormate = _nbListe.toLocaleString(lang === 'de' ? 'de-DE' : 'fr-FR'); %>
 <% const buildUrl = (overrides = {}) => {
   const params = new URLSearchParams();
   const qVal = overrides.q !== undefined ? overrides.q : (typeof searchQuery !== 'undefined' ? searchQuery : '');
@@ -77,7 +91,11 @@
             <div class="font-bold text-slate-900 truncate"><%= _vMake %><%= _vModel ? ' ' + _vModel : '' %><%= _vEngine ? ' · ' + _vEngine : '' %></div>
           </div>
         </div>
-        <a href="/produits?vehicleClear=1" class="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:text-primary hover:border-primary transition">
+        <%# Même fuite que le sélecteur de véhicule : en dur, ce bouton renvoyait
+            l'acheteur allemand sur le catalogue FRANÇAIS, et ce GET remettait la
+            session — panier, paiement, Order.lang et e-mails — en français. Les
+            deux autres « effacer » de la page passent déjà par _basePath. %>
+        <a href="<%= _lpList %>/produits?vehicleClear=1" class="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:text-primary hover:border-primary transition">
           <span class="material-symbols-outlined text-base">close</span>
           <%= t('listing.clearVehicle') %>
         </a>
@@ -265,7 +283,7 @@
             <% if (_vehicleContext) { %>
               <%/* Page véhicule : Accueil > Pièces auto par marque > Make [> Model [> Type]] */%>
               <nav class="flex items-center gap-2 text-xs text-gray-400 mb-2 flex-wrap">
-                <a class="hover:text-primary" href="/"><%= t('breadcrumb.home') %></a>
+                <a class="hover:text-primary" href="<%= _lpList %>/"><%= t('breadcrumb.home') %></a>
                 <span class="material-symbols-outlined text-[10px]">chevron_right</span>
                 <a class="hover:text-primary" href="/pieces-auto"><%= t('listing.partsByBrand') %></a>
                 <span class="material-symbols-outlined text-[10px]">chevron_right</span>
@@ -284,26 +302,26 @@
                 <% } %>
               </nav>
               <h1 class="text-2xl sm:text-3xl font-black tracking-tight"><%= _vehicleContext.h1 %></h1>
-              <p class="mt-1 text-sm text-gray-500"><%= typeof totalCount !== 'undefined' ? totalCount.toLocaleString('fr-FR') : products.length %> produit<%= (totalCount > 1) ? 's' : '' %> compatible<%= (totalCount > 1) ? 's' : '' %></p>
+              <p class="mt-1 text-sm text-gray-500"><%= t(_nbListe === 1 ? 'listing.compatiblePartsOne' : 'listing.compatibleParts', { count: _nbListeFormate }) %></p>
             <% } else if (_categoryContext) { %>
               <%/* Page catégorie : breadcrumb Accueil > Catégories > <Nom> et H1 = nom catégorie */%>
               <nav class="flex items-center gap-2 text-xs text-gray-400 mb-2">
-                <a class="hover:text-primary" href="/"><%= t('breadcrumb.home') %></a>
+                <a class="hover:text-primary" href="<%= _lpList %>/"><%= t('breadcrumb.home') %></a>
                 <span class="material-symbols-outlined text-[10px]">chevron_right</span>
-                <a class="hover:text-primary" href="/categorie"><%= t('breadcrumb.categories') %></a>
+                <a class="hover:text-primary" href="<%= _lpList %>/categorie"><%= t('breadcrumb.categories') %></a>
                 <span class="material-symbols-outlined text-[10px]">chevron_right</span>
                 <span class="text-gray-600 font-medium"><%= _categoryContext.name %></span>
               </nav>
               <h1 class="text-2xl sm:text-3xl font-black tracking-tight"><%= _categoryContext.name %></h1>
-              <p class="mt-1 text-sm text-gray-500"><%= t('listing.inCategory', { count: (typeof totalCount !== 'undefined' ? totalCount : products.length).toLocaleString(lang === 'de' ? 'de-DE' : 'fr-FR') }) %></p>
+              <p class="mt-1 text-sm text-gray-500"><%= t(_nbListe === 1 ? 'listing.inCategoryOne' : 'listing.inCategory', { count: _nbListeFormate }) %></p>
             <% } else { %>
               <%/* Catalogue global */%>
               <nav class="flex items-center gap-2 text-xs text-gray-400 mb-2">
-                <a class="hover:text-primary" href="/"><%= t('breadcrumb.home') %></a>
+                <a class="hover:text-primary" href="<%= _lpList %>/"><%= t('breadcrumb.home') %></a>
                 <span class="material-symbols-outlined text-[10px]">chevron_right</span>
-                <span class="text-gray-600 font-medium"><%= selectedCategoryLabel ? selectedCategoryLabel : t('breadcrumb.catalog') %></span>
+                <span class="text-gray-600 font-medium"><%= selectedCategoryLabel ? _catLabel(selectedCategoryLabel) : t('breadcrumb.catalog') %></span>
               </nav>
-              <h1 class="text-xl sm:text-2xl font-bold"><%= typeof totalCount !== 'undefined' ? totalCount.toLocaleString('fr-FR') : products.length %> <%= t('listing.found') %></h1>
+              <h1 class="text-xl sm:text-2xl font-bold"><%= t(_nbListe === 1 ? 'listing.foundOne' : 'listing.found', { count: _nbListeFormate }) %></h1>
             <% } %>
             <% if (!dbConnected) { %>
               <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900 text-sm">
@@ -375,25 +393,27 @@
         <div class="flex gap-2 mb-6 overflow-x-auto no-scrollbar -mx-4 px-4 md:flex-wrap md:overflow-visible md:mx-0 md:px-0">
           <% if (typeof selectedVehicleMake !== 'undefined' && selectedVehicleMake) { %>
             <a class="shrink-0 bg-primary/5 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2" href="<%= buildUrl({ vehicleMake: '', page: 1 }) %>">
-              Marque : <%= selectedVehicleMake %>
+              <%# La ponctuation est dans la clé : l'allemand ne met pas d'espace
+                  avant les deux-points (même règle que le résumé d'options). %>
+              <%= t('listing.filterMake') %> <%= selectedVehicleMake %>
               <span class="material-symbols-outlined text-sm">close</span>
             </a>
           <% } %>
           <% if (typeof selectedVehicleModel !== 'undefined' && selectedVehicleModel) { %>
             <a class="shrink-0 bg-primary/5 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2" href="<%= buildUrl({ vehicleModel: '', page: 1 }) %>">
-              Modèle : <%= selectedVehicleModel %>
+              <%= t('listing.filterModel') %> <%= selectedVehicleModel %>
               <span class="material-symbols-outlined text-sm">close</span>
             </a>
           <% } %>
           <% if (selectedStock === 'in') { %>
             <a class="shrink-0 bg-primary/5 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2" href="<%= buildUrl({ stock: '', page: 1 }) %>">
-              En stock
+              <%= t('product.stockIn') %>
               <span class="material-symbols-outlined text-sm">close</span>
             </a>
           <% } %>
           <% if (selectedMainCategory) { %>
             <a class="shrink-0 bg-primary/5 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2" href="<%= buildUrl({ mainCategory: '', subCategory: '', page: 1 }) %>">
-              <%= selectedCategoryLabel || selectedMainCategory %>
+              <%= _catLabel(selectedCategoryLabel || selectedMainCategory) %>
               <span class="material-symbols-outlined text-sm">close</span>
             </a>
           <% } %>
@@ -405,13 +425,13 @@
           <% } %>
           <% if (minPriceEuros !== null && typeof minPriceEuros !== 'undefined' && String(minPriceEuros)) { %>
             <a class="shrink-0 bg-primary/5 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2" href="<%= buildUrl({ minPrice: '', page: 1 }) %>">
-              Min <%= minPriceEuros %> €
+              <%= t('listing.filterMinPrice', { amount: minPriceEuros }) %>
               <span class="material-symbols-outlined text-sm">close</span>
             </a>
           <% } %>
           <% if (maxPriceEuros !== null && typeof maxPriceEuros !== 'undefined' && String(maxPriceEuros)) { %>
             <a class="shrink-0 bg-primary/5 text-primary border border-primary/20 px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-2" href="<%= buildUrl({ maxPrice: '', page: 1 }) %>">
-              Max <%= maxPriceEuros %> €
+              <%= t('listing.filterMaxPrice', { amount: maxPriceEuros }) %>
               <span class="material-symbols-outlined text-sm">close</span>
             </a>
           <% } %>
@@ -439,10 +459,13 @@
               <% const productUrl = (p && p.publicPath) ? p.publicPath : ('/produits/' + p._id); %>
               <% const badge = (p && p.badges && p.badges.topLeft) ? String(p.badges.topLeft).trim() : ''; %>
               <% const _specs = Array.isArray(p.specs) ? p.specs : []; %>
-              <% const _findSpec = (k) => { const s = _specs.find((x) => x && String(x.label || '').toLowerCase().includes(k)); return s ? String(s.value || '').trim() : ''; }; %>
+              <% /* Les specs d'une fiche allemande portent des libellés allemands
+                    (« Typ », « Zustand ») : chercher « type » n'y trouvait rien
+                    et la carte retombait sur la catégorie FRANÇAISE brute. */ %>
+              <% const _findSpec = (...cles) => { const s = _specs.find((x) => { const l = String(x && x.label || '').toLowerCase(); return cles.some((k) => l.includes(k)); }); return s ? String(s.value || '').trim() : ''; }; %>
               <% const _ref = (p.sku && String(p.sku).trim()) || ''; %>
-              <% const _etat = _findSpec('état') || _findSpec('etat') || (p.badges && p.badges.condition ? String(p.badges.condition).trim() : ''); %>
-              <% const _type = _findSpec('type') || (p.category ? String(p.category).split('>')[0].trim() : ''); %>
+              <% const _etat = _findSpec('état', 'etat', 'zustand') || (p.badges && p.badges.condition ? String(p.badges.condition).trim() : ''); %>
+              <% const _type = _findSpec('type', 'typ') || (p.category ? _catLabel(String(p.category).split('>')[0].trim()) : ''); %>
               <% const _wMonths = (p.warranty && p.warranty.months) ? p.warranty.months : 0; %>
               <% const _compat = (Array.isArray(p.compatibility) && p.compatibility[0]) ? p.compatibility[0] : null; %>
               <% const _pBrand = ((p.brand && String(p.brand).trim()) || (_compat && _compat.make) || ''); %>
@@ -462,7 +485,7 @@
                     <a class="block font-bold text-gray-900 leading-snug hover:text-primary text-sm sm:text-[15px] line-clamp-2" href="<%= productUrl %>"><%= p.name %></a>
                     <%# flex-wrap → 3 colonnes côte à côte sur large écran, jamais de chevauchement %>
                     <div class="flex flex-wrap gap-x-8 gap-y-2">
-                      <% [['Référence', _ref], ['État', _etat], ['Type', _type]].forEach((row) => { if (!row[1]) return; %>
+                      <% [[t('product.specRef'), _ref], [t('product.specState'), _etat], [t('product.specType'), _type]].forEach((row) => { if (!row[1]) return; %>
                         <div>
                           <p class="text-[10px] text-gray-400 uppercase tracking-wider leading-none mb-1"><%= row[0] %></p>
                           <p class="text-xs sm:text-sm font-semibold text-gray-800 whitespace-nowrap"><%= row[1] %></p>
@@ -486,7 +509,7 @@
                       <% if (_compat.model) { %><p class="text-xs text-gray-600 truncate" title="<%= _compat.model %>"><%= _compat.model %></p><% } %>
                       <% if (_compat.years) { %><p class="text-xs text-gray-500"><%= _compat.years %></p><% } %>
                     <% } else { %>
-                      <p class="text-sm text-gray-500">Plusieurs véhicules</p>
+                      <p class="text-sm text-gray-500"><%= t('listing.severalVehicles') %></p>
                     <% } %>
                     <a href="<%= productUrl %>" class="mt-1 text-xs font-semibold text-primary hover:underline"><%= t('listing.viewDetails') %></a>
                   </div>
@@ -496,6 +519,15 @@
                     <div class="sm:text-right">
                       <p class="text-[10px] text-gray-400 uppercase tracking-wider"><%= t('product.priceTTC') %></p>
                       <p class="text-xl lg:text-2xl font-extrabold text-gray-900 whitespace-nowrap"><%= formatMoney(p.priceCents) %> €</p>
+                      <%# PAngV : la carte allemande a un bouton d'ajout direct au panier. Le
+                          port et le Pfand encaissé doivent être annoncés AVANT ce clic,
+                          pas seulement sur la fiche (le panier affichait ensuite 198 €
+                          de plus que le prix lu ici). %>
+                      <% if (lang === 'de') { %>
+                        <% const _pfandCarte = (p.consigne && p.consigne.enabled === true && p.consigne.chargeUpfront === true && Number(p.consigne.amountCents) > 0) ? Number(p.consigne.amountCents) : 0; %>
+                        <p class="text-[11px] text-gray-500 leading-snug" data-price-info><%= p.serviceType === 'standalone_cloning' ? t('product.ttc') : t('product.priceInfoDe') %></p>
+                        <% if (_pfandCarte > 0) { %><p class="text-[11px] text-gray-500 leading-snug" data-price-deposit><%= t('product.plusDepositShort', { amount: formatMoney(_pfandCarte) }) %></p><% } %>
+                      <% } %>
                       <p class="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold <%= p.inStock ? 'text-emerald-600' : 'text-amber-600' %>">
                         <span class="w-1.5 h-1.5 rounded-full <%= p.inStock ? 'bg-emerald-500' : 'bg-amber-500' %>"></span><%= p.inStock ? t('product.stockIn') : t('product.stockOrder') %>
                       </p>
@@ -515,7 +547,7 @@
                           <span class="whitespace-nowrap"><%= t('product.addToCart') %></span>
                         </button>
                       </form>
-                      <button type="button" data-fav data-fav-id="<%= p._id %>" aria-label="Ajouter aux favoris" class="shrink-0 grid place-items-center w-11 h-11 rounded-xl border border-gray-200 text-gray-400 hover:text-primary hover:border-primary transition">
+                      <button type="button" data-fav data-fav-id="<%= p._id %>" aria-label="<%= t('product.addFavorite') %>" class="shrink-0 grid place-items-center w-11 h-11 rounded-xl border border-gray-200 text-gray-400 hover:text-primary hover:border-primary transition">
                         <span class="material-symbols-outlined text-xl">favorite</span>
                       </button>
                     </div>
@@ -544,11 +576,11 @@
               if (_right < _last - 1) _win.push('…');
               if (_last > 1) _win.push(_last);
             %>
-            <nav class="flex items-center justify-between sm:justify-center gap-2 sm:gap-3 py-8 border-t border-gray-200 mt-8" aria-label="Pagination des produits">
+            <nav class="flex items-center justify-between sm:justify-center gap-2 sm:gap-3 py-8 border-t border-gray-200 mt-8" aria-label="<%= t('a11y.pagination') %>">
               <%# Précédent %>
               <a <%- _current <= 1 ? 'aria-disabled="true" tabindex="-1"' : 'rel="prev"' %>
                  class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white h-10 px-3 sm:px-4 text-sm font-bold text-gray-600 hover:border-primary hover:text-primary transition <%= _current <= 1 ? 'pointer-events-none opacity-40' : '' %>"
-                 href="<%= buildUrl({ page: _prevPage }) %>" aria-label="Page précédente">
+                 href="<%= buildUrl({ page: _prevPage }) %>" aria-label="<%= t('a11y.prevPage') %>">
                 <span class="material-symbols-outlined text-lg">chevron_left</span>
                 <span class="hidden sm:inline"><%= t('pagination.previous') %></span>
               </a>
@@ -561,7 +593,7 @@
                   <% } else if (pNum === _current) { %>
                     <span aria-current="page" class="w-10 h-10 rounded-full bg-primary text-white font-bold text-sm flex items-center justify-center shadow-sm"><%= pNum %></span>
                   <% } else { %>
-                    <a class="w-10 h-10 rounded-full border border-gray-200 bg-white text-gray-700 font-bold text-sm flex items-center justify-center hover:border-primary hover:text-primary transition" href="<%= buildUrl({ page: pNum }) %>" aria-label="Page <%= pNum %>"><%= pNum %></a>
+                    <a class="w-10 h-10 rounded-full border border-gray-200 bg-white text-gray-700 font-bold text-sm flex items-center justify-center hover:border-primary hover:text-primary transition" href="<%= buildUrl({ page: pNum }) %>" aria-label="<%= t('a11y.pageN', { n: pNum }) %>"><%= pNum %></a>
                   <% } %>
                 <% }) %>
               </div>
@@ -571,7 +603,7 @@
               <%# Suivant %>
               <a <%- _current >= _last ? 'aria-disabled="true" tabindex="-1"' : 'rel="next"' %>
                  class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white h-10 px-3 sm:px-4 text-sm font-bold text-gray-600 hover:border-primary hover:text-primary transition <%= _current >= _last ? 'pointer-events-none opacity-40' : '' %>"
-                 href="<%= buildUrl({ page: _nextPage }) %>" aria-label="Page suivante">
+                 href="<%= buildUrl({ page: _nextPage }) %>" aria-label="<%= t('a11y.nextPage') %>">
                 <span class="hidden sm:inline"><%= t('pagination.next') %></span>
                 <span class="material-symbols-outlined text-lg">chevron_right</span>
               </a>

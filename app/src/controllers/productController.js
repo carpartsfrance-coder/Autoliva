@@ -8,7 +8,6 @@ const { renderInfoBlockHtml } = require('../services/infoBlockContent');
 const demoProducts = require('../demoProducts');
 const sanitizeHtml = require('sanitize-html');
 const { markdownToHtml } = require('../services/blogContent');
-const { buildCategoryPublicUrl } = require('../services/categoryPublic');
 const productOptions = require('../services/productOptions');
 const { rankProducts, sortRankedProducts } = require('../services/search');
 const brand = require('../config/brand');
@@ -17,7 +16,7 @@ const {
   buildProductPublicUrl,
   getPublicBaseUrlFromReq,
 } = require('../services/productPublic');
-const { buildHreflangSet, t } = require('../services/i18n');
+const { buildHreflangSet, t, redirectionFrGardantLaLangue } = require('../services/i18n');
 const productI18n = require('../services/productI18n');
 const blogI18n = require('../services/blogI18n');
 const categoryI18n = require('../services/categoryI18n');
@@ -418,7 +417,7 @@ async function getProductBySlug(req, res, next) {
         return getProduct(req, res, next);
       }
       return res.status(404).render('errors/404', {
-        title: `Page introuvable - ${brand.NAME}`,
+        title: t(req.lang || 'fr', 'error.404.title'),
       });
     }
 
@@ -629,7 +628,7 @@ async function getProduct(req, res, next) {
     if (dbConnected) {
       if (!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(404).render('errors/404', {
-          title: `Page introuvable - ${brand.NAME}`,
+          title: t(req.lang || 'fr', 'error.404.title'),
         });
       }
 
@@ -665,7 +664,7 @@ async function getProduct(req, res, next) {
 
     if (!product) {
       return res.status(404).render('errors/404', {
-        title: `Page introuvable - ${brand.NAME}`,
+        title: t(req.lang || 'fr', 'error.404.title'),
       });
     }
 
@@ -688,10 +687,19 @@ async function getProduct(req, res, next) {
     // fiche FR → jamais de page à moitié traduite indexée (leçon du /en).
     const pageLang = (req.lang === 'de' && productI18n.isSupportedLang('de')) ? 'de' : 'fr';
     const isLocalized = pageLang !== 'fr';
+    /* Nom FRANÇAIS de la catégorie, gardé pour le port affiché plus bas : la
+       classe d'expédition d'une catégorie se retrouve par Category.name
+       (français). Avec le nom traduit (« Getriebe »), elle n'était plus
+       trouvée et la fiche allemande annonçait le tarif de la classe par
+       défaut, plus bas que le port encaissé au paiement. */
+    const categorieFr = product.category;
     if (pageLang === 'de') {
       if (!productI18n.isTranslated(product, 'de')) {
         if (req.session) delete req.session.cartError;
-        return res.redirect(301, buildProductPublicPath(product)); // → fiche FR
+        /* → fiche FR, sans perdre l'allemand : le catalogue /de liste aussi les
+           fiches non traduites, et ce 301 renvoyait le visiteur sur une page
+           française dont le GET remettait la session en « fr ». */
+        return res.redirect(301, redirectionFrGardantLaLangue(req, buildProductPublicPath(product)));
       }
       product = productI18n.localizeProduct(product, 'de'); // calque DE non destructif
       /* La catégorie n'est PAS un champ traduisible de la fiche : elle est
@@ -1038,8 +1046,14 @@ async function getProduct(req, res, next) {
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
     const categoryName = typeof product.category === 'string' ? product.category.trim() : '';
-    const categorySlug = categoryName ? slugifyLoose(categoryName) : '';
-    const categoryUrl = categorySlug ? buildCategoryPublicUrl({ slug: categorySlug }, { req }) : '';
+    /* Lien du fil d'Ariane : le VRAI slug du document Category (et sa version
+       allemande sous /de). Il était fabriqué en slugifiant le nom affiché —
+       « Mécatroniques & calculateurs » → /categorie/mecatroniques-calculateurs,
+       404 en français ; et sous /de, l'URL française avec un slug allemand
+       (/categorie/transfergetriebe), 404 elle aussi. Le nom AFFICHÉ, lui, reste
+       celui de la page (traduit en allemand). */
+    const cheminCategorie = await categoryI18n.lienCategorie(categorieFr, pageLang);
+    const categoryUrl = cheminCategorie ? (baseUrl ? `${baseUrl}${cheminCategorie}` : cheminCategorie) : '';
 
     const breadcrumbItems = [
       {
@@ -1284,7 +1298,12 @@ async function getProduct(req, res, next) {
         productAccessories = accIds
           .map((accId) => byId.get(String(accId)))
           .filter(Boolean)
-          .map((p) => {
+          .map((pBrut) => {
+            /* Même calque que les cartes du catalogue allemand : sans lui, la
+               section « Complétez votre montage » d'une fiche /de affichait des
+               noms français et renvoyait vers la fiche FR, dont le GET remettait
+               la session — donc la commande et les e-mails — en français. */
+            const p = req.lang === 'de' ? productI18n.localizeProduct(pBrut, 'de') : pBrut;
             const rawImg = p.imageUrl
               || (Array.isArray(p.galleryUrls) && p.galleryUrls.find((u) => typeof u === 'string' && u.trim()))
               || '';
@@ -1295,13 +1314,37 @@ async function getProduct(req, res, next) {
               priceCents: Number(p.priceCents) || 0,
               inStock: p.inStock !== false,
               condition: (p.badges && p.badges.condition) || '',
+              /* Pfand encaissé à la commande : la carte allemande l'annonce à
+                 côté du prix, avant son bouton d'ajout au panier (PAngV). */
+              depositUpfrontCents: (p.consigne && p.consigne.enabled === true && p.consigne.chargeUpfront === true
+                && Number(p.consigne.amountCents) > 0) ? Math.floor(Number(p.consigne.amountCents)) : 0,
               imageUrl: buildSeoMediaUrl(rawImg, p.name),
-              publicPath: buildProductPublicPath(p),
+              publicPath: req.lang === 'de'
+                ? '/de/produits/' + encodeURIComponent(productI18n.localizedSlug(pBrut, 'de')) + '-' + pBrut._id
+                : buildProductPublicPath(p),
             };
           });
       }
     } catch (err) {
       console.error('[product] accessories error :', err && err.message);
+    }
+
+    /* Loi allemande sur l'affichage des prix (PAngV) : la fiche allemande doit
+       dire « zzgl. Versand » près du prix. On donne le montant réel vers
+       l'Allemagne (zone Europe de la classe d'expédition), pas un renvoi vague.
+       Même fonction que le panier et le paiement (getShippingMethods), avec la
+       catégorie française : le montant annoncé est celui qui sera encaissé.
+       Pas pour le service de clonage : aller-retour inclus, aucun port facturé. */
+    let versandDeCents = null;
+    if (res.locals.lang === 'de' && dbConnected && product.serviceType !== 'standalone_cloning') {
+      try {
+        const { getShippingMethods } = require('../services/shippingPricing');
+        const methodes = await getShippingMethods(dbConnected, [{ ...product, category: categorieFr }], { country: 'DE' }, 'de');
+        const domicile = methodes.find((m) => m && m.id === 'domicile');
+        versandDeCents = domicile && Number.isFinite(domicile.priceCents) ? domicile.priceCents : null;
+      } catch (err) {
+        console.error('[product] versand DE :', err && err.message);
+      }
     }
 
     if (req.session) delete req.session.cartError;
@@ -1337,6 +1380,7 @@ async function getProduct(req, res, next) {
       relatedBlogPosts,
       productAccessories,
       productLinking,
+      versandDeCents,
     });
   } catch (err) {
     return next(err);

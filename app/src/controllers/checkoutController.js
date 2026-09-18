@@ -14,7 +14,7 @@ const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const productOptions = require('../services/productOptions');
 const { getShippingMethods } = require('../services/shippingPricing');
-const { applyCheckoutLocale } = require('../services/i18n');
+const { applyCheckoutLocale, t } = require('../services/i18n');
 const productI18n = require('../services/productI18n');
 const { getLegalPageBySlug } = require('../services/legalPages');
 const { ensureInvoiceIssuedForPaidOrder } = require('../services/orderInvoices');
@@ -162,6 +162,18 @@ function normalizeProduct(product) {
  * consigne.enabled && consigne.chargeUpfront), en centimes.
  * @param {Array<{product:Object, quantity:number}>} items
  */
+/* Langue des messages du tunnel : celle de la session, comme le rendu des
+   pages livraison et paiement. Les validations écrivaient du français en dur,
+   affiché sous « Fehler » à un acheteur allemand (FIN trop courte, compte
+   existant…). */
+function langueTunnel(req) {
+  return (req && req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
+}
+
+function messageTunnel(req, cle, params) {
+  return t(langueTunnel(req), cle, params);
+}
+
 function computeUpfrontConsigneCents(items) {
   let total = 0;
   for (const it of items || []) {
@@ -178,7 +190,7 @@ function formatEuro(totalCents) {
   return `${(totalCents / 100).toFixed(2).replace('.', ',')} €`;
 }
 
-async function buildCartView(dbConnected, cart) {
+async function buildCartView(dbConnected, cart, lang) {
   const items = Object.entries(cart.items).map(([key, it]) => {
     const safe = it && typeof it === 'object' ? it : {};
     return {
@@ -213,7 +225,9 @@ async function buildCartView(dbConnected, cart) {
     const lineTotalCents = unitPriceCents * item.quantity;
     itemsTotalCents += lineTotalCents;
 
-    const fallbackSummary = productOptions.buildOptionsDisplay(product.options, item.optionsSelection).optionsSummary;
+    /* Même repli que le panier : dans la langue du tunnel, pas en français. */
+    const produitResume = lang === 'de' ? productI18n.localizeProduct(product, 'de') : product;
+    const fallbackSummary = productOptions.buildOptionsDisplay(produitResume.options, item.optionsSelection, lang).optionsSummary;
     const optionsSummary = typeof item.optionsSummary === 'string' && item.optionsSummary.trim() ? item.optionsSummary.trim() : fallbackSummary;
 
     viewItems.push({
@@ -879,6 +893,8 @@ async function getShipping(req, res, next) {
 
     const errorMessage = req.session.checkoutError || null;
     delete req.session.checkoutError;
+    const errorLoginHref = req.session.checkoutErrorLoginHref || '';
+    delete req.session.checkoutErrorLoginHref;
 
     const checkout = getCheckoutState(req);
     const sessionUser = req.session.user;
@@ -933,7 +949,7 @@ async function getShipping(req, res, next) {
     checkout.billingSameAsShipping = guestCheckout ? true : billingSameAsShipping;
     checkout.billingAddressId = guestCheckout ? '' : selectedBillingAddressId;
 
-    const { viewItems, itemsTotalCents } = await buildCartView(dbConnected, cart);
+    const { viewItems, itemsTotalCents } = await buildCartView(dbConnected, cart, langueTunnel(req));
     const consigneChargeCents = computeUpfrontConsigneCents(viewItems);
 
     if (viewItems.length === 0) {
@@ -942,14 +958,23 @@ async function getShipping(req, res, next) {
 
     // Zone de livraison depuis l'adresse connue (sélectionnée pour un compte,
     // saisie pour un invité) → frais de port adaptés ; sinon défaut métropole.
+    const tunnelAllemand = !!(req.session && req.session.preferredLang === 'de');
+    /* Pays réellement saisi par l'invité : getGuestCheckoutData remplit
+       « France » par défaut, ce qui faisait passer un invité allemand qui n'a
+       encore rien saisi pour une adresse en France. */
+    const guestBrut = checkout && checkout.guest && typeof checkout.guest === 'object' ? checkout.guest : {};
+    const guestAdresseSaisie = !!(getTrimmedString(guestBrut.country) || getTrimmedString(guestBrut.postalCode));
     let shipZoneAddr = null;
     if (!guestCheckout) {
       const selAddr = addresses.find((a) => String(a._id) === selectedAddressId);
       if (selAddr) shipZoneAddr = { country: selAddr.country, postalCode: selAddr.postalCode };
-    } else {
+    } else if (guestAdresseSaisie) {
       const g = getGuestCheckoutData(checkout);
-      if (g && (g.country || g.postalCode)) shipZoneAddr = { country: g.country, postalCode: g.postalCode };
+      shipZoneAddr = { country: g.country, postalCode: g.postalCode };
     }
+    /* Pas encore d'adresse : tunnel allemand estimé vers l'Allemagne (même
+       montant que la fiche et le panier), pas au tarif France. */
+    if (!shipZoneAddr && tunnelAllemand) shipZoneAddr = { country: 'DE' };
 
     const shippingMethods = await getShippingMethods(
       dbConnected,
@@ -977,7 +1002,7 @@ async function getShipping(req, res, next) {
 
       if (!result.ok) {
         delete req.session.promoCode;
-        req.session.checkoutError = result.reason || 'Code promo invalide.';
+        req.session.checkoutError = promoCodes.promoReasonMessage(result, langueTunnel(req));
         return res.redirect('/commande/livraison');
       }
 
@@ -1003,8 +1028,13 @@ async function getShipping(req, res, next) {
       dbConnected,
       cartItemCount,
       errorMessage,
+      errorLoginHref,
       guestCheckout,
-      guestForm: getGuestCheckoutData(checkout),
+      /* Même logique pour le formulaire : l'invité allemand voit « Deutschland »
+         présélectionné, cohérent avec le port estimé au-dessus. */
+      guestForm: (!guestAdresseSaisie && tunnelAllemand)
+        ? { ...getGuestCheckoutData(checkout), country: 'Allemagne' }
+        : getGuestCheckoutData(checkout),
       shippingMethods,
       selectedShippingMethod: selectedMethod.id,
       addresses,
@@ -1019,7 +1049,12 @@ async function getShipping(req, res, next) {
         line2: '',
         postalCode: '',
         city: '',
-        country: 'France',
+        /* Client connecté sans adresse : le port est estimé vers l'Allemagne
+           (plus haut), la fenêtre « Neue Adresse » doit donc proposer
+           Deutschland. Avec « France » présélectionné, une adresse à Berlin
+           saisie sans toucher au pays était enregistrée en France, et la
+           commande encaissée au port et au délai France. */
+        country: tunnelAllemand ? 'Allemagne' : 'France',
         isDefault: addresses.length === 0,
       },
       items: viewItems,
@@ -1033,6 +1068,8 @@ async function getShipping(req, res, next) {
       promoDiscountCents: computed.promoDiscountCents,
       itemsTotalAfterDiscountCents: computed.itemsTotalAfterDiscountCents,
       consigneChargeCents: computed.consigneChargeCents,
+      // Après la localisation des articles : noms dans la langue du tunnel.
+      consigneConditionnelle: pricing.listConditionalConsigneLines(viewItems),
     });
   } catch (err) {
    return next(err);
@@ -1125,10 +1162,12 @@ function buildSessionUser(user) {
   };
 }
 
-function buildGuestAccountResetUrl(req, token) {
+function buildGuestAccountResetUrl(req, token, lang) {
   const base = getPublicBaseUrl(req);
   if (!base || !token) return '';
-  return `${base.replace(/\/$/, '')}/compte/reinitialiser-mot-de-passe?token=${encodeURIComponent(String(token))}`;
+  // Ouvert depuis l'e-mail, souvent dans une session neuve : on y garde la langue du compte.
+  const suffixeLangue = lang === 'de' ? '&lang=de' : '';
+  return `${base.replace(/\/$/, '')}/compte/reinitialiser-mot-de-passe?token=${encodeURIComponent(String(token))}${suffixeLangue}`;
 }
 
 async function issueGuestAccountSetup(req, user) {
@@ -1147,7 +1186,7 @@ async function issueGuestAccountSetup(req, user) {
     }
   );
 
-  const resetUrl = buildGuestAccountResetUrl(req, token);
+  const resetUrl = buildGuestAccountResetUrl(req, token, user && user.lang);
   if (!resetUrl) {
     console.error('[GuestAccount] Impossible de construire l\'URL de réinitialisation — email non envoyé', {
       userId: String(user._id),
@@ -1205,7 +1244,7 @@ async function syncGuestCheckoutUser(user, guest) {
 async function ensureGuestCheckoutUser({ req, checkout } = {}) {
   const guest = getGuestCheckoutData(checkout);
   if (!hasCompleteGuestCheckoutData(guest)) {
-    return { ok: false, reason: 'Merci de renseigner email, prénom, nom, téléphone et adresse de livraison.' };
+    return { ok: false, reason: 'Merci de renseigner email, prénom, nom, téléphone et adresse de livraison.', reasonKey: 'checkout.errGuestIncomplete' };
   }
 
   if (req.session && req.session.user && req.session.user._id) {
@@ -1217,7 +1256,7 @@ async function ensureGuestCheckoutUser({ req, checkout } = {}) {
         return { ok: true, user: synced };
       } catch (err) {
         if (err && err.code === 11000) {
-          return { ok: false, reason: 'Un compte existe déjà avec cet email. Connectez-vous pour finaliser la commande.' };
+          return { ok: false, reason: 'Un compte existe déjà avec cet email. Connectez-vous pour finaliser la commande.', reasonKey: 'checkout.errAccountExists', loginRequired: true };
         }
         throw err;
       }
@@ -1226,7 +1265,7 @@ async function ensureGuestCheckoutUser({ req, checkout } = {}) {
 
   const existing = await User.findOne({ email: guest.email }).select('_id').lean();
   if (existing) {
-    return { ok: false, reason: 'Un compte existe déjà avec cet email. Connectez-vous pour finaliser la commande.' };
+    return { ok: false, reason: 'Un compte existe déjà avec cet email. Connectez-vous pour finaliser la commande.', reasonKey: 'checkout.errAccountExists', loginRequired: true };
   }
 
   const salt = crypto.randomBytes(16).toString('hex');
@@ -1268,12 +1307,12 @@ async function postShipping(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
     if (!dbConnected) {
-      req.session.checkoutError = "La base de données n'est pas disponible. Impossible de continuer.";
+      req.session.checkoutError = messageTunnel(req, 'checkout.errDbUnavailableContinue');
       return res.redirect('/commande/livraison');
     }
 
     const cart = getCart(req);
-    const { viewItems } = await buildCartView(dbConnected, cart);
+    const { viewItems } = await buildCartView(dbConnected, cart, langueTunnel(req));
 
     if (!viewItems.length) {
       return res.redirect('/panier');
@@ -1289,7 +1328,7 @@ async function postShipping(req, res, next) {
     const selectedMethod = shippingMethods.find((m) => m.id === shippingMethodRaw);
 
     if (!selectedMethod) {
-      req.session.checkoutError = 'Merci de choisir un mode de livraison.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errChooseShippingMethod');
       return res.redirect('/commande/livraison');
     }
 
@@ -1321,7 +1360,7 @@ async function postShipping(req, res, next) {
       checkout.billingAddressId = 'guest';
 
       if (!hasCompleteGuestCheckoutData(guest)) {
-        req.session.checkoutError = 'Merci de renseigner email, prénom, nom, téléphone et adresse de livraison.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errGuestIncomplete');
         return res.redirect('/commande/livraison');
       }
 
@@ -1342,14 +1381,14 @@ async function postShipping(req, res, next) {
 
     const addressExists = addresses.some((a) => String(a._id) === addressIdRaw);
     if (!addressExists) {
-      req.session.checkoutError = 'Merci de choisir une adresse de livraison.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errChooseShippingAddress');
       return res.redirect('/commande/livraison');
     }
 
     if (!billingSameAsShipping) {
       const billingExists = addresses.some((a) => String(a._id) === billingAddressIdRaw);
       if (!billingExists) {
-        req.session.checkoutError = 'Merci de choisir une adresse de facturation.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errChooseBillingAddress');
         return res.redirect('/commande/livraison');
       }
     }
@@ -1380,7 +1419,7 @@ async function postAddAddress(req, res, next) {
     }
 
     if (!dbConnected) {
-      req.session.checkoutError = "La base de données n'est pas disponible. Impossible d'ajouter une adresse.";
+      req.session.checkoutError = messageTunnel(req, 'checkout.errDbUnavailableAddress');
       return res.redirect('/commande/livraison');
     }
 
@@ -1395,7 +1434,7 @@ async function postAddAddress(req, res, next) {
     const isDefault = isTruthyFormValue(req.body.isDefault);
 
     if (!line1 || !postalCode || !city) {
-      req.session.checkoutError = 'Merci de renseigner au minimum : adresse, code postal et ville.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errAddressMinimum');
       return res.redirect('/commande/livraison');
     }
 
@@ -1455,12 +1494,14 @@ async function getPayment(req, res, next) {
 
     const errorMessage = req.session.checkoutError || null;
     delete req.session.checkoutError;
+    const errorLoginHref = req.session.checkoutErrorLoginHref || '';
+    delete req.session.checkoutErrorLoginHref;
 
     const checkout = getCheckoutState(req);
     const guestCheckout = isGuestCheckout(checkout);
     const shippingMethodKey = typeof checkout.shippingMethod === 'string' ? checkout.shippingMethod : '';
 
-    const { viewItems, itemsTotalCents } = await buildCartView(dbConnected, cart);
+    const { viewItems, itemsTotalCents } = await buildCartView(dbConnected, cart, langueTunnel(req));
     const consigneChargeCents = computeUpfrontConsigneCents(viewItems);
 
     if (viewItems.length === 0) {
@@ -1479,7 +1520,7 @@ async function getPayment(req, res, next) {
 
     let selectedMethod = shippingMethods.find((m) => m.id === shippingMethodKey) || null;
     if (!selectedMethod) {
-      req.session.checkoutError = 'Merci de choisir une livraison et une adresse.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errChooseShippingAndAddress');
       return res.redirect('/commande/livraison');
     }
 
@@ -1491,14 +1532,14 @@ async function getPayment(req, res, next) {
     if (guestCheckout) {
       const guest = getGuestCheckoutData(checkout);
       if (!hasCompleteGuestCheckoutData(guest)) {
-        req.session.checkoutError = 'Merci de renseigner email, prénom, nom, téléphone et adresse de livraison.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errGuestIncomplete');
         return res.redirect('/commande/livraison');
       }
       address = buildGuestAddressSnapshot(guest);
       billingAddress = address;
     } else {
       if (!dbConnected) {
-        req.session.checkoutError = "La base de données n'est pas disponible. Impossible de continuer.";
+        req.session.checkoutError = messageTunnel(req, 'checkout.errDbUnavailableContinue');
         return res.redirect('/commande/livraison');
       }
 
@@ -1516,12 +1557,12 @@ async function getPayment(req, res, next) {
         : addresses.find((a) => String(a._id) === checkout.billingAddressId) || null;
 
       if (!address) {
-        req.session.checkoutError = 'Adresse de livraison introuvable.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errShippingAddressNotFound');
         return res.redirect('/commande/livraison');
       }
 
       if (!billingAddress) {
-        req.session.checkoutError = 'Adresse de facturation introuvable.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errBillingAddressNotFound');
         return res.redirect('/commande/livraison');
       }
 
@@ -1529,9 +1570,7 @@ async function getPayment(req, res, next) {
       const shippingPostal = getTrimmedString(address.postalCode);
       const shippingCity = getTrimmedString(address.city);
       if (!shippingLine1 || !shippingPostal || !shippingCity) {
-        req.session.checkoutError =
-          "Votre adresse de livraison est incomplète (adresse / code postal / ville). " +
-          "Merci de la corriger dans \"Gérer mes adresses\" puis de réessayer.";
+        req.session.checkoutError = messageTunnel(req, 'checkout.errShippingAddressIncomplete');
         return res.redirect('/commande/livraison');
       }
 
@@ -1539,9 +1578,7 @@ async function getPayment(req, res, next) {
       const billingPostal = getTrimmedString(billingAddress.postalCode);
       const billingCity = getTrimmedString(billingAddress.city);
       if (!billingLine1 || !billingPostal || !billingCity) {
-        req.session.checkoutError =
-          "Votre adresse de facturation est incomplète (adresse / code postal / ville). " +
-          "Merci de la corriger dans \"Gérer mes adresses\" puis de réessayer.";
+        req.session.checkoutError = messageTunnel(req, 'checkout.errBillingAddressIncomplete');
         return res.redirect('/commande/livraison');
       }
 
@@ -1575,7 +1612,7 @@ async function getPayment(req, res, next) {
 
       if (!result.ok) {
         delete req.session.promoCode;
-        req.session.checkoutError = result.reason || 'Code promo invalide.';
+        req.session.checkoutError = promoCodes.promoReasonMessage(result, langueTunnel(req));
         return res.redirect('/commande/paiement');
       }
 
@@ -1623,6 +1660,7 @@ async function getPayment(req, res, next) {
       dbConnected,
       cartItemCount,
       errorMessage,
+      errorLoginHref,
       guestCheckout,
       localMolliePaymentSimulation,
       localScalapayPaymentSimulation,
@@ -1641,6 +1679,8 @@ async function getPayment(req, res, next) {
       itemsTotalAfterDiscountCents: computed.itemsTotalAfterDiscountCents,
       shippingCostCents: computed.shippingCostCents,
       consigneChargeCents: computed.consigneChargeCents,
+      // Rappelé dans le récapitulatif au-dessus du bouton de commande (§ 312j BGB).
+      consigneConditionnelle: pricing.listConditionalConsigneLines(viewItems),
       totalCents: computed.totalCents,
       vatRC, // aperçu autoliquidation HT (null si non applicable)
     });
@@ -1657,14 +1697,14 @@ async function postPayment(req, res, next) {
     let sessionUser = req.session.user;
 
     if (!dbConnected) {
-      req.session.checkoutError = "La base de données n'est pas disponible. Impossible de valider la commande.";
+      req.session.checkoutError = messageTunnel(req, 'checkout.errDbUnavailableOrder');
       return res.redirect('/commande/livraison');
     }
 
     const shippingMethodKey = checkout.shippingMethod;
 
     if (!shippingMethodKey || (!guestCheckout && !checkout.addressId)) {
-      req.session.checkoutError = 'Merci de choisir une livraison et une adresse.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errChooseShippingAndAddress');
       return res.redirect('/commande/livraison');
     }
 
@@ -1706,23 +1746,22 @@ async function postPayment(req, res, next) {
     };
 
     if (!vehicleProvided) {
-      req.session.checkoutError =
-        'Merci de renseigner votre plaque d’immatriculation ou votre VIN — obligatoire pour vérifier la compatibilité de la pièce.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errVehicleRequired');
       return res.redirect('/commande/paiement');
     }
 
     if (vehiclePlate && vehiclePlate.length < 5) {
-      req.session.checkoutError = 'La plaque semble trop courte. Merci de vérifier.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errPlateTooShort');
       return res.redirect('/commande/paiement');
     }
 
     if (vehicleVin && vehicleVin.length < 11) {
-      req.session.checkoutError = 'Le VIN semble trop court. Merci de vérifier.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errVinTooShort');
       return res.redirect('/commande/paiement');
     }
 
     if (!acceptCgv) {
-      req.session.checkoutError = 'Merci d’accepter les CGV pour continuer.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errAcceptCgv');
       return res.redirect('/commande/paiement');
     }
     const scalapayProduct = parseScalapayProductFromPaymentMethod(selectedPaymentMethod);
@@ -1733,26 +1772,31 @@ async function postPayment(req, res, next) {
 
     const cgvPage = await getLegalPageBySlug({ slug: 'cgv', dbConnected });
     if (!cgvPage) {
-      req.session.checkoutError = 'Les CGV sont indisponibles pour le moment. Réessayez plus tard.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errCgvUnavailable');
       return res.redirect('/commande/paiement');
     }
 
     if (paymentProvider === 'mollie' && !getTrimmedString(process.env.MOLLIE_API_KEY) && !simulateLocalPayment) {
-      req.session.checkoutError =
-        "Le paiement est temporairement indisponible. Merci de réessayer dans quelques minutes.";
+      req.session.checkoutError = messageTunnel(req, 'checkout.errPaymentUnavailable');
       return res.redirect('/commande/paiement');
     }
 
     if (paymentProvider === 'scalapay' && !getTrimmedString(process.env.SCALAPAY_API_KEY) && !simulateLocalPayment) {
-      req.session.checkoutError =
-        "Le paiement en plusieurs fois est temporairement indisponible. Merci de réessayer dans quelques minutes.";
+      req.session.checkoutError = messageTunnel(req, 'checkout.errInstallmentsUnavailable');
       return res.redirect('/commande/paiement');
     }
 
     if (guestCheckout && (!sessionUser || !sessionUser._id)) {
       const guestUserResult = await ensureGuestCheckoutUser({ req, checkout });
       if (!guestUserResult.ok) {
-        req.session.checkoutError = guestUserResult.reason || 'Impossible de préparer le compte invité.';
+        req.session.checkoutError = guestUserResult.reasonKey
+          ? messageTunnel(req, guestUserResult.reasonKey)
+          : (guestUserResult.reason || messageTunnel(req, 'checkout.errGuestAccount'));
+        /* Compte existant : un client qui revient commander en invité doit pouvoir
+           se connecter depuis le message, pas seulement lire qu'il le faut. */
+        if (guestUserResult.loginRequired) {
+          req.session.checkoutErrorLoginHref = '/compte/connexion?returnTo=%2Fcommande%2Flivraison';
+        }
         return res.redirect('/commande/livraison');
       }
       sessionUser = req.session.user;
@@ -1811,7 +1855,7 @@ async function postPayment(req, res, next) {
     if (guestCheckout) {
       const guest = getGuestCheckoutData(checkout);
       if (!hasCompleteGuestCheckoutData(guest)) {
-        req.session.checkoutError = 'Merci de renseigner email, prénom, nom, téléphone et adresse de livraison.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errGuestIncomplete');
         return res.redirect('/commande/livraison');
       }
 
@@ -1840,12 +1884,12 @@ async function postPayment(req, res, next) {
           : null;
 
       if (!selectedAddress) {
-        req.session.checkoutError = 'Adresse de livraison introuvable.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errShippingAddressNotFound');
         return res.redirect('/commande/livraison');
       }
 
       if (!selectedBillingAddress) {
-        req.session.checkoutError = 'Adresse de facturation introuvable.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errBillingAddressNotFound');
         return res.redirect('/commande/livraison');
       }
 
@@ -1854,9 +1898,7 @@ async function postPayment(req, res, next) {
       shippingCity = getTrimmedString(selectedAddress.city);
 
       if (!shippingLine1 || !shippingPostal || !shippingCity) {
-        req.session.checkoutError =
-          "Votre adresse de livraison est incomplète (adresse / code postal / ville). " +
-          "Merci de la corriger dans \"Gérer mes adresses\" puis de réessayer.";
+        req.session.checkoutError = messageTunnel(req, 'checkout.errShippingAddressIncomplete');
         return res.redirect('/commande/livraison');
       }
 
@@ -1865,9 +1907,7 @@ async function postPayment(req, res, next) {
       billingCity = getTrimmedString(selectedBillingAddress.city);
 
       if (!billingLine1 || !billingPostal || !billingCity) {
-        req.session.checkoutError =
-          "Votre adresse de facturation est incomplète (adresse / code postal / ville). " +
-          "Merci de la corriger dans \"Gérer mes adresses\" puis de réessayer.";
+        req.session.checkoutError = messageTunnel(req, 'checkout.errBillingAddressIncomplete');
         return res.redirect('/commande/livraison');
       }
     }
@@ -1892,7 +1932,7 @@ async function postPayment(req, res, next) {
       if (!product) continue;
 
       if (Number.isFinite(product.stockQty) && item.quantity > product.stockQty) {
-        req.session.checkoutError = 'Stock insuffisant pour un ou plusieurs articles. Merci de mettre à jour votre panier.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errStockInsufficient');
         return res.redirect('/panier');
       }
     }
@@ -1912,7 +1952,11 @@ async function postPayment(req, res, next) {
       if (product.inStock === false) continue;
 
       const unitPriceCents = productOptions.computeUnitPriceCents(product, item.optionsSelection);
-      const display = productOptions.buildOptionsDisplay(product.options, item.optionsSelection);
+      /* Repli (lignes déposées avant la localisation du résumé) : dans la
+         langue du tunnel, libellés d'options compris. */
+      const langueLigne = langueTunnel(req);
+      const produitResume = langueLigne === 'de' ? productI18n.localizeProduct(product, 'de') : product;
+      const display = productOptions.buildOptionsDisplay(produitResume.options, item.optionsSelection, langueLigne);
       const optionsSummary = typeof item.optionsSummary === 'string' && item.optionsSummary.trim() ? item.optionsSummary.trim() : display.optionsSummary;
 
       const lineTotalCents = unitPriceCents * item.quantity;
@@ -1972,7 +2016,7 @@ async function postPayment(req, res, next) {
     }
 
     if (orderItems.length === 0) {
-      req.session.checkoutError = 'Votre panier ne contient aucun article commandable.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errNoOrderableItems');
       return res.redirect('/panier');
     }
 
@@ -2005,7 +2049,7 @@ async function postPayment(req, res, next) {
     }, (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr');
     const selectedMethod = shippingMethods.find((m) => m.id === shippingMethodKey) || null;
     if (!selectedMethod) {
-      req.session.checkoutError = 'Merci de choisir un mode de livraison.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errChooseShippingMethod');
       return res.redirect('/commande/livraison');
     }
 
@@ -2022,7 +2066,7 @@ async function postPayment(req, res, next) {
 
       if (!result.ok) {
         delete req.session.promoCode;
-        req.session.checkoutError = result.reason || 'Code promo invalide.';
+        req.session.checkoutError = promoCodes.promoReasonMessage(result, langueTunnel(req));
         return res.redirect('/commande/paiement');
       }
 
@@ -2156,7 +2200,7 @@ async function postPayment(req, res, next) {
     }
 
     if (!created) {
-      req.session.checkoutError = 'Une erreur est survenue lors de la création de votre commande.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errOrderCreation');
       return res.redirect('/commande/livraison');
     }
 
@@ -2207,8 +2251,7 @@ async function postPayment(req, res, next) {
         await promoCodes.releaseReservedForOrder(created._id);
         checkout.pendingOrderId = '';
         delete req.session.promoCode;
-        req.session.checkoutError =
-          'Le code promo ne peut pas être réservé pour le moment (il vient peut-être d’être utilisé). Merci de réessayer.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errPromoReserve');
         return res.redirect('/commande/paiement');
       }
     }
@@ -2282,7 +2325,7 @@ async function postPayment(req, res, next) {
         });
         await releaseOrderStockIfNeeded(created);
         await promoCodes.releaseReservedForOrder(created._id);
-        req.session.checkoutError = 'Impossible de démarrer le paiement. Merci de réessayer.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errPaymentStart');
         return res.redirect('/commande/paiement');
       }
 
@@ -2298,7 +2341,7 @@ async function postPayment(req, res, next) {
           hasPaymentId: Boolean(payment && payment.id),
           hasCheckoutUrl: Boolean(checkoutUrl),
         });
-        req.session.checkoutError = 'Impossible de démarrer le paiement. Merci de réessayer.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errPaymentStart');
         await releaseOrderStockIfNeeded(created);
         await promoCodes.releaseReservedForOrder(created._id);
         return res.redirect('/commande/paiement');
@@ -2419,7 +2462,7 @@ async function postPayment(req, res, next) {
           "Scalapay refuse la connexion (401) : la clé API ne correspond pas à l'environnement de test. " +
           "Il te faut une clé Scalapay SANDBOX (test) pour https://integration.api.scalapay.com.";
       } else {
-        req.session.checkoutError = 'Impossible de démarrer le paiement. Merci de réessayer.';
+        req.session.checkoutError = messageTunnel(req, 'checkout.errPaymentStart');
       }
       return res.redirect('/commande/paiement');
     }
@@ -2428,7 +2471,7 @@ async function postPayment(req, res, next) {
     const scalapayToken = spOrder && spOrder.token ? String(spOrder.token) : '';
 
     if (!scalapayCheckoutUrl || !scalapayToken) {
-      req.session.checkoutError = 'Impossible de démarrer le paiement. Merci de réessayer.';
+      req.session.checkoutError = messageTunnel(req, 'checkout.errPaymentStart');
       await releaseOrderStockIfNeeded(created);
       await promoCodes.releaseReservedForOrder(created._id);
       return res.redirect('/commande/paiement');
@@ -2453,6 +2496,11 @@ async function postPayment(req, res, next) {
 async function getPaymentReturn(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
+    /* Messages affichés sur la page paiement, qui suit la langue du tunnel :
+       une phrase française en dur s'affichait sous « Fehler » après un
+       paiement annulé sur Mollie en allemand. */
+    const retourLang = (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
+    const message = (cle) => t(retourLang, cle);
     const sessionUser = req.session.user;
 
     if (!sessionUser || !sessionUser._id) {
@@ -2488,7 +2536,7 @@ async function getPaymentReturn(req, res, next) {
           result.errorMessage || ''
         );
         checkout.pendingOrderId = String(order._id);
-        req.session.checkoutError = 'Impossible de vérifier le paiement pour le moment. Réessayez.';
+        req.session.checkoutError = message('checkout.paymentCheckFailed');
         return res.redirect('/commande/paiement');
       }
 
@@ -2504,15 +2552,15 @@ async function getPaymentReturn(req, res, next) {
       if (updated && updated.paymentStatus === 'pending') {
         checkout.pendingOrderId = String(order._id);
         req.session.checkoutError = wasCancelled
-          ? 'Le paiement a été annulé. Vous pouvez réessayer.'
-          : "Le paiement n'a pas été finalisé. Vous pouvez réessayer.";
+          ? message('checkout.paymentCancelled')
+          : message('checkout.paymentNotCompleted');
         return res.redirect('/commande/paiement');
       }
 
       checkout.pendingOrderId = '';
       req.session.checkoutError = wasCancelled
-        ? 'Le paiement a été annulé. Vous pouvez réessayer.'
-        : 'Le paiement a échoué ou a été annulé. Vous pouvez réessayer.';
+        ? message('checkout.paymentCancelled')
+        : message('checkout.paymentFailed');
       return res.redirect('/commande/paiement');
     }
 
@@ -2530,22 +2578,22 @@ async function getPaymentReturn(req, res, next) {
 
         if (updated && updated.paymentStatus === 'pending') {
           checkout.pendingOrderId = String(order._id);
-          req.session.checkoutError = "Le paiement n'a pas été finalisé. Vous pouvez réessayer.";
+          req.session.checkoutError = message('checkout.paymentNotCompleted');
           return res.redirect('/commande/paiement');
         }
 
         checkout.pendingOrderId = '';
-        req.session.checkoutError = 'Le paiement a échoué ou a été annulé. Vous pouvez réessayer.';
+        req.session.checkoutError = message('checkout.paymentFailed');
         return res.redirect('/commande/paiement');
       } catch (err) {
         checkout.pendingOrderId = String(order._id);
-        req.session.checkoutError = 'Impossible de vérifier le paiement pour le moment. Réessayez.';
+        req.session.checkoutError = message('checkout.paymentCheckFailed');
         return res.redirect('/commande/paiement');
       }
     }
 
     checkout.pendingOrderId = '';
-    req.session.checkoutError = 'Paiement introuvable. Merci de réessayer.';
+    req.session.checkoutError = message('checkout.paymentNotFound');
     return res.redirect('/commande/paiement');
   } catch (err) {
     return next(err);

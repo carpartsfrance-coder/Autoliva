@@ -10,11 +10,40 @@
      ET par le menu mobile. */%>
 <% const _curPathClean = (_hp || '/').split('?')[0].split('#')[0]; %>
 <% const _isDe = typeof lang !== 'undefined' && lang === 'de'; %>
+<%/* Liens de navigation (accueil, catalogue, catégories, contact…) : préfixe de
+     la langue AFFICHÉE. Une page allemande servie sur une URL française (panier,
+     connexion, commandes) a un langPrefix vide : « Weiter einkaufen » ou le menu
+     menaient au catalogue français, dont le GET remet la session en « fr », et
+     « /categorie/<slug allemand> » répondait 404. Le panier et le compte gardent
+     _lp : ce sont des URL neutres qui suivent la langue de session. */%>
+<% const _navLp = _isDe ? '/de' : _lp; %>
 <% var _htSw = (typeof hreflangTags !== 'undefined' && Array.isArray(hreflangTags)) ? hreflangTags : []; %>
 <% var _frTag = null, _deTag = null; %>
 <% for (var _s = 0; _s < _htSw.length; _s++) { if (_htSw[_s] && _htSw[_s].lang === 'fr') _frTag = _htSw[_s]; if (_htSw[_s] && _htSw[_s].lang === 'de') _deTag = _htSw[_s]; } %>
-<% const _frHref = (_frTag && _frTag.href) ? _frTag.href : (_curPathClean === '/' ? '/' : _curPathClean); %>
-<% const _deHref = (_deTag && _deTag.href) ? _deTag.href : ('/de' + (_curPathClean === '/' ? '' : _curPathClean)); %>
+<%/* Tunnel et compte (/panier, /commande, /compte) : l'URL ne porte pas la
+     langue, la page suit la préférence de session. Le lien « FR » rechargeait
+     donc la même page… toujours en allemand. On y choisit la langue
+     explicitement (?lang=), en gardant la query (returnTo…). */%>
+<% const _langParPreference = typeof langFollowsPreference !== 'undefined' && langFollowsPreference === true; %>
+<%/* Sur ces pages, le sélecteur montre la langue de SESSION, pas celle du rendu :
+     les pages de compte restées en français (profil, adresses, factures…)
+     affichaient « FR » actif, sans lien ?lang=fr, alors que le panier était en
+     allemand — le client ne pouvait plus revenir au français depuis là. */%>
+<% const _switchDe = _langParPreference ? ((typeof tunnelLang !== 'undefined') ? tunnelLang === 'de' : _isDe) : _isDe; %>
+<%/* La langue déjà active garde un lien SANS ?lang= : « ?lang=fr » écrit aussi
+     `savLocale` en session (services/i18nSav.js), et une session vierge ne doit
+     pas être persistée pour rien. « ?lang=fr » n'apparaît donc que pour une
+     session déjà en allemand, qui existe forcément. */%>
+<% const _avecLang = (code) => {
+  const brut = (typeof currentPath === 'string' && currentPath ? currentPath : _curPathClean).split('#')[0];
+  const iq = brut.indexOf('?');
+  const chemin = iq === -1 ? brut : brut.slice(0, iq);
+  const params = (iq === -1 ? '' : brut.slice(iq + 1)).split('&').filter((p) => p && !/^lang(=|$)/i.test(p));
+  if (code) params.push('lang=' + code);
+  return params.length ? chemin + '?' + params.join('&') : chemin;
+}; %>
+<% const _frHref = _langParPreference ? _avecLang(_switchDe ? 'fr' : '') : ((_frTag && _frTag.href) ? _frTag.href : (_curPathClean === '/' ? '/' : _curPathClean)); %>
+<% const _deHref = _langParPreference ? _avecLang(_switchDe ? '' : 'de') : ((_deTag && _deTag.href) ? _deTag.href : ('/de' + (_curPathClean === '/' ? '' : _curPathClean))); %>
 
 <%/* Avertissement usurpation d'identité — AVANT le <header>, donc hors du sticky :
      il défile avec la page au lieu d'occuper l'écran en permanence. Placé ici
@@ -27,24 +56,24 @@
      principale pour laisser toute la largeur à la recherche. */%>
 <div class="hidden md:block bg-slate-50 border-b border-slate-100">
 <div class="mx-auto max-w-[1440px] px-4 md:px-10 flex items-center justify-end gap-5 h-9">
-<a class="flex items-center gap-1.5 text-sm font-bold text-slate-700 hover:text-primary transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %> au <%= brand.PHONE %>">
+<a class="flex items-center gap-1.5 text-sm font-bold text-slate-700 hover:text-primary transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="<%= t('a11y.callBrandAt', { phone: brand.PHONE }) %>">
 <span class="material-symbols-outlined text-base text-primary">call</span><%= brand.PHONE %>
 </a>
 <div class="flex items-center rounded-md border border-slate-200 overflow-hidden h-6" role="navigation" aria-label="Sprache / Langue">
-<a class="flex items-center justify-center px-2 h-full text-[11px] font-black uppercase tracking-wider transition-colors <%= _isDe ? 'text-slate-400 hover:text-primary hover:bg-white' : 'bg-primary text-white' %>" href="<%= _frHref %>" hreflang="fr" <%= _isDe ? '' : 'aria-current="true"' %>>FR</a>
-<a class="flex items-center justify-center px-2 h-full text-[11px] font-black uppercase tracking-wider transition-colors <%= _isDe ? 'bg-primary text-white' : 'text-slate-400 hover:text-primary hover:bg-white' %>" href="<%= _deHref %>" hreflang="de" <%= _isDe ? 'aria-current="true"' : '' %>>DE</a>
+<a class="flex items-center justify-center px-2 h-full text-[11px] font-black uppercase tracking-wider transition-colors <%= _switchDe ? 'text-slate-400 hover:text-primary hover:bg-white' : 'bg-primary text-white' %>" href="<%= _frHref %>" hreflang="fr" <%- _switchDe ? '' : 'aria-current="true"' %>>FR</a>
+<a class="flex items-center justify-center px-2 h-full text-[11px] font-black uppercase tracking-wider transition-colors <%= _switchDe ? 'bg-primary text-white' : 'text-slate-400 hover:text-primary hover:bg-white' %>" href="<%= _deHref %>" hreflang="de" <%- _switchDe ? 'aria-current="true"' : '' %>>DE</a>
 </div>
 </div>
 </div>
 
 <%/* Rangée principale */%>
 <div class="mx-auto flex max-w-[1440px] items-center gap-6 px-4 md:px-10 py-3">
-<a class="flex items-center gap-2 text-primary shrink-0" href="<%= _lp %>/">
+<a class="flex items-center gap-2 text-primary shrink-0" href="<%= _navLp %>/">
 <img src="<%= brand.LOGO_URL %>" alt="<%= brand.NAME %>" class="h-10 md:h-11 w-auto" width="600" height="200" loading="eager" />
 </a>
 
 <nav class="hidden lg:flex items-center gap-6 text-sm font-semibold text-slate-600">
-<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/" <%= _navActive('/') ? 'aria-current="page"' : '' %>><%= t('nav.home') %></a>
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _navLp %>/" <%= _navActive('/') ? 'aria-current="page"' : '' %>><%= t('nav.home') %></a>
 <style>
   .cat-nav { position: relative; }
   .cat-nav__trigger { display: inline-flex; align-items: center; gap: 4px; }
@@ -69,17 +98,17 @@
   @media (max-width: 1180px) { .cat-nav__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .cat-nav__card { width: min(94vw, 640px); } }
 </style>
 <div class="cat-nav">
-  <a class="cat-nav__trigger px-3 py-2 rounded-xl transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/produits" <%= _navActive('/produits') ? 'aria-current="page"' : '' %>><%= t('nav.catalog') %><span class="cat-nav__caret material-symbols-outlined">expand_more</span></a>
+  <a class="cat-nav__trigger px-3 py-2 rounded-xl transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _navLp %>/produits" <%= _navActive('/produits') ? 'aria-current="page"' : '' %>><%= t('nav.catalog') %><span class="cat-nav__caret material-symbols-outlined">expand_more</span></a>
   <% if (Array.isArray(navCategories) && navCategories.length) { %>
   <div class="cat-nav__panel">
     <div class="cat-nav__card">
       <div class="cat-nav__head">
         <span class="cat-nav__label"><%= t('header.allCategories') %></span>
-        <a class="cat-nav__seeall" href="<%= _lp %>/produits"><%= t('header.viewCatalog') %> <span class="material-symbols-outlined" style="font-size:15px;">arrow_forward</span></a>
+        <a class="cat-nav__seeall" href="<%= _navLp %>/produits"><%= t('header.viewCatalog') %> <span class="material-symbols-outlined" style="font-size:15px;">arrow_forward</span></a>
       </div>
       <div class="cat-nav__grid">
         <% navCategories.forEach(function (cat) { %>
-          <a class="cat-nav__item" href="<%= _lp %>/categorie/<%= encodeURIComponent(_isDe && cat.slugDe ? cat.slugDe : cat.slug) %>">
+          <a class="cat-nav__item" href="<%= _navLp %>/categorie/<%= encodeURIComponent(_isDe && cat.slugDe ? cat.slugDe : cat.slug) %>">
             <span class="cat-nav__ic"><span class="material-symbols-outlined"><%= cat.icon || 'category' %></span></span>
             <span class="cat-nav__nm"><%= _isDe && cat.nameDe ? cat.nameDe : cat.name %></span>
           </a>
@@ -89,14 +118,14 @@
   </div>
   <% } %>
 </div>
-<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/moteurs') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/moteurs" <%= _navActive('/moteurs') ? 'aria-current="page"' : '' %>><%= t('nav.engines') %></a>
-<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/blog') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/blog" <%= _navActive('/blog') ? 'aria-current="page"' : '' %>><%= t('nav.blog') %></a>
-<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/contact') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/contact" <%= _navActive('/contact') ? 'aria-current="page"' : '' %>><%= t('nav.contact') %></a>
-<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/devis') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _lp %>/devis" <%= _navActive('/devis') ? 'aria-current="page"' : '' %>><%= t('nav.quote') %></a>
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/moteurs') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _navLp %>/moteurs" <%= _navActive('/moteurs') ? 'aria-current="page"' : '' %>><%= t('nav.engines') %></a>
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/blog') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _navLp %>/blog" <%= _navActive('/blog') ? 'aria-current="page"' : '' %>><%= t('nav.blog') %></a>
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/contact') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _navLp %>/contact" <%= _navActive('/contact') ? 'aria-current="page"' : '' %>><%= t('nav.contact') %></a>
+<a class="px-3 py-2 rounded-xl transition-colors <%= _navActive('/devis') ? 'bg-primary/10 text-primary' : 'text-slate-600 hover:text-primary hover:bg-slate-50' %>" href="<%= _navLp %>/devis" <%= _navActive('/devis') ? 'aria-current="page"' : '' %>><%= t('nav.quote') %></a>
 </nav>
 
 <div class="hidden md:flex flex-1 max-w-3xl">
-<form action="<%= _lp %>/produits" class="relative w-full" method="GET" data-search-autocomplete data-search-autocomplete-view="compact">
+<form action="<%= _navLp %>/produits" class="relative w-full" method="GET" data-search-autocomplete data-search-autocomplete-view="compact">
 <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
 <span class="material-symbols-outlined text-xl">search</span>
  </div>
@@ -108,7 +137,7 @@
 <div class="absolute left-0 right-0 top-full mt-2 hidden" data-search-autocomplete-panel>
   <div class="rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden" style="font-family: Arial, sans-serif;">
     <div class="max-h-[28rem] overflow-y-auto" data-search-autocomplete-sections></div>
-    <a class="block border-t border-slate-100 px-4 py-3 text-xs font-black text-primary hover:bg-slate-50" href="<%= _lp %>/produits" data-search-autocomplete-all>
+    <a class="block border-t border-slate-100 px-4 py-3 text-xs font-black text-primary hover:bg-slate-50" href="<%= _navLp %>/produits" data-search-autocomplete-all>
       <%= t('header.viewCatalog') %>
     </a>
   </div>
@@ -138,13 +167,13 @@
 <span class="material-symbols-outlined">menu</span>
 </button>
 
-<a aria-label="<%= t('nav.search') %>" class="flex md:hidden items-center justify-center rounded-lg h-9 w-9 text-slate-700 hover:bg-slate-100 transition-colors" href="<%= _lp %>/rechercher">
+<a aria-label="<%= t('nav.search') %>" class="flex md:hidden items-center justify-center rounded-lg h-9 w-9 text-slate-700 hover:bg-slate-100 transition-colors" href="<%= _navLp %>/rechercher">
 <span class="material-symbols-outlined">search</span>
 </a>
 
 <%/* Téléphone : sur md+ il est dans la barre utilitaire en haut. Sous md, icône
      d'appel ici (tap-to-call, tracké via le listener tel: du footer). */%>
-<a class="flex md:hidden items-center justify-center rounded-lg h-9 w-9 text-primary hover:bg-slate-100 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %>" title="<%= t('header.callUs') %>">
+<a class="flex md:hidden items-center justify-center rounded-lg h-9 w-9 text-primary hover:bg-slate-100 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="<%= t('a11y.callBrand') %>" title="<%= t('header.callUs') %>">
 <span class="material-symbols-outlined">call</span>
 </a>
 
@@ -171,31 +200,31 @@
       </div>
 
       <div class="mt-4 grid gap-2">
-        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="Appeler <%= brand.NAME %> au <%= brand.PHONE %>">
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="<%= t('a11y.callBrandAt', { phone: brand.PHONE }) %>">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">call</span><%= t('header.callUs') %> · <%= brand.PHONE %></span>
           <span class="material-symbols-outlined">call</span>
         </a>
-        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/">
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _navLp %>/">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">home</span><%= t('nav.home') %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
-        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/produits">
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/produits') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _navLp %>/produits">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">storefront</span><%= t('nav.catalog') %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
-        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/moteurs') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/moteurs">
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/moteurs') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _navLp %>/moteurs">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">precision_manufacturing</span><%= t('nav.engines') %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
-        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/blog') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/blog">
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/blog') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _navLp %>/blog">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">article</span><%= t('nav.blog') %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
-        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/contact') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/contact">
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/contact') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _navLp %>/contact">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">mail</span><%= t('nav.contact') %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
-        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/devis') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _lp %>/devis">
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/devis') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _navLp %>/devis">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">request_quote</span><%= t('nav.quote') %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
@@ -204,9 +233,9 @@
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
 
-        <% const _mobileSwitchHref = _isDe ? _frHref : _deHref; %>
-        <% const _mobileSwitchLabel = _isDe ? 'Français' : 'Deutsch'; %>
-        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors hover:bg-slate-50 text-slate-800 border-t border-slate-100 mt-2 pt-4" href="<%= _mobileSwitchHref %>" hreflang="<%= _isDe ? 'fr' : 'de' %>">
+        <% const _mobileSwitchHref = _switchDe ? _frHref : _deHref; %>
+        <% const _mobileSwitchLabel = _switchDe ? 'Français' : 'Deutsch'; %>
+        <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors hover:bg-slate-50 text-slate-800 border-t border-slate-100 mt-2 pt-4" href="<%= _mobileSwitchHref %>" hreflang="<%= _switchDe ? 'fr' : 'de' %>">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">translate</span><%= _mobileSwitchLabel %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
         </a>
@@ -272,6 +301,28 @@
   })();
 </script>
 
+<script>
+  /* Libellés du menu d'autocomplétion de la recherche, dans la langue de la
+     page. Le serveur répondait déjà en allemand (titres de sections, noms de
+     fiches, libellés de catégorie), mais le calque client réinjectait du
+     français en dur : « Réf: », « Produit », « Catégorie », « Marque
+     véhicule », « 3 résultats », « Voir tous les résultats pour … ». Même
+     mécanisme que CART_TOAST_I18N (partials/footer.ejs) pour le toast panier.
+     Le lien « tout voir » n'est PAS repris ici : le script réutilise le href et
+     le texte rendus par EJS (donc /de/produits + « Katalog ansehen » dans le
+     header, « Zum Katalog » sur /de/rechercher), au lieu de les écraser par
+     « /produits » — ce qui renvoyait l'acheteur allemand sur le catalogue
+     français et remettait la session en « fr ». */
+  window.CPF_SEARCH_I18N = <%- JSON.stringify({
+    ref: t('cart.ref'),
+    product: t('cart.productFallback'),
+    vehicleMake: t('listing.vehicleMake'),
+    category: t('listing.category'),
+    countResult: t('search.countResult'),
+    countResults: t('search.countResults'),
+    allResultsFor: t('search.allResultsFor'),
+  }).replace(/</g, '\\u003c') %>;
+</script>
 <script defer src="/js/search-autocomplete.js"></script>
 
 <%- include('./lang-suggest') %>

@@ -167,8 +167,14 @@
           return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
             .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
         } %>
+        <% /* Les pages marque n'existent qu'en FRANÇAIS : sans ?lang=de, leur GET
+              remettait la session en « fr » depuis l'accueil /de — panier,
+              paiement, Order.lang et e-mails compris. Même helper que
+              « So erkennen Sie uns » et « Suivre mon SAV » (un robot reçoit
+              l'URL nue, sans paramètre à explorer). */ %>
+        <% const _lienMarque = (u) => (typeof lienFr === 'function' ? lienFr(u) : u); %>
         <% brands.forEach((b) => { %>
-          <a class="shrink-0 w-20 h-20 sm:w-24 sm:h-24 bg-white dark:bg-surface-dark rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-center hover:shadow-md transition-shadow grayscale hover:grayscale-0 cursor-pointer" href="/pieces-auto/<%= slugifyMakeForHome(b.make) %>" aria-label="Voir les pièces pour <%= b.label %>">
+          <a class="shrink-0 w-20 h-20 sm:w-24 sm:h-24 bg-white dark:bg-surface-dark rounded-2xl border border-slate-100 dark:border-slate-800 flex items-center justify-center hover:shadow-md transition-shadow grayscale hover:grayscale-0 cursor-pointer" href="<%= _lienMarque('/pieces-auto/' + slugifyMakeForHome(b.make)) %>" aria-label="<%= t('a11y.viewPartsFor', { brand: b.label }) %>">
             <img alt="<%= b.label %>" class="w-14 h-14 object-contain" src="<%= b.img %>" loading="lazy" />
           </a>
         <% }) %>
@@ -213,6 +219,13 @@
                 <div>
                   <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider"><%= t('product.priceTTC') %></p>
                   <p class="text-base sm:text-2xl home-display font-bold text-slate-900 dark:text-white"><%= formatMoney(p.priceCents) %> €</p>
+                  <%# PAngV : port et Pfand annoncés avant le bouton d'ajout direct (voir
+                      products/index.ejs). %>
+                  <% if (lang === 'de') { %>
+                    <% const _pfandCarte = (p.consigne && p.consigne.enabled === true && p.consigne.chargeUpfront === true && Number(p.consigne.amountCents) > 0) ? Number(p.consigne.amountCents) : 0; %>
+                    <p class="text-[10px] sm:text-[11px] text-slate-500 leading-snug" data-price-info><%= p.serviceType === 'standalone_cloning' ? t('product.ttc') : t('product.priceInfoDe') %></p>
+                    <% if (_pfandCarte > 0) { %><p class="text-[10px] sm:text-[11px] text-slate-500 leading-snug" data-price-deposit><%= t('product.plusDepositShort', { amount: formatMoney(_pfandCarte) }) %></p><% } %>
+                  <% } %>
                 </div>
                 <% const _pBrand = ((p.brand && String(p.brand).trim()) || (Array.isArray(p.compatibility) && p.compatibility[0] && p.compatibility[0].make) || ''); %>
                 <form action="/panier/ajouter/<%= p._id %>" method="POST"
@@ -241,7 +254,10 @@
           <h2 class="text-xl sm:text-3xl home-display font-bold"><%= t('home.blogTitle') %></h2>
           <p class="text-slate-500 dark:text-slate-400 text-sm mt-1"><%= t('home.blogDesc') %></p>
         </div>
-        <a class="flex items-center gap-2 border border-slate-200 dark:border-slate-800 px-6 py-2 rounded-full font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all" href="/blog">
+        <%# /de/blog existe et sert des articles traduits : sans le préfixe, ce
+            bouton menait au blog français, dont le GET remet la session en
+            « fr » (panier, paiement et e-mails compris). %>
+        <a class="flex items-center gap-2 border border-slate-200 dark:border-slate-800 px-6 py-2 rounded-full font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all" href="<%= langPrefix %>/blog">
           <%= t('home.exploreBlog') %> <span class="material-symbols-rounded text-lg">trending_up</span>
         </a>
       </div>

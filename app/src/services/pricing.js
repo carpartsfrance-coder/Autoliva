@@ -62,7 +62,38 @@ function computePricing({ itemsSubtotalCents, shippingCostCents, clientDiscountP
   };
 }
 
+/**
+ * Consignes NON encaissées à la commande (échange standard « sans caution ») :
+ * rien n'est ajouté au total, mais l'acheteur s'engage à renvoyer l'ancienne
+ * pièce, faute de quoi le montant lui est facturé. C'est un coût conditionnel :
+ * le panier, la livraison et le paiement doivent le rappeler juste avant la
+ * commande (§ 312j Abs. 2 BGB), alors qu'ils n'affichaient que la consigne
+ * encaissée. Mêmes conditions que la ligne `consigne.lines` créée au paiement
+ * (checkoutController.postPayment, `charged: false`).
+ *
+ * @param {Array<{product: object, quantity: number}>} items lignes du panier
+ * @returns {Array<{name: string, quantity: number, amountCents: number, delayDays: number}>}
+ */
+function listConditionalConsigneLines(items) {
+  const out = [];
+  for (const it of Array.isArray(items) ? items : []) {
+    const p = it && it.product;
+    const c = p && p.consigne;
+    if (!c || !c.enabled || c.chargeUpfront === true) continue;
+    if (!Number.isFinite(c.amountCents) || c.amountCents <= 0) continue;
+    const quantity = Math.max(1, Number(it.quantity) || 1);
+    out.push({
+      name: p.name || '',
+      quantity,
+      amountCents: Math.floor(c.amountCents) * quantity,
+      delayDays: Number.isFinite(c.delayDays) && c.delayDays > 0 ? Math.floor(c.delayDays) : 30,
+    });
+  }
+  return out;
+}
+
 module.exports = {
+  listConditionalConsigneLines,
   computePricing,
   computeClientDiscountCents,
   computePromoDiscountCents,

@@ -5,7 +5,12 @@
 <% var _vsModel = (typeof vsModel !== 'undefined' && vsModel) ? vsModel : ''; %>
 <% var _vsEngine = (typeof vsEngine !== 'undefined' && vsEngine) ? vsEngine : ''; %>
 <% var _vsBtn = (typeof vsButtonLabel !== 'undefined' && vsButtonLabel) ? vsButtonLabel : 'Voir les pièces'; %>
-<form action="/produits" method="GET" class="vehicle-selector flex flex-col sm:flex-row gap-2 w-full" data-vehicle-selector data-vs-make-sel="<%= _vsMake %>" data-vs-model-sel="<%= _vsModel %>" data-vs-engine-sel="<%= _vsEngine %>">
+<%# Le catalogue allemand est sous /de/produits : avec /produits en dur, le
+    visiteur de l'accueil /de qui validait son véhicule atterrissait sur le
+    catalogue FRANÇAIS, et ce GET remettait la session — donc le panier, le
+    paiement, Order.lang et les e-mails — en français. %>
+<% var _vsLp = (typeof langPrefix !== 'undefined' && langPrefix) ? langPrefix : ''; %>
+<form action="<%= _vsLp %>/produits" method="GET" class="vehicle-selector flex flex-col sm:flex-row gap-2 w-full" data-vehicle-selector data-vs-make-sel="<%= _vsMake %>" data-vs-model-sel="<%= _vsModel %>" data-vs-engine-sel="<%= _vsEngine %>">
   <select name="vehicleMake" data-vs-make required aria-label="<%= t('listing.vehicleMake') %>" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-900 focus:ring-primary focus:border-primary">
     <option value=""><%= t('vs.make') %></option>
   </select>

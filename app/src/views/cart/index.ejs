@@ -19,7 +19,7 @@
 
   <% if (errorMessage) { %>
     <div class="mb-8 rounded-2xl border border-red-200 bg-red-50 p-5 text-red-900">
-      <div class="font-bold">Erreur</div>
+      <div class="font-bold"><%= t('checkout.errorShort') %></div>
       <div class="mt-1 text-sm"><%= errorMessage %></div>
     </div>
   <% } %>
@@ -41,7 +41,8 @@
           <h3 class="font-display font-bold text-xl"><%= t('cart.empty') %></h3>
           <p class="mt-2 text-slate-600 dark:text-slate-400 text-sm"><%= t('cart.emptyDesc') %></p>
           <div class="mt-6">
-            <a class="inline-flex items-center justify-center rounded-2xl bg-primary hover:bg-red-700 text-white py-4 px-6 font-bold text-sm shadow-xl shadow-red-500/20 transition-all" href="/produits">
+            <%# Catalogue dans la langue du panier : /produits remettait la session en « fr ». %>
+            <a class="inline-flex items-center justify-center rounded-2xl bg-primary hover:bg-red-700 text-white py-4 px-6 font-bold text-sm shadow-xl shadow-red-500/20 transition-all" href="<%= lang === 'de' ? '/de' : '' %>/produits">
               <%= t('cart.continueShopping') %>
               <span class="material-symbols-outlined ml-2">arrow_forward</span>
             </a>
@@ -125,7 +126,7 @@
                 </div>
                 <h4 class="text-xs font-bold line-clamp-2 h-8 mb-2"><%= p && p.name ? p.name : '' %></h4>
                 <div class="flex items-center justify-between mt-auto">
-                  <span class="font-bold text-sm"><%= formatMoney(p && p.priceCents ? p.priceCents : 0) %> €</span>
+                  <span class="font-bold text-sm"><%= formatMoney(p && p.priceCents ? p.priceCents : 0) %> €<% if (lang === 'de') { %><%# PAngV : port et Pfand annoncés avant l'ajout direct (voir products/index.ejs). %><% const _pfandSugg = (p && p.consigne && p.consigne.enabled === true && p.consigne.chargeUpfront === true && Number(p.consigne.amountCents) > 0) ? Number(p.consigne.amountCents) : 0; %><span class="block text-[10px] font-medium text-slate-500" data-price-info><%= p && p.serviceType === 'standalone_cloning' ? t('product.ttc') : t('product.priceInfoDe') %></span><% if (_pfandSugg > 0) { %><span class="block text-[10px] font-medium text-slate-500" data-price-deposit><%= t('product.plusDepositShort', { amount: formatMoney(_pfandSugg) }) %></span><% } %><% } %></span>
                   <% const _pBrand = ((p && p.brand && String(p.brand).trim()) || (p && Array.isArray(p.compatibility) && p.compatibility[0] && p.compatibility[0].make) || ''); %>
                   <form action="/panier/ajouter/<%= p && p._id ? p._id : '' %>" method="POST"
                     data-product-id="<%= p && p._id ? p._id : '' %>"
@@ -213,6 +214,7 @@
             </div>
           <% } %>
         </div>
+        <%- include('../partials/consigne-conditionnelle', { lignes: (typeof consigneConditionnelle !== 'undefined' ? consigneConditionnelle : []), classes: 'mb-5' }) %>
 
         <!-- Promo code — collapsible -->
         <details class="mb-6 group">
@@ -236,7 +238,18 @@
         </details>
 
         <!-- CTA buttons -->
-        <% if (!currentUser) { %>
+        <% if (!currentUser && lang === 'de') { %>
+          <%# En allemand, la commande en invité passe en bouton principal : la
+              page de connexion n'est qu'un détour pour un premier achat. %>
+          <a class="w-full bg-primary hover:bg-red-700 text-white py-4 rounded-2xl font-bold text-base shadow-xl shadow-red-500/20 transition-all flex items-center justify-center gap-3" href="/commande/livraison?guest=1">
+            <%= t('cart.checkout') %>
+            <span class="material-symbols-outlined">arrow_forward</span>
+          </a>
+          <a class="mt-2 w-full border border-slate-200 hover:border-primary text-slate-700 hover:text-primary py-3.5 rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2" href="/compte/connexion?returnTo=%2Fpanier">
+            <%= t('cart.loginToCheckout') %>
+            <span class="material-symbols-outlined text-lg">arrow_forward</span>
+          </a>
+        <% } else if (!currentUser) { %>
           <a class="w-full bg-primary hover:bg-red-700 text-white py-4 rounded-2xl font-bold text-base shadow-xl shadow-red-500/20 transition-all flex items-center justify-center gap-3" href="/compte/connexion?returnTo=%2Fpanier">
             <%= t('cart.checkout') %>
             <span class="material-symbols-outlined">arrow_forward</span>
@@ -282,7 +295,7 @@
                     type="email"
                     name="email"
                     required
-                    placeholder="votre@email.com"
+                    placeholder="<%= t('footer.emailPlaceholder') %>"
                     class="flex-1 min-w-0 rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300"
                   />
                   <button type="submit" class="shrink-0 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">
@@ -297,6 +310,9 @@
 
           <script>
           (function () {
+            /* Messages du widget dans la langue du panier (ils restaient en français). */
+            var SAVE_CART_I18N = <%- JSON.stringify({ sending: t('cart.saveSending'), sent: t('cart.saveSent'), error: t('cart.saveError'), network: t('cart.saveNetworkError') }).replace(/</g, '\\u003c') %>;
+            var escapeHtml = function (v) { return String(v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
             var form = document.getElementById('save-cart-form');
             var result = document.getElementById('save-cart-result');
             if (!form) return;
@@ -312,7 +328,7 @@
             form.addEventListener('submit', function (e) {
               e.preventDefault();
               var email = form.querySelector('input[name="email"]').value;
-              result.innerHTML = '<span class="text-slate-500">Envoi…</span>';
+              result.innerHTML = '<span class="text-slate-500">' + escapeHtml(SAVE_CART_I18N.sending) + '</span>';
               fetch('/api/lead/save-cart', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -321,7 +337,7 @@
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
                   if (d && d.ok) {
-                    result.innerHTML = '<span class="text-green-700 font-semibold">✓ Panier envoyé à ' + email + '. Vérifiez votre boîte mail.</span>';
+                    result.innerHTML = '<span class="text-green-700 font-semibold">✓ ' + escapeHtml(SAVE_CART_I18N.sent.replace('%email%', email)) + '</span>';
                     try { sessionStorage.setItem('cpf_saved_cart', '1'); } catch (e) {}
                     setTimeout(function () {
                       var widget = document.getElementById('save-cart-widget');
@@ -330,11 +346,11 @@
                     }, 1500);
                     if (window.dataLayer) window.dataLayer.push({ event: 'lead_save_cart', email: email });
                   } else {
-                    result.innerHTML = '<span class="text-red-700">Erreur. Réessayez ou contactez-nous.</span>';
+                    result.innerHTML = '<span class="text-red-700">' + escapeHtml(SAVE_CART_I18N.error) + '</span>';
                   }
                 })
                 .catch(function () {
-                  result.innerHTML = '<span class="text-red-700">Erreur réseau.</span>';
+                  result.innerHTML = '<span class="text-red-700">' + escapeHtml(SAVE_CART_I18N.network) + '</span>';
                 });
             });
           })();
@@ -351,11 +367,11 @@
     <div class="mx-3 mb-1 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-sm shadow-xl overflow-hidden">
       <div class="flex items-center justify-between gap-3 px-4 py-3">
         <div class="flex flex-col min-w-0">
-          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400"><%= itemsCount %> article<%= itemsCount > 1 ? 's' : '' %></span>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400"><%= itemsCount %> <%= lang === 'de' ? (itemsCount > 1 ? 'Artikel' : 'Artikel') : ('article' + (itemsCount > 1 ? 's' : '')) %></span>
           <span class="text-lg font-black text-primary"><%= formatMoney(totalCents) %> €</span>
         </div>
         <% if (!currentUser) { %>
-          <a class="shrink-0 bg-primary hover:bg-red-700 text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-primary/20 transition-all" href="/compte/connexion?returnTo=%2Fpanier">
+          <a class="shrink-0 bg-primary hover:bg-red-700 text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-primary/20 transition-all" href="<%= lang === 'de' ? '/commande/livraison?guest=1' : '/compte/connexion?returnTo=%2Fpanier' %>">
             <%= t('common.validate') %>
             <span class="material-symbols-outlined text-lg">arrow_forward</span>
           </a>

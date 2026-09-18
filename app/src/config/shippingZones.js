@@ -159,6 +159,30 @@ function countryOptionsFor(lang) {
   return [{ group: 'Lieferung', items: tete }].concat(groupes);
 }
 
+/* Pays affiché dans une ADRESSE (paiement, pages commande) pour un client
+   allemand. La valeur stockée reste le libellé français (« Allemagne ») : c'est
+   la clé de zone. Sans cette table, la confirmation allemande affichait
+   « 10115 Berlin • Allemagne ». « (Festland) » ne sert qu'au menu. */
+const ADRESSE_DE = { ...ETIQUETTES_DE, 'France': 'Frankreich', 'Autre': 'Anderes Land' };
+const VALEUR_PAR_CODE = COUNTRY_OPTIONS
+  .reduce((acc, g) => acc.concat(g.items), [])
+  .reduce((acc, it) => {
+    const code = normalizeCountryCode(it.value);
+    if (code && !acc[code]) acc[code] = it.value;
+    return acc;
+  }, {});
+
+/** Libellé d'un pays d'adresse dans la langue demandée (le français est rendu tel quel). */
+function countryLabelFor(country, lang) {
+  const valeur = String(country == null ? '' : country).trim();
+  if (lang !== 'de' || !valeur) return valeur;
+  if (Object.prototype.hasOwnProperty.call(ADRESSE_DE, valeur)) return ADRESSE_DE[valeur];
+  /* Valeur libre ou code ISO (« DE », « allemagne ») : on retrouve l'option. */
+  const code = normalizeCountryCode(valeur);
+  const option = code ? VALEUR_PAR_CODE[code] : '';
+  return option && ADRESSE_DE[option] ? ADRESSE_DE[option] : valeur;
+}
+
 /** Normalise un pays (code ou libellé libre) → code ISO alpha-2. Défaut : FR. */
 function normalizeCountryCode(country) {
   const v = String(country == null ? '' : country).trim();
@@ -207,6 +231,7 @@ module.exports = {
   isEuVatCountry,
   COUNTRY_OPTIONS,
   countryOptionsFor,
+  countryLabelFor,
   normalizeCountryCode,
   resolveZone,
 };

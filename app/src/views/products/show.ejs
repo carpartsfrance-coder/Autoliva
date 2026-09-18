@@ -79,9 +79,14 @@
         : (findSpec('garantie') || topLeftBadge || ''); %>
       <%# Garantie « jusqu'à N mois » (formulation conforme, design Autoparts) %>
       <% const _wm = (product.warranty && Number(product.warranty.months) > 0) ? Number(product.warranty.months) : 0; %>
-      <% const _garLabel = _wm ? t('product.warrantyUpTo', { months: _wm }) : (keyGarantie || t('product.warrantyAsk')); %>
-      <% const _garValue = _wm ? (t('product.upToMonths', { months: _wm }) + ' — ' + t('product.partsLabor')) : (keyGarantie || t('product.warrantyAsk')); %>
       <% const optionGroups = Array.isArray(product.displayOptions) ? product.displayOptions : []; %>
+      <%# « Jusqu'à N mois » seulement si une option porte sur la garantie ; sinon
+          la fiche a UNE durée, et « bis zu » la rendait floue alors que les
+          annonces et les CGV doivent citer le même chiffre. Une option de
+          programmation ou de mode de fourniture ne change pas la garantie. %>
+      <% const _garVariable = optionGroups.some((g) => /garantie|gewährleistung|warranty/i.test(String((g && g.label) || '') + ' ' + (Array.isArray(g && g.choices) ? g.choices.map((c) => (c && c.label) || '').join(' ') : ''))); %>
+      <% const _garLabel = _wm ? t(_garVariable ? 'product.warrantyUpTo' : 'product.warrantyMonths', { months: _wm }) : (keyGarantie || t('product.warrantyAsk')); %>
+      <% const _garValue = _wm ? (t(_garVariable ? 'product.upToMonths' : 'product.monthsExact', { months: _wm }) + ' — ' + t('product.partsLabor')) : (keyGarantie || t('product.warrantyAsk')); %>
       <% const compGrouped = {}; %>
       <% (Array.isArray(product.compatibility) ? product.compatibility : []).forEach((c) => {
         const make = c && c.make ? String(c.make).trim() : '';
@@ -408,9 +413,14 @@
             <div style="font-size: 13px; font-weight: 800; color: #0F1626; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px;"><%= product.name %></div>
             <div style="font-size: 11px; font-weight: 600; color: #8A93A4; margin-top: 1px;"><%= t('product.refPrefix') %> <%= ref %><% if (shippingDelayText) { %> · <%= t('product.shippingLabel') %> <%= shippingDelayText %><% } %><% if (_garLabel) { %> · <%= _garLabel %><% } %></div>
           </div>
-          <span data-ap-sticky-checkok style="display: none; align-items: center; gap: 6px; background: #E4F5EC; color: #128A52; font-size: 11.5px; font-weight: 800; padding: 5px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;"><span class="material-symbols-outlined ap-fill" style="font-size: 14px;">check_circle</span>Vérification expert en cours</span>
+          <span data-ap-sticky-checkok style="display: none; align-items: center; gap: 6px; background: #E4F5EC; color: #128A52; font-size: 11.5px; font-weight: 800; padding: 5px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;"><span class="material-symbols-outlined ap-fill" style="font-size: 14px;">check_circle</span><%= t('product.expertCheckPending') %></span>
           <div class="ap-sticky-price" style="margin-left: auto; text-align: right; flex-shrink: 0;">
             <div style="font-size: 17px; font-weight: 800; color: #0F1626;"><%= formatMoney(basePriceCents) %> €</div>
+            <%# PAngV : la barre collante a son propre bouton « In den Warenkorb ».
+                L'acheteur allemand doit y voir, près du prix, que le port s'ajoute
+                et le Pfand encaissé à la commande — pas seulement dans le bloc prix
+                qu'il a peut-être déjà fait défiler. %>
+            <% if (lang === 'de') { %><div style="font-size: 10.5px; font-weight: 600; color: #6B7482; white-space: nowrap;"><%= t('product.ttc') %><% if (!isService) { %>, <%= t('product.plusShipping') %><% } %></div><% if (consigneUpfront) { %><div style="font-size: 10.5px; font-weight: 600; color: #6B7482; white-space: nowrap;"><%= t('product.plusDepositShort', { amount: consigneAmountEuro }) %></div><% } %><% } %>
             <% if (installmentEligible) { %><div style="font-size: 10.5px; font-weight: 600; color: #6B7482;">3x / 4x sans frais avec Scalapay</div><% } %>
           </div>
           <button type="button" data-ap-sticky-add style="height: 44px; padding: 0 20px; border: none; border-radius: 10px; background: #ED1C24; color: #FFFFFF; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 8px; flex-shrink: 0;" class="ap-cta">
@@ -426,10 +436,14 @@
       </div>
 
       <%# ═══ Fil d'ariane ═══ %>
-      <nav style="display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #8A93A4; padding: 22px 0 28px 0; flex-wrap: wrap;" aria-label="Fil d'Ariane">
-        <a href="/" style="color: #6B7482; text-decoration: none;" class="ap-hover-red"><%= t('breadcrumb.home') %></a>
+      <%# La fiche /de est la page d'atterrissage des annonces : « Startseite » et
+          « Katalog » menaient au site FRANÇAIS, dont le GET remet la session en
+          « fr » (panier, paiement, Order.lang et e-mails compris). %>
+      <% const _lpFil = typeof langPrefix !== 'undefined' ? langPrefix : ''; %>
+      <nav style="display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #8A93A4; padding: 22px 0 28px 0; flex-wrap: wrap;" aria-label="<%= t('a11y.breadcrumb') %>" data-fil-ariane>
+        <a href="<%= _lpFil %>/" style="color: #6B7482; text-decoration: none;" class="ap-hover-red"><%= t('breadcrumb.home') %></a>
         <span class="material-symbols-outlined" style="font-size: 14px; color: #C3C9D3;">chevron_right</span>
-        <a href="/produits" style="color: #6B7482; text-decoration: none;" class="ap-hover-red"><%= t('breadcrumb.catalog') %></a>
+        <a href="<%= _lpFil %>/produits" style="color: #6B7482; text-decoration: none;" class="ap-hover-red"><%= t('breadcrumb.catalog') %></a>
         <% if (typeof categoryUrl !== 'undefined' && categoryUrl && typeof categoryName !== 'undefined' && categoryName) { %>
           <% categoryName.split(/\s*>\s*/).forEach((part) => { %>
             <span class="material-symbols-outlined" style="font-size: 14px; color: #C3C9D3;">chevron_right</span>
@@ -456,24 +470,24 @@
             <% } %>
             <div style="position: absolute; top: 16px; left: 16px; background: #10151F; color: #FFFFFF; font-size: 12px; font-weight: 700; padding: 8px 13px; border-radius: 8px; z-index: 3;"><%= (heroBadge || t('product.reconditioned')) %></div>
             <% if (images.length > 1) { %>
-              <button type="button" data-gallery-prev aria-label="Image précédente" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 999px; border: 1px solid #E9ECF1; background: #FFFFFF; box-shadow: 0 4px 12px rgba(15,22,38,0.08); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 3;" class="ap-iconbtn"><span class="material-symbols-outlined" style="font-size: 20px; color: #0F1626;">chevron_left</span></button>
-              <button type="button" data-gallery-next aria-label="Image suivante" style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 999px; border: 1px solid #E9ECF1; background: #FFFFFF; box-shadow: 0 4px 12px rgba(15,22,38,0.08); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 3;" class="ap-iconbtn"><span class="material-symbols-outlined" style="font-size: 20px; color: #0F1626;">chevron_right</span></button>
+              <button type="button" data-gallery-prev aria-label="<%= t('a11y.prevImage') %>" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 999px; border: 1px solid #E9ECF1; background: #FFFFFF; box-shadow: 0 4px 12px rgba(15,22,38,0.08); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 3;" class="ap-iconbtn"><span class="material-symbols-outlined" style="font-size: 20px; color: #0F1626;">chevron_left</span></button>
+              <button type="button" data-gallery-next aria-label="<%= t('a11y.nextImage') %>" style="position: absolute; right: 16px; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 999px; border: 1px solid #E9ECF1; background: #FFFFFF; box-shadow: 0 4px 12px rgba(15,22,38,0.08); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 3;" class="ap-iconbtn"><span class="material-symbols-outlined" style="font-size: 20px; color: #0F1626;">chevron_right</span></button>
             <% } %>
             <% if (mainMediaItem && mainMediaItem.type === 'image') { %>
-              <button type="button" data-pp-zoom aria-label="Agrandir" style="position:absolute;bottom:16px;right:16px;width:40px;height:40px;border-radius:999px;border:1px solid #E9ECF1;background:#FFFFFF;box-shadow:0 4px 12px rgba(15,22,38,0.08);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:3;" class="ap-iconbtn"><span class="material-symbols-outlined" style="font-size: 20px; color: #0F1626;">zoom_in</span></button>
+              <button type="button" data-pp-zoom aria-label="<%= t('a11y.zoom') %>" style="position:absolute;bottom:16px;right:16px;width:40px;height:40px;border-radius:999px;border:1px solid #E9ECF1;background:#FFFFFF;box-shadow:0 4px 12px rgba(15,22,38,0.08);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:3;" class="ap-iconbtn"><span class="material-symbols-outlined" style="font-size: 20px; color: #0F1626;">zoom_in</span></button>
             <% } %>
           </div>
           <% if (visibleThumbItems.length > 1) { %>
             <div style="display: flex; gap: 14px; flex-wrap: wrap;">
               <% visibleThumbItems.forEach((item, idx) => { %>
                 <% const _isThumbVideo = item.type === 'video'; const _isThumbEmbed = item.type === 'embed'; %>
-                <button type="button" data-thumb data-index="<%= idx %>" data-src="<%= item.url %>" data-type="<%= item.type %>"<% if (_isThumbEmbed) { %> data-embed-src="<%= item.embedUrl %>"<% } %> aria-label="Vue <%= idx + 1 %>" style="width: 92px; height: 92px; padding: 5px; border: <%= idx === 0 ? '2px solid #ED1C24' : '2px solid #EDF0F4' %>; border-radius: 12px; background: #FFFFFF; cursor: pointer; overflow: hidden; position: relative; flex-shrink: 0;">
+                <button type="button" data-thumb data-index="<%= idx %>" data-src="<%= item.url %>" data-type="<%= item.type %>"<% if (_isThumbEmbed) { %> data-embed-src="<%= item.embedUrl %>"<% } %> aria-label="<%= t('a11y.imageView', { n: idx + 1 }) %>" style="width: 92px; height: 92px; padding: 5px; border: <%= idx === 0 ? '2px solid #ED1C24' : '2px solid #EDF0F4' %>; border-radius: 12px; background: #FFFFFF; cursor: pointer; overflow: hidden; position: relative; flex-shrink: 0;">
                   <% if (_isThumbEmbed && item.poster) { %>
                     <img alt="" decoding="async" loading="lazy" src="<%= item.poster %>" style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 7px;" />
                   <% } else if (_isThumbVideo) { %>
                     <video muted playsinline preload="metadata" style="width:100%;height:100%;object-fit:cover;border-radius:7px;"><source src="<%= item.url %>" /></video>
                   <% } else { %>
-                    <img alt="Vue <%= idx + 1 %>" decoding="async" loading="lazy" src="<%= item.url %>" style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 7px;" />
+                    <img alt="<%= t('a11y.imageView', { n: idx + 1 }) %>" decoding="async" loading="lazy" src="<%= item.url %>" style="width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 7px;" />
                   <% } %>
                 </button>
               <% }) %>
@@ -490,7 +504,7 @@
         <div class="ap-m-only ap-bleed" style="position: relative;">
           <div data-ap-gal-strip style="display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; border-top: 1px solid #F0F2F6; border-bottom: 1px solid #F0F2F6; scrollbar-width: none;">
             <% _mImgs.forEach(function (u, i) { %>
-              <img src="<%= u %>" alt="<%= product.name %><%= i ? (' — vue ' + (i + 1)) : '' %>"<% if (i) { %> loading="lazy" decoding="async"<% } %> style="flex: 0 0 100%; width: 100%; aspect-ratio: 1 / 0.92; object-fit: cover; scroll-snap-align: center; display: block;" />
+              <img src="<%= u %>" alt="<%= product.name %><%= i ? (' — ' + t('a11y.imageView', { n: i + 1 })) : '' %>"<% if (i) { %> loading="lazy" decoding="async"<% } %> style="flex: 0 0 100%; width: 100%; aspect-ratio: 1 / 0.92; object-fit: cover; scroll-snap-align: center; display: block;" />
             <% }) %>
           </div>
           <div style="position: absolute; top: 14px; left: 14px; background: #10151F; color: #FFFFFF; font-size: 11px; font-weight: 700; padding: 7px 11px; border-radius: 8px; pointer-events: none;"><%= (heroBadge || t('product.reconditioned')) %></div>
@@ -590,7 +604,7 @@
               <div style="min-width: 0;">
                 <div style="display: flex; align-items: flex-end; flex-wrap: wrap;">
                   <span class="ap-price-amount" style="font-size: 32px; font-weight: 800; letter-spacing: -0.01em; color: #0F1626; line-height: 1;" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="4" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(basePriceCents) %> €</span>
-                  <span style="font-size: 12px; font-weight: 700; color: #8A93A4; margin-left: 8px; padding-bottom: 2px;"><%= t('product.ttc') %></span>
+                  <span style="font-size: 12px; font-weight: 700; color: #8A93A4; margin-left: 8px; padding-bottom: 2px;"><%= t('product.ttc') %><% if (lang === 'de' && !isService) { %>, <%= t('product.plusShipping') %><% } %></span>
 <% if (product.vatRecoverable) { %><span style="font-size: 12.5px; font-weight: 700; color: #99A1B0; margin-left: 12px; padding-bottom: 2px;"><span data-price-display-ht><%= formatMoney(priceHTcents) %></span> <%= t('product.ht') %></span><% } %>
                 </div>
               </div>
@@ -606,6 +620,27 @@
                 <% } %>
               </div>
             </div>
+            <% if (lang === 'de' && !isService) { %>
+              <%# Ce que l'acheteur allemand paie en plus du prix, avant le panier :
+                  port réel vers l'Allemagne, délai, et consigne (encaissée à la
+                  commande, ou facturée si l'ancienne pièce ne revient pas).
+                  Jamais sur le service de clonage : aller-retour inclus. %>
+              <% const _versandDe = (typeof versandDeCents === 'number') ? versandDeCents : null; %>
+              <%# Délai de transport annoncé seulement pour une expédition sous 24 ou
+                  48 h : « 24-72 Std. » ou « 48 bis 72 Std. » contiennent aussi
+                  « 24 » / « 48 », et y ajouter 2 à 4 jours promettait trop court. %>
+              <% const _expeditionRapide = product.inStock && /^(?:versand in\s+|expédition\s+(?:sous\s+)?)?(?:24|48)(?:\s*(?:\/|bis|à)\s*48)?\s*(?:std\.?|h)$/i.test(String(shippingDelayText || '').trim()); %>
+              <div style="margin-top: 10px; font-size: 12px; font-weight: 600; color: #3E4657; line-height: 1.5;">
+                <% if (_versandDe !== null) { %>
+                  <div><%= _versandDe > 0 ? t('product.shippingToDe', { amount: formatMoney(_versandDe) }) : t('product.freeShippingToDe') %><% if (_expeditionRapide) { %> · <%= t('product.deliveryToDeDays') %><% } %></div>
+                <% } %>
+                <% if (consigneUpfront) { %>
+                  <div><%= t('product.depositUpfrontLine', { amount: consigneAmountEuro, days: consigneDelayDays }) %></div>
+                <% } else if (hasConsigne) { %>
+                  <div><%= t('product.coreChargeOnNoReturn', { amount: consigneAmountEuro, days: consigneDelayDays }) %></div>
+                <% } %>
+              </div>
+            <% } %>
             <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;">
               <% if (installmentEligible) { %>
               <span data-installment-wrapper><span style="display: inline-flex; align-items: center; gap: 7px; background: #FFFFFF; border: 1px solid #E1E5EB; border-radius: 999px; padding: 5px 12px; font-size: 11.5px; font-weight: 700; color: #2A3242;">4 × <span data-installment-amount><%= formatMoney(installment4Cents) %> €</span> <%= t('product.noFees') %><img src="/design/autoparts/scalapay.png" alt="Scalapay" style="height: 11px; display: block;" /></span></span>
@@ -663,9 +698,9 @@
 
       <%# ═══ Lightbox (hooks du script principal) ═══ %>
       <div aria-hidden="true" class="hidden" style="position:fixed;inset:0;z-index:100;background:rgba(11,15,26,0.85);backdrop-filter:blur(8px);padding:32px;align-items:center;justify-content:center;" data-lightbox role="dialog" tabindex="-1">
-        <button aria-label="Fermer" style="position:absolute;top:18px;right:18px;z-index:10;width:44px;height:44px;border-radius:999px;border:none;background:rgba(255,255,255,0.14);cursor:pointer;display:flex;align-items:center;justify-content:center;" data-lightbox-close type="button"><span class="material-symbols-outlined" style="color:#fff;font-size:22px;">close</span></button>
-        <button aria-label="Précédente" class="hidden" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);z-index:10;width:44px;height:44px;border-radius:999px;border:none;background:rgba(255,255,255,0.14);cursor:pointer;align-items:center;justify-content:center;display:flex;" data-lightbox-prev type="button"><span class="material-symbols-outlined" style="color:#fff;">chevron_left</span></button>
-        <button aria-label="Suivante" class="hidden" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);z-index:10;width:44px;height:44px;border-radius:999px;border:none;background:rgba(255,255,255,0.14);cursor:pointer;align-items:center;justify-content:center;display:flex;" data-lightbox-next type="button"><span class="material-symbols-outlined" style="color:#fff;">chevron_right</span></button>
+        <button aria-label="<%= t('header.close') %>" style="position:absolute;top:18px;right:18px;z-index:10;width:44px;height:44px;border-radius:999px;border:none;background:rgba(255,255,255,0.14);cursor:pointer;display:flex;align-items:center;justify-content:center;" data-lightbox-close type="button"><span class="material-symbols-outlined" style="color:#fff;font-size:22px;">close</span></button>
+        <button aria-label="<%= t('a11y.prevImage') %>" class="hidden" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);z-index:10;width:44px;height:44px;border-radius:999px;border:none;background:rgba(255,255,255,0.14);cursor:pointer;align-items:center;justify-content:center;display:flex;" data-lightbox-prev type="button"><span class="material-symbols-outlined" style="color:#fff;">chevron_left</span></button>
+        <button aria-label="<%= t('a11y.nextImage') %>" class="hidden" style="position:absolute;right:14px;top:50%;transform:translateY(-50%);z-index:10;width:44px;height:44px;border-radius:999px;border:none;background:rgba(255,255,255,0.14);cursor:pointer;align-items:center;justify-content:center;display:flex;" data-lightbox-next type="button"><span class="material-symbols-outlined" style="color:#fff;">chevron_right</span></button>
         <img alt="<%= product.name %>" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,0.45);" data-lightbox-img />
         <div class="hidden" style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.8);font-size:12px;font-weight:600;" data-lightbox-counter></div>
       </div>
@@ -722,8 +757,10 @@
               <div style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= t('product.notSureConseiller') %></div>
               <div style="font-size: 11.5px; font-weight: 500; color: #6B7482; margin-top: 2px;"><%= t('product.techTeamCallback') %></div>
             </div>
-            <div data-ap-callback-idle style="display: flex; gap: 8px; flex-shrink: 0;">
-              <input type="text" data-ap-callback-contact placeholder="<%= t('product.phoneOrEmail') %>" style="height: 42px; width: 200px; border: 1px solid #DEE2E9; border-radius: 10px; outline: none; font-family: inherit; font-size: 12.5px; font-weight: 500; color: #0F1626; padding: 0 13px; background: #FFFFFF;" />
+            <%# flex-wrap + min-width:0 : en allemand, « Rückruf anfordern » et le champ
+                de 200 px débordaient à 434 px sur un écran de 375 px. %>
+            <div data-ap-callback-idle style="display: flex; flex-wrap: wrap; gap: 8px; flex: 1 1 260px; min-width: 0;">
+              <input type="text" data-ap-callback-contact placeholder="<%= t('product.phoneOrEmail') %>" style="height: 42px; flex: 1 1 160px; min-width: 0; width: auto; border: 1px solid #DEE2E9; border-radius: 10px; outline: none; font-family: inherit; font-size: 12.5px; font-weight: 500; color: #0F1626; padding: 0 13px; background: #FFFFFF;" />
               <button type="button" data-ap-callback-btn style="height: 42px; padding: 0 16px; border: none; border-radius: 10px; background: #15213B; color: #FFFFFF; font-family: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; white-space: nowrap;" class="ap-navy"><%= t('product.callbackCta') %></button>
             </div>
             <div data-ap-callback-ok style="display: none; align-items: center; gap: 8px; flex-shrink: 0; background: #E4F5EC; border-radius: 10px; padding: 10px 14px;"><span class="material-symbols-outlined ap-fill" style="font-size: 16px; color: #128A52;">check_circle</span><span style="font-size: 12px; font-weight: 700; color: #128A52;"><%= t('product.callbackOk') %></span></div>
@@ -817,7 +854,7 @@
           <p style="font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.72); line-height: 1.7; margin: 0 0 26px 0; max-width: 480px;"><%= _recondIntro %></p>
           <% } %>
           <div style="display: flex; flex-direction: column; gap: 18px;">
-            <% var _recSteps = [ {t: t('product.recStep1Title'), d: t('product.recStep1Text')}, {t: t('product.recStep2Title'), d: t('product.recStep2Text')}, {t: (_wm ? t('product.recStep3Title', { months: _wm }) : 'Certificat et garantie'), d: t('product.recStep3Text')} ]; %>
+            <% var _recSteps = [ {t: t('product.recStep1Title'), d: t('product.recStep1Text')}, {t: t('product.recStep2Title'), d: t('product.recStep2Text')}, {t: (_wm ? t(_garVariable ? 'product.recStep3Title' : 'product.recStep3TitleExact', { months: _wm }) : t('product.recStep3TitleNoMonths')), d: t('product.recStep3Text')} ]; %>
             <% _recSteps.forEach((st, i) => { %>
               <div style="display: flex; align-items: flex-start; gap: 14px;">
                 <span style="width: 30px; height: 30px; border-radius: 999px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; flex-shrink: 0;"><%= i + 1 %></span>
@@ -869,7 +906,7 @@
         </div>
         <% var _cmpRows = [
              { c: t('product.cmpPrice'), u: t('product.cmpPriceUsed'), r: t('product.cmpPriceRecond'), n: t('product.cmpPriceNew'), weak: [true, false, false] },
-             { c: t('product.cmpWarranty'), u: t('product.cmpNone'), r: (_wm ? t('product.cmpWarrantyRecond', { months: _wm }) : 'Garantie sur la pièce'), n: t('product.cmpWarrantyNew'), weak: [true, false, false] },
+             { c: t('product.cmpWarranty'), u: t('product.cmpNone'), r: (_wm ? t(_garVariable ? 'product.cmpWarrantyRecond' : 'product.cmpWarrantyRecondExact', { months: _wm }) : t('product.cmpWarrantyPart')), n: t('product.cmpWarrantyNew'), weak: [true, false, false] },
              { c: t('product.cmpHistory'), u: t('product.cmpUnknown'), r: t('product.cmpHistoryRecond'), n: t('product.cmpNew2'), weak: [true, false, false] },
              { c: t('product.cmpAvail'), u: t('product.cmpRandom'), r: (shippingDelayText || t('product.cmpAvailRecond')), n: t('product.cmpAvailNew'), weak: [true, false, false] },
              { c: t('product.cmpBreakdown'), u: t('product.cmpNoRecourse'), r: t('product.cmpBreakdownRecond'), n: t('product.cmpBreakdownNew'), weak: [true, false, false] },
@@ -921,7 +958,10 @@
           <div style="font-size: 12.5px; font-weight: 500; color: #6B7482; margin-top: 4px;"><%= consigneUpfront ? t('product.exchangeHowSubConsigne', { amount: consigneAmountEuro }) : t('product.exchangeHowSub') %></div>
         </div>
         <div class="ap-echange-steps" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 28px;">
-          <% var _exSteps = [ {t: t('product.exStep1Title'), d: (consigneUpfront ? t('product.exStep1TextConsigne', { amount: consigneAmountEuro }) : t('product.exStep1Text'))}, {t: t('product.exStep2Title'), d: t('product.exStep2Text')}, {t: t('product.exStep3Title'), d: t('product.exStep3Text')}, {t: t('product.exStep4Title'), d: t('product.exStep4Text')} ]; %>
+          <%# Étape 4 : le délai réel de la fiche (« Délai retour » dans l'admin), le même
+              que la ligne de prix et la FAQ — « 30 » en dur annonçait deux délais
+              différents sur une fiche réglée à 15 jours. %>
+          <% var _exSteps = [ {t: t('product.exStep1Title'), d: (consigneUpfront ? t('product.exStep1TextConsigne', { amount: consigneAmountEuro }) : t('product.exStep1Text'))}, {t: t('product.exStep2Title'), d: t('product.exStep2Text')}, {t: t('product.exStep3Title'), d: t('product.exStep3Text')}, {t: t('product.exStep4Title'), d: t('product.exStep4Text', { days: consigneDelayDays })} ]; %>
           <% _exSteps.forEach((st, i) => { %>
             <div style="display: flex; align-items: flex-start; gap: 13px;">
               <span style="width: 32px; height: 32px; border-radius: 999px; background: #15213B; color: #FFFFFF; font-size: 13px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><%= i + 1 %></span>
@@ -982,9 +1022,22 @@
       <% } %>
 
       <%# ═══ FAQ ═══ %>
+      <%# « Y a-t-il une consigne ? » suit les MÊMES conditions que le bloc « L'échange
+          standard » plus haut (_showIso) et que la ligne de prix. Une pièce
+          reconditionnée sans consigne configurée affiche ce bloc (« retour
+          obligatoire sous N jours ») : la FAQ ne peut pas y répondre qu'aucun
+          retour n'est nécessaire. « Pas d'échange » est réservé aux fiches sans
+          ce bloc (occasion, neuf) ; le service de clonage a sa propre réponse. %>
+      <% var _faqA2 = consigneUpfront
+           ? t('product.faqA2Consigne', { amount: consigneAmountEuro, days: consigneDelayDays })
+           : (hasConsigne
+             ? t('product.faqA2', { amount: consigneAmountEuro, days: consigneDelayDays })
+             : (isService
+               ? t('product.faqA2Service')
+               : (_showIso ? t('product.faqA2ReturnRequired', { days: consigneDelayDays }) : t('product.faqA2NoExchange')))); %>
       <% var _faqItems = (product.sections && product.sections.showFaq && Array.isArray(product.faqs) && product.faqs.length)
            ? product.faqs.map((f) => ({ q: f.question, a: f.answer }))
-           : [ {q: t('product.faqQ1'), a: t('product.faqA1')}, {q: t('product.faqQ2'), a: t('product.faqA2')}, {q: t('product.faqQ3'), a: (_wm ? t('product.faqA3', { months: _wm }) : t('product.faqA3Ask'))}, {q: t('product.faqQ4'), a: t('product.faqA4')} ]; %>
+           : [ {q: t('product.faqQ1'), a: t('product.faqA1')}, {q: t('product.faqQ2'), a: _faqA2}, {q: t('product.faqQ3'), a: (_wm ? t(_garVariable ? 'product.faqA3' : 'product.faqA3Exact', { months: _wm }) : t('product.faqA3Ask'))}, {q: t('product.faqQ4'), a: t('product.faqA4')} ]; %>
       <% if (_faqItems.length) { %>
       <div style="max-width: 780px; margin: 72px auto 0 auto;">
         <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #ED1C24; margin-bottom: 8px;"><%= t('product.weAnswer') %></div>
@@ -1010,7 +1063,7 @@
             <div style="font-size: 19px; font-weight: 800; color: #0F1626;"><%= t('product.completeMounting') %></div>
             <div style="font-size: 12.5px; font-weight: 500; color: #6B7482; margin-top: 4px;"><%= t('product.accessoriesSub') %></div>
           </div>
-          <a href="/produits" style="display: flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; color: #ED1C24; text-decoration: none; white-space: nowrap;"><%= t('product.seeAllCatalog') %><span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span></a>
+          <a href="<%= langPrefix %>/produits" style="display: flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; color: #ED1C24; text-decoration: none; white-space: nowrap;"><%= t('product.seeAllCatalog') %><span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span></a>
         </div>
         <div class="ap-carousel ap-acc-carousel" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;">
           <% productAccessories.slice(0, 4).forEach((ac) => { %>
@@ -1026,8 +1079,8 @@
                 <a href="<%= ac.publicPath %>" style="display: block; font-size: 12px; font-weight: 700; color: #0F1626; line-height: 1.35; text-decoration: none; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;"><%= ac.name %></a>
                 <div style="font-size: 11px; font-weight: 600; color: #6B7482; margin-top: 2px;"><% if (ac.sku) { %><%= t('product.refPrefix') %> <%= ac.sku %><% } %><% if (ac.condition) { %> · <%= ac.condition %><% } %></div>
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px;">
-                  <span style="font-size: 13.5px; font-weight: 800; color: #0F1626;"><%= formatMoney(ac.priceCents) %> €</span>
-                  <button type="button" data-ap-acc-add data-acc-id="<%= ac._id %>" data-acc-name="<%= ac.name %>" <%= ac.inStock ? '' : 'disabled' %> style="width: 32px; height: 32px; border: 1px solid #E1E5EB; border-radius: 8px; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;<%= ac.inStock ? '' : 'opacity:0.45;cursor:not-allowed;' %>" class="ap-iconbtn" aria-label="Ajouter au panier"><span class="material-symbols-outlined" style="font-size: 16px; color: #0F1626;">add_shopping_cart</span></button>
+                  <span style="font-size: 13.5px; font-weight: 800; color: #0F1626;"><%= formatMoney(ac.priceCents) %> €<% if (lang === 'de') { %><span style="display: block; font-size: 10px; font-weight: 600; color: #6B7482;"><%= t('product.priceInfoDe') %><% if (ac.depositUpfrontCents > 0) { %><br><%= t('product.plusDepositShort', { amount: formatMoney(ac.depositUpfrontCents) }) %><% } %></span><% } %></span>
+                  <button type="button" data-ap-acc-add data-acc-id="<%= ac._id %>" data-acc-name="<%= ac.name %>" <%= ac.inStock ? '' : 'disabled' %> style="width: 32px; height: 32px; border: 1px solid #E1E5EB; border-radius: 8px; background: #FFFFFF; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;<%= ac.inStock ? '' : 'opacity:0.45;cursor:not-allowed;' %>" class="ap-iconbtn" aria-label="<%= t('product.addToCart') %>"><span class="material-symbols-outlined" style="font-size: 16px; color: #0F1626;">add_shopping_cart</span></button>
                 </div>
               </div>
             </div>
@@ -1051,7 +1104,7 @@
             <div style="font-size: 19px; font-weight: 800; color: #0F1626;"><%= t('product.goFurther') %></div>
             <div style="font-size: 12.5px; font-weight: 500; color: #6B7482; margin-top: 4px;"><%= t('product.blogSub') %></div>
           </div>
-          <a href="/blog" style="display: flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; color: #ED1C24; text-decoration: none; white-space: nowrap;"><%= t('product.seeAllBlog') %><span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span></a>
+          <a href="<%= langPrefix %>/blog" style="display: flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; color: #ED1C24; text-decoration: none; white-space: nowrap;"><%= t('product.seeAllBlog') %><span class="material-symbols-outlined" style="font-size: 16px;">chevron_right</span></a>
         </div>
         <div class="ap-carousel ap-blog-carousel" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px;">
           <% _blog.forEach((a) => { %>
@@ -1473,6 +1526,12 @@
               var startedAt = Date.now();
               var formData = new URLSearchParams(new FormData(addToCartForm));
 
+              /* Repli affiché quand la réponse n'est pas du JSON (429 du limiteur,
+                 502 de la plateforme) : il était écrit en français en dur sur une
+                 fiche entièrement allemande. CART_TOAST_I18N (footer.ejs) est
+                 local à son IIFE et rendu APRÈS ce script : on rend la clé ici. */
+              var AP_ERREUR_PANIER = <%- JSON.stringify(t('cart.addError')) %>;
+
               fetch(addToCartForm.getAttribute('action'), {
                 method: 'POST',
                 body: formData,
@@ -1488,7 +1547,7 @@
                     return null;
                   }).then(function (data) {
                     if (!response.ok || !data || data.ok !== true) {
-                      throw new Error(data && data.error ? data.error : 'Impossible d’ajouter le produit au panier pour le moment.');
+                      throw new Error(data && data.error ? data.error : AP_ERREUR_PANIER);
                     }
                     return data;
                   });
@@ -1523,7 +1582,7 @@
                 .catch(function (err) {
                   var minDisableRemaining = Math.max(0, 1000 - (Date.now() - startedAt));
                   if (window.CPFCartFeedback && typeof window.CPFCartFeedback.notifyError === 'function') {
-                    window.CPFCartFeedback.notifyError(err && err.message ? err.message : 'Impossible d’ajouter le produit au panier pour le moment.');
+                    window.CPFCartFeedback.notifyError(err && err.message ? err.message : AP_ERREUR_PANIER);
                   }
                   window.setTimeout(function () {
                     resetAddToCartButton();
@@ -1826,11 +1885,18 @@
           <% var _vlWm = (product.warranty && Number(product.warranty.months) > 0) ? Number(product.warranty.months) : 0; %>
           <% if (_vlWm) { %><span style="font-size:13px;color:#8A909E;"><%= t('product.warrantyMonths', { months: _vlWm }) %></span><% } %>
         </div>
+        <%# Les pages /pieces-auto/… et /categorie/… du maillage n'existent qu'en
+            FRANÇAIS (services/internalLinking.js les fabrique en dur). Depuis la
+            fiche /de — la page d'atterrissage des annonces — un seul clic
+            remettait la session en « fr » : panier, paiement, Order.lang et
+            e-mails. Même helper que le reste des liens FR-seulement ; un robot
+            reçoit l'URL nue. %>
+        <% const _lienMaillage = (u) => (typeof lienFr === 'function' ? lienFr(u) : u); %>
         <div class="pp-links">
           <% var _linkIdx = 0; %>
           <% if (Array.isArray(productLinking.parentVehicleLandings)) { %>
             <% for (const v of productLinking.parentVehicleLandings) { %>
-              <a href="<%= v.url %>" class="pp-link <%= _linkIdx === 0 ? 'navy' : 'white' %>">
+              <a href="<%= _lienMaillage(v.url) %>" class="pp-link <%= _linkIdx === 0 ? 'navy' : 'white' %>">
                 <span class="ic"><span class="material-symbols-outlined" style="font-size:24px;">directions_car</span></span>
                 <span style="flex:1;min-width:0;">
                   <span class="tt"><%= t('product.allPartsFor', { make: (v.makeName + (v.modelName ? ' ' + v.modelName : '')) }) %></span>
@@ -1842,7 +1908,7 @@
             <% } %>
           <% } %>
           <% if (productLinking.parentCategory) { %>
-            <a href="<%= productLinking.parentCategory.url %>" class="pp-link <%= _linkIdx === 0 ? 'navy' : 'white' %>">
+            <a href="<%= _lienMaillage(productLinking.parentCategory.url) %>" class="pp-link <%= _linkIdx === 0 ? 'navy' : 'white' %>">
               <span class="ic"><span class="material-symbols-outlined" style="font-size:24px;">manufacturing</span></span>
               <span style="flex:1;min-width:0;">
                 <span class="tt"><%= productLinking.parentCategory.name %></span>
