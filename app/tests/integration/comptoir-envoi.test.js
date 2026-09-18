@@ -19,7 +19,7 @@ process.env.COMPTOIR_API_KEY = 'cle-de-test';
 
 const Order = require('../../src/models/Order');
 const comptoir = require('../../src/services/comptoir');
-const { syncComptoirOrders } = require('../../src/jobs/syncComptoirOrders');
+const { syncComptoirOrders, syncComptoirStatuses } = require('../../src/jobs/syncComptoirOrders');
 
 let serveur;
 let n = 0;
@@ -216,6 +216,139 @@ test('connecteur Comptoir — envoi et rattrapage', async (t) => {
     } finally { f.restaurer(); }
 
     assert.equal((await Order.findById(cmd._id).lean()).comptoir.attempts, 2);
+  });
+
+  /* ── Mise à jour des statuts (envoi groupé, guide du 18/09/2026) ───────── */
+
+  const BULK_OK = { status: 200, text: async () => JSON.stringify({ created: 0, updated: 1, unchanged: 0, failed: 0 }) };
+
+  async function envoyee(over = {}) {
+    const cmd = await creerCommande(over);
+    const f = avecFetch(OK);
+    try { await comptoir.syncOrder(cmd._id); } finally { f.restaurer(); }
+    return cmd;
+  }
+
+  await t.test('une vente livrée après l’envoi est repoussée en « livree », une seule fois', async () => {
+    await Order.deleteMany({});
+    const cmd = await envoyee();
+    assert.equal((await Order.findById(cmd._id).lean()).comptoir.statusSentFor, 'preparation');
+
+    await Order.updateOne({ _id: cmd._id }, { $set: { status: 'delivered' } });
+    let f = avecFetch(BULK_OK);
+    try {
+      const out = await syncComptoirStatuses();
+      assert.equal(out.updated, 1);
+      assert.equal(f.vues.length, 1, 'un seul appel, groupé');
+      assert.match(f.vues[0].url, /\/orders\/bulk$/);
+      assert.equal(f.vues[0].body.orders.length, 1);
+      assert.equal(f.vues[0].body.orders[0].status, 'livree');
+      assert.equal(f.vues[0].body.orders[0].externalId, cmd.number);
+    } finally { f.restaurer(); }
+    const apres = await Order.findById(cmd._id).lean();
+    assert.equal(apres.comptoir.statusSentFor, 'livree');
+    assert.ok(apres.comptoir.statusSyncedAt);
+
+    /* Rien n'a bougé depuis : plus aucun appel. */
+    f = avecFetch(BULK_OK);
+    try {
+      const out = await syncComptoirStatuses();
+      assert.equal(out.changed, 0);
+      assert.equal(f.vues.length, 0);
+    } finally { f.restaurer(); }
+  });
+
+  await t.test('un remboursement repart en « retour », une commande figée est ignorée', async () => {
+    await Order.deleteMany({});
+    const rembourse = await envoyee();
+    await Order.updateOne({ _id: rembourse._id }, { $set: { status: 'refunded' } });
+    await envoyee();                       // toujours en préparation : rien à dire à Comptoir
+
+    const f = avecFetch(BULK_OK);
+    try {
+      const out = await syncComptoirStatuses();
+      assert.equal(out.changed, 1);
+      assert.equal(f.vues[0].body.orders.length, 1);
+      assert.equal(f.vues[0].body.orders[0].status, 'retour');
+    } finally { f.restaurer(); }
+  });
+
+  await t.test('un lot refusé est réessayé à l’heure suivante, pas marqué à jour', async () => {
+    await Order.deleteMany({});
+    const cmd = await envoyee();
+    await Order.updateOne({ _id: cmd._id }, { $set: { status: 'delivered' } });
+
+    let f = avecFetch(PANNE);
+    try {
+      const out = await syncComptoirStatuses();
+      assert.equal(out.updated, 0);
+      assert.equal(out.errors, 1);
+    } finally { f.restaurer(); }
+    let apres = await Order.findById(cmd._id).lean();
+    assert.equal(apres.comptoir.statusSentFor, 'preparation', 'rien n’est marqué à jour');
+    assert.equal(apres.comptoir.statusAttempts, 1);
+    assert.match(apres.comptoir.statusError, /502|Bad Gateway/);
+
+    f = avecFetch(BULK_OK);
+    try { assert.equal((await syncComptoirStatuses()).updated, 1); } finally { f.restaurer(); }
+    apres = await Order.findById(cmd._id).lean();
+    assert.equal(apres.comptoir.statusSentFor, 'livree');
+    assert.equal(apres.comptoir.statusAttempts, 0, 'un succès efface le compteur d’échecs');
+    assert.equal(apres.comptoir.statusError, '');
+  });
+
+  await t.test('échec détaillé : seule la vente refusée est réessayée', async () => {
+    await Order.deleteMany({});
+    const a = await envoyee();
+    const b = await envoyee();
+    await Order.updateMany({}, { $set: { status: 'delivered' } });
+
+    const refus = { status: 200, text: async () => JSON.stringify({ updated: 1, failed: [{ externalId: b.number, error: 'montant invalide' }] }) };
+    let f = avecFetch(refus);
+    try {
+      const out = await syncComptoirStatuses();
+      assert.equal(out.updated, 1);
+      assert.equal(out.errors, 1);
+    } finally { f.restaurer(); }
+    assert.equal((await Order.findById(a._id).lean()).comptoir.statusSentFor, 'livree');
+    const refusee = await Order.findById(b._id).lean();
+    assert.equal(refusee.comptoir.statusSentFor, 'preparation');
+    assert.equal(refusee.comptoir.statusAttempts, 1);
+
+    f = avecFetch(BULK_OK);
+    try {
+      const out = await syncComptoirStatuses();
+      assert.equal(out.changed, 1, 'seule la refusée repart');
+      assert.equal(f.vues[0].body.orders[0].externalId, b.number);
+    } finally { f.restaurer(); }
+  });
+
+  await t.test('échec annoncé sans détail : tout le lot est réessayé', async () => {
+    await Order.deleteMany({});
+    const cmd = await envoyee();
+    await Order.updateOne({ _id: cmd._id }, { $set: { status: 'delivered' } });
+
+    const flou = { status: 200, text: async () => JSON.stringify({ updated: 0, failed: 1 }) };
+    const f = avecFetch(flou);
+    try {
+      const out = await syncComptoirStatuses();
+      assert.equal(out.updated, 0);
+      assert.equal(out.errors, 1);
+    } finally { f.restaurer(); }
+    const apres = await Order.findById(cmd._id).lean();
+    assert.equal(apres.comptoir.statusSentFor, 'preparation');
+    assert.equal(apres.comptoir.statusAttempts, 1);
+  });
+
+  await t.test('une vente jamais envoyée n’est pas concernée par les statuts', async () => {
+    await Order.deleteMany({});
+    await creerCommande({ status: 'delivered' });
+    const f = avecFetch(BULK_OK);
+    try {
+      const out = await syncComptoirStatuses();
+      assert.equal(out.candidates, 0);
+      assert.equal(f.vues.length, 0);
+    } finally { f.restaurer(); }
   });
 
   await t.test('une commande supprimée n’est pas comptée', async () => {

@@ -37,6 +37,7 @@
  *   COMPTOIR_API_KEY    clé affichée UNE SEULE FOIS à la création du connecteur
  *                       (app Comptoir → Connecteurs → + Connecteur personnalisé)
  *   COMPTOIR_ENDPOINT   URL complète, si Comptoir en affiche une autre que le défaut
+ *   COMPTOIR_BULK_ENDPOINT  idem pour l'envoi groupé (défaut : <endpoint>/bulk)
  *   COMPTOIR_TIMEOUT_MS délai d'attente réseau (défaut 8000)
  */
 
@@ -53,6 +54,12 @@ function getApiKey() {
 
 function getEndpoint() {
   return env('COMPTOIR_ENDPOINT') || DEFAULT_ENDPOINT;
+}
+
+/* Envoi groupé : c'est le SEUL appel qui met à jour une vente déjà connue
+   (guide Comptoir du 18/09/2026). L'appel unitaire, lui, ignore un renvoi. */
+function getBulkEndpoint() {
+  return env('COMPTOIR_BULK_ENDPOINT') || `${getEndpoint().replace(/\/+$/, '')}/bulk`;
 }
 
 function getTimeoutMs() {
@@ -269,6 +276,12 @@ async function syncOrder(orderOrId, options = {}) {
         'comptoir.duplicate': !!result.duplicate,
         'comptoir.lastAttemptAt': new Date(),
         'comptoir.lastError': '',
+        /* Statut connu de Comptoir à cet instant : la suite ne renverra que
+           s'il change (voir syncStatuses). */
+        'comptoir.statusSentFor': buildPayload(order).status,
+        'comptoir.statusSyncedAt': new Date(),
+        'comptoir.statusAttempts': 0,
+        'comptoir.statusError': '',
         /* Un envoi qui passe efface le verdict « définitif » d'un échec
            antérieur : sans ça, une commande poussée après une clé corrigée
            gardait `permanentError: true` et sortait du rattrapage pour de bon
@@ -296,6 +309,169 @@ async function syncOrder(orderOrId, options = {}) {
   return { ok: false, error: result.error, permanent: !!result.permanent };
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+ * Mise à jour des statuts (envoi groupé)
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/** Comptoir refuse au-delà de 500 commandes par appel. */
+const BULK_MAX = 500;
+
+/** Statut Comptoir déjà connu pour une vente : l'envoi initial valait « preparation ». */
+function statutChezComptoir(order) {
+  return trimStr((order && order.comptoir && order.comptoir.statusSentFor) || '') || 'preparation';
+}
+
+/**
+ * POST groupé. Ne jette jamais.
+ * @returns {Promise<{ok:boolean, status?:number, body?:object, error?:string, permanent?:boolean}>}
+ */
+async function pushOrdersBulk(payloads) {
+  if (!isConfigured()) return { ok: false, skipped: true, error: 'COMPTOIR_API_KEY absente' };
+  const lot = (Array.isArray(payloads) ? payloads : []).slice(0, BULK_MAX);
+  if (!lot.length) return { ok: true, body: null };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), getTimeoutMs());
+  try {
+    const res = await fetch(getBulkEndpoint(), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${getApiKey()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: lot }),
+      signal: controller.signal,
+    });
+    const raw = await res.text();
+    let body = null;
+    try { body = raw ? JSON.parse(raw) : null; } catch (_) { /* réponse non JSON */ }
+    if (res.status >= 200 && res.status < 300) return { ok: true, status: res.status, body };
+    const permanent = res.status === 400 || res.status === 401 || res.status === 404;
+    return {
+      ok: false,
+      status: res.status,
+      error: trimStr((body && (body.error || body.message)) || raw, 300) || `HTTP ${res.status}`,
+      permanent,
+    };
+  } catch (err) {
+    const message = err && err.name === 'AbortError'
+      ? `délai dépassé (${getTimeoutMs()} ms)`
+      : trimStr(err && err.message, 300) || 'erreur réseau';
+    return { ok: false, error: message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Identifiants refusés par Comptoir dans une réponse groupée.
+ *
+ * Leur guide annonce un décompte (créées / mises à jour / inchangées / en
+ * échec) sans en fixer la forme exacte, et leur code a déjà été en avance sur
+ * leur doc (09/09/2026). On lit donc ce qu'on trouve :
+ *   - une liste d'échecs détaillée  → on ne réessaie que ceux-là ;
+ *   - un simple compteur non nul    → on ne peut pas distinguer, tout le lot
+ *     est réessayé à l'heure suivante (le renvoi est sans risque) ;
+ *   - rien                          → tout est passé.
+ * @returns {Set<string>|null} null = échecs non identifiables
+ */
+function echecsDuLot(body) {
+  if (!body || typeof body !== 'object') return new Set();
+  const listes = [body.failed, body.errors, body.failures, body.results, body.orders]
+    .filter((v) => Array.isArray(v));
+  const refuses = new Set();
+  let detaillee = false;
+  for (const liste of listes) {
+    for (const item of liste) {
+      if (!item || typeof item !== 'object') continue;
+      const id = trimStr(item.externalId || item.external_id || item.reference || item.id);
+      if (!id) continue;
+      detaillee = true;
+      const enEchec = item.error || item.failed === true || item.ok === false
+        || /fail|error|invalid|refus/i.test(String(item.status || item.result || ''));
+      if (enEchec) refuses.add(id);
+    }
+  }
+  if (detaillee) return refuses;
+  const compteur = Number(body.failed);
+  if (Number.isFinite(compteur) && compteur > 0) return null;
+  return refuses;
+}
+
+/**
+ * Met à jour chez Comptoir le statut des ventes déjà envoyées qui ont bougé
+ * depuis (livrée, retour).
+ *
+ * Jusqu'au 18/09/2026 c'était impossible : leur API ignorait un renvoi, et
+ * toutes nos ventes restaient « préparation » chez eux. Leur envoi groupé met
+ * désormais à jour une vente de même `externalId`.
+ *
+ * Un renvoi étant sans effet de bord, la prudence va dans un seul sens : en
+ * cas de doute on réessaie, jamais on ne marque à tort « à jour ».
+ */
+async function syncStatuses({ limit = BULK_MAX, windowDays = 365 } = {}) {
+  if (!isConfigured()) return { skipped: true, reason: 'non_configure' };
+
+  const Order = require('../models/Order');
+  const since = new Date(Date.now() - windowDays * 86400000);
+  const envoyees = await Order.find({
+    'comptoir.sentAt': { $exists: true, $ne: null },
+    createdAt: { $gte: since },
+    deletedAt: null,
+    $or: [
+      { 'comptoir.statusAttempts': { $lt: MAX_ATTEMPTS } },
+      { 'comptoir.statusAttempts': { $exists: false } },
+    ],
+  })
+    .select('_id number status paymentStatus totalCents items billingAddress shippingAddress createdAt molliePaidAt scalapayCapturedAt comptoir')
+    .sort({ updatedAt: -1 })
+    .limit(Math.max(1, Math.min(limit, BULK_MAX)))
+    .lean();
+
+  const aRenvoyer = envoyees.filter((o) => isEncaissee(o) && mapStatus(o.status) !== statutChezComptoir(o));
+  const out = { candidates: envoyees.length, changed: aRenvoyer.length, updated: 0, errors: 0 };
+  if (!aRenvoyer.length) return out;
+
+  const resultat = await pushOrdersBulk(aRenvoyer.map(buildPayload));
+  const maintenant = new Date();
+
+  if (!resultat.ok) {
+    out.errors = aRenvoyer.length;
+    out.error = resultat.error;
+    await Order.updateMany({ _id: { $in: aRenvoyer.map((o) => o._id) } }, {
+      $set: { 'comptoir.statusError': trimStr(resultat.error, 300) },
+      $inc: { 'comptoir.statusAttempts': 1 },
+    });
+    console.error('[comptoir-statuts] échec du lot :', resultat.error);
+    return out;
+  }
+
+  const refuses = echecsDuLot(resultat.body);
+  const passees = refuses ? aRenvoyer.filter((o) => !refuses.has(buildPayload(o).externalId)) : [];
+  const echouees = aRenvoyer.filter((o) => !passees.includes(o));
+
+  for (const o of passees) {
+    /* Statut confirmé : on remet aussi le compteur d'échecs à zéro — un succès
+       doit toujours effacer un verdict d'échec (leçon du 09/09/2026). */
+    await Order.updateOne({ _id: o._id }, {
+      $set: {
+        'comptoir.statusSentFor': mapStatus(o.status),
+        'comptoir.statusSyncedAt': maintenant,
+        'comptoir.statusAttempts': 0,
+        'comptoir.statusError': '',
+      },
+    });
+  }
+  if (echouees.length) {
+    await Order.updateMany({ _id: { $in: echouees.map((o) => o._id) } }, {
+      $set: { 'comptoir.statusError': refuses ? 'refusée par Comptoir' : 'échecs non détaillés par Comptoir' },
+      $inc: { 'comptoir.statusAttempts': 1 },
+    });
+  }
+
+  out.updated = passees.length;
+  out.errors = echouees.length;
+  console.log('[comptoir-statuts]', JSON.stringify(out), 'réponse :', trimStr(JSON.stringify(resultat.body), 300));
+  return out;
+}
+
 /**
  * Déclenche un envoi sans attendre — pour les chemins de paiement, où l'on ne
  * veut pas faire patienter le client derrière un appel à Comptoir.
@@ -314,13 +490,17 @@ function syncOrderInBackground(orderOrId) {
 
 module.exports = {
   DEFAULT_ENDPOINT,
+  BULK_MAX,
   isConfigured,
   getEndpoint,
+  getBulkEndpoint,
   mapStatus,
   isEncaissee,
   buildPayload,
   buildProductName,
   pushOrder,
+  pushOrdersBulk,
+  syncStatuses,
   syncOrder,
   syncOrderInBackground,
   MAX_ATTEMPTS,
