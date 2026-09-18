@@ -96,9 +96,16 @@ test('le repli ne rapatrie plus tout le catalogue', async (t) => {
     const regexes = f.$and[1].$or.map((c) => Object.values(c)[0].$regex);
     assert.ok(regexes.length, 'les mots alphanumériques sont conservés');
     for (const rx of regexes) {
-      /* Seuls [a-z0-9] et les classes de caractères fabriquées par
-         motifSansAccent : aucun métacaractère venu de la saisie. */
-      assert.match(rx, /^(\[[a-zà-ÿ]+\]|[a-z0-9])+$/iu, 'motif suspect : ' + rx);
+      /* Seuls [a-z0-9] et les classes fabriquées par le code lui-même :
+         motifSansAccent (accents), puis motifReference — [^a-z0-9]* entre
+         deux caractères d'une référence, et [0o] pour le zéro initial.
+         Aucun métacaractère venu de la saisie, la garantie est inchangée :
+         les deux fonctions filtrent l'entrée sur [a-z0-9] avant de bâtir. */
+      assert.match(
+        rx,
+        /^(\[\^a-z0-9\]\*|\[0o\]|\[[a-zà-ÿ]+\]|[a-z0-9])+$/iu,
+        'motif suspect : ' + rx
+      );
     }
     assert.ok(regexes.includes('dq') && regexes.includes('200'));
   });
@@ -106,7 +113,9 @@ test('le repli ne rapatrie plus tout le catalogue', async (t) => {
   await t.test('le nombre de mots est borné', () => {
     /* Une requête de cent mots fabriquerait un $or de six cents branches. */
     const f = svc.filtreTexteRepli({}, Array.from({ length: 50 }, (_, i) => 'mot' + i).join(' '));
-    assert.ok(f.$and[1].$or.length <= 6 * 6, 'au plus 6 mots × 6 champs');
+    /* 6 mots × 8 champs de repli, plus au pire 7 motifs de référence (les
+       6 mots + la requête recollée) × 5 champs où une référence a un sens. */
+    assert.ok(f.$and[1].$or.length <= 6 * 8 + 7 * 5, 'le $or reste borné');
   });
 
   await t.test('le plafond reste modeste', () => {
