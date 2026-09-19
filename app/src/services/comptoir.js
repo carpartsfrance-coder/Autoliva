@@ -469,42 +469,64 @@ function echecsDuLot(body) {
  *
  * Un renvoi étant sans effet de bord, la prudence va dans un seul sens : en
  * cas de doute on réessaie, jamais on ne marque à tort « à jour ».
+ *
+ * @param {{limit?:number, windowDays?:number, force?:boolean}} [options]
+ *   force : renvoyer TOUTES les ventes, même celles qu'on croit à jour. Passage
+ *   quotidien recommandé par Comptoir — il rattrape ce que leur côté aurait
+ *   perdu sans nous le dire, et une vente bloquée par ses réessais.
  */
-async function syncStatuses({ limit = BULK_MAX, windowDays = 365 } = {}) {
+async function syncStatuses({ limit = 2000, windowDays = 365, force = false } = {}) {
   if (!isConfigured()) return { skipped: true, reason: 'non_configure' };
 
   const Order = require('../models/Order');
   const since = new Date(Date.now() - windowDays * 86400000);
-  const envoyees = await Order.find({
+  const filtre = {
     'comptoir.sentAt': { $exists: true, $ne: null },
     createdAt: { $gte: since },
     deletedAt: null,
-    $or: [
+  };
+  /* Un renvoi complet ignore le compteur d'échecs : c'est justement le passage
+     qui doit rattraper une vente bloquée. */
+  if (!force) {
+    filtre.$or = [
       { 'comptoir.statusAttempts': { $lt: MAX_ATTEMPTS } },
       { 'comptoir.statusAttempts': { $exists: false } },
-    ],
-  })
+    ];
+  }
+  const envoyees = await Order.find(filtre)
     .select('_id number status paymentStatus totalCents items billingAddress shippingAddress createdAt molliePaidAt scalapayCapturedAt comptoir')
     .sort({ updatedAt: -1 })
-    .limit(Math.max(1, Math.min(limit, BULK_MAX)))
+    .limit(Math.max(1, limit))
     .lean();
 
-  const aRenvoyer = envoyees.filter((o) => isEncaissee(o) && !aJourChezComptoir(o));
-  const out = { candidates: envoyees.length, changed: aRenvoyer.length, updated: 0, errors: 0 };
+  const aRenvoyer = envoyees.filter((o) => isEncaissee(o) && (force || !aJourChezComptoir(o)));
+  const out = { candidates: envoyees.length, changed: aRenvoyer.length, updated: 0, errors: 0, force: !!force };
   if (!aRenvoyer.length) return out;
 
+  /* Leur limite est de 500 commandes par appel : au-delà, on envoie par
+     paquets. Un paquet en échec n'empêche pas les suivants. */
+  for (let i = 0; i < aRenvoyer.length; i += BULK_MAX) {
+    const paquet = aRenvoyer.slice(i, i + BULK_MAX);
+    await envoyerPaquet(Order, paquet, out);
+  }
+  console.log('[comptoir-statuts]', JSON.stringify(out));
+  return out;
+}
+
+/** Un paquet (≤ 500) : envoi, puis marquage de ce que Comptoir a accepté. */
+async function envoyerPaquet(Order, aRenvoyer, out) {
   const resultat = await pushOrdersBulk(aRenvoyer.map(buildPayload));
   const maintenant = new Date();
 
   if (!resultat.ok) {
-    out.errors = aRenvoyer.length;
+    out.errors += aRenvoyer.length;
     out.error = resultat.error;
     await Order.updateMany({ _id: { $in: aRenvoyer.map((o) => o._id) } }, {
       $set: { 'comptoir.statusError': trimStr(resultat.error, 300) },
       $inc: { 'comptoir.statusAttempts': 1 },
     });
     console.error('[comptoir-statuts] échec du lot :', resultat.error);
-    return out;
+    return;
   }
 
   const refuses = echecsDuLot(resultat.body);
@@ -531,10 +553,9 @@ async function syncStatuses({ limit = BULK_MAX, windowDays = 365 } = {}) {
     });
   }
 
-  out.updated = passees.length;
-  out.errors = echouees.length;
-  console.log('[comptoir-statuts]', JSON.stringify(out), 'réponse :', trimStr(JSON.stringify(resultat.body), 300));
-  return out;
+  out.updated += passees.length;
+  out.errors += echouees.length;
+  console.log('[comptoir-statuts] paquet de', aRenvoyer.length, '→', passees.length, 'acceptée(s) · réponse :', trimStr(JSON.stringify(resultat.body), 300));
 }
 
 /**

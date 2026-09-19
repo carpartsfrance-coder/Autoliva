@@ -9,7 +9,7 @@ const { sendConsigneReminders } = require('./sendConsigneReminders');
 const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations } = require('./savCronJobs');
 const { reconcileScalapayOrders } = require('./reconcileScalapayOrders');
 const { syncShipmentTracking } = require('./syncShipmentTracking');
-const { syncComptoirOrders, syncComptoirStatuses } = require('./syncComptoirOrders');
+const { syncComptoirOrders, syncComptoirStatuses, resyncComptoirAll } = require('./syncComptoirOrders');
 const { traduireNouveautesDe } = require('./traduireNouveautesDe');
 const { runEngineQuoteReminders } = require('./sendEngineQuoteReminders');
 const { sendRepurchaseReminders } = require('./sendRepurchaseReminders');
@@ -192,9 +192,12 @@ function startScheduler() {
       const r = await syncComptoirOrders();
       if (r && r.sent) console.log('[scheduler] Comptoir: ' + r.sent + ' commande(s) rattrapée(s)');
       /* Puis les statuts qui ont bougé depuis l'envoi (livrée, retour) : un
-         seul appel groupé, le seul que leur API accepte pour une mise à jour. */
-      const s = await syncComptoirStatuses();
-      if (s && s.updated) console.log('[scheduler] Comptoir: ' + s.updated + ' statut(s) mis à jour');
+         seul appel groupé, le seul que leur API accepte pour une mise à jour.
+         Une fois par jour (4 h du matin), on repousse TOUT : filet contre une
+         mise à jour perdue de leur côté, comme ils le recommandent. */
+      const complet = new Date().getHours() === 4;
+      const s = complet ? await resyncComptoirAll() : await syncComptoirStatuses();
+      if (s && s.updated) console.log('[scheduler] Comptoir: ' + s.updated + (complet ? ' vente(s) repoussée(s) (renvoi complet)' : ' statut(s) mis à jour'));
     } catch (err) {
       console.error('[scheduler] Erreur rattrapage Comptoir:', err.message || err);
     }
