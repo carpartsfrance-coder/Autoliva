@@ -207,6 +207,7 @@ app.use(helmet({
         "https://www.google.com",
         "https://js.mollie.com",
         "https://js.scalapay.com",
+        "https://getcomptoir.fr",
       ],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
@@ -226,6 +227,7 @@ app.use(helmet({
         "https://www.google.fr",
         "https://*.mollie.com",
         "https://*.scalapay.com",
+        "https://getcomptoir.fr",
       ],
       frameSrc: [
         "'self'",
