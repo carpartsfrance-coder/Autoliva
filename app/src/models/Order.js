@@ -580,6 +580,10 @@ const orderSchema = new mongoose.Schema(
          par leur API pour cette vente. Vide = jamais confirmé : l'envoi initial
          valait 'preparation'. Sert à ne renvoyer que ce qui a bougé. */
       statusSentFor: { type: String, default: '', trim: true },
+      /* Pays (ISO 2 lettres) déjà accepté par Comptoir pour cette vente : leur
+         colonne « Pays » n'existe que depuis le 18/09/2026, les ventes plus
+         anciennes repartent une fois pour la remplir. */
+      countrySentFor: { type: String, default: '', trim: true },
       statusSyncedAt: { type: Date, default: null },
       statusAttempts: { type: Number, default: 0, min: 0 },
       statusError: { type: String, default: '', trim: true },

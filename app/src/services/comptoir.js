@@ -115,6 +115,54 @@ function isEncaissee(order) {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
+ * Pays
+ * ────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Les adresses portent un nom de pays EN FRANÇAIS (« Belgique »), Comptoir
+ * attend « FR » ou « France » : on envoie le code ISO à 2 lettres, qui ne
+ * dépend d'aucune orthographe.
+ *
+ * Les départements d'outre-mer partent en FR : ce sont des ventes françaises,
+ * et rien ne garantit que Comptoir connaisse « RE » ou « GP ». Un pays inconnu
+ * n'est PAS envoyé — mieux vaut une colonne vide qu'un pays faux.
+ */
+const PAYS_ISO = {
+  france: 'FR', guadeloupe: 'FR', martinique: 'FR', guyane: 'FR', 'la reunion': 'FR',
+  reunion: 'FR', mayotte: 'FR', 'saint-martin': 'FR', 'saint-barthelemy': 'FR',
+  'nouvelle-caledonie': 'FR', 'polynesie francaise': 'FR', monaco: 'MC',
+  belgique: 'BE', luxembourg: 'LU', suisse: 'CH', allemagne: 'DE', autriche: 'AT',
+  espagne: 'ES', italie: 'IT', 'pays-bas': 'NL', portugal: 'PT', irlande: 'IE',
+  'royaume-uni': 'GB', pologne: 'PL', 'republique tcheque': 'CZ', slovaquie: 'SK',
+  hongrie: 'HU', roumanie: 'RO', bulgarie: 'BG', grece: 'GR', croatie: 'HR',
+  slovenie: 'SI', suede: 'SE', danemark: 'DK', finlande: 'FI', norvege: 'NO',
+  lituanie: 'LT', lettonie: 'LV', estonie: 'EE', malte: 'MT', chypre: 'CY',
+  andorre: 'AD', maroc: 'MA', algerie: 'DZ', tunisie: 'TN',
+};
+
+/** « La Réunion » → « la reunion » : accents et casse ne doivent rien changer. */
+function normaliserPays(valeur) {
+  return String(valeur == null ? '' : valeur)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Code ISO du pays de LIVRAISON (à défaut, de facturation). '' si inconnu. */
+function paysCommande(order) {
+  const candidats = [
+    order && order.shippingAddress && order.shippingAddress.country,
+    order && order.billingAddress && order.billingAddress.country,
+  ];
+  for (const brut of candidats) {
+    const cle = normaliserPays(brut);
+    if (!cle) continue;
+    if (/^[a-z]{2}$/.test(cle)) return cle.toUpperCase();  // déjà un code ISO
+    if (PAYS_ISO[cle]) return PAYS_ISO[cle];
+  }
+  return '';
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
  * Payload
  * ────────────────────────────────────────────────────────────────────────── */
 
@@ -161,6 +209,10 @@ function buildPayload(order) {
 
   const productName = buildProductName(order);
   if (productName) payload.productName = productName;
+
+  /* Alimente la colonne « Pays » de Comptoir (champ ajouté le 18/09/2026). */
+  const country = paysCommande(order);
+  if (country) payload.country = country;
 
   /* Quantité du PREMIER article — celui qui donne son nom à la fiche côté
      Comptoir. Envoyer la somme de toutes les lignes associerait la quantité
@@ -279,6 +331,7 @@ async function syncOrder(orderOrId, options = {}) {
         /* Statut connu de Comptoir à cet instant : la suite ne renverra que
            s'il change (voir syncStatuses). */
         'comptoir.statusSentFor': buildPayload(order).status,
+        'comptoir.countrySentFor': paysCommande(order),
         'comptoir.statusSyncedAt': new Date(),
         'comptoir.statusAttempts': 0,
         'comptoir.statusError': '',
@@ -319,6 +372,17 @@ const BULK_MAX = 500;
 /** Statut Comptoir déjà connu pour une vente : l'envoi initial valait « preparation ». */
 function statutChezComptoir(order) {
   return trimStr((order && order.comptoir && order.comptoir.statusSentFor) || '') || 'preparation';
+}
+
+/**
+ * Cette vente est-elle telle que Comptoir la connaît ? On compare ce qui peut
+ * changer après l'envoi : le statut, et le pays (champ apparu le 18/09/2026,
+ * donc vide sur tout l'historique — d'où un renvoi unique qui le remplit).
+ */
+function aJourChezComptoir(order) {
+  const paysAttendu = paysCommande(order);
+  const paysConnu = trimStr((order && order.comptoir && order.comptoir.countrySentFor) || '');
+  return mapStatus(order && order.status) === statutChezComptoir(order) && paysAttendu === paysConnu;
 }
 
 /**
@@ -425,7 +489,7 @@ async function syncStatuses({ limit = BULK_MAX, windowDays = 365 } = {}) {
     .limit(Math.max(1, Math.min(limit, BULK_MAX)))
     .lean();
 
-  const aRenvoyer = envoyees.filter((o) => isEncaissee(o) && mapStatus(o.status) !== statutChezComptoir(o));
+  const aRenvoyer = envoyees.filter((o) => isEncaissee(o) && !aJourChezComptoir(o));
   const out = { candidates: envoyees.length, changed: aRenvoyer.length, updated: 0, errors: 0 };
   if (!aRenvoyer.length) return out;
 
@@ -453,6 +517,7 @@ async function syncStatuses({ limit = BULK_MAX, windowDays = 365 } = {}) {
     await Order.updateOne({ _id: o._id }, {
       $set: {
         'comptoir.statusSentFor': mapStatus(o.status),
+        'comptoir.countrySentFor': paysCommande(o),
         'comptoir.statusSyncedAt': maintenant,
         'comptoir.statusAttempts': 0,
         'comptoir.statusError': '',
@@ -495,6 +560,7 @@ module.exports = {
   getEndpoint,
   getBulkEndpoint,
   mapStatus,
+  paysCommande,
   isEncaissee,
   buildPayload,
   buildProductName,

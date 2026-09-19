@@ -98,6 +98,15 @@ Payload envoyé :
   n'est jamais envoyée : un brouillon passé « en préparation » à la main ne
   gonfle pas le compteur.
 
+### Pays
+
+Les adresses portent un nom français (« Belgique », « La Réunion ») ; Comptoir
+attend `FR` ou `France` dans le champ `country`. On envoie le **code ISO à deux
+lettres** du pays de livraison (à défaut, de facturation). Les DOM partent en
+`FR` — ce sont des ventes françaises, et rien ne dit que Comptoir connaisse
+`RE` ou `GP`. Un pays non reconnu n'est pas envoyé du tout : une colonne vide
+vaut mieux qu'un pays faux.
+
 ### Correspondance des statuts
 
 | Autoliva | Comptoir |
@@ -118,8 +127,8 @@ paiement y resterait donc « preparation » pour toujours.
 `POST <endpoint>/bulk`, 500 commandes maximum, « une commande déjà connue est
 mise à jour si son statut a changé, jamais dupliquée »). D'où le second passage
 horaire `comptoir.syncStatuses()` : il ne renvoie que les ventes dont le statut
-a bougé depuis ce que Comptoir sait déjà (`order.comptoir.statusSentFor`), en
-un seul appel.
+a bougé depuis ce que Comptoir sait déjà (`order.comptoir.statusSentFor` et
+`countrySentFor`), en un seul appel.
 
 Leur réponse annonce un décompte (créées / mises à jour / inchangées / en
 échec) sans forme documentée. On lit ce qu'on trouve : une liste d'échecs
