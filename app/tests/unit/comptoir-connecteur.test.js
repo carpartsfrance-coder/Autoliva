@@ -35,6 +35,36 @@ test('le payload respecte les champs du guide Comptoir', () => {
   assert.equal(p.date, '2026-09-01T10:04:00.000Z'); // l'encaissement, pas la création
 });
 
+test('le pays part en code ISO, quelle que soit l’orthographe française', () => {
+  const pays = (c) => comptoir.buildPayload(commande({ shippingAddress: { fullName: 'Jean Dupont', country: c } })).country;
+  assert.equal(pays('France'), 'FR');
+  assert.equal(pays('Belgique'), 'BE');
+  assert.equal(pays('allemagne'), 'DE');
+  assert.equal(pays('BE'), 'BE', 'un code déjà ISO passe tel quel');
+  /* Les DOM sont des ventes françaises : « RE » ou « GP » risqueraient de ne
+     rien remplir chez Comptoir. */
+  assert.equal(pays('La Réunion'), 'FR');
+  assert.equal(pays('Guadeloupe'), 'FR');
+});
+
+test('un pays inconnu n’est pas envoyé : colonne vide plutôt que pays faux', () => {
+  const p = comptoir.buildPayload(commande({ shippingAddress: { fullName: 'Jean Dupont', country: 'Autre' }, billingAddress: { fullName: 'Jean Dupont', country: '' } }));
+  assert.equal('country' in p, false);
+});
+
+test('le pays de livraison prime, avec repli sur la facturation', () => {
+  const p = comptoir.buildPayload(commande({
+    shippingAddress: { fullName: 'Jean Dupont', country: 'Suisse' },
+    billingAddress: { fullName: 'Jean Dupont', country: 'France' },
+  }));
+  assert.equal(p.country, 'CH');
+  const repli = comptoir.buildPayload(commande({
+    shippingAddress: { fullName: 'Jean Dupont', country: '' },
+    billingAddress: { fullName: 'Jean Dupont', country: 'Belgique' },
+  }));
+  assert.equal(repli.country, 'BE');
+});
+
 test('la quantité envoyée est celle du premier article', () => {
   /* C'est le premier article qui nomme la fiche côté Comptoir : y associer la
      somme de toutes les lignes compterait des articles qu'on ne nomme pas. */

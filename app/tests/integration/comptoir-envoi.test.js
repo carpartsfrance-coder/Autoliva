@@ -340,6 +340,37 @@ test('connecteur Comptoir — envoi et rattrapage', async (t) => {
     assert.equal(apres.comptoir.statusAttempts, 1);
   });
 
+  await t.test('le pays manquant fait repartir la vente, une seule fois', async () => {
+    /* Le champ « pays » de Comptoir date du 18/09/2026 : tout l'historique
+       part une fois pour remplir leur colonne, puis plus rien. */
+    await Order.deleteMany({});
+    const cmd = await envoyee();
+    await Order.updateOne({ _id: cmd._id }, { $set: { 'comptoir.countrySentFor': '' } });
+
+    let f = avecFetch(BULK_OK);
+    try {
+      const out = await syncComptoirStatuses();
+      assert.equal(out.updated, 1);
+      assert.equal(f.vues[0].body.orders[0].country, 'FR');
+      assert.equal(f.vues[0].body.orders[0].status, 'preparation', 'le statut n’a pas bougé pour autant');
+    } finally { f.restaurer(); }
+    assert.equal((await Order.findById(cmd._id).lean()).comptoir.countrySentFor, 'FR');
+
+    f = avecFetch(BULK_OK);
+    try { assert.equal((await syncComptoirStatuses()).changed, 0); } finally { f.restaurer(); }
+  });
+
+  await t.test('un déménagement à l’étranger repart aussi', async () => {
+    await Order.deleteMany({});
+    const cmd = await envoyee();
+    await Order.updateOne({ _id: cmd._id }, { $set: { 'shippingAddress.country': 'Belgique' } });
+    const f = avecFetch(BULK_OK);
+    try {
+      assert.equal((await syncComptoirStatuses()).updated, 1);
+      assert.equal(f.vues[0].body.orders[0].country, 'BE');
+    } finally { f.restaurer(); }
+  });
+
   await t.test('une vente jamais envoyée n’est pas concernée par les statuts', async () => {
     await Order.deleteMany({});
     await creerCommande({ status: 'delivered' });
