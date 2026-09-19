@@ -19,7 +19,7 @@ process.env.COMPTOIR_API_KEY = 'cle-de-test';
 
 const Order = require('../../src/models/Order');
 const comptoir = require('../../src/services/comptoir');
-const { syncComptoirOrders, syncComptoirStatuses } = require('../../src/jobs/syncComptoirOrders');
+const { syncComptoirOrders, syncComptoirStatuses, resyncComptoirAll } = require('../../src/jobs/syncComptoirOrders');
 
 let serveur;
 let n = 0;
@@ -369,6 +369,73 @@ test('connecteur Comptoir — envoi et rattrapage', async (t) => {
       assert.equal((await syncComptoirStatuses()).updated, 1);
       assert.equal(f.vues[0].body.orders[0].country, 'BE');
     } finally { f.restaurer(); }
+  });
+
+  await t.test('renvoi complet : tout repart, même ce qu’on croit à jour', async () => {
+    await Order.deleteMany({});
+    const a = await envoyee();
+    const b = await envoyee();
+    let f = avecFetch(BULK_OK);
+    try { await syncComptoirStatuses(); } finally { f.restaurer(); }   // tout est à jour
+
+    f = avecFetch(BULK_OK);
+    try {
+      const out = await resyncComptoirAll();
+      assert.equal(out.changed, 2, 'les deux repartent malgré le marquage');
+      assert.equal(out.updated, 2);
+      assert.equal(f.vues.length, 1, 'un seul appel groupé');
+      const ids = f.vues[0].body.orders.map((o) => o.externalId).sort();
+      assert.deepEqual(ids, [a.number, b.number].sort());
+    } finally { f.restaurer(); }
+  });
+
+  await t.test('renvoi complet : une vente bloquée par ses réessais est rattrapée', async () => {
+    await Order.deleteMany({});
+    const cmd = await envoyee();
+    await Order.updateOne({ _id: cmd._id }, { $set: { status: 'delivered', 'comptoir.statusAttempts': 5 } });
+
+    let f = avecFetch(BULK_OK);
+    try { assert.equal((await syncComptoirStatuses()).changed, 0, 'le passage horaire l’a écartée'); } finally { f.restaurer(); }
+
+    f = avecFetch(BULK_OK);
+    try {
+      const out = await resyncComptoirAll();
+      assert.equal(out.updated, 1);
+    } finally { f.restaurer(); }
+    const apres = await Order.findById(cmd._id).lean();
+    assert.equal(apres.comptoir.statusSentFor, 'livree');
+    assert.equal(apres.comptoir.statusAttempts, 0);
+  });
+
+  await t.test('au-delà de 500 ventes, l’envoi part par paquets', async () => {
+    await Order.deleteMany({});
+    /* 501 marquées envoyées directement en base : créer 501 commandes puis les
+       pousser une à une prendrait des minutes pour ne rien prouver de plus. */
+    const docs = [];
+    for (let i = 0; i < 501; i += 1) {
+      docs.push({
+        userId: new mongoose.Types.ObjectId(),
+        number: `CP2026-95${String(i).padStart(4, '0')}`,
+        status: 'delivered', paymentStatus: 'paid', accountType: 'particulier', totalCents: 12000,
+        items: [{ name: 'Filtre', unitPriceCents: 12000, quantity: 1, lineTotalCents: 12000 }],
+        shippingAddress: { fullName: 'Jean Dupont', line1: '1 rue de Paris', postalCode: '75001', city: 'Paris', country: 'France' },
+        billingAddress: { fullName: 'Jean Dupont', line1: '1 rue de Paris', postalCode: '75001', city: 'Paris', country: 'France' },
+        createdAt: new Date(), updatedAt: new Date(),
+        comptoir: { sentAt: new Date(), statusSentFor: 'preparation', countrySentFor: 'FR', statusAttempts: 0 },
+      });
+    }
+    await Order.collection.insertMany(docs);
+
+    const f = avecFetch(BULK_OK);
+    try {
+      const out = await syncComptoirStatuses();
+      assert.equal(out.changed, 501);
+      assert.equal(f.vues.length, 2, 'deux appels : 500 puis 1');
+      assert.equal(f.vues[0].body.orders.length, 500);
+      assert.equal(f.vues[1].body.orders.length, 1);
+      assert.equal(out.updated, 501);
+    } finally { f.restaurer(); }
+    assert.equal(await Order.countDocuments({ 'comptoir.statusSentFor': 'livree' }), 501);
   });
 
   await t.test('une vente jamais envoyée n’est pas concernée par les statuts', async () => {

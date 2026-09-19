@@ -82,4 +82,16 @@ async function syncComptoirStatuses(options = {}) {
   return comptoir.syncStatuses(options);
 }
 
-module.exports = { syncComptoirOrders, syncComptoirStatuses, DEFAULT_WINDOW_DAYS };
+/**
+ * Renvoi COMPLET (une fois par jour) : toutes les ventes de l'année repartent,
+ * par paquets de 500, même celles qu'on croit déjà à jour.
+ *
+ * C'est le filet : leur ingestion a déjà évolué en silence (09/09/2026), et un
+ * renvoi est sans risque chez eux (anti-doublon sur externalId).
+ */
+async function resyncComptoirAll(options = {}) {
+  if (!comptoir.isConfigured()) return { skipped: true, reason: 'COMPTOIR_API_KEY absente' };
+  return comptoir.syncStatuses({ ...options, force: true });
+}
+
+module.exports = { syncComptoirOrders, syncComptoirStatuses, resyncComptoirAll, DEFAULT_WINDOW_DAYS };

@@ -136,7 +136,12 @@ détaillée ne fait réessayer que les ventes citées ; un simple compteur non n
 fait réessayer tout le lot à l'heure suivante. Le doute va toujours vers le
 renvoi, jamais vers un « à jour » à tort.
 
-**3. Réessai toujours sûr.** L'anti-doublon rend tout renvoi inoffensif : d'où
+**3. Renvoi complet quotidien.** À 4 h du matin, le passage horaire repousse
+TOUTES les ventes de l'année (`resyncComptoirAll`, paquets de 500), même celles
+qu'on croit à jour, et sans tenir compte du compteur de réessais. C'est le
+filet : leur ingestion a déjà changé en silence, et un renvoi ne coûte rien.
+
+**4. Réessai toujours sûr.** L'anti-doublon rend tout renvoi inoffensif : d'où
 le rattrapage horaire plutôt qu'un envoi unique qu'un incident réseau perdrait
 en silence.
 
