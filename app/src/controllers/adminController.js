@@ -3754,6 +3754,25 @@ async function getAdminOrderDetailPage(req, res, next) {
           : '',
       }));
 
+    /* Avoirs émis SANS remboursement (remboursés autrement) : ils ne sont
+       rattachés à aucune ligne de remboursement, donc affichés à part. */
+    const creditNotesList = Array.isArray(orderDoc.creditNotes) ? orderDoc.creditNotes : [];
+    const creditNotesTotalCents = creditNotesList.reduce((s, c) => s + (Number(c && c.totalCents) || 0), 0);
+    const viewCreditNotesSeuls = creditNotesList
+      .filter((c) => c && !Number.isInteger(c.refundIndex))
+      .slice()
+      .sort((a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime())
+      .map((c) => ({
+        number: c.number,
+        amount: formatEuro(c.totalCents || 0),
+        reason: c.reason || '',
+        notes: c.notes || '',
+        issuedAt: c.issuedAt ? formatDateTimeFR(c.issuedAt) : '',
+        createdBy: c.createdBy || '',
+        pdfUrl: `/admin/commandes/${String(orderDoc._id)}/avoir/${encodeURIComponent(c.number)}/pdf`,
+      }));
+    const avoirableLeftCents = Math.max(0, orderTotalCents - creditNotesTotalCents);
+
     const refundDefaultMethod = orderDoc.molliePaymentId && orderDoc.molliePaymentStatus === 'paid'
       ? 'mollie'
       : (orderDoc.scalapayOrderToken && (orderDoc.scalapayStatus === 'charged' || orderDoc.scalapayStatus === 'captured') ? 'scalapay' : 'manual');
@@ -4006,6 +4025,10 @@ async function getAdminOrderDetailPage(req, res, next) {
         refundsTotalCents,
         refundableLeft: formatEuro(refundableLeftCents),
         refundableLeftCents,
+        creditNotesSeuls: viewCreditNotesSeuls,
+        creditNotesTotal: formatEuro(creditNotesTotalCents),
+        avoirableLeft: formatEuro(avoirableLeftCents),
+        avoirableLeftCents,
         refundDefaultMethod,
         molliePaymentId: orderDoc.molliePaymentId || '',
         molliePaymentStatus: orderDoc.molliePaymentStatus || '',
@@ -5017,6 +5040,70 @@ async function postAdminRefundOrder(req, res, next) {
         ok: true,
         message: req.session.adminOrderSuccess,
         data: { refund: { amountCents, method: result.refund.method }, creditNote: result.creditNote ? { number: result.creditNote.number } : null },
+      });
+    }
+    return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * POST /admin/commandes/:orderId/avoir — créer un avoir SANS remboursement.
+ *
+ * Pour les remboursements faits hors du site (virement, geste commercial) :
+ * l'avoir est le document comptable, l'argent part par ailleurs. Rien n'est
+ * envoyé à Mollie, aucun remboursement n'est enregistré, le statut de la
+ * commande ne bouge pas et le client ne reçoit pas d'e-mail.
+ */
+async function postAdminCreateCreditNote(req, res, next) {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      req.session.adminOrderError = 'La base de données n’est pas disponible.';
+      return res.redirect('/admin/commandes');
+    }
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    }
+
+    const echec = (message) => {
+      req.session.adminOrderError = message;
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: message });
+      return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+    };
+
+    const rawAmount = getTrimmedString(req.body.amount).replace(/\s/g, '').replace(',', '.');
+    const amountFloat = Number.parseFloat(rawAmount);
+    const amountCents = Number.isFinite(amountFloat) ? Math.round(amountFloat * 100) : NaN;
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      return echec('Montant invalide. Saisis un montant en euros (ex : 12,50).');
+    }
+
+    const adminEmail = req.session && req.session.admin && req.session.admin.email
+      ? String(req.session.admin.email)
+      : 'admin';
+
+    const refundService = require('../services/refundService');
+    const result = await refundService.createStandaloneCreditNote({
+      orderId,
+      amountCents,
+      reason: getTrimmedString(req.body.reason),
+      notes: getTrimmedString(req.body.notes),
+      adminEmail,
+    });
+
+    if (!result.ok) {
+      console.error(`[admin-avoir] Échec pour commande ${orderId} :`, result.errorCode, result.error);
+      return echec(result.error || 'La création de l’avoir a échoué.');
+    }
+
+    req.session.adminOrderSuccess = `Avoir ${result.creditNote.number} créé pour ${(amountCents / 100).toFixed(2)} €. Aucun remboursement n’a été émis par le site.`;
+    if (wantsJsonResponse(req)) {
+      return res.json({
+        ok: true,
+        message: req.session.adminOrderSuccess,
+        data: { creditNote: { number: result.creditNote.number, totalCents: amountCents } },
       });
     }
     return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
@@ -13624,6 +13711,7 @@ module.exports = {
   postAdminRefundOrder,
   postAdminRefundConsigne,
   getAdminOrderCreditNotePdf,
+  postAdminCreateCreditNote,
   postAdminUploadOrderDocument,
   getAdminOrderDocument,
   getAdminOrderDocumentDownload,

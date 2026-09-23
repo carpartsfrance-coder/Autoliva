@@ -109,9 +109,13 @@ const creditNoteSchema = new mongoose.Schema(
     /* PDF binaire stocké en base (Render = filesystem éphémère) */
     pdfData: { type: Buffer, default: null, select: false },
     pdfSizeBytes: { type: Number, default: 0 },
-    /* Lien optionnel vers le refund correspondant (index dans refunds[]) */
+    /* Lien optionnel vers le refund correspondant (index dans refunds[]).
+       null = avoir émis SANS remboursement par le site (remboursé autrement :
+       virement, geste commercial…). */
     refundIndex: { type: Number, default: null },
     createdBy: { type: String, default: '', trim: true },
+    /* Notes internes — typiquement comment le client a réellement été remboursé. */
+    notes: { type: String, default: '', trim: true },
   },
   { timestamps: false }
 );
