@@ -12,6 +12,7 @@ const productI18n = require('../services/productI18n');
 const siteSettingsService = require('../services/siteSettings');
 const { publicBlogFilter } = require('../services/seoIndexPolicy');
 const brand = require('../config/brand');
+const { organisationSchema, idOrganisation } = require('../services/organisationSchema');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -357,17 +358,15 @@ async function getHome(req, res, next) {
     const jsonLd = JSON.stringify({
       '@context': 'https://schema.org',
       '@graph': [
-        {
-          '@type': 'Organization',
-          name: brand.NAME,
-          url: canonicalUrl,
-          logo: baseUrl ? `${baseUrl}/images/favicon.png` : '/images/favicon.png',
-          sameAs: sameAs.length ? sameAs : undefined,
-        },
+        /* Identité complète et politique de retour réelle, une seule entité
+           (services/organisationSchema.js) : l'ancien bloc n'avait que le nom,
+           l'URL et le favicon en guise de logo. */
+        organisationSchema(baseUrl, { sameAs }),
         {
           '@type': 'WebSite',
           name: brand.NAME,
           url: canonicalUrl,
+          publisher: { '@id': idOrganisation(baseUrl) },
           inLanguage: req.lang === 'en' ? 'en' : 'fr-FR',
           description: metaDescription,
           /* Sitelinks Search Box : permet à Google d'afficher un champ de recherche
