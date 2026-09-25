@@ -86,6 +86,14 @@ function sectionDescription(html) {
   return html.slice(debut, html.indexOf('</section>', debut));
 }
 
+/* Bloc « Véhicules compatibles », jusqu'au titre « Caractéristiques » (où
+   les références de la pièce, elles, ont leur place). */
+function sectionCompat(html) {
+  const debut = html.indexOf('<div id="compat">');
+  if (debut < 0) return null;
+  return html.slice(debut, html.indexOf('>Caractéristiques<', debut));
+}
+
 function metaDescription(html) {
   const m = html.match(/<meta name="description" content="([^"]*)"/);
   return m ? decoder(m[1]) : '';
@@ -420,6 +428,41 @@ test('fiche produit rendue par l’application — description et allégations (
     }
     assert.ok(!/garantie de 24 mois/.test(tout), 'garantie « en bloc » affichée');
     assert.equal(metaDescription(r.html), 'Mécatronique Audi A1 reconditionnée (1.0 TSI, 1.2 TFSI) · 1 référence testée(s) sur banc · livraison 24-48h.');
+  });
+
+  await t.test('comparatif et véhicules compatibles : rien de faux, rien d’interne (audit du 25/09/2026)', async () => {
+    /* Colonne « Occasion » : la garantie légale de conformité et celle des
+       vices cachés s'appliquent aussi à l'occasion (CGV art. 11) ; « Aucune »
+       et « Aucun recours » étaient faux. Le sous-titre parlait d'une « boîte
+       de vitesses » sur une boîte de transfert, un pont, une mécatronique. */
+    for (const p of [DQ200, WC, ALIBABA]) {
+      const lisible = texte(pages.get(p.sku));
+      assert.ok(lisible.includes('Occasion, reconditionné ou neuf ?'), `${p.sku} : le comparatif doit rester`);
+      assert.ok(lisible.includes('Garantie légale seulement'), `${p.sku} : garantie de l’occasion`);
+      assert.ok(lisible.includes('Recours limités'), `${p.sku} : recours de l’occasion`);
+      assert.ok(!/Garantie Aucune\b|Aucun recours/.test(lisible), `${p.sku} : « Aucune » / « Aucun recours » affiché`);
+      assert.ok(lisible.includes('comparés honnêtement — pour cette pièce.'), `${p.sku} : sous-titre générique`);
+      assert.ok(!lisible.includes('pour cette boîte de vitesses'), `${p.sku} : sous-titre « boîte de vitesses »`);
+    }
+    const de = await get(`/de/produits/${encodeURIComponent(DQ200.localizations.de.slug)}-${DQ200._id}`);
+    assert.equal(de.status, 200);
+    assert.ok(texte(de.html).includes('Nur gesetzliche Gewährleistung'), 'allemand : garantie de l’occasion');
+    assert.ok(!/Kein Rückgriff|für dieses Getriebe/.test(texte(de.html)), 'allemand : ancien texte');
+
+    /* WC-7756 : 12 véhicules, 7 références. Les 7 premiers recevaient chacun
+       une référence par sa POSITION dans la liste, les 5 suivants le SKU
+       interne. Aucune référence n'est rattachée à un véhicule en base : le
+       tableau n'en montre plus, la fiche les liste une fois, à part. */
+    for (const p of [WC, DQ200]) {
+      const compat = sectionCompat(pages.get(p.sku));
+      assert.ok(compat, `${p.sku} : bloc des véhicules compatibles absent`);
+      assert.ok(texte(compat).includes(p.compatibility[p.compatibility.length - 1].model), `${p.sku} : les véhicules doivent rester`);
+      assert.ok(!compat.includes(p.sku), `${p.sku} : SKU interne affiché comme référence d’un véhicule`);
+      for (const r of p.compatibleReferences) assert.ok(!compat.includes(`>${r}<`), `${p.sku} : ${r} attribuée à un véhicule`);
+      assert.ok(!texte(compat).includes('Références'), `${p.sku} : colonne « Références » encore là`);
+      const lisible = texte(pages.get(p.sku));
+      for (const r of p.compatibleReferences) assert.ok(lisible.includes(r), `${p.sku} : ${r} doit rester listée dans les caractéristiques`);
+    }
   });
 
   await t.test('le flux Merchant liste toujours toutes les fiches publiées', async () => {
