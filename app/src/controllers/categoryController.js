@@ -9,6 +9,7 @@ const {
   buildCategoryPublicPath,
   buildCategoryPublicUrl,
   getPublicBaseUrlFromReq,
+  compterFichesPubliees,
 } = require('../services/categoryPublic');
 const { buildHreflangSet, t, redirectionFrGardantLaLangue } = require('../services/i18n');
 const { formatCategoryDisplayName } = require('../services/brandSanitizer');
@@ -69,6 +70,19 @@ async function listCategories(req, res, next) {
         .sort({ sortOrder: 1, name: 1 })
         .select('_id name slug localizations.de.name localizations.de.slug localizations.de.translatedAt')
         .lean();
+
+      /* Catégories VIDES hors du sommaire (audit du 25/09/2026) : 42 des
+         catégories actives n'ont aucune fiche publiée. Leur page se sert en
+         noindex et le sitemap les écarte déjà (plan SEO A4.6) ; les lister ici
+         envoyait visiteurs et robots vers 42 pages vides. Même comptage que la
+         page et le sitemap : une catégorie qui se remplit revient d'elle-même.
+         Si le comptage échoue, la liste reste entière. */
+      try {
+        const comptes = await compterFichesPubliees((categories || []).map((c) => c && c.name).filter(Boolean));
+        categories = (categories || []).filter((c) => c && comptes.get(c.name) > 0);
+      } catch (err) {
+        console.error('[categories] comptage impossible, sommaire complet :', err && err.message ? err.message : err);
+      }
 
       categories = (categories || []).map((c) => {
         /* Sous /de : nom ET slug allemands. Le sommaire listait les 64
