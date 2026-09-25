@@ -7,7 +7,7 @@ const BlogPost = require('../models/BlogPost');
 const demoProducts = require('../demoProducts');
 const { buildProductPublicUrl, getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildCategoryPublicUrl, compterFichesPubliees } = require('../services/categoryPublic');
-const { DEFAULT_LEGAL_PAGES } = require('../services/legalPages');
+const { DEFAULT_LEGAL_PAGES, pageLegaleIndexable } = require('../services/legalPages');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 /* Dates des sitemaps : jamais updatedAt (plan de reprise SEO du 14/09/2026,
    action A4.5) — voir services/datesSeo.js. */
@@ -104,18 +104,22 @@ async function buildPagesUrls(baseUrl, dbConnected) {
   let legalPages = [];
   if (dbConnected) {
     legalPages = await LegalPage.find({ isPublished: { $ne: false } })
-      .select('_id slug')
+      .select('_id slug content')
       .sort({ sortOrder: 1, title: 1 })
       .lean();
   } else {
-    legalPages = (DEFAULT_LEGAL_PAGES || []).map((p) => ({ slug: p.slug }));
+    legalPages = (DEFAULT_LEGAL_PAGES || []).map((p) => ({ slug: p.slug, content: p.content }));
   }
 
   /* Pas de lastmod : updatedAt des pages légales bouge aussi quand on écrit
      leur traduction allemande (scripts/translate-legal-de.js), sans que le
-     texte français change. */
+     texte français change.
+     Une page encore provisoire (texte d'attente « À compléter dans
+     l’admin », CGV SAV non validées) est servie en noindex : elle n'a rien à
+     faire dans le sitemap — même règle que la page (services/legalPages). */
   for (const lp of legalPages) {
     if (!lp || !lp.slug) continue;
+    if (!pageLegaleIndexable(lp)) continue;
     urls.push({ loc: resolveUrl(`/legal/${encodeURIComponent(lp.slug)}`), lastmod: '' });
   }
   return urls;

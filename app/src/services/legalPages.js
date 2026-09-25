@@ -59,6 +59,63 @@ const DEFAULT_LEGAL_PAGES = [
   },
 ];
 
+/* ─── Pages encore provisoires : en ligne, mais hors de Google ─────────────
+ *
+ * Audit du 25/09/2026. Deux pages de confiance, liées depuis chaque pied de
+ * page, étaient indexables alors qu'elles n'étaient pas écrites :
+ *   - /legal/cookies montrait encore le texte d'attente des pages créées par
+ *     défaut (« À compléter dans l’admin. Informations recommandées : … »),
+ *     jusque dans sa description Google ;
+ *   - /legal/cgv-sav (vue legal/cgv-sav.ejs) se dit « Version provisoire — en
+ *     attente de validation juridique », tribunal « [VILLE À COMPLÉTER] ».
+ * Elles restent en ligne (le formulaire SAV fait accepter les CGV SAV), mais
+ * servies en « noindex, follow » et absentes de sitemap-pages.xml. Une page
+ * légale qui reçoit son vrai texte dans l'admin revient d'elle-même. */
+
+/* À passer à true le jour où un juriste a validé les CGV SAV — et retirer
+   alors de la vue les mentions « provisoire » et « [VILLE À COMPLÉTER] ». */
+const CGV_SAV_VALIDEES = false;
+const SLUG_CGV_SAV = 'cgv-sav';
+
+function normaliserTexteLegal(texte) {
+  return String(texte == null ? '' : texte)
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[’‘`´]/g, "'")
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const TEXTES_PAR_DEFAUT = new Set(DEFAULT_LEGAL_PAGES.map((p) => normaliserTexteLegal(p.content)));
+
+/**
+ * Le contenu d'une page légale est-il encore un texte d'attente ? Vide, le
+ * texte par défaut (même retouché : il commence par « À compléter » ou garde
+ * « à compléter dans l'admin »), ou un marqueur « [… À COMPLÉTER …] ».
+ */
+function estContenuProvisoire(contenu) {
+  const t = normaliserTexteLegal(contenu);
+  if (!t) return true;
+  if (TEXTES_PAR_DEFAUT.has(t)) return true;
+  if (/^a completer\b/.test(t)) return true;
+  if (/\ba completer dans l'admin\b/.test(t)) return true;
+  if (/\[[^\]]*\ba completer\b[^\]]*\]/.test(t)) return true;
+  return false;
+}
+
+/** Une page /legal/<slug> peut-elle figurer dans Google et le sitemap ? */
+function pageLegaleIndexable({ slug, content } = {}) {
+  if (getTrimmedString(slug).toLowerCase() === SLUG_CGV_SAV && !CGV_SAV_VALIDEES) return false;
+  return !estContenuProvisoire(content);
+}
+
+/* « noindex, follow », sans jamais relâcher un « noindex, nofollow » déjà
+   posé par app.js (hors production, FORCE_NOINDEX). */
+function metaRobotsProvisoire(res) {
+  const actuel = String((res && res.locals && res.locals.metaRobots) || '');
+  return /noindex/i.test(actuel) ? actuel : 'noindex, follow';
+}
+
 async function ensureDefaultLegalPagesInDb() {
   try {
     const existing = await LegalPage.find({ slug: { $in: DEFAULT_LEGAL_PAGES.map((p) => p.slug) } })
@@ -97,6 +154,7 @@ function getDefaultLegalPage(slug) {
     isPublished: true,
     sortOrder: found.sortOrder,
     updatedAt: null,
+    provisoire: estContenuProvisoire(found.content),
   };
 }
 
@@ -125,6 +183,7 @@ async function listLegalPages({ dbConnected, includeUnpublished = false } = {}) 
     isPublished: p.isPublished !== false,
     sortOrder: Number.isFinite(p.sortOrder) ? p.sortOrder : 0,
     updatedAt: p.updatedAt || null,
+    provisoire: estContenuProvisoire(p.content),
   }));
 }
 
@@ -161,6 +220,9 @@ async function getLegalPageBySlug({ slug, dbConnected, includeUnpublished = fals
     sortOrder: Number.isFinite(page.sortOrder) ? page.sortOrder : 0,
     updatedAt: page.updatedAt || null,
     deTraduite,
+    /* Jugé sur le texte FRANÇAIS, qui fait foi : sa traduction n'en est
+       que le reflet. */
+    provisoire: estContenuProvisoire(page.content),
   };
 }
 
@@ -195,6 +257,10 @@ async function updateLegalPageBySlug({ slug, title, content, isPublished, sortOr
 
 module.exports = {
   DEFAULT_LEGAL_PAGES,
+  CGV_SAV_VALIDEES,
+  estContenuProvisoire,
+  pageLegaleIndexable,
+  metaRobotsProvisoire,
   ensureDefaultLegalPagesInDb,
   listLegalPages,
   getLegalPageBySlug,

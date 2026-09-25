@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
   
 const { getPublicBaseUrlFromReq } = require('../services/categoryPublic');
-const { listLegalPages, getLegalPageBySlug } = require('../services/legalPages');
+const { listLegalPages, getLegalPageBySlug, metaRobotsProvisoire } = require('../services/legalPages');
 const { buildHreflangSet, t, redirectionFrGardantLaLangue } = require('../services/i18n');
 const brand = require('../config/brand');
 
@@ -12,6 +12,30 @@ function getTrimmedString(value) {
 function stripHtml(value) {
   if (typeof value !== 'string') return '';
   return value.replace(/<[^>]*>/g, ' ').replace(/\s{2,}/g, ' ').trim();
+}
+
+const ENTITES_NOMMEES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', rsquo: '’', lsquo: '‘', laquo: '«', raquo: '»', hellip: '…', ndash: '–', mdash: '—', euro: '€' };
+
+/**
+ * Entités HTML décodées. La description Google d'une page légale sortait du
+ * contenu déjà ÉCHAPPÉ par renderContentHtml (« d'un » → « d&#39;un ») ; le
+ * gabarit l'échappait une seconde fois et Google lisait « d&amp;#39;un ».
+ * Deux passes au plus : l'échappement du rendu, puis une entité saisie telle
+ * quelle dans l'admin (« &#39; » collé depuis un ancien site).
+ */
+function decoderEntites(texte) {
+  let out = String(texte || '');
+  for (let passe = 0; passe < 2 && /&(?:#\d+|#x[0-9a-f]+|[a-z]+);/i.test(out); passe++) {
+    out = out.replace(/&(#\d+|#x[0-9a-f]+|[a-z]+);/gi, (m, e) => {
+      if (e.charAt(0) === '#') {
+        const code = e.charAt(1).toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+        return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : m;
+      }
+      const nom = e.toLowerCase();
+      return Object.prototype.hasOwnProperty.call(ENTITES_NOMMEES, nom) ? ENTITES_NOMMEES[nom] : m;
+    });
+  }
+  return out;
 }
 
 function normalizeMetaText(value) {
@@ -131,7 +155,9 @@ async function getLegalPage(req, res, next) {
       : undefined);
 
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/legal/${encodeURIComponent(page.slug)}` : `${langPrefix}/legal/${encodeURIComponent(page.slug)}`;
-    const contentText = stripHtml(page && page.contentHtml ? page.contentHtml : '');
+    /* Décodée AVANT la coupe à 160 caractères : couper « d&#39; » en plein
+       milieu laissait un reste d'entité en fin de description. */
+    const contentText = decoderEntites(stripHtml(page && page.contentHtml ? page.contentHtml : ''));
     const metaDescription = truncateText(
       normalizeMetaText(contentText || `${page.title} sur ${brand.NAME}.`),
       160
@@ -188,6 +214,9 @@ async function getLegalPage(req, res, next) {
       jsonLd,
       dbConnected,
       page,
+      /* Texte d'attente (« À compléter dans l’admin… ») : la page reste en
+         ligne mais sort de Google, et de sitemap-pages.xml (seoController). */
+      ...(page.provisoire ? { metaRobots: metaRobotsProvisoire(res) } : {}),
     });
   } catch (err) {
     return next(err);
@@ -197,4 +226,5 @@ async function getLegalPage(req, res, next) {
 module.exports = {
   getLegalIndex,
   getLegalPage,
+  _pourTests: { decoderEntites },
 };
