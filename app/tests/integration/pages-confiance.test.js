@@ -303,6 +303,22 @@ test('pages de confiance servies par l’application (audit du 25/09/2026)', asy
     }
   });
 
+  await t.test('hreflang : le chemin de la page, jamais ses paramètres (suivi Ads, pagination, filtres)', async () => {
+    for (const [chemin, attendu] of [
+      ['/moteurs?utm_source=google&utm_campaign=moteurs&gclid=abc', '/moteurs'],
+      ['/blog?page=2', '/blog'],
+      ['/categorie/boites-de-vitesses?condition=reconditionne', '/categorie/boites-de-vitesses'],
+    ]) {
+      const r = await get(chemin);
+      assert.equal(r.status, 200, `${chemin} : ${r.status} ${r.location || ''}`);
+      const alternates = [...r.corps.matchAll(/<link rel="alternate" hreflang="([^"]*)" href="([^"]*)"\/>/g)]
+        .map((m) => [m[1], decoder(m[2]).replace(base, '')]);
+      assert.ok(alternates.length, `${chemin} : aucun hreflang`);
+      for (const [langue, href] of alternates) assert.ok(!href.includes('?'), `${chemin} : hreflang ${langue} = ${href}`);
+      assert.ok(alternates.some(([langue, href]) => langue === 'fr' && href === attendu), `${chemin} : ${JSON.stringify(alternates)}`);
+    }
+  });
+
   await t.test('lien cassé de l’article DQ200 : un 301 vers le vrai article EDC DC4, avant toute autre règle', async () => {
     const alias = await get('/blog/calculateur-edc-dc4-renault-diagnostic-prix-remplacement');
     assert.equal(alias.status, 301);
