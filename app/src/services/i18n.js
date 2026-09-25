@@ -42,7 +42,9 @@ function t(lang, key, params) {
  */
 function buildHreflangSet(baseUrl, pathWithoutLang, options) {
   const base = baseUrl || '';
-  const path = pathWithoutLang || '/';
+  /* Jamais de paramètres dans un hreflang (suivi Ads, page 2…) : seul le
+     chemin désigne la version d'une page. */
+  const path = String(pathWithoutLang || '/').split('?')[0].split('#')[0] || '/';
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   const frHref = `${base}${normalizedPath}`;
 

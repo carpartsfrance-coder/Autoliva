@@ -18,7 +18,11 @@
 const FAQ_ITEMS = [
   {
     question: "Quels sont les délais de livraison ?",
-    answer: "Les expéditions sont effectuées sous 24 à 48 h ouvrées après validation de votre commande. La livraison prend ensuite 2 à 5 jours ouvrés selon votre localisation. Vous recevrez un e-mail avec le numéro de suivi dès l'envoi de votre colis.",
+    /* Mot pour mot les délais des CGV (article 7.2), qui font foi. La FAQ
+       promettait « 24 à 48 h » pour toute pièce, moteurs et boîtes compris,
+       et ce texte part tel quel dans le JSON-LD FAQPage lu par Google. */
+    answer: "Sauf délai différent indiqué sur la fiche produit : les pièces standards, mécatroniques et calculateurs sont expédiés sous 24 à 72 heures ouvrées, puis livrés sous 24 à 72 heures ; les moteurs, boîtes de vitesses, ponts, boîtes de transfert et autres ensembles lourds sont expédiés sous 3 à 6 jours ouvrés, puis livrés sous 1 à 4 jours ouvrés (<a href=\"/legal/cgv\" class=\"text-primary font-bold hover:underline\">CGV</a>, article 7.2). Vous recevez un e-mail avec le numéro de suivi dès l'envoi de votre colis.",
+    answerPlain: "Sauf délai différent indiqué sur la fiche produit : les pièces standards, mécatroniques et calculateurs sont expédiés sous 24 à 72 heures ouvrées, puis livrés sous 24 à 72 heures ; les moteurs, boîtes de vitesses, ponts, boîtes de transfert et autres ensembles lourds sont expédiés sous 3 à 6 jours ouvrés, puis livrés sous 1 à 4 jours ouvrés (CGV, article 7.2). Vous recevez un e-mail avec le numéro de suivi dès l'envoi de votre colis.",
   },
   {
     question: "Comment fonctionne l'échange standard ?",

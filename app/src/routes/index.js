@@ -86,11 +86,18 @@ router.post('/sav/demande',
     next();
   }),
   savController.postSimpleForm);
-router.get('/sav/notre-engagement', (req, res) => {
+router.get('/sav/notre-engagement', async (req, res) => {
+  /* Chiffres calculés ici, au rendu : la page ne montre plus de cases
+     vides « — » (services/savChiffresPublics.js). */
+  const { chiffresSavPublics } = require('../services/savChiffresPublics');
   res.render('sav-engagement', {
     title: `Notre engagement SAV — ${brand.NAME}`,
     metaDescription: 'Transparence, banc dédié, réponse sous 5 jours, équité. Découvrez notre engagement Service Après-Vente.',
     canonicalUrl: `${getSiteUrlFromReq(req)}/sav/notre-engagement`,
+    chiffresSav: await chiffresSavPublics(),
+    /* Aucune photo d'atelier pour l'instant : le bloc reste masqué (plus
+       d'« emplacements réservés »). Liste d'objets { url, alt }. */
+    photosAtelier: [],
   });
 });
 /* Page de vérification anti-usurpation. L'URL est courte et mémorisable à
@@ -108,10 +115,15 @@ router.get('/securite', (req, res) => {
   });
 });
 router.get('/legal/cgv-sav', (req, res) => {
+  const { CGV_SAV_VALIDEES, metaRobotsProvisoire } = require('../services/legalPages');
   res.render('legal/cgv-sav', {
     title: `CGV SAV — ${brand.NAME}`,
     metaDescription: `Conditions générales du Service Après-Vente ${brand.NAME}.`,
     canonicalUrl: `${getSiteUrlFromReq(req)}/legal/cgv-sav`,
+    /* « Version provisoire — en attente de validation juridique » : en ligne
+       (le formulaire SAV fait accepter ces conditions), hors de Google tant
+       que CGV_SAV_VALIDEES reste à false (services/legalPages.js). */
+    ...(CGV_SAV_VALIDEES ? {} : { metaRobots: metaRobotsProvisoire(res) }),
   });
 });
 router.post('/sav/check-commande', savController.postCheckCommande);

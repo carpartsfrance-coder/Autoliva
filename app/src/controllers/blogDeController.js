@@ -20,7 +20,7 @@ const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services
 const blogProductCta = require('../services/blogProductCta');
 const nettoyageArticle = require('../services/nettoyageArticle');
 const signatureArticle = require('../services/signatureArticle');
-const { sanitizeBrandLeak } = require('../services/brandSanitizer');
+const { directivesProduitHtml, slugsEncadresProduit, remplirEncadresProduit } = require('../services/blogContent');
 const claimFilter = require('../services/claimFilter');
 const scalapay = require('../services/scalapay');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
@@ -326,6 +326,11 @@ async function getBlogPostDe(req, res) {
     }
 
     const de = post.localizations.de;
+    /* « :::product[slug] » resté en clair dans la traduction : même
+       emplacement que dans l'article français, rempli plus bas. */
+    const corpsDe = directivesProduitHtml(de.contentHtml || '');
+    /* Titre sans l'ancien sigle « CPF » ni l'ancien nom. */
+    const titreDe = nettoyageArticle.nettoyerTexte(de.title);
 
     const canonicalUrl = baseUrl
       ? `${baseUrl}/de/blog/${encodeURIComponent(post.slug)}`
@@ -333,14 +338,14 @@ async function getBlogPostDe(req, res) {
 
     /* Même filtre que le corps pour le résumé et la description Google
        (5 résumés et 4 descriptions promettaient encore « Ratenzahlung »). */
-    const sansAllegation = (t) => (t ? sanitizeBrandLeak(claimFilter.filtrer(t, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }))) : '');
+    const sansAllegation = (t) => (t ? nettoyageArticle.nettoyerTexte(claimFilter.filtrer(t, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }))) : '');
     const excerptPropre = sansAllegation(de.excerpt);
-    const computedDesc = truncateText(stripHtml(excerptPropre || sansAllegation(nettoyageArticle.nettoyerHtml(de.contentHtml || '', { lang: 'de' })) || ''), 160);
+    const computedDesc = truncateText(stripHtml(excerptPropre || sansAllegation(nettoyageArticle.nettoyerHtml(corpsDe, { lang: 'de' })) || ''), 160);
     const metaDescription = normalizeMetaText(
       (de.seo && de.seo.metaDescription && sansAllegation(de.seo.metaDescription)) || computedDesc
     );
     const titleTag = normalizeMetaText(
-      (de.seo && de.seo.metaTitle) ? de.seo.metaTitle : `${de.title} - ${brand.NAME}`
+      (de.seo && de.seo.metaTitle) ? nettoyageArticle.nettoyerTexte(de.seo.metaTitle) : `${titreDe} - ${brand.NAME}`
     );
 
     const hreflang = buildHreflangSetForBlogPost(baseUrl, post.slug);
@@ -359,7 +364,7 @@ async function getBlogPostDe(req, res) {
        /de/blog/x) — plan SEO A12. */
     let contentHtml = await rewriteInternalBlogLinks(
       claimFilter.filtrer(
-        nettoyageArticle.nettoyerHtml(de.contentHtml || '', { lang: 'de' }),
+        nettoyageArticle.nettoyerHtml(corpsDe, { lang: 'de' }),
         claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() })
       ),
       post.slug
@@ -389,13 +394,20 @@ async function getBlogPostDe(req, res) {
       };
     });
 
-    if (related.length && contentHtml) {
-      const ctaHtml = buildGermanProductCta(related[0]);
-      contentHtml = contentHtml.replace(
-        /<div class="blog-product-cta" data-product-cta="1"><\/div>/g,
-        ctaHtml
-      );
-    }
+    /* « :::product » : la 1re fiche liée ; « :::product[slug] » : la fiche de
+       ce slug si elle est publiée. Sans fiche, l'emplacement disparaît — ni
+       directive en clair, ni cadre vide. */
+    const slugsNommes = slugsEncadresProduit(contentHtml);
+    const fichesNommees = slugsNommes.length
+      ? await Product.find({ slug: { $in: slugsNommes }, isPublished: { $in: [true, null] } })
+        .select('_id name priceCents imageUrl slug localizations.de.name localizations.de.slug localizations.de.translatedAt ' + blogProductCta.CHAMPS_FICHE)
+        .lean()
+      : [];
+    const ficheParSlug = new Map(fichesNommees.map((p) => [p.slug, p]));
+    contentHtml = remplirEncadresProduit(contentHtml, {
+      nomme: (slug) => (ficheParSlug.has(slug) ? buildGermanProductCta(ficheParSlug.get(slug)) : ''),
+      lie: () => (related.length ? buildGermanProductCta(related[0]) : ''),
+    });
 
     // Articles similaires : uniquement parmi ceux traduits en DE, même catégorie
     const similarDocs = await BlogPost.find(publicBlogFilter({
@@ -422,7 +434,7 @@ async function getBlogPostDe(req, res) {
     const breadcrumbItems = [
       { '@type': 'ListItem', position: 1, name: 'Startseite', item: baseUrl ? `${baseUrl}/de` : '/de' },
       { '@type': 'ListItem', position: 2, name: 'Blog',       item: baseUrl ? `${baseUrl}/de/blog` : '/de/blog' },
-      { '@type': 'ListItem', position: 3, name: de.title,     item: canonicalUrl },
+      { '@type': 'ListItem', position: 3, name: titreDe,      item: canonicalUrl },
     ];
 
     const jsonLd = toSafeJsonLd({
@@ -430,7 +442,7 @@ async function getBlogPostDe(req, res) {
       '@graph': [
         {
           '@type': 'BlogPosting',
-          headline: de.title,
+          headline: titreDe,
           description: computedDesc || undefined,
           image: ogImage ? [ogImage] : undefined,
           datePublished: publishedAt ? new Date(publishedAt).toISOString() : undefined,
@@ -470,7 +482,7 @@ async function getBlogPostDe(req, res) {
       jsonLd,
       metaRobots: 'index, follow',
       post: {
-        title: de.title,
+        title: titreDe,
         slug: post.slug,
         excerpt: excerptPropre || computedDesc,
         coverImageUrl: buildSeoMediaUrl(post.coverImageUrl, de.title),

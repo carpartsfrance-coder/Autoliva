@@ -468,6 +468,29 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
     assert.equal((await get('/categorie/disques-frein')).status, 200);
   });
 
+  await t.test('catégories vides : ni au sommaire /categorie, ni dans le maillage d’une page catégorie (audit du 25/09/2026)', async () => {
+    /* Même règle que le sitemap : 42 catégories sans fiche publiée étaient
+       listées au sommaire, et chaque page catégorie en liait jusqu'à 7. */
+    const liensCategorie = (html) => [...html.matchAll(/href="\/categorie\/([^"?#/]+)"/g)].map((m) => m[1]);
+    const sommaire = await get('/categorie');
+    assert.equal(sommaire.status, 200);
+    const auSommaire = liensCategorie(sommaire.corps);
+    for (const nom of categories) {
+      assert.ok(auSommaire.includes(slugCategorie(nom)), `« ${nom} » a des fiches : elle reste au sommaire`);
+    }
+    assert.ok(auSommaire.includes('freinage'), '« Freinage » compte ses fiches « Freinage > Disques »');
+
+    require('../../src/services/internalLinking').clearCache();
+    const page = await get('/categorie/turbos');
+    assert.equal(page.status, 200);
+    const maillage = liensCategorie(page.corps);
+    assert.ok(maillage.includes('freinage') && maillage.includes('moteurs'), 'les catégories sœurs non vides restent liées');
+    for (const vide of ['disques-frein', 'brouillons-seulement', 'filtres-huile']) {
+      assert.ok(!auSommaire.includes(vide), `« ${vide} » est vide (ou inactive) : hors du sommaire`);
+      assert.ok(!maillage.includes(vide), `« ${vide} » est vide (ou inactive) : plus liée depuis une page catégorie`);
+    }
+  });
+
   await t.test('A4.6 sitemap des pages véhicule : chaque URL une seule fois', async () => {
     seo.__test.viderCaches();
     const r = await get('/sitemap-vehicles.xml');

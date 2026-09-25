@@ -71,8 +71,13 @@
   </section>
 
   <!-- Atelier -->
+  <%# Photos : seulement de vraies photos (route : photosAtelier). Les deux
+      cases grises « photos atelier à venir — emplacements réservés » ne
+      sont plus montrées (audit du 25/09/2026). %>
+  <% const _photosAtelier = (typeof photosAtelier !== 'undefined' && Array.isArray(photosAtelier))
+       ? photosAtelier.filter((p) => p && p.url) : []; %>
   <section class="mx-auto max-w-5xl px-4 sm:px-6 py-12">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-center">
+    <div class="grid grid-cols-1 <%= _photosAtelier.length ? 'lg:grid-cols-2' : '' %> gap-6 items-center">
       <div>
         <h2 class="text-2xl font-bold mb-3">Notre atelier et notre banc DQ200</h2>
         <p class="text-slate-600">
@@ -80,42 +85,45 @@
           Pour les autres pièces (DQ250, DQ381, DQ500, boîtes de transfert, ponts…), nous travaillons
           avec des partenaires reconnus pour garantir un diagnostic incontestable.
         </p>
-        <p class="mt-3 text-sm text-slate-500">
-          Photos atelier à venir — emplacements réservés ci-contre.
-        </p>
       </div>
+      <% if (_photosAtelier.length) { %>
       <div class="grid grid-cols-2 gap-3">
-        <div class="aspect-square rounded-2xl border border-slate-200 bg-slate-100 flex items-center justify-center text-slate-400">
-          <span class="material-symbols-rounded text-5xl" aria-hidden="true">photo</span>
-        </div>
-        <div class="aspect-square rounded-2xl border border-slate-200 bg-slate-100 flex items-center justify-center text-slate-400">
-          <span class="material-symbols-rounded text-5xl" aria-hidden="true">build</span>
-        </div>
+        <% _photosAtelier.slice(0, 4).forEach(function (p) { %>
+          <img src="<%= p.url %>" alt="<%= p.alt || '' %>" loading="lazy" class="aspect-square w-full rounded-2xl border border-slate-200 object-cover" />
+        <% }); %>
       </div>
+      <% } %>
     </div>
   </section>
 
-  <!-- Stats live -->
+  <!-- Chiffres -->
+  <%# Seulement des chiffres MESURÉS, calculés au rendu
+      (services/savChiffresPublics.js) : plus de « — » en attendant un appel
+      JavaScript, ni de « 5j » écrit en dur présenté comme un délai moyen.
+      Rien de mesuré : la section disparaît. %>
+  <% const _chiffres = (typeof chiffresSav !== 'undefined' && chiffresSav) ? chiffresSav : null; %>
+  <% if (_chiffres) { %>
   <section class="bg-slate-900 text-white">
     <div class="mx-auto max-w-5xl px-4 sm:px-6 py-12">
       <h2 class="text-2xl font-bold text-center mb-8">Nos chiffres en temps réel</h2>
-      <div class="grid grid-cols-2 sm:grid-cols-3 gap-6 text-center" id="sav-stats">
+      <div class="flex flex-wrap justify-center gap-x-16 gap-y-6 text-center" id="sav-stats">
+        <% if (_chiffres.tauxDefautProduit !== null && _chiffres.tauxDefautProduit !== undefined) { %>
         <div>
-          <div class="text-4xl font-bold" data-stat="taux">—</div>
-          <div class="mt-1 text-sm text-slate-300">% de défauts produits confirmés</div>
+          <div class="text-4xl font-bold" data-stat="taux"><%= _chiffres.tauxDefautProduit %> %</div>
+          <div class="mt-1 text-sm text-slate-300">de défauts produits confirmés</div>
         </div>
+        <% } %>
+        <% if (_chiffres.dossiersEnCours) { %>
         <div>
-          <div class="text-4xl font-bold" data-stat="delai">5j</div>
-          <div class="mt-1 text-sm text-slate-300">délai moyen d'analyse</div>
+          <div class="text-4xl font-bold" data-stat="ouverts"><%= _chiffres.dossiersEnCours %></div>
+          <div class="mt-1 text-sm text-slate-300"><%= _chiffres.dossiersEnCours > 1 ? 'dossiers en cours' : 'dossier en cours' %></div>
         </div>
-        <div>
-          <div class="text-4xl font-bold" data-stat="ouverts">—</div>
-          <div class="mt-1 text-sm text-slate-300">dossiers en cours</div>
-        </div>
+        <% } %>
       </div>
       <p class="mt-4 text-center text-xs text-slate-400">Chiffres mis à jour automatiquement.</p>
     </div>
   </section>
+  <% } %>
 
   <!-- FAQ -->
   <section class="mx-auto max-w-3xl px-4 sm:px-6 py-12">
@@ -154,16 +162,5 @@
     </div>
   </section>
 </main>
-
-<script>
-  // Stats live (dashboard public minimal — pas de Bearer côté visiteur :
-  // les chiffres exposés ici sont volontairement publics et anodins)
-  fetch('/api/sav/stats-publiques').then(function(r){ return r.json(); }).then(function(j){
-    if (!j || !j.success) return;
-    var d = j.data || {};
-    var t = document.querySelector('[data-stat="taux"]');     if (t) t.textContent = (d.taux_defaut_produit || 0) + ' %';
-    var o = document.querySelector('[data-stat="ouverts"]');  if (o) o.textContent = d.ouverts || '—';
-  }).catch(function(){});
-</script>
 
 <%- include('./partials/footer') %>

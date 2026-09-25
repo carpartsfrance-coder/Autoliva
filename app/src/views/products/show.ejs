@@ -715,34 +715,36 @@
           <% var _compatLimit = 5; var _compatMore = Math.max(0, compatVehicles.length - _compatLimit); %>
           <% if (compatVehicles.length) { %>
             <div data-ap-compat>
-              <%# Desktop / tablette : tableau 4 colonnes %>
+              <%# Plus de colonne « Références » : elle était remplie PAR POSITION
+                  (1re référence alternative sur la 1re ligne, 2e sur la 2e…),
+                  puis par le SKU interne (WC-…, DM-…, ASY-…) une fois la liste
+                  épuisée — un véhicule recevait une référence qui n'était pas
+                  la sienne. La compatibilité ne porte aucune référence par
+                  véhicule : les références de la pièce sont listées une seule
+                  fois, dans « Caractéristiques ». %>
+              <%# Desktop / tablette : tableau 3 colonnes %>
               <div class="ap-compat-table">
-                <div style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr 1fr; padding: 8px 0;">
+                <div style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr; padding: 8px 0;">
                   <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.model') %></span>
                   <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.engine') %></span>
                   <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.years') %></span>
-                  <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.references') %></span>
                 </div>
                 <% compatVehicles.forEach(function (v, i) { %>
-                  <% var _rowRef = refsAlternatives[i] || ref || engineCodeVal || '—'; %>
-                  <div class="<%= i >= _compatLimit ? 'ap-compat-extra' : '' %>" style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr 1fr; align-items: center; padding: 13px 0; border-top: 1px solid #F0F2F6;">
+                  <div class="<%= i >= _compatLimit ? 'ap-compat-extra' : '' %>" style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr; align-items: center; padding: 13px 0; border-top: 1px solid #F0F2F6;">
                     <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= [v.make, v.model].filter(Boolean).join(' ') || '—' %></span>
                     <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.engine || '—' %></span>
                     <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.years || '—' %></span>
-                    <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= _rowRef %></span>
                   </div>
                 <% }) %>
               </div>
-              <%# Mobile : liste (modèle — moteur / années / réf à droite) %>
+              <%# Mobile : liste (modèle — moteur / années) %>
               <div class="ap-compat-list" style="display: none;">
                 <% compatVehicles.forEach(function (v, i) { %>
-                  <% var _rowRefM = refsAlternatives[i] || ref || engineCodeVal || '—'; %>
                   <div class="<%= i >= _compatLimit ? 'ap-compat-extra' : '' %>" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 0;<%= i === 0 ? '' : ' border-top: 1px solid #F0F2F6;' %>">
                     <div style="min-width: 0;">
                       <div style="font-size: 13px; font-weight: 800; color: #0F1626; line-height: 1.35;"><%= [[v.make, v.model].filter(Boolean).join(' '), v.engine].filter(Boolean).join(' — ') || '—' %></div>
                       <% if (v.years) { %><div style="font-size: 12px; font-weight: 600; color: #6B7482; margin-top: 2px;"><%= v.years %></div><% } %>
                     </div>
-                    <span style="font-size: 12px; font-weight: 800; color: #0F1626; flex-shrink: 0;"><%= _rowRefM %></span>
                   </div>
                 <% }) %>
               </div>
@@ -907,12 +909,17 @@
           <div style="font-size: 22px; font-weight: 800; color: #0F1626;"><%= t('product.compareTitle') %></div>
           <div style="font-size: 12.5px; font-weight: 500; color: #6B7482; margin-top: 7px; line-height: 1.6;"><%= t('product.compareSub') %></div>
         </div>
+        <%# Colonne « Occasion » : une pièce d'occasion n'est jamais « sans
+            garantie » ni « sans recours ». La garantie légale de conformité
+            (2 ans, CGV art. 11.1) et celle des vices cachés (art. 11.2)
+            s'appliquent aussi à elle : écrire « Aucune » ou « Aucun recours »
+            était faux, sur chaque fiche reconditionnée. %>
         <% var _cmpRows = [
              { c: t('product.cmpPrice'), u: t('product.cmpPriceUsed'), r: t('product.cmpPriceRecond'), n: t('product.cmpPriceNew'), weak: [true, false, false] },
-             { c: t('product.cmpWarranty'), u: t('product.cmpNone'), r: (_wm ? t(_garVariable ? 'product.cmpWarrantyRecond' : 'product.cmpWarrantyRecondExact', { months: _wm }) : t('product.cmpWarrantyPart')), n: t('product.cmpWarrantyNew'), weak: [true, false, false] },
+             { c: t('product.cmpWarranty'), u: t('product.cmpWarrantyUsed'), r: (_wm ? t(_garVariable ? 'product.cmpWarrantyRecond' : 'product.cmpWarrantyRecondExact', { months: _wm }) : t('product.cmpWarrantyPart')), n: t('product.cmpWarrantyNew'), weak: [true, false, false] },
              { c: t('product.cmpHistory'), u: t('product.cmpUnknown'), r: t('product.cmpHistoryRecond'), n: t('product.cmpNew2'), weak: [true, false, false] },
              { c: t('product.cmpAvail'), u: t('product.cmpRandom'), r: (shippingDelayText || t('product.cmpAvailRecond')), n: t('product.cmpAvailNew'), weak: [true, false, false] },
-             { c: t('product.cmpBreakdown'), u: t('product.cmpNoRecourse'), r: t('product.cmpBreakdownRecond'), n: t('product.cmpBreakdownNew'), weak: [true, false, false] },
+             { c: t('product.cmpBreakdown'), u: t('product.cmpBreakdownUsed'), r: t('product.cmpBreakdownRecond'), n: t('product.cmpBreakdownNew'), weak: [true, false, false] },
              { c: t('product.cmpEnv'), cIcon: 'eco', u: t('product.cmpReuse'), r: t('product.cmpReuseRecond'), rIcon: 'check_circle', n: t('product.cmpNewProd'), weak: [false, false, true] }
            ]; %>
 
