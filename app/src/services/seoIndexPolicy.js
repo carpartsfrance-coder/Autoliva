@@ -9,7 +9,7 @@
  * Google a déclassé tout le domaine le 31/08 : l'essentiel de ce qu'il pouvait
  * indexer était produit en masse (articles générés, fiches d'import, pages
  * allemandes traduites à la machine, gabarits /pieces-auto et /reference),
- * contre 2 672 pages qui portent presque toutes les visites et les ventes. Le
+ * contre 2 821 pages qui portent presque toutes les visites et les ventes. Le
  * plan retire ces familles de l'index par un noindex RÉVERSIBLE, une famille à
  * la fois, et ne répond 410 qu'aux 268 articles publiés après la chute. Toutes
  * les pages restent en ligne, en vente, dans les flux Merchant et dans Ads.
@@ -29,7 +29,7 @@
  * Familles :
  *   gone        : les 268 adresses de gone-410-blog.txt répondent 410 (le
  *                 contenu reste en base : retirer un slug de la liste le rend) ;
- *   blog        : tout article français hors des 295 gardés passe en
+ *   blog        : tout article français hors des 296 gardés passe en
  *                 noindex, follow (liste BLANCHE) ;
  *   reference   : toute /reference/<réf> hors des 3 gardées, en noindex ;
  *   pieces-auto : toute /pieces-auto/* hors des 242 pages gardées, en noindex
@@ -357,7 +357,7 @@ function repondreDisparu(req, res, decision) {
 
 /**
  * Condition Mongo sur le slug, ou null quand rien ne change.
- *   lang 'fr', liste (défaut) : « blog » actif → seuls les 295 articles
+ *   lang 'fr', liste (défaut) : « blog » actif → seuls les 296 articles
  *     gardés ; sinon « gone » actif → tout sauf les 134 articles en 410.
  *   lang 'fr', page : l'article lui-même reste servi même en noindex ; seul
  *     le 410 l'écarte.

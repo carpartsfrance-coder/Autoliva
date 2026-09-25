@@ -15,7 +15,7 @@
  *
  * Listes lues (copies À L'IDENTIQUE de celles du plan, empreintes SHA-256
  * reportées dans le JSON pour qu'un test vérifie qu'il est à jour) :
- *   - keep-blog-fr.txt            : les 295 articles français GARDÉS (liste
+ *   - keep-blog-fr.txt            : les 296 articles français GARDÉS (liste
  *                                   blanche : tout autre article sort quand
  *                                   « blog » est actif) ;
  *   - gone-410-blog.txt           : les 268 adresses en 410 (134 articles du
@@ -25,8 +25,13 @@
  *   - keep-pieces-auto.txt        : les 242 pages /pieces-auto gardées (liste
  *                                   blanche : toute autre /pieces-auto/* sort) ;
  *   - keep-reference.txt          : les 3 pages /reference gardées ;
- *   - products-fr-noindex.ids.tsv.gz : les 11 273 fiches d'import sans signal
- *                                   (identifiants), gzip de la liste du plan.
+ *   - products-fr-noindex.ids.tsv.gz : les fiches d'import sans signal
+ *                                   (identifiants), gzip de la liste du plan :
+ *                                   11 273 au 14/09/2026, 11 125 depuis le
+ *                                   rafraîchissement du 25/09/2026 (148 fiches
+ *                                   avec un clic Google depuis avril, ou une
+ *                                   vente, un devis, un panier, un appel ou une
+ *                                   visite Google depuis le 10/09, restent).
  * S'y ajoute la règle de préfixe « DM- » : les 6 327 fiches DM- sont des copies
  * mot pour mot de distrimotor.com (décision de Killian du 14/09/2026) ; toutes
  * sortent avec « products », y compris les 335 que le plan gardait.

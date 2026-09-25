@@ -494,7 +494,7 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
 
   /* ── blog ─────────────────────────────────────────────────────────────── */
 
-  await t.test('blog : hors des 295 gardés, un article sort de Google — même si la base dit « index, follow »', async () => {
+  await t.test('blog : hors des 296 gardés, un article sort de Google — même si la base dit « index, follow »', async () => {
     activer('blog');
     for (const cle of ['X_D4FD', 'X_LR_PIN', 'X_AUDI', 'G_P0726']) estNoindex(await get(`/blog/${S[cle]}`), cle);
     for (const cle of ['K_DQ200', 'K_AUDI', 'N_TDI', 'N_RR']) estIndexable(await get(`/blog/${S[cle]}`), cle);
