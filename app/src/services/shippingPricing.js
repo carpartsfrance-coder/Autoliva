@@ -42,19 +42,18 @@ function normalizeCategoryKey(value) {
     .toLowerCase();
 }
 
-async function computeShippingPricesCents(dbConnected, products, zoneOrAddress) {
-  const fallback = { domicile: 1290 };
-  const zone = toZone(zoneOrAddress);
+/* Port appliqué quand aucune classe d'expédition n'est trouvée (ni classe par
+   défaut, ni classe de la fiche ou de sa catégorie), ou base déconnectée. */
+const PORT_DE_REPLI_CENTS = 1290;
 
-  if (!dbConnected) return fallback;
-
-  const list = Array.isArray(products) ? products : [];
-  if (!list.length) return { domicile: 0 };
-
-  const categoryDocs = await Category.find({})
-    .select('_id name shippingClassId')
-    .lean();
-
+/**
+ * Résolution « catégorie de la fiche → classe d'expédition » (nom exact, puis
+ * catégorie principale, puis sous-catégorie sans ambiguïté). Extraite telle
+ * quelle de computeShippingPricesCents pour être partagée avec les flux Google
+ * Merchant : le port annoncé dans le flux est celui que le panier encaissera,
+ * calculé par le même code.
+ */
+function creerResolveurClasseCategorie(categoryDocs) {
   const categoryInfoByKey = new Map();
   const subKeyToFullKeys = new Map();
 
@@ -138,6 +137,42 @@ async function computeShippingPricesCents(dbConnected, products, zoneOrAddress) 
     return '';
   }
 
+  return getCategoryShippingClassId;
+}
+
+/** Classes candidates d'UNE fiche : défaut, fiche, catégorie (null si absente). */
+function classesDuProduit(p, { classeCategorie, classById, defaultClass }) {
+  const productClassId = p && p.shippingClassId ? String(p.shippingClassId) : '';
+  const categoryClassId = classeCategorie(p);
+  return {
+    clsDefault: defaultClass || null,
+    clsProduct: productClassId ? (classById.get(productClassId) || null) : null,
+    clsCategory: categoryClassId ? (classById.get(categoryClassId) || null) : null,
+  };
+}
+
+/** Port à domicile d'UNE fiche : le plus cher de la classe par défaut, de la
+ *  classe de la fiche et de celle de sa catégorie. */
+function portDuProduit(p, zone, tarifs) {
+  const { clsDefault, clsProduct, clsCategory } = classesDuProduit(p, tarifs);
+  return Math.max(priceForZone(clsDefault, zone), priceForZone(clsProduct, zone), priceForZone(clsCategory, zone));
+}
+
+async function computeShippingPricesCents(dbConnected, products, zoneOrAddress) {
+  const fallback = { domicile: PORT_DE_REPLI_CENTS };
+  const zone = toZone(zoneOrAddress);
+
+  if (!dbConnected) return fallback;
+
+  const list = Array.isArray(products) ? products : [];
+  if (!list.length) return { domicile: 0 };
+
+  const categoryDocs = await Category.find({})
+    .select('_id name shippingClassId')
+    .lean();
+
+  const getCategoryShippingClassId = creerResolveurClasseCategorie(categoryDocs);
+
   const classIds = Array.from(
     new Set(
       list
@@ -166,25 +201,78 @@ async function computeShippingPricesCents(dbConnected, products, zoneOrAddress) 
 
   if (!defaultClass && !classDocs.length) return fallback;
 
+  const tarifs = { classeCategorie: getCategoryShippingClassId, classById, defaultClass };
   let domicile = 0;
 
   for (const p of list) {
-    const productClassId = p && p.shippingClassId ? String(p.shippingClassId) : '';
-    const categoryClassId = getCategoryShippingClassId(p);
-
-    const clsDefault = defaultClass || null;
-    const clsProduct = productClassId ? (classById.get(productClassId) || null) : null;
-    const clsCategory = categoryClassId ? (classById.get(categoryClassId) || null) : null;
-
-    const dDefault = priceForZone(clsDefault, zone);
-    const dProduct = priceForZone(clsProduct, zone);
-    const dCategory = priceForZone(clsCategory, zone);
-
-    const d = Math.max(dDefault, dProduct, dCategory);
-    domicile = Math.max(domicile, d);
+    domicile = Math.max(domicile, portDuProduit(p, zone, tarifs));
   }
 
   return { domicile };
+}
+
+/**
+ * Tarifs d'expédition chargés UNE fois, pour chiffrer des milliers de fiches
+ * (flux Google Merchant). Trois requêtes au lieu de trois par fiche.
+ *
+ * portDomicileCents(fiche, zone) rend EXACTEMENT ce que le panier facturerait
+ * pour cette fiche seule (getShippingMethods → méthode « domicile ») : mêmes
+ * résolutions (fiche, catégorie, défaut), même maximum, même repli à 12,90 €
+ * quand aucune classe n'existe, 0 pour le service de clonage seul. Un test
+ * d'intégration compare les deux fiche par fiche.
+ *
+ * classeRetenue(fiche, zone) : la classe qui porte ce prix (sert à classer la
+ * pièce « lourde » ou non pour les délais du flux).
+ */
+async function chargerTarifsPort() {
+  const [categoryDocs, defaultClass, classes] = await Promise.all([
+    Category.find({}).select('_id name shippingClassId').lean(),
+    ShippingClass.findOne({ isDefault: true }).select('_id name slug domicilePriceCents zonePricesCents').lean(),
+    ShippingClass.find({}).select('_id name slug domicilePriceCents zonePricesCents').lean(),
+  ]);
+  const tarifs = {
+    classeCategorie: creerResolveurClasseCategorie(categoryDocs),
+    classById: new Map(classes.map((c) => [String(c._id), c])),
+    defaultClass,
+  };
+  /* Le panier replie à 12,90 € quand ni la classe par défaut ni aucune des
+     classes référencées (fiche, catégorie) n'existe en base. */
+  const sansAucuneClasse = (p) => {
+    if (tarifs.defaultClass) return false;
+    const { clsProduct, clsCategory } = classesDuProduit(p, tarifs);
+    return !clsProduct && !clsCategory;
+  };
+  return {
+    portDomicileCents(p, zoneOrAddress) {
+      if (p && p.serviceType === 'standalone_cloning') return 0;
+      if (sansAucuneClasse(p)) return PORT_DE_REPLI_CENTS;
+      return portDuProduit(p, toZone(zoneOrAddress), tarifs);
+    },
+    classeRetenue(p, zoneOrAddress) {
+      const zone = toZone(zoneOrAddress);
+      const { clsDefault, clsProduct, clsCategory } = classesDuProduit(p, tarifs);
+      let retenue = null;
+      for (const cls of [clsProduct, clsCategory, clsDefault]) {
+        if (cls && (!retenue || priceForZone(cls, zone) > priceForZone(retenue, zone))) retenue = cls;
+      }
+      return retenue;
+    },
+  };
+}
+
+/**
+ * Date de la dernière modification d'un tarif : classe d'expédition, ou
+ * catégorie (c'est elle qui porte la classe de la plupart des fiches). Les flux
+ * Merchant reconstruisent leur cache quand elle est postérieure : Merchant
+ * compare le port du flux à celui du panier.
+ */
+async function dernierChangementTarifs() {
+  const [cls, cat] = await Promise.all([
+    ShippingClass.findOne({}).sort({ updatedAt: -1 }).select('updatedAt').lean(),
+    Category.findOne({}).sort({ updatedAt: -1 }).select('updatedAt').lean(),
+  ]);
+  const t = (d) => (d && d.updatedAt ? new Date(d.updatedAt).getTime() : 0);
+  return Math.max(t(cls), t(cat));
 }
 
 /**
@@ -247,8 +335,11 @@ async function getShippingMethods(dbConnected, products, zoneOrAddress, lang) {
 }
 
 module.exports = {
+  PORT_DE_REPLI_CENTS,
+  chargerTarifsPort,
   cleDelaiLivraison,
   computeShippingPricesCents,
+  dernierChangementTarifs,
   getShippingMethods,
   priceForZone,
   toZone,

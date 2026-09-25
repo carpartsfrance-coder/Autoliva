@@ -32,6 +32,7 @@ const categoryI18n = require('../services/categoryI18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const { sanitizeBrandLeak } = require('../services/brandSanitizer');
 const claimFilter = require('../services/claimFilter');
+const { etatDepuisTexte } = require('../services/etatPiece');
 const scalapay = require('../services/scalapay');
 const produitsDisparus = require('../services/produitsDisparus');
 const seoIndexPolicy = require('../services/seoIndexPolicy');
@@ -538,26 +539,16 @@ function extractWarrantyYearsFromText(value) {
   return parsed;
 }
 
+/* La lecture du badge d'état est partagée avec les flux Google Merchant
+   (services/etatPiece) : Merchant compare l'état du flux à celui de la page. */
+const SCHEMA_CONDITION = {
+  refurbished: 'https://schema.org/RefurbishedCondition',
+  new: 'https://schema.org/NewCondition',
+  used: 'https://schema.org/UsedCondition',
+};
+
 function mapSchemaCondition(value) {
-  const input = typeof value === 'string' ? value.trim() : '';
-  if (!input) return '';
-
-  const normalized = input
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-
-  if (/(recondition|refurb|remanufact|echange standard)/.test(normalized)) {
-    return 'https://schema.org/RefurbishedCondition';
-  }
-  if (/(^|\b)(neuf|new)(\b|$)/.test(normalized)) {
-    return 'https://schema.org/NewCondition';
-  }
-  if (/(^|\b)(occasion|used|utilise)(\b|$)/.test(normalized)) {
-    return 'https://schema.org/UsedCondition';
-  }
-
-  return '';
+  return SCHEMA_CONDITION[etatDepuisTexte(value)] || '';
 }
 
 async function listProducts(req, res, next) {

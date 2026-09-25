@@ -915,7 +915,7 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     }
   });
 
-  await t.test('flux Merchant : toutes les familles allumées, chaque fiche publiée y reste (français et allemand)', async () => {
+  await t.test('flux Merchant : toutes les familles allumées, les flux ne bougent pas (français et allemand)', async () => {
     activer('');
     const avant = await get('/google-merchant-feed.xml');
     const avantDe = await get('/google-merchant-feed-de.xml');
@@ -926,7 +926,12 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     assert.equal(apres.status, 200);
     assert.deepEqual(idsDe(apres.corps), idsDe(avant.corps));
     assert.deepEqual(idsDe(apresDe.corps), idsDe(avantDe.corps));
-    for (const p of [ASY, DM, EDN]) assert.ok(apres.corps.includes(p.slug), `${p.sku} reste dans le flux`);
+    /* Ce que le flux garde relève des règles Merchant (services/fluxMerchant),
+       pas de l'indexation : la boîte EDN y reste, fiche retirée de Google ou
+       non ; la copie distrimotor et le moteur ASY (consigne encaissée) n'y
+       sont pas, familles allumées ou non. */
+    assert.ok(apres.corps.includes(EDN.slug), `${EDN.sku} reste dans le flux`);
+    for (const p of [ASY, DM]) assert.ok(!apres.corps.includes(`<g:id>${p._id}</g:id>`), `${p.sku} hors du flux`);
   });
 
   /* ── Admin ────────────────────────────────────────────────────────────── */

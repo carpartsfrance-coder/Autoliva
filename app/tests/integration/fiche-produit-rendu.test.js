@@ -508,11 +508,43 @@ test('fiche produit rendue par l’application — description et allégations (
     }
   });
 
-  await t.test('le flux Merchant liste toujours toutes les fiches publiées', async () => {
+  await t.test('le flux Merchant ne garde que les fiches conformes, avec les textes de la fiche', async () => {
+    /* Audit Merchant du 25/09/2026 : le flux ne liste plus « toutes les fiches
+       publiées ». Sur les 10 fiches de production : les trois boîtes (DEK,
+       ALV-BX, EDN) restent ; la copie distrimotor sort, la DQ200 et le moteur
+       ASY sortent (consigne encaissée à la commande, absente près du prix sur
+       la fiche française), DQ250, AUTO, WC et Alibaba sortent (délai « sur
+       demande », « confirmé à la commande », « selon disponibilité »). */
+    const feed = require('../../src/routes/google-merchant-feed');
+    feed._invalidateCache();
     const r = await get('/google-merchant-feed.xml');
     assert.equal(r.status, 200);
-    for (const p of FIXTURE.produits) {
-      assert.ok(r.html.includes(`/product/${p.slug}`), `${p.sku} absent du flux Merchant`);
+    const items = r.html.split('<item>').slice(1);
+    const dans = (p) => items.some((it) => it.includes(`<g:id>${p._id}</g:id>`));
+    for (const p of [DEK, ALVBX, EDN]) assert.ok(dans(p), `${p.sku} doit rester dans le flux`);
+    for (const p of [DM, DQ200, ASY, DQ250, AUTO, WC, ALIBABA]) assert.ok(!dans(p), `${p.sku} ne doit pas être dans le flux`);
+    /* Le bilan journalisé compte chaque exclusion sous son premier motif (la
+       copie DQ200 de la page véhicule, ajoutée plus haut, est une troisième
+       consigne encaissée). */
+    const bilan = feed.dernierBilan();
+    assert.equal(bilan.articles, 3);
+    assert.equal(bilan.exclus.copie_distrimotor, 1);
+    assert.equal(bilan.exclus.consigne_encaissee, 3);
+    assert.equal(bilan.exclus.delai_non_garanti, 4);
+
+    /* Les textes du flux passent par les mêmes filtres que la fiche : ni
+       ISO 9001 ni « concessionnaires » (DEK), ni l'ancien nom. */
+    for (const it of items) {
+      const description = (it.match(/<g:description><!\[CDATA\[([\s\S]*?)\]\]><\/g:description>/) || [])[1] || '';
+      assert.ok(description.length > 100, 'description vide');
+      for (const [nom, rx] of Object.entries(ALLEGATIONS)) assert.ok(!rx.test(description), `« ${nom} » dans une description du flux`);
+      assert.ok(!/car\s?parts\s?france/i.test(it), 'ancien nom dans le flux');
     }
+    const dek = items.find((it) => it.includes(`<g:id>${DEK._id}</g:id>`));
+    assert.ok(dek.includes('<g:condition>refurbished</g:condition>'));
+    assert.ok(dek.includes('<g:brand>Volkswagen</g:brand>'));
+    assert.ok(dek.includes('<g:identifier_exists>no</g:identifier_exists>') && !dek.includes('<g:mpn>'), 'MPN = SKU interne');
+    assert.ok(dek.includes('<g:google_product_category>2641</g:google_product_category>'));
+    assert.match(dek, /<g:shipping>\s*<g:country>FR<\/g:country>/);
   });
 });

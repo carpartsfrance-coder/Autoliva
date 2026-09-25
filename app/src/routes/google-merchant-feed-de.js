@@ -12,129 +12,160 @@
  *
  * ── Ce qui diffère du flux français ────────────────────────────────────────
  *
- *   — titre, description : `localizations.de` ; les fiches non traduites sont
- *     EXCLUES (Merchant refuserait une page française sous un flux allemand) ;
+ *   — titre : `localizations.de.name` ; les fiches non traduites sont EXCLUES
+ *     (Merchant refuserait une page française sous un flux allemand) ;
+ *   — description : la fiche allemande ne sert jamais la description (motif
+ *     « langue » de claimFilter : traductions automatiques non relues) ; le
+ *     flux publie donc la description courte allemande — que la fiche sert en
+ *     meta description —, filtrée comme la fiche, sinon une description
+ *     factuelle ;
  *   — lien : /de/produits/<slug-de>-<id>, l'adresse canonique allemande ;
- *   — `g:shipping` pays DE avec le prix RÉEL de la zone Europe, calculé par le
- *     même code que le panier (priceForZone). Merchant compare le port du flux
- *     à celui du checkout : s'ils divergent, le flux est refusé. Les lire à la
- *     même source les rend cohérents par construction — y compris quand les
- *     trois classes sans prix Europe seront enfin renseignées.
+ *   — `g:shipping` pays DE au prix RÉEL de la zone Europe, calculé par le même
+ *     code que le panier (shippingPricing.chargerTarifsPort) : Merchant compare
+ *     le port du flux à celui du checkout ; transport 2 à 4 jours ouvrés ;
+ *   — la consigne encaissée n'exclut pas : la fiche allemande l'annonce près
+ *     du prix (« zzgl. … Pfand »).
  *
- * Tout ce qui ne dépend pas de la langue (état, marque, images, catégorie
- * Google) est repris du flux français, pas dupliqué.
+ * Tout le reste — exclusions, état, marque, identifiants, catégorie Google,
+ * délais de préparation — vient des règles communes (services/fluxMerchant.js)
+ * appliquées à la fiche FRANÇAISE, qui fait foi.
  */
 
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
-const Category = require('../models/Category');
-const ShippingClass = require('../models/ShippingClass');
-const { buildSeoMediaUrl } = require('../services/mediaStorage');
-const { priceForZone } = require('../services/shippingPricing');
-const feedFr = require('./google-merchant-feed');
+const { normalizeProduct } = require('../controllers/productController');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
+const { t } = require('../services/i18n');
+const { chargerTarifsPort, dernierChangementTarifs, PORT_DE_REPLI_CENTS } = require('../services/shippingPricing');
+const flux = require('../services/fluxMerchant');
 
-const BASE = 'https://autoliva.com';
 const ZONE = 'europe';
 const PAYS = 'DE';
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
 
-const xmlEscape = (s) => String(s == null ? '' : s)
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+const CHAMPS = [
+  '_id', 'name', 'slug', 'sku', 'description', 'shortDescription', 'priceCents', 'inStock', 'stockQty',
+  'imageUrl', 'galleryUrls', 'galleryTypes', 'category', 'brand', 'badges', 'specs', 'serviceType', 'consigne',
+  'shippingDelayText', 'shippingClassId', 'warranty', 'compatibility', 'compatibleReferences', 'engineCode',
+  'localizations.de.name', 'localizations.de.description', 'localizations.de.shortDescription',
+  'localizations.de.slug', 'localizations.de.shippingDelayText', 'localizations.de.translatedAt',
+].join(' ');
 
-const stripHtml = (s) => String(s || '').replace(/<[^>]*>/g, ' ').replace(/\s{2,}/g, ' ').trim();
-
-function normaliserCle(v) {
-  return String(v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-/* Classe d'expédition d'un produit : celle du produit, sinon celle de sa
-   catégorie (nom complet, puis catégorie principale), sinon la classe par
-   défaut. Même cascade que le panier. */
-async function resoudreClasses() {
-  const [classes, categories] = await Promise.all([
-    ShippingClass.find({ isActive: { $ne: false } }).lean(),
-    Category.find({}).select('name shippingClassId').lean(),
-  ]);
-  const parId = new Map(classes.map((c) => [String(c._id), c]));
-  const defaut = classes.find((c) => c.isDefault) || null;
-  const parCategorie = new Map();
-  for (const c of categories) {
-    const nom = String(c.name || '').trim();
-    if (!nom || !c.shippingClassId) continue;
-    const cls = parId.get(String(c.shippingClassId));
-    if (!cls) continue;
-    parCategorie.set(normaliserCle(nom), cls);
-    const principale = normaliserCle(nom.split('>')[0]);
-    if (!parCategorie.has(principale)) parCategorie.set(principale, cls);
-  }
-  return (produit) => {
-    if (produit.shippingClassId && parId.has(String(produit.shippingClassId))) {
-      return parId.get(String(produit.shippingClassId));
-    }
-    const cat = normaliserCle(produit.category);
-    return parCategorie.get(cat) || parCategorie.get(cat.split('>')[0].trim()) || defaut;
-  };
-}
-
+/** Fiches publiées ET traduites. Base déconnectée : BASE_INDISPONIBLE (503). */
 async function chargerProduits() {
-  if (mongoose.connection.readyState !== 1) return [];
-  const docs = await Product.find({
+  if (mongoose.connection.readyState !== 1) throw flux.baseIndisponible();
+  return Product.find({
     isPublished: { $ne: false },
     'localizations.de.translatedAt': { $ne: null },
   })
-    .select('_id slug sku priceCents inStock stockQty imageUrl galleryUrls galleryTypes category brand badges shippingClassId '
-      + 'localizations.de.name localizations.de.description localizations.de.shortDescription localizations.de.slug '
-      + 'localizations.de.badges.condition')
+    .select(CHAMPS)
     .lean();
-  const classeDe = await resoudreClasses();
-
-  return docs.map((p) => {
-    const de = (p.localizations && p.localizations.de) || {};
-    const nom = String(de.name || '').trim();
-    if (!nom) return null;
-    const seoPath = (raw) => buildSeoMediaUrl(raw, nom) || raw;
-
-    const images = [];
-    if (typeof p.imageUrl === 'string' && p.imageUrl.trim()) images.push(seoPath(p.imageUrl.trim()));
-    if (Array.isArray(p.galleryUrls)) {
-      const types = Array.isArray(p.galleryTypes) ? p.galleryTypes : [];
-      p.galleryUrls.forEach((u, i) => {
-        if (typeof u === 'string' && u.trim() && (types[i] || 'image') === 'image') images.push(seoPath(u.trim()));
-      });
-    }
-    if (!images.length) return null;
-
-    const cls = classeDe(p);
-    const portCents = cls ? priceForZone(cls, ZONE) : 1290;
-    const stockQty = typeof p.stockQty === 'number' ? p.stockQty : null;
-    const enStock = stockQty !== null ? stockQty > 0 : (p.inStock !== false);
-    const etatFr = (p.badges && p.badges.condition) || '';
-
-    return {
-      id: String(p._id),
-      title: nom.slice(0, 150),
-      description: stripHtml(de.description || de.shortDescription || nom).slice(0, 5000),
-      link: `${BASE}/de/produits/${encodeURIComponent(de.slug || p.slug || String(p._id))}-${p._id}`,
-      images,
-      price: `${(Number(p.priceCents) / 100).toFixed(2)} EUR`,
-      availability: enStock ? 'in_stock' : 'out_of_stock',
-      /* L'état vient du FRANÇAIS, pas de la traduction : c'est lui qui fait
-         foi, et le flux français le classe déjà avec ses heuristiques. */
-      condition: feedFr.classifyCondition({ slug: p.slug || '', title: etatFr + ' ' + (p.slug || ''), explicit: null }),
-      brand: (typeof p.brand === 'string' && p.brand.trim()) || feedFr.inferBrand(nom) || 'Autoliva',
-      mpn: (typeof p.sku === 'string' && p.sku) || String(p._id),
-      product_type: typeof p.category === 'string' ? p.category : '',
-      shippingPrice: `${(portCents / 100).toFixed(2)} EUR`,
-    };
-  }).filter(Boolean);
 }
 
-function urlImage(path) {
-  if (!path) return null;
-  if (path.startsWith('http')) return path;
-  const p = path.startsWith('/') ? path : `/${path}`;
-  return `${BASE}${p}${p.match(/\.(jpe?g|png|gif|webp)$/i) ? '' : '.jpeg'}`;
+/** Usage des images sur TOUTES les fiches publiées, traduites ou non : une
+ *  photo générique l'est aussi en allemand. */
+async function chargerUsagesImages() {
+  if (mongoose.connection.readyState !== 1) return new Map();
+  const docs = await Product.find({ isPublished: { $ne: false } }).select('imageUrl galleryUrls galleryTypes').lean();
+  return flux.compterUsagesImages(docs);
+}
+
+async function chargerTarifs() {
+  if (mongoose.connection.readyState !== 1) return null;
+  return chargerTarifsPort();
+}
+
+function article({ fiche, de, images, titre, ctx }, { tarifs }) {
+  const id = String(fiche._id);
+  const etat = flux.etatDuProduit(fiche);
+  const marque = flux.marqueGoogle(fiche);
+  const mpn = flux.mpnFiable(fiche, marque);
+  const liens = flux.imagesPourFlux(images, String(de.name || '').trim());
+  const classe = tarifs ? tarifs.classeRetenue(fiche, ZONE) : null;
+  const portCents = tarifs ? tarifs.portDomicileCents(fiche, ZONE) : PORT_DE_REPLI_CENTS;
+  const preparation = flux.delaisPreparation(fiche, { classe, textes: [fiche.shippingDelayText, de.shippingDelayText] });
+  const transport = flux.delaisTransport(fiche, { classe, pays: PAYS });
+  return {
+    id,
+    title: titre,
+    /* Textes ALLEMANDS uniquement : localizeProduct retomberait sur le
+       français quand la traduction d'un champ manque. */
+    description: flux.descriptionDuFlux({
+      fiche,
+      description: claimFilter.filtrer(String(de.description || ''), ctx),
+      courte: claimFilter.filtrer(String(de.shortDescription || ''), ctx),
+      lang: 'de',
+      titre,
+      etat,
+    }),
+    link: `${flux.BASE}/de/produits/${encodeURIComponent(de.slug || fiche.slug || id)}-${id}`,
+    image_link: liens[0],
+    additional_image_link: liens.slice(1),
+    availability: 'in_stock',
+    price: flux.prixXml(fiche.priceCents),
+    condition: etat,
+    brand: marque,
+    mpn,
+    identifier_exists: mpn ? null : 'no',
+    google_product_category: flux.categorieGoogle(fiche),
+    product_type: typeof fiche.category === 'string' ? fiche.category.trim() : '',
+    shipping: {
+      country: PAYS,
+      service: t('de', 'shipping.homeTitle'),
+      price: flux.prixXml(portCents),
+      min_handling_time: preparation.min,
+      max_handling_time: preparation.max,
+      min_transit_time: transport.min,
+      max_transit_time: transport.max,
+    },
+    min_handling_time: preparation.min,
+    max_handling_time: preparation.max,
+  };
+}
+
+/** Fiches traduites (lean) → articles + bilan. `usagesImages` : sur toutes
+ *  les fiches publiées. */
+function construireArticles(docs, { tarifs = null, usagesImages = new Map(), scalapayActif = false } = {}) {
+  const bilan = flux.nouveauBilan();
+  const candidats = [];
+  for (const doc of Array.isArray(docs) ? docs : []) {
+    const de = (doc.localizations && doc.localizations.de) || {};
+    const nomDe = String(de.name || '').trim();
+    if (!nomDe) continue; // pas de titre allemand : la fiche n'est pas traduite
+    bilan.fiches += 1;
+    const images = flux.imagesDeLaFiche(doc);
+    const fiche = normalizeProduct(doc);
+    const motifs = flux.motifsSansTexte(fiche, {
+      images,
+      usagesImages,
+      textesDelai: [fiche.shippingDelayText, de.shippingDelayText],
+      exclureConsigneEncaissee: false,
+    });
+    if (motifs.length) {
+      bilan.exclus[motifs[0]] += 1;
+      continue;
+    }
+    const ctx = claimFilter.contexteFiche(fiche, { scalapayActif });
+    /* L'état se lit sur la fiche FRANÇAISE, qui fait foi (badge, titre,
+       description) ; le titre testé est celui que l'Allemand lira. */
+    const affichee = {
+      ...fiche,
+      description: claimFilter.filtrer(fiche.description, ctx),
+      shortDescription: claimFilter.filtrer(fiche.shortDescription, ctx),
+    };
+    const titre = flux.titreDuFlux(nomDe, ctx);
+    const motifsTextes = flux.motifsDesTextes(affichee, { titre });
+    if (motifsTextes.length) {
+      bilan.exclus[motifsTextes[0]] += 1;
+      continue;
+    }
+    candidats.push({ fiche: affichee, de, images, titre, ctx });
+  }
+  const items = flux.exclureTitresDupliques(candidats, bilan).map((c) => article(c, { tarifs }));
+  items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  bilan.articles = items.length;
+  return { items, bilan };
 }
 
 function construireXml(items) {
@@ -143,31 +174,10 @@ function construireXml(items) {
   l.push('<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">');
   l.push('  <channel>');
   l.push('    <title>Autoliva — Google Merchant Feed (Deutschland)</title>');
-  l.push(`    <link>${BASE}/de</link>`);
+  l.push(`    <link>${flux.BASE}/de</link>`);
   l.push('    <description>Generalüberholte, gebrauchte und geprüfte Autoteile</description>');
   l.push(`    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>`);
-  for (const it of items) {
-    l.push('    <item>');
-    l.push(`      <g:id>${xmlEscape(it.id)}</g:id>`);
-    l.push(`      <g:title>${xmlEscape(it.title)}</g:title>`);
-    l.push(`      <g:description><![CDATA[${it.description.replace(/]]>/g, ']]]]><![CDATA[>')}]]></g:description>`);
-    l.push(`      <g:link>${xmlEscape(it.link)}</g:link>`);
-    l.push(`      <g:image_link>${xmlEscape(urlImage(it.images[0]))}</g:image_link>`);
-    for (const im of it.images.slice(1, 11)) l.push(`      <g:additional_image_link>${xmlEscape(urlImage(im))}</g:additional_image_link>`);
-    l.push(`      <g:price>${xmlEscape(it.price)}</g:price>`);
-    l.push(`      <g:availability>${xmlEscape(it.availability)}</g:availability>`);
-    l.push(`      <g:condition>${xmlEscape(it.condition)}</g:condition>`);
-    l.push(`      <g:brand>${xmlEscape(it.brand)}</g:brand>`);
-    l.push(`      <g:mpn>${xmlEscape(it.mpn)}</g:mpn>`);
-    l.push('      <g:identifier_exists>no</g:identifier_exists>');
-    l.push('      <g:google_product_category>888</g:google_product_category>');
-    if (it.product_type) l.push(`      <g:product_type>${xmlEscape(it.product_type)}</g:product_type>`);
-    l.push('      <g:shipping>');
-    l.push(`        <g:country>${PAYS}</g:country>`);
-    l.push(`        <g:price>${xmlEscape(it.shippingPrice)}</g:price>`);
-    l.push('      </g:shipping>');
-    l.push('    </item>');
-  }
+  for (const it of items) l.push(...flux.articleXml(it));
   l.push('  </channel>');
   l.push('</rss>');
   return l.join('\n');
@@ -175,19 +185,23 @@ function construireXml(items) {
 
 let cache = { xml: null, builtAt: 0 };
 let enCours = null;
+let dernierBilan = null;
 
 /* Le cache mémoire ne doit pas survivre à un changement de tarif : Killian a
    posé trois prix Europe en base et le flux a continué de servir l'ancien
    port pendant des heures, jusqu'au prochain redémarrage — que Render n'a
    pas déclenché pour un commit vide. Merchant Center compare le port du flux
    au panier : servir un port périmé, c'est se faire refuser le flux. On lit
-   donc la date de la dernière classe modifiée (7 documents, négligeable) et
-   on reconstruit si elle est postérieure au cache. */
+   donc la date de la dernière classe ou catégorie modifiée (quelques dizaines
+   de documents, négligeable) et on reconstruit si elle est postérieure au
+   cache. */
 async function tarifsModifiesDepuis(instant) {
+  if (mongoose.connection.readyState !== 1) return false;
   try {
-    const d = await ShippingClass.findOne({}).sort({ updatedAt: -1 }).select('updatedAt').lean();
-    return Boolean(d && d.updatedAt && new Date(d.updatedAt).getTime() > instant);
-  } catch (e) { return false; }
+    return (await dernierChangementTarifs()) > instant;
+  } catch (e) {
+    return false;
+  }
 }
 
 async function construireAvecCache() {
@@ -196,10 +210,13 @@ async function construireAvecCache() {
   }
   if (enCours) return enCours;
   enCours = (async () => {
-    const items = await chargerProduits();
-    items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const docs = await module.exports.chargerProduits();
+    const [usagesImages, tarifs] = await Promise.all([chargerUsagesImages(), chargerTarifs()]);
+    const { items, bilan } = construireArticles(docs, { tarifs, usagesImages, scalapayActif: scalapay.estActif() });
+    module.exports.journaliser(flux.resumerBilan('google-merchant-feed-de', bilan));
     const xml = construireXml(items);
     cache = { xml, builtAt: Date.now() };
+    dernierBilan = bilan;
     return xml;
   })();
   try { return await enCours; } finally { enCours = null; }
@@ -212,10 +229,20 @@ module.exports = async function googleMerchantFeedDe(req, res) {
     res.set({ 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
     res.send(xml);
   } catch (err) {
+    res.removeHeader('Set-Cookie');
+    if (err && err.code === flux.CODE_BASE_INDISPONIBLE) {
+      res.status(503).set({ 'Retry-After': '120', 'Content-Type': 'text/plain; charset=utf-8' }).send('Datenbank nicht verfügbar, später erneut versuchen');
+      return;
+    }
     console.error('[google-merchant-feed-de] error:', err);
     res.status(500).set('Content-Type', 'text/plain').send('Feed generation failed');
   }
 };
 
 module.exports.chargerProduits = chargerProduits;
+module.exports.construireArticles = construireArticles;
+module.exports.construireXml = construireXml;
+module.exports.construireAvecCache = construireAvecCache;
+module.exports.journaliser = (ligne) => console.log(ligne); // eslint-disable-line no-console
+module.exports.dernierBilan = () => dernierBilan;
 module.exports._invalidateCache = () => { cache = { xml: null, builtAt: 0 }; };
