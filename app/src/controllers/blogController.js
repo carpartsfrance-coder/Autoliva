@@ -6,10 +6,9 @@ const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services
 const blogProductCta = require('../services/blogProductCta');
 const nettoyageArticle = require('../services/nettoyageArticle');
 const signatureArticle = require('../services/signatureArticle');
-const { sanitizeBrandLeak } = require('../services/brandSanitizer');
 const claimFilter = require('../services/claimFilter');
 const scalapay = require('../services/scalapay');
-const { markdownToHtml, escapeHtml } = require('../services/blogContent');
+const { markdownToHtml, escapeHtml, directivesProduitHtml, slugsEncadresProduit, remplirEncadresProduit } = require('../services/blogContent');
 const { buildHreflangSet } = require('../services/i18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const brand = require('../config/brand');
@@ -254,10 +253,25 @@ function stripLeadingSommaireSectionFromMarkdown(markdown) {
 function getPostContentHtml(post) {
   if (!post) return '';
   if (typeof post.contentMarkdown === 'string' && post.contentMarkdown.trim()) {
-    return markdownToHtml(post.contentMarkdown);
+    return markdownToHtml(nettoyageArticle.nettoyerMarkdown(post.contentMarkdown));
   }
   if (typeof post.contentHtml === 'string' && post.contentHtml.trim()) return post.contentHtml;
   return '';
+}
+
+/* Markdown tel que la page l'affiche : restes de la chaîne retirés (en-tête
+   YAML, JSON-LD collé, marqueurs), titre répété en tête, lignes « Meta
+   title : … », sommaire et filets de tête. '' si l'article n'a pas de
+   Markdown. */
+function markdownAffiche(post) {
+  const cleanedMarkdown = (post && typeof post.contentMarkdown === 'string' && post.contentMarkdown.trim())
+    ? stripLeadingSommaireSectionFromMarkdown(
+        stripLeadingSeoNoiseFromMarkdown(
+          stripDuplicateLeadingTitleFromMarkdown(nettoyageArticle.nettoyerMarkdown(post.contentMarkdown), post.title)
+        )
+      )
+    : '';
+  return cleanedMarkdown ? stripLeadingHorizontalRulesFromMarkdown(cleanedMarkdown) : '';
 }
 
 function normalizeMetaText(value) {
@@ -340,12 +354,24 @@ function clampInt(value, { min, max, fallback } = {}) {
   return floored;
 }
 
+/* ~200 mots par minute, arrondi, 1 minute au moins. */
 function estimateReadingTimeMinutes(text) {
   const plain = stripHtml(text);
-  if (!plain) return 0;
-  const words = plain.split(/\s+/).filter(Boolean).length;
-  const minutes = Math.ceil(words / 220);
-  return clampInt(minutes, { min: 1, max: 60, fallback: 1 });
+  const words = plain ? plain.split(/\s+/).filter(Boolean).length : 0;
+  return clampInt(Math.round(words / 200), { min: 1, max: 60, fallback: 1 });
+}
+
+/**
+ * Temps de lecture d'un article : TOUJOURS recalculé, jamais lu en base.
+ * La valeur stockée (readingTimeMinutes) venait de la chaîne de génération :
+ * un article de 210 mots annonçait « 7 min » (audit du 25/09/2026). On compte
+ * le corps tel qu'il s'affiche, restes de la chaîne retirés ; même calcul sur
+ * la liste du blog et sur l'article, qui disent donc le même chiffre.
+ */
+function tempsDeLecture(post) {
+  const md = markdownAffiche(post);
+  const html = md ? markdownToHtml(md) : getPostContentHtml(post);
+  return estimateReadingTimeMinutes(nettoyageArticle.nettoyerHtml(html || '', { lang: 'fr' }));
 }
 
 function resolveAbsoluteUrl(baseUrl, rawUrl) {
@@ -475,15 +501,12 @@ function getBlogIndex(req, res) {
 
     const mappedAll = docs.map((d) => {
       const publishedAt = d && d.publishedAt ? d.publishedAt : d && d.createdAt ? d.createdAt : null;
-      const contentHtml = getPostContentHtml(d);
-      const minutes = Number.isFinite(d.readingTimeMinutes) && d.readingTimeMinutes > 0
-        ? d.readingTimeMinutes
-        : estimateReadingTimeMinutes(contentHtml || '');
+      const minutes = tempsDeLecture(d);
 
       return {
         slug: d.slug,
-        title: d.title,
-        excerpt: d.excerpt,
+        title: nettoyageArticle.nettoyerTexte(d.title),
+        excerpt: nettoyageArticle.nettoyerTexte(d.excerpt),
         imageUrl: buildSeoMediaUrl(coverFor(d), d.title),
         category: d.category && d.category.slug ? { slug: d.category.slug, label: d.category.label || d.category.slug } : null,
         dateLabel: formatDateFR(publishedAt),
@@ -502,12 +525,12 @@ function getBlogIndex(req, res) {
     const featured = showFeatured && featuredDoc
       ? {
           slug: featuredDoc.slug,
-          title: featuredDoc.title,
-          excerpt: featuredDoc.excerpt,
+          title: nettoyageArticle.nettoyerTexte(featuredDoc.title),
+          excerpt: nettoyageArticle.nettoyerTexte(featuredDoc.excerpt),
           imageUrl: buildSeoMediaUrl(coverFor(featuredDoc), featuredDoc.title),
           category: featuredDoc.category && featuredDoc.category.slug ? { slug: featuredDoc.category.slug, label: featuredDoc.category.label || featuredDoc.category.slug } : null,
           dateLabel: formatDateFR(featuredDoc.publishedAt || featuredDoc.createdAt),
-          readTimeLabel: `${Number.isFinite(featuredDoc.readingTimeMinutes) && featuredDoc.readingTimeMinutes > 0 ? featuredDoc.readingTimeMinutes : estimateReadingTimeMinutes(getPostContentHtml(featuredDoc) || '')} min`,
+          readTimeLabel: `${tempsDeLecture(featuredDoc)} min`,
           url: `/blog/${encodeURIComponent(featuredDoc.slug)}`,
         }
       : null;
@@ -534,7 +557,7 @@ function getBlogIndex(req, res) {
 
     const popularView = (popularArticles || []).map((p, idx) => ({
       rank: String(idx + 1).padStart(2, '0'),
-      title: p.title,
+      title: nettoyageArticle.nettoyerTexte(p.title),
       meta: `${(p.category && p.category.label) ? p.category.label : 'Blog'} • récent`,
       url: `/blog/${encodeURIComponent(p.slug)}`,
     }));
@@ -613,21 +636,16 @@ async function getBlogPost(req, res) {
       ];
     }
 
-    const cleanedMarkdown = (post && typeof post.contentMarkdown === 'string' && post.contentMarkdown.trim())
-      ? stripLeadingSommaireSectionFromMarkdown(
-          stripLeadingSeoNoiseFromMarkdown(
-            stripDuplicateLeadingTitleFromMarkdown(nettoyageArticle.nettoyerMarkdown(post.contentMarkdown), post.title)
-          )
-        )
-      : '';
+    const finalMarkdown = markdownAffiche(post);
 
-    const finalMarkdown = cleanedMarkdown
-      ? stripLeadingHorizontalRulesFromMarkdown(cleanedMarkdown)
-      : '';
-
-    let contentHtml = finalMarkdown
+    /* « :::product[slug] » resté en clair dans un corps HTML : même
+       emplacement que dans le Markdown, rempli plus bas. */
+    let contentHtml = directivesProduitHtml(finalMarkdown
       ? markdownToHtml(finalMarkdown)
-      : getPostContentHtml(post);
+      : getPostContentHtml(post));
+    /* Titre de l'article : ancien sigle « CPF » et ancien nom retirés, dans
+       le H1, le <title>, le JSON-LD et le fil d'Ariane. */
+    const titreArticle = nettoyageArticle.nettoyerTexte(post.title);
 
     const canonicalUrl = (() => {
       const customPath = post.seo && post.seo.canonicalPath ? post.seo.canonicalPath.trim() : '';
@@ -662,7 +680,7 @@ async function getBlogPost(req, res) {
        s'affiche juste au-dessus du texte filtré. Calculés sur le corps
        NETTOYÉ, pas sur le brut (JSON-LD collé en tête d'article). Un texte
        vidé par le filtre retombe sur le suivant. Plan SEO A11. */
-    const sansAllegation = (t) => (t ? sanitizeBrandLeak(claimFilter.filtrer(t, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }))) : '');
+    const sansAllegation = (t) => (t ? nettoyageArticle.nettoyerTexte(claimFilter.filtrer(t, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }))) : '');
     const excerptPropre = sansAllegation(post.excerpt);
     const computedDesc = truncateText(stripHtml(excerptPropre || sansAllegation(nettoyageArticle.nettoyerHtml(contentHtml || '', { lang: 'fr' })) || ''), 160);
     const metaDescription = normalizeMetaText((post.seo && post.seo.metaDescription && sansAllegation(post.seo.metaDescription)) || computedDesc);
@@ -683,8 +701,8 @@ async function getBlogPost(req, res) {
       return `${trimmed} | ${brand.NAME}`;
     }
     const rawTitle = post.seo && post.seo.metaTitle
-      ? ensureBrandSuffixOnBlogTitle(post.seo.metaTitle)
-      : `${post.title} | ${brand.NAME}`;
+      ? ensureBrandSuffixOnBlogTitle(nettoyageArticle.nettoyerTexte(post.seo.metaTitle))
+      : `${titreArticle} | ${brand.NAME}`;
     const title = clampSeoTitle(normalizeMetaText(rawTitle));
 
     const excerptForView = excerptPropre || computedDesc;
@@ -721,9 +739,7 @@ async function getBlogPost(req, res) {
        reprise SEO du 14/09/2026, action A4.5 ; la date de relecture humaine
        (A12) viendra s'y substituer. */
     const modifieLe = datesSeo.dateModificationArticle(post);
-    const readingTimeMinutes = Number.isFinite(post.readingTimeMinutes) && post.readingTimeMinutes > 0
-      ? post.readingTimeMinutes
-      : estimateReadingTimeMinutes(contentHtml || '');
+    const readingTimeMinutes = tempsDeLecture(post);
 
     const relatedView = (related || []).map((p) => {
       const priceEuros = Number.isFinite(p.priceCents) ? (p.priceCents / 100).toFixed(2).replace('.', ',') : '';
@@ -748,20 +764,27 @@ async function getBlogPost(req, res) {
     contentHtml = claimFilter.filtrer(contentHtml, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }));
     const signe = signatureArticle.signature(post, { lang: 'fr', marque: brand.NAME, baseUrl });
 
-    if (related.length && contentHtml) {
-      const p = related[0];
-      /* L'encadré ne promet plus que ce que dit la fiche liée (état, garantie,
-         délai, 3x seulement si Scalapay est actif) — plan SEO A11. */
-      const ctaHtml = blogProductCta.construireCta(p, {
-        lang: 'fr',
-        url: buildProductPublicPath(p),
-        nom: p.name || '',
-      });
-      contentHtml = contentHtml.replace(
-        /<div class="blog-product-cta" data-product-cta="1"><\/div>/g,
-        ctaHtml
-      );
-    }
+    /* L'encadré ne promet plus que ce que dit la fiche (état, garantie,
+       délai, 3x seulement si Scalapay est actif) — plan SEO A11.
+       « :::product » : la 1re fiche liée à l'article. « :::product[slug] » :
+       la fiche de ce slug, si elle existe et est publiée. Sans fiche,
+       l'emplacement disparaît — ni directive en clair, ni cadre vide. */
+    const cta = (p) => blogProductCta.construireCta(p, {
+      lang: 'fr',
+      url: buildProductPublicPath(p),
+      nom: p.name || '',
+    });
+    const slugsNommes = slugsEncadresProduit(contentHtml);
+    const fichesNommees = slugsNommes.length
+      ? await Product.find({ slug: { $in: slugsNommes }, isPublished: { $in: [true, null] } })
+        .select('_id name priceCents imageUrl slug ' + blogProductCta.CHAMPS_FICHE)
+        .lean()
+      : [];
+    const ficheParSlug = new Map(fichesNommees.map((p) => [p.slug, p]));
+    contentHtml = remplirEncadresProduit(contentHtml, {
+      nomme: (slug) => (ficheParSlug.has(slug) ? cta(ficheParSlug.get(slug)) : ''),
+      lie: () => (related.length ? cta(related[0]) : ''),
+    });
 
     /* Liens vers un article en 410 : le texte reste, la balise <a> part — dans
        les trois écritures de l'adresse (plan SEO A5.5). */
@@ -795,7 +818,7 @@ async function getBlogPost(req, res) {
     const similarCoverMap = await resolveRelatedCoverMap(similarDocs || []);
     const similarPosts = (similarDocs || []).map((s) => ({
       slug: s.slug,
-      title: s.title,
+      title: nettoyageArticle.nettoyerTexte(s.title),
       imageUrl: buildSeoMediaUrl(s.coverImageUrl || similarCoverMap.get(String(s.slug || s._id || '')) || '', s.title),
       url: `/blog/${encodeURIComponent(s.slug)}`,
     }));
@@ -816,14 +839,14 @@ async function getBlogPost(req, res) {
       {
         '@type': 'ListItem',
         position: 3,
-        name: post.title,
+        name: titreArticle,
         item: canonicalUrl,
       },
     ];
 
     const jsonLdObj = {
       '@type': 'BlogPosting',
-      headline: post.title,
+      headline: titreArticle,
       description: computedDesc || undefined,
       image: ogImage ? [ogImage] : undefined,
       datePublished: publishedAt ? new Date(publishedAt).toISOString() : undefined,
@@ -926,7 +949,7 @@ async function getBlogPost(req, res) {
       jsonLd,
       metaRobots: post.seo && post.seo.metaRobots ? post.seo.metaRobots : res.locals.metaRobots,
       post: {
-        title: post.title,
+        title: titreArticle,
         slug: post.slug,
         excerpt: excerptForView,
         coverImageUrl: buildSeoMediaUrl(effectiveCoverImageUrl, post.title),
@@ -951,4 +974,6 @@ async function getBlogPost(req, res) {
 module.exports = {
   getBlogIndex,
   getBlogPost,
+  /* Exposé pour les tests : le temps de lecture est recalculé, jamais lu. */
+  _pourTests: { tempsDeLecture, estimateReadingTimeMinutes },
 };

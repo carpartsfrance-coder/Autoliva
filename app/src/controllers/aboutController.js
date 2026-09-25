@@ -4,6 +4,7 @@ const { getPublicBaseUrlFromReq } = require('../services/productPublic');
 const siteSettings = require('../services/siteSettings');
 const { buildHreflangSet } = require('../services/i18n');
 const brand = require('../config/brand');
+const { organisationSchema, idOrganisation } = require('../services/organisationSchema');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -50,7 +51,10 @@ async function getAboutPage(req, res, next) {
       || `${brand.NAME} accompagne particuliers et professionnels avec des pièces auto reconditionnées et d’occasion contrôlées, un diagnostic précis et un suivi humain pour trouver la bonne référence rapidement.`;
     const metaDescription = truncateText(
       normalizeMetaText(
-        `Découvrez ${brand.NAME}, spécialiste français des pièces auto reconditionnées et d’occasion contrôlées : expertise atelier, tests sur banc, garantie jusqu’à 24 mois et accompagnement technique réactif.`
+        /* Plus d'« expertise atelier, tests sur banc, garantie jusqu’à 24 mois » :
+           le reconditionnement est fait par un partenaire, le banc ne vaut pas
+           pour toutes les pièces, la garantie dépend de la fiche (CGV 12.1). */
+        `${brand.NAME} (Car Parts France, Nice) : pièces auto reconditionnées et d’occasion contrôlées, compatibilité vérifiée au VIN, garantie indiquée sur chaque fiche.`
       ),
       160
     );
@@ -61,18 +65,15 @@ async function getAboutPage(req, res, next) {
         {
           '@type': 'AboutPage',
           name: 'Notre Histoire',
+          about: { '@id': idOrganisation(baseUrl) },
           url: canonicalUrl,
           description: metaDescription,
           primaryImageOfPage: ogImage,
           inLanguage: 'fr-FR',
         },
-        {
-          '@type': 'Organization',
-          name: brand.NAME,
-          url: baseUrl ? `${baseUrl}/` : '/',
-          description: aboutSummary,
-          image: ogImage,
-        },
+        /* La MÊME organisation que l'accueil (même @id), plus une deuxième
+           entité sans lien avec la première. */
+        { ...organisationSchema(baseUrl), description: aboutSummary, image: ogImage },
         {
           '@type': 'BreadcrumbList',
           itemListElement: [

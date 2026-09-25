@@ -7,7 +7,7 @@ const BlogPost = require('../models/BlogPost');
 const demoProducts = require('../demoProducts');
 const { buildProductPublicUrl, getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildCategoryPublicUrl, compterFichesPubliees } = require('../services/categoryPublic');
-const { DEFAULT_LEGAL_PAGES } = require('../services/legalPages');
+const { DEFAULT_LEGAL_PAGES, pageLegaleIndexable } = require('../services/legalPages');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 /* Dates des sitemaps : jamais updatedAt (plan de reprise SEO du 14/09/2026,
    action A4.5) — voir services/datesSeo.js. */
@@ -91,6 +91,9 @@ async function buildPagesUrls(baseUrl, dbConnected) {
     { loc: resolveUrl('/devis'), lastmod: '' },
     { loc: resolveUrl('/faq'), lastmod: '' },
     { loc: resolveUrl('/notre-histoire'), lastmod: '' },
+    /* « Comment nous reconnaître » (anti-usurpation) : liée depuis chaque
+       page, indexable, mais absente du sitemap jusqu'au 25/09/2026. */
+    { loc: resolveUrl('/securite'), lastmod: '' },
     { loc: resolveUrl('/legal'), lastmod: '' },
     // Landings devis (capture leads) — indexables, porteuses des requêtes money.
     { loc: resolveUrl('/moteurs'), lastmod: '' },
@@ -104,18 +107,22 @@ async function buildPagesUrls(baseUrl, dbConnected) {
   let legalPages = [];
   if (dbConnected) {
     legalPages = await LegalPage.find({ isPublished: { $ne: false } })
-      .select('_id slug')
+      .select('_id slug content')
       .sort({ sortOrder: 1, title: 1 })
       .lean();
   } else {
-    legalPages = (DEFAULT_LEGAL_PAGES || []).map((p) => ({ slug: p.slug }));
+    legalPages = (DEFAULT_LEGAL_PAGES || []).map((p) => ({ slug: p.slug, content: p.content }));
   }
 
   /* Pas de lastmod : updatedAt des pages légales bouge aussi quand on écrit
      leur traduction allemande (scripts/translate-legal-de.js), sans que le
-     texte français change. */
+     texte français change.
+     Une page encore provisoire (texte d'attente « À compléter dans
+     l’admin », CGV SAV non validées) est servie en noindex : elle n'a rien à
+     faire dans le sitemap — même règle que la page (services/legalPages). */
   for (const lp of legalPages) {
     if (!lp || !lp.slug) continue;
+    if (!pageLegaleIndexable(lp)) continue;
     urls.push({ loc: resolveUrl(`/legal/${encodeURIComponent(lp.slug)}`), lastmod: '' });
   }
   return urls;
@@ -450,7 +457,7 @@ async function buildReferencesUrls(baseUrl, dbConnected, { pourRetrait = false }
 async function buildBlogUrls(baseUrl, dbConnected) {
   if (!dbConnected) return [];
   const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
-  /* Famille « blog » : seuls les 296 articles gardés ; « gone » : pas les 410. */
+  /* Famille « blog » : seuls les 295 articles gardés ; « gone » : pas les 410. */
   const posts = await BlogPost.find(seoIndexPolicy.publicBlogFilter({ isPublished: true }))
     .select('_id slug title publishedAt createdAt coverImageUrl')
     .sort({ publishedAt: -1, updatedAt: -1 })
@@ -713,7 +720,7 @@ const RETRAITS = {
   },
   async blog(req, baseUrl, dbConnected) {
     if (!dbConnected) return [];
-    /* Tout article publié hors des 296 gardés ; les 410 ont leur propre
+    /* Tout article publié hors des 295 gardés ; les 410 ont leur propre
        fichier quand « gone » est allumé. */
     const exclus = seoIndexPolicy.articlesGardes();
     if (seoIndexPolicy.familleActive('gone')) {

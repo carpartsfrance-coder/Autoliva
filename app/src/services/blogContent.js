@@ -337,12 +337,27 @@ function markdownToHtml(markdown) {
       flushList();
     }
 
+    /* Encadré d'une fiche PRÉCISE : « :::product[slug] ». Seul « :::product »
+       (la 1re fiche liée) était compris : la directive restait écrite en
+       clair dans 6 articles gardés (audit du 25/09/2026). On pose un
+       emplacement ; le contrôleur y met l'encadré de la fiche si elle existe
+       et est publiée, sinon l'emplacement disparaît. */
+    const produitNomme = DIRECTIVE_PRODUIT.exec(trimmed);
+    if (produitNomme) {
+      flushParagraph();
+      flushList();
+      flushQuote();
+      flushOrderedList();
+      blocks.push(emplacementProduit(produitNomme[1]));
+      continue;
+    }
+
     if (trimmed === ':::product') {
       flushParagraph();
       flushList();
       flushQuote();
       flushOrderedList();
-      blocks.push('<div class="blog-product-cta" data-product-cta="1"></div>');
+      blocks.push(EMPLACEMENT_PRODUIT_LIE);
       continue;
     }
 
@@ -364,8 +379,56 @@ function stripHtml(value) {
   return value.replace(/<[^>]*>/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 
+/* ─── Encadrés produit dans le corps d'un article ─────────────────────────── */
+
+/* « :::product » : encadré de la 1re fiche liée à l'article (relatedProductIds),
+   posé par le contrôleur à cet emplacement. */
+const EMPLACEMENT_PRODUIT_LIE = '<div class="blog-product-cta" data-product-cta="1"></div>';
+
+/* « :::product[slug] » : encadré de la fiche qui porte ce slug. */
+const DIRECTIVE_PRODUIT = /^:::product\[([a-z0-9][a-z0-9-]*)\]\s*(?::::)?$/i;
+/* La même, restée en clair dans un corps HTML (article saisi en HTML,
+   traduction allemande d'un article Markdown). */
+const DIRECTIVE_PRODUIT_HTML = /<p>\s*:::product\[([a-z0-9][a-z0-9-]*)\]\s*(?::::)?\s*<\/p>/gi;
+const DIRECTIVE_PRODUIT_LIE_HTML = /<p>\s*:::product\s*<\/p>/gi;
+const EMPLACEMENT_PRODUIT_NOMME = /<div data-product-slug="([a-z0-9-]+)"><\/div>/g;
+
+function emplacementProduit(slug) {
+  return `<div data-product-slug="${escapeHtml(String(slug).toLowerCase())}"></div>`;
+}
+
+/** Directives restées en clair dans du HTML → mêmes emplacements que le Markdown. */
+function directivesProduitHtml(html) {
+  if (typeof html !== 'string' || !html) return html;
+  return html
+    .replace(DIRECTIVE_PRODUIT_HTML, (m, slug) => emplacementProduit(slug))
+    .replace(DIRECTIVE_PRODUIT_LIE_HTML, EMPLACEMENT_PRODUIT_LIE);
+}
+
+/** Slugs des encadrés « :::product[slug] » d'un corps HTML, sans doublon. */
+function slugsEncadresProduit(html) {
+  if (typeof html !== 'string' || !html) return [];
+  return [...new Set([...html.matchAll(EMPLACEMENT_PRODUIT_NOMME)].map((m) => m[1]))];
+}
+
+/**
+ * Remplit chaque emplacement : `nomme(slug)` pour « :::product[slug] »,
+ * `lie()` pour « :::product ». Un rendu vide (fiche absente, non publiée,
+ * aucune fiche liée) retire l'emplacement : jamais de directive en clair ni
+ * d'encadré vide (le cadre rouge s'affichait sans contenu).
+ */
+function remplirEncadresProduit(html, { nomme = () => '', lie = () => '' } = {}) {
+  if (typeof html !== 'string' || !html) return html;
+  return html
+    .replace(EMPLACEMENT_PRODUIT_NOMME, (m, slug) => nomme(slug) || '')
+    .split(EMPLACEMENT_PRODUIT_LIE).join(lie() || '');
+}
+
 module.exports = {
   escapeHtml,
   markdownToHtml,
   stripHtml,
+  directivesProduitHtml,
+  slugsEncadresProduit,
+  remplirEncadresProduit,
 };

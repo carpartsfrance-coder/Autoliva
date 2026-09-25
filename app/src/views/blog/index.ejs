@@ -188,13 +188,19 @@
           </div>
           <div class="relative z-10">
             <h3 class="text-xl font-display font-bold mb-3"><%= t('blog.stayInformed') %></h3>
+            <%# Plus de « 10 000 passionnés » : un chiffre invérifiable pour un
+                domaine de quatre mois (audit du 25/09/2026). Et le formulaire
+                ne faisait rien (onsubmit="return false") : il inscrit
+                désormais, comme celui du pied de page. %>
             <p class="text-xs text-slate-400 mb-6 leading-relaxed">
               <%= t('blog.subscribersDesc') %>
             </p>
-            <form class="space-y-3" onsubmit="return false;">
-              <input class="w-full bg-white/10 border-white/20 rounded-lg py-2.5 px-4 text-xs focus:ring-primary focus:border-primary placeholder-slate-500" placeholder="Votre adresse email" type="email"/>
+            <form class="space-y-3" action="/newsletter" method="POST">
+              <input name="returnTo" type="hidden" value="<%= typeof currentPath === 'string' && currentPath ? currentPath : '/blog' %>"/>
+              <input name="source" type="hidden" value="blog"/>
+              <input class="w-full bg-white/10 border-white/20 rounded-lg py-2.5 px-4 text-xs focus:ring-primary focus:border-primary placeholder-slate-500" name="email" placeholder="<%= t('blog.emailPlaceholder') %>" required type="email"/>
               <button class="w-full bg-primary hover:bg-red-700 text-white font-bold py-3 rounded-lg text-xs transition-all uppercase tracking-widest shadow-lg shadow-primary/20" type="submit">
-                S'abonner gratuitement
+                <%= t('blog.subscribeFree') %>
               </button>
             </form>
             <p class="text-[9px] text-slate-500 mt-4 text-center italic"><%= t('blog.unsubscribe') %></p>

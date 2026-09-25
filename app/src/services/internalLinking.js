@@ -26,6 +26,7 @@
 
 const mongoose = require('mongoose');
 const { slugify } = require('./productPublic');
+const { compterFichesPubliees } = require('./categoryPublic');
 /* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.5) :
    les blocs d'articles liés n'affichent ni un article en 410 ni un article
    sorti de Google. Le cache dépend donc aussi de l'état de SEO_PRUNE. */
@@ -432,7 +433,18 @@ async function getCategoryLinkingData(category, lang) {
   const catUrl = (c) => (isDe
     ? `/de/categorie/${(deOf(c).slug || c.slug)}`
     : `/categorie/${c.slug}`);
-  const linkableCats = isDe ? allCats.filter((c) => deOf(c).translatedAt) : allCats;
+  const traduites = isDe ? allCats.filter((c) => deOf(c).translatedAt) : allCats;
+  /* Aucune catégorie VIDE dans le maillage (audit du 25/09/2026) : chaque
+     page catégorie liait jusqu'à 7 catégories sans fiche publiée, servies en
+     noindex. Même comptage que la page, le sommaire /categorie et le sitemap.
+     Si le comptage échoue, on garde les liens d'avant. */
+  let comptes = null;
+  try {
+    comptes = await compterFichesPubliees(traduites.map((c) => c.name));
+  } catch (err) {
+    console.error('[internalLinking] catégories : comptage impossible :', err && err.message ? err.message : err);
+  }
+  const linkableCats = comptes ? traduites.filter((c) => comptes.get(c.name) > 0) : traduites;
   const siblingCategories = linkableCats
     .filter((c) => c.slug !== category.slug && !c.name.includes('>'))
     .slice(0, 10)

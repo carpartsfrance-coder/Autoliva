@@ -86,6 +86,14 @@ function sectionDescription(html) {
   return html.slice(debut, html.indexOf('</section>', debut));
 }
 
+/* Bloc « Véhicules compatibles », jusqu'au titre « Caractéristiques » (où
+   les références de la pièce, elles, ont leur place). */
+function sectionCompat(html) {
+  const debut = html.indexOf('<div id="compat">');
+  if (debut < 0) return null;
+  return html.slice(debut, html.indexOf('>Caractéristiques<', debut));
+}
+
 function metaDescription(html) {
   const m = html.match(/<meta name="description" content="([^"]*)"/);
   return m ? decoder(m[1]) : '';
@@ -189,6 +197,49 @@ test('fiche produit rendue par l’application — description et allégations (
   /* Les pages sont servies une fois, puis relues par chaque assertion. */
   const pages = new Map();
   for (const p of FIXTURE.produits) pages.set(p.sku, await getFiche(p));
+
+  await t.test('(f) données structurées fidèles aux CGV et à la page (audit du 25/09/2026)', () => {
+    for (const p of FIXTURE.produits) {
+      const html = pages.get(p.sku);
+      const brut = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('');
+      assert.ok(!/[<>]/.test(brut), `${p.sku} : « < » ou « > » non échappé dans le JSON-LD`);
+      assert.ok(!/FreeReturn|"merchantReturnDays":30/.test(brut), `${p.sku} : retour gratuit sous 30 jours annoncé (CGV : 14 jours, frais au client)`);
+      const produit = jsonLd(html).find((n) => n['@type'] === 'Product');
+      assert.ok(produit, `${p.sku} : pas de Product`);
+      assert.equal(produit.hasMerchantReturnPolicy, undefined, `${p.sku} : politique de retour sur la fiche`);
+      assert.equal(produit.manufacturer, undefined, `${p.sku} : Autoliva déclaré fabricant`);
+      const proprietes = (produit.additionalProperty || []).map((x) => `${x.name}: ${x.value}`).join(' | ');
+      assert.ok(!/Test qualité: Testé sur banc/.test(proprietes), `${p.sku} : « Testé sur banc » ajouté d'office`);
+      const offre = produit.offers || {};
+      assert.ok(offre.seller && offre.seller['@id'] && offre.seller['@id'].endsWith('/#organization'), `${p.sku} : vendeur sans lien vers l'organisation`);
+      const port = offre.shippingDetails;
+      assert.ok(port, `${p.sku} : port absent du JSON-LD`);
+      assert.equal(port.shippingDestination.addressCountry, 'FR');
+      assert.ok(!('deliveryTime' in port), `${p.sku} : délai de livraison inventé`);
+      if (p.serviceType === 'standalone_cloning') assert.equal(port.shippingRate.value, '0.00');
+      else assert.notEqual(port.shippingRate.value, '0.00', `${p.sku} : port gratuit annoncé alors que le panier le facture`);
+      if (produit.mpn) assert.match(produit.mpn, /\d/, `${p.sku} : MPN sans chiffre (code moteur ?)`);
+      if (offre.warranty) {
+        const d = offre.warranty.durationOfWarranty;
+        if (Number(p.warranty && p.warranty.months) > 0) {
+          assert.deepEqual([d.value, d.unitCode], [Number(p.warranty.months), 'MON'], `${p.sku} : garantie différente de celle affichée`);
+        }
+      }
+    }
+  });
+
+  await t.test('slug à double tiret (75 fiches Dekram) : la fiche répond, pas la recherche', async () => {
+    const id = new mongoose.Types.ObjectId();
+    const slug = 'boite-vitesses-ford-kuga-2-0--19060';
+    await db.collection('products').insertOne(versMongo({ ...DEK, _id: id.toHexString(), sku: 'DEK-11295319060', slug }));
+    try {
+      const r = await get(`/product/${slug}/`);
+      assert.equal(r.status, 200, `double tiret : ${r.status} → ${r.location || ''}`);
+      assert.match(r.html, new RegExp(`<link rel="canonical" href="[^"]*/product/${slug}/"`), 'canonique vers le slug exact');
+    } finally {
+      await db.collection('products').deleteOne({ _id: id });
+    }
+  });
 
   await t.test('(a)(b)(c) la description est dans la page pour les fiches françaises autorisées', () => {
     const attendus = [
@@ -420,6 +471,41 @@ test('fiche produit rendue par l’application — description et allégations (
     }
     assert.ok(!/garantie de 24 mois/.test(tout), 'garantie « en bloc » affichée');
     assert.equal(metaDescription(r.html), 'Mécatronique Audi A1 reconditionnée (1.0 TSI, 1.2 TFSI) · 1 référence testée(s) sur banc · livraison 24-48h.');
+  });
+
+  await t.test('comparatif et véhicules compatibles : rien de faux, rien d’interne (audit du 25/09/2026)', async () => {
+    /* Colonne « Occasion » : la garantie légale de conformité et celle des
+       vices cachés s'appliquent aussi à l'occasion (CGV art. 11) ; « Aucune »
+       et « Aucun recours » étaient faux. Le sous-titre parlait d'une « boîte
+       de vitesses » sur une boîte de transfert, un pont, une mécatronique. */
+    for (const p of [DQ200, WC, ALIBABA]) {
+      const lisible = texte(pages.get(p.sku));
+      assert.ok(lisible.includes('Occasion, reconditionné ou neuf ?'), `${p.sku} : le comparatif doit rester`);
+      assert.ok(lisible.includes('Garantie légale seulement'), `${p.sku} : garantie de l’occasion`);
+      assert.ok(lisible.includes('Recours limités'), `${p.sku} : recours de l’occasion`);
+      assert.ok(!/Garantie Aucune\b|Aucun recours/.test(lisible), `${p.sku} : « Aucune » / « Aucun recours » affiché`);
+      assert.ok(lisible.includes('comparés honnêtement — pour cette pièce.'), `${p.sku} : sous-titre générique`);
+      assert.ok(!lisible.includes('pour cette boîte de vitesses'), `${p.sku} : sous-titre « boîte de vitesses »`);
+    }
+    const de = await get(`/de/produits/${encodeURIComponent(DQ200.localizations.de.slug)}-${DQ200._id}`);
+    assert.equal(de.status, 200);
+    assert.ok(texte(de.html).includes('Nur gesetzliche Gewährleistung'), 'allemand : garantie de l’occasion');
+    assert.ok(!/Kein Rückgriff|für dieses Getriebe/.test(texte(de.html)), 'allemand : ancien texte');
+
+    /* WC-7756 : 12 véhicules, 7 références. Les 7 premiers recevaient chacun
+       une référence par sa POSITION dans la liste, les 5 suivants le SKU
+       interne. Aucune référence n'est rattachée à un véhicule en base : le
+       tableau n'en montre plus, la fiche les liste une fois, à part. */
+    for (const p of [WC, DQ200]) {
+      const compat = sectionCompat(pages.get(p.sku));
+      assert.ok(compat, `${p.sku} : bloc des véhicules compatibles absent`);
+      assert.ok(texte(compat).includes(p.compatibility[p.compatibility.length - 1].model), `${p.sku} : les véhicules doivent rester`);
+      assert.ok(!compat.includes(p.sku), `${p.sku} : SKU interne affiché comme référence d’un véhicule`);
+      for (const r of p.compatibleReferences) assert.ok(!compat.includes(`>${r}<`), `${p.sku} : ${r} attribuée à un véhicule`);
+      assert.ok(!texte(compat).includes('Références'), `${p.sku} : colonne « Références » encore là`);
+      const lisible = texte(pages.get(p.sku));
+      for (const r of p.compatibleReferences) assert.ok(lisible.includes(r), `${p.sku} : ${r} doit rester listée dans les caractéristiques`);
+    }
   });
 
   await t.test('le flux Merchant ne garde que les fiches conformes, avec les textes de la fiche', async () => {

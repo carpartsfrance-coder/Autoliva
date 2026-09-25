@@ -381,3 +381,21 @@ test('une longue suite de blancs ne fige pas le filtre', () => {
   assert.equal(cf.filtrer('Garantie 2 ans — la couverture la plus longue du marché.', fiche('ASY-1', 24)), 'Garantie 2 ans.');
   assert.equal(cf.filtrer('Garantie 2 ans, couverture la plus longue du marché.', fiche('ASY-1', 24)), 'Garantie 2 ans.');
 });
+
+test('caractéristiques : filtrées comme le reste de la fiche (tableau et JSON-LD)', () => {
+  const produit = {
+    sku: 'ASY-0100000001',
+    warranty: { months: 12 },
+    specs: [
+      { label: 'Code moteur', value: 'D4FB' },
+      { label: 'Reconditionnement', value: 'Reconditionné dans notre atelier' },
+      { label: 'Vide', value: '' },
+    ],
+  };
+  const ctx = cf.contexteFiche(produit, { scalapayActif: false });
+  const out = cf.filtrerFiche(produit, ctx);
+  const valeurs = out.specs.map((s) => `${s.label}: ${s.value}`);
+  assert.ok(valeurs.includes('Code moteur: D4FB'), 'une caractéristique vraie reste');
+  assert.ok(!valeurs.some((v) => /notre atelier/.test(v)), `atelier « à nous » dans les caractéristiques : ${valeurs.join(' | ')}`);
+  assert.equal(produit.specs[1].value, 'Reconditionné dans notre atelier', 'la fiche d’origine n’est pas modifiée');
+});

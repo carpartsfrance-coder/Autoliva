@@ -85,7 +85,12 @@ function i18nMiddleware(req, res, next) {
   }
 
   // Path without the /xx prefix — used for building alternate-language URLs
-  const rawPath = req.originalUrl || req.url || '/';
+  /* Le CHEMIN seul, jamais les paramètres : les hreflang de chaque page
+     reprenaient l'adresse entière (« /moteurs?utm_source=… », « /blog?page=2 »)
+     et déclaraient à Google, comme version de la page, une adresse de suivi
+     ou une page 2 en noindex (audit du 25/09/2026). Les vues qui lisent
+     currentPathWithoutLang (en-tête, pied de page) coupaient déjà la query. */
+  const rawPath = String(req.originalUrl || req.url || '/').split('?')[0].split('#')[0] || '/';
   if (isGerman) {
     const stripped = rawPath.replace(/^\/de(\/|$)/, '/$1').replace(/^\/\//, '/');
     res.locals.currentPathWithoutLang = stripped || '/';
