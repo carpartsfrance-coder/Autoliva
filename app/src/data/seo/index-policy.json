@@ -9,8 +9,8 @@
  ],
  "sources": {
   "keep-blog-fr.txt": {
-   "lignes": 295,
-   "sha256": "a6e8b9007381156bfe9f72f139598d7e9eccd8f41c6cc846820d9002192969ed"
+   "lignes": 296,
+   "sha256": "1bf4d5e876329a39bbde25352454ad98fab0b7a0c543b2901e847c263ba38393"
   },
   "gone-410-blog.txt": {
    "lignes": 268,
@@ -314,6 +314,7 @@
    "actionneur-boite-transfert-bmw-x3-e83-pignon-reparation",
    "apprentissage-calibrage-boite-edc-dc4-apres-remplacement-calculateur",
    "audi-a6-a7-s-tronic-dl382-tcu-calculateur-panne-remplacement",
+   "autoliva-avis",
    "bmw-x5-e53-4-4i-4-8is-actionneur-boite-transfert-atc500",
    "bmw-x5-e53-phase-1-vs-phase-2-facelift-piece-transfert",
    "boite-6dct250-getrag-dc4-calculateur-continental-guide-complet",

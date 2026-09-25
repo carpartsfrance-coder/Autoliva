@@ -6,7 +6,7 @@
  * est éprouvée sur les listes COMPLÈTES du plan, famille par famille et pour
  * les 64 combinaisons de l'interrupteur SEO_PRUNE.
  *
- *   - Chaque adresse de must-stay-indexable.txt (2 820) reste indexable sous
+ *   - Chaque adresse de must-stay-indexable.txt (2 821) reste indexable sous
  *     toutes les combinaisons. Seule exception, décidée par Killian le
  *     14/09/2026 : les fiches « DM- » (copies de distrimotor.com) sortent avec
  *     « products », y compris les 335 que le plan gardait.
@@ -94,7 +94,7 @@ test('index-policy.json est exactement ce que le générateur tire des listes co
 
 test('les listes commitées sont celles du plan : comptes et recoupements', () => {
   const p = require('../../src/data/seo/index-policy.json');
-  assert.equal(p.blog.garder.length, 295);
+  assert.equal(p.blog.garder.length, 296);
   assert.equal(p.blog.maillage.length, 76);
   assert.equal(p.disparus.fr.length + p.disparus.de.length, 268);
   assert.equal(p.piecesAuto.garder.length, 242);
@@ -102,7 +102,7 @@ test('les listes commitées sont celles du plan : comptes et recoupements', () =
   assert.equal(p.produits.noindex.length, 11125);
   assert.deepEqual(p.produits.prefixesSku, ['DM-'], 'décision du 14/09/2026 : toutes les copies distrimotor');
   assert.ok(!p.piecesAuto.garder.includes('/pieces-auto'), 'la racine /pieces-auto n’est pas une page de la règle');
-  assert.equal(MUST_STAY.length, 2820);
+  assert.equal(MUST_STAY.length, 2821);
   assert.equal(DISPARUS.length, 268);
 });
 
@@ -138,7 +138,7 @@ test('SEO_PRUNE absent : le middleware ne touche à rien, pas même une variable
 
 /* ─── Exhaustif, sur les listes complètes ─────────────────────────────────── */
 
-test('must-stay-indexable : les 2 820 adresses restent indexables sous les 64 combinaisons (sauf les copies DM- avec « products »)', () => {
+test('must-stay-indexable : les 2 821 adresses restent indexables sous les 64 combinaisons (sauf les copies DM- avec « products »)', () => {
   let dm = 0;
   for (const chemin of MUST_STAY) {
     const fiche = chemin.startsWith('/product/') ? FICHE_PAR_CHEMIN.get(chemin) : null;
