@@ -15,6 +15,7 @@ const { buildHreflangSet, t, redirectionFrGardantLaLangue } = require('../servic
 const { formatCategoryDisplayName } = require('../services/brandSanitizer');
 const internalLinking = require('../services/internalLinking');
 const productI18n = require('../services/productI18n');
+const { filtreAuDelaDuPreset } = require('../services/facettesListing');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -316,7 +317,10 @@ async function getCategory(req, res, next) {
       || (data.minPriceEuros !== null && data.minPriceEuros !== undefined)
       || (data.maxPriceEuros !== null && data.maxPriceEuros !== undefined)
       || (data.sort && data.sort !== 'newest' && data.sort !== '')
-      || data.page > 1;
+      || data.page > 1
+      /* Autre catégorie, état, véhicule… : même règle (audit du 25/09/2026,
+         services/facettesListing.js). */
+      || filtreAuDelaDuPreset(req.query, { categorie: category.name });
     const metaRobots = (filtersBeyondCategory || isEmpty)
       ? 'noindex, follow'
       : (res.locals.metaRobots || undefined);

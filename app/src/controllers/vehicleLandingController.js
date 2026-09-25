@@ -25,6 +25,7 @@ const { getPublicBaseUrlFromReq } = require('../services/productPublic');
 const internalLinking = require('../services/internalLinking');
 const claimFilter = require('../services/claimFilter');
 const scalapay = require('../services/scalapay');
+const { filtreAuDelaDuPreset } = require('../services/facettesListing');
 
 function toJsonLdSafe(value) {
   return JSON.stringify(value)
@@ -248,7 +249,9 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
     ? override.seoText
     : buildAutoSeoText({ makeName, modelName, partTypeName, totalCount: data.totalCount });
 
-  /* Robots : indexable si page nue, noindex si filtres au-delà du preset */
+  /* Robots : indexable si page nue, noindex si filtres au-delà du preset —
+     y compris une autre catégorie, un état ou un autre véhicule que ceux du
+     chemin (audit du 25/09/2026, services/facettesListing.js). */
   const filtersBeyond =
     data.searchQuery
     || data.selectedSubCategory
@@ -256,7 +259,8 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
     || (data.minPriceEuros !== null && data.minPriceEuros !== undefined)
     || (data.maxPriceEuros !== null && data.maxPriceEuros !== undefined)
     || (data.sort && data.sort !== 'newest' && data.sort !== '')
-    || data.page > 1;
+    || data.page > 1
+    || filtreAuDelaDuPreset(req.query, { categorie: presetCategoryName, marque: makeName, modele: modelName });
   /* Si on est sur une page model+partType et que l'utilisateur change vehicleModel
    * via le filtre, le path ne matche plus → noindex pour éviter du dup content. */
   const filterMismatch = (modelName && data.selectedVehicleModel && data.selectedVehicleModel.toLowerCase() !== modelName.toLowerCase());

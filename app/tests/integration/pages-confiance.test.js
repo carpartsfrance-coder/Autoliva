@@ -160,6 +160,16 @@ test('pages de confiance servies par l’application (audit du 25/09/2026)', asy
   ]);
   await db.collection('blogposts').insertOne(ARTICLE_TRACES);
 
+  /* Listings : deux catégories remplies, une marque et deux modèles. */
+  await db.collection('categories').insertMany([
+    { name: 'Boîtes de vitesses', slug: 'boites-de-vitesses', isActive: true, sortOrder: 1 },
+    { name: 'Turbos', slug: 'turbos', isActive: true, sortOrder: 2 },
+  ]);
+  await db.collection('products').insertMany([
+    { _id: new mongoose.Types.ObjectId(), name: 'Boîte de vitesses Audi A4 2.0 TDI', slug: 'boite-audi-a4-test', sku: 'WC-990110', category: 'Boîtes de vitesses', priceCents: 150000, isPublished: true, badges: { condition: 'Reconditionnée' }, compatibility: [{ make: 'Audi', model: 'A4' }] },
+    { _id: new mongoose.Types.ObjectId(), name: 'Turbo Audi A4 et A6 2.0 TDI', slug: 'turbo-audi-a4-test', sku: 'WC-990111', category: 'Turbos', priceCents: 45000, isPublished: true, badges: { condition: 'Occasion' }, compatibility: [{ make: 'Audi', model: 'A4' }, { make: 'Audi', model: 'A6' }] },
+  ]);
+
   const app = require('../../src/app');
   http = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   base = `http://127.0.0.1:${http.address().port}`;
@@ -275,6 +285,22 @@ test('pages de confiance servies par l’application (audit du 25/09/2026)', asy
     assert.ok(liste.includes('le guide Autoliva'), 'liste du blog : titre sans le sigle');
     assert.ok(!/\bCPF\b/.test(liste), 'liste du blog : CPF');
     assert.ok(/1 min de lecture|\b1 min\b/.test(liste) && !/\b7 min\b/.test(liste), 'liste du blog : même temps de lecture que l’article');
+  });
+
+  await t.test('facettes des pages catégorie et des hubs /pieces-auto : noindex, follow — la page nue reste indexable', async () => {
+    estIndexable(await get('/categorie/boites-de-vitesses'), 'catégorie nue');
+    estIndexable(await get('/categorie/boites-de-vitesses?utm_source=google&gclid=abc'), 'paramètres de suivi');
+    estIndexable(await get(`/categorie/boites-de-vitesses?mainCategory=${encodeURIComponent('Boîtes de vitesses')}`), 'mainCategory = la catégorie de la page');
+    for (const q of ['mainCategory=Turbos', 'condition=reconditionne', 'vehicleMake=Audi', 'vehicleMake=Audi&vehicleModel=A4', 'vehicleClear=1']) {
+      estNoindexFollow(await get(`/categorie/boites-de-vitesses?${q}`), `/categorie/boites-de-vitesses?${q}`);
+    }
+    estIndexable(await get('/pieces-auto/audi'), 'hub marque nu');
+    estIndexable(await get('/pieces-auto/audi/a4'), 'hub modèle nu');
+    estIndexable(await get('/pieces-auto/audi?vehicleMake=audi'), 'vehicleMake = la marque du chemin');
+    for (const chemin of ['/pieces-auto/audi?mainCategory=Turbos', '/pieces-auto/audi?condition=occasion',
+      '/pieces-auto/audi?vehicleModel=A6', '/pieces-auto/audi/a4?vehicleClear=1', '/pieces-auto/audi/a4?condition=reconditionne']) {
+      estNoindexFollow(await get(chemin), chemin);
+    }
   });
 
   await t.test('lien cassé de l’article DQ200 : un 301 vers le vrai article EDC DC4, avant toute autre règle', async () => {
