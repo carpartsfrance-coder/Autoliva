@@ -80,6 +80,50 @@ function locs(xml) {
   return [...xml.matchAll(/<loc>([^<]*)<\/loc>/g)].map((m) => m[1].replace(/&amp;/g, '&').replace(base, ''));
 }
 
+const MOTS = 'Le calculateur conserve les adaptations du véhicule donneur et la boîte passe en mode dégradé au premier démarrage ';
+const ARTICLE_TRACES = {
+  _id: new mongoose.Types.ObjectId(),
+  title: 'Voiture en mode dégradé après changement de mécatronique : le guide CPF',
+  slug: 'voiture-mode-degrade-apres-changement-mecatronique-dsg',
+  excerpt: 'Mécatronique Reconditionné CPF : la cause et la solution.',
+  contentMarkdown: [
+    '---',
+    'title: "Voiture en mode dégradé après changement de mécatronique DSG : que faire"',
+    'slug: "voiture-mode-degrade-apres-changement-mecatronique-dsg"',
+    'metaTitle: "Mode dégradé après changement mécatronique DSG : que faire"',
+    'primaryKeyword: "voiture en mode dégradé après changement mécatronique"',
+    'tags: ["DSG", "S-tronic", "mécatronique"]',
+    '---',
+    '',
+    `Vous venez de remplacer la mécatronique. ${MOTS.repeat(10)}Solution : un clonage Reconditionné CPF.`,
+    '',
+    ':::product[pont-arriere-test-cta]',
+    '',
+    ':::product[fiche-brouillon-test]',
+    '',
+    ':::product[fiche-inexistante]',
+    '',
+    'Fin de l’article.',
+  ].join('\n'),
+  readingTimeMinutes: 7,
+  isPublished: true,
+  publishedAt: new Date('2026-05-13T10:00:00Z'),
+  createdAt: new Date('2026-05-13T10:00:00Z'),
+  category: { slug: 'transmission-mecatronique', label: 'Mécatronique' },
+  seo: { metaTitle: '', metaDescription: '' },
+  /* La traduction allemande, faite sur le HTML : la directive y est restée
+     en clair, dans un paragraphe. */
+  localizations: {
+    de: {
+      title: 'Notlauf nach Mechatronik-Tausch: der CPF-Ratgeber von CPF',
+      excerpt: 'Ursache und Lösung.',
+      contentHtml: '<p>Sie haben die Mechatronik getauscht.</p><p>:::product[pont-arriere-test-cta]</p><p>:::product[fiche-inexistante]</p><p>Ende.</p>',
+      seo: { metaTitle: '', metaDescription: '' },
+      translatedAt: new Date('2026-09-07T09:30:00Z'),
+    },
+  },
+};
+
 function estIndexable(r, quoi) {
   assert.equal(r.status, 200, `${quoi} : statut ${r.status} ${r.location || ''}`);
   assert.ok(!r.xRobotsTag || !/noindex/i.test(r.xRobotsTag), `${quoi} : en-tête X-Robots-Tag « ${r.xRobotsTag} »`);
@@ -105,6 +149,16 @@ test('pages de confiance servies par l’application (audit du 25/09/2026)', asy
     { slug: 'confidentialite', title: 'Politique de confidentialité', content: "Données d'identification et d'usage : l'éditeur ne collecte que le nécessaire à la commande.", isPublished: true, sortOrder: 40 },
     { slug: 'cookies', title: 'Politique cookies', content: "À compléter dans l’admin.\n\nInformations recommandées :\n- Types de cookies\n- Durées\n- Comment gérer/retirer le consentement", isPublished: true, sortOrder: 50 },
   ]);
+
+  /* Un article gardé tel que l'audit l'a trouvé : l'en-tête YAML de son
+     fichier source en tête, « :::product[slug] » en clair (une fiche publiée,
+     une en brouillon, une qui n'existe pas), « CPF » dans le titre, le résumé
+     et le texte, et « 7 min » de lecture en base pour ~210 mots. */
+  await db.collection('products').insertMany([
+    { _id: new mongoose.Types.ObjectId(), name: 'Pont arrière reconditionné Mercedes A2043500714', slug: 'pont-arriere-test-cta', sku: 'WC-990100', category: 'Ponts & différentiels', priceCents: 129000, isPublished: true, warranty: { months: 12 }, badges: { condition: 'Reconditionné' } },
+    { _id: new mongoose.Types.ObjectId(), name: 'Fiche en brouillon', slug: 'fiche-brouillon-test', sku: 'WC-990101', category: 'Ponts & différentiels', priceCents: 99000, isPublished: false },
+  ]);
+  await db.collection('blogposts').insertOne(ARTICLE_TRACES);
 
   const app = require('../../src/app');
   http = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
@@ -185,5 +239,41 @@ test('pages de confiance servies par l’application (audit du 25/09/2026)', asy
     } finally {
       await db.collection('savtickets').deleteMany({ numero: /^SAV-T-/ });
     }
+  });
+
+  await t.test('article gardé : ni en-tête YAML, ni « :::product » en clair, ni « CPF » ; temps de lecture recalculé', async () => {
+    const r = await get(`/blog/${ARTICLE_TRACES.slug}`);
+    assert.equal(r.status, 200, `${r.status} ${r.location || ''}`);
+    const lisible = texte(r.corps);
+    assert.ok(!/primaryKeyword|metaTitle|slug:|tags:/.test(lisible), 'en-tête YAML affiché');
+    assert.ok(lisible.includes('Vous venez de remplacer la mécatronique.'), 'le texte de l’article doit rester');
+    assert.ok(!r.corps.includes(':::product'), 'directive en clair');
+    /* La fiche publiée a son encadré ; le brouillon et la fiche inconnue ne
+       laissent rien — ni lien, ni cadre vide. */
+    assert.match(r.corps, /<div class="blog-product-cta" data-product-cta="1"><span class="cta-eyebrow">Reconditionné — Garantie 12 mois<\/span><h3 class="cta-title">Pont arrière reconditionné Mercedes A2043500714<\/h3>/);
+    assert.ok(r.corps.includes('href="/product/pont-arriere-test-cta/"'), 'lien vers la fiche nommée');
+    assert.ok(!/fiche-brouillon-test|fiche-inexistante|data-product-slug/.test(r.corps), 'emplacement resté pour une fiche absente');
+    assert.ok(!/<div class="blog-product-cta" data-product-cta="1"><\/div>/.test(r.corps), 'cadre vide');
+    /* « CPF » : ni dans le texte, ni dans le <title>, ni dans la description, ni dans le JSON-LD. */
+    assert.ok(!/\bCPF\b/.test(lisible), 'CPF dans le texte visible');
+    assert.ok(!/\bCPF\b/.test(r.corps.replace(/<script(?![^>]*ld\+json)[\s\S]*?<\/script>/g, '')), 'CPF dans le HTML (title, meta, JSON-LD)');
+    assert.ok(lisible.includes('le guide Autoliva'), 'titre : la marque à la place du sigle');
+    assert.ok(lisible.includes('Solution : un clonage Reconditionné Autoliva.'), 'texte : la marque à la place du sigle');
+    /* ~210 mots, « 7 min » en base. */
+    assert.ok(lisible.includes('1 min de lecture'), lisible.slice(0, 400));
+    assert.ok(!lisible.includes('7 min'), '« 7 min » lu en base');
+
+    /* En allemand, même règle : l'encadré de la fiche (en allemand), rien
+       pour la fiche inconnue ; le sigle quitte le titre. */
+    const de = await get(`/de/blog/${ARTICLE_TRACES.slug}`);
+    assert.equal(de.status, 200, `allemand : ${de.status} ${de.location || ''}`);
+    assert.ok(!de.corps.includes(':::product') && !de.corps.includes('fiche-inexistante'), 'allemand : directive en clair');
+    assert.ok(de.corps.includes('href="/product/pont-arriere-test-cta/"') && de.corps.includes('Zum Produkt'), 'allemand : encadré de la fiche');
+    assert.ok(texte(de.corps).includes('der Autoliva-Ratgeber von Autoliva'), 'allemand : le sigle quitte le titre');
+
+    const liste = texte((await get('/blog')).corps);
+    assert.ok(liste.includes('le guide Autoliva'), 'liste du blog : titre sans le sigle');
+    assert.ok(!/\bCPF\b/.test(liste), 'liste du blog : CPF');
+    assert.ok(/1 min de lecture|\b1 min\b/.test(liste) && !/\b7 min\b/.test(liste), 'liste du blog : même temps de lecture que l’article');
   });
 });
