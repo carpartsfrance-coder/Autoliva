@@ -276,4 +276,10 @@ test('pages de confiance servies par l’application (audit du 25/09/2026)', asy
     assert.ok(!/\bCPF\b/.test(liste), 'liste du blog : CPF');
     assert.ok(/1 min de lecture|\b1 min\b/.test(liste) && !/\b7 min\b/.test(liste), 'liste du blog : même temps de lecture que l’article');
   });
+
+  await t.test('lien cassé de l’article DQ200 : un 301 vers le vrai article EDC DC4, avant toute autre règle', async () => {
+    const alias = await get('/blog/calculateur-edc-dc4-renault-diagnostic-prix-remplacement');
+    assert.equal(alias.status, 301);
+    assert.equal(alias.location, '/blog/calculateur-boite-edc-dc4-renault-diagnostic-prix-remplacement');
+  });
 });
