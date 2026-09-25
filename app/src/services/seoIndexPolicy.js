@@ -9,7 +9,7 @@
  * Google a déclassé tout le domaine le 31/08 : l'essentiel de ce qu'il pouvait
  * indexer était produit en masse (articles générés, fiches d'import, pages
  * allemandes traduites à la machine, gabarits /pieces-auto et /reference),
- * contre 2 672 pages qui portent presque toutes les visites et les ventes. Le
+ * contre 2 820 pages qui portent presque toutes les visites et les ventes. Le
  * plan retire ces familles de l'index par un noindex RÉVERSIBLE, une famille à
  * la fois, et ne répond 410 qu'aux 268 articles publiés après la chute. Toutes
  * les pages restent en ligne, en vente, dans les flux Merchant et dans Ads.
