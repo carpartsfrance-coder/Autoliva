@@ -198,6 +198,49 @@ test('fiche produit rendue par l’application — description et allégations (
   const pages = new Map();
   for (const p of FIXTURE.produits) pages.set(p.sku, await getFiche(p));
 
+  await t.test('(f) données structurées fidèles aux CGV et à la page (audit du 25/09/2026)', () => {
+    for (const p of FIXTURE.produits) {
+      const html = pages.get(p.sku);
+      const brut = [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('');
+      assert.ok(!/[<>]/.test(brut), `${p.sku} : « < » ou « > » non échappé dans le JSON-LD`);
+      assert.ok(!/FreeReturn|"merchantReturnDays":30/.test(brut), `${p.sku} : retour gratuit sous 30 jours annoncé (CGV : 14 jours, frais au client)`);
+      const produit = jsonLd(html).find((n) => n['@type'] === 'Product');
+      assert.ok(produit, `${p.sku} : pas de Product`);
+      assert.equal(produit.hasMerchantReturnPolicy, undefined, `${p.sku} : politique de retour sur la fiche`);
+      assert.equal(produit.manufacturer, undefined, `${p.sku} : Autoliva déclaré fabricant`);
+      const proprietes = (produit.additionalProperty || []).map((x) => `${x.name}: ${x.value}`).join(' | ');
+      assert.ok(!/Test qualité: Testé sur banc/.test(proprietes), `${p.sku} : « Testé sur banc » ajouté d'office`);
+      const offre = produit.offers || {};
+      assert.ok(offre.seller && offre.seller['@id'] && offre.seller['@id'].endsWith('/#organization'), `${p.sku} : vendeur sans lien vers l'organisation`);
+      const port = offre.shippingDetails;
+      assert.ok(port, `${p.sku} : port absent du JSON-LD`);
+      assert.equal(port.shippingDestination.addressCountry, 'FR');
+      assert.ok(!('deliveryTime' in port), `${p.sku} : délai de livraison inventé`);
+      if (p.serviceType === 'standalone_cloning') assert.equal(port.shippingRate.value, '0.00');
+      else assert.notEqual(port.shippingRate.value, '0.00', `${p.sku} : port gratuit annoncé alors que le panier le facture`);
+      if (produit.mpn) assert.match(produit.mpn, /\d/, `${p.sku} : MPN sans chiffre (code moteur ?)`);
+      if (offre.warranty) {
+        const d = offre.warranty.durationOfWarranty;
+        if (Number(p.warranty && p.warranty.months) > 0) {
+          assert.deepEqual([d.value, d.unitCode], [Number(p.warranty.months), 'MON'], `${p.sku} : garantie différente de celle affichée`);
+        }
+      }
+    }
+  });
+
+  await t.test('slug à double tiret (75 fiches Dekram) : la fiche répond, pas la recherche', async () => {
+    const id = new mongoose.Types.ObjectId();
+    const slug = 'boite-vitesses-ford-kuga-2-0--19060';
+    await db.collection('products').insertOne(versMongo({ ...DEK, _id: id.toHexString(), sku: 'DEK-11295319060', slug }));
+    try {
+      const r = await get(`/product/${slug}/`);
+      assert.equal(r.status, 200, `double tiret : ${r.status} → ${r.location || ''}`);
+      assert.match(r.html, new RegExp(`<link rel="canonical" href="[^"]*/product/${slug}/"`), 'canonique vers le slug exact');
+    } finally {
+      await db.collection('products').deleteOne({ _id: id });
+    }
+  });
+
   await t.test('(a)(b)(c) la description est dans la page pour les fiches françaises autorisées', () => {
     const attendus = [
       [DQ200, 'La mécatronique est l’organe électro-hydraulique qui pilote la boîte DSG7 DQ200'],

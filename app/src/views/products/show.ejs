@@ -238,7 +238,10 @@
         : [
             { icon: 'verified', label: keyGarantie || t('product.warrantyAsk') },
             { icon: 'terminal', label: keyProgrammation || t('product.progIncluded') },
-            { icon: 'analytics', label: t('product.benchTested') },
+            /* « Testé sur banc » d'office était faux pour l'occasion (compression,
+                endoscopie), les kits neufs… (audit du 25/09/2026). À la place, un
+                service réellement offert sur toutes les fiches. */
+            { icon: 'fact_check', label: t('product.freeVinCheck') },
             consigneUpfront ? { icon: 'verified_user', label: t('product.consigneRefundable') } : { icon: 'lock_open', label: t('product.noDeposit') },
           ]; %>
       <% const qualityHighlights = manualBadgeCards.length

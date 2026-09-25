@@ -610,8 +610,8 @@ function filtrerFaqs(faqs, ctx) {
 /**
  * Copie de la fiche avec tous les textes AFFICHÉS filtrés : description,
  * description courte (qui sert de meta description et de description JSON-LD),
- * balises SEO, badges, garantie, FAQ, points clés, blocs d'information. Ne
- * mute pas l'original.
+ * balises SEO, badges, garantie, FAQ, points clés, caractéristiques, blocs
+ * d'information. Ne mute pas l'original.
  */
 function filtrerFiche(product, ctx) {
   if (!product || !ctx || !ctx.regles || !ctx.regles.size) return product;
@@ -636,6 +636,15 @@ function filtrerFiche(product, ctx) {
     out.warranty = { ...out.warranty, text: filtrer(out.warranty.text, ctx) };
   }
   if (Array.isArray(out.keyPoints)) out.keyPoints = filtrerListe(out.keyPoints, ctx);
+  /* Caractéristiques : elles s'affichent dans le tableau de la fiche ET
+     partent dans le JSON-LD (additionalProperty). Elles passaient sans filtre
+     (« Reconditionné dans notre atelier »…). Une valeur vidée par le filtre
+     fait disparaître la ligne. */
+  if (Array.isArray(out.specs)) {
+    out.specs = out.specs
+      .map((s) => (s && typeof s === 'object' && typeof s.value === 'string' ? { ...s, value: filtrer(s.value, ctx) } : s))
+      .filter((s) => !(s && typeof s === 'object' && typeof s.value === 'string' && !s.value.trim()));
+  }
   if (Array.isArray(out.faqs)) out.faqs = filtrerFaqs(out.faqs, ctx);
   if (out.infoBlocksByPosition && typeof out.infoBlocksByPosition === 'object') {
     out.infoBlocksByPosition = filtrerBlocsInfo(out.infoBlocksByPosition, ctx);

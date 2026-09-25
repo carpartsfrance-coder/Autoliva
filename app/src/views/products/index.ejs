@@ -454,7 +454,7 @@
         <% } else { %>
           <%# Listing en LIGNES horizontales (1 produit par ligne, scannable). %>
           <div class="flex flex-col gap-4">
-            <% products.forEach((p) => { %>
+            <% products.forEach((p, _rang) => { %>
               <% const imgUrl = (p && typeof p.imageUrl === 'string' && p.imageUrl.trim()) ? p.imageUrl.trim() : (Array.isArray(p.galleryUrls) && p.galleryUrls[0] ? p.galleryUrls[0] : ''); %>
               <% const productUrl = (p && p.publicPath) ? p.publicPath : ('/produits/' + p._id); %>
               <% const badge = (p && p.badges && p.badges.topLeft) ? String(p.badges.topLeft).trim() : ''; %>
@@ -475,7 +475,10 @@
                   <%# 1 · IMAGE %>
                   <a href="<%= productUrl %>" class="relative shrink-0 bg-gray-50 overflow-hidden aspect-[4/3] sm:aspect-auto sm:w-40 lg:w-44 flex items-center justify-center">
                     <% if (imgUrl) { %>
-                      <img src="<%= imgUrl %>" alt="<%= p.name %>" width="400" height="300" loading="lazy" decoding="async" class="max-w-full max-h-full w-auto h-auto object-contain p-2"/>
+                      <%# Les 2 premières vignettes sont au-dessus de la ligne de flottaison :
+                          en « lazy », la 1re (élément LCP des listes) n'était demandée
+                          qu'après la mise en page (audit vitesse du 25/09/2026). %>
+                      <img src="<%= imgUrl %>" alt="<%= p.name %>" width="400" height="300" loading="<%= _rang < 2 ? 'eager' : 'lazy' %>"<% if (_rang === 0) { %> fetchpriority="high"<% } %> decoding="async" class="max-w-full max-h-full w-auto h-auto object-contain p-2"/>
                     <% } %>
                     <% if (badge) { %><span class="absolute top-2 left-2 bg-primary text-[10px] text-white font-bold px-2 py-1 rounded-full z-10"><%= badge %></span><% } %>
                   </a>

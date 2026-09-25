@@ -11,6 +11,15 @@ const { markdownToHtml } = require('../services/blogContent');
 const productOptions = require('../services/productOptions');
 const { rankProducts, sortRankedProducts } = require('../services/search');
 const brand = require('../config/brand');
+const { idOrganisation } = require('../services/organisationSchema');
+
+/* Port annoncé dans le JSON-LD des fiches : 3 requêtes (catégories, classes
+   d'expédition) par calcul, et les robots lisent des milliers de fiches
+   d'affilée. Gardé 10 min par (pays, service, classe, catégorie) : un tarif
+   changé dans l'admin rejoint le balisage au plus 10 min après ; le panier,
+   lui, recalcule toujours. */
+const PORT_JSONLD_TTL_MS = 10 * 60 * 1000;
+const cachePortJsonLd = new Map();
 const {
   buildProductPublicPath,
   buildProductPublicUrl,
@@ -421,7 +430,13 @@ async function getProductBySlug(req, res, next) {
       });
     }
 
-    const hit = await Product.findOne({ slug }).select('_id').lean();
+    /* Slug EXACT d'abord : 75 fiches Dekram portent un double tiret
+       (« boite-vitesses-ford-kuga-2-0--19060 », nom d'origine sans code
+       boîte). slugifyLoose le ramène à un tiret, la recherche échouait, et la
+       fiche — publiée, présente au sitemap — partait en 301 vers la recherche
+       (noindex). Invisible aux clients comme à Google (contrôle du 25/09/2026). */
+    const hit = (raw !== slug ? await Product.findOne({ slug: raw }).select('_id').lean() : null)
+      || await Product.findOne({ slug }).select('_id').lean();
     if (!hit || !hit._id) {
       // Aucun produit pour ce slug. Si le paramètre est un ObjectId valide
       // (cas d'un produit sans slug : son URL canonique retombe sur l'id),
@@ -856,7 +871,7 @@ async function getProduct(req, res, next) {
     const baseDesc = product.shortDescription || descriptionPourMeta || '';
     const baseDescPlain = toPlainText(baseDesc);
     const refsText = compatibleReferences.length ? compatibleReferences.slice(0, 6).join(', ') : '';
-    const autoDesc = `Pièce auto ${product.name}${skuText ? ` (réf ${skuText})` : ''}${refsText ? ` (références compatibles ${refsText})` : ''}${compatText ? ` compatible ${compatText}` : ''}. Livraison rapide. Paiement sécurisé.`;
+    const autoDesc = `Pièce auto ${product.name}${skuText ? ` (réf ${skuText})` : ''}${refsText ? ` (références compatibles ${refsText})` : ''}${compatText ? ` compatible ${compatText}` : ''}. Paiement sécurisé.`;
     const metaDescription = truncateText(normalizeMetaText(toPlainText(descriptionOverride) || baseDescPlain || autoDesc), 160);
 
     const images = [];
@@ -876,6 +891,10 @@ async function getProduct(req, res, next) {
     const schemaCondition = mapSchemaCondition(conditionText);
     const warrantyText = findSpecValue('garantie') || (product.badges && product.badges.topLeft ? String(product.badges.topLeft).trim() : '');
     const warrantyYears = extractWarrantyYearsFromText(warrantyText);
+    /* La fiche affiche la garantie en MOIS quand warranty.months est saisi
+       (show.ejs) : c'est cette durée que le JSON-LD doit reprendre, pas une
+       durée devinée dans un libellé (« 2 ans » d'un badge générique). */
+    const garantieMois = (product.warranty && Number(product.warranty.months) > 0) ? Math.round(Number(product.warranty.months)) : 0;
     const priceValidUntil = formatDateIso(new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)));
 
     /* Compatibilité véhicule pour les rich results.
@@ -912,26 +931,28 @@ async function getProduct(req, res, next) {
         enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.jsonldCompatRef'), value: r });
       });
     }
-    if (warrantyYears) {
+    if (garantieMois) {
+      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.guarantee'), value: `${garantieMois} ${t(pageLang, 'product.monthsWord')}` });
+    } else if (warrantyYears) {
       enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.guarantee'), value: `${warrantyYears} ${t(pageLang, 'product.yearsWord')}` });
     }
-    if (product.shippingDelayText) {
-      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.shippingLabel'), value: String(product.shippingDelayText).trim() });
-    }
-    /* Test qualité, Programmation, État : tirés des specs si dispo, sinon
-     * fallback constants pour signaler le positionnement reconditionné. */
-    enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.jsonldQualityTest'), value: t(pageLang, 'product.benchTested') });
-    if (Array.isArray(product.specs)) {
-      product.specs.forEach((s) => {
-        if (s && typeof s === 'object') {
-          const k = String(s.key || s.name || s.label || '').trim();
-          const v = String(s.value || '').trim();
-          if (k && v && !['Référence', 'Type', 'Garantie', 'Expédition'].includes(k)) {
-            // Évite doublons avec champs déjà ajoutés
-            enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: k, value: v });
-          }
-        }
-      });
+    /* Caractéristiques : les MÊMES que le tableau de la fiche (show.ejs, les
+       6 premières de product.specs, libellé + valeur, sans doublon), déjà
+       passées au filtre des allégations. Retirés (audit du 25/09/2026) :
+       « Test qualité : Testé sur banc », ajouté d'office à toutes les fiches et
+       faux pour l'occasion, les kits neufs et le clonage ; le délai
+       d'expédition, qui contredisait souvent celui affiché. Google demande de
+       ne baliser que ce que la page montre. */
+    const libellesVus = new Set();
+    for (const s of (Array.isArray(product.specs) ? product.specs : [])) {
+      if (libellesVus.size >= 6) break;
+      if (!s || typeof s !== 'object') continue;
+      const k = String(s.label || '').trim(); // la vue ne lit que label
+      const v = String(s.value || '').trim();
+      if (!k || !v || libellesVus.has(k.toLowerCase())) continue;
+      libellesVus.add(k.toLowerCase());
+      if (['référence', 'type', 'garantie', 'expédition'].includes(k.toLowerCase())) continue;
+      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: k, value: v });
     }
 
     const categoryNameForSchema = typeof product.category === 'string' ? product.category.trim() : '';
@@ -952,6 +973,41 @@ async function getProduct(req, res, next) {
         }
       : undefined;
 
+    /* Port réel vers le pays de la page (audit du 25/09/2026). Le JSON-LD
+       annonçait « livraison gratuite en 1 à 3 jours » sur toutes les fiches,
+       alors que les CGV (art. 4 et 7.2) facturent le port et prévoient 3 à 6
+       jours ouvrés d'expédition pour les pièces lourdes : Google peut
+       l'afficher tel quel dans les fiches marchandes — fausse déclaration.
+       Même fonction que le panier : le montant annoncé est celui qui sera
+       encaissé (0 pour le service de clonage, aller-retour inclus). Aucun
+       délai : il dépend de la pièce et du stock, la fiche l'affiche. */
+    const paysPage = pageLang === 'de' ? 'DE' : 'FR';
+    let portDomicileCents = null;
+    const clePort = [paysPage, product.serviceType || '', product.shippingClassId ? String(product.shippingClassId) : '', categorieFr || ''].join('|');
+    const portEnCache = cachePortJsonLd.get(clePort);
+    if (portEnCache && Date.now() - portEnCache.t < PORT_JSONLD_TTL_MS) {
+      portDomicileCents = portEnCache.v;
+    } else if (dbConnected) {
+      try {
+        const { getShippingMethods } = require('../services/shippingPricing');
+        const methodes = await getShippingMethods(dbConnected, [{ ...product, category: categorieFr }], { country: paysPage }, pageLang);
+        const domicile = methodes.find((m) => m && m.id === 'domicile');
+        portDomicileCents = domicile && Number.isFinite(domicile.priceCents) ? domicile.priceCents : null;
+        if (cachePortJsonLd.size > 500) cachePortJsonLd.clear();
+        cachePortJsonLd.set(clePort, { v: portDomicileCents, t: Date.now() });
+      } catch (err) {
+        console.error('[product] port JSON-LD :', err && err.message);
+      }
+    }
+
+    /* MPN : une vraie référence de pièce seulement. Le code moteur ou boîte
+       (« DQ200 », « 2KD-FTV » sur un différentiel) n'est pas un numéro de
+       pièce ; un gabarit jamais rempli (« A176350XXXX ») non plus. */
+    const refPiece = compatibleReferences.find((r) => {
+      const v = String(r || '').trim();
+      return v.length >= 5 && /\d/.test(v) && /^[A-Z0-9][A-Z0-9 .\-\/]*$/i.test(v) && !/X{3,}/i.test(v);
+    }) || undefined;
+
     const schemaProduct = {
       /* @type='Product' uniquement : AutomotivePart n'est pas un type
        * Schema.org valide (causait 908 erreurs structured data). Le signal
@@ -960,11 +1016,13 @@ async function getProduct(req, res, next) {
       name: product.name,
       description: truncateText(descriptionForSchema, 5000),
       sku: skuText || undefined,
-      mpn: engineCode || (compatibleReferences.length ? compatibleReferences[0] : undefined),
+      mpn: refPiece,
       productID: skuText || undefined,
       category: categoryNameForSchema || undefined,
       brand: schemaBrandName ? { '@type': 'Brand', name: schemaBrandName } : undefined,
-      manufacturer: { '@type': 'Organization', name: brand.NAME },
+      /* manufacturer : retiré. Autoliva ne fabrique ni ne reconditionne
+         lui-même (partenaire reconditionneur, pièces d'occasion) : le déclarer
+         fabricant de chaque pièce était faux. */
       itemCondition: schemaCondition || undefined,
       image: ogImage || undefined,
       /* isAccessoryOrSparePartFor : retiré. Le champ exigeait Vehicle objects
@@ -974,16 +1032,11 @@ async function getProduct(req, res, next) {
        * commentaire sur fitsVehicles). */
       // isAccessoryOrSparePartFor: <removed>,
       additionalProperty: enrichedAdditionalProperties.length ? enrichedAdditionalProperties : undefined,
-      /* hasMerchantReturnPolicy : retour ancien organe sous 30 jours (échange
-       * standard). Active le rich snippet "free returns" dans Google Shopping. */
-      hasMerchantReturnPolicy: {
-        '@type': 'MerchantReturnPolicy',
-        applicableCountry: 'FR',
-        returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
-        merchantReturnDays: 30,
-        returnMethod: 'https://schema.org/ReturnByMail',
-        returnFees: 'https://schema.org/FreeReturn',
-      },
+      /* hasMerchantReturnPolicy : retiré de la fiche. Il annonçait un retour
+         GRATUIT sous 30 jours (confusion avec le retour de l'ancienne pièce en
+         échange standard), alors que les CGV (art. 9) prévoient 14 jours, frais
+         de retour à la charge du client. La politique réelle est déclarée une
+         fois, sur l'organisation (services/organisationSchema.js). */
       aggregateRating: aggregateRatingBlock,
       offers: price
         ? {
@@ -994,37 +1047,32 @@ async function getProduct(req, res, next) {
             priceValidUntil: priceValidUntil || undefined,
             availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
             itemCondition: schemaCondition || undefined,
-            seller: { '@type': 'Organization', name: brand.NAME },
-            /* shippingDetails : signal "fast & free shipping" pour Google
-             * Shopping et les rich results SERP. Livraison 24h FR. */
-            shippingDetails: {
-              '@type': 'OfferShippingDetails',
-              shippingRate: { '@type': 'MonetaryAmount', value: '0.00', currency: 'EUR' },
-              shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'FR' },
-              deliveryTime: {
-                '@type': 'ShippingDeliveryTime',
-                handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
-                transitTime: { '@type': 'QuantitativeValue', minValue: 1, maxValue: 2, unitCode: 'DAY' },
-              },
-            },
-            warranty: warrantyYears
+            seller: { '@type': 'OnlineStore', '@id': idOrganisation(getPublicBaseUrlFromReq(req)), name: brand.NAME },
+            shippingDetails: portDomicileCents != null
+              ? {
+                  '@type': 'OfferShippingDetails',
+                  shippingRate: { '@type': 'MonetaryAmount', value: (portDomicileCents / 100).toFixed(2), currency: 'EUR' },
+                  shippingDestination: { '@type': 'DefinedRegion', addressCountry: paysPage },
+                }
+              : undefined,
+            warranty: (garantieMois || warrantyYears)
               ? {
                   '@type': 'WarrantyPromise',
-                  durationOfWarranty: {
-                    '@type': 'QuantitativeValue',
-                    value: warrantyYears,
-                    unitCode: 'ANN',
-                  },
-                  /* PartsAndLabor : couverture pièce + main d'œuvre montage
-                   * (positionnement reconditionné Autoliva), plus précis que
-                   * BrokenCondition. */
+                  durationOfWarranty: garantieMois
+                    ? { '@type': 'QuantitativeValue', value: garantieMois, unitCode: 'MON' }
+                    : { '@type': 'QuantitativeValue', value: warrantyYears, unitCode: 'ANN' },
+                  /* PartsAndLabor : la garantie commerciale « n'entraîne aucun
+                     frais pour le consommateur (main-d'œuvre, pièces, transport
+                     retour) » (CGV art. 12.2) — la main-d'œuvre de la REMISE EN
+                     ÉTAT, pas celle de la pose, que la fiche exclut. */
                   warrantyScope: 'https://schema.org/PartsAndLabor',
                 }
               : undefined,
           }
         : undefined,
     };
-    const schemaFaqPage = Array.isArray(product.faqs) && product.faqs.length
+    /* Même condition que la vue (show.ejs) : pas de FAQ balisée qu'on ne voit pas. */
+    const schemaFaqPage = product.sections && product.sections.showFaq && Array.isArray(product.faqs) && product.faqs.length
       ? {
           '@type': 'FAQPage',
           mainEntity: product.faqs
@@ -1099,9 +1147,11 @@ async function getProduct(req, res, next) {
         },
       ],
     })
-      .replace(/</g, '\u003c')
-      .replace(/>/g, '\u003e')
-      .replace(/&/g, '\u0026');
+      /* '\\u003c' (six caractères) et non '\u003c', qui ne remplaçait « < »
+         que par lui-même : un « </script> » dans un nom de fiche fermait le bloc. */
+      .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e')
+      .replace(/&/g, '\\u0026');
 
     let relatedProducts = [];
     let relatedBlogPosts = [];
