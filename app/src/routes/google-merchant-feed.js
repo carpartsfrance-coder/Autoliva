@@ -1,257 +1,162 @@
+'use strict';
+
 /**
- * GET /google-merchant-feed.xml
+ * GET /google-merchant-feed.xml — flux Google Merchant FRANÇAIS (RSS 2.0).
  *
- * Endpoint Express pour Google Merchant Center.
- * Génère un feed XML RSS 2.0 conforme à la spec Google Merchant à partir
- * de la base produits autoliva.com.
+ * N'y entrent que les fiches publiées exactes et conformes aux règles
+ * Merchant ; les règles vivent dans services/fluxMerchant.js (partagées avec
+ * le flux allemand) :
+ *   - exclues, avec un motif compté et journalisé à chaque construction :
+ *     copies distrimotor (DM-), service de clonage, image générique (partagée
+ *     par plus de 3 fiches publiées), titre générique ou porté par une autre
+ *     fiche, état impossible à établir ou contredit, consigne encaissée à la
+ *     commande (la fiche française ne l'affiche pas encore près du prix), hors
+ *     stock, délai « sur commande / sur demande / selon disponibilité /
+ *     confirmé à la commande » ;
+ *   - titre et description passés par les filtres de la fiche (ancien nom,
+ *     allégations non prouvées) ; description jamais servie pour les familles
+ *     dont la fiche la masque ;
+ *   - `g:shipping` France métropolitaine au prix exact du panier (même code :
+ *     shippingPricing.chargerTarifsPort), délais de préparation et de
+ *     transport des CGV art. 7.2 ;
+ *   - marque normalisée, jamais « Autoliva » ; MPN seulement s'il est fiable,
+ *     sinon identifier_exists=no ; catégorie Google par type de pièce.
  *
- * Conçu pour autoliva.com (Node + Express + MongoDB, hébergé Render.com).
- *
- * USAGE
- * -----
- *   const merchantFeedRoute = require('./routes/google-merchant-feed');
- *   app.get('/google-merchant-feed.xml', merchantFeedRoute);
- *
- * IMPORTANT
- * ---------
- *   - `loadProducts()` est câblée sur le modèle Mongoose Product (carpartsfrance →
- *     autoliva). Si on ajoute plus tard `condition` et `brand` en DB, retirer
- *     les heuristiques aval (déjà côté `classifyCondition` / `inferBrand`).
- *   - Le résultat est mis en cache 1h en mémoire process pour éviter de
- *     recalculer le feed à chaque crawl Google (Merchant fetch toutes les
- *     ~24h, mais d'autres outils peuvent solliciter l'URL).
+ * Base déconnectée : 503 + Retry-After, jamais un flux vide — Merchant
+ * retirerait tous les articles d'un coup.
  */
 
 const mongoose = require('mongoose');
 const Product = require('../models/Product');
-const { buildSeoMediaUrl } = require('../services/mediaStorage');
+const { normalizeProduct } = require('../controllers/productController');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
+const { t } = require('../services/i18n');
+const { buildProductPublicPath } = require('../services/productPublic');
+const { chargerTarifsPort, dernierChangementTarifs, PORT_DE_REPLI_CENTS } = require('../services/shippingPricing');
+const flux = require('../services/fluxMerchant');
 
-const xmlEscape = (s) => {
-  if (s === null || s === undefined) return '';
-  return String(s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-};
+const PAYS = 'FR';
+const ZONE = 'metropole';
 
-const REFURB_KW = ['reconditionn', 'echange-standard', 'echange-st', 'remanufactur'];
-const USED_KW = ['occasion'];
-const NEW_KW = ['neuf', 'neuve'];
+/* Champs lus : ceux que la fiche affiche et que les règles consultent. */
+const CHAMPS = [
+  '_id', 'name', 'slug', 'sku', 'description', 'shortDescription', 'priceCents', 'inStock', 'stockQty',
+  'imageUrl', 'galleryUrls', 'galleryTypes', 'category', 'brand', 'badges', 'specs', 'serviceType', 'consigne',
+  'shippingDelayText', 'shippingClassId', 'warranty', 'compatibility', 'compatibleReferences', 'engineCode',
+].join(' ');
 
-const CAR_BRANDS = [
-  'BMW', 'Audi', 'Volkswagen', 'VW', 'Seat', 'Skoda', 'Porsche',
-  'Mercedes', 'Mercedes-Benz', 'Land Rover', 'Range Rover', 'Jaguar',
-  'Mini', 'Ford', 'Renault', 'Peugeot', 'Citroen', 'Citroën',
-  'Opel', 'Chevrolet', 'Nissan', 'Infiniti', 'Toyota', 'Lexus',
-  'Hyundai', 'Kia', 'Volvo', 'Dodge', 'Jeep', 'Chrysler',
-  'Fiat', 'Alfa Romeo', 'Lancia', 'Tesla', 'Subaru', 'Mazda',
-];
-
-function classifyCondition({ slug = '', title = '', explicit }) {
-  if (explicit && ['new', 'refurbished', 'used'].includes(explicit)) {
-    return explicit;
-  }
-  const haystack = `${slug} ${title}`.toLowerCase();
-  if (USED_KW.some((k) => haystack.includes(k))) return 'used';
-  if (NEW_KW.some((k) => haystack.includes(k)) && !REFURB_KW.some((k) => haystack.includes(k))) {
-    return 'new';
-  }
-  if (REFURB_KW.some((k) => haystack.includes(k))) return 'refurbished';
-  return 'refurbished'; // default — 80%+ du catalogue est reconditionné
+/**
+ * Fiches publiées, telles qu'en base (lean). Base déconnectée : erreur
+ * BASE_INDISPONIBLE (la route répond 503), jamais un tableau vide.
+ */
+async function loadProducts() {
+  if (mongoose.connection.readyState !== 1) throw flux.baseIndisponible();
+  return Product.find({ isPublished: { $ne: false } }).select(CHAMPS).lean();
 }
 
-function inferBrand(...texts) {
-  const joined = texts.filter(Boolean).join(' ');
-  for (const b of CAR_BRANDS) {
-    const re = new RegExp(`\\b${b.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\b`, 'i');
-    if (re.test(joined)) return ['BMW', 'VW'].includes(b) ? b.toUpperCase() : b;
-  }
-  return null;
+/** Tarifs d'expédition du panier, chargés une fois ; null sans base. */
+async function chargerTarifs() {
+  if (mongoose.connection.readyState !== 1) return null;
+  return chargerTarifsPort();
 }
 
-function availabilityToG(av) {
-  if (!av) return 'in_stock';
-  const a = String(av).toLowerCase();
-  if (a.includes('outofstock') || a.includes('out_of_stock') || a === 'oos') return 'out_of_stock';
-  if (a.includes('preorder') || a.includes('pre_order')) return 'preorder';
-  if (a.includes('backorder')) return 'backorder';
-  return 'in_stock';
-}
-
-function stripHtml(value) {
-  return String(value || '')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-/* `badges.condition` est un champ libre côté admin ("Reconditionné", "Occasion",
- * "Neuf"…). On normalise vers les 3 valeurs Google Merchant ; sinon null pour
- * laisser `classifyCondition` jouer ses heuristiques. */
-function normalizeCondition(value) {
-  if (!value) return null;
-  const s = String(value).toLowerCase().trim();
-  if (['new', 'refurbished', 'used'].includes(s)) return s;
-  if (/(reconditionn|refurbi|échange standard|echange standard|reman)/.test(s)) return 'refurbished';
-  if (/(occasion|used|seconde main)/.test(s)) return 'used';
-  if (/(neuf|new)/.test(s)) return 'new';
-  return null;
+function article({ fiche, images, titre }, { tarifs }) {
+  const etat = flux.etatDuProduit(fiche);
+  const marque = flux.marqueGoogle(fiche);
+  const mpn = flux.mpnFiable(fiche, marque);
+  const liens = flux.imagesPourFlux(images, fiche.name);
+  const classe = tarifs ? tarifs.classeRetenue(fiche, ZONE) : null;
+  const portCents = tarifs ? tarifs.portDomicileCents(fiche, ZONE) : PORT_DE_REPLI_CENTS;
+  const preparation = flux.delaisPreparation(fiche, { classe, textes: [fiche.shippingDelayText] });
+  const transport = flux.delaisTransport(fiche, { classe, pays: PAYS });
+  return {
+    id: String(fiche._id),
+    title: titre,
+    description: flux.descriptionDuFlux({
+      fiche, description: fiche.description, courte: fiche.shortDescription, lang: 'fr', titre, etat,
+    }),
+    link: `${flux.BASE}${buildProductPublicPath(fiche)}`,
+    image_link: liens[0],
+    additional_image_link: liens.slice(1),
+    availability: 'in_stock',
+    price: flux.prixXml(fiche.priceCents),
+    condition: etat,
+    brand: marque,
+    mpn,
+    identifier_exists: mpn ? null : 'no',
+    google_product_category: flux.categorieGoogle(fiche),
+    product_type: typeof fiche.category === 'string' ? fiche.category.trim() : '',
+    shipping: {
+      country: PAYS,
+      service: t('fr', 'shipping.homeTitle'),
+      price: flux.prixXml(portCents),
+      min_handling_time: preparation.min,
+      max_handling_time: preparation.max,
+      min_transit_time: transport.min,
+      max_transit_time: transport.max,
+    },
+    min_handling_time: preparation.min,
+    max_handling_time: preparation.max,
+  };
 }
 
 /**
- * Charge les produits publiés depuis Mongo et les remappe vers la forme
- * consommée par `productToFeedItem`. Si la DB n'est pas connectée (boot),
- * retourne un tableau vide — Merchant Center retentera plus tard.
- *
- * Champs retournés :
- *   _id, slug, sku, name, description, priceCents, currency, stock, images,
- *   category, condition, brand, isPublished
+ * Fiches publiées (lean) → articles du flux + bilan des exclusions.
+ * Les règles sans texte d'abord ; le filtre des allégations ne tourne que sur
+ * les fiches qui restent.
  */
-async function loadProducts() {
-  if (mongoose.connection.readyState !== 1) return [];
+function construireArticles(docs, { tarifs = null, scalapayActif = false } = {}) {
+  const liste = Array.isArray(docs) ? docs : [];
+  const bilan = flux.nouveauBilan();
+  bilan.fiches = liste.length;
+  /* Une fois par construction : combien de fiches publiées partagent chaque image. */
+  const usagesImages = flux.compterUsagesImages(liste);
+  const candidats = [];
 
-  const docs = await Product.find({ isPublished: { $ne: false } })
-    .select(
-      '_id name slug sku description shortDescription priceCents inStock stockQty ' +
-      'imageUrl galleryUrls galleryTypes category brand badges'
-    )
-    .lean();
-
-  return docs.map((p) => {
-    const seoPath = (raw) => buildSeoMediaUrl(raw, p.name) || raw;
-
-    const images = [];
-    if (p.imageUrl && typeof p.imageUrl === 'string' && p.imageUrl.trim()) {
-      images.push({ path: seoPath(p.imageUrl.trim()) });
+  for (const doc of liste) {
+    const images = flux.imagesDeLaFiche(doc);
+    const fiche = normalizeProduct(doc);
+    const motifs = flux.motifsSansTexte(fiche, {
+      images, usagesImages, textesDelai: [fiche.shippingDelayText], exclureConsigneEncaissee: true,
+    });
+    if (motifs.length) {
+      bilan.exclus[motifs[0]] += 1;
+      continue;
     }
-    if (Array.isArray(p.galleryUrls)) {
-      const types = Array.isArray(p.galleryTypes) ? p.galleryTypes : [];
-      p.galleryUrls.forEach((u, i) => {
-        if (typeof u === 'string' && u.trim() && (types[i] || 'image') === 'image') {
-          images.push({ path: seoPath(u.trim()) });
-        }
-      });
-    }
-
-    const description = stripHtml(p.description || p.shortDescription || p.name || '');
-
-    const stockQty = typeof p.stockQty === 'number' ? p.stockQty : null;
-    const stock = stockQty !== null ? stockQty : (p.inStock !== false);
-
-    const condition = (p.badges && p.badges.condition)
-      ? normalizeCondition(p.badges.condition)
-      : null;
-
-    return {
-      _id: p._id,
-      slug: typeof p.slug === 'string' ? p.slug : '',
-      sku: typeof p.sku === 'string' ? p.sku : '',
-      name: typeof p.name === 'string' ? p.name : '',
-      description,
-      priceCents: Number(p.priceCents) || 0,
-      currency: 'EUR',
-      stock,
-      images,
-      category: typeof p.category === 'string' ? p.category : '',
-      condition,
-      brand: typeof p.brand === 'string' && p.brand.trim() ? p.brand.trim() : null,
-      isPublished: true,
+    /* Les textes tels que la fiche les affiche (productController.getProduct). */
+    const ctx = claimFilter.contexteFiche(fiche, { scalapayActif });
+    const affichee = {
+      ...fiche,
+      description: claimFilter.filtrer(fiche.description, ctx),
+      shortDescription: claimFilter.filtrer(fiche.shortDescription, ctx),
     };
-  });
-}
+    const titre = flux.titreDuFlux(fiche.name, ctx);
+    const motifsTextes = flux.motifsDesTextes(affichee, { titre });
+    if (motifsTextes.length) {
+      bilan.exclus[motifsTextes[0]] += 1;
+      continue;
+    }
+    candidats.push({ fiche: affichee, images, titre });
+  }
 
-function productToFeedItem(p) {
-  const baseUrl = 'https://autoliva.com';
-  const link = `${baseUrl}/product/${p.slug}/`;
-
-  const mainImage = (p.images && p.images[0] && p.images[0].path) || null;
-  const additionalImages = (p.images || []).slice(1, 11).map((i) => i.path).filter(Boolean);
-
-  const imageUrl = (path) => {
-    if (!path) return null;
-    if (path.startsWith('http')) return path;
-    // Ajouter l'extension .jpeg pour Google (sinon il rejette le format)
-    const withSlash = path.startsWith('/') ? path : `/${path}`;
-    return `${baseUrl}${withSlash}${withSlash.match(/\.(jpe?g|png|gif|webp)$/i) ? '' : '.jpeg'}`;
-  };
-
-  if (!mainImage) return null; // pas d'image = produit ineligible Google Merchant
-
-  const priceEuros = (Number(p.priceCents) / 100).toFixed(2);
-  const inStock = typeof p.stock === 'boolean' ? p.stock : Number(p.stock) > 0;
-  const availability = inStock ? 'in_stock' : 'out_of_stock';
-
-  const title = (p.name || '').trim().slice(0, 150);
-  const description = (p.description || title).trim().slice(0, 5000);
-
-  const condition = classifyCondition({
-    slug: p.slug || '',
-    title,
-    explicit: p.condition,
-  });
-
-  const brand = p.brand || inferBrand(title) || 'Autoliva';
-
-  return {
-    id: String(p._id),
-    title,
-    description,
-    link,
-    image_link: imageUrl(mainImage),
-    additional_image_link: additionalImages.map(imageUrl).filter(Boolean),
-    price: `${priceEuros} ${p.currency || 'EUR'}`,
-    availability,
-    condition,
-    brand,
-    mpn: p.sku || String(p._id),
-    identifier_exists: 'no',
-    google_product_category: '888', // Vehicles & Parts > Vehicle Parts & Accessories
-    product_type: p.category || '',
-  };
+  const items = flux.exclureTitresDupliques(candidats, bilan).map((c) => article(c, { tarifs }));
+  /* Tri stable par id pour des diffs propres. */
+  items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  bilan.articles = items.length;
+  return { items, bilan };
 }
 
 function buildFeedXml(items) {
-  const now = new Date().toUTCString();
   const lines = [];
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
   lines.push('<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">');
   lines.push('  <channel>');
   lines.push('    <title>Autoliva — Google Merchant Feed</title>');
-  lines.push('    <link>https://autoliva.com</link>');
-  lines.push('    <description>Pièces auto reconditionnées, occasion et testées sur banc</description>');
-  lines.push(`    <lastBuildDate>${now}</lastBuildDate>`);
-  for (const it of items) {
-    lines.push('    <item>');
-    lines.push(`      <g:id>${xmlEscape(it.id)}</g:id>`);
-    lines.push(`      <g:title>${xmlEscape(it.title)}</g:title>`);
-    lines.push(`      <g:description><![CDATA[${(it.description || '').replace(/]]>/g, ']]]]><![CDATA[>')}]]></g:description>`);
-    lines.push(`      <g:link>${xmlEscape(it.link)}</g:link>`);
-    lines.push(`      <g:image_link>${xmlEscape(it.image_link)}</g:image_link>`);
-    for (const ai of it.additional_image_link) {
-      lines.push(`      <g:additional_image_link>${xmlEscape(ai)}</g:additional_image_link>`);
-    }
-    lines.push(`      <g:price>${xmlEscape(it.price)}</g:price>`);
-    lines.push(`      <g:availability>${xmlEscape(it.availability)}</g:availability>`);
-    lines.push(`      <g:condition>${xmlEscape(it.condition)}</g:condition>`);
-    lines.push(`      <g:brand>${xmlEscape(it.brand)}</g:brand>`);
-    lines.push(`      <g:mpn>${xmlEscape(it.mpn)}</g:mpn>`);
-    lines.push(`      <g:identifier_exists>${xmlEscape(it.identifier_exists)}</g:identifier_exists>`);
-    lines.push(`      <g:google_product_category>${xmlEscape(it.google_product_category)}</g:google_product_category>`);
-    if (it.product_type) {
-      lines.push(`      <g:product_type>${xmlEscape(it.product_type)}</g:product_type>`);
-    }
-    lines.push('    </item>');
-  }
+  lines.push(`    <link>${flux.BASE}</link>`);
+  lines.push('    <description>Pièces auto reconditionnées, occasion et neuves</description>');
+  lines.push(`    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>`);
+  for (const it of items) lines.push(...flux.articleXml(it));
   lines.push('  </channel>');
   lines.push('</rss>');
   return lines.join('\n');
@@ -267,23 +172,38 @@ function buildFeedXml(items) {
  *      reconstructions (58 Mo en mémoire, deux fois le travail).
  * Google Merchant relit le flux selon SON calendrier (typiquement quelques fois
  * par jour), pas selon notre cache : 3 h ne changent rien pour lui. Le stock
- * du site n'est de toute façon pas le stock réel (sourcing à la commande). */
+ * du site n'est de toute façon pas le stock réel (sourcing à la commande).
+ * Le port, lui, doit suivre le panier : un tarif modifié (classe ou catégorie)
+ * après la construction la relance, comme pour le flux allemand. */
 let cache = { xml: null, builtAt: 0 };
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
 let constructionEnCours = null;
+let dernierBilan = null;
+
+async function tarifsModifiesDepuis(instant) {
+  if (mongoose.connection.readyState !== 1) return false;
+  try {
+    return (await dernierChangementTarifs()) > instant;
+  } catch (err) {
+    return false;
+  }
+}
 
 async function buildFeedCached() {
-  const now = Date.now();
-  if (cache.xml && now - cache.builtAt < CACHE_TTL_MS) return cache.xml;
+  if (cache.xml && Date.now() - cache.builtAt < CACHE_TTL_MS && !(await module.exports._tarifsModifiesDepuis(cache.builtAt))) {
+    return cache.xml;
+  }
   /* Verrou anti-ruée : les demandes concurrentes partagent UNE construction. */
   if (constructionEnCours) return constructionEnCours;
   constructionEnCours = (async () => {
     const products = await module.exports.loadProducts();
-    const items = products.map(productToFeedItem).filter(Boolean);
-    // Tri stable par id pour des diffs propres
-    items.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const tarifs = await module.exports.chargerTarifs();
+    const { items, bilan } = construireArticles(products, { tarifs, scalapayActif: scalapay.estActif() });
+    /* Une ligne par construction : combien gardés, combien exclus et pourquoi. */
+    module.exports.journaliser(flux.resumerBilan('google-merchant-feed', bilan));
     const xml = buildFeedXml(items);
     cache = { xml, builtAt: Date.now() };
+    dernierBilan = bilan;
     return xml;
   })();
   try {
@@ -306,6 +226,11 @@ module.exports = async function googleMerchantFeed(req, res) {
     });
     res.send(xml);
   } catch (err) {
+    res.removeHeader('Set-Cookie');
+    if (err && err.code === flux.CODE_BASE_INDISPONIBLE) {
+      res.status(503).set({ 'Retry-After': '120', 'Content-Type': 'text/plain; charset=utf-8' }).send('Base indisponible, réessayer plus tard');
+      return;
+    }
     // eslint-disable-next-line no-console
     console.error('[google-merchant-feed] error:', err);
     res.status(500).set('Content-Type', 'text/plain').send('Feed generation failed');
@@ -314,11 +239,13 @@ module.exports = async function googleMerchantFeed(req, res) {
 
 // Export interne pour tests / régénération forcée
 module.exports.loadProducts = loadProducts;
+module.exports.chargerTarifs = chargerTarifs;
+module.exports.construireArticles = construireArticles;
+module.exports.buildFeedXml = buildFeedXml;
 module.exports.buildFeedCached = buildFeedCached;
-module.exports.productToFeedItem = productToFeedItem;
-module.exports.classifyCondition = classifyCondition;
-module.exports.inferBrand = inferBrand;
-module.exports.availabilityToG = availabilityToG;
+module.exports.journaliser = (ligne) => console.log(ligne); // eslint-disable-line no-console
+module.exports.dernierBilan = () => dernierBilan;
+module.exports._tarifsModifiesDepuis = tarifsModifiesDepuis;
 module.exports._invalidateCache = function invalidateCache() {
   cache = { xml: null, builtAt: 0 };
 };
