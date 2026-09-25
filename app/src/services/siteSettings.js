@@ -141,7 +141,10 @@ function getDefaultHeroSlides() {
       imageAlt: brand.NAME,
       badge: 'Service Premium',
       title: 'Pièces auto reconditionnées, d’occasion et testées',
-      description: `${brand.NAME} accompagne particuliers et professionnels avec des pièces fiables, un devis rapide et une livraison express en 48/72h.`,
+      /* Plus de « livraison express en 48/72h » : les CGV (art. 7.2) prévoient
+         3 à 6 jours ouvrés d'expédition pour un moteur, une boîte ou un pont.
+         C'est la diapositive servie en production (aucune n'est en base). */
+      description: `${brand.NAME} accompagne particuliers et professionnels avec des pièces fiables, un devis rapide et une livraison suivie, chez vous ou à votre garage.`,
       ctaPrimaryText: 'Demander un Devis Gratuit',
       ctaPrimaryUrl: '/devis',
       ctaSecondaryText: 'Parcourir le catalogue',
@@ -224,7 +227,7 @@ function getDefaultHeroSlidesDe() {
       imageAlt: brand.NAME,
       badge: 'Premium-Service',
       title: 'Aufbereitete, gebrauchte und geprüfte Autoteile',
-      description: `${brand.NAME} unterstützt Privat- und Geschäftskunden mit zuverlässigen Teilen, schnellem Angebot und Expressversand in 48/72 Std.`,
+      description: `${brand.NAME} unterstützt Privat- und Geschäftskunden mit zuverlässigen Teilen, schnellem Angebot und Lieferung mit Sendungsverfolgung – zu Ihnen nach Hause oder in Ihre Werkstatt.`,
       ctaPrimaryText: 'Kostenloses Angebot anfordern',
       ctaPrimaryUrl: '/de/devis',
       ctaSecondaryText: 'Katalog durchsuchen',
