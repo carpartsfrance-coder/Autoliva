@@ -146,17 +146,18 @@ test('pages de confiance servies par l’application (audit du 25/09/2026)', asy
     assert.ok(decoder(brute).startsWith("Données d'identification et d'usage : l'éditeur"), decoder(brute));
   });
 
-  await t.test('sitemap-pages.xml : les pages provisoires en sortent', async () => {
+  await t.test('sitemap-pages.xml : /securite y entre, les pages provisoires en sortent', async () => {
     require('../../src/controllers/seoController').__test.viderCaches();
     const r = await get('/sitemap-pages.xml');
     assert.equal(r.status, 200);
     const pages = locs(r.corps);
-    for (const attendu of ['/legal/cgv', '/legal/confidentialite', '/faq', '/legal']) {
+    for (const attendu of ['/securite', '/legal/cgv', '/legal/confidentialite', '/faq', '/legal']) {
       assert.ok(pages.includes(attendu), `${attendu} manque au sitemap`);
     }
     for (const provisoire of ['/legal/cookies', '/legal/cgu', '/legal/mentions-legales', '/legal/cgv-sav']) {
       assert.ok(!pages.includes(provisoire), `${provisoire} (provisoire, en noindex) figure au sitemap`);
     }
+    estIndexable(await get('/securite'), '/securite');
   });
 
   await t.test('/sav/notre-engagement : ni cases vides, ni photos « à venir » — de vrais chiffres dès qu’il y en a', async () => {

@@ -91,6 +91,9 @@ async function buildPagesUrls(baseUrl, dbConnected) {
     { loc: resolveUrl('/devis'), lastmod: '' },
     { loc: resolveUrl('/faq'), lastmod: '' },
     { loc: resolveUrl('/notre-histoire'), lastmod: '' },
+    /* « Comment nous reconnaître » (anti-usurpation) : liée depuis chaque
+       page, indexable, mais absente du sitemap jusqu'au 25/09/2026. */
+    { loc: resolveUrl('/securite'), lastmod: '' },
     { loc: resolveUrl('/legal'), lastmod: '' },
     // Landings devis (capture leads) — indexables, porteuses des requêtes money.
     { loc: resolveUrl('/moteurs'), lastmod: '' },
