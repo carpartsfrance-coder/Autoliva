@@ -161,7 +161,7 @@
   "cart.checkout": "Checkout",
   "cart.guestCheckout": "Checkout as guest",
   "cart.shipping24": "24h shipping",
-  "cart.returns30": "30-day returns",
+  "cart.returns30": "14-day withdrawal",
   "checkout.stepCart": "Cart",
   "checkout.stepShipping": "Shipping",
   "checkout.stepPayment": "Payment",

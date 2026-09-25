@@ -161,7 +161,7 @@
   "cart.checkout": "Zur Kasse",
   "cart.guestCheckout": "Als Gast bestellen",
   "cart.shipping24": "Sendungsverfolgung",
-  "cart.returns30": "30 Tage Rückgabe",
+  "cart.returns30": "14 Tage Widerrufsrecht",
   "checkout.stepCart": "Warenkorb",
   "checkout.stepShipping": "Lieferung",
   "checkout.stepPayment": "Zahlung",

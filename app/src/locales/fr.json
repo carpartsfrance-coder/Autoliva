@@ -161,7 +161,7 @@
   "cart.checkout": "Valider ma commande",
   "cart.guestCheckout": "Commander en invité",
   "cart.shipping24": "Livraison suivie",
-  "cart.returns30": "Retours 30 jours",
+  "cart.returns30": "Rétractation 14 jours",
   "checkout.stepCart": "Panier",
   "checkout.stepShipping": "Livraison",
   "checkout.stepPayment": "Paiement",
