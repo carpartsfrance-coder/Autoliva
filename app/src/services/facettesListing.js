@@ -28,7 +28,7 @@ function texte(valeur) {
 /* « Boîtes de vitesses », « boites de vitesses », « BOÎTES  DE VITESSES » :
    la même catégorie. */
 function normaliser(valeur) {
-  return texte(valeur).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ');
+  return texte(valeur).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ');
 }
 
 /**

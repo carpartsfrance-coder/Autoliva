@@ -79,7 +79,7 @@ const SLUG_CGV_SAV = 'cgv-sav';
 
 function normaliserTexteLegal(texte) {
   return String(texte == null ? '' : texte)
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[’‘`´]/g, "'")
     .toLowerCase()
     .replace(/\s+/g, ' ')
