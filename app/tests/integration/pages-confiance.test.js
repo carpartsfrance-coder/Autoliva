@@ -319,6 +319,19 @@ test('pages de confiance servies par l’application (audit du 25/09/2026)', asy
     }
   });
 
+  await t.test('/blog : plus de « 10 000 passionnés », et le formulaire d’inscription inscrit vraiment', async () => {
+    for (const chemin of ['/blog', '/de/blog']) {
+      const r = await get(chemin);
+      assert.equal(r.status, 200, chemin);
+      assert.ok(!/10\s?000/.test(texte(r.corps)), `${chemin} : chiffre d’abonnés invérifiable`);
+      const bloc = r.corps.slice(r.corps.lastIndexOf('<form class="space-y-3"'));
+      assert.match(bloc, /^<form class="space-y-3" action="\/newsletter" method="POST">/, `${chemin} : formulaire muet`);
+      assert.match(bloc, /<input name="source" type="hidden" value="blog"\/>/);
+      assert.match(bloc, /name="email"[^>]*required/);
+    }
+    assert.ok(texte((await get('/blog')).corps).includes('Nos guides techniques sont écrits pour aider particuliers et garages à choisir la bonne pièce.'));
+  });
+
   await t.test('lien cassé de l’article DQ200 : un 301 vers le vrai article EDC DC4, avant toute autre règle', async () => {
     const alias = await get('/blog/calculateur-edc-dc4-renault-diagnostic-prix-remplacement');
     assert.equal(alias.status, 301);
