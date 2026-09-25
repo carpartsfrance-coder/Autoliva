@@ -430,7 +430,13 @@ async function getProductBySlug(req, res, next) {
       });
     }
 
-    const hit = await Product.findOne({ slug }).select('_id').lean();
+    /* Slug EXACT d'abord : 75 fiches Dekram portent un double tiret
+       (« boite-vitesses-ford-kuga-2-0--19060 », nom d'origine sans code
+       boîte). slugifyLoose le ramène à un tiret, la recherche échouait, et la
+       fiche — publiée, présente au sitemap — partait en 301 vers la recherche
+       (noindex). Invisible aux clients comme à Google (contrôle du 25/09/2026). */
+    const hit = (raw !== slug ? await Product.findOne({ slug: raw }).select('_id').lean() : null)
+      || await Product.findOne({ slug }).select('_id').lean();
     if (!hit || !hit._id) {
       // Aucun produit pour ce slug. Si le paramètre est un ObjectId valide
       // (cas d'un produit sans slug : son URL canonique retombe sur l'id),

@@ -220,6 +220,19 @@ test('fiche produit rendue par l’application — description et allégations (
     }
   });
 
+  await t.test('slug à double tiret (75 fiches Dekram) : la fiche répond, pas la recherche', async () => {
+    const id = new mongoose.Types.ObjectId();
+    const slug = 'boite-vitesses-ford-kuga-2-0--19060';
+    await db.collection('products').insertOne(versMongo({ ...DEK, _id: id.toHexString(), sku: 'DEK-11295319060', slug }));
+    try {
+      const r = await get(`/product/${slug}/`);
+      assert.equal(r.status, 200, `double tiret : ${r.status} → ${r.location || ''}`);
+      assert.match(r.html, new RegExp(`<link rel="canonical" href="[^"]*/product/${slug}/"`), 'canonique vers le slug exact');
+    } finally {
+      await db.collection('products').deleteOne({ _id: id });
+    }
+  });
+
   await t.test('(a)(b)(c) la description est dans la page pour les fiches françaises autorisées', () => {
     const attendus = [
       [DQ200, 'La mécatronique est l’organe électro-hydraulique qui pilote la boîte DSG7 DQ200'],
