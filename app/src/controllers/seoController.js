@@ -457,7 +457,7 @@ async function buildReferencesUrls(baseUrl, dbConnected, { pourRetrait = false }
 async function buildBlogUrls(baseUrl, dbConnected) {
   if (!dbConnected) return [];
   const resolveUrl = (path) => baseUrl ? `${baseUrl}${path}` : path;
-  /* Famille « blog » : seuls les 296 articles gardés ; « gone » : pas les 410. */
+  /* Famille « blog » : seuls les 295 articles gardés ; « gone » : pas les 410. */
   const posts = await BlogPost.find(seoIndexPolicy.publicBlogFilter({ isPublished: true }))
     .select('_id slug title publishedAt createdAt coverImageUrl')
     .sort({ publishedAt: -1, updatedAt: -1 })
@@ -720,7 +720,7 @@ const RETRAITS = {
   },
   async blog(req, baseUrl, dbConnected) {
     if (!dbConnected) return [];
-    /* Tout article publié hors des 296 gardés ; les 410 ont leur propre
+    /* Tout article publié hors des 295 gardés ; les 410 ont leur propre
        fichier quand « gone » est allumé. */
     const exclus = seoIndexPolicy.articlesGardes();
     if (seoIndexPolicy.familleActive('gone')) {
