@@ -508,29 +508,53 @@ test('fiche produit rendue par l’application — description et allégations (
     }
   });
 
+  await t.test('la consigne encaissée est annoncée près du prix, en français comme en allemand', async () => {
+    /* C'est la condition qui permet à ces fiches d'entrer dans le flux Merchant :
+       un montant réellement débité en plus du prix doit se lire près du prix. */
+    /* Le bloc prix, pas la feuille de style qui porte le même nom de classe. */
+    const blocPrix = (html) => {
+      const debut = html.indexOf('class="ap-pricebox"');
+      return debut === -1 ? '' : texte(html.slice(debut, debut + 6000));
+    };
+    const fr = pages.get(DQ200.sku);
+    assert.ok(blocPrix(fr).includes('99,00 € de consigne encaissée à la commande'),
+      'la consigne n’est pas annoncée près du prix sur la fiche française');
+
+    /* Une consigne facturée seulement en cas de non-retour se dit aussi, mais
+       autrement : rien n'est débité à la commande. */
+    const lu = blocPrix(pages.get(DQ250.sku));
+    assert.ok(!lu.includes('de consigne encaissée à la commande'), 'consigne annoncée à tort comme encaissée');
+    assert.ok(lu.includes('Retour de l’ancienne pièce obligatoire'), 'le cas « facturée si non retournée » doit être dit');
+
+    /* Une fiche sans consigne ne parle pas de consigne près du prix. */
+    assert.ok(!blocPrix(pages.get(DEK.sku)).includes('consigne'), 'consigne inventée sur une fiche qui n’en a pas');
+  });
+
   await t.test('le flux Merchant ne garde que les fiches conformes, avec les textes de la fiche', async () => {
     /* Audit Merchant du 25/09/2026 : le flux ne liste plus « toutes les fiches
        publiées ». Sur les 10 fiches de production : les trois boîtes (DEK,
-       ALV-BX, EDN) restent ; la copie distrimotor sort, la DQ200 et le moteur
-       ASY sortent (consigne encaissée à la commande, absente près du prix sur
-       la fiche française), DQ250, AUTO, WC et Alibaba sortent (délai « sur
-       demande », « confirmé à la commande », « selon disponibilité »). */
+       ALV-BX, EDN) restent, et le moteur ASY reste depuis le 29/09/2026 — sa
+       consigne encaissée à la commande est désormais annoncée près du prix sur
+       la fiche française. La copie distrimotor sort ; DQ250, AUTO, WC et
+       Alibaba sortent (délai « sur demande », « confirmé à la commande »,
+       « selon disponibilité ») ; la DQ200 sort parce que la page véhicule en a
+       ajouté une copie au même titre — deux fiches identiques ne se
+       distinguent pas dans Shopping. */
     const feed = require('../../src/routes/google-merchant-feed');
     feed._invalidateCache();
     const r = await get('/google-merchant-feed.xml');
     assert.equal(r.status, 200);
     const items = r.html.split('<item>').slice(1);
     const dans = (p) => items.some((it) => it.includes(`<g:id>${p._id}</g:id>`));
-    for (const p of [DEK, ALVBX, EDN]) assert.ok(dans(p), `${p.sku} doit rester dans le flux`);
-    for (const p of [DM, DQ200, ASY, DQ250, AUTO, WC, ALIBABA]) assert.ok(!dans(p), `${p.sku} ne doit pas être dans le flux`);
-    /* Le bilan journalisé compte chaque exclusion sous son premier motif (la
-       copie DQ200 de la page véhicule, ajoutée plus haut, est une troisième
-       consigne encaissée). */
+    for (const p of [DEK, ALVBX, EDN, ASY]) assert.ok(dans(p), `${p.sku} doit rester dans le flux`);
+    for (const p of [DM, DQ200, DQ250, AUTO, WC, ALIBABA]) assert.ok(!dans(p), `${p.sku} ne doit pas être dans le flux`);
+    /* Le bilan journalisé compte chaque exclusion sous son premier motif. */
     const bilan = feed.dernierBilan();
-    assert.equal(bilan.articles, 3);
+    assert.equal(bilan.articles, 4);
     assert.equal(bilan.exclus.copie_distrimotor, 1);
-    assert.equal(bilan.exclus.consigne_encaissee, 3);
+    assert.equal(bilan.exclus.consigne_encaissee, 0, 'la consigne n’exclut plus rien');
     assert.equal(bilan.exclus.delai_non_garanti, 4);
+    assert.equal(bilan.exclus.titre_duplique, 2, 'la DQ200 et sa copie de page véhicule');
 
     /* Les textes du flux passent par les mêmes filtres que la fiche : ni
        ISO 9001 ni « concessionnaires » (DEK), ni l'ancien nom. */

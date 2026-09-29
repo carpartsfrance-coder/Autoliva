@@ -154,9 +154,11 @@ test('exclusions : chaque règle a son motif', async (t) => {
     assert.equal(motif(fiche({ badges: { condition: 'Occasion' }, name: 'Moteur Opel Zafira Z17DTR — occasion', slug: 'moteur-z17dtr' })), null);
   });
 
-  await t.test('consigne encaissée à la commande : exclue du flux français, pas de l’allemand', () => {
+  await t.test('consigne encaissée à la commande : gardée dans les deux flux (la fiche l’annonce près du prix)', () => {
     const consigne = { consigne: { enabled: true, amountCents: 91000, delayDays: 30, chargeUpfront: true } };
-    assert.equal(motif(fiche(consigne)), MOTIF.CONSIGNE_ENCAISSEE);
+    /* Écartée jusqu'au 29/09/2026 : la fiche française encaissait la consigne
+       sans la dire près du prix. Elle le dit désormais dans les deux langues. */
+    assert.equal(motif(fiche(consigne)), null);
     /* Facturée seulement si l'ancienne pièce ne revient pas : rien à la commande. */
     assert.equal(motif(fiche({ consigne: { enabled: true, amountCents: 15000, chargeUpfront: false } })), null);
     assert.equal(motif(fiche({ consigne: { enabled: false, amountCents: 91000, chargeUpfront: true } })), null);

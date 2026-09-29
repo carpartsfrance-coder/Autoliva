@@ -423,7 +423,10 @@
                 L'acheteur allemand doit y voir, près du prix, que le port s'ajoute
                 et le Pfand encaissé à la commande — pas seulement dans le bloc prix
                 qu'il a peut-être déjà fait défiler. %>
-            <% if (lang === 'de') { %><div style="font-size: 10.5px; font-weight: 600; color: #6B7482; white-space: nowrap;"><%= t('product.ttc') %><% if (!isService) { %>, <%= t('product.plusShipping') %><% } %></div><% if (consigneUpfront) { %><div style="font-size: 10.5px; font-weight: 600; color: #6B7482; white-space: nowrap;"><%= t('product.plusDepositShort', { amount: consigneAmountEuro }) %></div><% } %><% } %>
+            <% if (lang === 'de') { %><div style="font-size: 10.5px; font-weight: 600; color: #6B7482; white-space: nowrap;"><%= t('product.ttc') %><% if (!isService) { %>, <%= t('product.plusShipping') %><% } %></div><% } %>
+            <%# La consigne encaissée à la commande se dit près du prix dans TOUTES
+                les langues : c'est un montant réellement débité en plus. %>
+            <% if (consigneUpfront) { %><div style="font-size: 10.5px; font-weight: 600; color: #6B7482; white-space: nowrap;"><%= t('product.plusDepositShort', { amount: consigneAmountEuro }) %></div><% } %>
             <% if (installmentEligible) { %><div style="font-size: 10.5px; font-weight: 600; color: #6B7482;">3x / 4x sans frais avec Scalapay</div><% } %>
           </div>
           <button type="button" data-ap-sticky-add style="height: 44px; padding: 0 20px; border: none; border-radius: 10px; background: #ED1C24; color: #FFFFFF; font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer; display: flex; align-items: center; gap: 8px; flex-shrink: 0;" class="ap-cta">
@@ -623,18 +626,24 @@
                 <% } %>
               </div>
             </div>
-            <% if (lang === 'de' && !isService) { %>
-              <%# Ce que l'acheteur allemand paie en plus du prix, avant le panier :
-                  port réel vers l'Allemagne, délai, et consigne (encaissée à la
-                  commande, ou facturée si l'ancienne pièce ne revient pas).
-                  Jamais sur le service de clonage : aller-retour inclus. %>
+            <% if (!isService && (lang === 'de' || hasConsigne)) { %>
+              <%# Ce que l'acheteur paie en plus du prix, avant le panier : port réel
+                  vers l'Allemagne (page /de seulement), et consigne — encaissée à la
+                  commande, ou facturée si l'ancienne pièce ne revient pas.
+                  Jamais sur le service de clonage : aller-retour inclus.
+
+                  La consigne est dite ici dans TOUTES les langues depuis le
+                  29/09/2026 : elle est réellement débitée en plus du prix affiché,
+                  et Google Merchant écartait du flux français toute fiche qui
+                  l'encaissait sans l'annoncer près du prix — 2 356 fiches, dont
+                  toutes les mécatroniques reconditionnées. %>
               <% const _versandDe = (typeof versandDeCents === 'number') ? versandDeCents : null; %>
               <%# Délai de transport annoncé seulement pour une expédition sous 24 ou
                   48 h : « 24-72 Std. » ou « 48 bis 72 Std. » contiennent aussi
                   « 24 » / « 48 », et y ajouter 2 à 4 jours promettait trop court. %>
               <% const _expeditionRapide = product.inStock && /^(?:versand in\s+|expédition\s+(?:sous\s+)?)?(?:24|48)(?:\s*(?:\/|bis|à)\s*48)?\s*(?:std\.?|h)$/i.test(String(shippingDelayText || '').trim()); %>
               <div style="margin-top: 10px; font-size: 12px; font-weight: 600; color: #3E4657; line-height: 1.5;">
-                <% if (_versandDe !== null) { %>
+                <% if (lang === 'de' && _versandDe !== null) { %>
                   <div><%= _versandDe > 0 ? t('product.shippingToDe', { amount: formatMoney(_versandDe) }) : t('product.freeShippingToDe') %><% if (_expeditionRapide) { %> · <%= t('product.deliveryToDeDays') %><% } %></div>
                 <% } %>
                 <% if (consigneUpfront) { %>
