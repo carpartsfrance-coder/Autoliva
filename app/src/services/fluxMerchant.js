@@ -770,6 +770,23 @@ function estLourd(fiche, classe) {
   return !!(classe && RX_CLASSE_LOURDE.test(normaliser(`${classe.name || ''} ${classe.slug || ''}`)));
 }
 
+/* Certaines familles sont livrées dans un délai FERME, décidé une fois pour
+   toutes, au lieu du délai écrit fiche par fiche — souvent vague (« délai
+   confirmé à la commande »). Le nombre est une promesse de LIVRAISON
+   (commande → chez le client) en jours ouvrés : la fiche l'affiche telle
+   quelle (product.deliveryInDays), le flux la répartit entre préparation et
+   transport, si bien que la page et Google annoncent le même total.
+   Mécatroniques : 4 jours ouvrés (décision de Killian du 29/09/2026 ; sur les
+   90 derniers jours l'expédition partait en 4 jours ouvrés médians, la
+   promesse engage donc l'atelier à préparer sous 24 h). */
+const PROMESSE_LIVRAISON_PAR_TYPE = { mecatronique: 4 };
+
+/** Promesse de livraison de la famille, en jours ouvrés, ou null. */
+function promesseLivraisonJours(fiche) {
+  const jours = PROMESSE_LIVRAISON_PAR_TYPE[typeDePiece(fiche)];
+  return Number.isInteger(jours) && jours > 0 ? jours : null;
+}
+
 const RX_DUREE = /(\d{1,3})(?:\s*(?:-|–|—|a|au|\/|bis|et|ou)\s*(\d{1,3}))?\s*(h|heures?|std\.?|stunden|j|jours?|jrs?|tage|werktage|arbeitstage|semaines?|sem|wochen?)(?![a-z])/;
 
 /** Délai d'expédition écrit sur la fiche, en jours ouvrés : { min, max } ou null.
@@ -792,8 +809,15 @@ function delaiFicheEnJours(texte) {
   return { min, max };
 }
 
-/** Délai de préparation (commande → remise au transporteur), jours ouvrés. */
-function delaisPreparation(fiche, { classe = null, textes = [] } = {}) {
+/** Délai de préparation (commande → remise au transporteur), jours ouvrés.
+ *  Avec une promesse de livraison, c'est ce qui reste une fois le transport
+ *  déduit : le délai ne vient plus du texte de la fiche, que la page n'affiche
+ *  plus non plus. */
+function delaisPreparation(fiche, { classe = null, textes = [], pays = 'FR' } = {}) {
+  const promesse = promesseLivraisonJours(fiche);
+  if (promesse !== null) {
+    return { min: 0, max: Math.max(0, promesse - delaisTransport(fiche, { classe, pays }).max) };
+  }
   let [min, max] = (estLourd(fiche, classe) ? DELAIS_CGV.lourd : DELAIS_CGV.standard).preparation;
   for (const t of textes) {
     const d = delaiFicheEnJours(t);
@@ -826,7 +850,9 @@ function motifsSansTexte(fiche, { images = [], usagesImages = new Map(), textesD
   if (!slugValide(fiche)) motifs.push(MOTIF.SANS_SLUG);
   if (!images.length) motifs.push(MOTIF.SANS_IMAGE);
   if (fiche.inStock === false) motifs.push(MOTIF.HORS_STOCK);
-  if (delaiNonGaranti(...textesDelai)) motifs.push(MOTIF.DELAI_NON_GARANTI);
+  /* Une famille à promesse de livraison n'est plus jugée sur le texte de la
+     fiche : la page et le flux annoncent la promesse. */
+  if (promesseLivraisonJours(fiche) === null && delaiNonGaranti(...textesDelai)) motifs.push(MOTIF.DELAI_NON_GARANTI);
   if (exclureConsigneEncaissee && consigneEncaissee(fiche)) motifs.push(MOTIF.CONSIGNE_ENCAISSEE);
   if (images.length && (usagesImages.get(cleImage(images[0])) || 0) > SEUIL_IMAGE_PARTAGEE) motifs.push(MOTIF.IMAGE_PARTAGEE);
   if (!etatDuProduit(fiche)) motifs.push(MOTIF.ETAT_INDETERMINE);
@@ -966,6 +992,7 @@ module.exports = {
   LIBELLE_MOTIF,
   MOTIF,
   MOTIFS,
+  PROMESSE_LIVRAISON_PAR_TYPE,
   SEUIL_IMAGE_PARTAGEE,
   TITRE_MAX,
   articleXml,
@@ -994,6 +1021,7 @@ module.exports = {
   normaliserMarque,
   nouveauBilan,
   prixXml,
+  promesseLivraisonJours,
   resumerBilan,
   texteBrut,
   texteXml,

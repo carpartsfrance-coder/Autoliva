@@ -158,6 +158,14 @@
       <% const refsAlternatives = Array.isArray(product.compatibleReferences) ? product.compatibleReferences.filter(Boolean) : []; %>
       <% const gearsVal = (findSpec('rapports') || findSpec('vitesses') || '').replace(/[^0-9]/g, ''); %>
       <% const shippingDelayText = product && product.shippingDelayText ? String(product.shippingDelayText).trim() : ''; %>
+      <%# Délai affiché : la promesse de livraison de la famille (mécatroniques :
+          4 jours ouvrés) l'emporte sur le délai d'expédition écrit sur la fiche,
+          souvent vague. Même nombre que le flux Merchant
+          (fluxMerchant.promesseLivraisonJours). Hors stock, la pièce est sourcée
+          à la commande : aucune promesse, on garde « délai confirmé ». %>
+      <% const deliveryPromiseDays = (product && product.inStock && Number(product.deliveryPromiseDays) > 0) ? Number(product.deliveryPromiseDays) : 0; %>
+      <% const delaiLabel = deliveryPromiseDays ? t('product.deliveryLabel') : t('product.shippingLabel'); %>
+      <% const delaiValeur = deliveryPromiseDays ? t('product.workingDays', { days: deliveryPromiseDays }) : shippingDelayText; %>
       <% const hasConsigne = product && product.consigne && product.consigne.enabled && product.consigne.amountCents > 0; %>
       <%# hasConsigne  = la pièce est en ÉCHANGE STANDARD (il y a une ancienne pièce à renvoyer).
           consigneUpfront = la caution est réellement ENCAISSÉE à la commande.
@@ -274,7 +282,7 @@
       <% if (technicalSpecs.length < 6 && keyProgrammation) pushTechnicalSpec(t('product.specProg'), keyProgrammation); %>
       <% if (technicalSpecs.length < 6) pushTechnicalSpec(t('product.guarantee'), (product.warranty && Number(product.warranty.months) > 0) ? (Number(product.warranty.months) + ' ' + t('product.monthsWord')) : (keyGarantie || t('product.specIncluded'))); %>
       <%# Délai : seulement s'il est saisi — « Sous 24/48h » par défaut sur 6 329 fiches (plan SEO A11). %>
-      <% if (technicalSpecs.length < 6 && shippingDelayText) pushTechnicalSpec(t('product.shippingLabel'), shippingDelayText); %>
+      <% if (technicalSpecs.length < 6 && delaiValeur) pushTechnicalSpec(delaiLabel, delaiValeur); %>
 
       <%# ══════════════════════════ REFONTE DESIGN — AUTOPARTS v3 ══════════════════════════
           Fiche produit portée au pixel depuis le handoff « Page Produit Autoparts v3 ».
@@ -414,7 +422,7 @@
           <% if (mainImage) { %><img class="ap-sticky-thumb" src="<%= mainImage %>" alt="" style="width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" /><% } %>
           <div class="ap-sticky-info" style="min-width: 0;">
             <div style="font-size: 13px; font-weight: 800; color: #0F1626; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 420px;"><%= product.name %></div>
-            <div style="font-size: 11px; font-weight: 600; color: #8A93A4; margin-top: 1px;"><%= t('product.refPrefix') %> <%= ref %><% if (shippingDelayText) { %> · <%= t('product.shippingLabel') %> <%= shippingDelayText %><% } %><% if (_garLabel) { %> · <%= _garLabel %><% } %></div>
+            <div style="font-size: 11px; font-weight: 600; color: #8A93A4; margin-top: 1px;"><%= t('product.refPrefix') %> <%= ref %><% if (delaiValeur) { %> · <%= delaiLabel %> <%= delaiValeur %><% } %><% if (_garLabel) { %> · <%= _garLabel %><% } %></div>
           </div>
           <span data-ap-sticky-checkok style="display: none; align-items: center; gap: 6px; background: #E4F5EC; color: #128A52; font-size: 11.5px; font-weight: 800; padding: 5px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;"><span class="material-symbols-outlined ap-fill" style="font-size: 14px;">check_circle</span><%= t('product.expertCheckPending') %></span>
           <div class="ap-sticky-price" style="margin-left: auto; text-align: right; flex-shrink: 0;">
@@ -619,7 +627,7 @@
                   <span style="display: inline-flex; align-items: center; gap: 6px; background: #E4F5EC; color: #128A52; font-size: 12px; font-weight: 800; padding: 6px 11px; border-radius: 999px; white-space: nowrap;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #128A52;"></span><%= t('product.inStockWord') %></span>
                   <%# Sans délai saisi, aucun délai promis : 6 329 fiches (dont les copies
                       Distrimotor) affichaient « 24/48h » par défaut. Plan SEO A11. %>
-                  <% if (shippingDelayText) { %><div style="font-size: 11.5px; font-weight: 700; color: #3E4657; margin-top: 7px;"><%= t('product.shipUnder') %> <%= shippingDelayText %></div><% } %>
+                  <% if (deliveryPromiseDays) { %><div style="font-size: 11.5px; font-weight: 700; color: #3E4657; margin-top: 7px;"><%= t('product.deliveryInDays', { days: deliveryPromiseDays }) %></div><% } else if (shippingDelayText) { %><div style="font-size: 11.5px; font-weight: 700; color: #3E4657; margin-top: 7px;"><%= t('product.shipUnder') %> <%= shippingDelayText %></div><% } %>
                 <% } else { %>
                   <span style="display: inline-flex; align-items: center; gap: 6px; background: #FDF0E0; color: #B45309; font-size: 12px; font-weight: 800; padding: 6px 11px; border-radius: 999px; white-space: nowrap;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #B45309;"></span><%= t('product.onOrderWord') %></span>
                   <div style="font-size: 11.5px; font-weight: 700; color: #3E4657; margin-top: 7px;"><%= t('product.delayConfirmed') %></div>
@@ -641,7 +649,7 @@
               <%# Délai de transport annoncé seulement pour une expédition sous 24 ou
                   48 h : « 24-72 Std. » ou « 48 bis 72 Std. » contiennent aussi
                   « 24 » / « 48 », et y ajouter 2 à 4 jours promettait trop court. %>
-              <% const _expeditionRapide = product.inStock && /^(?:versand in\s+|expédition\s+(?:sous\s+)?)?(?:24|48)(?:\s*(?:\/|bis|à)\s*48)?\s*(?:std\.?|h)$/i.test(String(shippingDelayText || '').trim()); %>
+              <% const _expeditionRapide = !deliveryPromiseDays && product.inStock && /^(?:versand in\s+|expédition\s+(?:sous\s+)?)?(?:24|48)(?:\s*(?:\/|bis|à)\s*48)?\s*(?:std\.?|h)$/i.test(String(shippingDelayText || '').trim()); %>
               <div style="margin-top: 10px; font-size: 12px; font-weight: 600; color: #3E4657; line-height: 1.5;">
                 <% if (lang === 'de' && _versandDe !== null) { %>
                   <div><%= _versandDe > 0 ? t('product.shippingToDe', { amount: formatMoney(_versandDe) }) : t('product.freeShippingToDe') %><% if (_expeditionRapide) { %> · <%= t('product.deliveryToDeDays') %><% } %></div>
@@ -927,7 +935,7 @@
              { c: t('product.cmpPrice'), u: t('product.cmpPriceUsed'), r: t('product.cmpPriceRecond'), n: t('product.cmpPriceNew'), weak: [true, false, false] },
              { c: t('product.cmpWarranty'), u: t('product.cmpWarrantyUsed'), r: (_wm ? t(_garVariable ? 'product.cmpWarrantyRecond' : 'product.cmpWarrantyRecondExact', { months: _wm }) : t('product.cmpWarrantyPart')), n: t('product.cmpWarrantyNew'), weak: [true, false, false] },
              { c: t('product.cmpHistory'), u: t('product.cmpUnknown'), r: t('product.cmpHistoryRecond'), n: t('product.cmpNew2'), weak: [true, false, false] },
-             { c: t('product.cmpAvail'), u: t('product.cmpRandom'), r: (shippingDelayText || t('product.cmpAvailRecond')), n: t('product.cmpAvailNew'), weak: [true, false, false] },
+             { c: t('product.cmpAvail'), u: t('product.cmpRandom'), r: (delaiValeur || t('product.cmpAvailRecond')), n: t('product.cmpAvailNew'), weak: [true, false, false] },
              { c: t('product.cmpBreakdown'), u: t('product.cmpBreakdownUsed'), r: t('product.cmpBreakdownRecond'), n: t('product.cmpBreakdownNew'), weak: [true, false, false] },
              { c: t('product.cmpEnv'), cIcon: 'eco', u: t('product.cmpReuse'), r: t('product.cmpReuseRecond'), rIcon: 'check_circle', n: t('product.cmpNewProd'), weak: [false, false, true] }
            ]; %>

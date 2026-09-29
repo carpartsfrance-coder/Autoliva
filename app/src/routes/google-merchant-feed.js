@@ -66,7 +66,7 @@ function article({ fiche, images, titre }, { tarifs }) {
   const liens = flux.imagesPourFlux(images, fiche.name);
   const classe = tarifs ? tarifs.classeRetenue(fiche, ZONE) : null;
   const portCents = tarifs ? tarifs.portDomicileCents(fiche, ZONE) : PORT_DE_REPLI_CENTS;
-  const preparation = flux.delaisPreparation(fiche, { classe, textes: [fiche.shippingDelayText] });
+  const preparation = flux.delaisPreparation(fiche, { classe, textes: [fiche.shippingDelayText], pays: PAYS });
   const transport = flux.delaisTransport(fiche, { classe, pays: PAYS });
   return {
     id: String(fiche._id),

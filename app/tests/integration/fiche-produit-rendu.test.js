@@ -530,30 +530,65 @@ test('fiche produit rendue par l’application — description et allégations (
     assert.ok(!blocPrix(pages.get(DEK.sku)).includes('consigne'), 'consigne inventée sur une fiche qui n’en a pas');
   });
 
+  await t.test('mécatroniques : la fiche annonce la livraison en 4 jours ouvrés, FR et DE', async () => {
+    /* Décision du 29/09/2026 : un délai ferme par famille remplace le délai
+       d'expédition écrit fiche par fiche — « 24 / 48h » ici, « délai
+       d'expédition sur demande » là, qui ne promettaient rien et écartaient
+       ces fiches du flux Merchant. Le même nombre est annoncé à Google
+       (préparation + transport), sinon la page et Shopping se contrediraient. */
+    for (const p of [DQ200, DQ250]) {
+      const lu = texte(pages.get(p.sku));
+      assert.ok(lu.includes('Livraison en 4 jours ouvrés'), `${p.sku} : promesse de livraison absente de la fiche`);
+      assert.ok(!lu.includes('Expédition sous'), `${p.sku} : l’ancien délai d’expédition est resté`);
+      assert.ok(!lu.includes(p.shippingDelayText), `${p.sku} : « ${p.shippingDelayText} » s’affiche encore`);
+    }
+
+    /* Les autres familles gardent le délai de leur fiche : rien n'est promis
+       à leur place (le moteur ASY est annoncé sous 6-9 jours). */
+    const moteur = texte(pages.get(ASY.sku));
+    assert.ok(moteur.includes('Expédition sous 6-9 jours'), 'le délai de la fiche moteur a disparu');
+    assert.ok(!moteur.includes('Livraison en 4 jours ouvrés'), 'promesse mécatronique appliquée à un moteur');
+
+    /* Allemand : « Lieferung in 4 Werktagen », pas la phrase française. */
+    const de = DQ200.localizations.de;
+    const r = await get(`/de/produits/${encodeURIComponent(de.slug)}-${DQ200._id}`);
+    assert.equal(r.status, 200, `fiche allemande : ${r.status} ${r.location || ''}`);
+    const luDe = texte(r.html);
+    assert.ok(luDe.includes('Lieferung in 4 Werktagen'), 'promesse de livraison absente de la fiche allemande');
+    assert.ok(!luDe.includes('Livraison en 4 jours ouvrés'), 'phrase française sur la fiche allemande');
+  });
+
   await t.test('le flux Merchant ne garde que les fiches conformes, avec les textes de la fiche', async () => {
     /* Audit Merchant du 25/09/2026 : le flux ne liste plus « toutes les fiches
        publiées ». Sur les 10 fiches de production : les trois boîtes (DEK,
        ALV-BX, EDN) restent, et le moteur ASY reste depuis le 29/09/2026 — sa
        consigne encaissée à la commande est désormais annoncée près du prix sur
-       la fiche française. La copie distrimotor sort ; DQ250, AUTO, WC et
-       Alibaba sortent (délai « sur demande », « confirmé à la commande »,
-       « selon disponibilité ») ; la DQ200 sort parce que la page véhicule en a
-       ajouté une copie au même titre — deux fiches identiques ne se
-       distinguent pas dans Shopping. */
+       la fiche française. La DQ250 reste depuis le 29/09/2026 : les
+       mécatroniques sont livrées en 4 jours ouvrés, promesse qui remplace son
+       « délai d'expédition sur demande ». La copie distrimotor sort ; AUTO, WC
+       et Alibaba sortent (délai « confirmé à la commande », « selon
+       disponibilité ») ; la DQ200 sort parce que la page véhicule en a ajouté
+       une copie au même titre — deux fiches identiques ne se distinguent pas
+       dans Shopping. */
     const feed = require('../../src/routes/google-merchant-feed');
     feed._invalidateCache();
     const r = await get('/google-merchant-feed.xml');
     assert.equal(r.status, 200);
     const items = r.html.split('<item>').slice(1);
     const dans = (p) => items.some((it) => it.includes(`<g:id>${p._id}</g:id>`));
-    for (const p of [DEK, ALVBX, EDN, ASY]) assert.ok(dans(p), `${p.sku} doit rester dans le flux`);
-    for (const p of [DM, DQ200, DQ250, AUTO, WC, ALIBABA]) assert.ok(!dans(p), `${p.sku} ne doit pas être dans le flux`);
+    for (const p of [DEK, ALVBX, EDN, ASY, DQ250]) assert.ok(dans(p), `${p.sku} doit rester dans le flux`);
+    for (const p of [DM, DQ200, AUTO, WC, ALIBABA]) assert.ok(!dans(p), `${p.sku} ne doit pas être dans le flux`);
+    /* Et Google reçoit la promesse de la fiche, pas un délai plus long :
+       préparation 0-1 j + transport 1-3 j = 4 jours ouvrés au plus. */
+    const meca = items.find((it) => it.includes(`<g:id>${DQ250._id}</g:id>`));
+    assert.match(meca, /<g:max_handling_time>1<\/g:max_handling_time>/);
+    assert.match(meca, /<g:max_transit_time>3<\/g:max_transit_time>/);
     /* Le bilan journalisé compte chaque exclusion sous son premier motif. */
     const bilan = feed.dernierBilan();
-    assert.equal(bilan.articles, 4);
+    assert.equal(bilan.articles, 5);
     assert.equal(bilan.exclus.copie_distrimotor, 1);
     assert.equal(bilan.exclus.consigne_encaissee, 0, 'la consigne n’exclut plus rien');
-    assert.equal(bilan.exclus.delai_non_garanti, 4);
+    assert.equal(bilan.exclus.delai_non_garanti, 3, 'plus la DQ250 : promesse de livraison');
     assert.equal(bilan.exclus.titre_duplique, 2, 'la DQ200 et sa copie de page véhicule');
 
     /* Les textes du flux passent par les mêmes filtres que la fiche : ni
