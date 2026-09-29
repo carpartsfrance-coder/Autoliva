@@ -33,6 +33,7 @@ const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const { sanitizeBrandLeak } = require('../services/brandSanitizer');
 const claimFilter = require('../services/claimFilter');
 const { etatDepuisTexte } = require('../services/etatPiece');
+const { promesseLivraisonJours } = require('../services/fluxMerchant');
 const scalapay = require('../services/scalapay');
 const produitsDisparus = require('../services/produitsDisparus');
 const seoIndexPolicy = require('../services/seoIndexPolicy');
@@ -251,6 +252,13 @@ function normalizeProduct(product) {
     ? product.shippingDelayText.trim()
     : '';
 
+  /* Promesse de livraison de la famille (mécatroniques : 4 jours ouvrés) —
+     lue sur le nom et la catégorie FRANÇAIS, normalizeProduct passant avant le
+     calque allemand. Elle remplace à l'affichage le délai écrit sur la fiche,
+     et le flux Merchant répartit les mêmes jours entre préparation et
+     transport : la page et Google annoncent le même total. */
+  const deliveryPromiseDays = promesseLivraisonJours(product) || 0;
+
   const compatibleReferences = Array.isArray(product.compatibleReferences)
     ? product.compatibleReferences
         .filter((v) => typeof v === 'string')
@@ -275,6 +283,7 @@ function normalizeProduct(product) {
     inStock,
     stockQty,
     shippingDelayText,
+    deliveryPromiseDays,
     compatibleReferences,
     priceCents: parseLegacyPriceCents(product),
     consigne: {

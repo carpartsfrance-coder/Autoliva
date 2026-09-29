@@ -154,9 +154,11 @@ test('exclusions : chaque règle a son motif', async (t) => {
     assert.equal(motif(fiche({ badges: { condition: 'Occasion' }, name: 'Moteur Opel Zafira Z17DTR — occasion', slug: 'moteur-z17dtr' })), null);
   });
 
-  await t.test('consigne encaissée à la commande : exclue du flux français, pas de l’allemand', () => {
+  await t.test('consigne encaissée à la commande : gardée dans les deux flux (la fiche l’annonce près du prix)', () => {
     const consigne = { consigne: { enabled: true, amountCents: 91000, delayDays: 30, chargeUpfront: true } };
-    assert.equal(motif(fiche(consigne)), MOTIF.CONSIGNE_ENCAISSEE);
+    /* Écartée jusqu'au 29/09/2026 : la fiche française encaissait la consigne
+       sans la dire près du prix. Elle le dit désormais dans les deux langues. */
+    assert.equal(motif(fiche(consigne)), null);
     /* Facturée seulement si l'ancienne pièce ne revient pas : rien à la commande. */
     assert.equal(motif(fiche({ consigne: { enabled: true, amountCents: 15000, chargeUpfront: false } })), null);
     assert.equal(motif(fiche({ consigne: { enabled: false, amountCents: 91000, chargeUpfront: true } })), null);
@@ -266,7 +268,6 @@ test('port et délais : g:shipping France, préparation et transport des CGV art
       ['Boîtes de vitesses', 'Boîte de vitesses reconditionnée Peugeot 208 1.6 HDi — 20DP42', true],
       ['Ponts & différentiels', 'Pont arrière reconditionné BMW X5 E70 3.64', true],
       ['Boîtes de transfert', 'Boîte de transfert BMW ATC700 pour X5 E70', true],
-      ['Mécatroniques & calculateurs', 'Mécatronique DSG7 DQ200 reconditionnée Volkswagen', false],
       ['Turbos', 'Turbo reconditionné Audi A4 2.0 TDI', false],
       ['Carrosserie / Éclairage > Phares / Feux', 'Phare avant LED BMW Série 5 G30 reconditionné', false],
     ];
@@ -275,6 +276,9 @@ test('port et délais : g:shipping France, préparation et transport des CGV art
       assert.deepEqual(flux.delaisPreparation(p), lourd ? { min: 3, max: 6 } : { min: 1, max: 3 }, name);
       assert.deepEqual(flux.delaisTransport(p), lourd ? { min: 1, max: 4 } : { min: 1, max: 3 }, name);
     }
+    /* Mécatroniques : transport standard, mais préparation dictée par la
+       promesse de livraison (test dédié plus bas). */
+    assert.deepEqual(flux.delaisTransport({ category: 'Mécatroniques & calculateurs', name: 'Mécatronique DSG7 DQ200 reconditionnée Volkswagen' }), { min: 1, max: 3 });
     /* Classe d'expédition « palette » : lourde, quelle que soit la catégorie. */
     assert.deepEqual(flux.delaisPreparation({ name: 'Accoudoir central Porsche', category: 'Habitacle > Consoles / Accoudoirs' }, { classe: { name: 'Palette' } }), { min: 3, max: 6 });
     /* Allemagne : 2 à 4 jours ouvrés après expédition. */
@@ -287,9 +291,35 @@ test('port et délais : g:shipping France, préparation et transport des CGV art
     assert.deepEqual(flux.delaisPreparation(moteur, { textes: ['3-5 jours'] }), { min: 3, max: 6 });
     const boite = { category: 'Boîtes de vitesses', name: 'Boîte de vitesses Volkswagen — LZY' };
     assert.deepEqual(flux.delaisPreparation(boite, { textes: ['24-72h'] }), { min: 3, max: 6 });
+    /* Sauf sous promesse de livraison : voir le test suivant. */
+    const turbo = { category: 'Turbos', name: 'Turbo Garrett GTB1749VK — Ford' };
+    assert.deepEqual(flux.delaisPreparation(turbo, { textes: ['24 / 48h'] }), { min: 1, max: 3 });
+    assert.deepEqual(flux.delaisPreparation(turbo, { textes: ['Expédition sous 2 à 3 jours ouvrés'] }), { min: 2, max: 3 });
+  });
+
+  await t.test('promesse de livraison : les mécatroniques sont livrées en 4 jours ouvrés', () => {
     const meca = { category: 'Mécatroniques & calculateurs', name: 'Mécatronique DSG7 DQ380 reconditionnée' };
-    assert.deepEqual(flux.delaisPreparation(meca, { textes: ['24 / 48h'] }), { min: 1, max: 3 });
-    assert.deepEqual(flux.delaisPreparation(meca, { textes: ['Expédition sous 2 à 3 jours ouvrés'] }), { min: 2, max: 3 });
+    assert.equal(flux.promesseLivraisonJours(meca), 4);
+    /* Préparation = promesse − transport, pour que le total annoncé à Google
+       soit celui de la fiche : 0-1 + 1-3 = 1 à 4 jours ouvrés en France,
+       0 + 2-4 = 2 à 4 en Allemagne. */
+    const prepFr = flux.delaisPreparation(meca, { textes: ['Délai selon disponibilité'], pays: 'FR' });
+    const transFr = flux.delaisTransport(meca, { pays: 'FR' });
+    assert.deepEqual(prepFr, { min: 0, max: 1 });
+    assert.equal(prepFr.max + transFr.max, 4);
+    const prepDe = flux.delaisPreparation(meca, { textes: [], pays: 'DE' });
+    const transDe = flux.delaisTransport(meca, { pays: 'DE' });
+    assert.deepEqual(prepDe, { min: 0, max: 0 });
+    assert.equal(prepDe.max + transDe.max, 4);
+    /* Le texte de la fiche ne rallonge plus rien : il n'est plus affiché. */
+    assert.deepEqual(flux.delaisPreparation(meca, { textes: ['6-9 jours'], pays: 'FR' }), { min: 0, max: 1 });
+    /* Et un délai vague n'écarte plus la fiche du flux. */
+    const motifs = flux.motifsSansTexte(meca, { images: ['a.jpg'], textesDelai: ['Délai confirmé à la commande'] });
+    assert.ok(!motifs.includes(flux.MOTIF.DELAI_NON_GARANTI), motifs.join(','));
+    const boite = { category: 'Boîtes de vitesses', name: 'Boîte de vitesses Volkswagen — LZY' };
+    assert.equal(flux.promesseLivraisonJours(boite), null);
+    assert.ok(flux.motifsSansTexte(boite, { images: ['a.jpg'], textesDelai: ['Délai confirmé à la commande'] })
+      .includes(flux.MOTIF.DELAI_NON_GARANTI));
   });
 
   await t.test('lecture des délais écrits sur les fiches', () => {

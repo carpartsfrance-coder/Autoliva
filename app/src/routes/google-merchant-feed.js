@@ -9,10 +9,8 @@
  *   - exclues, avec un motif compté et journalisé à chaque construction :
  *     copies distrimotor (DM-), service de clonage, image générique (partagée
  *     par plus de 3 fiches publiées), titre générique ou porté par une autre
- *     fiche, état impossible à établir ou contredit, consigne encaissée à la
- *     commande (la fiche française ne l'affiche pas encore près du prix), hors
- *     stock, délai « sur commande / sur demande / selon disponibilité /
- *     confirmé à la commande » ;
+ *     fiche, état impossible à établir ou contredit, hors stock, délai « sur
+ *     commande / sur demande / selon disponibilité / confirmé à la commande » ;
  *   - titre et description passés par les filtres de la fiche (ancien nom,
  *     allégations non prouvées) ; description jamais servie pour les familles
  *     dont la fiche la masque ;
@@ -68,7 +66,7 @@ function article({ fiche, images, titre }, { tarifs }) {
   const liens = flux.imagesPourFlux(images, fiche.name);
   const classe = tarifs ? tarifs.classeRetenue(fiche, ZONE) : null;
   const portCents = tarifs ? tarifs.portDomicileCents(fiche, ZONE) : PORT_DE_REPLI_CENTS;
-  const preparation = flux.delaisPreparation(fiche, { classe, textes: [fiche.shippingDelayText] });
+  const preparation = flux.delaisPreparation(fiche, { classe, textes: [fiche.shippingDelayText], pays: PAYS });
   const transport = flux.delaisTransport(fiche, { classe, pays: PAYS });
   return {
     id: String(fiche._id),
@@ -118,7 +116,10 @@ function construireArticles(docs, { tarifs = null, scalapayActif = false } = {})
     const images = flux.imagesDeLaFiche(doc);
     const fiche = normalizeProduct(doc);
     const motifs = flux.motifsSansTexte(fiche, {
-      images, usagesImages, textesDelai: [fiche.shippingDelayText], exclureConsigneEncaissee: true,
+      /* La fiche française annonce la consigne près du prix depuis le
+         29/09/2026 (views/products/show.ejs) : ces fiches entrent donc dans le
+         flux, comme elles le font déjà côté allemand. */
+      images, usagesImages, textesDelai: [fiche.shippingDelayText], exclureConsigneEncaissee: false,
     });
     if (motifs.length) {
       bilan.exclus[motifs[0]] += 1;

@@ -928,10 +928,11 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
     assert.deepEqual(idsDe(apresDe.corps), idsDe(avantDe.corps));
     /* Ce que le flux garde relève des règles Merchant (services/fluxMerchant),
        pas de l'indexation : la boîte EDN y reste, fiche retirée de Google ou
-       non ; la copie distrimotor et le moteur ASY (consigne encaissée) n'y
-       sont pas, familles allumées ou non. */
-    assert.ok(apres.corps.includes(EDN.slug), `${EDN.sku} reste dans le flux`);
-    for (const p of [ASY, DM]) assert.ok(!apres.corps.includes(`<g:id>${p._id}</g:id>`), `${p.sku} hors du flux`);
+       non ; le moteur ASY aussi depuis le 29/09/2026 (sa consigne est annoncée
+       près du prix) ; la copie distrimotor n'y est pas, familles allumées ou
+       non. */
+    for (const p of [EDN, ASY]) assert.ok(apres.corps.includes(`<g:id>${p._id}</g:id>`), `${p.sku} reste dans le flux`);
+    assert.ok(!apres.corps.includes(`<g:id>${DM._id}</g:id>`), `${DM.sku} hors du flux`);
   });
 
   /* ── Admin ────────────────────────────────────────────────────────────── */
