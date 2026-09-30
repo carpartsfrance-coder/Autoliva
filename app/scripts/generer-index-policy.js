@@ -15,12 +15,12 @@
  *
  * Listes lues (copies À L'IDENTIQUE de celles du plan, empreintes SHA-256
  * reportées dans le JSON pour qu'un test vérifie qu'il est à jour) :
- *   - keep-blog-fr.txt            : les 295 articles français GARDÉS (liste
+ *   - keep-blog-fr.txt            : les 315 articles français GARDÉS (liste
  *                                   blanche : tout autre article sort quand
  *                                   « blog » est actif) ;
  *   - gone-410-blog.txt           : les 268 adresses en 410 (134 articles du
  *                                   05–06/09 et leurs 134 copies allemandes) ;
- *   - kept-posts-need-inlinks.txt : les 76 articles gardés qui n'ont plus de
+ *   - kept-posts-need-inlinks.txt : les 96 articles gardés qui n'ont plus de
  *                                   lien depuis un autre article gardé ;
  *   - keep-pieces-auto.txt        : les 242 pages /pieces-auto gardées (liste
  *                                   blanche : toute autre /pieces-auto/* sort) ;
