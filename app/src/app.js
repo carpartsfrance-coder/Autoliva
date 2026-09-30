@@ -396,6 +396,7 @@ app.get('/favicon.ico', (req, res) => {
  *     inverse puis direct, en cache, attente bornée) passent sans compter.
  *     Un faux Googlebot reste sous la limite. Voir services/robotsVerifies.js. */
 const robotsVerifies = require('./services/robotsVerifies');
+const { creerJournalAgents } = require('./services/journalAgents');
 
 /* Langue du visiteur AVANT le middleware i18n (les limiteurs s'exécutent plus
    haut) : préfixe d'URL, sinon la préférence mémorisée — la même que lit le
@@ -425,6 +426,45 @@ const crawlerRoutesLimiter = rateLimit({
   handler: (req, res) => res.status(429).type('text/plain').send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
 });
 app.use(['/sitemap.xml', /^\/sitemap-.*\.xml$/, '/google-merchant-feed.xml', '/google-merchant-feed-de.xml'], crawlerRoutesLimiter);
+
+/* ─── Pages véhicules aspirées (30/09/2026) ───────────────────────────────────
+ *
+ * Un robot a pris /pieces-auto pour un catalogue à télécharger : 123 397
+ * requêtes en 24 h, la MOITIÉ du trafic du site, à ~5 000 par heure sans
+ * discontinuer, contre quelques centaines par jour jusque-là. L'instance
+ * (1 CPU, 2 Go) est restée à 100 % de processeur toute la nuit ; Render l'a
+ * redémarrée douze fois, dont trois pour dépassement mémoire. Chaque
+ * redémarrage = le site indisponible pour tout le monde.
+ *
+ * Ces pages ne sont plus indexées depuis le 25/09 (famille « pieces-auto » de
+ * SEO_PRUNE) et notre mesure d'audience n'y voit que 27 visites par jour : les
+ * freiner ne coûte rien à personne. Un robot vérifié (Googlebot, Storebot,
+ * AdsBot, Bingbot — DNS inverse, pas la simple déclaration) n'est jamais
+ * compté : il doit pouvoir repasser lire le noindex qu'on vient d'y poser.
+ *
+ * 90 pages par 10 minutes et par visiteur : un humain qui parcourt les pages
+ * véhicules n'en ouvre pas neuf par minute ; l'aspirateur, lui, en demande
+ * plus de quatre-vingts. Un 429 porte Retry-After, que les moteurs respectent.
+ *
+ * Le limiteur ne suffira pas si le robot se répartit sur des centaines
+ * d'adresses : c'est le journal des agents (posé juste avant, il compte TOUT,
+ * y compris ce qui est freiné) qui dira alors qui appeler — ou qu'il faut
+ * passer le domaine derrière Cloudflare. */
+const journalPiecesAuto = creerJournalAgents({ nom: '/pieces-auto' });
+const piecesAutoLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 90,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => robotsVerifies.cleLimiteur(req),
+  skip: (req) => robotsVerifies.estRobotVerifie(req),
+  handler: (req, res) => res
+    .status(429)
+    .set('Retry-After', '600')
+    .type('text/plain')
+    .send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
+});
+app.use('/pieces-auto', journalPiecesAuto, piecesAutoLimiter);
 
 app.get('/sitemap.xml', seoController.getSitemapXml);
 app.get('/sitemap-pages.xml', seoController.getSitemapPages);

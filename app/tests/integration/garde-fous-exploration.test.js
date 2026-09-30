@@ -357,6 +357,38 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
       'se dire Googlebot ne suffit pas');
   });
 
+  /* ── Pages véhicules aspirées (30/09/2026) ───────────────────────────── */
+
+  await t.test('pages véhicules : l’aspirateur est freiné, un Googlebot vérifié ne l’est jamais', async () => {
+    /* 123 397 requêtes sur /pieces-auto en 24 h, la moitié du trafic du site :
+       l'instance est tombée douze fois en une nuit. Ces pages ne sont plus
+       indexées et notre mesure n'y voit que 27 visites par jour — les freiner
+       ne coûte rien, sauf à celui qui les aspire. */
+    const aspirateur = '203.0.113.60';
+    for (let i = 1; i <= 90; i++) {
+      const r = await get('/pieces-auto/volkswagen', { ip: aspirateur });
+      assert.notEqual(r.status, 429, `requête ${i} de l’aspirateur`);
+    }
+    const freinee = await get('/pieces-auto/volkswagen', { ip: aspirateur });
+    assert.equal(freinee.status, 429, 'la 91e est freinée');
+    assert.equal(freinee.headers.get('retry-after'), '600', 'un 429 dit quand revenir');
+
+    assert.notEqual((await get('/pieces-auto/volkswagen', { ip: '203.0.113.61' })).status, 429,
+      'un autre visiteur n’hérite pas du quota de l’aspirateur');
+
+    /* Google doit pouvoir repasser sur ces pages : c'est comme ça qu'il lira
+       le noindex qu'on vient d'y poser. */
+    for (let i = 1; i <= 100; i++) {
+      const r = await get('/pieces-auto/volkswagen', { ip: '66.249.66.1', ua: UA_GOOGLEBOT });
+      assert.notEqual(r.status, 429, `Googlebot vérifié, requête ${i}`);
+    }
+
+    const fauxGooglebot = '203.0.113.62';
+    for (let i = 1; i <= 90; i++) await get('/pieces-auto/volkswagen', { ip: fauxGooglebot, ua: UA_GOOGLEBOT });
+    assert.equal((await get('/pieces-auto/volkswagen', { ip: fauxGooglebot, ua: UA_GOOGLEBOT })).status, 429,
+      'se dire Googlebot ne suffit pas');
+  });
+
   /* ── A4.5 — dates : jamais updatedAt ─────────────────────────────────── */
 
   await t.test('A4.5 sitemap des fiches : la date A3 pour les fiches qui ont regagné leur description, rien pour les autres', async () => {
