@@ -464,7 +464,43 @@ const piecesAutoLimiter = rateLimit({
     .type('text/plain')
     .send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
 });
-app.use('/pieces-auto', journalPiecesAuto, piecesAutoLimiter);
+/* Et un PLAFOND GLOBAL, parce que le limiteur par visiteur ne suffit pas.
+ *
+ * Première mesure, une fois le journal en ligne (30/09/2026, 10 h 14) : 867
+ * requêtes en cinq minutes — ~10 400 par heure — réparties sur 33 agents et,
+ * pour le seul premier d'entre eux, 172 adresses IP. Aucun ne se déclare
+ * robot : ce sont des agents de Chrome mobile ordinaires. Un aspirateur qui
+ * tourne sur un parc de proxys résidentiels ne dépasse jamais un quota par
+ * adresse — 228 requêtes sur 172 adresses, c'est une requête et demie chacune.
+ *
+ * On protège donc la machine, pas les adresses : au-delà de 60 pages par
+ * minute TOUS visiteurs confondus, la page n'est plus construite. Ces pages ne
+ * sont plus indexées et reçoivent 27 visites par jour : le plafond ne gêne
+ * personne, sauf celui qui en demande 170 par minute. Les robots vérifiés
+ * n'y sont pas soumis, et un 429 refusé ici ne touche ni la base ni le
+ * gabarit — il coûte mille fois moins cher qu'une page servie.
+ *
+ * Ce n'est pas la solution durable : le domaine derrière Cloudflare le serait.
+ * C'est ce qui remet le site debout aujourd'hui. */
+const PIECES_AUTO_PLAFOND_MIN = Number(process.env.PIECES_AUTO_PLAFOND_MIN) > 0
+  ? Number(process.env.PIECES_AUTO_PLAFOND_MIN)
+  : 60;
+const piecesAutoPlafond = rateLimit({
+  windowMs: 60 * 1000,
+  /* Réglable sur Render sans redéploiement (PIECES_AUTO_PLAFOND_MIN) : pendant
+     une attaque, on serre ; quand elle passe, on desserre. */
+  max: PIECES_AUTO_PLAFOND_MIN,
+  standardHeaders: false,
+  legacyHeaders: false,
+  keyGenerator: () => 'pieces-auto',
+  skip: (req) => robotsVerifies.estRobotVerifie(req),
+  handler: (req, res) => res
+    .status(429)
+    .set('Retry-After', '60')
+    .type('text/plain')
+    .send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
+});
+app.use('/pieces-auto', journalPiecesAuto, piecesAutoLimiter, piecesAutoPlafond);
 
 app.get('/sitemap.xml', seoController.getSitemapXml);
 app.get('/sitemap-pages.xml', seoController.getSitemapPages);
