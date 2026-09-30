@@ -34,6 +34,10 @@ for (const cle of ['MAILERSEND_API_KEY', 'BREVO_API_KEY', 'OPENAI_API_KEY', 'GEM
   process.env[cle] = '';
 }
 process.env.DE_AUTO_TRANSLATE = 'false';
+/* Plafond global des pages véhicules relevé pour les tests : à 60/min (la
+   valeur de production), le quota PAR VISITEUR ne serait jamais atteignable
+   dans la même minute. Les deux sont éprouvés séparément plus bas. */
+process.env.PIECES_AUTO_PLAFOND_MIN = '300';
 
 const FIXTURE = require('../fixtures/fiches-produit-prod.json');
 /* Même objet que celui que lit services/datesSeo.js (cache de require) : on
@@ -375,6 +379,21 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
 
     assert.notEqual((await get('/pieces-auto/volkswagen', { ip: '203.0.113.61' })).status, 429,
       'un autre visiteur n’hérite pas du quota de l’aspirateur');
+
+    /* Plafond global : un aspirateur réparti sur des centaines d'adresses ne
+       dépasse aucun quota par visiteur (mesuré le 30/09 : 228 requêtes sur
+       172 adresses). Au-delà de 60 pages par minute, toutes adresses
+       confondues, la page n'est plus construite. */
+    /* Agent de Googlebot sur des adresses qui ne sont PAS celles de Google :
+       le limiteur général du site l'épargne (il ne regarde que le nom
+       déclaré), le nôtre non — c'est justement le trou qu'on ferme. Sans ça,
+       ces 305 requêtes épuiseraient le quota général pour les tests suivants. */
+    const statuts = new Set();
+    for (let i = 1; i <= 305; i++) {
+      const ip = `198.18.${Math.floor(i / 250)}.${(i % 250) + 1}`;
+      statuts.add((await get('/pieces-auto/volkswagen', { ip, ua: UA_GOOGLEBOT })).status);
+    }
+    assert.ok(statuts.has(429), `le plafond global doit finir par répondre 429 (statuts vus : ${[...statuts]})`);
 
     /* Google doit pouvoir repasser sur ces pages : c'est comme ça qu'il lira
        le noindex qu'on vient d'y poser. */
