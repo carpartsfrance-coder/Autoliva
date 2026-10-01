@@ -1,5 +1,5 @@
 <%- include('./partials/head') %>
-<link rel="stylesheet" href="/css/sav.css?v=21">
+<link rel="stylesheet" href="/css/sav.css?v=<%= (typeof assetVersions !== 'undefined' && assetVersions.savCss) || '' %>">
 <%- include('./partials/sidebar', { active: 'sav' }) %>
 
 <main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>">
@@ -41,5 +41,5 @@
   </div>
 </main>
 
-<script src="/js/sav-admin.js?v=4" defer></script>
+<script src="/js/sav-admin.js?v=<%= (typeof assetVersions !== 'undefined' && assetVersions.savAdminJs) || '' %>" defer></script>
 <%- include('./partials/footer') %>

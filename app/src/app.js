@@ -617,6 +617,12 @@ const ASSET_VERSIONS = {
   adminCss: _safeMtime('admin/style.css'),
   adminCommandesCss: _safeMtime('admin/commandes.css'),
   adminCommandesJs: _safeMtime('js/admin-commandes.js'),
+  /* Le SAV portait un numéro de version écrit à la main (?v=48) : une
+     correction livrée le 01/10/2026 n'est jamais arrivée dans le navigateur de
+     l'équipe, qui a gardé sept jours le fichier en cache. Le mtime du fichier
+     s'en charge désormais tout seul. */
+  savAdminJs: _safeMtime('js/sav-admin.js'),
+  savCss: _safeMtime('css/sav.css'),
 };
 /* Polices servies depuis notre domaine (CSS inline + préchargements du
    gabarit) — lues une fois, voir services/policesLocales.js. */
