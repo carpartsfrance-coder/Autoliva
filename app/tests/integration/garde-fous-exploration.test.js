@@ -34,6 +34,10 @@ for (const cle of ['MAILERSEND_API_KEY', 'BREVO_API_KEY', 'OPENAI_API_KEY', 'GEM
   process.env[cle] = '';
 }
 process.env.DE_AUTO_TRANSLATE = 'false';
+/* Plafond global des pages véhicules relevé pour les tests : à 60/min (la
+   valeur de production), le quota PAR VISITEUR ne serait jamais atteignable
+   dans la même minute. Les deux sont éprouvés séparément plus bas. */
+process.env.PIECES_AUTO_PLAFOND_MIN = '300';
 
 const FIXTURE = require('../fixtures/fiches-produit-prod.json');
 /* Même objet que celui que lit services/datesSeo.js (cache de require) : on
@@ -354,6 +358,53 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
     const fauxGooglebot = '203.0.113.52';
     for (let i = 1; i <= 30; i++) await get('/sitemap-pages.xml', { ip: fauxGooglebot, ua: UA_GOOGLEBOT });
     assert.equal((await get('/sitemap-pages.xml', { ip: fauxGooglebot, ua: UA_GOOGLEBOT })).status, 429,
+      'se dire Googlebot ne suffit pas');
+  });
+
+  /* ── Pages véhicules aspirées (30/09/2026) ───────────────────────────── */
+
+  await t.test('pages véhicules : l’aspirateur est freiné, un Googlebot vérifié ne l’est jamais', async () => {
+    /* 123 397 requêtes sur /pieces-auto en 24 h, la moitié du trafic du site :
+       l'instance est tombée douze fois en une nuit. Ces pages ne sont plus
+       indexées et notre mesure n'y voit que 27 visites par jour — les freiner
+       ne coûte rien, sauf à celui qui les aspire. */
+    const aspirateur = '203.0.113.60';
+    for (let i = 1; i <= 90; i++) {
+      const r = await get('/pieces-auto/volkswagen', { ip: aspirateur });
+      assert.notEqual(r.status, 429, `requête ${i} de l’aspirateur`);
+    }
+    const freinee = await get('/pieces-auto/volkswagen', { ip: aspirateur });
+    assert.equal(freinee.status, 429, 'la 91e est freinée');
+    assert.equal(freinee.headers.get('retry-after'), '600', 'un 429 dit quand revenir');
+
+    assert.notEqual((await get('/pieces-auto/volkswagen', { ip: '203.0.113.61' })).status, 429,
+      'un autre visiteur n’hérite pas du quota de l’aspirateur');
+
+    /* Plafond global : un aspirateur réparti sur des centaines d'adresses ne
+       dépasse aucun quota par visiteur (mesuré le 30/09 : 228 requêtes sur
+       172 adresses). Au-delà de 60 pages par minute, toutes adresses
+       confondues, la page n'est plus construite. */
+    /* Agent de Googlebot sur des adresses qui ne sont PAS celles de Google :
+       le limiteur général du site l'épargne (il ne regarde que le nom
+       déclaré), le nôtre non — c'est justement le trou qu'on ferme. Sans ça,
+       ces 305 requêtes épuiseraient le quota général pour les tests suivants. */
+    const statuts = new Set();
+    for (let i = 1; i <= 305; i++) {
+      const ip = `198.18.${Math.floor(i / 250)}.${(i % 250) + 1}`;
+      statuts.add((await get('/pieces-auto/volkswagen', { ip, ua: UA_GOOGLEBOT })).status);
+    }
+    assert.ok(statuts.has(429), `le plafond global doit finir par répondre 429 (statuts vus : ${[...statuts]})`);
+
+    /* Google doit pouvoir repasser sur ces pages : c'est comme ça qu'il lira
+       le noindex qu'on vient d'y poser. */
+    for (let i = 1; i <= 100; i++) {
+      const r = await get('/pieces-auto/volkswagen', { ip: '66.249.66.1', ua: UA_GOOGLEBOT });
+      assert.notEqual(r.status, 429, `Googlebot vérifié, requête ${i}`);
+    }
+
+    const fauxGooglebot = '203.0.113.62';
+    for (let i = 1; i <= 90; i++) await get('/pieces-auto/volkswagen', { ip: fauxGooglebot, ua: UA_GOOGLEBOT });
+    assert.equal((await get('/pieces-auto/volkswagen', { ip: fauxGooglebot, ua: UA_GOOGLEBOT })).status, 429,
       'se dire Googlebot ne suffit pas');
   });
 

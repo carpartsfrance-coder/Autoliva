@@ -396,6 +396,7 @@ app.get('/favicon.ico', (req, res) => {
  *     inverse puis direct, en cache, attente bornée) passent sans compter.
  *     Un faux Googlebot reste sous la limite. Voir services/robotsVerifies.js. */
 const robotsVerifies = require('./services/robotsVerifies');
+const { creerJournalAgents } = require('./services/journalAgents');
 
 /* Langue du visiteur AVANT le middleware i18n (les limiteurs s'exécutent plus
    haut) : préfixe d'URL, sinon la préférence mémorisée — la même que lit le
@@ -425,6 +426,81 @@ const crawlerRoutesLimiter = rateLimit({
   handler: (req, res) => res.status(429).type('text/plain').send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
 });
 app.use(['/sitemap.xml', /^\/sitemap-.*\.xml$/, '/google-merchant-feed.xml', '/google-merchant-feed-de.xml'], crawlerRoutesLimiter);
+
+/* ─── Pages véhicules aspirées (30/09/2026) ───────────────────────────────────
+ *
+ * Un robot a pris /pieces-auto pour un catalogue à télécharger : 123 397
+ * requêtes en 24 h, la MOITIÉ du trafic du site, à ~5 000 par heure sans
+ * discontinuer, contre quelques centaines par jour jusque-là. L'instance
+ * (1 CPU, 2 Go) est restée à 100 % de processeur toute la nuit ; Render l'a
+ * redémarrée douze fois, dont trois pour dépassement mémoire. Chaque
+ * redémarrage = le site indisponible pour tout le monde.
+ *
+ * Ces pages ne sont plus indexées depuis le 25/09 (famille « pieces-auto » de
+ * SEO_PRUNE) et notre mesure d'audience n'y voit que 27 visites par jour : les
+ * freiner ne coûte rien à personne. Un robot vérifié (Googlebot, Storebot,
+ * AdsBot, Bingbot — DNS inverse, pas la simple déclaration) n'est jamais
+ * compté : il doit pouvoir repasser lire le noindex qu'on vient d'y poser.
+ *
+ * 90 pages par 10 minutes et par visiteur : un humain qui parcourt les pages
+ * véhicules n'en ouvre pas neuf par minute ; l'aspirateur, lui, en demande
+ * plus de quatre-vingts. Un 429 porte Retry-After, que les moteurs respectent.
+ *
+ * Le limiteur ne suffira pas si le robot se répartit sur des centaines
+ * d'adresses : c'est le journal des agents (posé juste avant, il compte TOUT,
+ * y compris ce qui est freiné) qui dira alors qui appeler — ou qu'il faut
+ * passer le domaine derrière Cloudflare. */
+const journalPiecesAuto = creerJournalAgents({ nom: '/pieces-auto' });
+const piecesAutoLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 90,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => robotsVerifies.cleLimiteur(req),
+  skip: (req) => robotsVerifies.estRobotVerifie(req),
+  handler: (req, res) => res
+    .status(429)
+    .set('Retry-After', '600')
+    .type('text/plain')
+    .send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
+});
+/* Et un PLAFOND GLOBAL, parce que le limiteur par visiteur ne suffit pas.
+ *
+ * Première mesure, une fois le journal en ligne (30/09/2026, 10 h 14) : 867
+ * requêtes en cinq minutes — ~10 400 par heure — réparties sur 33 agents et,
+ * pour le seul premier d'entre eux, 172 adresses IP. Aucun ne se déclare
+ * robot : ce sont des agents de Chrome mobile ordinaires. Un aspirateur qui
+ * tourne sur un parc de proxys résidentiels ne dépasse jamais un quota par
+ * adresse — 228 requêtes sur 172 adresses, c'est une requête et demie chacune.
+ *
+ * On protège donc la machine, pas les adresses : au-delà de 60 pages par
+ * minute TOUS visiteurs confondus, la page n'est plus construite. Ces pages ne
+ * sont plus indexées et reçoivent 27 visites par jour : le plafond ne gêne
+ * personne, sauf celui qui en demande 170 par minute. Les robots vérifiés
+ * n'y sont pas soumis, et un 429 refusé ici ne touche ni la base ni le
+ * gabarit — il coûte mille fois moins cher qu'une page servie.
+ *
+ * Ce n'est pas la solution durable : le domaine derrière Cloudflare le serait.
+ * C'est ce qui remet le site debout aujourd'hui. */
+const PIECES_AUTO_PLAFOND_MIN = Number(process.env.PIECES_AUTO_PLAFOND_MIN) > 0
+  ? Number(process.env.PIECES_AUTO_PLAFOND_MIN)
+  : 60;
+const piecesAutoPlafond = rateLimit({
+  windowMs: 60 * 1000,
+  /* Réglable sur Render sans redéploiement (PIECES_AUTO_PLAFOND_MIN) : pendant
+     une attaque, on serre ; quand elle passe, on desserre. */
+  max: PIECES_AUTO_PLAFOND_MIN,
+  standardHeaders: false,
+  legacyHeaders: false,
+  keyGenerator: () => 'pieces-auto',
+  skip: (req) => robotsVerifies.estRobotVerifie(req),
+  handler: (req, res) => res
+    .status(429)
+    .set('Retry-After', '60')
+    .type('text/plain')
+    .send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
+});
+app.use('/pieces-auto', journalPiecesAuto, piecesAutoLimiter, piecesAutoPlafond);
 
 app.get('/sitemap.xml', seoController.getSitemapXml);
 app.get('/sitemap-pages.xml', seoController.getSitemapPages);

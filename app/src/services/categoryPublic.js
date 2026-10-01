@@ -16,27 +16,45 @@ function _escapeRegExp(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/* Icône par défaut (Material Symbol) selon le nom de la catégorie, quand aucune
-   icône n'est définie en admin. */
+/* Icône du menu (Material Symbol) selon le nom de la catégorie, quand aucune
+   icône n'est définie en admin.
+ *
+ * Ces noms DOIVENT être embarqués dans la police d'icônes : elle est réduite
+ * aux seules icônes utilisées (scripts/polices-locales.js). Une icône absente
+ * du sous-ensemble ne s'affiche pas « vide » — le navigateur écrit son NOM en
+ * toutes lettres, en 24 px, dans le menu : « cyclone », « linear_scale »,
+ * « view_in_ar » se lisaient ainsi sur l'accueil (signalé le 01/10/2026).
+ * D'où cette table exportée, que le script de génération lit directement :
+ * les noms ne vivent plus seulement dans du code qu'il ne regardait pas. */
+const ICONE_PAR_DEFAUT = 'category';
+const ICONES_CATEGORIES = [
+  [/transfert/, 'sync_alt'],
+  [/bo[iî]te|vitesse|transmission/, 'settings'],
+  [/moteur|bloc/, 'settings_suggest'],
+  [/pont|diff[ée]rentiel|cardan|transmission/, 'linear_scale'],
+  [/turbo|compresseur/, 'cyclone'],
+  [/culasse/, 'view_in_ar'],
+  [/m[ée]catronique|calculateur|injection|pompe|valve/, 'memory'],
+  [/d[ée]marreur|alternateur|batterie|charge/, 'battery_charging_full'],
+  [/[ée]lectr|faisceau|capteur/, 'bolt'],
+  [/[ée]clairage|phare|feu|optique|ampoule/, 'lightbulb'],
+  [/frein|disque|plaquette|[ée]trier/, 'album'],
+  [/embrayage|volant moteur/, 'trip_origin'],
+  [/direction|suspension|amortisseur|cr[ée]maill/, 'tune'],
+  [/refroidiss|radiateur|climatis/, 'ac_unit'],
+  [/[ée]chappement|catalyseur|fap/, 'air'],
+  [/carrosserie|t[ôo]le|pare/, 'directions_car'],
+];
+
+/** Tous les noms d'icônes que ce service peut produire (police + tests). */
+function icones() {
+  return [...new Set(ICONES_CATEGORIES.map(([, nom]) => nom).concat(ICONE_PAR_DEFAUT))];
+}
+
 function _defaultIcon(name) {
   const n = (name || '').toLowerCase();
-  if (/transfert/.test(n)) return 'sync_alt';
-  if (/bo[iî]te|vitesse|transmission/.test(n)) return 'settings';
-  if (/moteur|bloc/.test(n)) return 'settings_suggest';
-  if (/pont|diff[ée]rentiel|cardan|transmission/.test(n)) return 'linear_scale';
-  if (/turbo|compresseur/.test(n)) return 'cyclone';
-  if (/culasse/.test(n)) return 'view_in_ar';
-  if (/m[ée]catronique|calculateur|injection|pompe|valve/.test(n)) return 'memory';
-  if (/d[ée]marreur|alternateur|batterie|charge/.test(n)) return 'battery_charging_full';
-  if (/[ée]lectr|faisceau|capteur/.test(n)) return 'bolt';
-  if (/[ée]clairage|phare|feu|optique|ampoule/.test(n)) return 'lightbulb';
-  if (/frein|disque|plaquette|[ée]trier/.test(n)) return 'album';
-  if (/embrayage|volant moteur/.test(n)) return 'trip_origin';
-  if (/direction|suspension|amortisseur|cr[ée]maill/.test(n)) return 'tune';
-  if (/refroidiss|radiateur|climatis/.test(n)) return 'ac_unit';
-  if (/[ée]chappement|catalyseur|fap/.test(n)) return 'air';
-  if (/carrosserie|t[ôo]le|pare/.test(n)) return 'directions_car';
-  return 'category';
+  const trouve = ICONES_CATEGORIES.find(([rx]) => rx.test(n));
+  return trouve ? trouve[1] : ICONE_PAR_DEFAUT;
 }
 
 async function getNavCategories() {
@@ -144,6 +162,8 @@ function buildCategoryPublicUrl(category, { req } = {}) {
 }
 
 module.exports = {
+  ICONE_PAR_DEFAUT,
+  icones,
   buildCategoryPublicPath,
   buildCategoryPublicUrl,
   getPublicBaseUrlFromReq,
