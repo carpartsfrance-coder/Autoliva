@@ -27,6 +27,29 @@ var current = phaseIndex(ticket.statut);
 var publicMsgs = (ticket.messages || []).filter(function(m){ return m.canal !== 'interne'; });
 %>
 
+<%# Mise en page d'un message collé : Tailwind remet à zéro les marges de p,
+    ul et ol, sans quoi un message rédigé ailleurs arriverait en un seul bloc
+    compact — exactement ce qu'on cherche à éviter. Tenu court et local au
+    partiel : rien de tout cela n'existe ailleurs dans l'espace client. %>
+<style>
+  .sav-msg-riche > :first-child { margin-top: 0; }
+  .sav-msg-riche > :last-child { margin-bottom: 0; }
+  .sav-msg-riche p { margin: 0 0 .6em; }
+  .sav-msg-riche br + br { display: none; }
+  .sav-msg-riche ul, .sav-msg-riche ol { margin: 0 0 .6em; padding-left: 1.25em; }
+  .sav-msg-riche ul { list-style: disc; }
+  .sav-msg-riche ol { list-style: decimal; }
+  .sav-msg-riche li { margin: .15em 0; }
+  .sav-msg-riche h3, .sav-msg-riche h4, .sav-msg-riche h5 { font-weight: 700; margin: .8em 0 .3em; font-size: 1em; }
+  .sav-msg-riche strong, .sav-msg-riche b { font-weight: 700; }
+  .sav-msg-riche em, .sav-msg-riche i { font-style: italic; }
+  .sav-msg-riche a { text-decoration: underline; }
+  .sav-msg-riche blockquote { margin: 0 0 .6em; padding-left: .75em; border-left: 2px solid currentColor; opacity: .85; }
+  .sav-msg-riche pre { white-space: pre-wrap; }
+  .sav-msg-riche code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+</style>
+
+
 <% if (sent) { %>
   <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
     Votre message a bien été envoyé. L'équipe SAV vous répondra rapidement.
@@ -97,7 +120,15 @@ var publicMsgs = (ticket.messages || []).filter(function(m){ return m.canal !== 
               <div class="text-[10px] opacity-70 mb-0.5">
                 <%= isClient ? 'Vous' : brand.NAME %> · <%= new Date(m.date).toLocaleString('fr-FR') %><% if (m.editedAt) { %> · <span class="italic" title="Modifié le <%= new Date(m.editedAt).toLocaleString('fr-FR') %>">(modifié)</span><% } %>
               </div>
-              <div class="whitespace-pre-wrap"><%= m.contenu %></div>
+              <%# Message rédigé ailleurs puis collé (ChatGPT, document) : sa mise
+                  en page a été nettoyée à l'enregistrement (savMessageHtml), il
+                  ne reste que la structure. Sans elle, on affiche le texte, dont
+                  les sauts de ligne sont conservés par whitespace-pre-wrap. %>
+              <% if (m.html) { %>
+                <div class="sav-msg-riche"><%- m.html %></div>
+              <% } else { %>
+                <div class="whitespace-pre-wrap"><%= m.contenu %></div>
+              <% } %>
               <% if (Array.isArray(m.attachments) && m.attachments.length) { %>
                 <div class="mt-2 pt-2 border-t <%= isClient ? 'border-white/30' : 'border-slate-300' %> space-y-1">
                   <% m.attachments.forEach(function(a) {

@@ -85,6 +85,11 @@ const messageSchema = new mongoose.Schema(
       required: true,
     },
     contenu: { type: String, required: true },
+    /* Mise en page du message, quand il a été rédigé ailleurs puis collé
+       (ChatGPT, document) : paragraphes, listes, gras. Déjà nettoyé à
+       l'enregistrement (services/savMessageHtml). Vide = on affiche `contenu`,
+       comme tous les messages d'avant le 01/10/2026. */
+    html: { type: String, default: '' },
     attachments: { type: [messageAttachmentSchema], default: [] },
     // Modification admin (champs absents = jamais édité)
     editedAt: { type: Date },
@@ -581,9 +586,10 @@ savTicketSchema.pre('save', async function preSave(next) {
 
 // ---------- Methods ----------
 
-savTicketSchema.methods.addMessage = function addMessage(auteur, canal, contenu, attachments) {
+savTicketSchema.methods.addMessage = function addMessage(auteur, canal, contenu, attachments, html) {
   const date = new Date();
   const msg = { auteur, canal, contenu, date };
+  if (html) msg.html = String(html);
   if (Array.isArray(attachments) && attachments.length) {
     msg.attachments = attachments
       .filter((a) => a && a.url)
