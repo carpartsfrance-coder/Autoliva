@@ -1,7 +1,8 @@
 {
-  "version": "caf7ae919e",
-  "genereLe": "2026-09-09T09:33:59.169Z",
+  "version": "4cc6d2cbf8",
+  "genereLe": "2026-10-01T07:16:54.464Z",
   "icones": [
+    "ac_unit",
     "account_balance",
     "account_circle",
     "account_tree",
@@ -12,8 +13,10 @@
     "add_shopping_cart",
     "admin_panel_settings",
     "ads_click",
+    "air",
     "airline_seat_recline_normal",
     "alarm",
+    "album",
     "alternate_email",
     "altitude",
     "analytics",
@@ -33,6 +36,7 @@
     "autorenew",
     "badge",
     "balance",
+    "battery_charging_full",
     "biotech",
     "block",
     "bolt",
@@ -41,7 +45,6 @@
     "build_circle",
     "cable",
     "calculate",
-    "calendar_month",
     "calendar_today",
     "call",
     "call_received",
@@ -74,6 +77,7 @@
     "credit_card",
     "crop_square",
     "currency_exchange",
+    "cyclone",
     "dashboard",
     "date_range",
     "delete",
@@ -141,7 +145,6 @@
     "hourglass_top",
     "html",
     "http",
-    "hub",
     "iframe",
     "image",
     "imagesmode",
@@ -155,6 +158,7 @@
     "language",
     "light",
     "lightbulb",
+    "linear_scale",
     "link",
     "list",
     "list_alt",
@@ -223,7 +227,6 @@
     "push_pin",
     "quiz",
     "radio",
-    "radio_button_checked",
     "receipt",
     "receipt_long",
     "redeem",
@@ -288,7 +291,7 @@
     "subscriptions",
     "support_agent",
     "swap_horiz",
-    "sync",
+    "sync_alt",
     "tab",
     "table",
     "table_rows",
@@ -307,6 +310,7 @@
     "translate",
     "trending_down",
     "trending_up",
+    "trip_origin",
     "tune",
     "unarchive",
     "undo",
@@ -317,7 +321,7 @@
     "verified",
     "verified_user",
     "view_column",
-    "view_list",
+    "view_in_ar",
     "visibility",
     "visibility_off",
     "warning",
@@ -427,7 +431,7 @@
       "unicodeRange": null,
       "icones": true,
       "preload": true,
-      "octets": 95228
+      "octets": 95664
     },
     {
       "famille": "Material Symbols Rounded",
@@ -438,7 +442,7 @@
       "unicodeRange": null,
       "icones": true,
       "preload": false,
-      "octets": 120528
+      "octets": 121292
     }
   ]
 }
