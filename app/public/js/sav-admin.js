@@ -3962,7 +3962,57 @@
     }
     var sujetInput = document.querySelector('input[name="sujet"]');
     if (sujetInput) sujetInput.addEventListener('input', renderPreview);
+    /* Coller depuis ChatGPT, Word ou un document : on garde la MISE EN PAGE
+       (paragraphes, sauts de ligne, listes, gras) et on jette l'habillage —
+       polices, couleurs, classes du logiciel d'origine. Sans ça, soit on colle
+       l'habillage et le message arrive en Times gris au milieu du site, soit on
+       colle le texte nu et l'auteur perd ses listes et ses paragraphes.
+       Même liste de balises que le nettoyage du serveur (savMessageHtml) :
+       ce que l'éditeur montre est ce que le client verra. */
+    var BALISES_COLLE = ['P','BR','DIV','SPAN','STRONG','B','EM','I','U','S','UL','OL','LI','BLOCKQUOTE','CODE','PRE','H3','H4','H5','A','HR'];
+    function nettoyerColle(html) {
+      var bac = document.createElement('div');
+      bac.innerHTML = String(html || '');
+      bac.querySelectorAll('script,style,meta,link,title,iframe,object,embed,img,table,colgroup').forEach(function (n) { n.remove(); });
+      Array.prototype.slice.call(bac.querySelectorAll('*')).forEach(function (n) {
+        if (BALISES_COLLE.indexOf(n.tagName) === -1) {
+          /* Balise non retenue : on garde son texte, pas son emballage. */
+          while (n.firstChild) n.parentNode.insertBefore(n.firstChild, n);
+          n.remove();
+          return;
+        }
+        for (var i = n.attributes.length - 1; i >= 0; i--) {
+          var a = n.attributes[i].name;
+          var garde = (n.tagName === 'A' && a === 'href');
+          if (!garde) n.removeAttribute(a);
+        }
+        if (n.tagName === 'A') {
+          var href = n.getAttribute('href') || '';
+          if (!/^(https?:|mailto:|tel:)/i.test(href)) n.removeAttribute('href');
+        }
+      });
+      return bac.innerHTML;
+    }
+    function texteEnHtml(texte) {
+      return String(texte || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\r\n?/g, '\n')
+        .split('\n')
+        .join('<br>');
+    }
     if (editor) {
+      editor.addEventListener('paste', function (e) {
+        var presse = e.clipboardData || window.clipboardData;
+        if (!presse) return;
+        var html = presse.getData('text/html');
+        var texte = presse.getData('text/plain');
+        if (!html && !texte) return;
+        e.preventDefault();
+        var aInserer = html ? nettoyerColle(html) : texteEnHtml(texte);
+        if (!aInserer.replace(/<[^>]*>/g, '').trim() && texte) aInserer = texteEnHtml(texte);
+        document.execCommand('insertHTML', false, aInserer);
+        syncContenu();
+      });
       editor.addEventListener('input', syncContenu);
       document.querySelectorAll('[data-cmd]').forEach(function (b) {
         b.addEventListener('click', function () {

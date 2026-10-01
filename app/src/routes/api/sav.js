@@ -10,6 +10,7 @@ const SavProcedure = require('../../models/SavProcedure');
 const AuditLog = require('../../models/AuditLog');
 const audit = require('../../services/auditLogger');
 const savFileStorage = require('../../services/savFileStorage');
+const savMessageHtml = require('../../services/savMessageHtml');
 const brand = require('../../config/brand');
 
 const router = express.Router();
@@ -1099,7 +1100,11 @@ adminRouter.post('/tickets/:numero/communication', upload.array('attachments', 5
 
     // Les pièces jointes sont rattachées au message : le client les voit dans la bulle,
     // pas seulement dans la liste des documents en bas de page.
-    ticket.addMessage('admin', canal, contenu, savedAttachments);
+    /* Le message garde sa mise en page quand il a été rédigé ailleurs puis
+       collé : on retient la structure (paragraphes, listes, gras) et on jette
+       l'habillage du logiciel d'origine (services/savMessageHtml). */
+    const htmlPropre = savMessageHtml.nettoyer(html);
+    ticket.addMessage('admin', canal, contenu, savedAttachments, htmlPropre);
     await ticket.save();
     audit.log({ req, action: 'sav.comm.' + canal, entityType: 'sav_ticket', entityId: ticket.numero, after: { attachments: savedAttachments.length } });
     return ok(res, { numero: ticket.numero, attachments: savedAttachments });
@@ -1901,6 +1906,10 @@ adminRouter.patch('/tickets/:numero/messages/:messageId', express.json({ limit: 
     const before = { contenu: msg.contenu, editedAt: msg.editedAt || null };
     const editor = (req.headers['x-admin-user'] || 'admin').toString().slice(0, 80);
     msg.contenu = newContenu;
+    /* La correction est saisie en texte : elle devient la seule version. Sans
+       cela, le client continuerait de lire la mise en page d'AVANT la
+       correction, puisque c'est elle qui s'affiche quand elle existe. */
+    msg.html = '';
     msg.editedAt = new Date();
     msg.editedBy = editor;
     await ticket.save();
