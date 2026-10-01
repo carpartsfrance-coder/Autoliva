@@ -109,7 +109,15 @@
       <div class="cat-nav__grid">
         <% navCategories.forEach(function (cat) { %>
           <a class="cat-nav__item" href="<%= _navLp %>/categorie/<%= encodeURIComponent(_isDe && cat.slugDe ? cat.slugDe : cat.slug) %>">
-            <span class="cat-nav__ic"><span class="material-symbols-outlined"><%= cat.icon || 'category' %></span></span>
+            <%# La police d'icônes est réduite aux icônes utilisées : une icône
+                absente ne s'affiche pas vide, le navigateur écrit son NOM en
+                24 px dans le menu (« cyclone », « linear_scale »… vus sur
+                l'accueil le 01/10/2026). Le champ « icône » de l'admin accepte
+                n'importe quel nom : on retombe donc sur l'icône générique
+                plutôt que d'écrire un mot au milieu du menu. %>
+            <% var _icone = cat.icon || 'category';
+               if (typeof polices !== 'undefined' && polices && polices.icones && polices.icones.size && !polices.icones.has(_icone)) _icone = 'category'; %>
+            <span class="cat-nav__ic"><span class="material-symbols-outlined"><%= _icone %></span></span>
             <span class="cat-nav__nm"><%= _isDe && cat.nameDe ? cat.nameDe : cat.name %></span>
           </a>
         <% }); %>

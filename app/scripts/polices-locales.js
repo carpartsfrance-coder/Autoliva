@@ -81,6 +81,17 @@ function listerFichiers(dossier, acc = []) {
  */
 function extraireIcones({ officiels, racine = RACINE } = {}) {
   const strictes = new Set();
+  /* Les icônes du menu « Catalogue » ne sont écrites dans AUCUNE vue : elles
+     viennent d'une table de services/categoryPublic.js (ou du champ menuIcon
+     d'une catégorie, qui reprend les mêmes noms). Le balayage ci-dessous ne
+     lit que les fichiers contenant « material-symbols » : il les a donc toutes
+     ratées, et neuf d'entre elles s'écrivaient en toutes lettres dans le menu
+     — « cyclone », « linear_scale », « view_in_ar »… (01/10/2026). */
+  try {
+    for (const nom of require(path.join(racine, 'src', 'services', 'categoryPublic')).icones()) strictes.add(nom);
+  } catch (e) {
+    console.warn('icônes des catégories illisibles :', e.message);
+  }
   const larges = new Set();
   const fichiers = DOSSIERS_SOURCES.flatMap((d) => listerFichiers(path.join(racine, d)));
   for (const f of fichiers) {
