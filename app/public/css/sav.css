@@ -652,9 +652,17 @@
   flex-direction: column;
   gap: 0.375rem;
 }
+/* Corriger un message, c'est relire un texte entier : la bulle fait 75 % de la
+   colonne et le champ 80 px de haut, soit trois lignes — on corrigeait à
+   l'aveugle (signalé le 01/10/2026). Pendant l'édition, la bulle prend donc
+   toute la largeur et le champ s'étire à la hauteur du texte (JS), jusqu'à
+   60 % de l'écran. */
+.sav-chat-content.is-editing { max-width: 100%; width: 100%; }
+.sav-chat-content.is-editing .sav-bubble { width: 100%; }
 .sav-bubble__edit-textarea {
   width: 100%;
-  min-height: 80px;
+  min-height: 180px;
+  max-height: 60vh;
   resize: vertical;
   padding: 0.5rem;
   font: inherit;

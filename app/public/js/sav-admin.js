@@ -3637,15 +3637,34 @@
           if (bodyEl) bodyEl.style.display = 'none';
           bubble.appendChild(form);
           var ta = form.querySelector('textarea');
+          /* La bulle fait 75 % de la colonne : à l'édition, on rend la largeur
+             entière, sinon on relit son message dans un couloir. */
+          var contenuEl = row && row.querySelector('.sav-chat-content');
+          if (contenuEl) contenuEl.classList.add('is-editing');
+          /* Et le champ prend la hauteur du texte, au lieu de trois lignes
+             fixes : corriger un message, c'est d'abord le relire en entier. */
+          function ajusterHauteur() {
+            ta.style.height = 'auto';
+            ta.style.height = Math.min(ta.scrollHeight + 2, Math.round(window.innerHeight * 0.6)) + 'px';
+          }
+          ta.addEventListener('input', ajusterHauteur);
+          ajusterHauteur();
           ta.focus();
+          /* Échap referme sans enregistrer, Ctrl/Cmd+Entrée enregistre : on ne
+             quitte pas le clavier pour viser deux petits boutons. */
+          ta.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { e.preventDefault(); form.querySelector('.sav-bubble__edit-cancel').click(); }
+            else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); form.querySelector('.sav-bubble__edit-save').click(); }
+          });
           form.querySelector('.sav-bubble__edit-cancel').addEventListener('click', function () {
             form.remove();
+            if (contenuEl) contenuEl.classList.remove('is-editing');
             if (bodyEl) bodyEl.style.display = '';
           });
           form.querySelector('.sav-bubble__edit-save').addEventListener('click', function () {
             var newVal = (ta.value || '').trim();
             if (!newVal) { toast('Contenu vide', 'error'); return; }
-            if (newVal === currentText) { form.remove(); if (bodyEl) bodyEl.style.display = ''; return; }
+            if (newVal === currentText) { form.remove(); if (contenuEl) contenuEl.classList.remove('is-editing'); if (bodyEl) bodyEl.style.display = ''; return; }
             var saveBtn = form.querySelector('.sav-bubble__edit-save');
             saveBtn.disabled = true; saveBtn.textContent = 'Enregistrement…';
             api('/tickets/' + encodeURIComponent(numero) + '/messages/' + encodeURIComponent(mid), {
