@@ -190,7 +190,9 @@ const S = {
   X_LR_PIN: 'boite-de-transfert-land-rover-discovery-5-range-rover-lr125903-guide-complet',
   X_ALFA_PIN: 'boite-de-transfert-alfa-romeo-giulia-stelvio-q4-guide-complet',
   X_D4FD: '17-crdi-d4fd-prix-budget-moteur-reconditionne',
-  X_AUDI: 'audi-q5-fy-s-tronic-dl382-tcu-panne-diagnostic-prix',
+  /* Article resté hors de l'index : le précédent (audi-q5-fy-…) est revenu
+     dans la liste blanche avec le lot du 30/09/2026. */
+  X_AUDI: 'audi-a4-b9-a5-f5-s-tronic-dl382-calculateur-tcu-panne',
   G_P0726: 'p0726-dl501-code-defaut-signal-regime-moteur',
   G_HILUX: 'identifier-differentiel-hilux-fortuner-code-moteur-reference-41110',
   G_CODES: 'codes-defaut-dsg-s-tronic-guide-complet-par-boite',
@@ -215,7 +217,7 @@ const ARTICLES = [
   article('X_LR_PIN', { slug: S.X_LR_PIN, titre: 'Boîtes de transfert Land Rover Discovery 5 : guide complet', categorie: 'transmission-boite-de-transfert', publie: '2026-07-01T09:00:00Z', epingle: true }),
   article('X_ALFA_PIN', { slug: S.X_ALFA_PIN, titre: 'Boîte de transfert Alfa Romeo Giulia Q4 : guide complet', categorie: 'transmission-boite-de-transfert', publie: '2026-07-02T09:00:00Z', epingle: true }),
   article('X_D4FD', { slug: S.X_D4FD, titre: 'Moteur 1.7 CRDi D4FD reconditionné : prix', categorie: 'moteur-diesel', publie: '2026-07-10T09:00:00Z', produits: [] }),
-  article('X_AUDI', { slug: S.X_AUDI, titre: 'Audi Q5 FY S tronic DL382 : panne du calculateur', categorie: 'transmission-mecatronique', publie: '2026-08-01T09:00:00Z' }),
+  article('X_AUDI', { slug: S.X_AUDI, titre: 'Audi A4 B9 / A5 F5 S tronic DL382 : panne du calculateur', categorie: 'transmission-mecatronique', publie: '2026-08-01T09:00:00Z' }),
   article('G_P0726', { slug: S.G_P0726, titre: 'Code P0726 DL501 : signal de régime moteur', categorie: 'moteur-diesel', publie: '2026-09-05T09:00:00Z', de: { titre: 'Fehlercode P0726 DL501', traduit: '2026-09-08T08:00:00Z' } }),
   article('G_HILUX', { slug: S.G_HILUX, titre: 'Identifier le différentiel Hilux Fortuner', categorie: 'transmission-pont-differentiel', publie: '2026-09-06T09:00:00Z', de: { titre: 'Differential Hilux Fortuner erkennen', traduit: '2026-09-08T08:05:00Z' } }),
   article('G_CODES', { slug: S.G_CODES, titre: 'Codes défaut DSG S tronic Audi A4 : guide complet par boîte', categorie: 'transmission-mecatronique', publie: '2026-09-05T12:00:00Z', de: { titre: 'DSG-Fehlercodes', traduit: '2026-09-08T08:10:00Z' } }),
@@ -494,7 +496,7 @@ test('politique d’indexation servie par l’application (plan SEO A5)', async 
 
   /* ── blog ─────────────────────────────────────────────────────────────── */
 
-  await t.test('blog : hors des 295 gardés, un article sort de Google — même si la base dit « index, follow »', async () => {
+  await t.test('blog : hors des 315 gardés, un article sort de Google — même si la base dit « index, follow »', async () => {
     activer('blog');
     for (const cle of ['X_D4FD', 'X_LR_PIN', 'X_AUDI', 'G_P0726']) estNoindex(await get(`/blog/${S[cle]}`), cle);
     for (const cle of ['K_DQ200', 'K_AUDI', 'N_TDI', 'N_RR']) estIndexable(await get(`/blog/${S[cle]}`), cle);

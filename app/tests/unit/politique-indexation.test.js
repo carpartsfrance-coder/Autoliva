@@ -94,8 +94,8 @@ test('index-policy.json est exactement ce que le générateur tire des listes co
 
 test('les listes commitées sont celles du plan : comptes et recoupements', () => {
   const p = require('../../src/data/seo/index-policy.json');
-  assert.equal(p.blog.garder.length, 295);
-  assert.equal(p.blog.maillage.length, 76);
+  assert.equal(p.blog.garder.length, 315);
+  assert.equal(p.blog.maillage.length, 96);
   assert.equal(p.disparus.fr.length + p.disparus.de.length, 268);
   assert.equal(p.piecesAuto.garder.length, 242);
   assert.deepEqual(p.references.garder, ['0AM927769G', '4797786420', 'C2D3506']);
@@ -414,7 +414,7 @@ test('dates de bascule : la variable Render passe devant le fichier ; invalide o
   assert.deepEqual(politique.famillesEnRetrait({ maintenant: fin, env }), ['pieces-auto', 'de']);
 });
 
-/* ─── Maillage des 76 articles gardés sans lien ───────────────────────────── */
+/* ─── Maillage des 96 articles gardés sans lien ───────────────────────────── */
 
 test('maillage : chaque article à mailler publié reçoit un hôte gardé, jamais lui-même, de sa catégorie d’abord', () => {
   const p = require('../../src/data/seo/index-policy.json');
@@ -426,14 +426,14 @@ test('maillage : chaque article à mailler publié reçoit un hôte gardé, jama
   const parHote = politique.repartirMaillage(articles);
   const hotes = new Map();
   for (const [hote, cibles] of parHote) for (const c of cibles) hotes.set(c, hote);
-  assert.deepEqual([...hotes.keys()].sort(), p.blog.maillage.slice().sort(), 'chacun des 76 a un hôte');
+  assert.deepEqual([...hotes.keys()].sort(), p.blog.maillage.slice().sort(), 'chacun des 96 a un hôte');
   const categorie = new Map(articles.map((a) => [a.slug, a.category.slug]));
   for (const [cible, hote] of hotes) {
     assert.notEqual(hote, cible);
     assert.ok(p.blog.garder.includes(hote), `${hote} : l’hôte est un article gardé`);
   }
   const memeCategorie = [...hotes].filter(([c, h]) => categorie.get(c) === categorie.get(h)).length;
-  assert.ok(memeCategorie >= 70, `la plupart dans leur catégorie (${memeCategorie}/76)`);
+  assert.ok(memeCategorie >= 70, `la plupart dans leur catégorie (${memeCategorie}/96)`);
   for (const cibles of parHote.values()) assert.ok(cibles.length <= 2, 'au plus deux par hôte');
   assert.deepEqual(politique.repartirMaillage(articles.slice().reverse()), parHote, 'stable, quel que soit l’ordre de la base');
   /* Un article à mailler seul dans sa catégorie trouve un hôte ailleurs ; un

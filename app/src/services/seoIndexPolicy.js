@@ -29,7 +29,7 @@
  * Familles :
  *   gone        : les 268 adresses de gone-410-blog.txt répondent 410 (le
  *                 contenu reste en base : retirer un slug de la liste le rend) ;
- *   blog        : tout article français hors des 295 gardés passe en
+ *   blog        : tout article français hors des 315 gardés passe en
  *                 noindex, follow (liste BLANCHE) ;
  *   reference   : toute /reference/<réf> hors des 3 gardées, en noindex ;
  *   pieces-auto : toute /pieces-auto/* hors des 242 pages gardées, en noindex
@@ -40,6 +40,26 @@
  *                 du 14/09/2026), en noindex. N'est allumée qu'après le contrôle
  *                 Merchant Center (action A2). Le choix fait fiche par fiche
  *                 dans l'admin (seo.indexOverride) passe devant la liste.
+ *
+ * ── Réintégration progressive du blog (demande de Killian, 30/09/2026) ──────
+ *
+ * Les articles sortis de l'index ne sont pas perdus : on en remet un petit lot
+ * à la fois dans keep-blog-fr.txt, en commençant par ceux qui travaillaient
+ * vraiment. Ajouter un slug à cette liste le remet DANS l'index, dans les
+ * listes publiques et dans les sitemaps ; l'ajouter en même temps à
+ * kept-posts-need-inlinks.txt lui rend des liens internes depuis les articles
+ * gardés — sans quoi il revient orphelin et Google ne repasse pas dessus.
+ *
+ * Critères du lot du 30/09/2026 (20 articles, mesurés sur les pages vues
+ * maison d'avril à fin août, avant la démotion) : au moins une visite
+ * organique, au moins 600 mots, et moins de 30 % de ressemblance avec un autre
+ * article (le lot mesuré plafonne à 5 % : ces textes ne sont pas des copies les
+ * uns des autres). Ces 20 portaient 32 % du trafic organique de tout le lot
+ * sorti de l'index. Il reste 127 articles éligibles aux mêmes critères.
+ *
+ * Marche à suivre pour le lot suivant : ajouter les adresses aux deux listes,
+ * relancer node scripts/generer-index-policy.js, et attendre le contrôle
+ * Search Console d'une à deux semaines avant d'en remettre.
  *
  * ── Un seul point d'application ──────────────────────────────────────────────
  *
@@ -357,7 +377,7 @@ function repondreDisparu(req, res, decision) {
 
 /**
  * Condition Mongo sur le slug, ou null quand rien ne change.
- *   lang 'fr', liste (défaut) : « blog » actif → seuls les 295 articles
+ *   lang 'fr', liste (défaut) : « blog » actif → seuls les 315 articles
  *     gardés ; sinon « gone » actif → tout sauf les 134 articles en 410.
  *   lang 'fr', page : l'article lui-même reste servi même en noindex ; seul
  *     le 410 l'écarte.
@@ -431,7 +451,7 @@ function retirerLiensDisparus(html) {
 
 /* ─── Maillage des articles gardés sans lien entrant ──────────────────────── */
 
-/* 76 articles gardés ne reçoivent plus de lien d'aucun autre article gardé
+/* 96 articles gardés ne reçoivent plus de lien d'aucun autre article gardé
    (65 n'en recevaient que d'articles retirés, 11 d'aucun). Le bloc « articles
    similaires » de chaque article gardé en porte donc un ou deux, répartis de
    façon stable : un hôte de la même catégorie d'abord (au plus 2 par hôte,
