@@ -1021,6 +1021,19 @@ function getRobotsTxt(req, res) {
     'Disallow: /_next/',
     'Disallow: /feed/',
     '',
+    '# --- Robots d’entraînement d’IA qui ne rendent rien ---',
+    /* meta-externalagent aspire les pages pour entraîner les modèles de Meta.
+       Le 01/10/2026, il faisait 43 % des requêtes restantes sur /pieces-auto,
+       réparties sur 80 adresses, et n'envoie aucun visiteur en retour. Meta
+       déclare respecter robots.txt.
+       NE SONT PAS bloqués, volontairement : facebookexternalhit (aperçu d'un
+       lien partagé sur Facebook), meta-externalfetcher (aperçu demandé par un
+       utilisateur, WhatsApp compris) — les bloquer casserait les partages ;
+       ni GPTBot ni ClaudeBot, qui nous envoient de vrais visiteurs (27 venus
+       de ChatGPT en 36 h). */
+    'User-agent: meta-externalagent',
+    'Disallow: /',
+    '',
     '# --- Bots indésirables ---',
     'User-agent: AhrefsBot',
     'Crawl-delay: 5',

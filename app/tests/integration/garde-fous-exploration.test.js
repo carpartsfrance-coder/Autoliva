@@ -361,6 +361,26 @@ test('garde-fous d’exploration servis par l’application (plan SEO A4)', asyn
       'se dire Googlebot ne suffit pas');
   });
 
+  /* ── Robots d'IA (01/10/2026) ─────────────────────────────────────────── */
+
+  await t.test('robots.txt : Meta est renvoyé, ceux qui envoient des visiteurs restent', async () => {
+    const robots = (await get('/robots.txt')).corps;
+    assert.match(robots, /User-agent: meta-externalagent\nDisallow: \//,
+      'meta-externalagent aspirait 43 % des requêtes restantes sur /pieces-auto');
+
+    /* Bloquer ceux-là casserait les aperçus de liens partagés (Facebook,
+       WhatsApp) : ce ne sont pas des aspirateurs, ils répondent à un humain. */
+    for (const agent of ['facebookexternalhit', 'meta-externalfetcher']) {
+      assert.ok(!robots.includes(agent), `${agent} ne doit pas être bloqué`);
+    }
+    /* Ni ceux qui nous envoient de vrais visiteurs. */
+    for (const agent of ['GPTBot', 'ClaudeBot', 'PerplexityBot']) {
+      assert.ok(!robots.includes(agent), `${agent} ne doit pas être bloqué`);
+    }
+    /* Et le reste du site s'explore toujours. */
+    assert.match(robots, /User-agent: \*\nAllow: \//);
+  });
+
   /* ── Pages véhicules aspirées (30/09/2026) ───────────────────────────── */
 
   await t.test('pages véhicules : l’aspirateur est freiné, un Googlebot vérifié ne l’est jamais', async () => {
