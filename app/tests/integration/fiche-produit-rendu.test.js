@@ -530,6 +530,24 @@ test('fiche produit rendue par l’application — description et allégations (
     assert.ok(!blocPrix(pages.get(DEK.sku)).includes('consigne'), 'consigne inventée sur une fiche qui n’en a pas');
   });
 
+  await t.test('les logos des garages gardent leurs proportions', () => {
+    /* Chaque logo porte width="400" (sa largeur réelle). Sans « width: auto »,
+       cet attribut l'emporte sur le rapport hauteur/largeur : les six
+       s'affichaient étirés à 400 px de large au lieu de 45 à 101, et le Porsche
+       barrait un tiers de l'écran (mesuré sur la page en ligne le 02/10/2026).
+       Le contrôle porte sur le gabarit : la bande n'est pas dans ce jeu d'essai,
+       mais la règle, elle, doit tenir. */
+    const gabarit = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'src', 'views', 'products', 'show.ejs'), 'utf8');
+    const debut = gabarit.indexOf('<div class="ap-marquee-track">');
+    assert.ok(debut > 0, 'bande de logos introuvable dans le gabarit');
+    const bande = gabarit.slice(debut, debut + 3000);
+    const logos = [...bande.matchAll(/<img[^>]+\/design\/autoparts\/[^>]+>/g)].map((m) => m[0]);
+    assert.ok(logos.length >= 6, `logos trouvés : ${logos.length}`);
+    for (const balise of logos) {
+      assert.match(balise, /width:\s*auto/, `logo étiré : ${balise.slice(0, 90)}`);
+    }
+  });
+
   await t.test('mécatroniques : la fiche annonce la livraison en 4 jours ouvrés, FR et DE', async () => {
     /* Décision du 29/09/2026 : un délai ferme par famille remplace le délai
        d'expédition écrit fiche par fiche — « 24 / 48h » ici, « délai
