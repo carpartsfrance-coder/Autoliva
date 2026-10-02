@@ -312,7 +312,10 @@
         @keyframes apLogoMarquee { to { transform: translateX(-50%); } }
         .ap-marquee-track { display: flex; width: max-content; animation: apLogoMarquee 30s linear infinite; }
         .ap-marquee-track:hover { animation-play-state: paused; }
-        .ap-marquee-track img { transition: filter 0.2s; }
+        /* width: auto — sans quoi l'attribut width="400" de chaque logo
+           l'emporte sur son rapport hauteur/largeur et l'étire (02/10/2026).
+           Posé ici AUSSI, pour le prochain logo ajouté sans style en ligne. */
+        .ap-marquee-track img { transition: filter 0.2s; width: auto; }
         .ap-marquee-track img:hover { filter: grayscale(0) opacity(1) !important; }
         @media (prefers-reduced-motion: reduce) { .ap-marquee-track { animation: none !important; } }
         .ap-hover-red:hover { color: #ED1C24 !important; }
@@ -1031,15 +1034,19 @@
         <div style="text-align: center; margin-top: 28px;">
           <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #99A1B0; margin-bottom: 18px;"><%= t('product.garagesTrust') %></div>
           <div style="overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);">
+            <%# Chaque logo porte width="400" (sa largeur réelle) : sans « width: auto »,
+                cet attribut l'emporte sur le rapport hauteur/largeur et TOUS les
+                logos s'affichaient étirés à 400 px de large au lieu de 45 à 101 —
+                le Porsche barrait un tiers de l'écran (signalé le 02/10/2026). %>
             <div class="ap-marquee-track">
               <% for (var _dup = 0; _dup < 2; _dup++) { %>
                 <div style="display: flex; align-items: center; gap: 64px; padding-right: 64px;"<%= _dup === 1 ? ' aria-hidden="true"' : '' %>>
-                  <img src="/design/autoparts/logo-porsche.webp" alt="Porsche" width="400" height="202" loading="lazy" decoding="async" style="height: 44px; filter: grayscale(1) opacity(0.7);" />
-                  <img src="/design/autoparts/chassay-automobiles.png" alt="Chassay Automobiles" width="400" height="79" loading="lazy" decoding="async" style="height: 20px; filter: grayscale(1) opacity(0.7);" />
-                  <img src="/design/autoparts/sun-motors.webp" alt="Sun Motors" width="400" height="267" loading="lazy" decoding="async" style="height: 42px; filter: grayscale(1) opacity(0.75);" />
-                  <img src="/design/autoparts/mougins-autosport.webp" alt="Mougins Auto Sport" width="400" height="267" loading="lazy" decoding="async" style="height: 32px; filter: grayscale(1) opacity(0.7);" />
-                  <img src="/design/autoparts/Logo-FLAT44-contact.png" alt="FLAT44" width="400" height="170" loading="lazy" decoding="async" style="height: 24px; filter: invert(0.75) grayscale(1) opacity(0.85);" />
-                  <img src="/design/autoparts/LOGO-SIMPLICI-CAR-NOIR-copie.png" alt="SimpliciCar" width="400" height="391" loading="lazy" decoding="async" style="height: 44px; filter: grayscale(1) opacity(0.75);" />
+                  <img src="/design/autoparts/logo-porsche.webp" alt="Porsche" width="400" height="202" loading="lazy" decoding="async" style="height: 44px; width: auto; filter: grayscale(1) opacity(0.7);" />
+                  <img src="/design/autoparts/chassay-automobiles.png" alt="Chassay Automobiles" width="400" height="79" loading="lazy" decoding="async" style="height: 20px; width: auto; filter: grayscale(1) opacity(0.7);" />
+                  <img src="/design/autoparts/sun-motors.webp" alt="Sun Motors" width="400" height="267" loading="lazy" decoding="async" style="height: 42px; width: auto; filter: grayscale(1) opacity(0.75);" />
+                  <img src="/design/autoparts/mougins-autosport.webp" alt="Mougins Auto Sport" width="400" height="267" loading="lazy" decoding="async" style="height: 32px; width: auto; filter: grayscale(1) opacity(0.7);" />
+                  <img src="/design/autoparts/Logo-FLAT44-contact.png" alt="FLAT44" width="400" height="170" loading="lazy" decoding="async" style="height: 24px; width: auto; filter: invert(0.75) grayscale(1) opacity(0.85);" />
+                  <img src="/design/autoparts/LOGO-SIMPLICI-CAR-NOIR-copie.png" alt="SimpliciCar" width="400" height="391" loading="lazy" decoding="async" style="height: 44px; width: auto; filter: grayscale(1) opacity(0.75);" />
                 </div>
               <% } %>
             </div>
