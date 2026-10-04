@@ -53,7 +53,32 @@ async function getMediaBySeoUrl(req, res, next) {
 /**
  * Common media serving logic.
  */
-function servePlaceholder(res) {
+/* ── Pourquoi ce journal ────────────────────────────────────────────────────
+ *
+ * Servir un carré gris en 200 était un bon choix pour la mise en page, mais il
+ * a rendu le problème INVISIBLE : ni erreur, ni 404, ni ligne de journal. Des
+ * fiches et 191 articles ont affiché ce carré pendant des mois sans que rien
+ * ne le signale. On trace donc chaque identifiant manquant — une seule fois
+ * par heure et par identifiant, et au plus 200 identifiants retenus : un robot
+ * qui martèle une vieille adresse ne doit pas noyer les journaux.
+ */
+const MANQUANTS_VUS = new Map();
+const MANQUANT_SILENCE_MS = 60 * 60 * 1000;
+const MANQUANTS_MAX = 200;
+
+function signalerMediaManquant(id) {
+  const cle = getTrimmedString(id);
+  if (!cle) return;
+  const maintenant = Date.now();
+  const derniere = MANQUANTS_VUS.get(cle);
+  if (derniere && maintenant - derniere < MANQUANT_SILENCE_MS) return;
+  if (MANQUANTS_VUS.size >= MANQUANTS_MAX) MANQUANTS_VUS.clear();
+  MANQUANTS_VUS.set(cle, maintenant);
+  console.warn(`[media] fichier absent, carré gris servi : /media/${cle}`);
+}
+
+function servePlaceholder(res, id) {
+  signalerMediaManquant(id);
   if (placeholderBuf) {
     res.set('Content-Type', 'image/svg+xml');
     // Image absente temporairement → NE PAS la cacher comme un vrai 200 (sinon
@@ -69,7 +94,7 @@ async function serveMedia(id, res, next) {
   try {
     const file = await mediaStorage.findFileById(id);
     if (!file) {
-      return servePlaceholder(res);
+      return servePlaceholder(res, id);
     }
 
     const contentType = typeof file.contentType === 'string' && file.contentType.trim()
@@ -94,7 +119,7 @@ async function serveMedia(id, res, next) {
 
     const stream = mediaStorage.openDownloadStream(id);
     stream.on('error', () => {
-      servePlaceholder(res);
+      servePlaceholder(res, id);
     });
     stream.pipe(res);
   } catch (err) {

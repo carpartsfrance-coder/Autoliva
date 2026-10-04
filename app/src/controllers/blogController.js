@@ -10,7 +10,8 @@ const claimFilter = require('../services/claimFilter');
 const scalapay = require('../services/scalapay');
 const { markdownToHtml, escapeHtml, directivesProduitHtml, slugsEncadresProduit, remplirEncadresProduit } = require('../services/blogContent');
 const { buildHreflangSet } = require('../services/i18n');
-const { buildSeoMediaUrl } = require('../services/mediaStorage');
+const mediaStorage = require('../services/mediaStorage');
+const { buildSeoMediaUrl } = mediaStorage;
 const brand = require('../config/brand');
 const datesSeo = require('../services/datesSeo');
 /* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.5) :
@@ -727,9 +728,22 @@ async function getBlogPost(req, res) {
 
     // Couverture : image de l'article ; à défaut, image principale du 1er produit lié.
     const relatedMainImage = (related.find((p) => p && p.imageUrl) || {}).imageUrl || '';
-    const effectiveCoverImageUrl = post.coverImageUrl || relatedMainImage;
+    /* Une adresse qui pointe vers un fichier disparu est une chaîne bien
+       remplie : pour le code elle « existe », et le repli ci-dessous ne se
+       déclenchait donc jamais. Résultat, pendant des mois, 191 articles ont
+       affiché un carré gris — et l'ont envoyé en og:image à Google et aux
+       réseaux. On traite désormais une image morte comme une image absente,
+       ce qui rend au repli son rôle. En cache : les couvertures sont très
+       partagées, une seule lecture sert tout le monde. */
+    const absentsCouverture = await mediaStorage.idsAbsentsEnCache([
+      post.coverImageUrl,
+      post.seo && post.seo.ogImageUrl,
+      relatedMainImage,
+    ]);
+    const siVivante = (url) => (url && !mediaStorage.estMediaAbsent(url, absentsCouverture) ? url : '');
+    const effectiveCoverImageUrl = siVivante(post.coverImageUrl) || siVivante(relatedMainImage);
 
-    const ogImageRaw = (post.seo && post.seo.ogImageUrl) ? post.seo.ogImageUrl : effectiveCoverImageUrl;
+    const ogImageRaw = siVivante(post.seo && post.seo.ogImageUrl) || effectiveCoverImageUrl;
     const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
 
     const publishedAt = post.publishedAt || post.createdAt || null;
