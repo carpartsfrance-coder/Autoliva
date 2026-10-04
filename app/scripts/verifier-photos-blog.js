@@ -18,14 +18,18 @@
  *
  * ── Ce que fait --apply ──────────────────────────────────────────────────────
  *
- * Il VIDE les adresses mortes au lieu de les remplacer. C'est le geste utile :
- * tout le site teste « l'article a-t-il une couverture ? » et bascule sur la
- * photo du premier produit lié quand il n'en a pas (blogController.js:325 pour
- * les listes, :730 pour l'article). Une couverture morte est une chaîne bien
- * remplie : le repli ne se déclenchait donc jamais. La vider le réveille, et
- * l'article récupère une photo qui est dans son sujet — l'article sur le pont
- * Haldex prend la photo du pont Haldex qu'on vend. 188 des 191 articles ont un
- * produit lié dont la photo est vivante.
+ * Il remplace l'adresse morte par la photo du premier produit lié — celle que
+ * l'article sur le pont Haldex mérite : le pont Haldex qu'on vend. S'il n'y en
+ * a pas, il vide le champ.
+ *
+ * Pourquoi écrire la photo plutôt que seulement vider : le blog sait se rabattre
+ * sur le produit lié quand la couverture est vide (blogController.js:325 pour
+ * les listes, :730 pour l'article), mais SIX autres endroits ne le savent pas —
+ * le bloc blog de l'accueil, « Pour aller plus loin » des fiches, les « conseils
+ * liés » du maillage interne, et sitemap-blog.xml. Vider seulement laissait donc
+ * une tuile grise sur la page d'accueil (constaté le 04/10/2026). Écrire la
+ * photo répare les huit surfaces d'un coup, sans toucher au code, et c'est
+ * exactement l'image que le repli affichait déjà.
  *
  * Dans le corps des textes, l'image morte est retirée (avec le paragraphe qui
  * ne contenait qu'elle), en français, en markdown et en allemand, pour que les
@@ -165,6 +169,8 @@ function retirerImage(texte, url, genre) {
 
   const aReparer = [];
   let couverturesMortes = 0;
+  let couverturesVides = 0;
+  let combles = 0;
   let ogMortes = 0;
   let imagesCorps = 0;
   const sansRepli = [];
@@ -173,14 +179,23 @@ function retirerImage(texte, url, genre) {
     const changements = {};
     const traces = [];
 
-    if (morte(a.coverImageUrl)) {
-      couverturesMortes += 1;
-      changements.coverImageUrl = '';
+    const couvertureMorte = morte(a.coverImageUrl);
+    const couvertureVide = !String(a.coverImageUrl || '').trim();
+    if (couvertureMorte || couvertureVide) {
+      if (couvertureMorte) couverturesMortes += 1; else couverturesVides += 1;
       const repli = repliDe(a);
-      traces.push(repli
-        ? `couverture morte → reprendra la photo de « ${(repli.name || '').slice(0, 54)} »`
-        : 'couverture morte → AUCUN repli, l’article restera sans image');
-      if (!repli) sansRepli.push(a);
+      if (repli) {
+        changements.coverImageUrl = repli.imageUrl;
+        combles += 1;
+        traces.push(`${couvertureMorte ? 'couverture morte' : 'couverture vide'} → photo de « ${(repli.name || '').slice(0, 54)} »`);
+      } else if (couvertureMorte) {
+        changements.coverImageUrl = '';
+        traces.push('couverture morte → AUCUN repli, l’article restera sans image');
+        sansRepli.push(a);
+      } else {
+        /* Vide et sans repli : rien à faire, on n'invente pas d'image. */
+        sansRepli.push(a);
+      }
     }
     if (morte(a.seo && a.seo.ogImageUrl)) {
       ogMortes += 1;
@@ -266,12 +281,14 @@ function retirerImage(texte, url, genre) {
     + `(${absentsFiches} sur ${mediasFiches.size} médias de fiches)`);
   console.log('');
   console.log(`couvertures mortes             : ${couverturesMortes}`);
+  console.log(`couvertures vides              : ${couverturesVides}`);
+  console.log(`→ reprendront la photo du produit lié : ${combles}`);
   console.log(`og:image mortes                : ${ogMortes}`);
   console.log(`images mortes dans les textes  : ${imagesCorps}`);
   console.log(`articles à réparer             : ${aReparer.length}`);
 
   if (sansRepli.length) {
-    console.log('\n── Ces articles n’auront AUCUNE image (aucun produit lié avec photo) ──');
+    console.log('\n── Ces articles restent sans image (aucun produit lié avec photo) ──');
     for (const a of sansRepli) {
       console.log(`   ${a.title || a.slug}`);
       console.log(`      https://autoliva.com/blog/${a.slug}`);
