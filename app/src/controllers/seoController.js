@@ -484,6 +484,11 @@ async function buildBlogUrls(baseUrl, dbConnected) {
     .select('_id slug title publishedAt createdAt coverImageUrl')
     .sort({ publishedAt: -1, updatedAt: -1 })
     .lean();
+  /* Comme pour les fiches : on ne déclare à Google que les images qu'on a
+     vraiment. Une couverture dont le fichier a disparu renvoie un carré gris
+     en 200, donc rien ne la signale — en octobre 2026, 191 articles en avaient
+     une. Calculé une fois pour tout le sitemap. */
+  const absents = await mediaStorage.idsAbsents(posts.map((bp) => bp && bp.coverImageUrl));
   const urls = [];
   for (const bp of posts) {
     if (!bp || !bp.slug) continue;
@@ -492,7 +497,9 @@ async function buildBlogUrls(baseUrl, dbConnected) {
        avait redaté 1 173 articles dont pas un mot n'avait changé. */
     const last = datesSeo.isoPasse(datesSeo.dateModificationArticle(bp));
     const images = [];
-    if (bp.coverImageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(bp.coverImageUrl, bp.title)));
+    if (bp.coverImageUrl && !mediaStorage.estMediaAbsent(bp.coverImageUrl, absents)) {
+      images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(bp.coverImageUrl, bp.title)));
+    }
     urls.push({ loc, lastmod: last, images, imageTitle: bp.title || '' });
   }
   return urls;
@@ -512,6 +519,8 @@ async function buildBlogUrlsDe(baseUrl, dbConnected) {
     .select('_id slug title publishedAt createdAt coverImageUrl localizations.de.translatedAt localizations.de.title')
     .sort({ publishedAt: -1, updatedAt: -1 })
     .lean();
+  /* Même règle qu'en français : pas d'image morte déclarée à Google. */
+  const absentsDeBlog = await mediaStorage.idsAbsents(posts.map((bp) => bp && bp.coverImageUrl));
   const urls = [];
   for (const bp of posts) {
     if (!bp || !bp.slug) continue;
@@ -523,7 +532,9 @@ async function buildBlogUrlsDe(baseUrl, dbConnected) {
     const last = datesSeo.isoPasse(datesSeo.dateModificationArticleDe(bp));
     const images = [];
     const imgTitle = deLoc.title || bp.title;
-    if (bp.coverImageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(bp.coverImageUrl, imgTitle)));
+    if (bp.coverImageUrl && !mediaStorage.estMediaAbsent(bp.coverImageUrl, absentsDeBlog)) {
+      images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(bp.coverImageUrl, imgTitle)));
+    }
     urls.push({ loc, lastmod: last, images, imageTitle: imgTitle || '' });
   }
   return urls;

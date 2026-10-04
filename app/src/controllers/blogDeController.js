@@ -23,7 +23,8 @@ const signatureArticle = require('../services/signatureArticle');
 const { directivesProduitHtml, slugsEncadresProduit, remplirEncadresProduit } = require('../services/blogContent');
 const claimFilter = require('../services/claimFilter');
 const scalapay = require('../services/scalapay');
-const { buildSeoMediaUrl } = require('../services/mediaStorage');
+const mediaStorage = require('../services/mediaStorage');
+const { buildSeoMediaUrl } = mediaStorage;
 const brand = require('../config/brand');
 const datesSeo = require('../services/datesSeo');
 /* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.5) :
@@ -355,9 +356,6 @@ async function getBlogPostDe(req, res) {
        publication. Jamais updatedAt (plan de reprise SEO, action A4.5). */
     const modifieLe = datesSeo.dateModificationArticleDe(post);
 
-    const ogImageRaw = (post.seo && post.seo.ogImageUrl) ? post.seo.ogImageUrl : post.coverImageUrl;
-    const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
-
     // Réécriture des liens internes /blog/X → /de/blog/X quand X est traduit
     /* Mêmes restes de chaîne que le français, retirés avant la réécriture des
        liens internes (les liens de préproduction deviennent /blog/x, puis
@@ -381,6 +379,22 @@ async function getBlogPostDe(req, res) {
         .select('_id name priceCents imageUrl slug localizations.de.name localizations.de.slug localizations.de.translatedAt ' + blogProductCta.CHAMPS_FICHE)
         .lean();
     }
+
+    /* L'allemand n'avait pas le repli du français : sans couverture, la page
+       partait sans og:image ni image de JSON-LD. Il lui fallait donc attendre
+       que les produits liés soient chargés. Même règle qu'en français : une
+       image dont le fichier a disparu compte comme absente, et le repli prend
+       le relais avec la photo du premier produit lié. */
+    const imagePremierProduitLie = (related.find((p) => p && p.imageUrl) || {}).imageUrl || '';
+    const absentsCouverture = await mediaStorage.idsAbsentsEnCache([
+      post.coverImageUrl,
+      post.seo && post.seo.ogImageUrl,
+      imagePremierProduitLie,
+    ]);
+    const siVivante = (url) => (url && !mediaStorage.estMediaAbsent(url, absentsCouverture) ? url : '');
+    const couvertureEffective = siVivante(post.coverImageUrl) || siVivante(imagePremierProduitLie);
+    const ogImageRaw = siVivante(post.seo && post.seo.ogImageUrl) || couvertureEffective;
+    const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
 
     const relatedProducts = (related || []).map((p) => {
       const priceEuros = Number.isFinite(p.priceCents) ? (p.priceCents / 100).toFixed(2).replace('.', ',') : '';
@@ -485,7 +499,7 @@ async function getBlogPostDe(req, res) {
         title: titreDe,
         slug: post.slug,
         excerpt: excerptPropre || computedDesc,
-        coverImageUrl: buildSeoMediaUrl(post.coverImageUrl, de.title),
+        coverImageUrl: buildSeoMediaUrl(couvertureEffective, de.title),
         category: post.category && post.category.slug ? { slug: post.category.slug, label: blogCategoryLabelDe(post.category) } : null,
         ...(() => {
           const signe = signatureArticle.signature(post, { lang: 'de', marque: brand.NAME, baseUrl });

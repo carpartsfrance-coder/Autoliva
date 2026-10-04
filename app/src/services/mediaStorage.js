@@ -280,10 +280,76 @@ function estMediaAbsent(url, absents) {
   return !!id && absents.has(String(id));
 }
 
+/* ── Même question, mais posée à chaque page vue ──────────────────────────────
+ *
+ * idsAbsents interroge GridFS. Sur les sitemaps et les flux, c'est une fois par
+ * construction : négligeable. Sur une page d'article, ce serait une requête par
+ * visite, sur une instance à 1 processeur qui s'est déjà effondrée sous la
+ * charge fin septembre. D'où ce cache.
+ *
+ * Il tient la réponse PAR IDENTIFIANT, pas par page : les couvertures du blog
+ * sont très partagées (la plus utilisée sert 18 articles), donc un seul aller
+ * en base sert ensuite tout le monde. Dix minutes : assez pour absorber une
+ * rafale de visites, assez court pour qu'un ré-envoi d'image se voie vite.
+ *
+ * Un identifiant ré-envoyé reçoit un NOUVEL identifiant (GridFS ne réutilise
+ * pas), donc une réponse « absent » ne peut pas devenir fausse en sens inverse
+ * sans que l'adresse change aussi.
+ */
+const CACHE_MEDIAS = new Map();
+const CACHE_DUREE_MS = 10 * 60 * 1000;
+const CACHE_TAILLE_MAX = 5000;
+
+async function idsAbsentsEnCache(urls) {
+  const ids = new Set();
+  for (const u of Array.isArray(urls) ? urls : []) {
+    const id = extractMediaIdFromUrl(u);
+    if (id) ids.add(String(id));
+  }
+  if (!ids.size) return new Set();
+
+  const maintenant = Date.now();
+  const absents = new Set();
+  const aDemander = [];
+  for (const id of ids) {
+    const connu = CACHE_MEDIAS.get(id);
+    if (connu && connu.expire > maintenant) {
+      if (connu.absent) absents.add(id);
+    } else {
+      aDemander.push(id);
+    }
+  }
+  if (!aDemander.length) return absents;
+
+  const frais = await idsAbsents(aDemander.map((id) => `/media/${id}`));
+  /* Rien en base (hors ligne, ou stockage vide) : idsAbsents rend un ensemble
+     vide par prudence. On ne met alors RIEN en cache, sinon dix minutes de
+     « tout va bien » masqueraient une vraie panne. */
+  if (mongoose.connection.readyState !== 1) return absents;
+
+  /* Cache plein : on le vide d'un coup plutôt que d'y chercher le plus ancien.
+     Cinq mille entrées de deux champs, c'est quelques dizaines de kilo-octets ;
+     le vider coûte moins cher que de le trier. */
+  if (CACHE_MEDIAS.size + aDemander.length > CACHE_TAILLE_MAX) CACHE_MEDIAS.clear();
+  for (const id of aDemander) {
+    const absent = frais.has(id);
+    CACHE_MEDIAS.set(id, { absent, expire: maintenant + CACHE_DUREE_MS });
+    if (absent) absents.add(id);
+  }
+  return absents;
+}
+
+/** Pour les tests : repartir d'un cache propre. */
+function viderCacheMedias() {
+  CACHE_MEDIAS.clear();
+}
+
 module.exports = {
   saveBuffer,
   idsAbsents,
+  idsAbsentsEnCache,
   estMediaAbsent,
+  viderCacheMedias,
   saveMulterFile,
   extractMediaIdFromUrl,
   deleteById,

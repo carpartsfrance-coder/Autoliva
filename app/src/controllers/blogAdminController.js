@@ -831,9 +831,14 @@ async function postAdminUpdateBlogPost(req, res, next) {
       ? savedCover.url
       : (form.coverImageUrl || (existing.coverImageUrl || ''));
 
-    if (savedCover && savedCover.url) {
-      await mediaStorage.deleteFromUrl(existing.coverImageUrl);
-    }
+    /* On ne supprime PLUS l'ancien fichier. Les couvertures du blog sont
+       partagées : la même illustration sert jusqu'à cinquante articles. La
+       supprimer en remplaçant la couverture d'UN article éteignait donc les
+       quarante-neuf autres, qui se mettaient à afficher un carré gris sans que
+       rien ne le signale. C'est l'origine des 196 couvertures mortes trouvées
+       le 04/10/2026 : les trois adresses les plus touchées servaient 50, 30 et
+       13 articles. Un fichier devenu inutile ne coûte que de l'espace ; un
+       fichier supprimé à tort casse des pages en silence. */
 
     const updated = await BlogPost.findByIdAndUpdate(
       postId,
@@ -919,11 +924,9 @@ async function postAdminDeleteBlogPost(req, res, next) {
       return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
 
-    const existing = await BlogPost.findById(postId).select('_id coverImageUrl').lean();
-    if (existing && existing.coverImageUrl) {
-      await mediaStorage.deleteFromUrl(existing.coverImageUrl);
-    }
-
+    /* Même raison qu'au remplacement de couverture : l'illustration de cet
+       article est très probablement celle de dizaines d'autres. Supprimer
+       l'article ne doit pas emporter leur image. */
     await BlogPost.findByIdAndDelete(postId);
     req.session.adminBlogSuccess = 'Article supprimé.';
     return res.redirect('/admin/blog');
