@@ -33,6 +33,7 @@ const { t } = require('../services/i18n');
 const { buildProductPublicPath } = require('../services/productPublic');
 const { chargerTarifsPort, dernierChangementTarifs, PORT_DE_REPLI_CENTS } = require('../services/shippingPricing');
 const flux = require('../services/fluxMerchant');
+const mediaStorage = require('../services/mediaStorage');
 
 const PAYS = 'FR';
 const ZONE = 'metropole';
@@ -104,7 +105,7 @@ function article({ fiche, images, titre }, { tarifs }) {
  * Les règles sans texte d'abord ; le filtre des allégations ne tourne que sur
  * les fiches qui restent.
  */
-function construireArticles(docs, { tarifs = null, scalapayActif = false } = {}) {
+function construireArticles(docs, { tarifs = null, scalapayActif = false, mediasAbsents = new Set() } = {}) {
   const liste = Array.isArray(docs) ? docs : [];
   const bilan = flux.nouveauBilan();
   bilan.fiches = liste.length;
@@ -113,7 +114,11 @@ function construireArticles(docs, { tarifs = null, scalapayActif = false } = {})
   const candidats = [];
 
   for (const doc of liste) {
-    const images = flux.imagesDeLaFiche(doc);
+    /* Une adresse dont le fichier manque n'est pas une image : la route /media
+       sert alors un carré gris sous une adresse en .jpeg, et Google refuse le
+       produit au lieu de l'afficher sans photo. La fiche qui n'a que celles-là
+       sort du flux sous « sans image ». */
+    const images = flux.imagesDeLaFiche(doc).filter((u) => !mediaStorage.estMediaAbsent(u, mediasAbsents));
     const fiche = normalizeProduct(doc);
     const motifs = flux.motifsSansTexte(fiche, {
       /* La fiche française annonce la consigne près du prix depuis le
@@ -199,7 +204,12 @@ async function buildFeedCached() {
   constructionEnCours = (async () => {
     const products = await module.exports.loadProducts();
     const tarifs = await module.exports.chargerTarifs();
-    const { items, bilan } = construireArticles(products, { tarifs, scalapayActif: scalapay.estActif() });
+    /* Une seule requête par construction : les adresses de médias absents, pour
+       ne jamais annoncer à Google une photo qu'on ne sert plus. */
+    const mediasAbsents = await mediaStorage.idsAbsents(
+      products.flatMap((d) => [d.imageUrl, ...(Array.isArray(d.galleryUrls) ? d.galleryUrls : [])])
+    );
+    const { items, bilan } = construireArticles(products, { tarifs, mediasAbsents, scalapayActif: scalapay.estActif() });
     /* Une ligne par construction : combien gardés, combien exclus et pourquoi. */
     module.exports.journaliser(flux.resumerBilan('google-merchant-feed', bilan));
     const xml = buildFeedXml(items);

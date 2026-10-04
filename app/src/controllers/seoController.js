@@ -8,7 +8,8 @@ const demoProducts = require('../demoProducts');
 const { buildProductPublicUrl, getPublicBaseUrlFromReq } = require('../services/productPublic');
 const { buildCategoryPublicUrl, compterFichesPubliees } = require('../services/categoryPublic');
 const { DEFAULT_LEGAL_PAGES, pageLegaleIndexable } = require('../services/legalPages');
-const { buildSeoMediaUrl } = require('../services/mediaStorage');
+const mediaStorage = require('../services/mediaStorage');
+const { buildSeoMediaUrl } = mediaStorage;
 /* Dates des sitemaps : jamais updatedAt (plan de reprise SEO du 14/09/2026,
    action A4.5) — voir services/datesSeo.js. */
 const datesSeo = require('../services/datesSeo');
@@ -223,31 +224,52 @@ async function buildProductsUrlsToutes(req, baseUrl, dbConnected) {
   }
 }
 
+/* Les images d'une fiche à déclarer dans un sitemap : les VIDÉOS n'en sont pas
+   (galleryTypes), et un média absent du stockage non plus — la route /media
+   sert alors un carré gris, et une adresse en .jpeg qui rend un SVG fait
+   refuser l'image (constat du 02/10/2026 : 10 médias absents, déclarés plus de
+   150 fois à Google). `absents` vient de mediaStorage.idsAbsents, calculé une
+   fois pour tout le sitemap. */
+function imagesDeclarables(p, absents) {
+  const sorties = [];
+  const types = Array.isArray(p.galleryTypes) ? p.galleryTypes : [];
+  const ajouter = (u) => {
+    const url = typeof u === 'string' ? u.trim() : '';
+    if (!url) return;
+    if (mediaStorage.estMediaAbsent(url, absents)) return;
+    sorties.push(url);
+  };
+  ajouter(p.imageUrl);
+  if (Array.isArray(p.galleryUrls)) {
+    p.galleryUrls.forEach((u, i) => { if (types[i] !== 'video') ajouter(u); });
+  }
+  return sorties;
+}
+
 async function buildProductsUrlsSansCache(req, baseUrl, dbConnected) {
   let products = [];
   if (dbConnected) {
     products = await Product.find({ isPublished: { $ne: false } })
-      .select('_id slug sku name imageUrl galleryUrls seo.indexOverride')
+      .select('_id slug sku name imageUrl galleryUrls galleryTypes seo.indexOverride')
       .sort({ updatedAt: -1 })
       .lean();
   } else {
     products = (demoProducts || []).slice();
   }
 
+  /* Une seule requête pour tout le sitemap : on ne déclare pas une photo qu'on
+     ne sert plus. */
+  const absents = await mediaStorage.idsAbsents(
+    products.flatMap((p) => [p.imageUrl, ...(Array.isArray(p.galleryUrls) ? p.galleryUrls : [])])
+  );
+
   const urls = [];
   for (const p of products) {
     if (!p || !p._id) continue;
     const loc = buildProductPublicUrl(p, { req });
     if (!loc) continue;
-    const images = [];
-    if (p.imageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(p.imageUrl, p.name)));
-    if (Array.isArray(p.galleryUrls)) {
-      for (const u of p.galleryUrls) {
-        if (typeof u === 'string' && u.trim()) {
-          images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(u.trim(), p.name)));
-        }
-      }
-    }
+    const images = imagesDeclarables(p, absents)
+      .map((u) => absMediaUrl(baseUrl, buildSeoMediaUrl(u, p.name)));
     /* lastmod = jour où la fiche a regagné sa description (A3), et seulement
        pour celles-là. Les autres n'ont pas changé : rien à annoncer. */
     urls.push({
@@ -542,9 +564,13 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
     isPublished: { $ne: false },
     'localizations.de.translatedAt': { $ne: null },
   })
-    .select('_id slug sku name imageUrl galleryUrls seo.indexOverride localizations.de.translatedAt localizations.de.slug localizations.de.name')
+    .select('_id slug sku name imageUrl galleryUrls galleryTypes seo.indexOverride localizations.de.translatedAt localizations.de.slug localizations.de.name')
     .sort({ updatedAt: -1 })
     .lean();
+
+  const absentsDe = await mediaStorage.idsAbsents(
+    products.flatMap((p) => [p.imageUrl, ...(Array.isArray(p.galleryUrls) ? p.galleryUrls : [])])
+  );
 
   const urls = [];
   for (const p of products) {
@@ -558,13 +584,8 @@ async function buildProductUrlsDe(req, baseUrl, dbConnected) {
        allemand de la page. updatedAt bouge à chaque stock ou prix. */
     const last = datesSeo.isoPasse(datesSeo.dateTraductionDe(p));
     const imgTitle = deLoc.name || p.name;
-    const images = [];
-    if (p.imageUrl) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(p.imageUrl, imgTitle)));
-    if (Array.isArray(p.galleryUrls)) {
-      for (const u of p.galleryUrls) {
-        if (typeof u === 'string' && u.trim()) images.push(absMediaUrl(baseUrl, buildSeoMediaUrl(u.trim(), imgTitle)));
-      }
-    }
+    const images = imagesDeclarables(p, absentsDe)
+      .map((u) => absMediaUrl(baseUrl, buildSeoMediaUrl(u, imgTitle)));
     urls.push({
       loc,
       lastmod: last,

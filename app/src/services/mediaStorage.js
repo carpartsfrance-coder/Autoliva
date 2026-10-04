@@ -1,4 +1,7 @@
 const mongoose = require('mongoose');
+
+/* Nom du bucket GridFS des médias du catalogue (fichiers + chunks). */
+const BUCKET_NAME = 'media';
 const { Readable } = require('stream');
 const { optimiserImageCatalogue } = require('./imageCompress');
 
@@ -26,7 +29,7 @@ function getBucket() {
 
   const dbId = getDbIdentity(db);
   if (!cachedBucket || cachedDbId !== dbId) {
-    cachedBucket = new mongoose.mongo.GridFSBucket(db, { bucketName: 'media' });
+    cachedBucket = new mongoose.mongo.GridFSBucket(db, { bucketName: BUCKET_NAME });
     cachedDbId = dbId;
   }
 
@@ -222,8 +225,65 @@ function buildSeoMediaUrl(rawUrl, label, contentType) {
   return `/media/${String(id)}.${ext}`;
 }
 
+/**
+ * Parmi ces adresses, lesquelles désignent un média que nous n'avons PAS ?
+ * Rend un Set des identifiants absents, en UNE requête quelle que soit la
+ * taille du catalogue.
+ *
+ * ── Pourquoi (02/10/2026) ──────────────────────────────────────────────────
+ *
+ * Quand le fichier manque, la route /media sert un carré gris plutôt qu'une
+ * erreur : la page du site reste présentable. Mais ce carré gris ne doit JAMAIS
+ * être annoncé à l'extérieur — ni dans un sitemap d'images, ni dans un flux
+ * Merchant. L'adresse annonce une photo en .jpeg et renvoie un SVG : Google
+ * refuse le produit au lieu de le montrer sans photo.
+ *
+ * Mesuré ce jour-là : 10 médias absents, référencés 164 fois par 79 fiches, et
+ * déclarés à Google plus de 150 fois dans sitemap-products.xml.
+ */
+async function idsAbsents(urls) {
+  const ids = new Set();
+  for (const u of Array.isArray(urls) ? urls : []) {
+    const id = extractMediaIdFromUrl(u);
+    if (id) ids.add(String(id));
+  }
+  if (!ids.size) return new Set();
+  if (mongoose.connection.readyState !== 1) return new Set();
+
+  const tous = [...ids];
+  const presents = new Set();
+  const collection = mongoose.connection.db.collection(`${BUCKET_NAME}.files`);
+  /* Stockage vide : on ne juge rien. Une base de test (ou une base fraîche dont
+     les médias n'ont pas encore été restaurés) déclarerait sinon TOUTES les
+     photos absentes, et viderait d'un coup le flux et les sitemaps. */
+  const stockageVide = (await collection.estimatedDocumentCount()) === 0;
+  if (stockageVide) return new Set();
+  const LOT = 5000;
+  for (let i = 0; i < tous.length; i += LOT) {
+    const lot = tous.slice(i, i + LOT)
+      .filter((x) => mongoose.Types.ObjectId.isValid(x))
+      .map((x) => new mongoose.Types.ObjectId(x));
+    if (!lot.length) continue;
+    /* eslint-disable no-await-in-loop */
+    const docs = await collection.find({ _id: { $in: lot } }).project({ _id: 1, length: 1 }).toArray();
+    /* eslint-enable no-await-in-loop */
+    for (const d of docs) if ((d.length || 0) > 0) presents.add(String(d._id));
+  }
+  return new Set(tous.filter((x) => !presents.has(x)));
+}
+
+/** L'adresse désigne-t-elle un média absent du stockage ? (`absents` vient de
+ *  idsAbsents). Une adresse qui n'est pas un /media/<id> n'est jamais jugée. */
+function estMediaAbsent(url, absents) {
+  if (!absents || !absents.size) return false;
+  const id = extractMediaIdFromUrl(url);
+  return !!id && absents.has(String(id));
+}
+
 module.exports = {
   saveBuffer,
+  idsAbsents,
+  estMediaAbsent,
   saveMulterFile,
   extractMediaIdFromUrl,
   deleteById,

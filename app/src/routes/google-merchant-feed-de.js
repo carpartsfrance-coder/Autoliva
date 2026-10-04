@@ -39,6 +39,7 @@ const scalapay = require('../services/scalapay');
 const { t } = require('../services/i18n');
 const { chargerTarifsPort, dernierChangementTarifs, PORT_DE_REPLI_CENTS } = require('../services/shippingPricing');
 const flux = require('../services/fluxMerchant');
+const mediaStorage = require('../services/mediaStorage');
 
 const ZONE = 'europe';
 const PAYS = 'DE';
@@ -126,7 +127,7 @@ function article({ fiche, de, images, titre, ctx }, { tarifs }) {
 
 /** Fiches traduites (lean) → articles + bilan. `usagesImages` : sur toutes
  *  les fiches publiées. */
-function construireArticles(docs, { tarifs = null, usagesImages = new Map(), scalapayActif = false } = {}) {
+function construireArticles(docs, { tarifs = null, usagesImages = new Map(), scalapayActif = false, mediasAbsents = new Set() } = {}) {
   const bilan = flux.nouveauBilan();
   const candidats = [];
   for (const doc of Array.isArray(docs) ? docs : []) {
@@ -134,7 +135,10 @@ function construireArticles(docs, { tarifs = null, usagesImages = new Map(), sca
     const nomDe = String(de.name || '').trim();
     if (!nomDe) continue; // pas de titre allemand : la fiche n'est pas traduite
     bilan.fiches += 1;
-    const images = flux.imagesDeLaFiche(doc);
+    /* Une adresse dont le fichier manque n'est pas une image : la route /media
+       sert alors un carré gris sous une adresse en .jpeg, et Google refuse le
+       produit. La fiche qui n'a que celles-là sort sous « sans image ». */
+    const images = flux.imagesDeLaFiche(doc).filter((u) => !mediaStorage.estMediaAbsent(u, mediasAbsents));
     const fiche = normalizeProduct(doc);
     const motifs = flux.motifsSansTexte(fiche, {
       images,
@@ -212,7 +216,10 @@ async function construireAvecCache() {
   enCours = (async () => {
     const docs = await module.exports.chargerProduits();
     const [usagesImages, tarifs] = await Promise.all([chargerUsagesImages(), chargerTarifs()]);
-    const { items, bilan } = construireArticles(docs, { tarifs, usagesImages, scalapayActif: scalapay.estActif() });
+    const mediasAbsents = await mediaStorage.idsAbsents(
+      docs.flatMap((d) => [d.imageUrl, ...(Array.isArray(d.galleryUrls) ? d.galleryUrls : [])])
+    );
+    const { items, bilan } = construireArticles(docs, { tarifs, usagesImages, mediasAbsents, scalapayActif: scalapay.estActif() });
     module.exports.journaliser(flux.resumerBilan('google-merchant-feed-de', bilan));
     const xml = construireXml(items);
     cache = { xml, builtAt: Date.now() };
