@@ -200,4 +200,52 @@ test('flux Merchant : port exact du panier, délais, cache des tarifs', async (t
     await Category.updateOne({ name: 'Boîtes de vitesses' }, { $set: { shippingClassId: classePalette } });
     assert.equal(portDuFlux(articles((await get('/google-merchant-feed.xml')).corps).get(dekId)), '149.00 EUR', 'catégorie modifiée : nouveau port');
   });
+
+  /* ── Un média absent n'est pas une image (02/10/2026) ─────────────────────
+     Quand le fichier manque, la route /media sert un carré gris plutôt qu'une
+     erreur : la page du site reste présentable. Mais annoncer ce carré gris à
+     Google sous une adresse en .jpeg fait REFUSER le produit — et dix médias
+     absents étaient déclarés plus de 150 fois dans sitemap-products.xml. */
+  await t.test('un média absent n’est pas une image : ni dans le flux, ni dans le sitemap', async () => {
+    const { Readable } = require('stream');
+    const bucket = new mongoose.mongo.GridFSBucket(db, { bucketName: 'media' });
+    const idVivant = await new Promise((resolve, reject) => {
+      const flux = bucket.openUploadStream('photo-reelle.webp', { contentType: 'image/webp' });
+      flux.on('error', reject);
+      flux.on('finish', () => resolve(String(flux.id)));
+      Readable.from(Buffer.from('octets de photo')).pipe(flux);
+    });
+    const idMort = oid().toHexString();
+
+    const modele = (suffixe, image) => ({
+      ...pont,
+      _id: oid(),
+      name: `Pont arrière reconditionné Audi Q7 4M quattro ${suffixe}`,
+      slug: `pont-arriere-audi-q7-4m-${suffixe.toLowerCase()}`,
+      sku: `PONT-MEDIA-${suffixe}`,
+      imageUrl: `/media/${image}`,
+      galleryUrls: [],
+    });
+    const vivante = modele('VIVANTE', idVivant);
+    const morte = modele('MORTE', idMort);
+    await db.collection('products').insertMany([vivante, morte]);
+
+    feedFr._invalidateCache();
+    const flux = articles((await get('/google-merchant-feed.xml')).corps);
+    assert.ok(flux.has(String(vivante._id)), 'la fiche dont la photo existe doit rester dans le flux');
+    assert.ok(!flux.has(String(morte._id)), 'la fiche dont la photo manque doit sortir du flux');
+    const bilan = feedFr.dernierBilan();
+    assert.ok(bilan.exclus.sans_image >= 1, `et sortir sous le motif « sans image » (bilan : ${JSON.stringify(bilan.exclus)})`);
+
+    const plan = await get('/sitemap-products.xml');
+    assert.ok(plan.corps.includes(idVivant), 'la photo qui existe reste déclarée');
+    assert.ok(!plan.corps.includes(idMort), 'la photo qui manque ne doit plus être déclarée à Google');
+
+    /* On rend la base telle qu'on l'a trouvée : les fiches d'essai ET le média.
+       Tant qu'un seul média est stocké, le contrôle d'existence est actif et
+       jugerait absentes les photos factices des autres jeux d'essai. */
+    await db.collection('products').deleteMany({ _id: { $in: [vivante._id, morte._id] } });
+    await bucket.delete(new mongoose.Types.ObjectId(idVivant));
+    feedFr._invalidateCache();
+  });
 });
