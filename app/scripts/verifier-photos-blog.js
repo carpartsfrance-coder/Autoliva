@@ -41,10 +41,10 @@ const BlogPost = require('../src/models/BlogPost');
 const Product = require('../src/models/Product');
 const { extractMediaIdFromUrl } = require('../src/services/mediaStorage');
 const { blogSourceHash } = require('../src/jobs/traduireNouveautesDe');
+const { verdictEcriture } = require('../src/services/gardeFousMedias');
 
 const APPLY = process.argv.includes('--apply');
 const LOT = 5000;
-const SEUIL_ABSENTS = 0.01;
 
 /* Les champs de texte où une image peut se cacher. Les trois portent les mêmes
    adresses : le markdown est la source, le HTML français en est le rendu, et
@@ -135,7 +135,8 @@ function retirerImage(texte, url, genre) {
   /* GARDE-FOU 1 — stockage vide : on ne juge RIEN. Branché par erreur sur une
      base dont les médias ne sont pas restaurés, --apply effacerait sinon toutes
      les illustrations du blog, sans retour possible. */
-  if ((await collection.estimatedDocumentCount()) === 0) {
+  const stockes = await collection.estimatedDocumentCount();
+  if (stockes === 0) {
     console.error('AUCUN média dans le stockage : base incomplète, ou mauvaise base. Abandon.');
     await mongoose.disconnect();
     process.exit(1);
@@ -152,6 +153,7 @@ function retirerImage(texte, url, genre) {
     /* eslint-enable no-await-in-loop */
     for (const d of docs) if ((d.length || 0) > 0) presents.add(String(d._id));
   }
+  const absentsBlogSeul = ids.length - presents.size;
   const morte = (url) => {
     const id = extractMediaIdFromUrl(url);
     return !!id && !presents.has(String(id));
@@ -219,14 +221,49 @@ function retirerImage(texte, url, genre) {
     if (Object.keys(changements).length) aReparer.push({ article: a, changements, traces });
   }
 
-  /* GARDE-FOU 2 — proportion. Quelques adresses mortes, c'est un incident ;
-     au-delà de 1 % des médias référencés, c'est le stockage ou la connexion qui
-     est en cause, pas les articles. On refuse d'écrire. */
-  const partAbsente = ids.length ? (ids.length - presents.size) / ids.length : 0;
+  /* GARDE-FOU 2 — le stockage répond-il correctement ?
+     La question n'est pas « le blog a-t-il beaucoup d'images mortes ? » mais
+     « peut-on faire confiance à ce que la base nous répond ? ». Mesurée sur le
+     seul blog, elle donne une réponse fausse : il ne référence que 707
+     illustrations, très partagées, donc 58 fichiers supprimés font 8 % — un
+     chiffre qui ressemble à une panne alors que c'est la casse elle-même.
+     On la pose donc à TOUT ce que le site référence, fiches comprises. Une
+     base incomplète, une mauvaise base ou une connexion qui échoue font
+     plonger les deux ensembles d'un coup ; une suppression de couvertures ne
+     touche que le blog. Au 04/10/2026 : 0 % sur 7 775 médias de fiches, 8,2 %
+     sur le blog, 0,74 % sur l'ensemble. */
+  const mediasFiches = new Set();
+  await Product.find({}).select('imageUrl galleryUrls').lean().cursor()
+    .eachAsync((p) => {
+      for (const u of [p.imageUrl, ...(Array.isArray(p.galleryUrls) ? p.galleryUrls : [])]) {
+        const id = extractMediaIdFromUrl(u);
+        if (id) mediasFiches.add(String(id));
+      }
+    });
+  /* Ces identifiants-là n'ont pas encore été demandés : sans cette boucle ils
+     passeraient tous pour absents, et le garde-fou crierait à la panne. */
+  const resteADemander = [...mediasFiches].filter((x) => !presents.has(x));
+  for (let i = 0; i < resteADemander.length; i += LOT) {
+    const lot = resteADemander.slice(i, i + LOT)
+      .filter((x) => mongoose.Types.ObjectId.isValid(x))
+      .map((x) => new mongoose.Types.ObjectId(x));
+    if (!lot.length) continue;
+    /* eslint-disable no-await-in-loop */
+    const docs = await collection.find({ _id: { $in: lot } }).project({ _id: 1, length: 1 }).toArray();
+    /* eslint-enable no-await-in-loop */
+    for (const d of docs) if ((d.length || 0) > 0) presents.add(String(d._id));
+  }
+
+  const absentsFiches = [...mediasFiches].filter((x) => !presents.has(x)).length;
+  const toutLeSite = new Set([...ids, ...mediasFiches]);
+  const absentsPartout = [...toutLeSite].filter((x) => !presents.has(x)).length;
+  const partAbsente = toutLeSite.size ? absentsPartout / toutLeSite.size : 0;
 
   const publies = articles.filter((a) => a.isPublished !== false).length;
   console.log(`articles analysés              : ${articles.length} (${publies} publiés, ${articles.length - publies} brouillons)`);
-  console.log(`adresses de médias distinctes  : ${ids.length} (${presents.size} présentes, ${ids.length - presents.size} absentes)`);
+  console.log(`adresses de médias distinctes  : ${ids.length} (${ids.length - absentsBlogSeul} présentes, ${absentsBlogSeul} absentes)`);
+  console.log(`santé du stockage              : ${(100 * partAbsente).toFixed(2)} % d'absents sur tout le site `
+    + `(${absentsFiches} sur ${mediasFiches.size} médias de fiches)`);
   console.log('');
   console.log(`couvertures mortes             : ${couverturesMortes}`);
   console.log(`og:image mortes                : ${ogMortes}`);
@@ -241,11 +278,20 @@ function retirerImage(texte, url, genre) {
     }
   }
 
-  if (APPLY && partAbsente > SEUIL_ABSENTS) {
-    console.error(`\n${(100 * partAbsente).toFixed(1)} % des médias référencés sont absents (seuil : ${100 * SEUIL_ABSENTS} %).`);
-    console.error('Ce n’est pas un incident d’articles, c’est le stockage. Rien n’a été écrit.');
-    await mongoose.disconnect();
-    process.exit(1);
+  if (APPLY) {
+    const verdict = verdictEcriture({
+      mediasStockes: stockes,
+      totalSite: toutLeSite.size,
+      absentsSite: absentsPartout,
+      totalCorpus: ids.length,
+      absentsCorpus: absentsBlogSeul,
+    });
+    if (!verdict.ecrire) {
+      console.error(`\n${verdict.raison}`);
+      console.error('Rien n’a été écrit.');
+      await mongoose.disconnect();
+      process.exit(1);
+    }
   }
 
   if (!APPLY) {
