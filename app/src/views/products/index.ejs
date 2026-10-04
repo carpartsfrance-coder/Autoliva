@@ -479,6 +479,12 @@
                           en « lazy », la 1re (élément LCP des listes) n'était demandée
                           qu'après la mise en page (audit vitesse du 25/09/2026). %>
                       <img src="<%= imgUrl %>" alt="<%= p.name %>" width="400" height="300" loading="<%= _rang < 2 ? 'eager' : 'lazy' %>"<% if (_rang === 0) { %> fetchpriority="high"<% } %> decoding="async" class="max-w-full max-h-full w-auto h-auto object-contain p-2"/>
+                    <% } else { %>
+                      <%# Sans photo, c'était un rectangle gris vide — l'accueil et les
+                          pages véhicule posent déjà l'icône neutre (home.ejs, reference.ejs). %>
+                      <div class="w-full h-full flex items-center justify-center text-slate-300">
+                        <span class="material-symbols-outlined" style="font-size:40px;">inventory_2</span>
+                      </div>
                     <% } %>
                     <% if (badge) { %><span class="absolute top-2 left-2 bg-primary text-[10px] text-white font-bold px-2 py-1 rounded-full z-10"><%= badge %></span><% } %>
                   </a>

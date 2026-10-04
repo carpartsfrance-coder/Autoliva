@@ -62,8 +62,10 @@ function referencesDe(fiche) {
   await mongoose.connect(process.env.MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
   console.log(APPLY ? '>>> MODE ÉCRITURE <<<\n' : '>>> AUDIT (aucune écriture) <<<\n');
 
-  const fiches = await Product.find({ isPublished: { $ne: false } })
-    .select('name sku slug category imageUrl galleryUrls galleryTypes inStock priceCents')
+  /* Brouillons compris : une photo morte sur un brouillon se verra le jour de
+     sa publication, et les compteurs seraient faux sans eux. */
+  const fiches = await Product.find({})
+    .select('name sku slug category imageUrl galleryUrls galleryTypes inStock priceCents isPublished')
     .lean();
 
   /* Les ids de médias réellement stockés, en quelques requêtes. */
@@ -77,6 +79,16 @@ function referencesDe(fiche) {
   const ids = [...tousLesIds];
   const presents = new Set();
   const collection = mongoose.connection.db.collection('media.files');
+
+  /* GARDE-FOU 1 — stockage vide : on ne juge RIEN. Branché par erreur sur une
+     base dont les médias ne sont pas restaurés, --apply effacerait sinon toutes
+     les photos du catalogue, sans retour possible. */
+  const stockes = await collection.estimatedDocumentCount();
+  if (stockes === 0) {
+    console.error('AUCUN média dans le stockage : base incomplète, ou mauvaise base. Abandon.');
+    await mongoose.disconnect();
+    process.exit(1);
+  }
   for (let i = 0; i < ids.length; i += LOT) {
     const docs = await collection
       .find({ _id: { $in: ids.slice(i, i + LOT).map((x) => new mongoose.Types.ObjectId(x)) } })
@@ -113,6 +125,7 @@ function referencesDe(fiche) {
       categorie: f.category || '',
       prix: Math.round((f.priceCents || 0) / 100),
       enStock: f.inStock !== false,
+      publiee: f.isPublished !== false,
       mortes: mortes.map((r) => r.url),
       restantes: imagesSurvivantes.map((r) => r.url),
     };
@@ -121,14 +134,22 @@ function referencesDe(fiche) {
     aNettoyer.push({ fiche: f, mortes, survivantes });
   }
 
-  console.log(`fiches publiées analysées      : ${fiches.length}`);
+  /* GARDE-FOU 2 — proportion. Une poignée d'adresses mortes est un incident ;
+     au-delà de 1 % des médias référencés, c'est le stockage ou la connexion qui
+     est en cause, pas les fiches. On refuse d'écrire plutôt que de vider le
+     site. */
+  const partAbsente = ids.length ? (ids.length - presents.size) / ids.length : 0;
+  const SEUIL = 0.01;
+
+  const publiees = fiches.filter((f) => f.isPublished !== false).length;
+  console.log(`fiches analysées               : ${fiches.length} (${publiees} publiées, ${fiches.length - publiees} brouillons)`);
   console.log(`adresses de médias distinctes  : ${ids.length} (${presents.size} présentes, ${ids.length - presents.size} absentes)`);
   console.log(`références mortes sur les fiches : ${referencesMortes}, réparties sur ${aNettoyer.length} fiche(s)`);
   console.log('');
   console.log(`fiches SANS AUCUNE photo        : ${sansAucunePhoto.length}`);
   console.log(`fiches dont la 1re photo manque : ${principaleMorte.length} (une autre photo prendra sa place)`);
 
-  const ligne = (e) => `   ${e.sku.padEnd(12)} ${e.enStock ? 'en stock ' : 'hors stock'} ${String(e.prix).padStart(5)} €  https://autoliva.com/product/${e.slug}/`;
+  const ligne = (e) => `   ${e.sku.padEnd(12)} ${e.publiee ? 'publiée  ' : 'brouillon'} ${e.enStock ? 'en stock ' : 'hors stock'} ${String(e.prix).padStart(5)} €  https://autoliva.com/product/${e.slug}/`;
   if (sansAucunePhoto.length) {
     console.log('\n── Ces fiches demandent une VRAIE photo (il n’en reste aucune) ──');
     for (const e of sansAucunePhoto) { console.log(`   ${e.nom}`); console.log(ligne(e)); }
@@ -136,6 +157,13 @@ function referencesDe(fiche) {
   if (principaleMorte.length) {
     console.log('\n── Ces fiches ont une photo valide plus loin : elle remonte en principale ──');
     for (const e of principaleMorte) { console.log(`   ${e.nom}`); console.log(ligne(e)); }
+  }
+
+  if (APPLY && partAbsente > SEUIL) {
+    console.error(`\n${(100 * partAbsente).toFixed(1)} % des médias référencés sont absents (seuil : ${100 * SEUIL} %).`);
+    console.error('Ce n’est pas un incident de fiches, c’est le stockage. Rien n’a été écrit.');
+    await mongoose.disconnect();
+    process.exit(1);
   }
 
   if (!APPLY) {
