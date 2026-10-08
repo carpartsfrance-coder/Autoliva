@@ -372,6 +372,10 @@ async function logSmsSent({ orderId, smsType, recipientPhone, result } = {}) {
 
 module.exports = {
   normalizePhoneFR,
+  /* Exporté pour la demande d'avis Google (avisAdminController) : le même
+     ordre de priorité livraison → facturation doit valoir pour tous les SMS
+     liés à une commande. */
+  resolvePhoneFromOrder,
   sendSms,
   logSmsSent,
   sendOrderConfirmationSms,

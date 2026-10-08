@@ -2446,35 +2446,224 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <% } %>
 
+<!-- Composeur « Demander un avis » -->
+<div id="avisModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/50 p-4 print:hidden">
+  <div class="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl">
+    <div class="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+      <div>
+        <div class="text-lg font-semibold text-slate-900">Demander un avis Google</div>
+        <div class="mt-1 text-xs text-slate-500">
+          Le client sera envoyé vers
+          <a data-avis-lien href="#" target="_blank" rel="noopener noreferrer" class="font-mono text-red-600 hover:text-red-700 break-all"></a>.
+          Les textes se modifient dans <a href="/admin/parametres/avis" class="font-semibold text-slate-700 hover:text-slate-900">Paramètres → Demande d'avis</a>.
+        </div>
+        <div data-avis-deja hidden class="mt-2 text-xs font-semibold text-amber-700"></div>
+      </div>
+      <button type="button" data-avis-fermer class="shrink-0 text-slate-400 hover:text-slate-600">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="p-5">
+      <div class="flex gap-2">
+        <button type="button" data-avis-onglet="email" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">E-mail</button>
+        <button type="button" data-avis-onglet="sms" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">SMS</button>
+        <button type="button" data-avis-onglet="whatsapp" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">WhatsApp</button>
+      </div>
+
+      <div data-avis-erreur hidden class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"></div>
+      <div data-avis-statut class="mt-4 text-sm font-medium text-emerald-700"></div>
+
+      <!-- E-mail -->
+      <div data-avis-panneau="email" hidden class="mt-4">
+        <div class="text-xs text-slate-500">Destinataire : <span data-avis-dest class="font-semibold text-slate-500"></span></div>
+        <label class="mt-3 block text-xs font-semibold uppercase tracking-wider text-slate-400">Objet</label>
+        <input data-avis-sujet type="text" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+        <label class="mt-3 block text-xs font-semibold uppercase tracking-wider text-slate-400">Message</label>
+        <textarea data-avis-corps rows="12" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+        <div class="mt-1 text-[11px] text-slate-400">Le lien seul sur sa ligne devient le gros bouton rouge dans l'e-mail.</div>
+        <button type="button" data-avis-envoyer="email" class="btn btn-primary mt-4">Envoyer l'e-mail</button>
+      </div>
+
+      <!-- SMS -->
+      <div data-avis-panneau="sms" hidden class="mt-4">
+        <div class="text-xs text-slate-500">Destinataire : <span data-avis-dest class="font-semibold text-slate-500"></span></div>
+        <div data-avis-optin hidden class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Ce client n'a pas donné son accord pour les SMS. Envoi possible, mais c'est ta décision.
+        </div>
+        <label class="mt-3 block text-xs font-semibold uppercase tracking-wider text-slate-400">Message</label>
+        <textarea data-avis-corps rows="4" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+        <div class="mt-1 text-[11px] text-slate-400"><span data-avis-sms-count></span> · un lien dans un SMS « CarParts » peut être filtré par l'opérateur sans avertissement.</div>
+        <button type="button" data-avis-envoyer="sms" class="btn btn-primary mt-4">Envoyer le SMS</button>
+      </div>
+
+      <!-- WhatsApp -->
+      <div data-avis-panneau="whatsapp" hidden class="mt-4">
+        <div class="text-xs text-slate-500">Destinataire : <span data-avis-dest class="font-semibold text-slate-500"></span></div>
+        <label class="mt-3 block text-xs font-semibold uppercase tracking-wider text-slate-400">Message</label>
+        <textarea data-avis-corps rows="10" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+        <div class="mt-1 text-[11px] text-slate-400">WhatsApp s'ouvre avec le message prérempli : l'envoi part de ton téléphone.</div>
+        <button type="button" data-avis-envoyer="whatsapp" class="btn btn-primary mt-4">Ouvrir WhatsApp</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <script>
-  /* Demande d'avis Skeepers sur cette commande (POST same-origin JSON, pas de CSRF). */
+  /* Demande d'avis GOOGLE sur cette commande.
+     On ouvre un composeur : le texte vient des modèles (/admin/parametres/avis),
+     reste modifiable avant l'envoi, et chaque canal part séparément. POST
+     same-origin JSON, pas de CSRF (comme le reste du détail commande). */
   (function () {
     var btn = document.getElementById('reviewRequestBtn');
-    if (!btn) return;
-    btn.addEventListener('click', function () {
-      var id = btn.getAttribute('data-order-id');
-      if (!id) return;
-      if (!confirm("Envoyer une demande d'avis à ce client via Avis Vérifiés ?")) return;
-      btn.disabled = true;
-      fetch('/admin/commandes/' + encodeURIComponent(id) + '/demande-avis', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-      }).then(function (r) { return r.json().catch(function () { return {}; }); }).then(function (j) {
-        if (j && j.ok) {
-          /* On montre AUSSI la réponse brute de Skeepers : c'est la seule
-             information dont on dispose sur ce qu'ils comptent faire de
-             l'événement, et elle est indispensable le jour où l'e-mail
-             n'arrive pas — la copier à leur support vaut mieux que de leur
-             décrire un symptôme. */
-          var txt = j.message || 'Demande transmise à Skeepers.';
-          try {
-            var brut = j.reponseSkeepers ? JSON.stringify(j.reponseSkeepers) : '';
-            if (brut && brut !== '{}' && brut !== 'null') txt += '\n\nRéponse Skeepers :\n' + brut.slice(0, 600);
-          } catch (e) { /* affichage seulement, jamais bloquant */ }
-          alert(txt);
+    var modal = document.getElementById('avisModal');
+    if (!btn || !modal) return;
+
+    var id = btn.getAttribute('data-order-id');
+    var statut = modal.querySelector('[data-avis-statut]');
+    var erreur = modal.querySelector('[data-avis-erreur]');
+    var deja = modal.querySelector('[data-avis-deja]');
+    var lien = modal.querySelector('[data-avis-lien]');
+    var charge = false;
+
+    function ouvrir() { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+    function fermer() { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+
+    function montrerErreur(msg) {
+      erreur.textContent = msg || 'Erreur inconnue.';
+      erreur.hidden = false;
+    }
+
+    function onglet(canal) {
+      modal.querySelectorAll('[data-avis-onglet]').forEach(function (o) {
+        var actif = o.getAttribute('data-avis-onglet') === canal;
+        o.classList.toggle('bg-slate-900', actif);
+        o.classList.toggle('text-white', actif);
+        o.classList.toggle('text-slate-600', !actif);
+      });
+      modal.querySelectorAll('[data-avis-panneau]').forEach(function (p) {
+        p.hidden = p.getAttribute('data-avis-panneau') !== canal;
+      });
+    }
+
+    function remplir(j) {
+      lien.textContent = j.lienAvis || '';
+      lien.setAttribute('href', j.lienAvis || '#');
+
+      if (j.deja && j.deja.at) {
+        var d = new Date(j.deja.at);
+        var canaux = (j.deja.canaux || []).join(', ');
+        deja.textContent = 'Déjà demandé le ' + d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+          + (canaux ? ' (' + canaux + ')' : '') + '.';
+        deja.hidden = false;
+      } else {
+        deja.hidden = true;
+      }
+
+      ['email', 'sms', 'whatsapp'].forEach(function (canal) {
+        var c = (j.canaux && j.canaux[canal]) || {};
+        var panneau = modal.querySelector('[data-avis-panneau="' + canal + '"]');
+        if (!panneau) return;
+        var corps = panneau.querySelector('[data-avis-corps]');
+        var sujet = panneau.querySelector('[data-avis-sujet]');
+        var dest = panneau.querySelector('[data-avis-dest]');
+        var envoyer = panneau.querySelector('[data-avis-envoyer]');
+        if (corps) {
+          corps.value = c.corps || '';
+          /* Remplir en JS ne déclenche pas « input » : sans cet événement, le
+             compteur SMS resterait à « 0 caractères » devant un message plein. */
+          corps.dispatchEvent(new Event('input'));
         }
-        else { alert('Échec : ' + ((j && j.error) || 'erreur inconnue')); }
-      }).catch(function () { alert('Erreur réseau.'); }).then(function () { btn.disabled = false; });
+        if (sujet) sujet.value = c.sujet || '';
+
+        /* On dit POURQUOI un canal est indisponible plutôt que de griser un
+           bouton sans explication : pas d'adresse, pas de numéro, ou canal
+           désactivé dans les paramètres — trois causes, trois remèdes. */
+        var motif = '';
+        if (!c.enabled) motif = 'Canal désactivé dans les paramètres.';
+        else if (!c.destinataire) motif = canal === 'email' ? "Pas d'adresse e-mail sur ce client." : 'Pas de numéro de téléphone exploitable.';
+        if (dest) {
+          dest.textContent = motif || c.destinataire;
+          dest.classList.toggle('text-red-600', !!motif);
+          dest.classList.toggle('text-slate-500', !motif);
+        }
+        if (envoyer) envoyer.disabled = !!motif;
+
+        var optin = panneau.querySelector('[data-avis-optin]');
+        if (optin) optin.hidden = !!motif || c.optIn !== false;
+      });
+      onglet('email');
+    }
+
+    btn.addEventListener('click', function () {
+      if (!id) return;
+      ouvrir();
+      if (charge) return;
+      statut.textContent = 'Chargement…';
+      fetch('/admin/commandes/' + encodeURIComponent(id) + '/avis', {
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      }).then(function (r) { return r.json().catch(function () { return {}; }); }).then(function (j) {
+        statut.textContent = '';
+        if (j && j.ok) { charge = true; erreur.hidden = true; remplir(j); }
+        else { montrerErreur((j && j.error) || 'Chargement impossible.'); }
+      }).catch(function () { statut.textContent = ''; montrerErreur('Erreur réseau.'); });
+    });
+
+    modal.querySelectorAll('[data-avis-fermer]').forEach(function (b) { b.addEventListener('click', fermer); });
+    modal.addEventListener('click', function (e) { if (e.target === modal) fermer(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.classList.contains('hidden')) fermer(); });
+
+    modal.querySelectorAll('[data-avis-onglet]').forEach(function (o) {
+      o.addEventListener('click', function () { onglet(o.getAttribute('data-avis-onglet')); });
+    });
+
+    /* Compteur SMS : le texte est ici DÉJÀ substitué (lien et n° de commande
+       compris), donc le décompte est le vrai. */
+    var smsCorps = modal.querySelector('[data-avis-panneau="sms"] [data-avis-corps]');
+    var smsCount = modal.querySelector('[data-avis-sms-count]');
+    if (smsCorps && smsCount) {
+      var majSms = function () {
+        var n = smsCorps.value.length;
+        smsCount.textContent = n + ' caractères · ' + (n ? (n <= 160 ? 1 : Math.ceil(n / 153)) : 0) + ' SMS';
+      };
+      smsCorps.addEventListener('input', majSms);
+      majSms();
+    }
+
+    modal.querySelectorAll('[data-avis-envoyer]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var canal = b.getAttribute('data-avis-envoyer');
+        var panneau = modal.querySelector('[data-avis-panneau="' + canal + '"]');
+        var corps = panneau.querySelector('[data-avis-corps]');
+        var sujet = panneau.querySelector('[data-avis-sujet]');
+        var payload = { corps: corps ? corps.value : '' };
+        if (sujet) payload.sujet = sujet.value;
+        if (!payload.corps.trim()) { montrerErreur('Le message est vide.'); return; }
+
+        erreur.hidden = true;
+        b.disabled = true;
+        var libelle = b.textContent;
+        b.textContent = 'Envoi…';
+        fetch('/admin/commandes/' + encodeURIComponent(id) + '/avis/' + canal, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify(payload),
+        }).then(function (r) { return r.json().catch(function () { return {}; }); }).then(function (j) {
+          if (!j || !j.ok) { montrerErreur((j && j.error) || 'Échec.'); return; }
+          if (canal === 'whatsapp' && j.waUrl) {
+            /* WhatsApp part du téléphone du commercial : on ouvre la
+               conversation préremplie, l'envoi reste un geste humain. */
+            window.open(j.waUrl, '_blank', 'noopener');
+            statut.textContent = 'WhatsApp ouvert pour ' + (j.destinataire || '') + ' — il reste à appuyer sur Envoyer.';
+          } else {
+            statut.textContent = j.message || 'Envoyé.';
+            if (j.avertissement) montrerErreur(j.avertissement);
+          }
+          deja.hidden = true;
+        }).catch(function () { montrerErreur('Erreur réseau.'); })
+          .then(function () { b.disabled = false; b.textContent = libelle; });
+      });
     });
   })();
 </script>

@@ -1483,6 +1483,60 @@ ${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
   };
 }
 
+/**
+ * Demande d'avis Google — e-mail.
+ *
+ * Le corps arrive en TEXTE BRUT depuis les réglages back-office
+ * (/admin/parametres/avis), variables déjà substituées. On ne fait donc ici
+ * que la mise en forme : échappement, paragraphes, et surtout le lien.
+ *
+ * Un paragraphe réduit au seul lien devient le gros bouton rouge — c'est ce
+ * qui permet à l'auteur du message de CHOISIR où tombe le bouton, sans
+ * dupliquer le lien en bas de l'e-mail. Un lien au fil du texte reste un
+ * lien cliquable ordinaire.
+ */
+function buildAvisGoogleEmail({ order, user, baseUrl, sujet, corps, lienAvis } = {}) {
+  const number = order && order.number ? String(order.number) : '';
+  const lien = getTrimmedString(lienAvis);
+  const subject = getTrimmedString(sujet)
+    || (number ? `Votre avis sur la commande #${number}` : 'Votre avis nous intéresse');
+
+  const texteBrut = String(corps == null ? '' : corps).replace(/\r\n/g, '\n');
+
+  const blocs = texteBrut.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const bodyHtml = blocs.map((p) => {
+    if (lien && p === lien) return renderPrimaryButton({ href: lien, label: 'Laisser un avis sur Google' });
+    let html = escapeHtml(p).replace(/\n/g, '<br />');
+    if (lien) {
+      /* Le lien est déjà échappé dans `html` : on remplace sa forme échappée,
+         pas l'originale, sinon le remplacement ne trouve rien dès que l'URL
+         contient un & (cas des liens « writereview?placeid=…&hl=fr »). */
+      const lienEchappe = escapeHtml(lien);
+      html = html.split(lienEchappe).join(
+        `<a href="${lienEchappe}" style="color:#ec1313;text-decoration:none;font-weight:800;">${lienEchappe}</a>`
+      );
+    }
+    return `<div style="margin-top:12px;font-size:14px;line-height:1.6;color:#334155;">${html}</div>`;
+  }).join('\n');
+
+  /* Filet de sécurité : si l'auteur du message a retiré le lien du texte, on
+     l'ajoute quand même en bouton. Un e-mail « donnez votre avis » sans aucun
+     moyen de le donner serait un envoi perdu. */
+  const lienPresent = !!lien && texteBrut.includes(lien);
+  const bouton = lienPresent ? '' : renderPrimaryButton({ href: lien, label: 'Laisser un avis sur Google' });
+
+  return {
+    subject,
+    html: renderEmailLayout({
+      title: subject,
+      preheader: 'Votre avis nous aide beaucoup',
+      bodyHtml: bodyHtml + bouton,
+      baseUrl,
+    }),
+    text: lienPresent || !lien ? texteBrut : `${texteBrut}\n\n${lien}`,
+  };
+}
+
 module.exports = {
   buildOrderConfirmationEmail,
   buildConsigneStartEmail,
@@ -1506,4 +1560,5 @@ module.exports = {
   buildCloningDoneEmail,
   buildCloningFailedEmail,
   buildRefundIssuedEmail,
+  buildAvisGoogleEmail,
 };
