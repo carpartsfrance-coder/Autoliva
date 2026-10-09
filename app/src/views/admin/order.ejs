@@ -2625,7 +2625,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (smsCorps && smsCount) {
       var majSms = function () {
         var n = smsCorps.value.length;
-        smsCount.textContent = n + ' caractères · ' + (n ? (n <= 160 ? 1 : Math.ceil(n / 153)) : 0) + ' SMS';
+        var seg = n ? (n <= 160 ? 1 : Math.ceil(n / 153)) : 0;
+        smsCount.textContent = n + ' caractères · ' + seg + ' SMS';
+        /* Au-delà d'un segment, on le signale : c'est facturé au segment, et
+           le texte par défaut a été écrit pour tenir en un seul. */
+        smsCount.classList.toggle('text-amber-600', seg > 1);
+        smsCount.classList.toggle('font-semibold', seg > 1);
       };
       smsCorps.addEventListener('input', majSms);
       majSms();

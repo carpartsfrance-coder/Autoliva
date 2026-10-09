@@ -174,6 +174,7 @@
           <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
             <div class="text-[11px] text-slate-400">
               <span data-count>0</span> caractères<% if (c.canal === 'sms') { %> · <span data-seg>0</span> SMS<% } %>
+              <span class="text-slate-300">une fois rempli</span>
             </div>
             <button type="button" data-reset class="text-xs font-semibold text-slate-400 hover:text-slate-600">Revenir au texte par défaut</button>
           </div>
@@ -201,10 +202,23 @@
   </div>
 </main>
 
+<script id="avisExemple" type="application/json"><%- JSON.stringify(reglages.exemple) %></script>
 <script>
   (function () {
     var form = document.getElementById('avisForm');
     if (!form) return;
+
+    /* Valeurs d'exemple pour compter le message RÉEL : le gabarit contient
+       « {lienEnquete} » (13 caractères) là où partira un lien d'une
+       quarantaine. Compter le gabarit ferait croire à un SMS d'un segment
+       alors qu'il en coûte deux. */
+    var exemple = {};
+    try { exemple = JSON.parse(document.getElementById('avisExemple').textContent) || {}; } catch (e) { exemple = {}; }
+    function remplir(tpl) {
+      return String(tpl || '').replace(/\{(\w+)\}/g, function (brut, cle) {
+        return Object.prototype.hasOwnProperty.call(exemple, cle) ? exemple[cle] : brut;
+      });
+    }
     var lien = document.getElementById('lienAvis');
 
     var reset = document.getElementById('lienReset');
@@ -241,9 +255,17 @@
       var label = bloc.querySelector('[data-enable-label]');
 
       function maj() {
-        var v = corps ? corps.value : '';
+        var brut = corps ? corps.value : '';
+        var v = remplir(brut);
         if (count) count.textContent = v.length;
-        if (seg) seg.textContent = v.length ? segments(v.length) : 0;
+        if (seg) {
+          var n = v.length ? segments(v.length) : 0;
+          seg.textContent = n;
+          /* Au-delà d'un segment, on le signale : chaque segment est facturé,
+             et le texte par défaut a justement été écrit pour tenir en un. */
+          seg.parentNode.classList.toggle('text-amber-600', n > 1);
+          seg.parentNode.classList.toggle('font-semibold', n > 1);
+        }
         if (alerte) alerte.hidden = !/https?:\/\//i.test(v);
       }
       if (corps) { corps.addEventListener('input', maj); }

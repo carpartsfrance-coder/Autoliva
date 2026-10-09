@@ -27,13 +27,24 @@ const brand = require('../config/brand');
 function texte(v) { return typeof v === 'string' ? v : ''; }
 
 /**
- * 24 caractères base64url tirés du CSPRNG (~143 bits). La page est publique et
- * sans authentification : le jeton est la seule chose qui protège le retour
- * d'un client, un identifiant séquentiel ou un hash de n° de commande
- * laisserait n'importe qui parcourir les avis des autres.
+ * 12 caractères base64url tirés du CSPRNG (72 bits).
+ *
+ * Deux contraintes qui tirent en sens inverse :
+ *  - la page est publique et sans authentification, le jeton est la SEULE
+ *    chose qui protège le retour d'un client. Un identifiant séquentiel ou un
+ *    dérivé du n° de commande laisserait parcourir les avis des autres ;
+ *  - le lien part par SMS, où chaque caractère compte : il décide à lui seul
+ *    du passage à deux segments.
+ *
+ * 72 bits tranchent : il faudrait de l'ordre de 2^71 tentatives pour en
+ * trouver un, et ce qu'on y gagnerait est le prénom et le n° de commande d'un
+ * client. Passer à 144 bits doublerait le coût du SMS pour rien.
+ *
+ * Les jetons de 24 caractères émis avant le 09/10/2026 restent valides :
+ * `parToken` n'impose pas de longueur.
  */
 function nouveauToken() {
-  return crypto.randomBytes(18).toString('base64url');
+  return crypto.randomBytes(9).toString('base64url');
 }
 
 function baseUrl() {

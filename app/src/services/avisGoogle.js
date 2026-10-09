@@ -75,7 +75,16 @@ L'équipe {brand}
 {phone}`,
   },
   sms: {
-    corps: '{brand} : merci pour votre commande #{orderNumber} ! Votre avis nous aide beaucoup : {lienEnquete} - Un souci ? {phone}',
+    /* TIENT EN UN SEUL SEGMENT (160 caractères), lien compris — c'est la
+       contrainte qui a dicté ce texte, et le test unitaire la verrouille.
+       Deux segments doublent le coût de chaque envoi, et les opérateurs
+       découpent parfois mal un SMS long contenant une URL.
+       Le téléphone a sauté volontairement : la page d'enquête est elle-même
+       l'issue de secours d'un client mécontent, qui y décrit son problème et
+       se fait rappeler. Le remettre coûterait 16 caractères pour un recours
+       qui existe déjà deux clics plus loin — {phone} reste disponible si on
+       change d'avis. */
+    corps: "{brand} : votre avis sur la commande #{orderNumber} ? C'est par ici, en 10 s : {lienEnquete}",
   },
   whatsapp: {
     corps: `Bonjour {prenom}, c'est {brand}.
@@ -232,6 +241,19 @@ async function reglagesPourAdmin() {
     lienPersonnalise: !!(doc && rempli(doc.lienAvis) && doc.lienAvis.trim() !== LIEN_PAR_DEFAUT),
     canaux,
     variables: VARIABLES,
+    /* Valeurs d'exemple pour que le compteur de la page compte le message
+       RÉEL. Sans ça il compte « {lienEnquete} » (13 caractères) au lieu du
+       lien (une quarantaine) : le texte paraît tenir en un segment et part
+       en deux. Le jeton d'exemple a la longueur d'un vrai. */
+    exemple: {
+      brand: brand.NAME,
+      orderNumber: 'CP2026-000485',
+      prenom: 'Julien',
+      nom: 'Farge',
+      phone: brand.PHONE || '',
+      lienAvis: (doc && rempli(doc.lienAvis) ? doc.lienAvis.trim() : LIEN_PAR_DEFAUT),
+      lienEnquete: `${(brand.SITE_URL || '').replace(/\/$/, '')}/mon-avis/ABCdef123456`,
+    },
     enquete: enq,
     enqueteDefauts: ENQUETE_DEFAUTS,
     seuilParDefaut: SEUIL_PAR_DEFAUT,

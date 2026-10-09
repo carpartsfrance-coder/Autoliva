@@ -20,6 +20,8 @@ process.env.BRAND = 'autoliva';
 delete process.env.MONGODB_URI;
 
 const avis = require('../../src/services/avisGoogle');
+const reviewFeedback = require('../../src/services/reviewFeedback');
+const brand = require('../../src/config/brand');
 const { buildAvisGoogleEmail } = require('../../src/services/emailTemplates');
 
 const commande = { number: 'CP2026-000485', shippingAddress: { fullName: 'Julien Farge' } };
@@ -67,11 +69,27 @@ test('les trois canaux portent le lien', async (t) => {
     assert.ok(!r.corps.includes(avis.LIEN_PAR_DEFAUT), 'pas de lien Google direct quand l\'enquête est en place');
   });
 
-  await t.test('le SMS par défaut tient en 2 segments une fois substitué', async () => {
-    const r = await avis.resoudre('sms', { order: commande, user: client });
-    assert.ok(r.corps.includes(avis.LIEN_PAR_DEFAUT), 'le lien doit être présent');
+  await t.test('le SMS par défaut tient en UN segment, lien compris', async () => {
+    /* La contrainte qui a dicté le texte du SMS. On la mesure sur le pire cas
+       réel : le lien d'enquête (plus long que le lien Google), un jeton émis
+       par le vrai générateur, et un n° de commande au format de production.
+       Deux segments doublent le coût de chaque envoi — si ce test casse, c'est
+       le texte qu'il faut raccourcir, pas la limite. */
+    const token = reviewFeedback.nouveauToken();
+    const lienEnquete = `${brand.SITE_URL}/mon-avis/${token}`;
+    const r = await avis.resoudre('sms', { order: commande, user: client, lienEnquete });
+    assert.ok(r.corps.includes(lienEnquete), 'le lien doit être présent');
     assert.ok(!/\{\w+\}/.test(r.corps), 'aucune variable ne doit rester : ' + r.corps);
-    assert.ok(r.corps.length <= 306, '2 segments max, mesuré : ' + r.corps.length);
+    assert.ok(r.corps.length <= 160, `un seul segment (160) attendu, mesuré ${r.corps.length} : ${r.corps}`);
+  });
+
+  await t.test('le SMS reste en GSM-7 : pas de caractère qui ferait tomber à 70', () => {
+    /* Un seul caractère hors GSM-7 (œ, guillemets typographiques, emoji…)
+       bascule tout le SMS en UCS-2 : la limite passe de 160 à 70 et le texte
+       part en deux segments sans qu'on ait rien allongé. */
+    const GSM7 = /^[@£$¥èéùìòÇØøÅåÆæßÉ !"#¤%&'()*+,\-./0-9:;<=>?¡A-ZÄÖÑÜ§¿a-zäöñüà\r\n]*$/;
+    const sansVariables = avis.DEFAUTS.sms.corps.replace(/\{\w+\}/g, '');
+    assert.ok(GSM7.test(sansVariables), 'caractère hors GSM-7 dans : ' + sansVariables);
   });
 });
 
