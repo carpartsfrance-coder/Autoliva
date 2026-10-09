@@ -62,7 +62,7 @@ const VARIABLES = [
   ['lienAvis', "Lien Google DIRECT, sans passer par l'enquête — en e-mail, seul sur sa ligne, il devient le bouton"],
   ['piece', "La pièce achetée (« mécatronique DQ200 ») — « commande » si on ne la reconnaît pas"],
   ['bonAchat', "Mention du bon d'achat, phrase entière — vide si le bon est désactivé"],
-  ['bonCourt', "Version courte pour le SMS (« 30 € offerts. ») — vide si le bon est désactivé"],
+  ['bonSms', "Clause pour le SMS (« , un bon de 30 € vous est offert ») — VIRGULE COMPRISE, pour disparaître proprement si le bon est coupé"],
   ['phone', 'Téléphone de la marque'],
 ];
 
@@ -107,16 +107,23 @@ function mentionBon(bon) {
 }
 
 /**
- * Version courte, pour le SMS. « Un bon de 30 € pour votre réponse. » fait
- * 35 caractères : avec le lien d'enquête et le nom de la pièce, elle fait
- * sauter le message à deux segments. Celle-ci en fait 14, et le « pour quoi »
- * est porté par la phrase qui suit immédiatement (« Répondez en 10 s »).
- * Comme l'autre, c'est une PHRASE : elle doit pouvoir disparaître sans
- * laisser un texte bancal.
+ * Clause pour le SMS — **virgule de tête comprise**.
+ *
+ * La version précédente, « 30 € offerts. », tenait en un segment mais faisait
+ * SMS d'arnaque : une phrase nue, sans objet, c'est exactement le vocabulaire
+ * des tirages au sort frauduleux. Dans un message qui doit inspirer confiance
+ * à quelqu'un qui vient de dépenser plusieurs centaines d'euros, c'est raté.
+ *
+ * La virgule est DANS la variable, et pas dans le gabarit, parce que la
+ * clause doit disparaître avec sa ponctuation quand le bon est coupé :
+ * « en 10 secondes, : <lien> » serait pire que tout.
+ *
+ * Le « pour quoi » est porté par la proposition précédente (« dites-le-nous
+ * en 10 secondes ») : le bon récompense la réponse, jamais un avis.
  */
-function mentionBonCourte(bon) {
+function mentionBonSms(bon) {
   const euros = montantEnEuros(bon);
-  return euros ? `${euros} € offerts.` : '';
+  return euros ? `, un bon de ${euros} € vous est offert` : '';
 }
 
 /**
@@ -157,7 +164,12 @@ L'équipe {brand}
        se fait rappeler. Le remettre coûterait 16 caractères pour un recours
        qui existe déjà deux clics plus loin — {phone} reste disponible si on
        change d'avis. */
-    corps: 'Bonjour {prenom}, {brand}. Votre {piece} vous convient ? {bonCourt} Répondez en 10 s : {lienEnquete}',
+    /* DEUX SEGMENTS ASSUMÉS. Toutes les formulations correctes dépassent 160
+       caractères une fois le lien (42) et le nom de la pièce comptés — c'est
+       mesuré, pas supposé. Le second segment coûte quelques centimes ; un SMS
+       qui fait arnaque coûte le client. Le test vérifie qu'on ne passe jamais
+       à TROIS, et qu'un bon désactivé fait retomber à un seul. */
+    corps: 'Bonjour {prenom}, c\'est {brand}. Votre {piece} vous convient ? Dites-le-nous en 10 secondes{bonSms} : {lienEnquete}',
   },
   whatsapp: {
     corps: `Bonjour {prenom}, c'est {brand}.
@@ -270,7 +282,7 @@ function variablesCommande({ order, user, lienAvis, lienEnquete, bon } = {}) {
     lienEnquete: lienEnquete || lienAvis || LIEN_PAR_DEFAUT,
     piece: nomPiece(order),
     bonAchat: mentionBon(bon),
-    bonCourt: mentionBonCourte(bon),
+    bonSms: mentionBonSms(bon),
     phone: brand.PHONE || '',
   };
 }
@@ -382,7 +394,7 @@ async function reglagesPourAdmin() {
       lienEnquete: `${(brand.SITE_URL || '').replace(/\/$/, '')}/mon-avis/ABCdef123456`,
       piece: 'mécatronique DQ200',
       bonAchat: mentionBon(bonCourant),
-      bonCourt: mentionBonCourte(bonCourant),
+      bonSms: mentionBonSms(bonCourant),
     },
     enquete: enq,
     bon: bonCourant,
@@ -479,7 +491,7 @@ module.exports = {
   nettoyerTexte,
   BON_DEFAUTS,
   mentionBon,
-  mentionBonCourte,
+  mentionBonSms,
   nomPiece,
   appliquerVariables,
   variablesCommande,
