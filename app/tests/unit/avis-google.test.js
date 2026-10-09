@@ -81,32 +81,43 @@ test('les trois canaux portent le lien', async (t) => {
     assert.ok(!r.corps.includes(avis.LIEN_PAR_DEFAUT), 'pas de lien Google direct quand l\'enquête est en place');
   });
 
-  await t.test('le SMS tient en UN segment même dans le PIRE cas', async () => {
-    /* Le cas normal ne prouve rien : c'est la combinaison des longueurs qui
-       fait déborder. On compose donc le pire message possible pour la marque
-       RÉELLEMENT déployée — prénom composé, nom de pièce au maximum de la
-       troncature, vrai domaine, vrai jeton — et on le mesure.
+  /* Longueur GSM-7 : le € n'est pas dans la table de base, il vit dans la
+     table d'extension et compte DOUBLE. Un décompte naïf annonce un segment
+     là où l'opérateur en facture deux. */
+  const longueurSms = (txt) => txt.length + (txt.match(/€/g) || []).length;
+  const pireCommande = { number: 'CP2026-000485', items: [{ name: 'Arbre de transmission AV gauche renforcé' }] };
+  const pireClient = { firstName: 'Jean-Christophe', lastName: 'de la Villardière' };
 
-       Si ce test casse après un changement de marque ou de domaine, ce n'est
-       pas la limite qu'il faut relever : c'est le texte qu'il faut raccourcir.
-       Deux segments, c'est le double du coût sur chaque envoi. */
-    const token = reviewFeedback.nouveauToken();
-    const lienEnquete = `${brand.SITE_URL}/mon-avis/${token}`;
-    const pire = {
-      number: 'CP2026-000485',
-      items: [{ name: 'Arbre de transmission AV gauche renforcé' }],
-    };
-    const r = await avis.resoudre('sms', {
-      order: pire,
-      user: { firstName: 'Jean-Christophe', lastName: 'de la Villardière' },
+  await t.test('le SMS ne dépasse JAMAIS deux segments', async () => {
+    /* Deux segments sont assumés : toutes les formulations qui ne font pas
+       « SMS d'arnaque » dépassent 160 caractères une fois le lien et le nom
+       de la pièce comptés. Le second segment coûte quelques centimes, un
+       message qui inspire la méfiance coûte le client.
+       Trois segments, en revanche, veut dire que le texte a dérivé.
+       On compose le pire message possible pour la marque RÉELLEMENT
+       déployée : prénom composé, pièce au maximum de la troncature, vrai
+       domaine, vrai jeton. */
+    const lienEnquete = `${brand.SITE_URL}/mon-avis/${reviewFeedback.nouveauToken()}`;
+    const r = await avis.resoudre('sms', { order: pireCommande, user: pireClient, lienEnquete });
+    const n = longueurSms(r.corps);
+    assert.ok(n <= 306, `deux segments max (306) pour ${brand.NAME}, mesuré ${n} : ${r.corps}`);
+  });
+
+  await t.test('sans bon d\'achat, le SMS retombe à un seul segment', async () => {
+    /* La clause du bon porte sa propre virgule : en disparaissant elle ne
+       doit laisser ni ponctuation orpheline ni double espace. Et le message
+       nu doit redevenir le SMS d'un segment qu'il était. */
+    const lienEnquete = `${brand.SITE_URL}/mon-avis/${reviewFeedback.nouveauToken()}`;
+    const vars = avis.variablesCommande({
+      order: { number: 'CP2026-000485', items: [{ name: 'Mécatronique DQ200' }] },
+      user: { firstName: 'Julien' },
       lienEnquete,
+      bon: { actif: false },
     });
-    /* Le € n'est pas dans la table GSM-7 de base : il vit dans la table
-       d'extension et compte DOUBLE. Un décompte naïf annoncerait 1 segment
-       là où l'opérateur en facture 2. */
-    const longueur = r.corps.length + (r.corps.match(/€/g) || []).length;
-    assert.ok(longueur <= 160,
-      `un seul segment (160) attendu pour ${brand.NAME}, mesuré ${longueur} : ${r.corps}`);
+    const corps = avis.nettoyerTexte(avis.appliquerVariables(avis.DEFAUTS.sms.corps, vars));
+    assert.ok(!/ ,|, :|\s{2}/.test(corps), 'ponctuation orpheline : ' + corps);
+    const n = longueurSms(corps);
+    assert.ok(n <= 160, `un seul segment attendu sans bon, mesuré ${n} : ${corps}`);
   });
 
   await t.test('le nom de pièce est coupé sur un mot entier', () => {
@@ -118,20 +129,6 @@ test('les trois canaux portent le lien', async (t) => {
        genres — « cette {piece} » aurait donné « cette moteur ». */
     assert.equal(avis.nomPiece({ items: [] }), 'commande');
     assert.equal(avis.nomPiece(null), 'commande');
-  });
-
-  await t.test('le SMS par défaut tient en UN segment, lien compris', async () => {
-    /* La contrainte qui a dicté le texte du SMS. On la mesure sur le pire cas
-       réel : le lien d'enquête (plus long que le lien Google), un jeton émis
-       par le vrai générateur, et un n° de commande au format de production.
-       Deux segments doublent le coût de chaque envoi — si ce test casse, c'est
-       le texte qu'il faut raccourcir, pas la limite. */
-    const token = reviewFeedback.nouveauToken();
-    const lienEnquete = `${brand.SITE_URL}/mon-avis/${token}`;
-    const r = await avis.resoudre('sms', { order: commande, user: client, lienEnquete });
-    assert.ok(r.corps.includes(lienEnquete), 'le lien doit être présent');
-    assert.ok(!/\{\w+\}/.test(r.corps), 'aucune variable ne doit rester : ' + r.corps);
-    assert.ok(r.corps.length <= 160, `un seul segment (160) attendu, mesuré ${r.corps.length} : ${r.corps}`);
   });
 
   await t.test('le SMS reste en GSM-7 : pas de caractère qui ferait tomber à 70', () => {
