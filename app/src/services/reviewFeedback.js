@@ -20,6 +20,7 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const ReviewFeedback = require('../models/ReviewFeedback');
+const PromoCode = require('../models/PromoCode');
 const avis = require('./avisGoogle');
 const { getSiteUrlFromEnv } = require('./siteUrl');
 const brand = require('../config/brand');
@@ -165,6 +166,75 @@ async function enregistrerNote(doc, note) {
   return { ok: true, publier, retenue, ignoree, modifiee, lienAvis, reglages, doc };
 }
 
+/* Alphabet sans caractère ambigu : le code est recopié à la main depuis un
+   SMS ou un e-mail, et un O pris pour un 0 fait un client qui appelle. */
+const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function codeAleatoire() {
+  const buf = crypto.randomBytes(6);
+  let out = '';
+  for (let i = 0; i < 6; i += 1) out += ALPHABET[buf[i] % ALPHABET.length];
+  return `AVIS-${out}`;
+}
+
+/**
+ * Émet le bon d'achat qui récompense la RÉPONSE à l'enquête.
+ *
+ * ⚠ AUCUNE CONDITION SUR LA NOTE, ET IL NE FAUT JAMAIS EN AJOUTER.
+ * Récompenser un AVIS est interdit par Google et constitue une pratique
+ * commerciale trompeuse en droit français ; récompenser la réponse à une
+ * enquête de satisfaction est une dépense marketing ordinaire. Toute la
+ * différence tient à ces trois propriétés, qui vivent ici :
+ *   - appelé pour toute note de 1 à 5 ;
+ *   - jamais conditionné à `redirigeGoogleAt` ni à quoi que ce soit de public ;
+ *   - aucune preuve d'avis demandée.
+ * Un `if (doc.rating >= …)` dans cette fonction ferait basculer le dispositif
+ * du côté interdit.
+ *
+ * Un seul bon par commande : l'appel est idempotent.
+ * @returns {Promise<Object|null>} le bon, ou null si désactivé.
+ */
+async function emettreBon(doc) {
+  if (!doc) return null;
+  if (doc.bon && doc.bon.code) return doc.bon; // déjà émis
+
+  const reglages = await avis.bon();
+  if (!reglages.actif || !(reglages.montantCents > 0)) return null;
+
+  const expireLe = new Date(Date.now() + reglages.validiteJours * 86400000);
+
+  /* Quelques essais : l'unicité est garantie par l'index de PromoCode, pas
+     par l'espoir que 32^6 suffise. */
+  let code = '';
+  for (let essai = 0; essai < 5 && !code; essai += 1) {
+    const candidat = codeAleatoire();
+    try {
+      await PromoCode.create({
+        code: candidat,
+        label: `Réponse à l'enquête de satisfaction — commande ${doc.orderNumber || ''}`.trim(),
+        isActive: true,
+        discountType: 'fixed',
+        discountAmountCents: reglages.montantCents,
+        minSubtotalCents: reglages.minimumCents,
+        endsAt: expireLe,
+        maxTotalUses: 1,
+      });
+      code = candidat;
+    } catch (err) {
+      if (!err || err.code !== 11000) throw err; // collision → on retente
+    }
+  }
+  if (!code) {
+    console.error('[avis] bon non émis : 5 collisions de code d\'affilée');
+    return null;
+  }
+
+  doc.bon = { code, montantCents: reglages.montantCents, emisLe: new Date(), expireLe };
+  doc.updatedAt = new Date();
+  await doc.save();
+  return doc.bon;
+}
+
 /**
  * Enregistre le détail d'un retour négatif. Renvoie le document pour que
  * l'appelant déclenche l'alerte interne.
@@ -241,6 +311,7 @@ async function statistiques() {
 
 module.exports = {
   nouveauToken,
+  emettreBon,
   urlEnquete,
   pourCommande,
   parToken,

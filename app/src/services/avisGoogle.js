@@ -60,6 +60,7 @@ const VARIABLES = [
   ['orderNumber', 'N° de commande'],
   ['lienEnquete', "Lien à envoyer : la page « quelle note ? » qui filtre avant Google (enquête coupée = lien Google)"],
   ['lienAvis', "Lien Google DIRECT, sans passer par l'enquête — en e-mail, seul sur sa ligne, il devient le bouton"],
+  ['bonAchat', "Mention du bon d'achat (« un bon de 30 € ») — vide si le bon est désactivé"],
   ['phone', 'Téléphone de la marque'],
 ];
 
@@ -67,7 +68,9 @@ const VARIABLES = [
    s'adressent pas au même moment (l'attention du client est déjà captée). */
 const ENQUETE_DEFAUTS = {
   question: "Comment s'est passée votre commande #{orderNumber} ?",
-  messageContent: "Merci beaucoup ! Dernière étape : partagez-le sur Google. C'est ce qui aide le plus les automobilistes qui hésitent.",
+  /* Pas de « partagez-LE » : depuis que la page demande une note et non un
+     avis, le pronom ne renvoie plus à rien. */
+  messageContent: "Merci beaucoup ! Si vous avez trente secondes de plus, un avis sur Google aide énormément les automobilistes qui hésitent encore à nous faire confiance.",
   messageMecontent: "Désolé que ça n'ait pas été à la hauteur. Dites-nous ce qui s'est passé — on s'en occupe personnellement, et on vous recontacte.",
   remerciement: "C'est noté, merci de nous l'avoir dit. Un membre de l'équipe vous recontacte sous 24 h ouvrées.",
 };
@@ -75,14 +78,49 @@ const ENQUETE_DEFAUTS = {
 /** Note minimale par défaut pour être renvoyé vers Google. */
 const SEUIL_PAR_DEFAUT = 4;
 
+/* Bon d'achat : désactivé par défaut dans le CODE (c'est une dépense, elle ne
+   doit pas s'allumer toute seule chez qui déploierait ce code ailleurs). La
+   valeur réellement en service vit en base. */
+const BON_DEFAUTS = { actif: false, montantCents: 3000, minimumCents: 0, validiteJours: 180 };
+
+/**
+ * Ce que remplace {bonAchat} : « Un bon de 30 € pour votre réponse. »
+ *
+ * Une PHRASE COMPLÈTE, et non un bout de groupe nominal, pour deux raisons.
+ * D'abord elle doit pouvoir disparaître sans laisser un texte bancal quand le
+ * bon est coupé — un gabarit écrit autour d'un fragment devient illisible le
+ * jour où il vaut ''. Ensuite elle dit « pour votre réponse » et jamais
+ * « pour votre avis » : c'est précisément ce que la loi distingue.
+ */
+function mentionBon(bon) {
+  if (!bon || !bon.actif || !(bon.montantCents > 0)) return '';
+  const euros = bon.montantCents % 100 === 0
+    ? String(bon.montantCents / 100)
+    : (bon.montantCents / 100).toFixed(2).replace('.', ',');
+  return `Un bon de ${euros} € pour votre réponse.`;
+}
+
+/**
+ * Referme les trous laissés par une variable vide : « 10 s.  https://… » avec
+ * ses deux espaces, ou trois sauts de ligne là où le bon aurait dû être.
+ * Sans ça, couper le bon d'achat abîme visiblement tous les messages.
+ */
+function nettoyerTexte(v) {
+  return String(v == null ? '' : v)
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 const DEFAUTS = {
   email: {
     sujet: 'Votre avis sur la commande #{orderNumber}',
     corps: `Bonjour {prenom},
 
-Vous avez reçu votre commande #{orderNumber}. Nous espérons que la pièce vous donne entière satisfaction.
+Vous avez reçu votre commande #{orderNumber}. Tout s'est bien passé ?
 
-Prendriez-vous une minute pour laisser un avis sur Google ? C'est ce qui aide le plus les automobilistes qui hésitent encore à nous faire confiance.
+Dites-le nous en une question : une note de 1 à 5, dix secondes. {bonAchat}
 
 {lienEnquete}
 
@@ -100,13 +138,15 @@ L'équipe {brand}
        se fait rappeler. Le remettre coûterait 16 caractères pour un recours
        qui existe déjà deux clics plus loin — {phone} reste disponible si on
        change d'avis. */
-    corps: "{brand} : votre avis sur la commande #{orderNumber} ? C'est par ici, en 10 s : {lienEnquete}",
+    corps: '{brand} : votre avis sur la commande #{orderNumber} ? 10 s. {bonAchat} {lienEnquete}',
   },
   whatsapp: {
     corps: `Bonjour {prenom}, c'est {brand}.
 
-Votre commande #{orderNumber} est bien arrivée ? Si tout est en ordre, un avis sur Google nous aiderait énormément — ça prend une minute :
+Votre commande #{orderNumber} est bien arrivée ? Dites-nous en une question ce que vous en avez pensé — dix secondes :
 {lienEnquete}
+
+{bonAchat}
 
 Et si quelque chose ne va pas, répondez-moi ici : on règle ça.
 
@@ -164,7 +204,7 @@ function appliquerVariables(tpl, vars) {
  * User, pas sur Order) ; on retombe sur l'adresse de livraison quand le compte
  * est vide, ce qui est le cas des commandes invité.
  */
-function variablesCommande({ order, user, lienAvis, lienEnquete } = {}) {
+function variablesCommande({ order, user, lienAvis, lienEnquete, bon } = {}) {
   const o = order || {};
   const u = user || {};
   const nomLivraison = texte(o.shippingAddress && o.shippingAddress.fullName).trim();
@@ -179,6 +219,7 @@ function variablesCommande({ order, user, lienAvis, lienEnquete } = {}) {
     /* Pas d'enquête (coupée, ou appelant qui n'en fournit pas) → le lien
        Google. Un message dont le lien manquerait ne doit jamais partir. */
     lienEnquete: lienEnquete || lienAvis || LIEN_PAR_DEFAUT,
+    bonAchat: mentionBon(bon),
     phone: brand.PHONE || '',
   };
 }
@@ -191,17 +232,18 @@ function variablesCommande({ order, user, lienAvis, lienEnquete } = {}) {
 async function resoudre(canal, { order, user, lienEnquete } = {}) {
   if (!CANAUX.includes(canal)) return { enabled: false, sujet: '', corps: '', lienAvis: '' };
   const doc = await charger();
+  const bonCourant = await bon();
   const ov = (doc && doc[canal]) || null;
   const enabled = ov ? ov.enabled !== false : true;
   const lienAvis = (doc && rempli(doc.lienAvis) ? doc.lienAvis.trim() : LIEN_PAR_DEFAUT);
   const defaut = DEFAUTS[canal];
   const sujetTpl = ov && rempli(ov.sujet) ? ov.sujet : (defaut.sujet || '');
   const corpsTpl = ov && rempli(ov.corps) ? ov.corps : defaut.corps;
-  const vars = variablesCommande({ order, user, lienAvis, lienEnquete });
+  const vars = variablesCommande({ order, user, lienAvis, lienEnquete, bon: bonCourant });
   return {
     enabled,
-    sujet: appliquerVariables(sujetTpl, vars),
-    corps: appliquerVariables(corpsTpl, vars),
+    sujet: nettoyerTexte(appliquerVariables(sujetTpl, vars)),
+    corps: nettoyerTexte(appliquerVariables(corpsTpl, vars)),
     lienAvis,
   };
 }
@@ -232,10 +274,28 @@ async function enquete() {
   return out;
 }
 
+/**
+ * Réglages du bon d'achat offert pour une RÉPONSE à l'enquête.
+ * Voir models/AvisSettings : il ne doit JAMAIS dépendre de la note.
+ */
+async function bon() {
+  const doc = await charger();
+  const b = (doc && doc.bon) || null;
+  if (!b) return { ...BON_DEFAUTS };
+  const n = (v, d) => (Number.isFinite(v) && v >= 0 ? v : d);
+  return {
+    actif: b.actif === true,
+    montantCents: n(b.montantCents, BON_DEFAUTS.montantCents),
+    minimumCents: n(b.minimumCents, BON_DEFAUTS.minimumCents),
+    validiteJours: Math.max(1, Math.round(n(b.validiteJours, BON_DEFAUTS.validiteJours))),
+  };
+}
+
 /** Pour la page de réglages : défauts + override courant fusionnés. */
 async function reglagesPourAdmin() {
   const doc = await charger();
   const enq = await enquete();
+  const bonCourant = await bon();
   const canaux = CANAUX.map((canal) => {
     const ov = (doc && doc[canal]) || null;
     const defaut = DEFAUTS[canal];
@@ -269,8 +329,17 @@ async function reglagesPourAdmin() {
       phone: brand.PHONE || '',
       lienAvis: (doc && rempli(doc.lienAvis) ? doc.lienAvis.trim() : LIEN_PAR_DEFAUT),
       lienEnquete: `${(brand.SITE_URL || '').replace(/\/$/, '')}/mon-avis/ABCdef123456`,
+      bonAchat: mentionBon(bonCourant),
     },
     enquete: enq,
+    bon: bonCourant,
+    /* Pour avertir en back-office : un bon actif que RIEN n'annonce dans les
+       messages, c'est de l'argent distribué sans effet d'entraînement. */
+    bonAnnonce: CANAUX.some((canal) => {
+      const ov = (doc && doc[canal]) || null;
+      const corps = ov && rempli(ov.corps) ? ov.corps : DEFAUTS[canal].corps;
+      return corps.includes('{bonAchat}');
+    }),
     enqueteDefauts: ENQUETE_DEFAUTS,
     seuilParDefaut: SEUIL_PAR_DEFAUT,
     updatedAt: (doc && doc.updatedAt) || null,
@@ -331,6 +400,15 @@ async function enregistrer(payload, parNom) {
   });
   set.enquete = blocEnquete;
 
+  const b = p.bon || {};
+  const entier = (v, d) => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : d; };
+  set.bon = {
+    actif: b.actif === true,
+    montantCents: entier(b.montantCents, BON_DEFAUTS.montantCents),
+    minimumCents: entier(b.minimumCents, BON_DEFAUTS.minimumCents),
+    validiteJours: Math.max(1, entier(b.validiteJours, BON_DEFAUTS.validiteJours)),
+  };
+
   await AvisSettings.updateOne({ singleton: 'avis' }, { $set: set }, { upsert: true });
   invalidateCache();
   return { ok: true };
@@ -344,6 +422,10 @@ module.exports = {
   ENQUETE_DEFAUTS,
   SEUIL_PAR_DEFAUT,
   enquete,
+  bon,
+  nettoyerTexte,
+  BON_DEFAUTS,
+  mentionBon,
   appliquerVariables,
   variablesCommande,
   getLien,

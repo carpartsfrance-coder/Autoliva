@@ -124,6 +124,15 @@ async function postAvisSettings(req, res, next) {
       messageMecontent: texte(b.enquete_messageMecontent),
       remerciement: texte(b.enquete_remerciement),
     };
+    /* Saisi en euros, stocké en centimes : personne ne tape « 3000 » pour
+       trente euros, et une erreur d'unité ici distribue cent fois trop. */
+    const euros = (v, d) => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n * 100 : d; };
+    payload.bon = {
+      actif: b.bon_actif != null,
+      montantCents: euros(b.bon_montant, avis.BON_DEFAUTS.montantCents),
+      minimumCents: euros(b.bon_minimum, avis.BON_DEFAUTS.minimumCents),
+      validiteJours: b.bon_validite,
+    };
     const r = await avis.enregistrer(payload, adminName(req));
     if (!r.ok) return res.redirect('/admin/parametres/avis?erreur=' + encodeURIComponent(r.error));
     return res.redirect('/admin/parametres/avis?saved=1');

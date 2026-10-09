@@ -28,6 +28,25 @@
         <div class="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"><%= avertissement %></div>
       <% } %>
 
+      <%
+        /* Le bon s'affiche dès qu'il existe, à toutes les étapes d'après-note :
+           il récompense la RÉPONSE, pas l'avis, donc il ne peut pas dépendre
+           de l'écran sur lequel le client a atterri. */
+      %>
+      <% function blocBon() { %>
+        <% if (bon) { %>
+          <div class="mt-6 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 p-5 text-center">
+            <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Votre bon pour avoir répondu</div>
+            <div class="mt-1.5 font-mono text-2xl font-bold tracking-widest text-slate-900"><%= bon.code %></div>
+            <div class="mt-1 text-sm font-semibold text-slate-700"><%= bon.montant %> € de remise</div>
+            <% if (bon.expireLe) { %>
+              <div class="mt-1 text-xs text-slate-400">Valable jusqu'au <%= new Date(bon.expireLe).toLocaleDateString('fr-FR') %></div>
+            <% } %>
+            <div class="mt-3 text-xs text-slate-500">À saisir dans le panier. Utilisable une fois. Nous vous l'envoyons aussi par e-mail.</div>
+          </div>
+        <% } %>
+      <% } %>
+
       <% if (etape === 'note') { %>
         <%/* ── Étape 1 : la note ──────────────────────────────────────── */%>
         <h1 class="text-xl sm:text-2xl font-bold text-slate-900"><%= question %></h1>
@@ -53,6 +72,10 @@
         <%/* ── Note haute, mais le client est revenu sur la page ──────── */%>
         <h1 class="text-xl sm:text-2xl font-bold text-slate-900">Merci <%= prenom %> !</h1>
         <p class="mt-3 text-sm sm:text-base leading-relaxed text-slate-600"><%= messageContent %></p>
+        <%/* Le bon AVANT le bouton : il est acquis par la réponse, pas par le
+             clic qui suit. L'ordre à l'écran doit dire la même chose que le
+             code — sinon on laisse croire à un échange. */%>
+        <% blocBon() %>
         <% if (lienAvis) { %>
           <a href="<%= lienAvis %>" rel="noopener noreferrer"
              class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-red-600 px-5 py-3.5 text-sm font-bold text-white hover:bg-red-700">
@@ -83,6 +106,8 @@
           </button>
         </form>
 
+        <% blocBon() %>
+
         <% if (lienAvis) { %>
           <%/* Réglage « proposer quand même le lien Google » : visible, mais
                après le formulaire — on propose d'abord de régler le problème. */%>
@@ -97,6 +122,7 @@
         <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-2xl text-emerald-600">✓</div>
         <h1 class="mt-4 text-xl sm:text-2xl font-bold text-slate-900">Merci <%= prenom %></h1>
         <p class="mt-3 text-sm sm:text-base leading-relaxed text-slate-600"><%= remerciement %></p>
+        <% blocBon() %>
         <p class="mt-5 text-sm text-slate-500">
           Besoin de nous joindre avant ? <a href="tel:<%= brand.PHONE.replace(/\s/g, '') %>" class="font-semibold text-red-600 hover:text-red-700"><%= brand.PHONE %></a>
           · <a href="mailto:<%= brand.EMAIL_CONTACT %>" class="font-semibold text-red-600 hover:text-red-700"><%= brand.EMAIL_CONTACT %></a>

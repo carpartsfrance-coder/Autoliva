@@ -55,6 +55,34 @@ const enqueteSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/**
+ * Bon d'achat offert en échange d'une RÉPONSE à l'enquête.
+ *
+ * ⚠ LA FRONTIÈRE LÉGALE EST ICI, ET ELLE EST ÉTROITE. Rémunérer un AVIS est
+ * interdit par Google et constitue une pratique commerciale trompeuse en
+ * droit français. Rémunérer la réponse à une enquête de satisfaction est une
+ * dépense marketing ordinaire.
+ *
+ * Ce qui fait la différence, et que le code doit garantir — pas seulement
+ * l'intention :
+ *   - le bon part pour TOUTE note de 1 à 5, jamais seulement les bonnes ;
+ *   - il n'est jamais conditionné à la publication d'un avis Google ;
+ *   - on ne demande aucune preuve d'avis publié.
+ * Ne jamais ajouter de condition sur `rating` ni sur `redirigeGoogleAt` dans
+ * l'émission du bon : ce serait exactement l'infraction qu'on évite.
+ */
+const bonSchema = new mongoose.Schema(
+  {
+    actif: { type: Boolean, default: false },
+    montantCents: { type: Number, default: 3000, min: 0 },
+    /* Montant minimum de commande pour l'utiliser. 0 = aucun — mais un bon de
+       30 € sans plancher sur une pièce à 35 € se solde par une vente à perte. */
+    minimumCents: { type: Number, default: 0, min: 0 },
+    validiteJours: { type: Number, default: 180, min: 1 },
+  },
+  { _id: false }
+);
+
 const avisSettingsSchema = new mongoose.Schema(
   {
     singleton: { type: String, default: 'avis', unique: true, index: true },
@@ -66,6 +94,7 @@ const avisSettingsSchema = new mongoose.Schema(
     sms: { type: canalSchema, default: () => ({}) },
     whatsapp: { type: canalSchema, default: () => ({}) },
     enquete: { type: enqueteSchema, default: () => ({}) },
+    bon: { type: bonSchema, default: () => ({}) },
     updatedAt: { type: Date, default: Date.now },
     updatedByName: { type: String, default: '', trim: true },
   },
