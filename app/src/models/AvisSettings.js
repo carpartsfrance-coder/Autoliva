@@ -28,6 +28,33 @@ const canalSchema = new mongoose.Schema(
   { _id: false }
 );
 
+/**
+ * Enquête de satisfaction placée AVANT Google : le client note de 1 à 5 sur
+ * une page à nous, et n'est renvoyé vers Google qu'au-dessus du seuil.
+ *
+ * ⚠ Orienter ainsi selon la note (« review gating ») est contraire à la
+ * politique Google sur les avis. `proposerGoogleAuxMecontents` remet le
+ * dispositif dans les clous sans redéploiement : l'enquête sert alors à
+ * détecter et traiter le problème, mais le lien reste offert à tout le monde.
+ */
+const enqueteSchema = new mongoose.Schema(
+  {
+    active: { type: Boolean, default: true },
+    /* Note à partir de laquelle on renvoie vers Google. 4 par défaut :
+       en dessous, un avis public coûte plus cher que ce qu'il rapporte. */
+    seuil: { type: Number, default: 4, min: 1, max: 5 },
+    proposerGoogleAuxMecontents: { type: Boolean, default: false },
+    /* Textes de la page publique. '' = défaut du code (même convention que
+       les messages : on suit les évolutions du défaut tant qu'on n'a pas
+       écrit le sien). */
+    question: { type: String, default: '' },
+    messageContent: { type: String, default: '' },
+    messageMecontent: { type: String, default: '' },
+    remerciement: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
 const avisSettingsSchema = new mongoose.Schema(
   {
     singleton: { type: String, default: 'avis', unique: true, index: true },
@@ -38,6 +65,7 @@ const avisSettingsSchema = new mongoose.Schema(
     email: { type: canalSchema, default: () => ({}) },
     sms: { type: canalSchema, default: () => ({}) },
     whatsapp: { type: canalSchema, default: () => ({}) },
+    enquete: { type: enqueteSchema, default: () => ({}) },
     updatedAt: { type: Date, default: Date.now },
     updatedByName: { type: String, default: '', trim: true },
   },

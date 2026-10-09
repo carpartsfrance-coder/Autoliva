@@ -167,6 +167,11 @@ router.get('/sav/tickets/:numero', requireAdminAuth, savAdminController.getSavTi
 router.get('/parametres/sms', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.getSmsSettingsPage);
 router.post('/parametres/sms', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.postSmsSettings);
 router.post('/parametres/sms/test', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.postSmsTest);
+/* Retours de l'enquête de satisfaction. Accessible à TOUT admin (pas
+   seulement l'owner) : rappeler un client mécontent est le travail des
+   commerciaux, pas un réglage. */
+router.get('/avis', requireAdminAuth, avisAdminController.getAvisRetoursPage);
+router.post('/avis/:id/traiter', requireAdminAuth, avisAdminController.postTraiterRetour);
 router.get('/parametres/avis', requireAdminAuth, requireAbility('settings.site'), avisAdminController.getAvisSettingsPage);
 router.post('/parametres/avis', requireAdminAuth, requireAbility('settings.site'), avisAdminController.postAvisSettings);
 // Éditables par TOUT admin (propriétaire + commerciaux « employe »), comme la

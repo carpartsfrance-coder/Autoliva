@@ -1537,6 +1537,59 @@ function buildAvisGoogleEmail({ order, user, baseUrl, sujet, corps, lienAvis } =
   };
 }
 
+/**
+ * Alerte INTERNE : un client vient de mettre une note basse dans l'enquête.
+ *
+ * Destinataire : nous, pas le client. Le but est qu'on décroche vite — un
+ * retour négatif non traité est un avis négatif en sursis. D'où le téléphone
+ * en évidence et le texte du client en entier, sans troncature : résumer
+ * obligerait à rouvrir le back-office pour savoir de quoi il s'agit.
+ */
+function buildAvisNegatifAlerteEmail({ feedback, baseUrl, adminUrl } = {}) {
+  const f = feedback || {};
+  const note = Number.isFinite(f.rating) ? f.rating : '?';
+  const numero = getTrimmedString(f.orderNumber);
+  const subject = `⚠ Avis ${note}/5 — commande ${numero || 'inconnue'}`;
+  const tel = getTrimmedString(f.rappelTelephone) || getTrimmedString(f.clientTelephone);
+
+  const ligne = (label, valeur) => (valeur
+    ? `<tr><td style="padding:4px 12px 4px 0;color:#64748b;font-size:13px;white-space:nowrap;">${escapeHtml(label)}</td>
+          <td style="padding:4px 0;font-size:13px;font-weight:700;color:#0f172a;">${escapeHtml(valeur)}</td></tr>`
+    : '');
+
+  const bodyHtml = `
+<div style="font-size:16px;font-weight:900;color:#b91c1c;">Note ${escapeHtml(note)}/5 — à rappeler</div>
+<div style="margin-top:8px;font-size:14px;line-height:1.6;color:#334155;">
+  Ce client n'a pas été renvoyé vers Google. Son retour est resté chez nous : c'est le moment de régler le problème.
+</div>
+
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:14px;">
+  ${ligne('Commande', numero)}
+  ${ligne('Client', getTrimmedString(f.clientNom))}
+  ${ligne('E-mail', getTrimmedString(f.clientEmail))}
+  ${ligne('Téléphone', tel)}
+</table>
+
+${getTrimmedString(f.message) ? `
+<div style="margin-top:14px;padding:12px 14px;border:1px solid #fecaca;background:#fef2f2;border-radius:14px;color:#7f1d1d;font-size:13px;line-height:1.6;">
+  <div style="font-weight:900;">Ce qu'il nous dit</div>
+  <div style="margin-top:6px;white-space:pre-line;">${escapeHtml(f.message)}</div>
+</div>` : `
+<div style="margin-top:14px;font-size:13px;color:#64748b;">
+  Il a mis la note sans laisser de message. Le détail de la commande dira peut-être pourquoi.
+</div>`}
+
+${renderPrimaryButton({ href: adminUrl, label: 'Ouvrir le retour' })}`;
+
+  return {
+    subject,
+    html: renderEmailLayout({ title: subject, preheader: `Note ${note}/5 sur ${numero}`, bodyHtml, baseUrl }),
+    text: `Note ${note}/5 — commande ${numero}\n`
+      + `Client : ${getTrimmedString(f.clientNom)} ${getTrimmedString(f.clientEmail)} ${tel}\n\n`
+      + (getTrimmedString(f.message) || '(aucun message)') + `\n\n${getTrimmedString(adminUrl)}`,
+  };
+}
+
 module.exports = {
   buildOrderConfirmationEmail,
   buildConsigneStartEmail,
@@ -1561,4 +1614,5 @@ module.exports = {
   buildCloningFailedEmail,
   buildRefundIssuedEmail,
   buildAvisGoogleEmail,
+  buildAvisNegatifAlerteEmail,
 };

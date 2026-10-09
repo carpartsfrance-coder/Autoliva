@@ -11,6 +11,7 @@ const leadCaptureController = require('../controllers/leadCaptureController');
 const moteurOccasionController = require('../controllers/moteurOccasionController');
 const boiteOccasionController = require('../controllers/boiteOccasionController');
 const pontTransfertController = require('../controllers/pontTransfertController');
+const avisPublicController = require('../controllers/avisPublicController');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const brand = require('../config/brand');
 
@@ -22,6 +23,14 @@ router.get('/product', (req, res) => res.redirect(301, '/produits'));
 router.get('/product/:slug', productController.getProductBySlug);
 // Arbre véhicule (marques→modèles→motorisations) pour le sélecteur de véhicule.
 router.get('/api/vehicules', productController.getVehicleTreeApi);
+
+/* Enquête de satisfaction — la page ouverte depuis une demande d'avis.
+   Le jeton vaut authentification : pas de session, pas de CSRF à poser. URL
+   courte, parce qu'elle part aussi par SMS, où chaque caractère compte et où
+   une longue adresse se fait tronquer. Page en noindex (cf. contrôleur). */
+router.get('/mon-avis/:token', avisPublicController.getEnquete);
+router.post('/mon-avis/:token', avisPublicController.postNote);
+router.post('/mon-avis/:token/message', avisPublicController.postMessage);
 
 router.get('/contact', contactController.getContactPage);
 router.post('/contact', contactController.postContact);

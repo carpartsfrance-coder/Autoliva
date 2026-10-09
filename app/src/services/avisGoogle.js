@@ -42,9 +42,22 @@ const VARIABLES = [
   ['nom', 'Nom du client'],
   ['brand', 'Nom de la marque'],
   ['orderNumber', 'N° de commande'],
-  ['lienAvis', "Lien vers la fiche Google — en e-mail, seul sur sa ligne, il devient le bouton"],
+  ['lienEnquete', "Lien à envoyer : la page « quelle note ? » qui filtre avant Google (enquête coupée = lien Google)"],
+  ['lienAvis', "Lien Google DIRECT, sans passer par l'enquête — en e-mail, seul sur sa ligne, il devient le bouton"],
   ['phone', 'Téléphone de la marque'],
 ];
+
+/* Textes par défaut de la page d'enquête. Séparés des messages : ils ne
+   s'adressent pas au même moment (l'attention du client est déjà captée). */
+const ENQUETE_DEFAUTS = {
+  question: "Comment s'est passée votre commande #{orderNumber} ?",
+  messageContent: "Merci beaucoup ! Dernière étape : partagez-le sur Google. C'est ce qui aide le plus les automobilistes qui hésitent.",
+  messageMecontent: "Désolé que ça n'ait pas été à la hauteur. Dites-nous ce qui s'est passé — on s'en occupe personnellement, et on vous recontacte.",
+  remerciement: "C'est noté, merci de nous l'avoir dit. Un membre de l'équipe vous recontacte sous 24 h ouvrées.",
+};
+
+/** Note minimale par défaut pour être renvoyé vers Google. */
+const SEUIL_PAR_DEFAUT = 4;
 
 const DEFAUTS = {
   email: {
@@ -55,20 +68,20 @@ Vous avez reçu votre commande #{orderNumber}. Nous espérons que la pièce vous
 
 Prendriez-vous une minute pour laisser un avis sur Google ? C'est ce qui aide le plus les automobilistes qui hésitent encore à nous faire confiance.
 
-{lienAvis}
+{lienEnquete}
 
 Merci beaucoup,
 L'équipe {brand}
 {phone}`,
   },
   sms: {
-    corps: '{brand} : merci pour votre commande #{orderNumber} ! Votre avis Google nous aide beaucoup : {lienAvis} - Un souci ? {phone}',
+    corps: '{brand} : merci pour votre commande #{orderNumber} ! Votre avis nous aide beaucoup : {lienEnquete} - Un souci ? {phone}',
   },
   whatsapp: {
     corps: `Bonjour {prenom}, c'est {brand}.
 
 Votre commande #{orderNumber} est bien arrivée ? Si tout est en ordre, un avis sur Google nous aiderait énormément — ça prend une minute :
-{lienAvis}
+{lienEnquete}
 
 Et si quelque chose ne va pas, répondez-moi ici : on règle ça.
 
@@ -126,7 +139,7 @@ function appliquerVariables(tpl, vars) {
  * User, pas sur Order) ; on retombe sur l'adresse de livraison quand le compte
  * est vide, ce qui est le cas des commandes invité.
  */
-function variablesCommande({ order, user, lienAvis } = {}) {
+function variablesCommande({ order, user, lienAvis, lienEnquete } = {}) {
   const o = order || {};
   const u = user || {};
   const nomLivraison = texte(o.shippingAddress && o.shippingAddress.fullName).trim();
@@ -138,6 +151,9 @@ function variablesCommande({ order, user, lienAvis } = {}) {
     brand: brand.NAME,
     orderNumber: texte(o.number) || '',
     lienAvis: lienAvis || LIEN_PAR_DEFAUT,
+    /* Pas d'enquête (coupée, ou appelant qui n'en fournit pas) → le lien
+       Google. Un message dont le lien manquerait ne doit jamais partir. */
+    lienEnquete: lienEnquete || lienAvis || LIEN_PAR_DEFAUT,
     phone: brand.PHONE || '',
   };
 }
@@ -147,7 +163,7 @@ function variablesCommande({ order, user, lienAvis } = {}) {
  * @returns {Promise<{enabled:boolean, sujet:string, corps:string, lienAvis:string}>}
  *   enabled=false → le canal est désactivé dans le back-office : ne pas envoyer.
  */
-async function resoudre(canal, { order, user } = {}) {
+async function resoudre(canal, { order, user, lienEnquete } = {}) {
   if (!CANAUX.includes(canal)) return { enabled: false, sujet: '', corps: '', lienAvis: '' };
   const doc = await charger();
   const ov = (doc && doc[canal]) || null;
@@ -156,7 +172,7 @@ async function resoudre(canal, { order, user } = {}) {
   const defaut = DEFAUTS[canal];
   const sujetTpl = ov && rempli(ov.sujet) ? ov.sujet : (defaut.sujet || '');
   const corpsTpl = ov && rempli(ov.corps) ? ov.corps : defaut.corps;
-  const vars = variablesCommande({ order, user, lienAvis });
+  const vars = variablesCommande({ order, user, lienAvis, lienEnquete });
   return {
     enabled,
     sujet: appliquerVariables(sujetTpl, vars),
@@ -165,9 +181,36 @@ async function resoudre(canal, { order, user } = {}) {
   };
 }
 
+const CHAMPS_ENQUETE = ['question', 'messageContent', 'messageMecontent', 'remerciement'];
+
+/**
+ * Réglages de l'enquête, défauts appliqués.
+ * @returns {Promise<{active:boolean, seuil:number, proposerGoogleAuxMecontents:boolean,
+ *                    question:string, messageContent:string, messageMecontent:string,
+ *                    remerciement:string}>}
+ */
+async function enquete() {
+  const doc = await charger();
+  const e = (doc && doc.enquete) || null;
+  const seuilBrut = e && Number.isFinite(e.seuil) ? e.seuil : SEUIL_PAR_DEFAUT;
+  const out = {
+    active: e ? e.active !== false : true,
+    /* Borné à 2–5. Un seuil de 1 n'orienterait personne (tout passe) et un
+       seuil de 6 n'enverrait plus jamais personne sur Google : deux façons de
+       désactiver l'enquête sans le dire, alors qu'il y a un interrupteur. */
+    seuil: Math.min(5, Math.max(2, Math.round(seuilBrut))),
+    proposerGoogleAuxMecontents: !!(e && e.proposerGoogleAuxMecontents),
+  };
+  CHAMPS_ENQUETE.forEach((c) => {
+    out[c] = e && rempli(e[c]) ? e[c] : ENQUETE_DEFAUTS[c];
+  });
+  return out;
+}
+
 /** Pour la page de réglages : défauts + override courant fusionnés. */
 async function reglagesPourAdmin() {
   const doc = await charger();
+  const enq = await enquete();
   const canaux = CANAUX.map((canal) => {
     const ov = (doc && doc[canal]) || null;
     const defaut = DEFAUTS[canal];
@@ -189,6 +232,9 @@ async function reglagesPourAdmin() {
     lienPersonnalise: !!(doc && rempli(doc.lienAvis) && doc.lienAvis.trim() !== LIEN_PAR_DEFAUT),
     canaux,
     variables: VARIABLES,
+    enquete: enq,
+    enqueteDefauts: ENQUETE_DEFAUTS,
+    seuilParDefaut: SEUIL_PAR_DEFAUT,
     updatedAt: (doc && doc.updatedAt) || null,
     updatedByName: (doc && doc.updatedByName) || '',
   };
@@ -234,6 +280,19 @@ async function enregistrer(payload, parNom) {
       corps: corps && corps !== defaut.corps ? corps : '',
     };
   });
+  const e = p.enquete || {};
+  const seuil = parseInt(e.seuil, 10);
+  const blocEnquete = {
+    active: e.active !== false,
+    seuil: Number.isFinite(seuil) ? Math.min(5, Math.max(2, seuil)) : SEUIL_PAR_DEFAUT,
+    proposerGoogleAuxMecontents: e.proposerGoogleAuxMecontents === true,
+  };
+  CHAMPS_ENQUETE.forEach((c) => {
+    const v = texte(e[c]).replace(/\r\n/g, '\n').trim();
+    blocEnquete[c] = v && v !== ENQUETE_DEFAUTS[c] ? v : '';
+  });
+  set.enquete = blocEnquete;
+
   await AvisSettings.updateOne({ singleton: 'avis' }, { $set: set }, { upsert: true });
   invalidateCache();
   return { ok: true };
@@ -244,6 +303,9 @@ module.exports = {
   CANAUX,
   VARIABLES,
   DEFAUTS,
+  ENQUETE_DEFAUTS,
+  SEUIL_PAR_DEFAUT,
+  enquete,
   appliquerVariables,
   variablesCommande,
   getLien,

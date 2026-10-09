@@ -68,6 +68,65 @@
         </div>
       </div>
 
+      <!-- Enquête de satisfaction -->
+      <div class="mt-4 bg-white rounded-2xl border border-slate-200 p-5">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-base text-slate-400">filter_alt</span>
+              <span class="font-semibold text-slate-900">Enquête avant Google</span>
+            </div>
+            <div class="mt-1 max-w-xl text-xs text-slate-500">
+              Le lien envoyé ouvre d'abord une page à nous : « quelle note ? ».
+              Au-dessus du seuil, le client part sur Google ; en dessous, il décrit son problème et le retour arrive dans
+              <a href="/admin/avis" class="font-semibold text-slate-700 hover:text-slate-900">Retours clients</a>.
+            </div>
+          </div>
+          <label class="inline-flex shrink-0 cursor-pointer items-center gap-2">
+            <input type="checkbox" name="enquete_active" <%= reglages.enquete.active ? 'checked' : '' %> data-enquete-active class="sr-only peer">
+            <span class="relative h-6 w-10 rounded-full bg-slate-200 transition peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition after:content-[''] peer-checked:after:translate-x-4"></span>
+            <span class="text-xs font-semibold text-slate-500 peer-checked:text-emerald-600" data-enquete-label><%= reglages.enquete.active ? 'Activée' : 'Désactivée' %></span>
+          </label>
+        </div>
+
+        <div data-enquete-bloc class="<%= reglages.enquete.active ? '' : 'opacity-40 pointer-events-none' %>">
+          <div class="mt-5 flex flex-wrap items-center gap-3">
+            <label for="enquete_seuil" class="text-sm font-semibold text-slate-600">On envoie sur Google à partir de</label>
+            <select id="enquete_seuil" name="enquete_seuil" class="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-500">
+              <% [2,3,4,5].forEach(function (n) { %>
+                <option value="<%= n %>" <%= reglages.enquete.seuil === n ? 'selected' : '' %>><%= n %>/5</option>
+              <% }) %>
+            </select>
+            <span class="text-sm text-slate-500">et au-dessus.</span>
+          </div>
+
+          <label class="mt-4 flex items-start gap-2.5 cursor-pointer rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <input type="checkbox" name="enquete_proposerGoogle" <%= reglages.enquete.proposerGoogleAuxMecontents ? 'checked' : '' %> class="mt-0.5">
+            <span class="text-xs leading-relaxed text-amber-900">
+              <span class="font-bold">Proposer quand même le lien Google aux clients mécontents.</span><br>
+              Filtrer les avis selon la note est contraire à la politique Google (« ne sollicitez pas sélectivement les avis positifs ») :
+              le risque va du retrait des avis à la suspension de la fiche. Coché, l'enquête sert à détecter et traiter le problème,
+              mais le lien reste offert à tout le monde — et on est dans les clous.
+            </span>
+          </label>
+
+          <%
+            var CHAMPS_ENQUETE = [
+              ['question', 'Question posée', 2],
+              ['messageContent', 'Au-dessus du seuil (avant Google)', 2],
+              ['messageMecontent', 'En dessous du seuil (demande d\'explication)', 3],
+              ['remerciement', 'Après envoi du message', 2],
+            ];
+          %>
+          <% CHAMPS_ENQUETE.forEach(function (c) { %>
+            <label class="mt-4 block text-xs font-semibold uppercase tracking-wider text-slate-400" for="enquete_<%= c[0] %>"><%= c[1] %></label>
+            <textarea id="enquete_<%= c[0] %>" name="enquete_<%= c[0] %>" rows="<%= c[2] %>"
+                      class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm leading-relaxed focus:border-red-500 focus:ring-2 focus:ring-red-500"><%= reglages.enquete[c[0]] %></textarea>
+          <% }) %>
+          <div class="mt-2 text-[11px] text-slate-400">Les variables ci-dessous fonctionnent aussi dans ces textes.</div>
+        </div>
+      </div>
+
       <!-- Variables -->
       <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Variables disponibles</div>
@@ -158,6 +217,20 @@
        fait dans le composeur d'une commande (où le lien et le n° sont
        connus). */
     function segments(n) { return n <= 160 ? 1 : Math.ceil(n / 153); }
+
+    var enqActive = form.querySelector('[data-enquete-active]');
+    var enqBloc = form.querySelector('[data-enquete-bloc]');
+    var enqLabel = form.querySelector('[data-enquete-label]');
+    if (enqActive && enqBloc) {
+      enqActive.addEventListener('change', function () {
+        /* Grisé plutôt que masqué : on veut voir ce qui se rallumera, et les
+           champs restent soumis — couper l'enquête ne doit pas effacer les
+           textes qu'on a écrits. */
+        enqBloc.classList.toggle('opacity-40', !enqActive.checked);
+        enqBloc.classList.toggle('pointer-events-none', !enqActive.checked);
+        if (enqLabel) enqLabel.textContent = enqActive.checked ? 'Activée' : 'Désactivée';
+      });
+    }
 
     form.querySelectorAll('[data-canal]').forEach(function (bloc) {
       var corps = bloc.querySelector('[data-corps]');

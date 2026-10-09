@@ -21,6 +21,7 @@ const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const User = require('../models/User');
 const avis = require('../services/avisGoogle');
+const reviewFeedback = require('../services/reviewFeedback');
 /* Importés comme MODULES et non déconstruits : les tests d'intégration
    remplacent `emailService.sendEmail` / `smsService.sendSms` pour compter ce
    qui PARTIRAIT sans rien envoyer, ce qu'une déconstruction au chargement
@@ -114,12 +115,47 @@ async function postAvisSettings(req, res, next) {
         corps: texte(b['corps_' + canal]),
       };
     });
+    payload.enquete = {
+      active: b.enquete_active != null,
+      seuil: b.enquete_seuil,
+      proposerGoogleAuxMecontents: b.enquete_proposerGoogle != null,
+      question: texte(b.enquete_question),
+      messageContent: texte(b.enquete_messageContent),
+      messageMecontent: texte(b.enquete_messageMecontent),
+      remerciement: texte(b.enquete_remerciement),
+    };
     const r = await avis.enregistrer(payload, adminName(req));
     if (!r.ok) return res.redirect('/admin/parametres/avis?erreur=' + encodeURIComponent(r.error));
     return res.redirect('/admin/parametres/avis?saved=1');
   } catch (err) {
     return next(err);
   }
+}
+
+/**
+ * Résout les trois messages d'une commande, enquête comprise.
+ *
+ * Le jeton est créé ICI, au moment où on prépare un message — pas à la
+ * livraison ni par un cron : on ne veut pas semer des liens d'enquête pour
+ * des commandes qu'on ne sollicitera jamais. Et comme il est stable, le lien
+ * reste le même que la demande parte par e-mail, SMS ou WhatsApp.
+ *
+ * Enquête coupée → `lienEnquete` vaut undefined et les modèles retombent sur
+ * le lien Google (cf. avisGoogle.variablesCommande).
+ */
+async function resoudreCanaux(order, user) {
+  const reglages = await avis.enquete();
+  let lienEnquete;
+  if (reglages.active) {
+    const suivi = await reviewFeedback.pourCommande(order, user);
+    if (suivi) lienEnquete = reviewFeedback.urlEnquete(suivi.token);
+  }
+  const [email, sms, whatsapp] = await Promise.all([
+    avis.resoudre('email', { order, user, lienEnquete }),
+    avis.resoudre('sms', { order, user, lienEnquete }),
+    avis.resoudre('whatsapp', { order, user, lienEnquete }),
+  ]);
+  return { email, sms, whatsapp, lienEnquete, enquete: reglages };
 }
 
 // ─── Composeur sur une commande ─────────────────────────────────────────────
@@ -134,11 +170,7 @@ async function getAvisCommande(req, res) {
     const { order, user, error } = await chargerCommande(req.params.orderId);
     if (error) return res.status(400).json({ ok: false, error });
 
-    const [email, sms, whatsapp] = await Promise.all([
-      avis.resoudre('email', { order, user }),
-      avis.resoudre('sms', { order, user }),
-      avis.resoudre('whatsapp', { order, user }),
-    ]);
+    const { email, sms, whatsapp, lienEnquete, enquete } = await resoudreCanaux(order, user);
     const telephone = resolvePhoneFromOrder(order);
     const notif = order.notifications || {};
 
@@ -146,6 +178,14 @@ async function getAvisCommande(req, res) {
       ok: true,
       numero: order.number || '',
       lienAvis: email.lienAvis,
+      /* Ce sur quoi le client va VRAIMENT tomber. L'afficher évite de croire
+         qu'on l'envoie direct sur Google alors que l'enquête est en place. */
+      lienEnquete: lienEnquete || email.lienAvis,
+      enquete: {
+        active: enquete.active,
+        seuil: enquete.seuil,
+        proposerGoogleAuxMecontents: enquete.proposerGoogleAuxMecontents,
+      },
       deja: {
         at: notif.googleReviewRequestedAt || null,
         canaux: Array.isArray(notif.googleReviewChannels) ? notif.googleReviewChannels : [],
@@ -187,7 +227,7 @@ async function postAvisEmail(req, res) {
     const destinataire = texte(user && user.email).trim();
     if (!destinataire) return res.status(400).json({ ok: false, error: 'Pas d’adresse e-mail sur ce client.' });
 
-    const resolu = await avis.resoudre('email', { order, user });
+    const resolu = (await resoudreCanaux(order, user)).email;
     if (!resolu.enabled) return res.status(400).json({ ok: false, error: 'Canal e-mail désactivé dans les paramètres.' });
 
     const sujet = (texte(req.body && req.body.sujet).trim() || resolu.sujet).slice(0, 200);
@@ -223,7 +263,7 @@ async function postAvisSms(req, res) {
     const telephone = resolvePhoneFromOrder(order);
     if (!telephone) return res.status(400).json({ ok: false, error: 'Pas de numéro français exploitable sur cette commande.' });
 
-    const resolu = await avis.resoudre('sms', { order, user });
+    const resolu = (await resoudreCanaux(order, user)).sms;
     if (!resolu.enabled) return res.status(400).json({ ok: false, error: 'Canal SMS désactivé dans les paramètres.' });
 
     const corps = (texte(req.body && req.body.corps).trim() || resolu.corps).slice(0, MAX_SMS);
@@ -263,7 +303,7 @@ async function postAvisWhatsapp(req, res) {
     const telephone = resolvePhoneFromOrder(order);
     if (!telephone) return res.status(400).json({ ok: false, error: 'Pas de numéro français exploitable sur cette commande.' });
 
-    const resolu = await avis.resoudre('whatsapp', { order, user });
+    const resolu = (await resoudreCanaux(order, user)).whatsapp;
     if (!resolu.enabled) return res.status(400).json({ ok: false, error: 'Canal WhatsApp désactivé dans les paramètres.' });
 
     const corps = (texte(req.body && req.body.corps).trim() || resolu.corps).slice(0, MAX_WHATSAPP);
@@ -277,7 +317,52 @@ async function postAvisWhatsapp(req, res) {
   }
 }
 
+// ─── Retours de l'enquête (liste back-office) ───────────────────────────────
+
+const FILTRES = new Set(['repondus', 'a_traiter', 'resolu', 'publie', 'en_attente', 'tous']);
+
+async function getAvisRetoursPage(req, res, next) {
+  try {
+    const filtre = FILTRES.has(String(req.query.filtre || '')) ? String(req.query.filtre) : 'repondus';
+    const [retours, stats, reglages] = await Promise.all([
+      mongoose.connection.readyState === 1 ? reviewFeedback.lister({ filtre }) : [],
+      reviewFeedback.statistiques(),
+      avis.enquete(),
+    ]);
+    return res.render('admin/avis-retours', {
+      title: "Retours clients · Avis",
+      activeKey: 'avis-retours',
+      retours,
+      stats,
+      reglages,
+      filtre,
+      dbConnected: mongoose.connection.readyState === 1,
+      successMessage: req.query.traite ? 'Retour mis à jour ✓' : null,
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/** POST /admin/avis/:id/traiter — body { resolu, note }. */
+async function postTraiterRetour(req, res, next) {
+  try {
+    const b = req.body || {};
+    const r = await reviewFeedback.traiter(req.params.id, {
+      resolu: b.resolu === 'on' || b.resolu === 'true' || b.resolu === true,
+      note: texte(b.note),
+      par: adminName(req),
+    });
+    if (!r.ok) return res.status(400).redirect('/admin/avis?filtre=a_traiter');
+    return res.redirect('/admin/avis?traite=1&filtre=' + encodeURIComponent(texte(b.filtre) || 'a_traiter'));
+  } catch (err) {
+    return next(err);
+  }
+}
+
 module.exports = {
+  getAvisRetoursPage,
+  postTraiterRetour,
   getAvisSettingsPage,
   postAvisSettings,
   getAvisCommande,

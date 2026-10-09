@@ -47,10 +47,24 @@ test('substitution des variables', async (t) => {
 });
 
 test('les trois canaux portent le lien', async (t) => {
-  await t.test('chaque modèle par défaut contient {lienAvis}', () => {
+  await t.test('chaque modèle par défaut passe par l\'enquête', () => {
     avis.CANAUX.forEach((canal) => {
-      assert.match(avis.DEFAUTS[canal].corps, /\{lienAvis\}/, canal + ' doit contenir le lien');
+      /* {lienEnquete} et pas {lienAvis} : le client passe d'abord par la page
+         « quelle note ? ». Enquête coupée, la variable retombe sur le lien
+         Google — un modèle sans aucun lien ne doit jamais exister. */
+      assert.match(avis.DEFAUTS[canal].corps, /\{lienEnquete\}/, canal + ' doit contenir le lien');
     });
+  });
+
+  await t.test('sans enquête fournie, le lien Google prend le relais', async () => {
+    const r = await avis.resoudre('email', { order: commande, user: client });
+    assert.ok(r.corps.includes(avis.LIEN_PAR_DEFAUT), 'un message sans lien ne doit jamais partir');
+  });
+
+  await t.test('avec une enquête, c\'est elle qui est dans le message', async () => {
+    const r = await avis.resoudre('email', { order: commande, user: client, lienEnquete: 'https://autoliva.com/mon-avis/abc' });
+    assert.ok(r.corps.includes('https://autoliva.com/mon-avis/abc'));
+    assert.ok(!r.corps.includes(avis.LIEN_PAR_DEFAUT), 'pas de lien Google direct quand l\'enquête est en place');
   });
 
   await t.test('le SMS par défaut tient en 2 segments une fois substitué', async () => {

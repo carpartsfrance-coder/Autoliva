@@ -167,7 +167,9 @@ test("demande d'avis Google sur une commande", async (t) => {
     for (const canal of ['email', 'sms', 'whatsapp']) {
       const c = r.corps.canaux[canal];
       assert.equal(c.enabled, true, canal);
-      assert.ok(c.corps.includes(avis.LIEN_PAR_DEFAUT), canal + ' doit porter le lien');
+      /* Le lien envoyé est celui de l'enquête, pas Google : c'est elle qui
+         décide ensuite où va le client (cf. avis-enquete.test.js). */
+      assert.match(c.corps, /\/mon-avis\//, canal + ' doit porter le lien');
       assert.ok(c.corps.includes('CPAVIS-500'), canal + ' doit porter le n° de commande');
       assert.ok(!/\{\w+\}/.test(c.corps), canal + ' : variable non substituée → ' + c.corps);
     }
