@@ -145,6 +145,53 @@ test("demande d'avis Google sur une commande", async (t) => {
     assert.ok(!/Skeepers|Avis V[eé]rifi[eé]s/.test(r.corps));
   });
 
+  await t.test('un dossier SAV en cours est signalé sur la commande et dans le composeur', async () => {
+    const SavTicket = require('../../src/models/SavTicket');
+    const o = await Order.findById(idLivree).lean();
+
+    const ticket = await SavTicket.create({
+      numero: 'SAV-TEST-0001',
+      numeroCommande: o.number,
+      statut: 'en_analyse',
+      pieceType: 'mecatronique',
+      client: { nom: 'Julien Farge', email: 'client-avis@example.com' },
+    });
+    /* Pas de t.after ici : il s'exécuterait APRÈS la déconnexion mongoose du
+       test parent. La base en mémoire est jetée à la fin, il n'y a rien à
+       nettoyer. */
+
+    // Sur la fiche commande : bandeau rouge et lien vers le dossier.
+    const fiche = await requete(`/admin/commandes/${idLivree}`);
+    assert.equal(fiche.status, 200);
+    assert.match(fiche.corps, /data-sav-bandeau="ouvert"/);
+    assert.match(fiche.corps, /SAV-TEST-0001/);
+    assert.match(fiche.corps, /En analyse/);
+    assert.match(fiche.corps, /\/admin\/sav\/tickets\/SAV-TEST-0001/);
+
+    // Dans le composeur : l'avertissement remonte en JSON.
+    const comp = await requete(`/admin/commandes/${idLivree}/avis`);
+    assert.equal(comp.corps.savOuvert.numero, 'SAV-TEST-0001');
+    assert.equal(comp.corps.savOuvert.statut, 'En analyse');
+
+    /* Un dossier CLOS ne doit pas déclencher l'avertissement : sinon il
+       hurlerait sur toutes les commandes ayant un historique SAV. */
+    await SavTicket.updateOne({ _id: ticket._id }, { $set: { statut: 'resolu_garantie' } });
+    const apres = await requete(`/admin/commandes/${idLivree}/avis`);
+    assert.equal(apres.corps.savOuvert, null);
+    const fiche2 = await requete(`/admin/commandes/${idLivree}`);
+    assert.ok(!/data-sav-bandeau="ouvert"/.test(fiche2.corps), 'un dossier clos ne doit pas alerter');
+    assert.match(fiche2.corps, /data-sav-bandeau="clos"/, "l'historique reste visible, en gris");
+  });
+
+  await t.test('une commande sans SAV n\'affiche aucun bandeau', async () => {
+    const fiche = await requete(`/admin/commandes/${idSansTel}`);
+    assert.equal(fiche.status, 200);
+    /* Sur `data-sav-bandeau` et non sur le texte : la chaîne « Dossier SAV
+       en cours » existe aussi dans le JS du composeur, présent sur toutes
+       les fiches. */
+    assert.ok(!/data-sav-bandeau=/.test(fiche.corps));
+  });
+
   await t.test('la page Paramètres mène à la nouvelle page', async () => {
     const r = await requete('/admin/parametres');
     assert.equal(r.status, 200);

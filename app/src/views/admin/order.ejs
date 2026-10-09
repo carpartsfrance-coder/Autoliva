@@ -243,6 +243,44 @@
         </script>
       <% } %>
 
+      <%/* Dossiers SAV de cette commande. Placé AVANT tout le reste : quand un
+           dossier est en cours, c'est la première chose à savoir — avant de
+           relancer, de demander un avis ou de promettre quoi que ce soit. */%>
+      <% if (typeof savTickets !== 'undefined' && savTickets && savTickets.length) { %>
+        <% var _savOuvert = savTickets.filter(function (t) { return t.ouvert; }); %>
+        <div data-sav-bandeau="<%= _savOuvert.length ? 'ouvert' : 'clos' %>"
+             class="mt-6 rounded-2xl border p-5 <%= _savOuvert.length ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white' %>">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-base <%= _savOuvert.length ? 'text-red-600' : 'text-slate-400' %>">support_agent</span>
+            <span class="font-semibold <%= _savOuvert.length ? 'text-red-900' : 'text-slate-900' %>">
+              <% if (_savOuvert.length) { %>
+                Dossier SAV en cours<%= _savOuvert.length > 1 ? ' (' + _savOuvert.length + ')' : '' %>
+              <% } else { %>
+                SAV — <%= savTickets.length %> dossier<%= savTickets.length > 1 ? 's' : '' %> clos
+              <% } %>
+            </span>
+          </div>
+          <% if (_savOuvert.length) { %>
+            <div class="mt-1 text-xs text-red-800">
+              Pas de demande d'avis ni de relance commerciale tant que ce n'est pas réglé.
+            </div>
+          <% } %>
+          <div class="mt-3 space-y-2">
+            <% savTickets.forEach(function (t) { %>
+              <a href="/admin/sav/tickets/<%= encodeURIComponent(t.numero) %>"
+                 class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-slate-300">
+                <span class="font-mono text-xs font-semibold text-slate-900"><%= t.numero %></span>
+                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide <%= t.statutClasse %>"><%= t.statutLabel %></span>
+                <% if (t.pieceLabel) { %><span class="text-xs text-slate-500"><%= t.pieceLabel %></span><% } %>
+                <span class="ml-auto text-[11px] text-slate-400">
+                  ouvert le <%= new Date(t.createdAt).toLocaleDateString('fr-FR') %>
+                </span>
+              </a>
+            <% }) %>
+          </div>
+        </div>
+      <% } %>
+
       <div class="mt-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
         <section class="xl:col-span-8 space-y-6">
           <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -2458,6 +2496,7 @@ document.addEventListener('DOMContentLoaded', function() {
           Les textes se modifient dans <a href="/admin/parametres/avis" class="font-semibold text-slate-700 hover:text-slate-900">Paramètres → Demande d'avis</a>.
         </div>
         <div data-avis-deja hidden class="mt-2 text-xs font-semibold text-amber-700"></div>
+        <div data-avis-sav hidden class="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-900"></div>
       </div>
       <button type="button" data-avis-fermer class="shrink-0 text-slate-400 hover:text-slate-600">
         <span class="material-symbols-outlined">close</span>
@@ -2524,6 +2563,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var statut = modal.querySelector('[data-avis-statut]');
     var erreur = modal.querySelector('[data-avis-erreur]');
     var deja = modal.querySelector('[data-avis-deja]');
+    var sav = modal.querySelector('[data-avis-sav]');
     var lien = modal.querySelector('[data-avis-lien]');
     var charge = false;
 
@@ -2547,9 +2587,26 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
 
+    var savOuvert = null;
+
     function remplir(j) {
       lien.textContent = j.lienAvis || '';
       lien.setAttribute('href', j.lienAvis || '#');
+
+      /* Dossier SAV en cours : on le met sous les yeux et on redemande
+         confirmation avant chaque envoi. Pas de blocage dur — un dossier
+         peut être une question anodine, et c'est à l'humain de trancher. */
+      savOuvert = j.savOuvert || null;
+      if (savOuvert) {
+        var depuis = savOuvert.depuis ? new Date(savOuvert.depuis).toLocaleDateString('fr-FR') : '';
+        sav.innerHTML = '<strong>Dossier SAV en cours : ' + savOuvert.numero + '</strong> ('
+          + savOuvert.statut + (depuis ? ', ouvert le ' + depuis : '') + ').<br>'
+          + 'Demander un avis maintenant, c\'est aller chercher l\'avis négatif que l\'enquête sert à éviter. '
+          + '<a href="/admin/sav/tickets/' + encodeURIComponent(savOuvert.numero) + '" class="font-semibold underline">Ouvrir le dossier</a>';
+        sav.hidden = false;
+      } else {
+        sav.hidden = true;
+      }
 
       if (j.deja && j.deja.at) {
         var d = new Date(j.deja.at);
@@ -2645,6 +2702,9 @@ document.addEventListener('DOMContentLoaded', function() {
         var payload = { corps: corps ? corps.value : '' };
         if (sujet) payload.sujet = sujet.value;
         if (!payload.corps.trim()) { montrerErreur('Le message est vide.'); return; }
+        if (savOuvert && !window.confirm(
+          'Le dossier SAV ' + savOuvert.numero + ' est encore en cours sur cette commande.\n\n'
+          + 'Envoyer quand même la demande d\'avis ?')) return;
 
         erreur.hidden = true;
         b.disabled = true;

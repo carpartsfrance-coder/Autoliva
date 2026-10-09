@@ -1855,10 +1855,16 @@
           parts.push('<a href="' + clientHref + '" class="inline-flex items-center gap-1 hover:text-primary">' +
             icon('person') + '<span>' + escapeHtml(c.nom || c.email) + '</span></a>');
         }
-        if (t.commandeId || t.commandeNumero) {
-          var num = t.commandeNumero || t.commandeId;
-          parts.push('<a href="/admin/commandes/' + encodeURIComponent(t.commandeId || num) + '" class="inline-flex items-center gap-1 hover:text-primary">' +
-            icon('receipt_long') + '<span>' + escapeHtml(num) + '</span></a>');
+        /* Le champ est `numeroCommande` — `commandeId` et `commandeNumero`
+           n'ont jamais existé sur le ticket, le lien ne s'est donc jamais
+           affiché dans l'en-tête. La carte « Commande liée » plus bas lit la
+           bonne clé depuis toujours, d'où le fait que ça passait inaperçu.
+           `/admin/commandes/<numero>` est accepté et redirige vers l'URL
+           canonique (cf. getAdminOrderDetailPage). */
+        var numCmd = t.numeroCommande || t.commandeNumero || (t.commande && t.commande.numero);
+        if (numCmd) {
+          parts.push('<a href="/admin/commandes/' + encodeURIComponent(numCmd) + '" class="inline-flex items-center gap-1 hover:text-primary">' +
+            icon('receipt_long') + '<span>' + escapeHtml(numCmd) + '</span></a>');
         }
         if (t.createdAt) {
           parts.push('<span class="inline-flex items-center gap-1" title="' + escapeHtml(new Date(t.createdAt).toLocaleString('fr-FR')) + '">' +

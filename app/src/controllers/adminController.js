@@ -10,6 +10,7 @@ const Category = require('../models/Category');
 const ReturnRequest = require('../models/ReturnRequest');
 const PromoCode = require('../models/PromoCode');
 const PromoRedemption = require('../models/PromoRedemption');
+const savCommande = require('../services/savCommande');
 const VehicleMake = require('../models/VehicleMake');
 const ShippingClass = require('../models/ShippingClass');
 const ProductOptionTemplate = require('../models/ProductOptionTemplate');
@@ -3885,8 +3886,15 @@ async function getAdminOrderDetailPage(req, res, next) {
       if (evt && evt.sessionId) visitorSessionId = evt.sessionId;
     } catch (_) { /* non bloquant */ }
 
+    /* Tickets SAV de cette commande. Best-effort : le rapprochement se fait
+       sur le numéro, et un SAV illisible ne doit pas empêcher d'ouvrir la
+       commande. */
+    const savTickets = await savCommande.ticketsPourCommande(orderDoc.number);
+
     return res.render('admin/order', {
       title: `Admin - ${orderDoc.number}`,
+      savTickets,
+      savTicketOuvert: savTickets.find((t) => t.ouvert) || null,
       dbConnected,
       errorMessage,
       successMessage,
