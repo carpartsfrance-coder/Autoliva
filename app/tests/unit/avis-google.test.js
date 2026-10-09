@@ -81,6 +81,45 @@ test('les trois canaux portent le lien', async (t) => {
     assert.ok(!r.corps.includes(avis.LIEN_PAR_DEFAUT), 'pas de lien Google direct quand l\'enquête est en place');
   });
 
+  await t.test('le SMS tient en UN segment même dans le PIRE cas', async () => {
+    /* Le cas normal ne prouve rien : c'est la combinaison des longueurs qui
+       fait déborder. On compose donc le pire message possible pour la marque
+       RÉELLEMENT déployée — prénom composé, nom de pièce au maximum de la
+       troncature, vrai domaine, vrai jeton — et on le mesure.
+
+       Si ce test casse après un changement de marque ou de domaine, ce n'est
+       pas la limite qu'il faut relever : c'est le texte qu'il faut raccourcir.
+       Deux segments, c'est le double du coût sur chaque envoi. */
+    const token = reviewFeedback.nouveauToken();
+    const lienEnquete = `${brand.SITE_URL}/mon-avis/${token}`;
+    const pire = {
+      number: 'CP2026-000485',
+      items: [{ name: 'Arbre de transmission AV gauche renforcé' }],
+    };
+    const r = await avis.resoudre('sms', {
+      order: pire,
+      user: { firstName: 'Jean-Christophe', lastName: 'de la Villardière' },
+      lienEnquete,
+    });
+    /* Le € n'est pas dans la table GSM-7 de base : il vit dans la table
+       d'extension et compte DOUBLE. Un décompte naïf annoncerait 1 segment
+       là où l'opérateur en facture 2. */
+    const longueur = r.corps.length + (r.corps.match(/€/g) || []).length;
+    assert.ok(longueur <= 160,
+      `un seul segment (160) attendu pour ${brand.NAME}, mesuré ${longueur} : ${r.corps}`);
+  });
+
+  await t.test('le nom de pièce est coupé sur un mot entier', () => {
+    const long = { items: [{ name: 'Mécatronique DQ200 0AM325065S Audi A3 Sportback' }] };
+    assert.equal(avis.nomPiece(long), 'mécatronique DQ200');
+    /* Minuscule initiale au milieu d'une phrase, mais jamais sur un sigle. */
+    assert.equal(avis.nomPiece({ items: [{ name: 'TCU DQ381' }] }), 'TCU DQ381');
+    /* Sans article : le gabarit écrit « Votre {piece} », qui marche aux deux
+       genres — « cette {piece} » aurait donné « cette moteur ». */
+    assert.equal(avis.nomPiece({ items: [] }), 'commande');
+    assert.equal(avis.nomPiece(null), 'commande');
+  });
+
   await t.test('le SMS par défaut tient en UN segment, lien compris', async () => {
     /* La contrainte qui a dicté le texte du SMS. On la mesure sur le pire cas
        réel : le lien d'enquête (plus long que le lien Google), un jeton émis

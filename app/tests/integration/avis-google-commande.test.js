@@ -217,8 +217,16 @@ test("demande d'avis Google sur une commande", async (t) => {
       /* Le lien envoyé est celui de l'enquête, pas Google : c'est elle qui
          décide ensuite où va le client (cf. avis-enquete.test.js). */
       assert.match(c.corps, /\/mon-avis\//, canal + ' doit porter le lien');
-      assert.ok(c.corps.includes('CPAVIS-500'), canal + ' doit porter le n° de commande');
       assert.ok(!/\{\w+\}/.test(c.corps), canal + ' : variable non substituée → ' + c.corps);
+      /* Chaque message doit permettre au client de RECONNAÎTRE son achat.
+         L'e-mail et WhatsApp ont la place pour le n° de commande ; le SMS
+         nomme la pièce — « #CPAVIS-500 » n'évoque rien pour le client, et
+         160 caractères ne permettent pas les deux. */
+      if (canal === 'sms') {
+        assert.match(c.corps, /mécatronique DQ200/i, 'le SMS doit nommer la pièce');
+      } else {
+        assert.ok(c.corps.includes('CPAVIS-500'), canal + ' doit porter le n° de commande');
+      }
     }
     assert.equal(r.corps.deja.at, null);
   });
