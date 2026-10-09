@@ -23,16 +23,32 @@ const AvisSettings = require('../models/AvisSettings');
 const brand = require('../config/brand');
 
 /**
- * Lien par défaut : la fiche Google d'Autoliva (lien de partage fourni par
- * Killian le 08/10/2026 — il redirige vers la fiche d'établissement, d'où le
- * client clique « Rédiger un avis »).
+ * Lien par défaut : le formulaire « Rédiger un avis » d'AUTOLIVA, DIRECT.
  *
- * Il est volontairement COURT : en SMS, chaque caractère compte, et un lien
- * de 34 caractères laisse de la place au texte. Si un jour on obtient le lien
- * « écrire un avis » direct (https://search.google.com/local/writereview?placeid=…),
- * il suffit de le coller dans /admin/parametres/avis — aucun code à toucher.
+ * Le premier lien fourni (https://share.google/Wi0js27zvNXPSolZe) était le
+ * lien de PARTAGE de la fiche : il ouvrait le profil d'établissement, où il
+ * fallait encore trouver « Rédiger un avis ». Un écran de plus entre le clic
+ * et le formulaire, chez quelqu'un qui nous rend déjà service.
+ *
+ * Celui-ci ouvre la boîte de dialogue de notation (Google demande d'abord de
+ * se connecter, c'est normal et inévitable : un avis anonyme n'existe pas).
+ *
+ * Identifiants relevés le 09/10/2026 sur la fiche, et recoupés entre eux :
+ *   place_id ChIJQ7cZH4flyRIR7sSisS62-aI
+ *   cid      11743617815010264302  (= 0xa2f9b62eb1a2c4ee, seconde moitié du
+ *                                    ftid 0x12c9e5871f19b743:0xa2f9b62eb1a2c4ee)
+ *   kgmid    /g/11nw257r17
+ * `https://www.google.com/maps?cid=11743617815010264302` affiche bien AUTOLIVA
+ * et autoliva.com — c'est ainsi qu'on a vérifié qu'il ne s'agit pas d'un
+ * homonyme.
+ *
+ * ⚠ 79 caractères, contre 38 pour l'ancien. Sans effet sur le SMS, qui porte
+ * {lienEnquete} (une quarantaine) — SAUF si l'enquête est désactivée : le
+ * repli ramène alors ce lien dans le SMS, qui peut passer à deux segments.
+ * Le compteur du back-office l'affiche et passe en ambre, c'est visible avant
+ * d'envoyer.
  */
-const LIEN_PAR_DEFAUT = 'https://share.google/Wi0js27zvNXPSolZe';
+const LIEN_PAR_DEFAUT = 'https://search.google.com/local/writereview?placeid=ChIJQ7cZH4flyRIR7sSisS62-aI';
 
 const CANAUX = ['email', 'sms', 'whatsapp'];
 

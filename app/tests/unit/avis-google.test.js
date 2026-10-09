@@ -58,6 +58,18 @@ test('les trois canaux portent le lien', async (t) => {
     });
   });
 
+  await t.test("le lien par défaut ouvre le FORMULAIRE d'avis, pas la fiche", () => {
+    /* Le premier lien retenu était un lien de partage (share.google/…) : il
+       ouvrait le profil de l'établissement, et il fallait encore y trouver
+       « Rédiger un avis ». Un écran de plus chez quelqu'un qui nous rend
+       service. Ce test interdit d'y revenir sans s'en rendre compte. */
+    assert.match(
+      avis.LIEN_PAR_DEFAUT,
+      /^https:\/\/search\.google\.com\/local\/writereview\?placeid=[A-Za-z0-9_-]+$/,
+      'le défaut doit être un lien « écrire un avis » direct : ' + avis.LIEN_PAR_DEFAUT
+    );
+  });
+
   await t.test('sans enquête fournie, le lien Google prend le relais', async () => {
     const r = await avis.resoudre('email', { order: commande, user: client });
     assert.ok(r.corps.includes(avis.LIEN_PAR_DEFAUT), 'un message sans lien ne doit jamais partir');
