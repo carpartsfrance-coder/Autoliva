@@ -218,6 +218,17 @@
           </div>
 
           <% if (c.canal === 'email') { %>
+            <label class="mt-4 flex items-start gap-2.5 cursor-pointer rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <input type="checkbox" name="texteSimple_email" <%= c.texteSimple ? 'checked' : '' %> class="mt-0.5">
+              <span class="text-xs leading-relaxed text-slate-600">
+                <span class="font-bold text-slate-900">Envoyer en texte brut (recommandé).</span><br>
+                Pas de logo, pas de bouton, pas de pied de page : le message part tel que tu l'écris ci-dessous.
+                Le gabarit habituel ressemble à une newsletter, et c'est ce que Gmail range dans « Promotions ».
+                Une demande d'avis est une correspondance entre deux personnes — elle doit en avoir l'air.
+                <br>Le suivi des ouvertures et des clics est coupé sur cet e-mail dans les deux cas :
+                il réécrirait le lien vers un domaine de redirection.
+              </span>
+            </label>
             <label class="block mt-4 text-xs font-semibold uppercase tracking-wider text-slate-400" for="sujet_email">Objet</label>
             <input id="sujet_email" name="sujet_<%= c.canal %>" type="text" value="<%= c.sujet %>"
                    class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">

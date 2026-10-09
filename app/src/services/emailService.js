@@ -185,7 +185,7 @@ function getFrom() {
   };
 }
 
-async function sendEmail({ toEmail, subject, html, text, attachments, replyTo, lang } = {}) {
+async function sendEmail({ toEmail, subject, html, text, attachments, replyTo, lang, sansSuivi } = {}) {
   /* Point de passage UNIQUE de tous les e-mails : c'est ici, et nulle part
      ailleurs, que la version allemande est produite. Les gabarits restent
      français ; seuls les nœuds de texte du HTML rendu sont substitués, jamais
@@ -226,6 +226,20 @@ async function sendEmail({ toEmail, subject, html, text, attachments, replyTo, l
     html: typeof html === 'string' && html.trim() ? html : undefined,
     text: typeof text === 'string' && text.trim() ? text : undefined,
   };
+
+  /* `sansSuivi` : coupe le suivi POUR CE MESSAGE, sans toucher aux réglages
+     du compte (ils restent actifs pour les autres e-mails).
+     Deux raisons, toutes deux visibles par le client :
+      - le suivi des CLICS réécrit chaque lien vers un domaine de redirection
+        MailerSend. Dans un e-mail en texte brut, l'URL est lue telle quelle :
+        on enverrait un lien qui ne ressemble pas à autoliva.com, c'est-à-dire
+        exactement ce qu'on apprend aux gens à ne pas cliquer ;
+      - le suivi des OUVERTURES injecte un pixel image, signal classique de
+        l'onglet Promotions.
+     Clés validées par l'API : track_clicks, track_opens, track_content. */
+  if (sansSuivi) {
+    payload.settings = { track_clicks: false, track_opens: false };
+  }
 
   // Reply-To header (MailerSend accepts an array of { email, name })
   if (replyTo) {
