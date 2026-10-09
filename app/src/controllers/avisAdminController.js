@@ -22,6 +22,7 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 const avis = require('../services/avisGoogle');
 const reviewFeedback = require('../services/reviewFeedback');
+const savCommande = require('../services/savCommande');
 /* Importés comme MODULES et non déconstruits : les tests d'intégration
    remplacent `emailService.sendEmail` / `smsService.sendSms` pour compter ce
    qui PARTIRAIT sans rien envoyer, ce qu'une déconstruction au chargement
@@ -181,6 +182,12 @@ async function getAvisCommande(req, res) {
 
     const { email, sms, whatsapp, lienEnquete, enquete } = await resoudreCanaux(order, user);
     const telephone = resolvePhoneFromOrder(order);
+    /* Un dossier SAV en cours est LA raison de ne pas demander d'avis :
+       solliciter un client en plein litige, c'est aller chercher soi-même
+       l'avis négatif que toute l'enquête sert à éviter. On avertit sans
+       bloquer — parfois le dossier est une question anodine, et c'est à
+       l'humain de trancher. */
+    const ticketOuvert = await savCommande.ticketOuvert(order.number);
     const notif = order.notifications || {};
 
     return res.json({
@@ -195,6 +202,11 @@ async function getAvisCommande(req, res) {
         seuil: enquete.seuil,
         proposerGoogleAuxMecontents: enquete.proposerGoogleAuxMecontents,
       },
+      savOuvert: ticketOuvert ? {
+        numero: ticketOuvert.numero,
+        statut: ticketOuvert.statutLabel,
+        depuis: ticketOuvert.createdAt,
+      } : null,
       deja: {
         at: notif.googleReviewRequestedAt || null,
         canaux: Array.isArray(notif.googleReviewChannels) ? notif.googleReviewChannels : [],
