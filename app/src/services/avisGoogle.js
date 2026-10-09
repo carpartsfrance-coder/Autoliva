@@ -60,7 +60,9 @@ const VARIABLES = [
   ['orderNumber', 'N° de commande'],
   ['lienEnquete', "Lien à envoyer : la page « quelle note ? » qui filtre avant Google (enquête coupée = lien Google)"],
   ['lienAvis', "Lien Google DIRECT, sans passer par l'enquête — en e-mail, seul sur sa ligne, il devient le bouton"],
-  ['bonAchat', "Mention du bon d'achat (« un bon de 30 € ») — vide si le bon est désactivé"],
+  ['piece', "La pièce achetée (« mécatronique DQ200 ») — « commande » si on ne la reconnaît pas"],
+  ['bonAchat', "Mention du bon d'achat, phrase entière — vide si le bon est désactivé"],
+  ['bonCourt', "Version courte pour le SMS (« 30 € offerts. ») — vide si le bon est désactivé"],
   ['phone', 'Téléphone de la marque'],
 ];
 
@@ -92,12 +94,29 @@ const BON_DEFAUTS = { actif: false, montantCents: 3000, minimumCents: 0, validit
  * jour où il vaut ''. Ensuite elle dit « pour votre réponse » et jamais
  * « pour votre avis » : c'est précisément ce que la loi distingue.
  */
-function mentionBon(bon) {
+function montantEnEuros(bon) {
   if (!bon || !bon.actif || !(bon.montantCents > 0)) return '';
-  const euros = bon.montantCents % 100 === 0
+  return bon.montantCents % 100 === 0
     ? String(bon.montantCents / 100)
     : (bon.montantCents / 100).toFixed(2).replace('.', ',');
-  return `Un bon de ${euros} € pour votre réponse.`;
+}
+
+function mentionBon(bon) {
+  const euros = montantEnEuros(bon);
+  return euros ? `Un bon de ${euros} € pour votre réponse.` : '';
+}
+
+/**
+ * Version courte, pour le SMS. « Un bon de 30 € pour votre réponse. » fait
+ * 35 caractères : avec le lien d'enquête et le nom de la pièce, elle fait
+ * sauter le message à deux segments. Celle-ci en fait 14, et le « pour quoi »
+ * est porté par la phrase qui suit immédiatement (« Répondez en 10 s »).
+ * Comme l'autre, c'est une PHRASE : elle doit pouvoir disparaître sans
+ * laisser un texte bancal.
+ */
+function mentionBonCourte(bon) {
+  const euros = montantEnEuros(bon);
+  return euros ? `${euros} € offerts.` : '';
 }
 
 /**
@@ -120,7 +139,7 @@ const DEFAUTS = {
 
 Vous avez reçu votre commande #{orderNumber}. Tout s'est bien passé ?
 
-Dites-le nous en une question : une note de 1 à 5, dix secondes. {bonAchat}
+Dites-le-nous en une question : une note de 1 à 5, dix secondes. {bonAchat}
 
 {lienEnquete}
 
@@ -138,7 +157,7 @@ L'équipe {brand}
        se fait rappeler. Le remettre coûterait 16 caractères pour un recours
        qui existe déjà deux clics plus loin — {phone} reste disponible si on
        change d'avis. */
-    corps: '{brand} : votre avis sur la commande #{orderNumber} ? 10 s. {bonAchat} {lienEnquete}',
+    corps: 'Bonjour {prenom}, {brand}. Votre {piece} vous convient ? {bonCourt} Répondez en 10 s : {lienEnquete}',
   },
   whatsapp: {
     corps: `Bonjour {prenom}, c'est {brand}.
@@ -204,6 +223,36 @@ function appliquerVariables(tpl, vars) {
  * User, pas sur Order) ; on retombe sur l'adresse de livraison quand le compte
  * est vide, ce qui est le cas des commandes invité.
  */
+/**
+ * Nom de la pièce, pour parler au client dans SES mots.
+ *
+ * « #CP2026-000485 » est notre référence, pas la sienne : elle ne lui évoque
+ * rien et fait ressembler le message à un envoi de masse. Ce dont il se
+ * souvient, c'est la pièce qu'il a montée.
+ *
+ * Coupé à 24 caractères SUR UN MOT ENTIER, sans points de suspension : les
+ * noms de fiches portent souvent la référence et le véhicule à la suite
+ * (« Mécatronique DQ200 0AM325065S Audi A3 »), et un SMS a 160 caractères en
+ * tout. Minuscule initiale quand c'est un mot ordinaire — « Votre
+ * Mécatronique » au milieu d'une phrase fait tache — mais jamais sur un
+ * acronyme comme « TCU ».
+ */
+function nomPiece(order) {
+  const items = (order && Array.isArray(order.items)) ? order.items : [];
+  const brut = texte(items[0] && items[0].name).trim().replace(/\s+/g, ' ');
+  if (!brut) return 'commande';
+  let nom = brut;
+  if (nom.length > 24) {
+    const coupe = nom.slice(0, 25);
+    const espace = coupe.lastIndexOf(' ');
+    nom = (espace > 8 ? coupe.slice(0, espace) : nom.slice(0, 24)).trim();
+  }
+  if (nom.length > 1 && nom[1] === nom[1].toLowerCase()) {
+    nom = nom[0].toLowerCase() + nom.slice(1);
+  }
+  return nom;
+}
+
 function variablesCommande({ order, user, lienAvis, lienEnquete, bon } = {}) {
   const o = order || {};
   const u = user || {};
@@ -219,7 +268,9 @@ function variablesCommande({ order, user, lienAvis, lienEnquete, bon } = {}) {
     /* Pas d'enquête (coupée, ou appelant qui n'en fournit pas) → le lien
        Google. Un message dont le lien manquerait ne doit jamais partir. */
     lienEnquete: lienEnquete || lienAvis || LIEN_PAR_DEFAUT,
+    piece: nomPiece(order),
     bonAchat: mentionBon(bon),
+    bonCourt: mentionBonCourte(bon),
     phone: brand.PHONE || '',
   };
 }
@@ -329,7 +380,9 @@ async function reglagesPourAdmin() {
       phone: brand.PHONE || '',
       lienAvis: (doc && rempli(doc.lienAvis) ? doc.lienAvis.trim() : LIEN_PAR_DEFAUT),
       lienEnquete: `${(brand.SITE_URL || '').replace(/\/$/, '')}/mon-avis/ABCdef123456`,
+      piece: 'mécatronique DQ200',
       bonAchat: mentionBon(bonCourant),
+      bonCourt: mentionBonCourte(bonCourant),
     },
     enquete: enq,
     bon: bonCourant,
@@ -426,6 +479,8 @@ module.exports = {
   nettoyerTexte,
   BON_DEFAUTS,
   mentionBon,
+  mentionBonCourte,
+  nomPiece,
   appliquerVariables,
   variablesCommande,
   getLien,
