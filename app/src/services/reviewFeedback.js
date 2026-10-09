@@ -109,8 +109,26 @@ async function parToken(token) {
 /**
  * Enregistre la note du client et décide de la suite.
  *
- * @returns {Promise<{ok:boolean, publier:boolean, lienAvis:string, doc:Object}>}
- *   publier=true → on redirige vers Google.
+ * ── UNE NOTE NE PEUT QUE BAISSER ────────────────────────────────────────────
+ *
+ * Sans cette règle, le filtre ne filtre rien : le client met 3/5, tombe sur le
+ * formulaire interne, revient en arrière dans son navigateur — la page aux
+ * étoiles est encore dans le cache — clique 5/5, et il est sur Google. La
+ * protection ne peut pas vivre dans la page : elle doit être ICI, puisque
+ * n'importe qui peut rejouer la requête.
+ *
+ * Pourquoi « ne peut que baisser » plutôt que « la première note est
+ * définitive » : la porte ne doit jamais pouvoir s'OUVRIR après coup, mais un
+ * client qui redescend sa note nous dit quelque chose qu'on veut entendre —
+ * et il ne peut pas s'en servir pour atteindre Google. La seule direction
+ * interdite est celle qui mène au formulaire d'avis public.
+ *
+ * @returns {Promise<{ok:boolean, publier:boolean, retenue:number,
+ *                    ignoree:boolean, modifiee:boolean, lienAvis:string, doc:Object}>}
+ *   publier=true → on redirige vers Google, et c'est la note RETENUE qui en
+ *   décide, jamais celle qui vient d'être soumise.
+ *   ignoree=true → on a reçu une note plus haute et on l'a laissée de côté.
+ *   modifiee=true → la note enregistrée a changé (première note comprise).
  */
 async function enregistrerNote(doc, note) {
   const n = Math.round(Number(note));
@@ -118,21 +136,33 @@ async function enregistrerNote(doc, note) {
 
   const reglages = await avis.enquete();
   const lienAvis = await avis.getLien();
-  const publier = n >= reglages.seuil;
 
-  doc.rating = n;
-  doc.ratedAt = new Date();
-  /* Une note déjà traitée ne retombe pas en « à traiter » parce que le client
-     a rouvert le lien : on ne réécrit le statut que depuis l'attente, ou
-     depuis un état qui n'a pas encore été pris en main. */
-  if (doc.statut === 'en_attente' || doc.statut === 'publie') {
-    doc.statut = publier ? 'publie' : 'a_traiter';
+  const ancienne = Number.isFinite(doc.rating) ? doc.rating : null;
+  const ignoree = ancienne != null && n > ancienne;
+  const retenue = ignoree ? ancienne : n;
+  const modifiee = !ignoree && retenue !== ancienne;
+  const publier = retenue >= reglages.seuil;
+
+  if (modifiee) {
+    doc.rating = retenue;
+    doc.ratedAt = new Date();
+    /* Une note déjà traitée ne retombe pas en « à traiter » parce que le
+       client a rouvert le lien : on ne réécrit le statut que depuis l'attente,
+       ou depuis un état qui n'a pas encore été pris en main. */
+    if (doc.statut === 'en_attente' || doc.statut === 'publie') {
+      doc.statut = publier ? 'publie' : 'a_traiter';
+    }
+    doc.updatedAt = new Date();
   }
-  if (publier) doc.redirigeGoogleAt = new Date();
-  doc.updatedAt = new Date();
-  await doc.save();
+  /* Posé même sans changement de note : c'est un fait (on l'a envoyé chez
+     Google), et il vaut pour chaque passage, pas seulement le premier. */
+  if (publier) {
+    doc.redirigeGoogleAt = new Date();
+    doc.updatedAt = new Date();
+  }
+  if (doc.isModified()) await doc.save();
 
-  return { ok: true, publier, lienAvis, reglages, doc };
+  return { ok: true, publier, retenue, ignoree, modifiee, lienAvis, reglages, doc };
 }
 
 /**

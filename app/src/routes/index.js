@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 
 const aboutController = require('../controllers/aboutController');
 const homeController = require('../controllers/homeController');
@@ -27,10 +28,23 @@ router.get('/api/vehicules', productController.getVehicleTreeApi);
 /* Enquête de satisfaction — la page ouverte depuis une demande d'avis.
    Le jeton vaut authentification : pas de session, pas de CSRF à poser. URL
    courte, parce qu'elle part aussi par SMS, où chaque caractère compte et où
-   une longue adresse se fait tronquer. Page en noindex (cf. contrôleur). */
-router.get('/mon-avis/:token', avisPublicController.getEnquete);
-router.post('/mon-avis/:token', avisPublicController.postNote);
-router.post('/mon-avis/:token/message', avisPublicController.postMessage);
+   une longue adresse se fait tronquer. Page en noindex (cf. contrôleur).
+
+   Limiteur dédié : deviner un jeton de 72 bits est déjà hors de portée, mais
+   rien n'empêchait d'essayer en boucle et de remplir les journaux. Un vrai
+   client fait trois requêtes (la page, la note, le message) — 40 par
+   quart d'heure laissent passer plusieurs personnes derrière un même NAT
+   mobile tout en coupant net l'essai systématique. */
+const monAvisLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Trop de tentatives. Réessayez dans quelques minutes.',
+});
+router.get('/mon-avis/:token', monAvisLimiter, avisPublicController.getEnquete);
+router.post('/mon-avis/:token', monAvisLimiter, avisPublicController.postNote);
+router.post('/mon-avis/:token/message', monAvisLimiter, avisPublicController.postMessage);
 
 router.get('/contact', contactController.getContactPage);
 router.post('/contact', contactController.postContact);
