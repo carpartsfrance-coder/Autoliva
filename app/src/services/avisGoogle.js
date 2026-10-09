@@ -142,17 +142,16 @@ function nettoyerTexte(v) {
 const DEFAUTS = {
   email: {
     sujet: 'Votre avis sur la commande #{orderNumber}',
+    /* Pas de formule de politesse ni de coordonnées ici : la SIGNATURE les
+       porte (services/emailSignature), dans les deux formats. En écrire
+       d'autres au-dessus ferait doublon avec elle. */
     corps: `Bonjour {prenom},
 
 Vous avez reçu votre commande #{orderNumber}. Tout s'est bien passé ?
 
 Dites-le-nous en une question : une note de 1 à 5, dix secondes. {bonAchat}
 
-{lienEnquete}
-
-Merci beaucoup,
-L'équipe {brand}
-{phone}`,
+{lienEnquete}`,
   },
   sms: {
     /* TIENT EN UN SEUL SEGMENT (160 caractères), lien compris — c'est la
@@ -308,9 +307,9 @@ async function resoudre(canal, { order, user, lienEnquete } = {}) {
     sujet: nettoyerTexte(appliquerVariables(sujetTpl, vars)),
     corps: nettoyerTexte(appliquerVariables(corpsTpl, vars)),
     lienAvis,
-    /* E-mail seulement. Défaut true : le texte brut passe mieux en boîte
-       principale que le gabarit maison, qui a tout d'une newsletter. */
-    texteSimple: canal === 'email' ? !(ov && ov.texteSimple === false) : false,
+    /* E-mail seulement. 'signature' par défaut : une lettre signée passe en
+       boîte principale là où un gabarit marketing part en Promotions. */
+    format: canal === 'email' ? (ov && ov.format === 'texte' ? 'texte' : 'signature') : '',
   };
 }
 
@@ -375,7 +374,7 @@ async function reglagesPourAdmin() {
       sujet: ov && rempli(ov.sujet) ? ov.sujet : (defaut.sujet || ''),
       corps: ov && rempli(ov.corps) ? ov.corps : defaut.corps,
       personnalise: !!(ov && (rempli(ov.sujet) || rempli(ov.corps))),
-      texteSimple: canal === 'email' ? !(ov && ov.texteSimple === false) : false,
+      format: canal === 'email' ? (ov && ov.format === 'texte' ? 'texte' : 'signature') : '',
     };
   });
   return {
@@ -454,7 +453,7 @@ async function enregistrer(payload, parNom) {
       enabled: c.enabled !== false,
       sujet: sujet && sujet !== (defaut.sujet || '') ? sujet : '',
       corps: corps && corps !== defaut.corps ? corps : '',
-      texteSimple: canal === 'email' ? c.texteSimple !== false : false,
+      format: canal === 'email' ? (c.format === 'texte' ? 'texte' : 'signature') : '',
     };
   });
   const e = p.enquete || {};

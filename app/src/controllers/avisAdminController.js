@@ -31,6 +31,7 @@ const emailService = require('../services/emailService');
 const smsService = require('../services/smsService');
 const { resolvePhoneFromOrder } = smsService;
 const { buildAvisGoogleEmail } = require('../services/emailTemplates');
+const { signatureTexte } = require('../services/emailSignature');
 const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const brand = require('../config/brand');
 
@@ -114,7 +115,7 @@ async function postAvisSettings(req, res, next) {
         enabled: b['enabled_' + canal] != null,
         sujet: texte(b['sujet_' + canal]),
         corps: texte(b['corps_' + canal]),
-        texteSimple: canal === 'email' ? b.texteSimple_email != null : false,
+        format: canal === 'email' ? texte(b.format_email) : '',
       };
     });
     payload.enquete = {
@@ -249,16 +250,26 @@ async function postAvisEmail(req, res) {
     const destinataire = texte(user && user.email).trim();
     if (!destinataire) return res.status(400).json({ ok: false, error: 'Pas d’adresse e-mail sur ce client.' });
 
-    const resolu = (await resoudreCanaux(order, user)).email;
+    const canaux = await resoudreCanaux(order, user);
+    const resolu = canaux.email;
+    /* Le lien que le corps est CENSÉ porter : celui de l'enquête quand elle
+       est active, le lien Google seulement sinon. */
+    const lienAttendu = canaux.lienEnquete || resolu.lienAvis;
     if (!resolu.enabled) return res.status(400).json({ ok: false, error: 'Canal e-mail désactivé dans les paramètres.' });
 
     const sujet = (texte(req.body && req.body.sujet).trim() || resolu.sujet).slice(0, 200);
     const corps = (texte(req.body && req.body.corps).trim() || resolu.corps).slice(0, MAX_EMAIL);
 
-    /* Filet commun aux deux formes : un e-mail « donnez votre avis » sans
-       aucun moyen de le donner est un envoi perdu. */
-    const corpsAvecLien = resolu.lienAvis && !corps.includes(resolu.lienAvis)
-      ? `${corps}\n\n${resolu.lienAvis}`
+    /* Filet : un e-mail « donnez votre avis » sans aucun moyen de le donner
+       est un envoi perdu.
+       ⚠ On compare au lien ATTENDU, pas au lien Google. Comparer au lien
+       Google ajoutait l'URL `search.google.com/local/writereview…` au bas de
+       CHAQUE e-mail — le corps portant le lien d'enquête, la condition était
+       toujours vraie. Double dégât : une URL brute et laide en fin de
+       message, et surtout un raccourci vers Google qui contournait l'enquête,
+       c'est-à-dire exactement ce que l'enquête sert à empêcher. */
+    const corpsAvecLien = lienAttendu && !corps.includes(lienAttendu)
+      ? `${corps}\n\n${lienAttendu}`
       : corps;
 
     /* TEXTE BRUT PAR DÉFAUT. Le gabarit maison — logo, gros bouton, pied de
@@ -269,12 +280,14 @@ async function postAvisEmail(req, res) {
        `sansSuivi` dans les deux cas : le suivi des clics réécrirait le lien
        vers un domaine de redirection, ce qui ruine le peu de confiance qu'un
        lien dans un e-mail inspire encore. */
-    const envoi = resolu.texteSimple
-      ? { subject: sujet, text: corpsAvecLien }
+    /* La signature est ajoutée DANS LES DEUX FORMATS : même en texte pur, un
+       message professionnel se signe. C'est aussi ce qui permet au gabarit
+       de ne plus porter de formule de politesse. */
+    const envoi = resolu.format === 'texte'
+      ? { subject: sujet, text: `${corpsAvecLien}\n\n${signatureTexte()}` }
       : (() => {
         const mail = buildAvisGoogleEmail({
-          order, user, baseUrl: getSiteUrlFromEnv() || brand.SITE_URL,
-          sujet, corps: corpsAvecLien, lienAvis: resolu.lienAvis,
+          sujet, corps: corpsAvecLien, lien: lienAttendu,
         });
         return { subject: mail.subject, html: mail.html, text: mail.text };
       })();

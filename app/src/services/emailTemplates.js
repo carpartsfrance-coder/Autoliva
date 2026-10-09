@@ -1,4 +1,5 @@
 const brand = require('../config/brand');
+const { signatureHtml, signatureTexte } = require('./emailSignature');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -1484,67 +1485,55 @@ ${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
 }
 
 /**
- * Demande d'avis Google — e-mail.
+ * Demande d'avis — e-mail au format LETTRE + SIGNATURE.
  *
- * Le corps arrive en TEXTE BRUT depuis les réglages back-office
- * (/admin/parametres/avis), variables déjà substituées. On ne fait donc ici
- * que la mise en forme : échappement, paragraphes, et surtout le lien.
+ * Volontairement dépouillé du gabarit maison (logo en bandeau d'en-tête,
+ * gros bouton rouge, pied de page) : c'est cette allure de newsletter que
+ * l'onglet Promotions de Gmail attrape, et un e-mail en Promotions n'est pas
+ * lu. Ce qu'on envoie ici a la forme de ce que n'importe quel professionnel
+ * écrit — du texte, puis sa signature.
  *
- * Un paragraphe réduit au seul lien devient le gros bouton rouge — c'est ce
- * qui permet à l'auteur du message de CHOISIR où tombe le bouton, sans
- * dupliquer le lien en bas de l'e-mail. Un lien au fil du texte reste un
- * lien cliquable ordinaire.
+ * Le corps arrive en TEXTE BRUT depuis les réglages back-office, variables
+ * déjà substituées. On ne fait que la mise en forme : échappement,
+ * paragraphes, et le lien transformé en lien cliquable nommé plutôt qu'en
+ * URL nue au milieu du texte.
  */
-function buildAvisGoogleEmail({ order, user, baseUrl, sujet, corps, lienAvis } = {}) {
-  const number = order && order.number ? String(order.number) : '';
-  const lien = getTrimmedString(lienAvis);
-  const subject = getTrimmedString(sujet)
-    || (number ? `Votre avis sur la commande #${number}` : 'Votre avis nous intéresse');
-
+function buildAvisGoogleEmail({ sujet, corps, lien } = {}) {
+  const url = getTrimmedString(lien);
+  const subject = getTrimmedString(sujet) || 'Votre avis nous intéresse';
   const texteBrut = String(corps == null ? '' : corps).replace(/\r\n/g, '\n');
 
   const blocs = texteBrut.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
-  const bodyHtml = blocs.map((p) => {
-    if (lien && p === lien) return renderPrimaryButton({ href: lien, label: 'Laisser un avis sur Google' });
-    let html = escapeHtml(p).replace(/\n/g, '<br />');
-    if (lien) {
-      /* Le lien est déjà échappé dans `html` : on remplace sa forme échappée,
-         pas l'originale, sinon le remplacement ne trouve rien dès que l'URL
-         contient un & (cas des liens « writereview?placeid=…&hl=fr »). */
-      const lienEchappe = escapeHtml(lien);
-      html = html.split(lienEchappe).join(
-        `<a href="${lienEchappe}" style="color:#ec1313;text-decoration:none;font-weight:800;">${lienEchappe}</a>`
-      );
+  const corpsHtml = blocs.map((p) => {
+    /* Un paragraphe réduit au seul lien devient un lien NOMMÉ : « Donner mon
+       avis » se lit, « https://autoliva.com/mon-avis/g5v8uEmjqUDD » non. Pas
+       de bouton pour autant — un bouton, c'est la signature visuelle d'une
+       campagne. */
+    if (url && p === url) {
+      return `<p style="margin:0 0 14px;"><a href="${escapeHtml(url)}" style="color:#1d4ed8;font-weight:bold;">Donner mon avis en 10 secondes</a></p>`;
     }
-    return `<div style="margin-top:12px;font-size:14px;line-height:1.6;color:#334155;">${html}</div>`;
+    let html = escapeHtml(p).replace(/\n/g, '<br />');
+    if (url) {
+      /* Le lien est déjà échappé dans `html` : on remplace sa forme échappée,
+         sinon le remplacement échoue dès que l'URL contient un &. */
+      const lienEchappe = escapeHtml(url);
+      html = html.split(lienEchappe).join(`<a href="${lienEchappe}" style="color:#1d4ed8;">${lienEchappe}</a>`);
+    }
+    return `<p style="margin:0 0 14px;">${html}</p>`;
   }).join('\n');
 
-  /* Filet de sécurité : si l'auteur du message a retiré le lien du texte, on
-     l'ajoute quand même en bouton. Un e-mail « donnez votre avis » sans aucun
-     moyen de le donner serait un envoi perdu. */
-  const lienPresent = !!lien && texteBrut.includes(lien);
-  const bouton = lienPresent ? '' : renderPrimaryButton({ href: lien, label: 'Laisser un avis sur Google' });
+  const html = `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#ffffff;">
+<div style="max-width:620px;margin:0;padding:18px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">
+${corpsHtml}
+${signatureHtml()}
+</div>
+</body></html>`;
 
-  return {
-    subject,
-    html: renderEmailLayout({
-      title: subject,
-      preheader: 'Votre avis nous aide beaucoup',
-      bodyHtml: bodyHtml + bouton,
-      baseUrl,
-    }),
-    text: lienPresent || !lien ? texteBrut : `${texteBrut}\n\n${lien}`,
-  };
+  return { subject, html, text: `${texteBrut}\n\n${signatureTexte()}` };
 }
 
-/**
- * Alerte INTERNE : un client vient de mettre une note basse dans l'enquête.
- *
- * Destinataire : nous, pas le client. Le but est qu'on décroche vite — un
- * retour négatif non traité est un avis négatif en sursis. D'où le téléphone
- * en évidence et le texte du client en entier, sans troncature : résumer
- * obligerait à rouvrir le back-office pour savoir de quoi il s'agit.
- */
 function buildAvisNegatifAlerteEmail({ feedback, baseUrl, adminUrl } = {}) {
   const f = feedback || {};
   const note = Number.isFinite(f.rating) ? f.rating : '?';
