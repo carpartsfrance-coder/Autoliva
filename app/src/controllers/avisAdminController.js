@@ -270,7 +270,14 @@ async function postAvisSms(req, res) {
     if (!corps) return res.status(400).json({ ok: false, error: 'Message vide.' });
 
     const r = await smsService.sendSms({ to: telephone, text: corps });
-    smsService.logSmsSent({ orderId: order._id, smsType: 'avis_google', recipientPhone: telephone, result: r }).catch(() => {});
+    /* ATTENDU, comme l'est déjà le journal de l'e-mail : on annonce « SMS
+       envoyé » juste après, et l'admin peut recharger la fiche dans la
+       seconde. Laisser l'écriture filer en arrière-plan ouvrait une fenêtre
+       où le SMS était parti mais absent de l'historique de la commande.
+       Un échec d'écriture ne doit pas pour autant faire passer pour raté un
+       SMS déjà chez le client. */
+    await smsService.logSmsSent({ orderId: order._id, smsType: 'avis_google', recipientPhone: telephone, result: r })
+      .catch((err) => console.error('[avis] journal SMS non écrit :', err && err.message));
     if (!r || !r.ok) {
       return res.status(502).json({ ok: false, error: (r && r.message) || `Échec de l'envoi : ${(r && r.reason) || 'inconnu'}` });
     }
