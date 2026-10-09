@@ -176,6 +176,58 @@ test('enquête de satisfaction avant Google', async (t) => {
     assert.match(envoyes[0].subject, /2\/5/);
   });
 
+  await t.test('REJOUER la note avec 5/5 après un 2/5 ne mène pas à Google', async () => {
+    /* Le trou que ce test ferme : la page aux étoiles reste dans le cache du
+       navigateur. Un retour en arrière puis un clic sur 5 rejoue exactement
+       cette requête — si le serveur la prenait, le filtre ne filtrerait rien. */
+    envoyes.length = 0;
+    const r = await requete(`/mon-avis/${tokenMecontent}`, { method: 'POST', form: { note: '5' }, sansSession: true });
+    assert.equal(r.status, 200, 'surtout pas de 302 vers Google');
+    assert.ok(!r.corps.includes(avis.LIEN_PAR_DEFAUT), 'aucune trace du lien Google');
+    assert.match(r.corps, /déjà enregistrée/, "on dit pourquoi, plutôt que d'afficher une page qui ne correspond pas au clic");
+
+    const suivi = await ReviewFeedback.findOne({ orderId: idMecontent });
+    assert.equal(suivi.rating, 2, 'la note enregistrée ne bouge pas');
+    assert.equal(suivi.redirigeGoogleAt, null);
+    assert.equal(envoyes.length, 0, 'une note inchangée ne doit pas re-déclencher d\'alerte');
+  });
+
+  await t.test('une note peut en revanche BAISSER', async () => {
+    /* L'autre sens est autorisé : il ne peut pas servir à atteindre Google,
+       et il nous apprend quelque chose. */
+    const id = await commande();
+    await requete(`/admin/commandes/${id}/avis`);
+    const token = (await ReviewFeedback.findOne({ orderId: id })).token;
+
+    const haut = await requete(`/mon-avis/${token}`, { method: 'POST', form: { note: '5' }, sansSession: true });
+    assert.equal(haut.status, 302);
+    assert.equal((await ReviewFeedback.findOne({ orderId: id })).statut, 'publie');
+
+    envoyes.length = 0;
+    const bas = await requete(`/mon-avis/${token}`, { method: 'POST', form: { note: '1' }, sansSession: true });
+    assert.equal(bas.status, 200);
+    const suivi = await ReviewFeedback.findOne({ orderId: id });
+    assert.equal(suivi.rating, 1);
+    assert.equal(suivi.statut, 'a_traiter');
+    assert.equal(envoyes.length, 1, 'et ça doit nous alerter');
+
+    // Et une fois descendu, impossible de remonter.
+    const retour = await requete(`/mon-avis/${token}`, { method: 'POST', form: { note: '5' }, sansSession: true });
+    assert.equal(retour.status, 200);
+    assert.equal((await ReviewFeedback.findOne({ orderId: id })).rating, 1);
+  });
+
+  await t.test('une note hors de 1-5 est refusée', async () => {
+    const id = await commande();
+    await requete(`/admin/commandes/${id}/avis`);
+    const token = (await ReviewFeedback.findOne({ orderId: id })).token;
+    for (const note of ['0', '6', '99', 'abc', '']) {
+      const r = await requete(`/mon-avis/${token}`, { method: 'POST', form: { note }, sansSession: true });
+      assert.equal(r.status, 400, `note « ${note} » aurait dû être refusée`);
+    }
+    assert.equal((await ReviewFeedback.findOne({ orderId: id })).rating, null);
+  });
+
   await t.test('le message du client est enregistré et ré-alerte', async () => {
     envoyes.length = 0;
     const r = await requete(`/mon-avis/${tokenMecontent}/message`, {

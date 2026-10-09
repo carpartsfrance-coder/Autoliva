@@ -54,6 +54,7 @@ function base(req, { reglages, doc, etape }) {
     telephoneConnu: texte(doc.rappelTelephone) || texte(doc.clientTelephone),
     lienAvis: '',
     erreur: null,
+    avertissement: null,
   };
 }
 
@@ -123,15 +124,25 @@ async function postNote(req, res, next) {
     }
 
     /* Note haute : on envoie sur Google sans page intermédiaire. Chaque écran
-       de plus entre le clic et le formulaire d'avis est un client perdu. */
+       de plus entre le clic et le formulaire d'avis est un client perdu.
+       `r.publier` suit la note RETENUE, jamais celle qui vient d'arriver :
+       rejouer la requête avec 5/5 après un 3/5 ne mène nulle part. */
     if (r.publier) return res.redirect(302, r.lienAvis);
 
-    /* Note basse : alerte immédiate, AVANT même que le client ait écrit quoi
-       que ce soit. Une note de 1 sans message reste une information qu'on
-       veut avoir le jour même, et beaucoup s'arrêtent là. */
-    envoyerAlerte(req, r.doc).catch(() => {});
+    /* Alerte immédiate, AVANT même que le client ait écrit quoi que ce soit :
+       une note de 1 sans message reste une information qu'on veut avoir le
+       jour même, et beaucoup s'arrêtent là. Seulement si la note a bougé —
+       sinon un client qui recharge la page déclenche un e-mail par clic. */
+    if (r.modifiee) envoyerAlerte(req, r.doc).catch(() => {});
 
     const locals = base(req, { reglages, doc: r.doc, etape: 'probleme' });
+    if (r.ignoree) {
+      /* On le DIT, plutôt que d'afficher sans explication une page qui ne
+         correspond pas au clic. Un client qui s'est trompé d'étoile comprend
+         alors qu'il doit nous l'écrire — et ça nous arrive dans le même
+         formulaire. */
+      locals.avertissement = `Votre note de ${r.retenue}/5 est déjà enregistrée : elle ne peut plus être remontée. Dites-le nous ci-dessous si vous vous êtes trompé.`;
+    }
     /* Le lien Google reste accessible si le réglage le demande : c'est la
        version conforme à la politique Google (voir services/reviewFeedback). */
     if (reglages.proposerGoogleAuxMecontents) locals.lienAvis = r.lienAvis;
