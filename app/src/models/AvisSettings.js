@@ -24,6 +24,12 @@ const canalSchema = new mongoose.Schema(
     enabled: { type: Boolean, default: true },
     sujet: { type: String, default: '' },
     corps: { type: String, default: '' },
+    /* E-MAIL UNIQUEMENT. true = texte brut, sans gabarit : pas de logo, pas de
+       bouton, pas de pied de page. Le gabarit maison ressemble à une
+       newsletter, et c'est précisément ce que l'onglet Promotions attrape.
+       Une demande d'avis est une correspondance d'une personne à une autre :
+       elle doit en avoir l'air. Défaut true — le gabarit reste disponible. */
+    texteSimple: { type: Boolean, default: true },
   },
   { _id: false }
 );

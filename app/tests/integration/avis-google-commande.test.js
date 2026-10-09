@@ -250,12 +250,52 @@ test("demande d'avis Google sur une commande", async (t) => {
     assert.equal(envoyes.length, 1);
     assert.equal(envoyes[0].toEmail, 'client-avis@example.com');
     assert.equal(envoyes[0].subject, 'Un avis ?');
-    assert.match(envoyes[0].html, /Laisser un avis sur Google/);
+    /* TEXTE BRUT : aucune balise. Le gabarit maison (logo, bouton, pied de
+       page) a tout d'une newsletter, et c'est ce que l'onglet Promotions
+       attrape — or un e-mail en Promotions n'est pas lu. */
+    assert.equal(envoyes[0].html, undefined, 'aucun HTML ne doit partir');
+    assert.match(envoyes[0].text, /Bonjour Julien/);
+    assert.ok(envoyes[0].text.includes(avis.LIEN_PAR_DEFAUT), 'le lien doit être en clair');
+    /* Et pas de suivi : il réécrirait le lien vers un domaine de redirection,
+       exactement ce qu'on apprend aux gens à ne pas cliquer. */
+    assert.equal(envoyes[0].sansSuivi, true);
 
     const o = await Order.findById(idLivree).lean();
     assert.ok(o.notifications.googleReviewRequestedAt, 'la demande doit être tracée');
     assert.deepEqual(o.notifications.googleReviewChannels, ['email']);
     assert.ok((o.emailsSent || []).some((e) => e.type === 'avis_google' && e.status === 'sent'));
+  });
+
+  await t.test("le gabarit HTML reste disponible si on le redemande", async () => {
+    const enregistre = await requete('/admin/parametres/avis', {
+      method: 'POST',
+      form: {
+        lienAvis: '', enabled_email: 'on', enabled_sms: 'on', enabled_whatsapp: 'on',
+        corps_email: avis.DEFAUTS.email.corps, sujet_email: avis.DEFAUTS.email.sujet,
+        corps_sms: avis.DEFAUTS.sms.corps, corps_whatsapp: avis.DEFAUTS.whatsapp.corps,
+        enquete_active: 'on', enquete_seuil: '4', // texteSimple_email décoché
+      },
+    });
+    assert.equal(enregistre.status, 302);
+
+    envoyes.length = 0;
+    const r = await requete(`/admin/commandes/${idLivree}/avis/email`, {
+      method: 'POST', json: { sujet: 'Un avis ?', corps: 'Bonjour,\n\n' + avis.LIEN_PAR_DEFAUT },
+    });
+    assert.equal(r.status, 200);
+    assert.match(envoyes[0].html, /Laisser un avis sur Google/, 'le gros bouton revient');
+    assert.equal(envoyes[0].sansSuivi, true, 'le suivi reste coupé, gabarit ou pas');
+
+    // On remet le texte brut pour la suite du fichier.
+    await requete('/admin/parametres/avis', {
+      method: 'POST',
+      form: {
+        lienAvis: '', enabled_email: 'on', enabled_sms: 'on', enabled_whatsapp: 'on',
+        corps_email: avis.DEFAUTS.email.corps, sujet_email: avis.DEFAUTS.email.sujet,
+        corps_sms: avis.DEFAUTS.sms.corps, corps_whatsapp: avis.DEFAUTS.whatsapp.corps,
+        enquete_active: 'on', enquete_seuil: '4', texteSimple_email: 'on',
+      },
+    });
   });
 
   await t.test('le SMS part et prévient du risque de filtrage du lien', async () => {

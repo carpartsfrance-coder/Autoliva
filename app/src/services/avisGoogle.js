@@ -308,6 +308,9 @@ async function resoudre(canal, { order, user, lienEnquete } = {}) {
     sujet: nettoyerTexte(appliquerVariables(sujetTpl, vars)),
     corps: nettoyerTexte(appliquerVariables(corpsTpl, vars)),
     lienAvis,
+    /* E-mail seulement. Défaut true : le texte brut passe mieux en boîte
+       principale que le gabarit maison, qui a tout d'une newsletter. */
+    texteSimple: canal === 'email' ? !(ov && ov.texteSimple === false) : false,
   };
 }
 
@@ -372,6 +375,7 @@ async function reglagesPourAdmin() {
       sujet: ov && rempli(ov.sujet) ? ov.sujet : (defaut.sujet || ''),
       corps: ov && rempli(ov.corps) ? ov.corps : defaut.corps,
       personnalise: !!(ov && (rempli(ov.sujet) || rempli(ov.corps))),
+      texteSimple: canal === 'email' ? !(ov && ov.texteSimple === false) : false,
     };
   });
   return {
@@ -450,6 +454,7 @@ async function enregistrer(payload, parNom) {
       enabled: c.enabled !== false,
       sujet: sujet && sujet !== (defaut.sujet || '') ? sujet : '',
       corps: corps && corps !== defaut.corps ? corps : '',
+      texteSimple: canal === 'email' ? c.texteSimple !== false : false,
     };
   });
   const e = p.enquete || {};

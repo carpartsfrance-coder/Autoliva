@@ -114,6 +114,7 @@ async function postAvisSettings(req, res, next) {
         enabled: b['enabled_' + canal] != null,
         sujet: texte(b['sujet_' + canal]),
         corps: texte(b['corps_' + canal]),
+        texteSimple: canal === 'email' ? b.texteSimple_email != null : false,
       };
     });
     payload.enquete = {
@@ -254,15 +255,34 @@ async function postAvisEmail(req, res) {
     const sujet = (texte(req.body && req.body.sujet).trim() || resolu.sujet).slice(0, 200);
     const corps = (texte(req.body && req.body.corps).trim() || resolu.corps).slice(0, MAX_EMAIL);
 
-    const mail = buildAvisGoogleEmail({
-      order, user, baseUrl: getSiteUrlFromEnv() || brand.SITE_URL,
-      sujet, corps, lienAvis: resolu.lienAvis,
-    });
+    /* Filet commun aux deux formes : un e-mail « donnez votre avis » sans
+       aucun moyen de le donner est un envoi perdu. */
+    const corpsAvecLien = resolu.lienAvis && !corps.includes(resolu.lienAvis)
+      ? `${corps}\n\n${resolu.lienAvis}`
+      : corps;
+
+    /* TEXTE BRUT PAR DÉFAUT. Le gabarit maison — logo, gros bouton, pied de
+       page — a tout d'une newsletter, et c'est ce que l'onglet Promotions
+       attrape. Une demande d'avis est une correspondance d'une personne à
+       une autre : elle doit en avoir l'air, sans balise. Le gabarit reste
+       disponible par le réglage « texteSimple ».
+       `sansSuivi` dans les deux cas : le suivi des clics réécrirait le lien
+       vers un domaine de redirection, ce qui ruine le peu de confiance qu'un
+       lien dans un e-mail inspire encore. */
+    const envoi = resolu.texteSimple
+      ? { subject: sujet, text: corpsAvecLien }
+      : (() => {
+        const mail = buildAvisGoogleEmail({
+          order, user, baseUrl: getSiteUrlFromEnv() || brand.SITE_URL,
+          sujet, corps: corpsAvecLien, lienAvis: resolu.lienAvis,
+        });
+        return { subject: mail.subject, html: mail.html, text: mail.text };
+      })();
+
     const r = await emailService.sendEmail({
       toEmail: destinataire,
-      subject: mail.subject,
-      html: mail.html,
-      text: mail.text,
+      ...envoi,
+      sansSuivi: true,
       replyTo: brand.EMAIL_CONTACT ? { email: brand.EMAIL_CONTACT, name: brand.NAME } : null,
     });
     await emailService.logEmailSent({ orderId: order._id, emailType: 'avis_google', recipientEmail: destinataire, result: r });
