@@ -1590,6 +1590,59 @@ ${renderPrimaryButton({ href: adminUrl, label: 'Ouvrir le retour' })}`;
   };
 }
 
+/**
+ * Le bon d'achat qui récompense la RÉPONSE à l'enquête.
+ *
+ * ⚠ La formulation n'est pas cosmétique. Cet e-mail ne doit jamais remercier
+ * d'un AVIS ni le mentionner comme une condition : il récompense une réponse
+ * à une enquête de satisfaction, et c'est exactement ce qui le sépare d'une
+ * pratique commerciale trompeuse. Voir models/AvisSettings (schéma `bon`).
+ */
+function buildBonAvisEmail({ feedback, baseUrl } = {}) {
+  const f = feedback || {};
+  const bon = f.bon || {};
+  const code = getTrimmedString(bon.code);
+  const montant = formatEuro(bon.montantCents);
+  const prenom = getTrimmedString(f.clientNom).split(/\s+/)[0];
+  const expire = bon.expireLe ? formatDateFR(bon.expireLe) : '';
+  const subject = `Votre bon de ${montant} — merci d'avoir répondu`;
+
+  const bodyHtml = `
+<div style="font-size:16px;font-weight:900;">Merci${prenom ? ' ' + escapeHtml(prenom) : ''} !</div>
+<div style="margin-top:10px;font-size:14px;line-height:1.6;color:#334155;">
+  Vous avez pris dix secondes pour nous dire ce que vous pensiez de votre commande${f.orderNumber ? ` <strong>#${escapeHtml(f.orderNumber)}</strong>` : ''}.
+  Voici le bon promis, à utiliser sur votre prochaine commande.
+</div>
+
+<div style="margin-top:16px;padding:18px;border:2px dashed #cbd5e1;border-radius:14px;text-align:center;background:#f8fafc;">
+  <div style="font-size:12px;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;">Votre code</div>
+  <div style="margin-top:6px;font-size:26px;font-weight:900;letter-spacing:0.12em;color:#0f172a;font-family:monospace;">${escapeHtml(code)}</div>
+  <div style="margin-top:6px;font-size:14px;font-weight:700;color:#334155;">${escapeHtml(montant)} de remise</div>
+  ${expire ? `<div style="margin-top:4px;font-size:12px;color:#64748b;">Valable jusqu'au ${escapeHtml(expire)}</div>` : ''}
+</div>
+
+<div style="margin-top:14px;font-size:13px;line-height:1.6;color:#64748b;">
+  À saisir dans le panier, au moment de valider. Utilisable une fois.
+</div>
+
+${renderPrimaryButton({ href: baseUrl, label: 'Voir le catalogue' })}
+
+<div style="margin-top:18px;font-size:12px;line-height:1.6;color:#94a3b8;">
+  Ce bon vous est offert pour votre réponse à notre enquête, quelle qu'elle soit — il ne dépend
+  d'aucune note et ne vous engage à rien d'autre.
+</div>`;
+
+  return {
+    subject,
+    html: renderEmailLayout({ title: subject, preheader: `Votre code ${code} — ${montant} de remise`, bodyHtml, baseUrl }),
+    text: `Merci d'avoir répondu à notre enquête.\n\n`
+      + `Votre code : ${code} (${montant} de remise`
+      + (expire ? `, valable jusqu'au ${expire}` : '') + `).\n`
+      + `À saisir dans le panier. Utilisable une fois.\n\n`
+      + `Ce bon vous est offert pour votre réponse, quelle qu'elle soit.`,
+  };
+}
+
 module.exports = {
   buildOrderConfirmationEmail,
   buildConsigneStartEmail,
@@ -1615,4 +1668,5 @@ module.exports = {
   buildRefundIssuedEmail,
   buildAvisGoogleEmail,
   buildAvisNegatifAlerteEmail,
+  buildBonAvisEmail,
 };

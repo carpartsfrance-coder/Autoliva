@@ -284,6 +284,104 @@ test('enquête de satisfaction avant Google', async (t) => {
     assert.equal(apres.statut, 'resolu', 'un retour traité ne doit pas retomber en « à traiter »');
   });
 
+  await t.test("bon d'achat : versé pour la RÉPONSE, quelle que soit la note", async () => {
+    const PromoCode = require('../../src/models/PromoCode');
+
+    const enregistre = await requete('/admin/parametres/avis', {
+      method: 'POST',
+      form: {
+        lienAvis: '', enabled_email: 'on', enabled_sms: 'on', enabled_whatsapp: 'on',
+        corps_email: avis.DEFAUTS.email.corps, sujet_email: avis.DEFAUTS.email.sujet,
+        corps_sms: avis.DEFAUTS.sms.corps, corps_whatsapp: avis.DEFAUTS.whatsapp.corps,
+        enquete_active: 'on', enquete_seuil: '4',
+        bon_actif: 'on', bon_montant: '30', bon_minimum: '200', bon_validite: '180',
+      },
+    });
+    assert.equal(enregistre.status, 302);
+
+    /* Le cœur du dispositif : la note la PLUS BASSE et la plus haute doivent
+       toutes deux donner un bon. Une condition sur la note ferait basculer le
+       mécanisme du côté interdit (avis rémunéré). */
+    const codes = {};
+    for (const [etiquette, note] of [['mecontent', '1'], ['content', '5']]) {
+      const id = await commande();
+      await requete(`/admin/commandes/${id}/avis`);
+      const token = (await ReviewFeedback.findOne({ orderId: id })).token;
+
+      envoyes.length = 0;
+      const r = await requete(`/mon-avis/${token}`, { method: 'POST', form: { note }, sansSession: true });
+      assert.equal(r.status, 200, `${etiquette} : le code doit être remis à l'écran, donc pas de 302`);
+
+      const suivi = await ReviewFeedback.findOne({ orderId: id });
+      assert.ok(suivi.bon && suivi.bon.code, `${etiquette} : aucun bon émis`);
+      assert.equal(suivi.bon.montantCents, 3000);
+      assert.match(suivi.bon.code, /^AVIS-[A-Z0-9]{6}$/);
+      assert.ok(r.corps.includes(suivi.bon.code), `${etiquette} : le code doit s'afficher`);
+      codes[etiquette] = suivi.bon.code;
+
+      // Et le code existe vraiment côté promo, utilisable une fois.
+      const promo = await PromoCode.findOne({ code: suivi.bon.code }).lean();
+      assert.ok(promo, `${etiquette} : code promo absent de la base`);
+      assert.equal(promo.discountType, 'fixed');
+      assert.equal(promo.discountAmountCents, 3000);
+      assert.equal(promo.minSubtotalCents, 20000);
+      assert.equal(promo.maxTotalUses, 1);
+      assert.ok(promo.endsAt, 'le bon doit expirer');
+
+      // Et il part par e-mail.
+      assert.ok(envoyes.some((e) => (e.subject || '').includes('bon')), `${etiquette} : e-mail du bon non envoyé`);
+    }
+    assert.notEqual(codes.mecontent, codes.content, 'deux clients, deux codes');
+
+    // Le 5/5 garde son bouton Google ; le 1/5 ne l'a pas.
+    const idH = await commande();
+    await requete(`/admin/commandes/${idH}/avis`);
+    const tokenH = (await ReviewFeedback.findOne({ orderId: idH })).token;
+    const haut = await requete(`/mon-avis/${tokenH}`, { method: 'POST', form: { note: '5' }, sansSession: true });
+    assert.ok(haut.corps.includes(avis.LIEN_PAR_DEFAUT), 'le 5/5 doit garder le bouton Google');
+  });
+
+  await t.test("le bon n'est émis qu'une fois par commande", async () => {
+    const id = await commande();
+    await requete(`/admin/commandes/${id}/avis`);
+    const token = (await ReviewFeedback.findOne({ orderId: id })).token;
+    await requete(`/mon-avis/${token}`, { method: 'POST', form: { note: '3' }, sansSession: true });
+    const premier = (await ReviewFeedback.findOne({ orderId: id })).bon.code;
+    // Plusieurs rechargements et une tentative de remontée de note.
+    await requete(`/mon-avis/${token}`, { sansSession: true });
+    await requete(`/mon-avis/${token}`, { method: 'POST', form: { note: '5' }, sansSession: true });
+    await requete(`/mon-avis/${token}`, { method: 'POST', form: { note: '2' }, sansSession: true });
+    const apres = await ReviewFeedback.findOne({ orderId: id });
+    assert.equal(apres.bon.code, premier, 'un seul bon, même après plusieurs passages');
+    const PromoCode = require('../../src/models/PromoCode');
+    assert.equal(await PromoCode.countDocuments({ code: premier }), 1);
+  });
+
+  await t.test("bon coupé : aucun code, et le message n'en parle plus", async () => {
+    const enregistre = await requete('/admin/parametres/avis', {
+      method: 'POST',
+      form: {
+        lienAvis: '', enabled_email: 'on', enabled_sms: 'on', enabled_whatsapp: 'on',
+        corps_email: avis.DEFAUTS.email.corps, sujet_email: avis.DEFAUTS.email.sujet,
+        corps_sms: avis.DEFAUTS.sms.corps, corps_whatsapp: avis.DEFAUTS.whatsapp.corps,
+        enquete_active: 'on', enquete_seuil: '4', bon_montant: '30', // bon_actif décoché
+      },
+    });
+    assert.equal(enregistre.status, 302);
+
+    const id = await commande();
+    const prep = await requete(`/admin/commandes/${id}/avis`);
+    /* {bonAchat} devient vide : le message ne doit pas garder un trou ni
+       promettre un bon qui n'existe plus. */
+    assert.ok(!/bon de/i.test(prep.corps.canaux.sms.corps), prep.corps.canaux.sms.corps);
+    assert.ok(!/ {2}/.test(prep.corps.canaux.sms.corps), 'double espace laissé par la variable vide');
+
+    const token = (await ReviewFeedback.findOne({ orderId: id })).token;
+    const r = await requete(`/mon-avis/${token}`, { method: 'POST', form: { note: '5' }, sansSession: true });
+    assert.equal(r.status, 302, 'sans bon à remettre, on repart droit sur Google');
+    assert.equal((await ReviewFeedback.findOne({ orderId: id })).bon.code, '');
+  });
+
   await t.test('réglage « proposer quand même Google » : le lien réapparaît', async () => {
     const idTiers = await commande();
     await requete(`/admin/commandes/${idTiers}/avis`);

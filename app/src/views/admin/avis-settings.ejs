@@ -127,6 +127,62 @@
         </div>
       </div>
 
+      <!-- Bon d'achat -->
+      <div class="mt-4 bg-white rounded-2xl border border-slate-200 p-5">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-base text-slate-400">redeem</span>
+              <span class="font-semibold text-slate-900">Bon d'achat pour une réponse</span>
+            </div>
+            <div class="mt-1 max-w-xl text-xs text-slate-500">
+              Offert à tous ceux qui répondent à l'enquête, <strong>quelle que soit la note</strong> et qu'ils publient sur Google ou non.
+              Le code part à l'écran et par e-mail, et sert une seule fois.
+            </div>
+          </div>
+          <label class="inline-flex shrink-0 cursor-pointer items-center gap-2">
+            <input type="checkbox" name="bon_actif" <%= reglages.bon.actif ? 'checked' : '' %> data-bon-actif class="sr-only peer">
+            <span class="relative h-6 w-10 rounded-full bg-slate-200 transition peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition after:content-[''] peer-checked:after:translate-x-4"></span>
+            <span class="text-xs font-semibold text-slate-500 peer-checked:text-emerald-600" data-bon-label><%= reglages.bon.actif ? 'Activé' : 'Désactivé' %></span>
+          </label>
+        </div>
+
+        <div class="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs leading-relaxed text-red-900">
+          <span class="font-bold">Ne jamais conditionner ce bon à la note, ni à la publication d'un avis.</span><br>
+          Récompenser une <em>réponse à une enquête</em> est une dépense marketing ordinaire. Récompenser un <em>avis</em> est
+          interdit par Google (avis supprimés) et constitue une pratique commerciale trompeuse en droit français.
+          Toute la différence tient là, et le code la garantit : le bon part pour les 1/5 comme pour les 5/5.
+        </div>
+
+        <div data-bon-bloc class="<%= reglages.bon.actif ? '' : 'opacity-40 pointer-events-none' %>">
+          <% if (reglages.bon.actif && !reglages.bonAnnonce) { %>
+            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <span class="font-bold">Aucun message n'annonce le bon.</span>
+              Tu le distribues sans qu'il incite personne : ajoute <code class="font-mono">{bonAchat}</code> dans au moins un des trois messages ci-dessous.
+            </div>
+          <% } %>
+
+          <div class="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label for="bon_montant" class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Montant (€)</label>
+              <input id="bon_montant" name="bon_montant" type="number" min="1" step="1" value="<%= Math.round(reglages.bon.montantCents / 100) %>"
+                     class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-500">
+            </div>
+            <div>
+              <label for="bon_minimum" class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Commande minimum (€)</label>
+              <input id="bon_minimum" name="bon_minimum" type="number" min="0" step="1" value="<%= Math.round(reglages.bon.minimumCents / 100) %>"
+                     class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-500">
+              <div class="mt-1 text-[11px] text-slate-400">0 = aucun. Un bon de 30 € sur une pièce à 35 € se vend à perte.</div>
+            </div>
+            <div>
+              <label for="bon_validite" class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Validité (jours)</label>
+              <input id="bon_validite" name="bon_validite" type="number" min="1" step="1" value="<%= reglages.bon.validiteJours %>"
+                     class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-500">
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Variables -->
       <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
         <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Variables disponibles</div>
@@ -231,6 +287,19 @@
        fait dans le composeur d'une commande (où le lien et le n° sont
        connus). */
     function segments(n) { return n <= 160 ? 1 : Math.ceil(n / 153); }
+
+    /* Même grisage que l'enquête : on voit ce qui se rallumera, et les champs
+       restent soumis — couper le bon ne doit pas effacer son montant. */
+    var bonActif = form.querySelector('[data-bon-actif]');
+    var bonBloc = form.querySelector('[data-bon-bloc]');
+    var bonLabel = form.querySelector('[data-bon-label]');
+    if (bonActif && bonBloc) {
+      bonActif.addEventListener('change', function () {
+        bonBloc.classList.toggle('opacity-40', !bonActif.checked);
+        bonBloc.classList.toggle('pointer-events-none', !bonActif.checked);
+        if (bonLabel) bonLabel.textContent = bonActif.checked ? 'Activé' : 'Désactivé';
+      });
+    }
 
     var enqActive = form.querySelector('[data-enquete-active]');
     var enqBloc = form.querySelector('[data-enquete-bloc]');

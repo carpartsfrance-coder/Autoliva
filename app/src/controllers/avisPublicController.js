@@ -20,7 +20,7 @@ const mongoose = require('mongoose');
 const reviewFeedback = require('../services/reviewFeedback');
 const avis = require('../services/avisGoogle');
 const emailService = require('../services/emailService');
-const { buildAvisNegatifAlerteEmail } = require('../services/emailTemplates');
+const { buildAvisNegatifAlerteEmail, buildBonAvisEmail } = require('../services/emailTemplates');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const brand = require('../config/brand');
 
@@ -48,6 +48,13 @@ function base(req, { reglages, doc, etape }) {
     remerciement: avis.appliquerVariables(reglages.remerciement, vars),
     seuil: reglages.seuil,
     note: doc.rating || null,
+    /* Le bon vit sur le suivi : il réapparaît si le client rouvre son lien,
+       ce qui évite « j'ai perdu mon code » au standard. */
+    bon: (doc.bon && doc.bon.code) ? {
+      code: doc.bon.code,
+      montant: (doc.bon.montantCents / 100).toFixed(2).replace(/[.,]00$/, '').replace('.', ','),
+      expireLe: doc.bon.expireLe,
+    } : null,
     /* Pré-rempli avec le numéro de la commande : on l'a déjà, le redemander
        sur un téléphone est le genre de friction qui fait abandonner le
        formulaire — et c'est justement celui des clients mécontents. */
@@ -123,11 +130,28 @@ async function postNote(req, res, next) {
       return res.status(400).render('avis/enquete', locals);
     }
 
-    /* Note haute : on envoie sur Google sans page intermédiaire. Chaque écran
-       de plus entre le clic et le formulaire d'avis est un client perdu.
+    /* Le bon récompense la RÉPONSE : émis AVANT toute distinction sur la note,
+       et sur ce chemin unique par lequel passent les 1/5 comme les 5/5.
+       Ne jamais le déplacer dans l'une des deux branches ci-dessous. */
+    const bon = await reviewFeedback.emettreBon(r.doc).catch((err) => {
+      console.error('[avis] bon non émis :', err && err.message);
+      return null;
+    });
+    if (bon) envoyerBonParEmail(req, r.doc).catch(() => {});
+
+    /* Note haute SANS bon : droit sur Google, chaque écran de plus entre le
+       clic et le formulaire est un client perdu. AVEC un bon, on doit d'abord
+       le remettre — et cet écran-là n'est pas une friction, c'est ce que le
+       client est venu chercher ; le bouton Google y est mieux placé qu'au
+       bout d'une redirection.
        `r.publier` suit la note RETENUE, jamais celle qui vient d'arriver :
        rejouer la requête avec 5/5 après un 3/5 ne mène nulle part. */
-    if (r.publier) return res.redirect(302, r.lienAvis);
+    if (r.publier) {
+      if (!bon) return res.redirect(302, r.lienAvis);
+      const locals = base(req, { reglages, doc: r.doc, etape: 'content' });
+      locals.lienAvis = r.lienAvis;
+      return res.render('avis/enquete', locals);
+    }
 
     /* Alerte immédiate, AVANT même que le client ait écrit quoi que ce soit :
        une note de 1 sans message reste une information qu'on veut avoir le
@@ -174,6 +198,28 @@ async function postMessage(req, res, next) {
     return res.render('avis/enquete', base(req, { reglages, doc: r.doc, etape: 'merci' }));
   } catch (err) {
     return next(err);
+  }
+}
+
+/**
+ * Envoie le bon au client, best-effort.
+ *
+ * Doublon volontaire de l'affichage à l'écran : le client ferme l'onglet, le
+ * code est perdu. Par e-mail il le retrouve le jour où il recommande — c'est
+ * là que le bon sert à quelque chose.
+ */
+async function envoyerBonParEmail(req, doc) {
+  const destinataire = texte(doc.clientEmail).trim();
+  if (!destinataire || !doc.bon || !doc.bon.code) return;
+  try {
+    const baseUrl = getSiteUrlFromReq(req);
+    const mail = buildBonAvisEmail({ feedback: doc, baseUrl });
+    await emailService.sendEmail({
+      toEmail: destinataire, subject: mail.subject, html: mail.html, text: mail.text,
+      replyTo: brand.EMAIL_CONTACT ? { email: brand.EMAIL_CONTACT, name: brand.NAME } : null,
+    });
+  } catch (err) {
+    console.error('[avis] bon non envoyé par e-mail :', err && err.message);
   }
 }
 

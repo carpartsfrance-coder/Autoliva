@@ -61,6 +61,16 @@ const reviewFeedbackSchema = new mongoose.Schema(
        On ne peut pas savoir s'il a publié, seulement qu'on l'y a mené. */
     redirigeGoogleAt: { type: Date, default: null },
 
+    /* Bon d'achat émis pour la RÉPONSE à l'enquête (jamais pour l'avis :
+       voir AvisSettings.bon). Un seul par commande, posé à la première note
+       quelle qu'elle soit. */
+    bon: {
+      code: { type: String, default: '', trim: true, uppercase: true },
+      montantCents: { type: Number, default: 0, min: 0 },
+      emisLe: { type: Date, default: null },
+      expireLe: { type: Date, default: null },
+    },
+
     statut: {
       type: String,
       enum: ['en_attente', 'publie', 'a_traiter', 'resolu'],
