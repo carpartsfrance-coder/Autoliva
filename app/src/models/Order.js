@@ -386,8 +386,16 @@ const orderSchema = new mongoose.Schema(
          date enregistrée deux fois ne réécrit pas au client. */
       deliveryEstimateSentFor: { type: String, default: '', trim: true },
       deliveryEstimateSentAt: { type: Date, default: null },
-      // Demande d'avis Skeepers/Avis Vérifiés poussée (posé uniquement après succès).
+      /* HISTORIQUE. Skeepers / Avis Vérifiés a été retiré en octobre 2026 :
+         plus rien n'écrit ce champ, il est conservé pour que les demandes
+         poussées avant cette date restent lisibles. */
       skeepersReviewRequestedAt: { type: Date, default: null },
+      /* Demande d'avis GOOGLE (e-mail / SMS / WhatsApp), envoyée par nous
+         depuis le détail de la commande. `...At` = dernière demande, tous
+         canaux confondus ; `...Channels` = canaux déjà utilisés, pour que
+         l'admin voie d'un coup d'œil ce qui est déjà parti. */
+      googleReviewRequestedAt: { type: Date, default: null },
+      googleReviewChannels: { type: [String], default: [] },
     },
     emailsSent: { type: [emailSentSchema], default: [] },
     smsSent: { type: [smsSentSchema], default: [] },

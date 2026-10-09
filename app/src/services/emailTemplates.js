@@ -1483,6 +1483,113 @@ ${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
   };
 }
 
+/**
+ * Demande d'avis Google — e-mail.
+ *
+ * Le corps arrive en TEXTE BRUT depuis les réglages back-office
+ * (/admin/parametres/avis), variables déjà substituées. On ne fait donc ici
+ * que la mise en forme : échappement, paragraphes, et surtout le lien.
+ *
+ * Un paragraphe réduit au seul lien devient le gros bouton rouge — c'est ce
+ * qui permet à l'auteur du message de CHOISIR où tombe le bouton, sans
+ * dupliquer le lien en bas de l'e-mail. Un lien au fil du texte reste un
+ * lien cliquable ordinaire.
+ */
+function buildAvisGoogleEmail({ order, user, baseUrl, sujet, corps, lienAvis } = {}) {
+  const number = order && order.number ? String(order.number) : '';
+  const lien = getTrimmedString(lienAvis);
+  const subject = getTrimmedString(sujet)
+    || (number ? `Votre avis sur la commande #${number}` : 'Votre avis nous intéresse');
+
+  const texteBrut = String(corps == null ? '' : corps).replace(/\r\n/g, '\n');
+
+  const blocs = texteBrut.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const bodyHtml = blocs.map((p) => {
+    if (lien && p === lien) return renderPrimaryButton({ href: lien, label: 'Laisser un avis sur Google' });
+    let html = escapeHtml(p).replace(/\n/g, '<br />');
+    if (lien) {
+      /* Le lien est déjà échappé dans `html` : on remplace sa forme échappée,
+         pas l'originale, sinon le remplacement ne trouve rien dès que l'URL
+         contient un & (cas des liens « writereview?placeid=…&hl=fr »). */
+      const lienEchappe = escapeHtml(lien);
+      html = html.split(lienEchappe).join(
+        `<a href="${lienEchappe}" style="color:#ec1313;text-decoration:none;font-weight:800;">${lienEchappe}</a>`
+      );
+    }
+    return `<div style="margin-top:12px;font-size:14px;line-height:1.6;color:#334155;">${html}</div>`;
+  }).join('\n');
+
+  /* Filet de sécurité : si l'auteur du message a retiré le lien du texte, on
+     l'ajoute quand même en bouton. Un e-mail « donnez votre avis » sans aucun
+     moyen de le donner serait un envoi perdu. */
+  const lienPresent = !!lien && texteBrut.includes(lien);
+  const bouton = lienPresent ? '' : renderPrimaryButton({ href: lien, label: 'Laisser un avis sur Google' });
+
+  return {
+    subject,
+    html: renderEmailLayout({
+      title: subject,
+      preheader: 'Votre avis nous aide beaucoup',
+      bodyHtml: bodyHtml + bouton,
+      baseUrl,
+    }),
+    text: lienPresent || !lien ? texteBrut : `${texteBrut}\n\n${lien}`,
+  };
+}
+
+/**
+ * Alerte INTERNE : un client vient de mettre une note basse dans l'enquête.
+ *
+ * Destinataire : nous, pas le client. Le but est qu'on décroche vite — un
+ * retour négatif non traité est un avis négatif en sursis. D'où le téléphone
+ * en évidence et le texte du client en entier, sans troncature : résumer
+ * obligerait à rouvrir le back-office pour savoir de quoi il s'agit.
+ */
+function buildAvisNegatifAlerteEmail({ feedback, baseUrl, adminUrl } = {}) {
+  const f = feedback || {};
+  const note = Number.isFinite(f.rating) ? f.rating : '?';
+  const numero = getTrimmedString(f.orderNumber);
+  const subject = `⚠ Avis ${note}/5 — commande ${numero || 'inconnue'}`;
+  const tel = getTrimmedString(f.rappelTelephone) || getTrimmedString(f.clientTelephone);
+
+  const ligne = (label, valeur) => (valeur
+    ? `<tr><td style="padding:4px 12px 4px 0;color:#64748b;font-size:13px;white-space:nowrap;">${escapeHtml(label)}</td>
+          <td style="padding:4px 0;font-size:13px;font-weight:700;color:#0f172a;">${escapeHtml(valeur)}</td></tr>`
+    : '');
+
+  const bodyHtml = `
+<div style="font-size:16px;font-weight:900;color:#b91c1c;">Note ${escapeHtml(note)}/5 — à rappeler</div>
+<div style="margin-top:8px;font-size:14px;line-height:1.6;color:#334155;">
+  Ce client n'a pas été renvoyé vers Google. Son retour est resté chez nous : c'est le moment de régler le problème.
+</div>
+
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:14px;">
+  ${ligne('Commande', numero)}
+  ${ligne('Client', getTrimmedString(f.clientNom))}
+  ${ligne('E-mail', getTrimmedString(f.clientEmail))}
+  ${ligne('Téléphone', tel)}
+</table>
+
+${getTrimmedString(f.message) ? `
+<div style="margin-top:14px;padding:12px 14px;border:1px solid #fecaca;background:#fef2f2;border-radius:14px;color:#7f1d1d;font-size:13px;line-height:1.6;">
+  <div style="font-weight:900;">Ce qu'il nous dit</div>
+  <div style="margin-top:6px;white-space:pre-line;">${escapeHtml(f.message)}</div>
+</div>` : `
+<div style="margin-top:14px;font-size:13px;color:#64748b;">
+  Il a mis la note sans laisser de message. Le détail de la commande dira peut-être pourquoi.
+</div>`}
+
+${renderPrimaryButton({ href: adminUrl, label: 'Ouvrir le retour' })}`;
+
+  return {
+    subject,
+    html: renderEmailLayout({ title: subject, preheader: `Note ${note}/5 sur ${numero}`, bodyHtml, baseUrl }),
+    text: `Note ${note}/5 — commande ${numero}\n`
+      + `Client : ${getTrimmedString(f.clientNom)} ${getTrimmedString(f.clientEmail)} ${tel}\n\n`
+      + (getTrimmedString(f.message) || '(aucun message)') + `\n\n${getTrimmedString(adminUrl)}`,
+  };
+}
+
 module.exports = {
   buildOrderConfirmationEmail,
   buildConsigneStartEmail,
@@ -1506,4 +1613,6 @@ module.exports = {
   buildCloningDoneEmail,
   buildCloningFailedEmail,
   buildRefundIssuedEmail,
+  buildAvisGoogleEmail,
+  buildAvisNegatifAlerteEmail,
 };

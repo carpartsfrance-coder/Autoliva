@@ -1,0 +1,134 @@
+<%- include('../partials/head') %>
+
+<%/*
+  Enquête de satisfaction, ouverte depuis le lien d'une demande d'avis.
+
+  Pas d'en-tête ni de pied de page du site : la page a UNE tâche, et chaque
+  lien de navigation est une sortie. On garde le logo, qui sert à rassurer sur
+  la provenance du lien — ces messages arrivent par SMS et WhatsApp, où une
+  URL inconnue se fait fermer.
+
+  Tout passe par des <form> classiques : ces liens s'ouvrent dans le
+  navigateur intégré d'une messagerie, le JS n'est qu'un confort.
+*/%>
+
+<main class="flex-1 bg-slate-50">
+  <div class="mx-auto w-full max-w-xl px-4 sm:px-6 py-10 sm:py-16">
+
+    <a href="/" class="block">
+      <img src="<%= brand.LOGO_URL %>" alt="<%= brand.NAME %>" class="h-9 w-auto mx-auto" />
+    </a>
+
+    <div class="mt-8 rounded-2xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm">
+
+      <% if (erreur) { %>
+        <div class="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"><%= erreur %></div>
+      <% } %>
+
+      <% if (etape === 'note') { %>
+        <%/* ── Étape 1 : la note ──────────────────────────────────────── */%>
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-900"><%= question %></h1>
+        <p class="mt-2 text-sm text-slate-500">Une seule question, et c'est tout. Votre réponse nous est utile dans les deux cas.</p>
+
+        <form method="POST" action="/mon-avis/<%= encodeURIComponent(token) %>" id="formNote" class="mt-7">
+          <div class="flex items-center justify-center gap-2 sm:gap-3" role="group" aria-label="Votre note sur 5">
+            <% for (var n = 1; n <= 5; n++) { %>
+              <button type="submit" name="note" value="<%= n %>"
+                      aria-label="<%= n %> sur 5"
+                      class="etoile group flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl border border-slate-200 bg-white text-2xl transition hover:border-amber-300 hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <span class="text-slate-300 group-hover:text-amber-400">★</span>
+              </button>
+            <% } %>
+          </div>
+          <div class="mt-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <span>Décevant</span>
+            <span>Parfait</span>
+          </div>
+        </form>
+
+      <% } else if (etape === 'content') { %>
+        <%/* ── Note haute, mais le client est revenu sur la page ──────── */%>
+        <h1 class="text-xl sm:text-2xl font-bold text-slate-900">Merci <%= prenom %> !</h1>
+        <p class="mt-3 text-sm sm:text-base leading-relaxed text-slate-600"><%= messageContent %></p>
+        <% if (lienAvis) { %>
+          <a href="<%= lienAvis %>" rel="noopener noreferrer"
+             class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-red-600 px-5 py-3.5 text-sm font-bold text-white hover:bg-red-700">
+            Laisser mon avis sur Google
+          </a>
+        <% } %>
+
+      <% } else if (etape === 'probleme') { %>
+        <%/* ── Étape 2 : note basse, on recueille le problème ─────────── */%>
+        <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Votre note : <%= note %>/5</div>
+        <h1 class="mt-2 text-xl sm:text-2xl font-bold text-slate-900">Qu'est-ce qui n'a pas été ?</h1>
+        <p class="mt-3 text-sm sm:text-base leading-relaxed text-slate-600"><%= messageMecontent %></p>
+
+        <form method="POST" action="/mon-avis/<%= encodeURIComponent(token) %>/message" class="mt-6">
+          <label for="message" class="block text-xs font-semibold uppercase tracking-wider text-slate-400">Ce qui s'est passé</label>
+          <textarea id="message" name="message" rows="6" required maxlength="4000"
+                    placeholder="La pièce ne correspond pas, le délai, un défaut au montage…"
+                    class="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm leading-relaxed focus:border-red-500 focus:ring-2 focus:ring-red-500"></textarea>
+
+          <label for="telephone" class="mt-4 block text-xs font-semibold uppercase tracking-wider text-slate-400">Téléphone pour vous rappeler (facultatif)</label>
+          <input id="telephone" name="telephone" type="tel" maxlength="40"
+                 value="<%= typeof telephoneConnu !== 'undefined' ? telephoneConnu : '' %>"
+                 placeholder="06 12 34 56 78"
+                 class="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-3 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-500">
+
+          <button type="submit" class="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-red-600 px-5 py-3.5 text-sm font-bold text-white hover:bg-red-700">
+            Envoyer à l'équipe
+          </button>
+        </form>
+
+        <% if (lienAvis) { %>
+          <%/* Réglage « proposer quand même le lien Google » : visible, mais
+               après le formulaire — on propose d'abord de régler le problème. */%>
+          <p class="mt-5 border-t border-slate-100 pt-5 text-xs text-slate-400">
+            Vous préférez le dire publiquement ?
+            <a href="<%= lienAvis %>" rel="noopener noreferrer" class="font-semibold text-slate-600 underline hover:text-slate-900">Laisser un avis sur Google</a>.
+          </p>
+        <% } %>
+
+      <% } else { %>
+        <%/* ── Étape 3 : remerciement ─────────────────────────────────── */%>
+        <div class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-2xl text-emerald-600">✓</div>
+        <h1 class="mt-4 text-xl sm:text-2xl font-bold text-slate-900">Merci <%= prenom %></h1>
+        <p class="mt-3 text-sm sm:text-base leading-relaxed text-slate-600"><%= remerciement %></p>
+        <p class="mt-5 text-sm text-slate-500">
+          Besoin de nous joindre avant ? <a href="tel:<%= brand.PHONE.replace(/\s/g, '') %>" class="font-semibold text-red-600 hover:text-red-700"><%= brand.PHONE %></a>
+          · <a href="mailto:<%= brand.EMAIL_CONTACT %>" class="font-semibold text-red-600 hover:text-red-700"><%= brand.EMAIL_CONTACT %></a>
+        </p>
+      <% } %>
+    </div>
+
+    <p class="mt-6 text-center text-xs text-slate-400">
+      <%= brand.NAME %><% if (orderNumber) { %> · commande <%= orderNumber %><% } %>
+    </p>
+  </div>
+</main>
+
+<script>
+  /* Confort : survoler ou cliquer une étoile colore celles de gauche. Les
+     boutons restent des submit — sans JS, la page fonctionne à l'identique. */
+  (function () {
+    var form = document.getElementById('formNote');
+    if (!form) return;
+    var boutons = [].slice.call(form.querySelectorAll('.etoile'));
+    function peindre(jusqua) {
+      boutons.forEach(function (b, i) {
+        var actif = i <= jusqua;
+        b.querySelector('span').style.color = actif ? '#f59e0b' : '';
+        b.style.borderColor = actif ? '#fcd34d' : '';
+      });
+    }
+    boutons.forEach(function (b, i) {
+      b.addEventListener('mouseenter', function () { peindre(i); });
+      b.addEventListener('focus', function () { peindre(i); });
+    });
+    form.addEventListener('mouseleave', function () { peindre(-1); });
+  })();
+</script>
+
+</div>
+</body>
+</html>

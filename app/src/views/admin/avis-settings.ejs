@@ -1,0 +1,295 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'settings' }) %>
+
+<%
+  /* Libellés des trois canaux. Le texte ne vit qu'ici : la page est générée
+     par une boucle sur reglages.canaux, pour qu'un canal ajouté côté service
+     apparaisse sans retoucher la vue. */
+  var CANAL_INFOS = {
+    email: {
+      titre: 'E-mail',
+      icone: 'mail',
+      aide: "Envoyé par MailerSend, dans le gabarit habituel. Un lien seul sur sa ligne devient le gros bouton rouge.",
+      lignes: 14,
+    },
+    sms: {
+      titre: 'SMS',
+      icone: 'sms',
+      aide: "Envoyé par Brevo depuis l'expéditeur « CarParts ». Attention : certains opérateurs filtrent les SMS contenant un lien, sans le signaler.",
+      lignes: 4,
+    },
+    whatsapp: {
+      titre: 'WhatsApp',
+      icone: 'chat',
+      aide: "Ouvre WhatsApp avec le message prérempli : l'envoi part de ton téléphone. Les liens passent sans problème.",
+      lignes: 10,
+    },
+  };
+%>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8 max-w-4xl">
+
+    <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Paramètres', url: '/admin/parametres'}, {label: "Demande d'avis"}] }) %>
+    <div class="text-2xl md:text-3xl font-semibold text-slate-900">Demande d'avis Google</div>
+    <div class="mt-1 text-sm text-slate-500">
+      Le lien et les trois messages envoyés depuis le bouton « Demander un avis » d'une commande.
+      Rien ne part d'ici : les envois se font commande par commande, et le texte reste modifiable avant chaque envoi.
+    </div>
+
+    <% if (successMessage) { %>
+      <div class="mt-6 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm font-medium"><%= successMessage %></div>
+    <% } %>
+    <% if (errorMessage) { %>
+      <div class="mt-6 rounded-xl bg-red-50 border border-red-200 text-red-800 px-4 py-3 text-sm font-medium"><%= errorMessage %></div>
+    <% } %>
+
+    <form method="POST" action="/admin/parametres/avis" class="mt-6" id="avisForm">
+
+      <!-- Lien -->
+      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+        <label for="lienAvis" class="block text-sm font-semibold text-slate-900">Lien vers l'avis</label>
+        <div class="mt-1 text-xs text-slate-500">
+          C'est ce lien que le client ouvre. Par défaut, la fiche Google d'Autoliva.
+          Tu peux coller à la place un lien « écrire un avis » direct (<span class="font-mono">search.google.com/local/writereview?placeid=…</span>) : il sera utilisé tel quel.
+        </div>
+        <input id="lienAvis" name="lienAvis" type="url" required
+               value="<%= reglages.lienAvis %>"
+               placeholder="<%= reglages.lienParDefaut %>"
+               class="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-red-500 focus:border-red-500">
+        <div class="mt-2 flex flex-wrap items-center gap-3">
+          <a href="<%= reglages.lienAvis %>" target="_blank" rel="noopener noreferrer" class="text-xs font-semibold text-red-600 hover:text-red-700">Ouvrir le lien pour vérifier →</a>
+          <% if (reglages.lienPersonnalise) { %>
+            <button type="button" id="lienReset" class="text-xs font-semibold text-slate-400 hover:text-slate-600">Revenir au lien par défaut</button>
+          <% } else { %>
+            <span class="text-xs text-slate-400">Lien par défaut.</span>
+          <% } %>
+        </div>
+      </div>
+
+      <!-- Enquête de satisfaction -->
+      <div class="mt-4 bg-white rounded-2xl border border-slate-200 p-5">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-base text-slate-400">filter_alt</span>
+              <span class="font-semibold text-slate-900">Enquête avant Google</span>
+            </div>
+            <div class="mt-1 max-w-xl text-xs text-slate-500">
+              Le lien envoyé ouvre d'abord une page à nous : « quelle note ? ».
+              Au-dessus du seuil, le client part sur Google ; en dessous, il décrit son problème et le retour arrive dans
+              <a href="/admin/avis" class="font-semibold text-slate-700 hover:text-slate-900">Retours clients</a>.
+            </div>
+          </div>
+          <label class="inline-flex shrink-0 cursor-pointer items-center gap-2">
+            <input type="checkbox" name="enquete_active" <%= reglages.enquete.active ? 'checked' : '' %> data-enquete-active class="sr-only peer">
+            <span class="relative h-6 w-10 rounded-full bg-slate-200 transition peer-checked:bg-emerald-500 after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:transition after:content-[''] peer-checked:after:translate-x-4"></span>
+            <span class="text-xs font-semibold text-slate-500 peer-checked:text-emerald-600" data-enquete-label><%= reglages.enquete.active ? 'Activée' : 'Désactivée' %></span>
+          </label>
+        </div>
+
+        <div data-enquete-bloc class="<%= reglages.enquete.active ? '' : 'opacity-40 pointer-events-none' %>">
+          <div class="mt-5 flex flex-wrap items-center gap-3">
+            <label for="enquete_seuil" class="text-sm font-semibold text-slate-600">On envoie sur Google à partir de</label>
+            <select id="enquete_seuil" name="enquete_seuil" class="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-500">
+              <% [2,3,4,5].forEach(function (n) { %>
+                <option value="<%= n %>" <%= reglages.enquete.seuil === n ? 'selected' : '' %>><%= n %>/5</option>
+              <% }) %>
+            </select>
+            <span class="text-sm text-slate-500">et au-dessus.</span>
+          </div>
+
+          <label class="mt-4 flex items-start gap-2.5 cursor-pointer rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <input type="checkbox" name="enquete_proposerGoogle" <%= reglages.enquete.proposerGoogleAuxMecontents ? 'checked' : '' %> class="mt-0.5">
+            <span class="text-xs leading-relaxed text-amber-900">
+              <span class="font-bold">Proposer quand même le lien Google aux clients mécontents.</span><br>
+              Filtrer les avis selon la note est contraire à la politique Google (« ne sollicitez pas sélectivement les avis positifs ») :
+              le risque va du retrait des avis à la suspension de la fiche. Coché, l'enquête sert à détecter et traiter le problème,
+              mais le lien reste offert à tout le monde — et on est dans les clous.
+            </span>
+          </label>
+
+          <%
+            var CHAMPS_ENQUETE = [
+              ['question', 'Question posée', 2],
+              ['messageContent', 'Au-dessus du seuil (avant Google)', 2],
+              ['messageMecontent', 'En dessous du seuil (demande d\'explication)', 3],
+              ['remerciement', 'Après envoi du message', 2],
+            ];
+          %>
+          <% CHAMPS_ENQUETE.forEach(function (c) { %>
+            <label class="mt-4 block text-xs font-semibold uppercase tracking-wider text-slate-400" for="enquete_<%= c[0] %>"><%= c[1] %></label>
+            <textarea id="enquete_<%= c[0] %>" name="enquete_<%= c[0] %>" rows="<%= c[2] %>"
+                      class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm leading-relaxed focus:border-red-500 focus:ring-2 focus:ring-red-500"><%= reglages.enquete[c[0]] %></textarea>
+          <% }) %>
+          <div class="mt-2 text-[11px] text-slate-400">Les variables ci-dessous fonctionnent aussi dans ces textes.</div>
+        </div>
+      </div>
+
+      <!-- Variables -->
+      <div class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Variables disponibles</div>
+        <div class="mt-2 flex flex-wrap items-center gap-1.5">
+          <% reglages.variables.forEach(function(v) { %>
+            <span title="<%= v[1] %>" class="text-[11px] font-mono text-slate-600 bg-white border border-slate-200 rounded px-1.5 py-0.5">{<%= v[0] %>}</span>
+          <% }) %>
+        </div>
+        <div class="mt-2 text-xs text-slate-500">Une variable inconnue est laissée telle quelle dans le message — tu la verras dans l'aperçu avant d'envoyer.</div>
+      </div>
+
+      <!-- Les trois canaux -->
+      <% reglages.canaux.forEach(function(c) {
+           var info = CANAL_INFOS[c.canal] || { titre: c.canal, icone: 'send', aide: '', lignes: 8 };
+      %>
+        <div class="mt-4 bg-white rounded-2xl border border-slate-200 p-5" data-canal="<%= c.canal %>">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-base text-slate-400"><%= info.icone %></span>
+                <span class="font-semibold text-slate-900"><%= info.titre %></span>
+                <% if (c.personnalise) { %>
+                  <span class="text-[10px] font-bold uppercase tracking-wide rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5">Personnalisé</span>
+                <% } %>
+              </div>
+              <div class="mt-1 text-xs text-slate-500 max-w-xl"><%= info.aide %></div>
+            </div>
+            <label class="inline-flex items-center gap-2 cursor-pointer shrink-0">
+              <input type="checkbox" name="enabled_<%= c.canal %>" <%= c.enabled ? 'checked' : '' %> data-enable class="sr-only peer">
+              <span class="relative w-10 h-6 bg-slate-200 rounded-full peer-checked:bg-emerald-500 transition after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-5 after:h-5 after:bg-white after:rounded-full after:transition peer-checked:after:translate-x-4"></span>
+              <span class="text-xs font-semibold text-slate-500 peer-checked:text-emerald-600" data-enable-label><%= c.enabled ? 'Activé' : 'Désactivé' %></span>
+            </label>
+          </div>
+
+          <% if (c.canal === 'email') { %>
+            <label class="block mt-4 text-xs font-semibold uppercase tracking-wider text-slate-400" for="sujet_email">Objet</label>
+            <input id="sujet_email" name="sujet_<%= c.canal %>" type="text" value="<%= c.sujet %>"
+                   class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+          <% } %>
+
+          <label class="block mt-4 text-xs font-semibold uppercase tracking-wider text-slate-400" for="corps_<%= c.canal %>">Message</label>
+          <textarea id="corps_<%= c.canal %>" name="corps_<%= c.canal %>" rows="<%= info.lignes %>" data-corps
+                    class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed focus:ring-2 focus:ring-red-500 focus:border-red-500"><%= c.corps %></textarea>
+
+          <div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+            <div class="text-[11px] text-slate-400">
+              <span data-count>0</span> caractères<% if (c.canal === 'sms') { %> · <span data-seg>0</span> SMS<% } %>
+              <span class="text-slate-300">une fois rempli</span>
+            </div>
+            <button type="button" data-reset class="text-xs font-semibold text-slate-400 hover:text-slate-600">Revenir au texte par défaut</button>
+          </div>
+          <textarea class="hidden" data-defaut-corps><%= c.corpsDefaut %></textarea>
+          <% if (c.canal === 'email') { %><textarea class="hidden" data-defaut-sujet><%= c.sujetDefaut %></textarea><% } %>
+
+          <% if (c.canal === 'sms') { %>
+            <div class="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900" data-alerte-lien hidden>
+              Ce SMS contient un lien. Avec l'expéditeur alphanumérique « CarParts », une partie des opérateurs français le jette sans rien dire
+              (Brevo répond quand même « envoyé »). Garde l'e-mail ou WhatsApp pour le lien si tu veux être sûr qu'il arrive.
+            </div>
+          <% } %>
+        </div>
+      <% }) %>
+
+      <div class="mt-6 flex items-center gap-3">
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+        <% if (reglages.updatedAt) { %>
+          <span class="text-xs text-slate-400">
+            Dernière modification le <%= new Date(reglages.updatedAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %><%= reglages.updatedByName ? ' par ' + reglages.updatedByName : '' %>.
+          </span>
+        <% } %>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script id="avisExemple" type="application/json"><%- JSON.stringify(reglages.exemple) %></script>
+<script>
+  (function () {
+    var form = document.getElementById('avisForm');
+    if (!form) return;
+
+    /* Valeurs d'exemple pour compter le message RÉEL : le gabarit contient
+       « {lienEnquete} » (13 caractères) là où partira un lien d'une
+       quarantaine. Compter le gabarit ferait croire à un SMS d'un segment
+       alors qu'il en coûte deux. */
+    var exemple = {};
+    try { exemple = JSON.parse(document.getElementById('avisExemple').textContent) || {}; } catch (e) { exemple = {}; }
+    function remplir(tpl) {
+      return String(tpl || '').replace(/\{(\w+)\}/g, function (brut, cle) {
+        return Object.prototype.hasOwnProperty.call(exemple, cle) ? exemple[cle] : brut;
+      });
+    }
+    var lien = document.getElementById('lienAvis');
+
+    var reset = document.getElementById('lienReset');
+    if (reset && lien) {
+      reset.addEventListener('click', function () { lien.value = lien.getAttribute('placeholder') || ''; });
+    }
+
+    /* Compteur de caractères + segments SMS. On compte le message TEL QUEL,
+       variables non substituées : c'est une indication, l'aperçu exact se
+       fait dans le composeur d'une commande (où le lien et le n° sont
+       connus). */
+    function segments(n) { return n <= 160 ? 1 : Math.ceil(n / 153); }
+
+    var enqActive = form.querySelector('[data-enquete-active]');
+    var enqBloc = form.querySelector('[data-enquete-bloc]');
+    var enqLabel = form.querySelector('[data-enquete-label]');
+    if (enqActive && enqBloc) {
+      enqActive.addEventListener('change', function () {
+        /* Grisé plutôt que masqué : on veut voir ce qui se rallumera, et les
+           champs restent soumis — couper l'enquête ne doit pas effacer les
+           textes qu'on a écrits. */
+        enqBloc.classList.toggle('opacity-40', !enqActive.checked);
+        enqBloc.classList.toggle('pointer-events-none', !enqActive.checked);
+        if (enqLabel) enqLabel.textContent = enqActive.checked ? 'Activée' : 'Désactivée';
+      });
+    }
+
+    form.querySelectorAll('[data-canal]').forEach(function (bloc) {
+      var corps = bloc.querySelector('[data-corps]');
+      var count = bloc.querySelector('[data-count]');
+      var seg = bloc.querySelector('[data-seg]');
+      var alerte = bloc.querySelector('[data-alerte-lien]');
+      var toggle = bloc.querySelector('[data-enable]');
+      var label = bloc.querySelector('[data-enable-label]');
+
+      function maj() {
+        var brut = corps ? corps.value : '';
+        var v = remplir(brut);
+        if (count) count.textContent = v.length;
+        if (seg) {
+          var n = v.length ? segments(v.length) : 0;
+          seg.textContent = n;
+          /* Au-delà d'un segment, on le signale : chaque segment est facturé,
+             et le texte par défaut a justement été écrit pour tenir en un. */
+          seg.parentNode.classList.toggle('text-amber-600', n > 1);
+          seg.parentNode.classList.toggle('font-semibold', n > 1);
+        }
+        if (alerte) alerte.hidden = !/https?:\/\//i.test(v);
+      }
+      if (corps) { corps.addEventListener('input', maj); }
+      maj();
+
+      if (toggle && label) {
+        toggle.addEventListener('change', function () {
+          label.textContent = toggle.checked ? 'Activé' : 'Désactivé';
+        });
+      }
+
+      var bouton = bloc.querySelector('[data-reset]');
+      if (bouton) {
+        bouton.addEventListener('click', function () {
+          var dc = bloc.querySelector('[data-defaut-corps]');
+          var ds = bloc.querySelector('[data-defaut-sujet]');
+          if (dc && corps) corps.value = dc.value;
+          var sujet = bloc.querySelector('input[name^="sujet_"]');
+          if (ds && sujet) sujet.value = ds.value;
+          maj();
+        });
+      }
+    });
+  })();
+</script>
+
+<%- include('./partials/footer') %>

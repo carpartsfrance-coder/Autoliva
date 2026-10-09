@@ -15,6 +15,7 @@ const mongoose = require('mongoose');
 const adminController = require('../controllers/adminController');
 const savAdminController = require('../controllers/savAdminController');
 const smsSettingsAdminController = require('../controllers/smsSettingsAdminController');
+const avisAdminController = require('../controllers/avisAdminController');
 const leadTemplatesAdminController = require('../controllers/leadTemplatesAdminController');
 const abandonedCartAdminController = require('../controllers/abandonedCartAdminController');
 const engineQuoteAdminController = require('../controllers/engineQuoteAdminController');
@@ -166,6 +167,13 @@ router.get('/sav/tickets/:numero', requireAdminAuth, savAdminController.getSavTi
 router.get('/parametres/sms', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.getSmsSettingsPage);
 router.post('/parametres/sms', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.postSmsSettings);
 router.post('/parametres/sms/test', requireAdminAuth, requireAbility('settings.site'), smsSettingsAdminController.postSmsTest);
+/* Retours de l'enquête de satisfaction. Accessible à TOUT admin (pas
+   seulement l'owner) : rappeler un client mécontent est le travail des
+   commerciaux, pas un réglage. */
+router.get('/avis', requireAdminAuth, avisAdminController.getAvisRetoursPage);
+router.post('/avis/:id/traiter', requireAdminAuth, avisAdminController.postTraiterRetour);
+router.get('/parametres/avis', requireAdminAuth, requireAbility('settings.site'), avisAdminController.getAvisSettingsPage);
+router.post('/parametres/avis', requireAdminAuth, requireAbility('settings.site'), avisAdminController.postAvisSettings);
 // Éditables par TOUT admin (propriétaire + commerciaux « employe »), comme la
 // page « Leads à relancer » d'où viennent ces modèles — pas réservé au owner.
 // (Le comptable reste hors /admin.)
@@ -177,8 +185,6 @@ router.post('/parametres/modeles-messages/:id/supprimer', requireAdminAuth, lead
 router.post('/api/messages/reformulate', requireAdminAuth, leadTemplatesAdminController.postReformulateMessage);
 // Diagnostic import conversions Google Ads (lecture seule, dry-run).
 router.get('/api/ads/diagnostic', requireAdminAuth, require('../controllers/adsAdminController').getAdsDiagnostic);
-// Diagnostic demandes d'avis Skeepers / Avis Vérifiés (config + auth, lecture seule).
-router.get('/api/reviews/diagnostic', requireAdminAuth, require('../controllers/reviewsAdminController').getReviewsDiagnostic);
 router.get('/parametres/sav', requireAdminAuth, savAdminController.getSavSettings);
 router.get('/parametres/audit', requireAdminAuth, savAdminController.getAuditLog);
 router.get('/parametres/integrations', requireAdminAuth, savAdminController.getIntegrations);
@@ -223,8 +229,6 @@ router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.post
 // Liste « files » : corbeille groupée (restaurable) et étiquettes réunies en un PDF.
 router.post('/commandes/corbeille-multi', requireAdminAuth, adminController.postAdminBulkTrashOrders);
 router.get('/commandes/etiquettes.pdf', requireAdminAuth, adminController.getAdminOrdersLabelsPdf);
-// Demande d'avis Skeepers sur une sélection de commandes (≤ 50).
-router.post('/commandes/demande-avis-multi', requireAdminAuth, require('../controllers/reviewsAdminController').postRequestReviewBulk);
 router.post('/commandes/sync-suivi', requireAdminAuth, adminController.postAdminSyncShipmentTracking);
 router.get('/commandes/jumingo-debug', requireAdminAuth, adminController.getAdminJumingoDebug);
 router.get('/commandes/nouvelle', requireAdminAuth, adminController.getAdminNewOrderPage);
@@ -235,8 +239,13 @@ router.post('/commandes/:orderId/avancer', requireAdminAuth, adminController.pos
 router.get('/commandes/:orderId/ligne', requireAdminAuth, adminController.getAdminOrderRow);
 router.post('/commandes/:orderId/livraison-prevue', requireAdminAuth, adminController.postAdminDeliveryEstimate);
 router.post('/commandes/:orderId/type', requireAdminAuth, adminController.postAdminUpdateOrderType);
-// Demande d'avis Skeepers sur UNE commande (bouton du détail).
-router.post('/commandes/:orderId/demande-avis', requireAdminAuth, require('../controllers/reviewsAdminController').postRequestReviewSingle);
+/* Demande d'avis GOOGLE sur UNE commande (bouton du détail) : contenu
+   prérempli, puis envoi par le canal choisi. Remplace Skeepers, retiré en
+   octobre 2026 — c'est nous qui envoyons, donc l'envoi est constatable. */
+router.get('/commandes/:orderId/avis', requireAdminAuth, avisAdminController.getAvisCommande);
+router.post('/commandes/:orderId/avis/email', requireAdminAuth, avisAdminController.postAvisEmail);
+router.post('/commandes/:orderId/avis/sms', requireAdminAuth, avisAdminController.postAvisSms);
+router.post('/commandes/:orderId/avis/whatsapp', requireAdminAuth, avisAdminController.postAvisWhatsapp);
 // Approvisionnement de la pièce (édition inline depuis la liste + form détail)
 router.post('/commandes/:orderId/sourcing', requireAdminAuth, adminController.postAdminUpdateOrderSourcing);
 // Régime de TVA de la vente (normal 20 % par défaut, marge décidée au cas par cas)

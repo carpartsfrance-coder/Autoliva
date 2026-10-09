@@ -18,7 +18,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 process.env.BRAND = 'autoliva';
 delete process.env.MONGODB_URI;
 for (const cle of ['MAILERSEND_API_KEY', 'BREVO_API_KEY', 'MOLLIE_API_KEY', 'MOLLIE_ORGANIZATION_TOKEN',
-  'SCALAPAY_API_KEY', 'COMPTOIR_API_KEY', 'SKEEPERS_API_KEY', 'JUMINGO_API_KEY']) {
+  'SCALAPAY_API_KEY', 'COMPTOIR_API_KEY', 'JUMINGO_API_KEY']) {
   process.env[cle] = '';
 }
 process.env.ADMIN_EMAIL = 'admin-avoir@example.com';
