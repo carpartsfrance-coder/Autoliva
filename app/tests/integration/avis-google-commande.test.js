@@ -250,12 +250,14 @@ test("demande d'avis Google sur une commande", async (t) => {
     assert.equal(envoyes.length, 1);
     assert.equal(envoyes[0].toEmail, 'client-avis@example.com');
     assert.equal(envoyes[0].subject, 'Un avis ?');
-    /* TEXTE BRUT : aucune balise. Le gabarit maison (logo, bouton, pied de
-       page) a tout d'une newsletter, et c'est ce que l'onglet Promotions
-       attrape — or un e-mail en Promotions n'est pas lu. */
-    assert.equal(envoyes[0].html, undefined, 'aucun HTML ne doit partir');
+    /* Lettre + signature : pas de gabarit marketing, mais la signature de la
+       maison — logo, téléphone, horaires — comme tout professionnel. */
+    assert.match(envoyes[0].html, /Service Client Autoliva/, 'la signature doit être là');
+    assert.match(envoyes[0].html, /logo-autoliva\.png/, 'le logo doit être là');
+    assert.match(envoyes[0].html, /04 65 84 54 88/, 'le téléphone doit être là');
+    assert.ok(!/Laisser un avis sur Google/.test(envoyes[0].html), 'plus de gros bouton de campagne');
     assert.match(envoyes[0].text, /Bonjour Julien/);
-    assert.ok(envoyes[0].text.includes(avis.LIEN_PAR_DEFAUT), 'le lien doit être en clair');
+    assert.match(envoyes[0].text, /Service Client Autoliva/, 'signature aussi en texte');
     /* Et pas de suivi : il réécrirait le lien vers un domaine de redirection,
        exactement ce qu'on apprend aux gens à ne pas cliquer. */
     assert.equal(envoyes[0].sansSuivi, true);
@@ -266,14 +268,31 @@ test("demande d'avis Google sur une commande", async (t) => {
     assert.ok((o.emailsSent || []).some((e) => e.type === 'avis_google' && e.status === 'sent'));
   });
 
-  await t.test("le gabarit HTML reste disponible si on le redemande", async () => {
+  await t.test("l'e-mail ne contient JAMAIS le lien Google direct", async () => {
+    /* Régression : le filet « lien absent du corps » comparait au lien
+       GOOGLE alors que le corps porte le lien d'ENQUÊTE. La condition était
+       donc toujours vraie et l'URL `search.google.com/local/writereview…`
+       était collée au bas de chaque e-mail — une URL brute en fin de
+       message, et surtout un raccourci qui contournait l'enquête. */
+    envoyes.length = 0;
+    const r = await requete(`/admin/commandes/${idLivree}/avis/email`, { method: 'POST', json: {} });
+    assert.equal(r.status, 200);
+    const envoye = envoyes[0];
+    for (const partie of [envoye.html || '', envoye.text || '']) {
+      assert.ok(!partie.includes('search.google.com'),
+        'le lien Google ne doit jamais court-circuiter l\'enquête : ' + partie.slice(0, 300));
+      assert.match(partie, /\/mon-avis\//, "l'e-mail doit porter le lien d'enquête");
+    }
+  });
+
+  await t.test("le format texte pur reste disponible", async () => {
     const enregistre = await requete('/admin/parametres/avis', {
       method: 'POST',
       form: {
         lienAvis: '', enabled_email: 'on', enabled_sms: 'on', enabled_whatsapp: 'on',
         corps_email: avis.DEFAUTS.email.corps, sujet_email: avis.DEFAUTS.email.sujet,
         corps_sms: avis.DEFAUTS.sms.corps, corps_whatsapp: avis.DEFAUTS.whatsapp.corps,
-        enquete_active: 'on', enquete_seuil: '4', // texteSimple_email décoché
+        enquete_active: 'on', enquete_seuil: '4', format_email: 'texte',
       },
     });
     assert.equal(enregistre.status, 302);
@@ -283,8 +302,9 @@ test("demande d'avis Google sur une commande", async (t) => {
       method: 'POST', json: { sujet: 'Un avis ?', corps: 'Bonjour,\n\n' + avis.LIEN_PAR_DEFAUT },
     });
     assert.equal(r.status, 200);
-    assert.match(envoyes[0].html, /Laisser un avis sur Google/, 'le gros bouton revient');
-    assert.equal(envoyes[0].sansSuivi, true, 'le suivi reste coupé, gabarit ou pas');
+    assert.equal(envoyes[0].html, undefined, 'aucune balise en format texte');
+    assert.match(envoyes[0].text, /Service Client Autoliva/, 'la signature reste, en texte');
+    assert.equal(envoyes[0].sansSuivi, true, 'le suivi reste coupé dans les deux formats');
 
     // On remet le texte brut pour la suite du fichier.
     await requete('/admin/parametres/avis', {
@@ -293,7 +313,7 @@ test("demande d'avis Google sur une commande", async (t) => {
         lienAvis: '', enabled_email: 'on', enabled_sms: 'on', enabled_whatsapp: 'on',
         corps_email: avis.DEFAUTS.email.corps, sujet_email: avis.DEFAUTS.email.sujet,
         corps_sms: avis.DEFAUTS.sms.corps, corps_whatsapp: avis.DEFAUTS.whatsapp.corps,
-        enquete_active: 'on', enquete_seuil: '4', texteSimple_email: 'on',
+        enquete_active: 'on', enquete_seuil: '4', format_email: 'signature',
       },
     });
   });

@@ -194,44 +194,47 @@ test('réglages back-office', async (t) => {
   });
 });
 
-test("gabarit e-mail", async (t) => {
-  const lien = 'https://share.google/abc?a=1&b=2';
+test("gabarit e-mail — lettre + signature", async (t) => {
+  const lien = 'https://autoliva.com/mon-avis/abc?a=1&b=2';
 
-  await t.test('un lien seul sur sa ligne devient le bouton, et n\'est pas dupliqué', () => {
-    const m = buildAvisGoogleEmail({
-      order: commande, user: client, baseUrl: 'https://autoliva.com',
-      sujet: 'Objet', corps: 'Bonjour Julien,\n\n' + lien + '\n\nMerci', lienAvis: lien,
-    });
-    assert.match(m.html, /Laisser un avis sur Google/);
-    assert.equal((m.html.match(/Laisser un avis sur Google/g) || []).length, 1);
+  await t.test("aucune trace du gabarit marketing", () => {
+    const m = buildAvisGoogleEmail({ sujet: 'Objet', corps: 'Bonjour,\n\n' + lien, lien });
+    /* Ce qui classait l'e-mail en Promotions : un logo en bandeau d'en-tête,
+       un gros bouton coloré, un pied de page. Rien de tout ça ne doit
+       revenir — c'est tout l'objet de ce format. */
+    assert.ok(!/Laisser un avis sur Google/.test(m.html), 'plus de bouton de campagne');
+    assert.ok(!/Besoin d/.test(m.html), 'plus de pied de page du gabarit');
+    assert.ok(!/bgcolor="#ec1313"/.test(m.html), 'plus de bouton rouge');
+  });
+
+  await t.test("un lien seul sur sa ligne devient un lien NOMMÉ, pas une URL nue", () => {
+    const m = buildAvisGoogleEmail({ sujet: 'Objet', corps: 'Bonjour,\n\n' + lien + '\n\nMerci', lien });
+    assert.match(m.html, /Donner mon avis en 10 secondes/);
     /* L'URL doit être échappée dans le href (le & devient &amp;) : sans ça,
        un lien à plusieurs paramètres casse dans certains clients mail. */
-    assert.match(m.html, /href="https:\/\/share\.google\/abc\?a=1&amp;b=2"/);
+    assert.match(m.html, /href="https:\/\/autoliva\.com\/mon-avis\/abc\?a=1&amp;b=2"/);
   });
 
   await t.test('un lien au fil du texte reste cliquable', () => {
-    const m = buildAvisGoogleEmail({
-      order: commande, user: client, baseUrl: 'https://autoliva.com',
-      sujet: 'Objet', corps: 'Votre avis ici : ' + lien + ' — merci !', lienAvis: lien,
-    });
-    assert.match(m.html, /<a href="https:\/\/share\.google\/abc\?a=1&amp;b=2"/);
+    const m = buildAvisGoogleEmail({ sujet: 'Objet', corps: 'Votre avis ici : ' + lien + ' — merci !', lien });
+    assert.match(m.html, /<a href="https:\/\/autoliva\.com\/mon-avis\/abc\?a=1&amp;b=2"/);
   });
 
-  await t.test('lien retiré du texte : le bouton est ajouté quand même', () => {
-    const m = buildAvisGoogleEmail({
-      order: commande, user: client, baseUrl: 'https://autoliva.com',
-      sujet: 'Objet', corps: 'Bonjour Julien, merci pour votre commande.', lienAvis: lien,
-    });
-    assert.match(m.html, /Laisser un avis sur Google/);
-    assert.ok(m.text.includes(lien), 'la version texte doit aussi porter le lien');
+  await t.test('la signature de la maison est présente, dans les deux parties', () => {
+    const m = buildAvisGoogleEmail({ sujet: 'Objet', corps: 'Bonjour,', lien });
+    for (const partie of [m.html, m.text]) {
+      assert.match(partie, /Service Client/);
+      assert.ok(partie.includes(brand.PHONE), 'le téléphone doit venir de brand.js');
+      assert.ok(partie.includes(brand.EMAIL_CONTACT));
+    }
+    assert.match(m.html, /logo-autoliva\.png|logo-v2\.png/, 'le logo doit être en absolu');
+    /* Lisible sans images : rien d'important n'est dans le logo, et il porte
+       un alt. La plupart des clients bloquent les images par défaut. */
+    assert.match(m.html, /alt="/);
   });
 
-  await t.test('le HTML du client est échappé, pas interprété', () => {
-    const m = buildAvisGoogleEmail({
-      order: commande, user: { firstName: '<script>x</script>' },
-      baseUrl: 'https://autoliva.com', sujet: 'Objet',
-      corps: 'Bonjour <script>alert(1)</script>', lienAvis: lien,
-    });
+  await t.test('le HTML du corps est échappé, pas interprété', () => {
+    const m = buildAvisGoogleEmail({ sujet: 'Objet', corps: 'Bonjour <script>alert(1)</script>', lien });
     assert.ok(!m.html.includes('<script>alert(1)</script>'));
     assert.match(m.html, /&lt;script&gt;/);
   });

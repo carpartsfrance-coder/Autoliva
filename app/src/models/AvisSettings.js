@@ -24,12 +24,15 @@ const canalSchema = new mongoose.Schema(
     enabled: { type: Boolean, default: true },
     sujet: { type: String, default: '' },
     corps: { type: String, default: '' },
-    /* E-MAIL UNIQUEMENT. true = texte brut, sans gabarit : pas de logo, pas de
-       bouton, pas de pied de page. Le gabarit maison ressemble à une
-       newsletter, et c'est précisément ce que l'onglet Promotions attrape.
-       Une demande d'avis est une correspondance d'une personne à une autre :
-       elle doit en avoir l'air. Défaut true — le gabarit reste disponible. */
-    texteSimple: { type: Boolean, default: true },
+    /* E-MAIL UNIQUEMENT. Mise en forme du message :
+         'signature' — une lettre, puis la signature de la maison (logo et
+                       bloc de contact), comme ce que tout professionnel
+                       envoie. C'est le défaut.
+         'texte'     — texte pur, sans la moindre balise.
+       Dans les deux cas, PAS de gabarit marketing : le logo en bandeau
+       d'en-tête, le gros bouton et le pied de page sont ce que l'onglet
+       Promotions de Gmail attrape, et un e-mail en Promotions n'est pas lu. */
+    format: { type: String, enum: ['signature', 'texte'], default: 'signature' },
   },
   { _id: false }
 );
