@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-10-12 — Connecteur MCP : lecture du SAV et des commandes
+
+### Backend
+- **Nouveau** : quatre outils en **lecture seule** sur le connecteur MCP existant (`/mcp`) : `listSavTickets`, `getSavTicket`, `getSavAttachment`, `getOrder`. Documentation : [`app/src/mcp/README.md`](../app/src/mcp/README.md).
+- `getSavAttachment` rend les photos (réduites à 1400 × 2400 px quand elles dépassent 2 Mo) et les pages JPEG d'un PDF scanné. Le texte d'un PDF n'est jamais lu : un PDF « texte » est annoncé illisible plutôt que deviné, un PDF mixte porte un avertissement.
+- `services/savAgentService.js` : filtres ajoutés à la file (`open_only`, `awaiting`, `search`) et champs ajoutés à chaque ticket (`created_at`, `waiting_on`, dates du dernier message). Ajouts seulement : l'API « agent » (`/admin/api/sav/agent`) répond comme avant quand ces paramètres sont absents (vérifié par test).
+- **Correction** dans cette même API : `?status[$ne]=x`, `?motif[...]`, `?team[...]` et `?assignee[...]` passaient tels quels dans la requête Mongo (injection d'opérateur, derrière la clé d'API). Seules les chaînes sont désormais acceptées.
+- Aucune dépendance ajoutée, aucune variable d'environnement nouvelle, aucune migration.
+
+### Sécurité
+- Aucun outil n'écrit en base (vérifié par test : état de la base identique avant et après tous les appels).
+- Pas de champ téléphone, adresse postale, prix d'achat, réponse brute de paiement ni contenu de fichier de commande dans les réponses. Les textes libres (messages, notes internes) sont rendus tels quels.
+- `getSavAttachment` refuse tout fichier qui n'est pas rattaché au ticket nommé (autre ticket, fichier interne, identifiant inconnu : même réponse).
+- **Fichiers piégés** (les pièces jointes viennent des clients) : aucun PDF n'est ouvert avec une bibliothèque, aucune image n'est décodée sans que ses dimensions aient été lues dans l'en-tête, la réduction se fait dans un fil séparé avec file d'attente et délai. Détail dans le README du connecteur.
+- Connecteur : comparaison du jeton à temps constant, lot JSON-RPC plafonné à 10 messages, page d'autorisation OAuth mise à jour (elle annonce maintenant le SAV et les commandes).
+- ⚠ Le jeton `MCP_BEARER_TOKEN` donne désormais accès à des données personnelles de clients. Le faire tourner s'il a circulé, et éviter la variante « jeton dans l'URL ».
+
+### Tests
+- `app/tests/integration/mcp-sav-lecture.test.js` (16 cas) et `app/tests/unit/mcp-sav-outils.test.js` (13 cas), dont : base identique avant et après tous les appels (fichiers compris), image de 12 000 × 12 000 px refusée sans allocation, PDF qui se dilaterait en 200 Mo lu sans rien décompresser, PDF de 4 Mo de flux vides lu en temps linéaire.
+
+### Mise en service — côté Killian
+1. Fusionner et laisser Render redéployer.
+2. Vérifier que `MCP_BEARER_TOKEN` est bien renseigné sur Render (sinon le connecteur répond 503).
+3. Ajouter (ou reconnecter) le connecteur `https://autoliva.com/mcp` dans Claude : les quatre nouveaux outils apparaissent.
+
 ## 2026-05-13 — API d'import blog server-to-server + refonte skill SEO en orchestrateur
 
 ### Backend
