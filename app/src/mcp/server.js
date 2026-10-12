@@ -27,7 +27,7 @@ const listSavTickets = require('./tools/listSavTickets');
 const getSavTicket = require('./tools/getSavTicket');
 const getSavAttachment = require('./tools/getSavAttachment');
 const getOrder = require('./tools/getOrder');
-const { mountOAuth, isValidAccessToken } = require('./oauth');
+const { mountOAuth, isValidAccessToken, RETRY_AFTER_S } = require('./oauth');
 
 const TOOLS = [
   businessOverview, productPerformance, campaignPerformance, funnelLeaks,
@@ -143,7 +143,7 @@ function handleOptions(req, res) {
   res.status(204).end();
 }
 
-function bearerAuth(req, res, next) {
+async function bearerAuth(req, res, next) {
   applyCors(req, res);
   const expected = process.env.MCP_BEARER_TOKEN;
   if (!expected) {
@@ -157,8 +157,27 @@ function bearerAuth(req, res, next) {
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   // Accepte deux formes :
   // 1. Le secret MCP_BEARER_TOKEN direct (curl, scripts, autres clients MCP)
-  // 2. Un access token OAuth émis par /oauth/token (Cowork)
-  if (!token || (!sameSecret(token, expected) && !isValidAccessToken(token))) {
+  // 2. Un access token OAuth émis par /oauth/token (Claude), gardé en base
+  if (token && sameSecret(token, expected)) return next();
+
+  let valid = false;
+  if (token) {
+    try {
+      valid = await isValidAccessToken(token);
+    } catch (err) {
+      // Base indisponible : le jeton est peut-être bon. On demande de
+      // réessayer (503) au lieu de le déclarer invalide (401), sinon Claude
+      // jetterait l'autorisation et redemanderait une connexion complète.
+      console.error('[mcp] vérification du jeton impossible :', err.message);
+      res.set('Retry-After', String(RETRY_AFTER_S));
+      return res.status(503).json({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: JSONRPC_INTERNAL_ERROR, message: 'Base de données indisponible, réessayez dans un instant' },
+      });
+    }
+  }
+  if (!valid) {
     // RFC 9728 : indique au client où trouver les métadonnées OAuth.
     const baseUrl = (req.get('x-forwarded-proto') || 'https') + '://' + (req.get('x-forwarded-host') || req.get('host'));
     res.set('WWW-Authenticate', `Bearer realm="mcp", resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`);

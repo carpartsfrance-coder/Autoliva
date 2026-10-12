@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-10-12 — Connecteur MCP : les autorisations survivent aux redémarrages
+
+### Backend
+- **Correction** : les codes et jetons OAuth du connecteur (`/oauth/*`) vivaient en mémoire dans `app/src/mcp/oauth.js`. Chaque déploiement ou redémarrage Render les effaçait, et Claude perdait l'accès jusqu'à une reconnexion manuelle (constaté le 12/10 au matin, juste après la mise en ligne de la demande n° 429). Ils sont maintenant gardés dans MongoDB, nouveau modèle `McpOAuthToken`.
+- Seule l'empreinte SHA-256 de chaque jeton est stockée : une copie de la base ne donne accès à rien.
+- Expiration gérée par MongoDB (index TTL sur `expiresAt`) et vérifiée à chaque lecture. Codes : 5 min, à usage unique. Jetons d'accès : 30 jours. Jetons de rafraîchissement : 90 jours, remplacés à chaque usage (ils n'expiraient pas avant, mais disparaissaient au premier redémarrage).
+- Base indisponible : le connecteur répond **503 + `Retry-After`** au lieu de 401, pour que Claude réessaie au lieu de jeter son autorisation. Sans jeton, la réponse reste 401 (Claude doit pouvoir découvrir la page de connexion). Le secret statique `MCP_BEARER_TOKEN` ne dépend pas de la base.
+- Une signature de consentement de mauvaise longueur faisait lever `timingSafeEqual` : elle est maintenant refusée proprement (400), et les routes OAuth devenues asynchrones ont un filet qui empêche une requête malformée d'arrêter le processus.
+- Aucune dépendance ajoutée, aucune variable d'environnement nouvelle. La collection `mcpoauthtokens` se crée seule.
+
+### Tests
+- `app/tests/integration/mcp-oauth-persistance.test.js` (10 cas) : parcours complet de Claude (consentement, code PKCE, jeton), **redémarrage simulé puis même jeton toujours accepté**, rafraîchissement à usage unique, code à usage unique, jeton expiré refusé, aucun jeton en clair en base, index TTL présent, signature malformée, base coupée (503 puis retour à la normale). Sur l'ancien code, le test du redémarrage échoue.
+
+### Mise en service — côté Killian
+1. Fusionner et laisser Render redéployer.
+2. Reconnecter **une dernière fois** le connecteur dans Claude : les autorisations d'avant étaient en mémoire, ce déploiement les efface comme les précédents. Les suivants ne les toucheront plus.
+
 ## 2026-10-12 — Connecteur MCP : lecture du SAV et des commandes
 
 ### Backend

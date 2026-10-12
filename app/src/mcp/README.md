@@ -106,7 +106,7 @@ curl -s -X POST http://localhost:3000/mcp \
 - Lecture seule : aucun outil n'écrit en base.
 - Depuis l'ajout du SAV, le jeton donne accès à des **données personnelles de clients** (noms, e-mails, messages, pièces jointes). Le garder secret compte davantage qu'avant : préférer la connexion OAuth ou l'en-tête `Authorization` à la variante « jeton dans l'URL » (`/mcp/<token>`), qui laisse le jeton dans les journaux d'accès.
 - Auth Bearer obligatoire, fail closed si le token n'est pas configuré.
-- Pas de session → pas d'état à compromettre côté serveur.
+- Pas de session MCP. Les autorisations OAuth données à Claude (codes, jetons d'accès et de rafraîchissement) sont gardées dans MongoDB (modèle `McpOAuthToken`), sous forme d'empreinte SHA-256 seulement, avec expiration automatique : elles survivent aux redéploiements. Si la base ne répond pas, le connecteur répond 503 (réessayer), pas 401.
 - Le token doit être traité comme une clé d'API : ne pas le committer, le faire tourner si compromis.
 
 ## Architecture
