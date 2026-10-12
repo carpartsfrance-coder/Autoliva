@@ -170,7 +170,7 @@ function handleAuthorizeGet(req, res) {
 </head>
 <body>
   <h1>Autoliva — Autoriser Claude</h1>
-  <p>Claude souhaite accéder à vos données business (CA, ventes, campagnes, paniers abandonnés) en lecture seule.</p>
+  <p>Claude souhaite accéder, en lecture seule, à vos données business (CA, ventes, campagnes, paniers abandonnés) ainsi qu'au SAV et aux commandes : tickets, messages et pièces jointes des clients, détail des commandes.</p>
   <form method="POST" action="/oauth/authorize">
     <input type="hidden" name="payload" value="${escapeHtml(encoded)}">
     <input type="hidden" name="sig" value="${escapeHtml(sig)}">
