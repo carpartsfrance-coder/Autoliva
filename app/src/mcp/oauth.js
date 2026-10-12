@@ -10,24 +10,77 @@
 // - Single-user, single-secret : `MCP_BEARER_TOKEN` reste le secret partagé
 //   que l'utilisateur saisit sur la page de consent /oauth/authorize.
 // - L'AS émet un access token random (32 bytes) après validation du secret.
-// - Tokens et codes vivent en mémoire (Map). Un redémarrage les invalide
-//   → l'utilisateur doit refaire le consent. Acceptable en pratique
-//   (auth perdure quelques jours, refresh inclus, redémarrages rares).
+// - Codes et jetons sont gardés dans MongoDB (modèle McpOAuthToken), sous
+//   forme d'empreinte SHA-256. Avant octobre 2026 ils vivaient en mémoire :
+//   chaque déploiement sur Render redémarrait le site, effaçait toutes les
+//   autorisations et obligeait à reconnecter le connecteur dans Claude.
+// - Base indisponible : on répond 503 (« réessayez »), jamais 401. Un 401
+//   ferait croire à Claude que son jeton est mort et lui ferait relancer
+//   toute la connexion pendant un simple décrochage de la base.
 // - PKCE S256 obligatoire (OAuth 2.1).
 
 const crypto = require('crypto');
+const mongoose = require('mongoose');
+const McpOAuthToken = require('../models/McpOAuthToken');
 
 const STATIC_CLIENT_ID = 'cpf-analytics-cowork';
 const ACCESS_TOKEN_TTL_S = 30 * 24 * 3600; // 30 jours
+const REFRESH_TOKEN_TTL_MS = 90 * 24 * 3600 * 1000; // 90 jours, renouvelé à chaque usage
 const CODE_TTL_MS = 5 * 60 * 1000; // 5 min
+const RETRY_AFTER_S = 5;
 
-// Stockage en mémoire :
-// codes : Map<code, { code_challenge, redirect_uri, client_id, expiresAt }>
-// accessTokens : Map<token, { issuedAt, expiresAt, clientId }>
-// refreshTokens : Map<token, { issuedAt }>
-const codes = new Map();
-const accessTokens = new Map();
-const refreshTokens = new Map();
+// === Stockage en base =====================================================
+
+class DbUnavailableError extends Error {
+  constructor() {
+    super('Base de données indisponible');
+    this.code = 'DB_UNAVAILABLE';
+  }
+}
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
+function assertDbReady() {
+  if (mongoose.connection.readyState !== 1) throw new DbUnavailableError();
+}
+
+async function saveCode(code, { codeChallenge, redirectUri, clientId }) {
+  assertDbReady();
+  await McpOAuthToken.create({
+    kind: 'code',
+    tokenHash: hashToken(code),
+    clientId,
+    codeChallenge,
+    redirectUri,
+    expiresAt: new Date(Date.now() + CODE_TTL_MS),
+  });
+}
+
+/* Lecture ET suppression en une seule opération : un code ne sert qu'une fois,
+ * même si deux requêtes le présentent en même temps. */
+async function takeCode(code) {
+  assertDbReady();
+  return McpOAuthToken.findOneAndDelete({ kind: 'code', tokenHash: hashToken(code) }).lean();
+}
+
+async function takeRefreshToken(token) {
+  assertDbReady();
+  return McpOAuthToken.findOneAndDelete({
+    kind: 'refresh',
+    tokenHash: hashToken(token),
+    expiresAt: { $gt: new Date() },
+  }).lean();
+}
+
+function sendDbUnavailableJson(res) {
+  res.set('Retry-After', String(RETRY_AFTER_S));
+  return res.status(503).json({
+    error: 'temporarily_unavailable',
+    error_description: 'Base de données indisponible, réessayez dans un instant',
+  });
+}
 
 function getBaseUrl(req) {
   const proto = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
@@ -186,7 +239,7 @@ function handleAuthorizeGet(req, res) {
   res.set('Content-Type', 'text/html; charset=utf-8').send(html);
 }
 
-function handleAuthorizePost(req, res) {
+async function handleAuthorizePost(req, res) {
   setOAuthCsp(res);
   const expected = process.env.MCP_BEARER_TOKEN;
   if (!expected) return res.status(503).send('Serveur non configuré');
@@ -203,7 +256,9 @@ function handleAuthorizePost(req, res) {
   if (!decoded) return res.status(400).send('Payload invalide');
 
   const expectedSig = crypto.createHmac('sha256', expected).update(decoded).digest('hex');
-  if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expectedSig, 'hex'))) {
+  const sigBuf = Buffer.from(String(sig), 'hex');
+  const expectedSigBuf = Buffer.from(expectedSig, 'hex');
+  if (sigBuf.length !== expectedSigBuf.length || !crypto.timingSafeEqual(sigBuf, expectedSigBuf)) {
     return res.status(400).send('Signature invalide');
   }
 
@@ -221,12 +276,20 @@ function handleAuthorizePost(req, res) {
 
   // Émet un code d'autorisation.
   const code = crypto.randomBytes(32).toString('hex');
-  codes.set(code, {
-    code_challenge: params.code_challenge,
-    redirect_uri: params.redirect_uri,
-    client_id: params.client_id,
-    expiresAt: Date.now() + CODE_TTL_MS,
-  });
+  try {
+    await saveCode(code, {
+      codeChallenge: params.code_challenge,
+      redirectUri: params.redirect_uri,
+      clientId: params.client_id,
+    });
+  } catch (err) {
+    console.error('[mcp-oauth] enregistrement du code impossible :', err.message);
+    res.set('Retry-After', String(RETRY_AFTER_S));
+    return res
+      .status(503)
+      .set('Content-Type', 'text/html; charset=utf-8')
+      .send('<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:420px;margin:60px auto;padding:24px"><h1>Service momentanément indisponible</h1><p>La base de données ne répond pas. Réessayez dans quelques secondes.</p><p><a href="javascript:history.back()">Retour</a></p></body></html>');
+  }
 
   const url = new URL(params.redirect_uri);
   url.searchParams.set('code', code);
@@ -236,66 +299,85 @@ function handleAuthorizePost(req, res) {
 
 // === /oauth/token ========================================================
 
-function issueAccessToken(clientId) {
+async function issueAccessToken(clientId) {
+  assertDbReady();
   const accessToken = crypto.randomBytes(32).toString('hex');
   const refreshToken = crypto.randomBytes(32).toString('hex');
   const now = Date.now();
-  accessTokens.set(accessToken, {
-    issuedAt: now,
-    expiresAt: now + ACCESS_TOKEN_TTL_S * 1000,
-    clientId,
-  });
-  refreshTokens.set(refreshToken, { issuedAt: now, clientId });
+  await McpOAuthToken.insertMany([
+    {
+      kind: 'access',
+      tokenHash: hashToken(accessToken),
+      clientId,
+      expiresAt: new Date(now + ACCESS_TOKEN_TTL_S * 1000),
+    },
+    {
+      kind: 'refresh',
+      tokenHash: hashToken(refreshToken),
+      clientId,
+      expiresAt: new Date(now + REFRESH_TOKEN_TTL_MS),
+    },
+  ]);
   return { accessToken, refreshToken };
 }
 
-function handleToken(req, res) {
+async function handleToken(req, res) {
   const body = req.body || {};
   const grantType = body.grant_type;
 
-  if (grantType === 'authorization_code') {
-    const { code, code_verifier } = body;
-    const data = codes.get(code);
-    if (!data) {
-      return res.status(400).json({ error: 'invalid_grant', error_description: 'Code inconnu' });
-    }
-    codes.delete(code);
-    if (data.expiresAt < Date.now()) {
-      return res.status(400).json({ error: 'invalid_grant', error_description: 'Code expiré' });
-    }
-    if (!code_verifier) {
-      return res.status(400).json({ error: 'invalid_request', error_description: 'code_verifier manquant' });
-    }
-    const challenge = crypto.createHash('sha256').update(code_verifier).digest('base64url');
-    if (challenge !== data.code_challenge) {
-      return res.status(400).json({ error: 'invalid_grant', error_description: 'PKCE mismatch' });
+  try {
+    if (grantType === 'authorization_code') {
+      const { code, code_verifier } = body;
+      if (!code || typeof code !== 'string') {
+        return res.status(400).json({ error: 'invalid_request', error_description: 'code manquant' });
+      }
+      const data = await takeCode(code);
+      if (!data) {
+        return res.status(400).json({ error: 'invalid_grant', error_description: 'Code inconnu' });
+      }
+      if (data.expiresAt.getTime() < Date.now()) {
+        return res.status(400).json({ error: 'invalid_grant', error_description: 'Code expiré' });
+      }
+      if (!code_verifier || typeof code_verifier !== 'string') {
+        return res.status(400).json({ error: 'invalid_request', error_description: 'code_verifier manquant' });
+      }
+      const challenge = crypto.createHash('sha256').update(code_verifier).digest('base64url');
+      if (challenge !== data.codeChallenge) {
+        return res.status(400).json({ error: 'invalid_grant', error_description: 'PKCE mismatch' });
+      }
+
+      const { accessToken, refreshToken } = await issueAccessToken(data.clientId);
+      return res.json({
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: ACCESS_TOKEN_TTL_S,
+        refresh_token: refreshToken,
+        scope: 'mcp',
+      });
     }
 
-    const { accessToken, refreshToken } = issueAccessToken(data.client_id);
-    return res.json({
-      access_token: accessToken,
-      token_type: 'Bearer',
-      expires_in: ACCESS_TOKEN_TTL_S,
-      refresh_token: refreshToken,
-      scope: 'mcp',
-    });
-  }
-
-  if (grantType === 'refresh_token') {
-    const { refresh_token } = body;
-    const data = refreshTokens.get(refresh_token);
-    if (!data) {
-      return res.status(400).json({ error: 'invalid_grant', error_description: 'Refresh token inconnu' });
+    if (grantType === 'refresh_token') {
+      const { refresh_token } = body;
+      if (!refresh_token || typeof refresh_token !== 'string') {
+        return res.status(400).json({ error: 'invalid_request', error_description: 'refresh_token manquant' });
+      }
+      // Rotation : l'ancien jeton est retiré au moment où on le lit.
+      const data = await takeRefreshToken(refresh_token);
+      if (!data) {
+        return res.status(400).json({ error: 'invalid_grant', error_description: 'Refresh token inconnu' });
+      }
+      const { accessToken, refreshToken: newRefresh } = await issueAccessToken(data.clientId);
+      return res.json({
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: ACCESS_TOKEN_TTL_S,
+        refresh_token: newRefresh,
+        scope: 'mcp',
+      });
     }
-    const { accessToken, refreshToken: newRefresh } = issueAccessToken(data.clientId);
-    refreshTokens.delete(refresh_token);
-    return res.json({
-      access_token: accessToken,
-      token_type: 'Bearer',
-      expires_in: ACCESS_TOKEN_TTL_S,
-      refresh_token: newRefresh,
-      scope: 'mcp',
-    });
+  } catch (err) {
+    console.error('[mcp-oauth] /oauth/token :', err.message);
+    return sendDbUnavailableJson(res);
   }
 
   return res.status(400).json({ error: 'unsupported_grant_type' });
@@ -303,14 +385,17 @@ function handleToken(req, res) {
 
 // === Validation d'un access token (utilisé par bearerAuth de server.js) ===
 
-function isValidAccessToken(token) {
-  const data = accessTokens.get(token);
-  if (!data) return false;
-  if (data.expiresAt < Date.now()) {
-    accessTokens.delete(token);
-    return false;
-  }
-  return true;
+/* Renvoie true ou false. Lève DbUnavailableError (code DB_UNAVAILABLE) si la
+ * base ne répond pas : l'appelant doit alors répondre 503, pas 401. */
+async function isValidAccessToken(token) {
+  if (!token || typeof token !== 'string') return false;
+  assertDbReady();
+  const found = await McpOAuthToken.exists({
+    kind: 'access',
+    tokenHash: hashToken(token),
+    expiresAt: { $gt: new Date() },
+  });
+  return Boolean(found);
 }
 
 // === Montage des routes ===================================================
@@ -327,10 +412,22 @@ function mountOAuth(app) {
 
   // Authorization endpoint — page HTML de consent
   app.get('/oauth/authorize', handleAuthorizeGet);
-  app.post('/oauth/authorize', handleAuthorizePost);
+  app.post('/oauth/authorize', catchAsync(handleAuthorizePost));
 
   // Token endpoint
-  app.post('/oauth/token', handleToken);
+  app.post('/oauth/token', catchAsync(handleToken));
 }
 
-module.exports = { mountOAuth, isValidAccessToken };
+/* Express 4 ne rattrape pas les erreurs d'une fonction async : sans ce
+ * filet, une requête malformée deviendrait une promesse rejetée non gérée,
+ * qui arrête le processus Node. On répond 400 à la place. */
+function catchAsync(handler) {
+  return (req, res, next) => {
+    Promise.resolve(handler(req, res, next)).catch((err) => {
+      console.error('[mcp-oauth] requête refusée :', err.message);
+      if (!res.headersSent) res.status(400).json({ error: 'invalid_request' });
+    });
+  };
+}
+
+module.exports = { mountOAuth, isValidAccessToken, hashToken, RETRY_AFTER_S };
