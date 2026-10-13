@@ -216,6 +216,10 @@ async function accuserReception(leadId, e164, ctx) {
         canal: 'sms', auto: true, gabarit: 'ringover_accuse',
         ok: false, motif: r.raison || 'inconnu',
       });
+      /* Un numéro hors périmètre n'est pas une panne, c'est une consigne : la
+         personne ne recevra RIEN, il faut la rappeler. Le dire en clair sur la
+         fiche vaut mieux qu'un code d'erreur que personne ne décode. */
+      if (r.raison === 'destinataire_hors_perimetre') return 'Pas de SMS possible sur ce numéro — à rappeler';
       return 'SMS non envoyé (' + r.raison + ')';
     }
     await AbandonedCart.updateOne({ _id: leadId }, { $set: { ringoverSmsSentAt: new Date() } });

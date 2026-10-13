@@ -227,6 +227,29 @@
       </div>
     <% } %>
 
+    <%# ── SMS d'accusé de réception (appel manqué) ─────────────────────
+        Affiché SEULEMENT quand il y a quelque chose à dire. Le 25/09/2026,
+        Ringover a cessé d'accepter les envois : 19 jours et 692 clients plus
+        tard, personne ne l'avait vu. C'est cet encart qui aurait prévenu. %>
+    <% var _ss = typeof santeSms !== 'undefined' && santeSms ? santeSms : null; %>
+    <% if (_ss && _ss.verdict !== 'ok') { %>
+      <% var _ssCouleur = _ss.verdict === 'alerte' ? 'red' : 'amber'; %>
+      <div class="mt-8 bg-white rounded-2xl border border-<%= _ssCouleur %>-200 p-6">
+        <div class="flex items-start gap-3">
+          <span class="material-symbols-outlined text-lg text-<%= _ssCouleur %>-600 mt-0.5">sms_failed</span>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-slate-900">SMS de rappel aux appels manqués</div>
+            <p class="mt-1 text-sm text-slate-600"><%= _ss.message %></p>
+            <div class="mt-3 flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
+              <span class="text-<%= _ssCouleur %>-600">Échecs : <strong><%= _ss.echecs.toLocaleString('fr-FR') %></strong></span>
+              <% if (_ss.clients) { %><span>Clients sans réponse : <strong class="text-slate-700"><%= _ss.clients.toLocaleString('fr-FR') %></strong></span><% } %>
+              <% if (_ss.jours !== null) { %><span>Dernier envoi : il y a <%= _ss.jours %> j</span><% } %>
+            </div>
+          </div>
+        </div>
+      </div>
+    <% } %>
+
     <!-- Pipeline Clonage Widget -->
     <%
       var _pl = typeof pipeline !== 'undefined' && pipeline ? pipeline : {};

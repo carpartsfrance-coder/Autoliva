@@ -2441,6 +2441,14 @@ async function getAdminDashboard(req, res, next) {
       santeDe = await require('../services/santeTraductionDe').etatTraductionDe();
     } catch (_) { /* ignore */ }
 
+    /* Santé du SMS d'accusé de réception. Même raison : le 25/09/2026, Ringover
+       s'est mis à tout refuser et le mécanisme a continué sans un mot pendant
+       19 jours — 692 clients appelés sans réponse. Best-effort. */
+    let santeSms = null;
+    try {
+      santeSms = await require('../services/santeSmsRingover').etatSmsRingover();
+    } catch (_) { /* ignore */ }
+
     return res.render('admin/dashboard', {
       title: 'Admin - Dashboard',
       dbConnected,
@@ -2455,6 +2463,7 @@ async function getAdminDashboard(req, res, next) {
         topProducts: showFinancials ? topProducts : [],
       },
       santeDe,
+      santeSms,
       pipeline,
       weeklyChart: { labels: weekLabels, values: weekValues, prevValues: prevWeekValues },
       monthlyChart: { labels: monthLabels, values: monthValues },

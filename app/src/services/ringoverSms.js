@@ -65,6 +65,37 @@ function texteSelonContexte(sujet, prenom, piece) {
     .replace('{piece}', pi);
 }
 
+/* ── Qui peut réellement recevoir ce SMS ────────────────────────────────────
+ *
+ * Mesuré sur 1 320 envois antérieurs au 25/09/2026 : SEULS les mobiles de
+ * France métropolitaine (+336, +337) ont abouti — 738 fois. Toutes les autres
+ * destinations ont échoué, 100 % du temps et sans une seule exception :
+ * lignes fixes françaises (+331 à +335, +339), DOM (+262 Réunion, +590
+ * Guadeloupe, +594 Guyane, +596 Martinique), Belgique, Suisse, Espagne,
+ * Allemagne, Luxembourg, Maghreb. 470 appels d'API pour 470 refus.
+ *
+ * Les appeler quand même avait deux coûts : une requête inutile à chaque appel
+ * manqué, et surtout un journal noyé sous des centaines d'échecs attendus —
+ * c'est précisément ce bruit qui a rendu INVISIBLE la vraie panne du 25/09,
+ * quand les mobiles français se sont mis à échouer eux aussi.
+ *
+ * Réglable sans déploiement : si une nouvelle clé API ouvre l'international,
+ * il suffit d'élargir RINGOVER_SMS_PREFIXES.
+ */
+const PREFIXES_DEFAUT = '+336,+337';
+
+function prefixesAutorises() {
+  const brut = String(process.env.RINGOVER_SMS_PREFIXES || '').trim() || PREFIXES_DEFAUT;
+  return brut.split(',').map((p) => p.trim()).filter((p) => /^\+\d{2,6}$/.test(p));
+}
+
+/** Ce numéro peut-il recevoir le SMS, vu de notre compte Ringover ? */
+function peutRecevoir(dest) {
+  const liste = prefixesAutorises();
+  if (!liste.length) return true;
+  return liste.some((p) => String(dest || '').startsWith(p));
+}
+
 function conf() {
   const cle = String(process.env.RINGOVER_API_KEY || '').trim();
   const from = String(process.env.RINGOVER_SMS_FROM || '').trim();
@@ -89,6 +120,9 @@ async function envoyer({ to, content, sujet, prenom, piece } = {}) {
   /* Ne jamais s'écrire à soi-même : un renvoi interne ou une erreur de
      configuration produirait une boucle. */
   if (dest === from) return { ok: false, raison: 'destinataire_est_expediteur' };
+  /* Hors périmètre : on ne tente pas. L'appelant le journalise, pour que le
+     commercial voie « pas de SMS possible » sur la fiche et rappelle. */
+  if (!peutRecevoir(dest)) return { ok: false, raison: 'destinataire_hors_perimetre' };
 
   const message = String(content || '').trim()
     || (sujet ? texteSelonContexte(sujet, prenom, piece) : texte);
@@ -131,4 +165,4 @@ async function envoyer({ to, content, sujet, prenom, piece } = {}) {
   }
 }
 
-module.exports = { envoyer, estActif, texteSelonContexte, TEXTE_DEFAUT, TEXTES };
+module.exports = { envoyer, estActif, texteSelonContexte, peutRecevoir, prefixesAutorises, TEXTE_DEFAUT, TEXTES };
