@@ -30,7 +30,20 @@
 const brand = require('../config/brand');
 const smsService = require('./smsService');
 
-/* ── Pourquoi on redonne le numéro mobile (15/10/2026) ──────────────────────
+/* ── « Ecrivez-nous », pas « Repondez » (15/10/2026, 2e correction) ─────────
+ *
+ * Première rédaction : « Repondez par SMS au 07 45 88 00 85 ». Killian l'a
+ * essayée et a mis le doigt sur le défaut : le message arrive d'un expéditeur
+ * ALPHANUMÉRIQUE, donc le réflexe — appuyer sur « répondre » — part dans le
+ * vide, et le mot « répondez » invite précisément à ce geste-là. Vérifié le
+ * même jour : sa réponse n'est jamais arrivée chez Ringover (aucun
+ * « event=received » de la journée, alors que le webhook « Sms reçus » est
+ * actif et que l'« event=sent » de son test est bien passé).
+ *
+ * On dit donc « Ecrivez-nous au … » — un geste différent, vers un numéro
+ * nommé — et on prévient en clair que ce message-ci ne reçoit pas de réponse.
+ *
+ * ── Pourquoi on donne le numéro mobile (15/10/2026) ─────────────────────────
  *
  * Première version : « Rappelez-nous au 04 65 84 54 88 ». Ça prévenait, mais ça
  * ne DEMANDAIT PLUS LE MOTIF — alors que c'est tout l'intérêt de l'accusé :
@@ -51,15 +64,15 @@ const smsService = require('./smsService');
  */
 const TEXTES = {
   devis: "{prenom}nous n'avons pas pu prendre votre appel. C'est au sujet du devis pour votre "
-    + '{piece} ? Repondez par SMS au {mobile}, on revient vers vous. Autoliva',
+    + '{piece} ? Ecrivez-nous au {mobile} (pas de reponse a ce SMS). Autoliva',
   commande: "{prenom}nous n'avons pas pu prendre votre appel. C'est au sujet de votre commande ? "
-    + 'Repondez par SMS au {mobile}, on revient vers vous. Autoliva',
+    + 'Ecrivez-nous au {mobile} (pas de reponse a ce SMS). Autoliva',
   sav: "{prenom}nous n'avons pas pu prendre votre appel. C'est au sujet de votre dossier SAV ? "
-    + 'Repondez par SMS au {mobile}, on vous rappelle. Autoliva',
+    + 'Ecrivez-nous au {mobile} (pas de reponse a ce SMS). Autoliva',
 };
 
-const TEXTE_DEFAUT = "Bonjour, nous n'avons pas pu prendre votre appel. Dites-nous en deux mots ce "
-  + "qu'il vous faut par SMS au {mobile}, on vous rappelle. Autoliva";
+const TEXTE_DEFAUT = "Bonjour, nous n'avons pas pu prendre votre appel. Dites-nous ce qu'il vous "
+  + 'faut par SMS au {mobile} (pas de reponse a ce SMS). Autoliva';
 
 /* Repli du repli : sans numéro mobile configuré, on ne peut rien demander — on
    donne la ligne principale et on s'arrête là. */
@@ -90,6 +103,9 @@ function mobileLisible() {
 /* Les motifs qui veulent dire « le canal Ringover est coupé ». Un destinataire
    impossible n'en fait pas partie : Brevo ne ferait pas mieux sur une ligne
    fixe, et réessayer serait deux fois le même échec. */
+/* Un SMS GSM-7 tient en 160 caractères ; au-delà il est facturé double. */
+const UN_SEGMENT = 160;
+
 const MOTIFS_CANAL_COUPE = new Set([
   'non_configure', 'credits_epuises', 'reseau',
 ]);
@@ -112,12 +128,18 @@ function texteRepli(sujet, prenom, piece) {
   const table = mobile ? TEXTES : TEXTES_SANS_MOBILE;
   const defaut = mobile ? TEXTE_DEFAUT : TEXTE_DEFAUT_SANS_MOBILE;
   const modele = table[String(sujet || '')] || defaut;
-  const p = sansAccent(prenom).trim();
-  return modele
-    .replace('{prenom}', p ? p + ', ' : 'Bonjour, ')
+  const assembler = (entete) => modele
+    .replace('{prenom}', entete)
     .replace('{piece}', sansAccent(piece || 'piece').trim())
     .replace('{mobile}', mobile)
     .replace('{tel}', brand.PHONE);
+
+  const p = sansAccent(prenom).trim();
+  const avecPrenom = assembler(p ? p + ', ' : 'Bonjour, ');
+  /* Le prénom est une politesse, pas une information : s'il fait basculer le
+     message sur un second segment, il coûte le double et on s'en passe. */
+  if (avecPrenom.length <= UN_SEGMENT) return avecPrenom;
+  return assembler('Bonjour, ');
 }
 
 /**
@@ -138,6 +160,6 @@ async function envoyerRepli({ to, sujet, prenom, piece } = {}) {
 }
 
 module.exports = {
-  envoyerRepli, texteRepli, justifieUnRepli, mobileLisible,
+  envoyerRepli, texteRepli, justifieUnRepli, mobileLisible, UN_SEGMENT,
   TEXTES, TEXTE_DEFAUT, TEXTES_SANS_MOBILE, TEXTE_DEFAUT_SANS_MOBILE,
 };

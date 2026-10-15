@@ -70,12 +70,21 @@ test('le message demande le motif et dit par quel numéro répondre', () => {
   assert.match(t, /07 45 88 00 85/, 'le mobile qui REÇOIT les SMS doit y être');
   assert.match(t, /\?/, 'le motif doit être demandé : c’est tout l’intérêt de l’accusé');
   assert.doesNotMatch(t, /https?:\/\/|www\./i, 'aucun lien : les opérateurs les filtrent');
-  assert.doesNotMatch(t, /repondez a ce message/i,
-    'on ne peut pas répondre à un SMS Brevo : il faut nommer le numéro');
+  assert.doesNotMatch(t, /^(?!.*pas de reponse).*repondez/i,
+    'ne jamais dire « repondez » : l’expéditeur Brevo ne reçoit rien, le réflexe part dans le vide');
+  assert.match(t, /Ecrivez-nous|par SMS au/i, 'il faut nommer le geste : écrire à un autre numéro');
+  assert.match(t, /pas de reponse a ce SMS/i,
+    'le client doit savoir que répondre à CE message ne mène nulle part');
   assert.doesNotMatch(t, /[àâäéèêëîïôöùûüç]/i, 'pas d’accent : sinon le SMS passe en UCS-2 et coûte double');
   assert.match(t, /Jean/, 'le prénom connu doit être utilisé');
   assert.match(t, /boite/, 'la pièce doit être nommée, sans accent');
   assert.ok(t.length <= 160, `un seul segment attendu, ${t.length} caractères`);
+});
+
+test('un prénom long ne fait jamais basculer sur un second SMS', () => {
+  const t = repli.texteRepli('devis', 'Christopher', 'moteur');
+  assert.ok(t.length <= repli.UN_SEGMENT, `${t.length} caractères`);
+  assert.match(t, /^Bonjour, /, 'le prénom cède la place plutôt que de coûter un segment de plus');
 });
 
 test('les quatre messages tiennent en un seul SMS', () => {
