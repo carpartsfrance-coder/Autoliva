@@ -40,6 +40,7 @@ const AbandonedCart = require('../models/AbandonedCart');
 const Order = require('../models/Order');
 const SavTicket = require('../models/SavTicket');
 const ringoverSms = require('./ringoverSms');
+const accuseAppelRepli = require('./accuseAppelRepli');
 const { partLexicon, leadCategoryFromSource } = require('./partLexicon');
 const { journaliser } = require('./leadCommunications');
 
@@ -199,18 +200,22 @@ async function findContext(e164) {
  * @returns {Promise<string>} libellé de ce qui s'est passé, pour la note
  */
 async function accuserReception(leadId, e164, ctx) {
-  if (!ringoverSms.estActif()) return '';
   try {
     const lead = await AbandonedCart.findById(leadId).select('ringoverSmsSentAt').lean();
     const dernier = lead && lead.ringoverSmsSentAt ? new Date(lead.ringoverSmsSentAt) : null;
     if (dernier && Date.now() - dernier.getTime() < 24 * 3600 * 1000) return 'SMS déjà envoyé aujourd\'hui';
 
-    const r = await ringoverSms.envoyer({
-      to: e164,
-      sujet: (ctx && ctx.sujet) || '',
-      prenom: (ctx && ctx.prenom) || '',
-      piece: (ctx && ctx.piece) || '',
-    });
+    /* Ringover désarmé : on ne le fait pas semblant d'essayer, on passe
+       directement au repli. */
+    const r = ringoverSms.estActif()
+      ? await ringoverSms.envoyer({
+        to: e164,
+        sujet: (ctx && ctx.sujet) || '',
+        prenom: (ctx && ctx.prenom) || '',
+        piece: (ctx && ctx.piece) || '',
+      })
+      : { ok: false, raison: 'non_configure' };
+
     if (!r.ok) {
       await journaliser(leadId, {
         canal: 'sms', auto: true, gabarit: 'ringover_accuse',
@@ -220,6 +225,28 @@ async function accuserReception(leadId, e164, ctx) {
          personne ne recevra RIEN, il faut la rappeler. Le dire en clair sur la
          fiche vaut mieux qu'un code d'erreur que personne ne décode. */
       if (r.raison === 'destinataire_hors_perimetre') return 'Pas de SMS possible sur ce numéro — à rappeler';
+
+      /* Le canal est coupé, mais la personne a appelé : on la prévient quand
+         même, par Brevo, avec le numéro à rappeler puisqu'elle ne pourra pas
+         répondre au message. */
+      if (accuseAppelRepli.justifieUnRepli(r.raison)) {
+        const b = await accuseAppelRepli.envoyerRepli({
+          to: e164,
+          sujet: (ctx && ctx.sujet) || '',
+          prenom: (ctx && ctx.prenom) || '',
+          piece: (ctx && ctx.piece) || '',
+        });
+        await journaliser(leadId, {
+          canal: 'sms', auto: true, gabarit: 'accuse_appel_repli',
+          corps: b.ok ? (b.texte || '') : '',
+          ok: b.ok, motif: b.ok ? '' : (b.raison || 'inconnu'),
+        });
+        if (b.ok) {
+          await AbandonedCart.updateOne({ _id: leadId }, { $set: { ringoverSmsSentAt: new Date() } });
+          return 'SMS de rappel envoyé (par Brevo, Ringover indisponible)';
+        }
+        return 'Aucun SMS envoyé : Ringover (' + r.raison + ') et Brevo (' + b.raison + ') ont échoué';
+      }
       return 'SMS non envoyé (' + r.raison + ')';
     }
     await AbandonedCart.updateOne({ _id: leadId }, { $set: { ringoverSmsSentAt: new Date() } });
@@ -439,4 +466,7 @@ async function recordIvrCode({ code, from, callId, at } = {}) {
 module.exports = {
   toE164, phoneKey, motifFromReceiver, findContext,
   recordMissedCall, recordSmsReply, recordIvrCode,
+  /* Exposé pour les tests : c'est le chemin qui décide si le client est
+     prévenu, et par quel canal. */
+  accuserReception,
 };
