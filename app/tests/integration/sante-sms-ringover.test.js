@@ -22,6 +22,8 @@ process.env.BRAND = 'autoliva';
    fait que constater que le canal est censé être armé. */
 process.env.RINGOVER_API_KEY = 'cle-de-test-sans-valeur';
 process.env.RINGOVER_SMS_FROM = '+33600000000';
+/* La sonde interroge l'API Ringover pour de vrai : coupée ici. */
+process.env.RINGOVER_SONDE = 'off';
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -161,4 +163,13 @@ test('hors périmètre : aucun appel à Ringover n’est tenté', async () => {
   const r = await ringoverSms.envoyer({ to: '+33148000000', content: 'test' });
   assert.equal(r.ok, false);
   assert.equal(r.raison, 'destinataire_hors_perimetre');
+});
+
+test('ce que la sonde nous apprend, code par code', () => {
+  const { lireSonde } = ringoverSms;
+  assert.match(lireSonde(200), /seule l’écriture est refusée/);
+  assert.match(lireSonde(400), /seule l’écriture est refusée/);
+  assert.match(lireSonde(401), /n’est pas reconnue/);
+  assert.match(lireSonde(403), /AUCUN droit sur Conversations/);
+  assert.match(lireSonde(0), /injoignable/);
 });

@@ -48,6 +48,24 @@ const EXPLICATIONS = {
   non_configure: 'Le canal est désarmé : RINGOVER_API_KEY ou RINGOVER_SMS_FROM manque.',
 };
 
+/* La sonde interroge Ringover : on ne la lance qu'en cas de panne, et au plus
+   une fois toutes les dix minutes, pour qu'un tableau de bord rafraîchi ne
+   martèle pas leur API. */
+const SONDE_CACHE = { a: 0, phrase: '' };
+const SONDE_DUREE_MS = 10 * 60 * 1000;
+
+async function diagnostic() {
+  /* Débrayable : les tests ne doivent pas appeler Ringover pour de vrai. */
+  if (String(process.env.RINGOVER_SONDE || '').toLowerCase() === 'off') return '';
+  const maintenant = Date.now();
+  if (SONDE_CACHE.a && maintenant - SONDE_CACHE.a < SONDE_DUREE_MS) return SONDE_CACHE.phrase;
+  const r = await ringoverSms.sonder();
+  const phrase = r.ok ? ringoverSms.lireSonde(r.statut) : '';
+  SONDE_CACHE.a = maintenant;
+  SONDE_CACHE.phrase = phrase;
+  return phrase;
+}
+
 /** Les numéros que Ringover accepte, en expression régulière, pour la base. */
 function regexPerimetre() {
   const prefixes = ringoverSms.prefixesAutorises();
@@ -147,9 +165,15 @@ async function etatSmsRingover() {
     ? `Dernier SMS parti le ${derniereReussite.toLocaleDateString('fr-FR')}`
     : 'Aucun SMS n’est jamais parti';
 
+  /* Quand Ringover refuse, on lui demande pourquoi plutôt que de supposer. */
+  let sonde = '';
+  if (motif === 'http_403' || motif === 'http_401') {
+    try { sonde = await diagnostic(); } catch (_) { /* best-effort */ }
+  }
+
   return {
     verdict: nbEchecs >= SEUIL_ALERTE ? 'alerte' : 'attention',
-    message: `${depuisQuand}. ${expliquer(motif)}`,
+    message: `${depuisQuand}. ${expliquer(motif)}${sonde ? ' — ' + sonde : ''}`,
     echecs: nbEchecs,
     clients,
     motif,
@@ -158,4 +182,4 @@ async function etatSmsRingover() {
   };
 }
 
-module.exports = { etatSmsRingover, SEUIL_ALERTE, EXPLICATIONS, expliquer, regexPerimetre };
+module.exports = { etatSmsRingover, SEUIL_ALERTE, EXPLICATIONS, expliquer, regexPerimetre, diagnostic };
