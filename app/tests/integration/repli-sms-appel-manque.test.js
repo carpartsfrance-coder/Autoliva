@@ -27,6 +27,9 @@ delete process.env.RINGOVER_API_KEY;
 delete process.env.RINGOVER_SMS_FROM;
 process.env.BREVO_API_KEY = '';
 process.env.RINGOVER_SONDE = 'off';
+/* Le numéro mobile Ringover reste joignable EN RÉCEPTION même quand l'API
+   refuse d'envoyer : c'est par lui que le client répond. */
+process.env.RINGOVER_SMS_FROM = '+33745880085';
 
 const test = require('node:test');
 const assert = require('node:assert');
@@ -62,14 +65,37 @@ async function unLead(suffixe) {
   });
 }
 
-test('le message du repli donne le numéro à rappeler, et aucun lien', () => {
+test('le message demande le motif et dit par quel numéro répondre', () => {
   const t = repli.texteRepli('devis', 'Jean', 'boîte');
-  assert.match(t, new RegExp(brand.PHONE.replace(/ /g, '\\s')), 'le numéro à rappeler doit y être');
+  assert.match(t, /07 45 88 00 85/, 'le mobile qui REÇOIT les SMS doit y être');
+  assert.match(t, /\?/, 'le motif doit être demandé : c’est tout l’intérêt de l’accusé');
   assert.doesNotMatch(t, /https?:\/\/|www\./i, 'aucun lien : les opérateurs les filtrent');
-  assert.doesNotMatch(t, /répond|repondez a ce message/i, 'on ne demande pas de répondre : c’est impossible');
+  assert.doesNotMatch(t, /repondez a ce message/i,
+    'on ne peut pas répondre à un SMS Brevo : il faut nommer le numéro');
   assert.doesNotMatch(t, /[àâäéèêëîïôöùûüç]/i, 'pas d’accent : sinon le SMS passe en UCS-2 et coûte double');
   assert.match(t, /Jean/, 'le prénom connu doit être utilisé');
   assert.match(t, /boite/, 'la pièce doit être nommée, sans accent');
+  assert.ok(t.length <= 160, `un seul segment attendu, ${t.length} caractères`);
+});
+
+test('les quatre messages tiennent en un seul SMS', () => {
+  for (const [sujet, prenom, piece] of [['devis', 'Jean', 'boîte'], ['commande', '', ''], ['sav', 'Marie', ''], ['', '', '']]) {
+    const t = repli.texteRepli(sujet, prenom, piece);
+    assert.ok(t.length <= 160, `« ${sujet || 'défaut'} » fait ${t.length} caractères`);
+  }
+});
+
+test('sans mobile configuré, on ne demande rien qu’on ne puisse recevoir', () => {
+  const avant = process.env.RINGOVER_SMS_FROM;
+  delete process.env.RINGOVER_SMS_FROM;
+  try {
+    const t = repli.texteRepli('commande', '', '');
+    assert.doesNotMatch(t, /Repondez par SMS/i,
+      'sans numéro qui reçoit, demander une réponse serait un piège');
+    assert.match(t, new RegExp(brand.PHONE.replace(/ /g, '\\s')), 'il reste la ligne principale');
+  } finally {
+    process.env.RINGOVER_SMS_FROM = avant;
+  }
 });
 
 test('sans prénom, la phrase reste correcte', () => {
