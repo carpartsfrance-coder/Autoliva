@@ -153,17 +153,34 @@ async function etatSmsRingover() {
     return {
       verdict: 'alerte',
       message: 'Aucun SMS d’accusé ne peut partir : ' + EXPLICATIONS.non_configure,
-      echecs: nbEchecs, clients, motif: 'non_configure', derniereReussite, jours,
+      echecs: nbEchecs, clients, couverts: 0, motif: 'non_configure', derniereReussite, jours,
     };
   }
 
   if (!nbEchecs) {
-    return { verdict: 'ok', message: '', echecs: 0, clients: 0, motif: '', derniereReussite, jours };
+    return { verdict: 'ok', message: '', echecs: 0, clients: 0, couverts: 0, motif: '', derniereReussite, jours };
   }
 
   const depuisQuand = derniereReussite
     ? `Dernier SMS parti le ${derniereReussite.toLocaleDateString('fr-FR')}`
     : 'Aucun SMS n’est jamais parti';
+
+  /* Combien de clients le repli Brevo a-t-il quand même prévenus ? C'est ce
+     qui distingue « panne qui coûte des clients » de « panne à réparer, mais
+     sans victime ». */
+  const repli = await AbandonedCart.aggregate([
+    { $match: { 'communications.gabarit': 'accuse_appel_repli' } },
+    { $unwind: '$communications' },
+    {
+      $match: {
+        'communications.gabarit': 'accuse_appel_repli',
+        'communications.statut': 'envoye',
+        'communications.at': { $gte: derniereReussite || depuis },
+      },
+    },
+    { $count: 'n' },
+  ]).option({ maxTimeMS: 4000 });
+  const couverts = (repli[0] && repli[0].n) || 0;
 
   /* Quand Ringover refuse, on lui demande pourquoi plutôt que de supposer. */
   let sonde = '';
@@ -173,9 +190,11 @@ async function etatSmsRingover() {
 
   return {
     verdict: nbEchecs >= SEUIL_ALERTE ? 'alerte' : 'attention',
-    message: `${depuisQuand}. ${expliquer(motif)}${sonde ? ' — ' + sonde : ''}`,
+    message: `${depuisQuand}. ${expliquer(motif)}${sonde ? ' — ' + sonde : ''}`
+      + (couverts ? ` En attendant, ${couverts} client(s) ont été prévenus par SMS via Brevo.` : ''),
     echecs: nbEchecs,
     clients,
+    couverts,
     motif,
     derniereReussite,
     jours,
