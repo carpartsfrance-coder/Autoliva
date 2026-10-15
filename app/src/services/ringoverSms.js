@@ -20,6 +20,7 @@
  */
 
 const API = 'https://public-api.ringover.com/v2/push/sms';
+const API_RACINE = 'https://public-api.ringover.com/v2';
 
 /* Messages calibrés pour UN segment : aucun accent hors GSM-7, aucun lien
    (les opérateurs français filtrent les liens venant d'un expéditeur inconnu).
@@ -165,4 +166,63 @@ async function envoyer({ to, content, sujet, prenom, piece } = {}) {
   }
 }
 
-module.exports = { envoyer, estActif, texteSelonContexte, peutRecevoir, prefixesAutorises, TEXTE_DEFAUT, TEXTES };
+/* ── Sonde de diagnostic ────────────────────────────────────────────────────
+ *
+ * Depuis le 25/09/2026, chaque envoi reçoit « 403 insufficient permissions ».
+ * On a vérifié une à une les causes possibles de notre côté — droit
+ * Conversations en écriture actif sur une clé régénérée, numéro expéditeur
+ * valide et attribué au même utilisateur, crédits disponibles, serveur
+ * redémarré — sans rien trouver. Deviner coûte des allers-retours ; autant
+ * demander à Ringover.
+ *
+ * La sonde appelle un endpoint en LECTURE avec la MÊME clé, et ne retient que
+ * le code HTTP. Elle n'envoie rien, ne lit aucune donnée client, et ne montre
+ * jamais la clé. Trois réponses, trois conclusions :
+ *
+ *   200 ou 400 → la clé est acceptée et a le droit de LIRE les conversations.
+ *                Seule l'écriture est refusée : la panne est du côté Ringover.
+ *   401        → la clé n'est pas reconnue : ce n'est pas celle qu'on croit
+ *                (mauvaise valeur dans RINGOVER_API_KEY, ou clé supprimée).
+ *   403        → la clé est valide mais n'a AUCUN droit sur Conversations :
+ *                les bascules de l'interface ne sont pas appliquées.
+ */
+async function sonder() {
+  const { cle, actif } = conf();
+  if (!actif) return { ok: false, statut: 0, raison: 'non_configure' };
+  try {
+    const ctl = new AbortController();
+    const minuteur = setTimeout(() => ctl.abort(), 8000);
+    const r = await fetch(`${API_RACINE}/conversations?limit_count=1`, {
+      headers: { Authorization: cle },
+      signal: ctl.signal,
+    });
+    clearTimeout(minuteur);
+    const corps = await r.text().catch(() => '');
+    return { ok: true, statut: r.status, detail: corps.slice(0, 160) };
+  } catch (err) {
+    return { ok: false, statut: 0, raison: 'reseau' };
+  }
+}
+
+/** Ce que le code renvoyé par la sonde nous apprend, en français. */
+function lireSonde(statut) {
+  if (statut === 200 || statut === 400) {
+    return 'La clé est acceptée en LECTURE sur Conversations : seule l’écriture est refusée. '
+      + 'Le blocage est donc côté Ringover, pas chez nous.';
+  }
+  if (statut === 401) {
+    return 'La clé n’est pas reconnue par Ringover : la valeur de RINGOVER_API_KEY n’est pas '
+      + 'celle d’une clé existante (mauvaise valeur, ou clé supprimée).';
+  }
+  if (statut === 403) {
+    return 'La clé est valide mais n’a AUCUN droit sur Conversations, ni lecture ni écriture : '
+      + 'les bascules de l’interface Ringover ne sont pas appliquées à cette clé.';
+  }
+  if (!statut) return 'Ringover est injoignable depuis le serveur.';
+  return `Ringover répond ${statut} sur la lecture des conversations.`;
+}
+
+module.exports = {
+  envoyer, estActif, texteSelonContexte, peutRecevoir, prefixesAutorises,
+  sonder, lireSonde, TEXTE_DEFAUT, TEXTES,
+};
