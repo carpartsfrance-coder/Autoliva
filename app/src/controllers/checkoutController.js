@@ -625,28 +625,41 @@ async function applyMolliePaymentToOrder(order, payment) {
 
   if (paymentStatus === 'paid' && !wasPaid) {
     try {
-      const alreadySent = refreshed
-        && refreshed.notifications
-        && refreshed.notifications.orderConfirmationSentAt;
+      // Verrou atomique AVANT l'envoi : le retour du client et le webhook du
+      // prestataire de paiement arrivent quasi simultanément et lisaient tous
+      // les deux un flag encore vide, ce qui envoyait DEUX confirmations au
+      // client pour la même commande.
+      const claimed = await Order.findOneAndUpdate(
+        {
+          _id: refreshed._id,
+          $or: [
+            { 'notifications.orderConfirmationSentAt': { $exists: false } },
+            { 'notifications.orderConfirmationSentAt': null },
+          ],
+        },
+        { $set: { 'notifications.orderConfirmationSentAt': new Date() } },
+        { new: true }
+      ).select('_id').lean();
 
-      if (!alreadySent) {
+      if (claimed) {
         const user = await User.findById(refreshed.userId).select('_id email firstName smsOptIn').lean();
         if (user && user.email) {
           const sent = await emailService.sendOrderConfirmationEmail({ order: refreshed, user });
           emailService.logEmailSent({ orderId: refreshed._id, emailType: 'order_confirmation', recipientEmail: user.email, result: sent });
           smsService.sendOrderConfirmationSms({ order: refreshed, user }).catch(() => {});
-          if (sent && sent.ok) {
+          if (!sent || !sent.ok) {
+            // Envoi raté : on relâche le verrou pour laisser une autre
+            // tentative (webhook de rattrapage, action admin).
             await Order.updateOne(
-              {
-                _id: refreshed._id,
-                $or: [
-                  { 'notifications.orderConfirmationSentAt': { $exists: false } },
-                  { 'notifications.orderConfirmationSentAt': null },
-                ],
-              },
-              { $set: { 'notifications.orderConfirmationSentAt': new Date() } }
+              { _id: refreshed._id },
+              { $set: { 'notifications.orderConfirmationSentAt': null } }
             );
           }
+        } else {
+          await Order.updateOne(
+            { _id: refreshed._id },
+            { $set: { 'notifications.orderConfirmationSentAt': null } }
+          );
         }
       }
     } catch (err) {
@@ -840,28 +853,41 @@ async function applyScalapayPaymentToOrder(order, { scalapayStatus, paymentStatu
 
   if (safePaymentStatus === 'paid' && !wasPaid) {
     try {
-      const alreadySent = refreshed
-        && refreshed.notifications
-        && refreshed.notifications.orderConfirmationSentAt;
+      // Verrou atomique AVANT l'envoi : le retour du client et le webhook du
+      // prestataire de paiement arrivent quasi simultanément et lisaient tous
+      // les deux un flag encore vide, ce qui envoyait DEUX confirmations au
+      // client pour la même commande.
+      const claimed = await Order.findOneAndUpdate(
+        {
+          _id: refreshed._id,
+          $or: [
+            { 'notifications.orderConfirmationSentAt': { $exists: false } },
+            { 'notifications.orderConfirmationSentAt': null },
+          ],
+        },
+        { $set: { 'notifications.orderConfirmationSentAt': new Date() } },
+        { new: true }
+      ).select('_id').lean();
 
-      if (!alreadySent) {
+      if (claimed) {
         const user = await User.findById(refreshed.userId).select('_id email firstName smsOptIn').lean();
         if (user && user.email) {
           const sent = await emailService.sendOrderConfirmationEmail({ order: refreshed, user });
           emailService.logEmailSent({ orderId: refreshed._id, emailType: 'order_confirmation', recipientEmail: user.email, result: sent });
           smsService.sendOrderConfirmationSms({ order: refreshed, user }).catch(() => {});
-          if (sent && sent.ok) {
+          if (!sent || !sent.ok) {
+            // Envoi raté : on relâche le verrou pour laisser une autre
+            // tentative (webhook de rattrapage, action admin).
             await Order.updateOne(
-              {
-                _id: refreshed._id,
-                $or: [
-                  { 'notifications.orderConfirmationSentAt': { $exists: false } },
-                  { 'notifications.orderConfirmationSentAt': null },
-                ],
-              },
-              { $set: { 'notifications.orderConfirmationSentAt': new Date() } }
+              { _id: refreshed._id },
+              { $set: { 'notifications.orderConfirmationSentAt': null } }
             );
           }
+        } else {
+          await Order.updateOne(
+            { _id: refreshed._id },
+            { $set: { 'notifications.orderConfirmationSentAt': null } }
+          );
         }
       }
     } catch (err) {

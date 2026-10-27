@@ -3,6 +3,7 @@ const { getSiteUrlFromEnv } = require('./siteUrl');
 const Order = require('../models/Order');
 const brand = require('../config/brand');
 const { resolveSms } = require('./smsSettings');
+const marketingOptOut = require('./marketingOptOut');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -329,6 +330,11 @@ async function sendCloningStepSms({ order, user, step } = {}) {
 
 async function sendAbandonedCartSms({ cart, user } = {}) {
   if (!cart) return { ok: false, reason: 'missing_data' };
+
+  // Désinscription des relances commerciales : vaut pour l'email ET le SMS.
+  if (cart.email && await marketingOptOut.isOptedOut(cart.email)) {
+    return { ok: false, reason: 'marketing_opt_out' };
+  }
 
   let phone = '';
   if (user && user.addresses && user.addresses.length) {

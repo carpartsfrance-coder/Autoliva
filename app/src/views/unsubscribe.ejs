@@ -1,0 +1,75 @@
+<%- include('partials/head') %>
+<%- include('partials/header') %>
+
+<main class="flex-1 bg-background-light">
+  <div class="mx-auto max-w-2xl px-4 sm:px-6 py-12">
+    <div class="bg-white rounded-2xl border border-slate-200 p-6 sm:p-10 shadow-premium">
+
+      <div class="text-xs font-semibold uppercase tracking-widest text-slate-400"><%= brand.NAME %></div>
+
+      <% if (state === 'done') { %>
+        <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-slate-900">C'est fait, vous ne recevrez plus de relance</h1>
+        <p class="mt-4 text-sm text-slate-600">
+          L'adresse <strong class="text-slate-900"><%= email %></strong> est retirée de nos emails et SMS commerciaux :
+          relances de panier, relances de devis et newsletter. L'arrêt est immédiat.
+        </p>
+        <div class="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          Vous continuerez à recevoir uniquement les emails liés à vos commandes
+          (confirmation, expédition, suivi de livraison, retour de consigne, SAV) :
+          ce sont des informations que nous devons vous transmettre.
+        </div>
+        <% if (errorMessage) { %>
+          <p class="mt-4 text-sm font-semibold text-red-600"><%= errorMessage %></p>
+        <% } %>
+        <form action="/desinscription/reinscription" class="mt-6" method="POST">
+          <input name="email" type="hidden" value="<%= email %>" />
+          <input name="token" type="hidden" value="<%= token %>" />
+          <button class="text-sm text-slate-500 underline hover:text-slate-800" type="submit">
+            C'était une erreur, me réinscrire
+          </button>
+        </form>
+
+      <% } else if (state === 'resubscribed') { %>
+        <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-slate-900">Vous êtes réinscrit</h1>
+        <p class="mt-4 text-sm text-slate-600">
+          L'adresse <strong class="text-slate-900"><%= email %></strong> peut à nouveau recevoir nos emails commerciaux.
+        </p>
+        <a class="mt-6 inline-block text-sm text-slate-500 underline hover:text-slate-800" href="/">Retour à l'accueil</a>
+
+      <% } else { %>
+        <h1 class="mt-2 text-2xl sm:text-3xl font-bold text-slate-900">Ne plus recevoir d'emails commerciaux</h1>
+        <p class="mt-4 text-sm text-slate-600">
+          Indiquez l'adresse à retirer de nos relances (panier, devis, newsletter).
+          Les emails liés à vos commandes continueront d'arriver normalement.
+        </p>
+        <% if (errorMessage) { %>
+          <p class="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700"><%= errorMessage %></p>
+        <% } %>
+        <form action="/desinscription" class="mt-6 space-y-4" method="POST">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700" for="unsubscribe-email">Votre adresse email</label>
+            <input
+              autocomplete="email"
+              class="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm focus:border-primary focus:ring-primary"
+              id="unsubscribe-email"
+              name="email"
+              placeholder="prenom.nom@email.fr"
+              required
+              type="email"
+              value="<%= email %>"
+            />
+          </div>
+          <button class="w-full rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white hover:opacity-90" type="submit">
+            Me désinscrire
+          </button>
+        </form>
+      <% } %>
+
+      <p class="mt-8 border-t border-slate-200 pt-4 text-xs text-slate-400">
+        Une question sur une commande ? Écrivez-nous à <%= brand.EMAIL_CONTACT %> ou appelez le <%= brand.PHONE %>.
+      </p>
+    </div>
+  </div>
+</main>
+
+<%- include('partials/footer') %>

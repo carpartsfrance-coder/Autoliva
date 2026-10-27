@@ -22,6 +22,7 @@ const { resolveSms } = require('../services/smsSettings');
 const { buildReminderEmailHtml } = require('../services/engineQuoteEmail');
 const { partLexicon, leadCategoryFromSource } = require('../services/partLexicon');
 const brand = require('../config/brand');
+const marketingOptOut = require('../services/marketingOptOut');
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
@@ -122,6 +123,12 @@ async function sendReminder(cart, type) {
 
   if (!cart.email) return false; // pas d'email, on ne peut pas relancer
 
+  // Le client a demandé l'arrêt des relances commerciales : on s'arrête là.
+  if (await marketingOptOut.isOptedOut(cart.email)) {
+    console.log(`[engineQuoteReminders] ${cart.email} désinscrit — relance ${type} non envoyée`);
+    return false;
+  }
+
   const quoteRef = (cart.requested && cart.requested.ref) || '';
   const plate = (cart.requested && cart.requested.plate) || '';
   const firstNameForEmail = (cart.firstName && cart.lastName) ? cart.firstName : '';
@@ -142,6 +149,8 @@ async function sendReminder(cart, type) {
   const cat = leadCategoryFromSource(cart.captureSource);
   const lex = partLexicon(cat);
 
+  const unsubscribeUrl = marketingOptOut.buildUnsubscribeUrl(cart.email, publicBase());
+
   const html = buildReminderEmailHtml({
     category: cat,
     type,
@@ -154,6 +163,7 @@ async function sendReminder(cart, type) {
     brandPhoneIntl: brand.PHONE_MOTEUR_INTL,
     pdfUrl,
     mollieUrl,
+    unsubscribeUrl,
   });
 
   const subject = type === 'winback'
@@ -164,7 +174,7 @@ async function sendReminder(cart, type) {
         ? `Votre devis ${quoteRef} — je peux reconfirmer la dispo`
         : `On reste dispo pour votre devis ${quoteRef}`;
 
-  const text = `Bonjour,\n\nJe reviens vers vous au sujet de mon devis ${quoteRef} (envoyé il y a ${daysSince} jour(s)). Un devis n'étant garanti que 24h (${lex.leNoun} peut partir, les prix bougent), dites-moi si vous êtes toujours intéressé : je reconfirme la disponibilité et le prix du jour.\n\nL'équipe Autoliva\n${brand.PHONE_MOTEUR}`;
+  const text = `Bonjour,\n\nJe reviens vers vous au sujet de mon devis ${quoteRef} (envoyé il y a ${daysSince} jour(s)). Un devis n'étant garanti que 24h (${lex.leNoun} peut partir, les prix bougent), dites-moi si vous êtes toujours intéressé : je reconfirme la disponibilité et le prix du jour.\n\nL'équipe Autoliva\n${brand.PHONE_MOTEUR}${unsubscribeUrl ? `\n\nSe désinscrire des relances : ${unsubscribeUrl}` : ''}`;
 
   const result = await emailService.sendEmail({
     toEmail: cart.email,

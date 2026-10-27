@@ -10,6 +10,7 @@ const contactController = require('../controllers/contactController');
 const legacyRedirectController = require('../controllers/legacyRedirectController');
 const leadCaptureController = require('../controllers/leadCaptureController');
 const moteurOccasionController = require('../controllers/moteurOccasionController');
+const unsubscribeController = require('../controllers/unsubscribeController');
 const boiteOccasionController = require('../controllers/boiteOccasionController');
 const pontTransfertController = require('../controllers/pontTransfertController');
 const avisPublicController = require('../controllers/avisPublicController');
@@ -48,6 +49,11 @@ router.post('/mon-avis/:token/message', monAvisLimiter, avisPublicController.pos
 
 router.get('/contact', contactController.getContactPage);
 router.post('/contact', contactController.postContact);
+
+/* Désinscription des relances commerciales (lien en pied des emails de relance) */
+router.get('/desinscription', unsubscribeController.getUnsubscribe);
+router.post('/desinscription', unsubscribeController.postUnsubscribe);
+router.post('/desinscription/reinscription', unsubscribeController.postResubscribe);
 
 /* Endpoints publics de capture de lead (popup, save-cart, devis fiche produit, CTA blog) */
 router.post('/api/lead/save-cart', leadCaptureController.postSaveCart);

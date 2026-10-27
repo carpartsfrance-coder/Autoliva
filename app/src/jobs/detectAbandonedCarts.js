@@ -3,6 +3,8 @@ const mongoose = require('mongoose');
 const AbandonedCart = require('../models/AbandonedCart');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const { findPaidOrderBlockingReminder } = require('../services/cartReminderGuards');
+const marketingOptOut = require('../services/marketingOptOut');
 
 const ABANDON_DELAY_MS = 60 * 60 * 1000; // 1 hour
 
@@ -19,13 +21,13 @@ const SESSION_AVEC_ARTICLE = /"cart":\{"items":\{"/;
 async function detectAbandonedCarts() {
   if (mongoose.connection.readyState !== 1) {
     console.error('[abandoned-carts] MongoDB non connectée, skip.');
-    return { detected: 0, skipped: 0, errors: 0 };
+    return { detected: 0, skipped: 0, alreadyTracked: 0, alreadyPaid: 0, optedOut: 0, errors: 0 };
   }
 
   const now = new Date();
   const cutoff = new Date(now.getTime() - ABANDON_DELAY_MS);
 
-  const report = { detected: 0, skipped: 0, alreadyTracked: 0, errors: 0 };
+  const report = { detected: 0, skipped: 0, alreadyTracked: 0, alreadyPaid: 0, optedOut: 0, errors: 0 };
 
   try {
     // Access the raw sessions collection managed by connect-mongo
@@ -213,6 +215,28 @@ async function detectAbandonedCarts() {
 
         if (abandonedItems.length === 0) {
           report.skipped += 1;
+          continue;
+        }
+
+        // Ne pas recréer un lead pour une adresse désinscrite des emails
+        // commerciaux : sinon le client recommence à recevoir des relances
+        // dès sa visite suivante.
+        if (await marketingOptOut.isOptedOut(email)) {
+          report.optedOut += 1;
+          continue;
+        }
+
+        // Panier résiduel : le client a payé mais n'est pas revenu sur le
+        // site, donc son panier est resté dans la session. Sans ce contrôle,
+        // le CRON relance une pièce déjà achetée et payée.
+        const paidOrder = await findPaidOrderBlockingReminder({
+          userId,
+          email,
+          items: abandonedItems,
+        });
+
+        if (paidOrder) {
+          report.alreadyPaid += 1;
           continue;
         }
 

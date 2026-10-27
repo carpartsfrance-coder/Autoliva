@@ -162,6 +162,11 @@
                         <%= c.captureBadge.label %>
                       </span>
                     <% } %>
+                    <% if (c.marketingOptOut) { %>
+                      <span class="inline-flex items-center rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider" title="Ce client a demandé l'arrêt des emails commerciaux : plus aucune relance, automatique ou manuelle, ne lui sera envoyée.">
+                        Désinscrit
+                      </span>
+                    <% } %>
                     <% if (c.engineQuoteUrl) { %>
                       <a href="<%= c.engineQuoteUrl %>" class="inline-flex items-center gap-0.5 text-[11px] font-semibold text-primary hover:underline">Dossier devis <span class="material-symbols-outlined text-xs">arrow_forward</span></a>
                     <% } %>

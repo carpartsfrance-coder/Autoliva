@@ -1,8 +1,10 @@
 const mongoose = require('mongoose');
 
 const AbandonedCart = require('../models/AbandonedCart');
+const MarketingOptOut = require('../models/MarketingOptOut');
 const Product = require('../models/Product');
 const { sendAbandonedCartReminder, sendEmail } = require('../services/emailService');
+const marketingOptOut = require('../services/marketingOptOut');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const {
   applyVariables,
@@ -558,6 +560,23 @@ async function getAdminLeadsPage(req, res, next) {
       }
     });
 
+    /* ── Adresses désinscrites des emails commerciaux : on le signale au
+       commercial, pour qu'il ne tente pas une relance qui sera refusée ── */
+    try {
+      const emails = leads.map((l) => (l.email || '').trim().toLowerCase()).filter(Boolean);
+      if (emails.length) {
+        const optedOutRows = await MarketingOptOut.find({ email: { $in: emails } }).select('email').lean();
+        const optedOutSet = new Set(optedOutRows.map((o) => o.email));
+        leads.forEach((l) => {
+          const normalized = (l.email || '').trim().toLowerCase();
+          l.marketingOptOut = Boolean(normalized && optedOutSet.has(normalized));
+          if (l.marketingOptOut) l.canRemind = false;
+        });
+      }
+    } catch (err) {
+      console.error('[leads] Erreur lecture désinscriptions :', err && err.message ? err.message : err);
+    }
+
     const pagination = {
       page: currentPage,
       perPage,
@@ -708,6 +727,7 @@ async function getAdminLeadDetail(req, res, next) {
         commResume: resumeComm,
         fournisseur,
         recoveryToken: cart.recoveryToken,
+        marketingOptOut: await marketingOptOut.isOptedOut(cart.email),
         createdAt: formatDateTimeFR(cart.createdAt),
       },
     });
@@ -795,6 +815,9 @@ async function postAdminManualReminder(req, res, next) {
         return res.json({ ok: true, status: nextStatus });
       }
       return res.redirect('/admin/activite-panier');
+    }
+    if (result && result.reason === 'marketing_opt_out') {
+      return res.status(400).json({ ok: false, error: 'Ce client s’est désinscrit des emails commerciaux : aucune relance ne peut lui être envoyée.' });
     }
     return res.status(500).json({ ok: false, error: `Échec envoi: ${result && result.reason ? result.reason : 'erreur inconnue'}` });
   } catch (err) {
