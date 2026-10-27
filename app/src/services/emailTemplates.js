@@ -853,7 +853,7 @@ function buildNewBlogPostEmail({ post, baseUrl } = {}) {
   const coverImageUrl = getTrimmedString(post && post.coverImageUrl);
   const safeBaseUrl = getTrimmedString(baseUrl);
   const articleUrl = slug ? `${safeBaseUrl}/blog/${slug}` : `${safeBaseUrl}/blog`;
-  const unsubscribeUrl = `${safeBaseUrl}/newsletter/desinscription`;
+  const unsubscribeUrl = `${safeBaseUrl}/desinscription`;
 
   const coverHtml = coverImageUrl
     ? `<div style="margin-bottom:16px;border-radius:12px;overflow:hidden;">
@@ -894,7 +894,7 @@ function renderCartItemRowsSimple(items) {
     .join('');
 }
 
-function buildAbandonedCartReminder1({ cart, baseUrl } = {}) {
+function buildAbandonedCartReminder1({ cart, baseUrl, unsubscribeUrl: providedUnsubscribeUrl } = {}) {
   const firstName = cart && cart.firstName ? String(cart.firstName).trim() : '';
   const greeting = firstName ? escapeHtml(firstName) : 'Bonjour';
   const items = cart && Array.isArray(cart.items) ? cart.items : [];
@@ -902,7 +902,8 @@ function buildAbandonedCartReminder1({ cart, baseUrl } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
-  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
+  const unsubscribeUrl = getTrimmedString(providedUnsubscribeUrl)
+    || (safeBaseUrl ? `${safeBaseUrl}/desinscription` : '');
 
   const itemsText = renderCartItemRowsSimple(items);
 
@@ -939,7 +940,7 @@ ${unsubscribeUrl ? `<div style="margin-top:24px;padding-top:14px;border-top:1px 
   };
 }
 
-function buildAbandonedCartReminder2({ cart, baseUrl } = {}) {
+function buildAbandonedCartReminder2({ cart, baseUrl, unsubscribeUrl: providedUnsubscribeUrl } = {}) {
   const firstName = cart && cart.firstName ? String(cart.firstName).trim() : '';
   const greeting = firstName ? escapeHtml(firstName) : 'Bonjour';
   const items = cart && Array.isArray(cart.items) ? cart.items : [];
@@ -947,7 +948,8 @@ function buildAbandonedCartReminder2({ cart, baseUrl } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
-  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
+  const unsubscribeUrl = getTrimmedString(providedUnsubscribeUrl)
+    || (safeBaseUrl ? `${safeBaseUrl}/desinscription` : '');
 
   const itemsText = renderCartItemRowsSimple(items);
 
@@ -984,7 +986,7 @@ ${unsubscribeUrl ? `<div style="margin-top:24px;padding-top:14px;border-top:1px 
   };
 }
 
-function buildAbandonedCartReminder3({ cart, baseUrl, promoCode } = {}) {
+function buildAbandonedCartReminder3({ cart, baseUrl, promoCode, unsubscribeUrl: providedUnsubscribeUrl } = {}) {
   const firstName = cart && cart.firstName ? String(cart.firstName).trim() : '';
   const greeting = firstName ? escapeHtml(firstName) : 'Bonjour';
   const items = cart && Array.isArray(cart.items) ? cart.items : [];
@@ -992,7 +994,8 @@ function buildAbandonedCartReminder3({ cart, baseUrl, promoCode } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
-  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
+  const unsubscribeUrl = getTrimmedString(providedUnsubscribeUrl)
+    || (safeBaseUrl ? `${safeBaseUrl}/desinscription` : '');
   const safePromoCode = getTrimmedString(promoCode);
 
   const itemsText = renderCartItemRowsSimple(items);

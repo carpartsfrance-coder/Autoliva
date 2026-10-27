@@ -306,6 +306,7 @@ function buildReminderEmailHtml(opts) {
   </td></tr>
   <tr><td style="padding:0 32px 24px;">
     <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.5;"><a href="mailto:contact@autoliva.com" style="color:#94a3b8;">contact@autoliva.com</a> · <a href="tel:${escapeHtml(opts.brandPhoneIntl || '+33465848539')}" style="color:#94a3b8;text-decoration:none;">${escapeHtml(opts.brandPhone || '04 65 84 85 39')}</a></p>
+    ${opts.unsubscribeUrl ? `<p style="margin:8px 0 0;font-size:11px;color:#94a3b8;line-height:1.5;">Vous ne souhaitez plus recevoir de relance ? <a href="${escapeHtml(opts.unsubscribeUrl)}" style="color:#94a3b8;text-decoration:underline;">Se désinscrire</a></p>` : ''}
   </td></tr>
 </table>
 </td></tr>

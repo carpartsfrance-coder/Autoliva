@@ -36,6 +36,7 @@ const { traduireEmail, langueDe } = require('./emailI18n');
 const { buildLegalPdfBuffer } = require('./legalPdf');
 const { getLegalPageBySlug } = require('./legalPages');
 const { getSiteUrlFromEnv } = require('./siteUrl');
+const marketingOptOut = require('./marketingOptOut');
 const brand = require('../config/brand');
 
 function getTrimmedString(value) {
@@ -555,16 +556,23 @@ async function sendNewBlogPostToSubscribers({ post, baseUrl } = {}) {
 async function sendAbandonedCartReminder({ cart, reminderNumber, promoCode } = {}) {
   if (!cart || !cart.email) return { ok: false, reason: 'missing_data' };
 
+  // Dernier rempart : une adresse désinscrite ne reçoit plus de relance,
+  // qu'elle vienne du CRON ou d'un clic « relancer » dans l'admin.
+  if (await marketingOptOut.isOptedOut(cart.email)) {
+    return { ok: false, reason: 'marketing_opt_out' };
+  }
+
   const baseUrl = getBaseUrl();
   const num = Number(reminderNumber) || 1;
+  const unsubscribeUrl = marketingOptOut.buildUnsubscribeUrl(cart.email, baseUrl);
 
   let built;
   if (num === 1) {
-    built = buildAbandonedCartReminder1({ cart, baseUrl });
+    built = buildAbandonedCartReminder1({ cart, baseUrl, unsubscribeUrl });
   } else if (num === 2) {
-    built = buildAbandonedCartReminder2({ cart, baseUrl });
+    built = buildAbandonedCartReminder2({ cart, baseUrl, unsubscribeUrl });
   } else {
-    built = buildAbandonedCartReminder3({ cart, baseUrl, promoCode });
+    built = buildAbandonedCartReminder3({ cart, baseUrl, promoCode, unsubscribeUrl });
   }
 
   if (!built) return { ok: false, reason: 'build_failed' };

@@ -175,7 +175,7 @@ app.use((req, res, next) => {
   if (p === '/commande/paiement/webhook') return next();
   if (p === '/admin/connexion' || p === '/admin/reinitialiser' || p === '/admin/deconnexion') return next();
 
-  const shouldProtect = /^(\/admin|\/compte|\/contact|\/devis|\/commande|\/newsletter)(\/|$)/.test(p);
+  const shouldProtect = /^(\/admin|\/compte|\/contact|\/devis|\/commande|\/newsletter|\/desinscription)(\/|$)/.test(p);
   if (!shouldProtect) return next();
 
   if (!isSameOrigin(req)) {

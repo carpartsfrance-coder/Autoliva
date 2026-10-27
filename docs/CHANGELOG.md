@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-10-27 — Désinscription réelle des relances + fin des relances après paiement
+
+Déclencheur : un client (commande CP2026-000673) recevait des relances « votre panier vous attend » après avoir payé, et le lien « Se désinscrire des emails marketing » du pied de ces emails ne menait nulle part.
+
+### Trois causes corrigées
+1. **Lien de désinscription mort** : les 3 emails de relance panier et l'email de nouvel article pointaient vers `/newsletter/desinscription`, une route qui n'a jamais existé (404). Le client cliquait, rien ne se passait.
+2. **Relances après paiement** : quand un client paie et ne revient pas sur le site, son panier reste dans sa session. Le CRON de détection le revoyait plus tard et créait un NOUVEAU lead, avec un `abandonedAt` postérieur à la commande — ce que le garde-fou « commande payée depuis l'abandon » ne pouvait pas voir. Résultat : 3 relances sur une pièce déjà achetée.
+3. **Double confirmation de commande** : le retour du client et le webhook du prestataire de paiement arrivaient à une seconde d'écart et lisaient tous les deux un flag `orderConfirmationSentAt` encore vide → deux emails de confirmation.
+
+### Nouveau
+- Page publique `/desinscription` : lien signé (HMAC) en un clic depuis l'email, ou saisie manuelle de l'adresse (utile quand un client le demande par téléphone). `/newsletter/desinscription` redirige vers elle, pour les emails déjà partis.
+- Collection `marketingoptouts` : une adresse désinscrite ne reçoit plus de relance panier, de relance devis, de newsletter ni de SMS marketing. La désinscription stoppe immédiatement les leads en cours et l'abonnement newsletter.
+- Les emails **transactionnels** (confirmation, expédition, consigne, livraison, SAV, remboursement) ne sont jamais filtrés : ils restent dus au client.
+- `src/services/cartReminderGuards.js` : garde-fou partagé entre la détection et l'envoi. Ne relance pas si le client a payé depuis l'abandon, ou s'il a acheté l'une des pièces du panier dans les 60 derniers jours (rattrape les paniers résiduels de session).
+- Admin « Leads à relancer » : badge **Désinscrit** sur la carte du lead, bouton de relance désactivé, message clair si on tente quand même.
+
+### Configuration
+- Nouvelle variable optionnelle `UNSUBSCRIBE_TOKEN_SECRET` (cf. `app/.env.example`). Si elle est vide, `SESSION_SECRET` est utilisé — aucune action requise sur Render.
+
+### Tests
+- `app/tests/integration/marketing-optout.test.js` : rejoue le scénario complet sur une vraie base MongoDB et la vraie app Express (vues rendues par HTTP, `fetch` intercepté donc aucun email réel). Couvre le panier résiduel non relancé, le lien de désinscription, le token invalide, la redirection de l'ancien lien, la réinscription, et la non-régression (un vrai panier abandonné est toujours relancé).
+
+### Fichiers ajoutés
+- `app/src/models/MarketingOptOut.js`, `app/src/services/marketingOptOut.js`, `app/src/services/cartReminderGuards.js`
+- `app/src/controllers/unsubscribeController.js`, `app/src/views/unsubscribe.ejs`
+- `app/tests/integration/marketing-optout.test.js`
+
+### Fichiers modifiés
+- `app/src/routes/index.js`, `app/src/routes/newsletter.js`, `app/src/app.js` (CSRF sur `/desinscription`)
+- `app/src/services/emailTemplates.js`, `app/src/services/emailService.js`, `app/src/services/engineQuoteEmail.js`, `app/src/services/smsService.js`
+- `app/src/jobs/sendAbandonedCartReminders.js`, `app/src/jobs/detectAbandonedCarts.js`, `app/src/jobs/sendEngineQuoteReminders.js`
+- `app/src/controllers/checkoutController.js` (verrou de confirmation), `app/src/controllers/abandonedCartAdminController.js`, `app/src/views/admin/cart-activity.ejs`
+- `app/.env.example`
+
 ## 2026-10-12 — Connecteur MCP : les autorisations survivent aux redémarrages
 
 ### Backend

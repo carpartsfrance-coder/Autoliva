@@ -1,9 +1,10 @@
 const mongoose = require('mongoose');
 
 const AbandonedCart = require('../models/AbandonedCart');
-const Order = require('../models/Order');
 const User = require('../models/User');
 const { sendAbandonedCartReminder } = require('../services/emailService');
+const { findPaidOrderBlockingReminder } = require('../services/cartReminderGuards');
+const marketingOptOut = require('../services/marketingOptOut');
 const smsService = require('../services/smsService');
 const { journaliser } = require('../services/leadCommunications');
 
@@ -31,11 +32,11 @@ const EXPIRATION_DELAY_MS = 7 * 24 * 60 * 60 * 1000;  // 7 days after reminder 3
 async function sendAbandonedCartReminders() {
   if (mongoose.connection.readyState !== 1) {
     console.error('[cart-reminders] MongoDB non connectée, skip.');
-    return { sent: 0, expired: 0, errors: 0 };
+    return { sent: 0, expired: 0, optedOut: 0, errors: 0 };
   }
 
   const now = new Date();
-  const report = { sent: 0, expired: 0, errors: 0 };
+  const report = { sent: 0, expired: 0, optedOut: 0, errors: 0 };
 
   // Interrupteur d'urgence : ABANDONED_CART_REMINDERS_ENABLED=false coupe le cron
   // instantanément via une variable d'environnement (Render), sans redéploiement —
@@ -143,42 +144,45 @@ async function sendAbandonedCartReminders() {
           continue;
         }
 
-        // Défense en profondeur : si le client a déjà passé une commande PAYÉE
-        // depuis l'abandon (quel que soit le moyen de paiement — Mollie,
-        // Scalapay, virement… — et sans avoir cliqué le lien recovery), on
-        // marque le panier recovered et on n'envoie PAS de relance.
-        //
-        // On matche par userId ET par EMAIL : chaque commande (même invité) est
-        // rattachée à un User créé avec l'email du client. Sans le match email,
-        // un achat invité (userId du panier = null) n'était jamais détecté →
-        // le client continuait à recevoir des relances après avoir payé.
-        try {
-          const orderUserIds = [];
-          if (cart.userId) orderUserIds.push(cart.userId);
-          if (cart.email) {
-            const buyer = await User.findOne({ email: String(cart.email).trim().toLowerCase() })
-              .select('_id').lean();
-            if (buyer && !orderUserIds.some((id) => String(id) === String(buyer._id))) {
-              orderUserIds.push(buyer._id);
-            }
-          }
-          if (orderUserIds.length) {
-            const subsequentPaidOrder = await Order.findOne({
-              userId: { $in: orderUserIds },
-              paymentStatus: 'paid',
-              createdAt: { $gte: cart.abandonedAt },
-            }).select('_id number').lean();
+        // Le client s'est désinscrit des emails commerciaux : on arrête ce
+        // lead définitivement plutôt que de le repasser en revue chaque heure.
+        if (await marketingOptOut.isOptedOut(cart.email)) {
+          await AbandonedCart.updateOne(
+            { _id: cart._id },
+            { $set: { status: 'expired' } }
+          );
+          report.optedOut += 1;
+          console.log(`[cart-reminders] Panier ${cart._id} stoppé (${cart.email} désinscrit des emails commerciaux)`);
+          continue;
+        }
 
-            if (subsequentPaidOrder) {
-              await AbandonedCart.updateOne(
-                { _id: cart._id },
-                { $set: { status: 'recovered', recoveredAt: now } }
-              );
-              console.log(`[cart-reminders] Panier ${cart._id} marqué recovered (commande ${subsequentPaidOrder.number || subsequentPaidOrder._id} payée depuis l'abandon)`);
-              continue;
-            }
-          }
-        } catch (_) { /* non-bloquant, on continue avec l'envoi normal */ }
+        // Défense en profondeur : si le client a déjà payé (quel que soit le
+        // moyen de paiement, et sans avoir cliqué le lien recovery), on marque
+        // le panier recovered et on n'envoie PAS de relance.
+        //
+        // Deux cas couverts, par userId ET par email (les commandes invité sont
+        // rattachées à un User créé avec l'email du client) :
+        //   – une commande payée depuis l'abandon ;
+        //   – une commande payée récemment contenant l'une des pièces du
+        //     panier. Ce second cas rattrape les paniers restés en session
+        //     après un paiement : le CRON de détection les revoit plus tard,
+        //     avec un `abandonedAt` postérieur à la commande, et relançait
+        //     alors une pièce déjà achetée.
+        const blockingOrder = await findPaidOrderBlockingReminder({
+          userId: cart.userId,
+          email: cart.email,
+          items: cart.items,
+          abandonedAt: cart.abandonedAt,
+        });
+
+        if (blockingOrder) {
+          await AbandonedCart.updateOne(
+            { _id: cart._id },
+            { $set: { status: 'recovered', recoveredAt: now } }
+          );
+          console.log(`[cart-reminders] Panier ${cart._id} marqué recovered (commande payée ${blockingOrder.number || blockingOrder._id})`);
+          continue;
+        }
 
         // Send the email
         const result = await sendAbandonedCartReminder({
