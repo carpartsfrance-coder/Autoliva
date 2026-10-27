@@ -62,7 +62,8 @@
       <input type="hidden" name="view" value="<%= view %>" />
       <div class="grid grid-cols-2 lg:grid-cols-7 gap-3">
 
-        <input type="text" name="q" value="<%= filters.q || '' %>" placeholder="Email, nom, tél…"
+        <input type="text" name="q" value="<%= filters.q || '' %>" placeholder="Email, nom, tél, n° commande, pièce…"
+          title="Email, nom, prénom, téléphone (toutes graphies), numéro de commande ou de facture, pièce du panier, plaque, VIN, référence"
           class="col-span-2 lg:col-span-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
 
         <select name="manual" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
@@ -111,6 +112,14 @@
         <button class="btn btn-primary text-sm" type="submit">Appliquer</button>
         <a href="/admin/activite-panier" class="btn btn-ghost text-sm">Réinitialiser</a>
       </div>
+
+      <% if (filters.q) { %>
+        <div class="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+          <span class="material-symbols-outlined text-sm">search</span>
+          <span>Recherche « <strong><%= filters.q %></strong> » sur <strong>tout l'historique</strong>, tous statuts confondus — la période et la file « À traiter » ne s'appliquent pas.</span>
+          <a href="/admin/activite-panier" class="ml-auto font-semibold underline">Effacer</a>
+        </div>
+      <% } %>
     </form>
 
     <!-- Liste de leads -->

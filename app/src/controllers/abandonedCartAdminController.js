@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const AbandonedCart = require('../models/AbandonedCart');
 const Product = require('../models/Product');
 const { sendAbandonedCartReminder, sendEmail } = require('../services/emailService');
+const { buildLeadSearchConditions } = require('../services/leadSearch');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const {
   applyVariables,
@@ -30,10 +31,6 @@ const { getMergedTemplates } = require('../services/leadTemplateSettings');
 const { journaliser, historique, resume } = require('../services/leadCommunications');
 const { demandesFournisseur } = require('../services/supplierRequest');
 const brand = require('../config/brand');
-
-function escapeRegExp(str) {
-  return String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 function escapeHtml(value) {
   return String(value || '')
@@ -275,6 +272,10 @@ async function getAdminLeadsPage(req, res, next) {
        le même client). Un filtre explicitement incompatible (statut manuel,
        source moteur/boîte, statut recovered/expired) bascule sur « Tous ». */
     let view = req.query.view === 'all' ? 'all' : 'todo';
+    /* Une recherche doit retrouver le client où qu'il soit : la file « À
+       traiter » masque les leads déjà contactés, convertis, expirés et les
+       pipelines devis. Chercher dedans ne renvoyait presque jamais rien. */
+    if (q) view = 'all';
     if (manualStatusFilter && manualStatusFilter !== 'none') view = 'all';
     if (status && ['recovered', 'expired'].includes(status)) view = 'all';
     if (captureSource && ENGINE_PIPELINE_SOURCES.includes(captureSource)) view = 'all';
@@ -340,16 +341,22 @@ async function getAdminLeadsPage(req, res, next) {
       query.phone = { $ne: '' };
     }
 
-    if (period && ['7d', '30d', '90d'].includes(period)) {
+    /* Hors recherche seulement : sur une recherche, la période (30 j par
+       défaut) écartait silencieusement les clients plus anciens — un client
+       qui appelle pour une commande de septembre était introuvable. */
+    if (!q && period && ['7d', '30d', '90d'].includes(period)) {
       const start = new Date();
       const days = parseInt(period, 10) || 30;
       start.setDate(start.getDate() - days);
       query.lastActivityAt = { $gte: start };
     }
 
+    /* Email, nom, prénom, « Prénom Nom », téléphone (toutes graphies),
+       pièce du panier, demande (plaque, VIN, référence), et numéro de
+       commande ou de facture — résolu en client puis en leads. */
     if (q) {
-      const rx = new RegExp(escapeRegExp(q), 'i');
-      query.$or = [{ email: rx }, { firstName: rx }, { lastName: rx }, { phone: rx }];
+      const searchConditions = await buildLeadSearchConditions(q);
+      if (searchConditions && searchConditions.length) query.$or = searchConditions;
     }
 
     /* Filtres utilisateur seuls (pour compter les onglets), puis contraintes
