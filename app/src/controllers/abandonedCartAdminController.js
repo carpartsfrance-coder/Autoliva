@@ -3,7 +3,6 @@ const mongoose = require('mongoose');
 const AbandonedCart = require('../models/AbandonedCart');
 const Product = require('../models/Product');
 const { sendAbandonedCartReminder, sendEmail } = require('../services/emailService');
-const { buildLeadSearchConditions } = require('../services/leadSearch');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const {
   applyVariables,
@@ -30,6 +29,7 @@ async function loadArticlesForBody(text) {
 const { getMergedTemplates } = require('../services/leadTemplateSettings');
 const { journaliser, historique, resume } = require('../services/leadCommunications');
 const { demandesFournisseur } = require('../services/supplierRequest');
+const { buildLeadSearchConditions } = require('../services/leadSearch');
 const brand = require('../config/brand');
 
 function escapeHtml(value) {
