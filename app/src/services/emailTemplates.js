@@ -1,4 +1,5 @@
 const brand = require('../config/brand');
+const { buildUnsubscribeUrl } = require('./emailSuppression');
 const { signatureHtml, signatureTexte } = require('./emailSignature');
 
 function getTrimmedString(value) {
@@ -902,7 +903,7 @@ function buildAbandonedCartReminder1({ cart, baseUrl } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
-  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
+  const unsubscribeUrl = safeBaseUrl ? buildUnsubscribeUrl(safeBaseUrl, cart && cart.email) : '';
 
   const itemsText = renderCartItemRowsSimple(items);
 
@@ -947,7 +948,7 @@ function buildAbandonedCartReminder2({ cart, baseUrl } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
-  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
+  const unsubscribeUrl = safeBaseUrl ? buildUnsubscribeUrl(safeBaseUrl, cart && cart.email) : '';
 
   const itemsText = renderCartItemRowsSimple(items);
 
@@ -992,7 +993,7 @@ function buildAbandonedCartReminder3({ cart, baseUrl, promoCode } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
-  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
+  const unsubscribeUrl = safeBaseUrl ? buildUnsubscribeUrl(safeBaseUrl, cart && cart.email) : '';
   const safePromoCode = getTrimmedString(promoCode);
 
   const itemsText = renderCartItemRowsSimple(items);

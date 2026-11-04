@@ -116,9 +116,19 @@ async function detectAbandonedCarts() {
         //   - un lead expired dont le cycle a démarré < 30 j → la séquence de
         //     relances a déjà été jouée ce mois-ci pour ce panier (sinon un
         //     panier qui dort en session relançait le client tous les ~10 jours,
-        //     indéfiniment).
+        //     indéfiniment) ;
+        //   - un lead relancé depuis < 90 j, quel que soit son statut → voir
+        //     ci-dessous.
+        //
+        // Le critère sur lastRemindedAt ferme le dernier trou : une relance
+        // envoyée bascule le lead en 'recovered' quelques secondes plus tard,
+        // et le critère « recovered depuis < 7 j » cesse alors de protéger au
+        // bout d'une semaine. Un panier jamais vidé repartait donc en relance
+        // n°1 tous les 7 jours, sans fin — constaté en production sur 155
+        // destinataires, jusqu'à 15 cycles pour un même client.
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
         const existingCart = await AbandonedCart.findOne({
           $and: [
             { $or: [{ sessionId }, { email }] },
@@ -127,6 +137,7 @@ async function detectAbandonedCarts() {
                 { status: { $nin: ['recovered', 'expired'] } },
                 { status: 'recovered', recoveredAt: { $gte: sevenDaysAgo } },
                 { status: 'expired', abandonedAt: { $gte: thirtyDaysAgo } },
+                { lastRemindedAt: { $gte: ninetyDaysAgo } },
               ],
             },
           ],
