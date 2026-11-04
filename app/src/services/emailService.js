@@ -32,6 +32,7 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 
 const { buildOrderInvoicePdfBuffer } = require('./invoicePdf');
+const { CATEGORY_MARKETING, CATEGORY_TRANSACTIONAL, isSuppressed } = require('./emailSuppression');
 const { traduireEmail, langueDe } = require('./emailI18n');
 const { buildLegalPdfBuffer } = require('./legalPdf');
 const { getLegalPageBySlug } = require('./legalPages');
@@ -185,7 +186,7 @@ function getFrom() {
   };
 }
 
-async function sendEmail({ toEmail, subject, html, text, attachments, replyTo, lang, sansSuivi } = {}) {
+async function sendEmail({ toEmail, subject, html, text, attachments, replyTo, lang, sansSuivi, category } = {}) {
   /* Point de passage UNIQUE de tous les e-mails : c'est ici, et nulle part
      ailleurs, que la version allemande est produite. Les gabarits restent
      français ; seuls les nœuds de texte du HTML rendu sont substitués, jamais
@@ -208,6 +209,19 @@ async function sendEmail({ toEmail, subject, html, text, attachments, replyTo, l
   if (!from.email) {
     console.error('MAIL_FROM_EMAIL manquant : email non envoyé');
     return { ok: false, reason: 'missing_from_email' };
+  }
+
+  // Garde-fou opt-out : vérifié sur l'adresse réelle du destinataire, avant
+  // tout envoi, pour qu'aucun appelant ne puisse le contourner. Les e-mails
+  // marketing sont bloqués dès qu'une suppression existe ; les transactionnels
+  // ne le sont qu'en portée 'all'.
+  const emailCategory = category === CATEGORY_MARKETING ? CATEGORY_MARKETING : CATEGORY_TRANSACTIONAL;
+  const suppression = await isSuppressed(toEmail, emailCategory);
+  if (suppression.blocked) {
+    console.log(
+      `[emailService] Envoi bloqué (opt-out ${suppression.scope}) — ${emailCategory} — ${getTrimmedString(subject) || 'sans objet'}`
+    );
+    return { ok: false, reason: 'suppressed', scope: suppression.scope };
   }
 
   const resolved = resolveToEmail(toEmail);
@@ -514,7 +528,10 @@ async function sendNewBlogPostToSubscribers({ post, baseUrl } = {}) {
 
   let subscribers = [];
   try {
-    subscribers = await NewsletterSubscriber.find({ status: 'active' }).select('email').limit(500).lean();
+    subscribers = await NewsletterSubscriber.find({ status: 'active', unsubscribedAt: null })
+      .select('email')
+      .limit(500)
+      .lean();
   } catch (err) {
     console.error('[Newsletter] Erreur lecture abonnés :', err.message);
     return { sent: 0, errors: 1 };
@@ -530,8 +547,16 @@ async function sendNewBlogPostToSubscribers({ post, baseUrl } = {}) {
 
   for (const sub of subscribers) {
     try {
-      const result = await sendEmail({ toEmail: sub.email, subject: email.subject, html: email.html, text: email.text });
-      if (result && result.ok) {
+      const result = await sendEmail({
+        toEmail: sub.email,
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
+        category: CATEGORY_MARKETING,
+      });
+      if (result && result.reason === 'suppressed') {
+        // Désinscrit : ce n'est pas une erreur, on passe au suivant.
+      } else if (result && result.ok) {
         sent++;
       } else {
         errors++;
@@ -575,6 +600,7 @@ async function sendAbandonedCartReminder({ cart, reminderNumber, promoCode } = {
     subject: built.subject,
     html: built.html,
     text: built.text,
+    category: CATEGORY_MARKETING,
   });
 }
 
