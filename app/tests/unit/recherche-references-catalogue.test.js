@@ -72,6 +72,19 @@ test('une référence tapée en fragments retrouve aussi la fiche', () => {
   assert.ok(fauxMatch(f, MECATRONIQUE));
 });
 
+test('la lettre de variante isolée n’est pas perdue au recollage', () => {
+  /* « 0am 325 025 d 000 » : le « d » fait un fragment d'un seul caractère.
+     Recollé sans lui, on cherchait « 0am325025000 » — aucune pièce. Ce terme
+     est facturé 19,28 € sur 30 jours dans Google Ads. */
+  const f = svc.filtreTexteRepli({ archived: false }, '0am 325 025 d 000');
+  assert.ok(fauxMatch(f, { compatibleReferences: ['0AM 325 025 D 000'] }));
+  /* Le préfiltre reste large (les fragments « 325 » et « 025 » ramènent
+     d'autres fiches) — c'est le classement qui tranche ensuite. Ici on
+     vérifie seulement que la bonne fiche n'est plus écartée d'entrée. */
+  assert.ok(new RegExp(svc.motifReference('0am325025d000'), 'i').test('0AM 325 025 D 000'));
+  assert.ok(!new RegExp(svc.motifReference('0am325025d000'), 'i').test('0AM 325 025 H'));
+});
+
 test('la lettre O à la place du zéro initial retrouve la fiche', () => {
   const f = svc.filtreTexteRepli({ archived: false }, 'oam325025d');
   assert.ok(fauxMatch(f, MECATRONIQUE));

@@ -254,7 +254,16 @@ function filtreTexteRepli(filter, searchQuery, lang) {
   /* Les motifs de référence : sur chaque mot, et sur la requête entière
      recollée (« 0am 325 025 d » et « 0am325025d » désignent la même pièce). */
   const candidatsRef = mots.slice();
-  if (mots.length > 1) candidatsRef.push(mots.join(''));
+  /* Le recollage part des fragments BRUTS, pas de `mots` : celui-ci écarte les
+     fragments d'un seul caractère, or c'est exactement la lettre de variante
+     d'une référence. « 0am 325 025 d 000 » recollé sans le « d » donne
+     « 0am325025000 », qui ne correspond à aucune pièce — la fiche qui porte
+     « 0AM 325 025 D 000 » restait alors introuvable. */
+  const fragments = String(searchQuery || '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .slice(0, 10);
+  if (fragments.length > 1) candidatsRef.push(fragments.join(''));
   for (const candidat of candidatsRef) {
     const motif = motifReference(candidat);
     if (!motif) continue;
