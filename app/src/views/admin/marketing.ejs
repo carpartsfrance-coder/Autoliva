@@ -74,6 +74,7 @@
           <select class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900" name="model">
             <option value="last" <%= filters.model === 'last' ? 'selected' : '' %>>Dernier clic (qui a converti)</option>
             <option value="first" <%= filters.model === 'first' ? 'selected' : '' %>>Premier clic (qui a découvert)</option>
+            <option value="visit" <%= filters.model === 'visit' ? 'selected' : '' %>>Dernière arrivée (sans favoriser la pub)</option>
           </select>
         </div>
 
@@ -267,7 +268,7 @@
                      var visitorsPeriod = (filters.period === '7d' || filters.period === '30d') ? filters.period : '7d';
                      qsVisitors.push('period=' + visitorsPeriod);
                      drillVisitorsUrl = '/admin/visiteurs?' + qsVisitors.join('&');
-                   } else if (r.bucket === '__direct__' || r.bucket === '__organic__' || r.bucket === '__gads__' || r.bucket === '__fb__' || r.bucket === '__msads__') {
+                   } else if (r.bucket === '__direct__' || r.bucket === '__organic__' || r.bucket === '__ai__' || r.bucket === '__referral__' || r.bucket === '__gads__' || r.bucket === '__fb__' || r.bucket === '__msads__') {
                      // Buckets virtuels (Direct, Organique, Google Ads sans UTM, etc.) : pas de drill
                      // précis vers commandes, mais on peut quand même lister les visiteurs
                      // par source si disponible
@@ -342,7 +343,7 @@
     </div>
 
     <div class="mt-4 text-xs text-slate-400">
-      <strong>Note :</strong> les visites proviennent de la collection <code>attributiontouches</code> (TTL 180 jours). Les commandes proviennent de <code>orders.attribution.<%= filters.model === 'first' ? 'firstTouch' : 'lastTouch' %></code>. Une commande sans aucune trace UTM/gclid est rangée dans <em>Direct / SEO</em>. Les commandes d'avant la mise en place du tracking sont dans <em>Pré-tracking</em>.
+      <strong>Note :</strong> les visites proviennent de la collection <code>attributiontouches</code> (TTL 180 jours) : clics pub (gclid / utm) et, depuis novembre 2026, arrivées depuis un moteur de recherche, un assistant IA ou un autre site. Les visites directes (sans référent) ne sont pas enregistrées. Les commandes proviennent de <code>orders.attribution.<%= filters.model === 'first' ? 'firstTouch' : (filters.model === 'visit' ? 'visitTouch' : 'lastTouch') %></code>. « Dernier clic » garde un clic pub jusqu'à 90 jours, même si le client revient ensuite par Google gratuit : pour comparer pub et gratuit, choisir « Dernière arrivée ». Les commandes téléphone / WhatsApp sont dans <em>Commandes hors site</em> ; les commandes web sans source (visite directe, ou passées avant ce suivi) dans <em>Commandes web sans source</em>. Pour le trafic Google gratuit exact, voir Search Console.
     </div>
   </div>
 </main>

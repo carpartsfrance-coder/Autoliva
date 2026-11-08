@@ -565,6 +565,11 @@ const orderSchema = new mongoose.Schema(
     attribution: {
       firstTouch: { type: attributionTouchSubSchema, default: null },
       lastTouch: { type: attributionTouchSubSchema, default: null },
+      // Dernière arrivée avant la commande (pub, Google gratuit, ChatGPT, autre
+      // site), sans la préférence de 90 jours pour le gclid de lastTouch.
+      // Absente = client arrivé directement, ou commande d'avant le 11/2026.
+      // Voir captureAttribution.
+      visitTouch: { type: attributionTouchSubSchema, default: null },
       ga4ClientId: { type: String, default: '', trim: true },
       ga4SessionId: { type: String, default: '', trim: true },
       uploadedToGoogleAdsAt: { type: Date, default: null, index: true },

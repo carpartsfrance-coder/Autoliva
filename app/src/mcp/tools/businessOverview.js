@@ -11,6 +11,12 @@ const {
   safePeriod,
 } = require('../util/period');
 const { eurFromCents, pct, deltaPct, jsonResult } = require('../util/format');
+const {
+  ORGANIC_REFERRER_REGEX,
+  AI_REFERRER_REGEX,
+  AI_SOURCE_REGEX,
+  SEARCH_SOURCE_REGEX,
+} = require('../../services/sourceVisite');
 
 const PAID_STATUSES = ['paid', 'processing', 'shipped', 'delivered', 'completed'];
 
@@ -60,10 +66,38 @@ async function aggregateUniqueVisitsInRange(startDate, endDate) {
   return result[0]?.visits || 0;
 }
 
+const OWN_REFERRER_REGEX = /^https?:\/\/(?:[a-z0-9-]+\.)*autoliva\.(com|fr|de)(?:[\/?#:]|$)/i;
+
+// Range une ligne agrégée (utm + drapeaux) dans un canal. Fonction pure,
+// testée dans tests/unit/source-visite.test.js.
+function trafficBucket(r) {
+  const src = (r.source || '').toLowerCase();
+  const med = (r.medium || '').toLowerCase();
+  if (med === 'cpc' || med === 'paid' || med === 'ppc' || src === 'google_ads' || r.hasGclid) {
+    if (r.hasGclid || src.includes('google')) return 'paid_google';
+    if (r.hasFbclid || src.includes('facebook') || src.includes('meta')) return 'paid_facebook';
+    if (r.hasMsclkid || src.includes('bing') || src.includes('microsoft')) return 'paid_microsoft';
+    return 'paid_other';
+  }
+  if (med === 'organic' || (src && !med && SEARCH_SOURCE_REGEX.test(src))) return 'organic';
+  if (med === 'email' || med === 'newsletter') return 'email';
+  if (med === 'ai' || (src && AI_SOURCE_REGEX.test(src))) return 'ai';
+  if (!src && !med) {
+    // Visite sans marqueur : c'est le référent qui dit d'où elle vient.
+    if (r.hasOrganicReferrer) return 'organic';
+    if (r.hasAiReferrer) return 'ai';
+    if (r.hasExternalReferrer) return 'referral';
+    return 'direct';
+  }
+  if (med === 'referral' || med === 'social' || (src && !med)) return 'referral';
+  return 'direct';
+}
+
 async function aggregateTrafficMix(startDate) {
   const match = {};
   if (startDate) match.createdAt = { $gte: startDate };
 
+  const ref = { $ifNull: ['$referrer', ''] };
   const rows = await AttributionTouch.aggregate([
     { $match: match },
     {
@@ -74,39 +108,48 @@ async function aggregateTrafficMix(startDate) {
           hasGclid: { $cond: [{ $and: [{ $ifNull: ['$gclid', false] }, { $ne: ['$gclid', ''] }] }, true, false] },
           hasFbclid: { $cond: [{ $and: [{ $ifNull: ['$fbclid', false] }, { $ne: ['$fbclid', ''] }] }, true, false] },
           hasMsclkid: { $cond: [{ $and: [{ $ifNull: ['$msclkid', false] }, { $ne: ['$msclkid', ''] }] }, true, false] },
+          hasOrganicReferrer: { $cond: [{ $regexMatch: { input: ref, regex: ORGANIC_REFERRER_REGEX } }, true, false] },
+          hasAiReferrer: { $cond: [{ $regexMatch: { input: ref, regex: AI_REFERRER_REGEX } }, true, false] },
+          hasExternalReferrer: {
+            $cond: [{ $and: [{ $ne: [ref, ''] }, { $not: [{ $regexMatch: { input: ref, regex: OWN_REFERRER_REGEX } }] }] }, true, false],
+          },
         },
         sessions: { $addToSet: '$sessionId' },
       },
     },
-    { $project: { _id: 0, source: '$_id.source', medium: '$_id.medium', hasGclid: '$_id.hasGclid', hasFbclid: '$_id.hasFbclid', hasMsclkid: '$_id.hasMsclkid', visits: { $size: '$sessions' } } },
+    {
+      $project: {
+        _id: 0,
+        source: '$_id.source',
+        medium: '$_id.medium',
+        hasGclid: '$_id.hasGclid',
+        hasFbclid: '$_id.hasFbclid',
+        hasMsclkid: '$_id.hasMsclkid',
+        hasOrganicReferrer: '$_id.hasOrganicReferrer',
+        hasAiReferrer: '$_id.hasAiReferrer',
+        hasExternalReferrer: '$_id.hasExternalReferrer',
+        visits: { $size: '$sessions' },
+      },
+    },
   ]);
 
-  const buckets = { paid_google: 0, paid_facebook: 0, paid_microsoft: 0, paid_other: 0, organic: 0, referral: 0, email: 0, direct: 0 };
+  const buckets = { paid_google: 0, paid_facebook: 0, paid_microsoft: 0, paid_other: 0, organic: 0, ai: 0, referral: 0, email: 0, direct: 0 };
   for (const r of rows) {
-    const src = (r.source || '').toLowerCase();
-    const med = (r.medium || '').toLowerCase();
-    if (med === 'cpc' || med === 'paid' || med === 'ppc' || src === 'google_ads' || r.hasGclid) {
-      if (r.hasGclid || src.includes('google')) buckets.paid_google += r.visits;
-      else if (r.hasFbclid || src.includes('facebook') || src.includes('meta')) buckets.paid_facebook += r.visits;
-      else if (r.hasMsclkid || src.includes('bing') || src.includes('microsoft')) buckets.paid_microsoft += r.visits;
-      else buckets.paid_other += r.visits;
-    } else if (med === 'organic' || (src && !med && (src.includes('google') || src.includes('bing') || src.includes('duckduckgo')))) {
-      buckets.organic += r.visits;
-    } else if (med === 'email' || med === 'newsletter') {
-      buckets.email += r.visits;
-    } else if (med === 'referral' || (src && !med)) {
-      buckets.referral += r.visits;
-    } else {
-      buckets.direct += r.visits;
-    }
+    buckets[trafficBucket(r)] += r.visits;
   }
   const total = Object.values(buckets).reduce((a, b) => a + b, 0);
   const mix = {};
   for (const [k, v] of Object.entries(buckets)) {
     mix[k] = { visits: v, sharePct: pct(v, total) };
   }
-  return { totalVisits: total, mix };
+  return { totalVisits: total, mix, note: TRAFFIC_NOTE };
 }
+
+// Ce que ces chiffres ne voient pas : à rappeler à chaque lecture.
+const TRAFFIC_NOTE =
+  "Visites enregistrées côté serveur : clics pub (gclid/utm), arrivées depuis un moteur de recherche, un assistant IA ou un autre site. "
+  + "Les visites directes (sans référent) ne sont pas comptées, et les visites gratuites (moteurs, IA, autres sites) ne le sont que depuis la correction de novembre 2026. "
+  + "Le chiffre exact des clics Google gratuits est dans Google Search Console.";
 
 async function topProducts(startDate, limit) {
   const match = { ...BASE_ORDER_MATCH };
@@ -149,7 +192,7 @@ async function abandonedCartLoss(startDate) {
 const definition = {
   name: 'getBusinessOverview',
   description:
-    "Vue de pilotage globale Car Parts France pour une période donnée : CA, nombre de commandes, panier moyen (AOV), nombre de visites uniques, taux de conversion, mix sources de trafic (organique / payé Google/Facebook/Microsoft / direct / referral / email), top 5 produits par CA, et estimation du CA perdu sur paniers abandonnés. Compare automatiquement avec la période précédente. À utiliser pour répondre à 'comment va le business ?', 'CA du mois', 'évolution vs mois dernier'.",
+    "Vue de pilotage globale Car Parts France pour une période donnée : CA, nombre de commandes, panier moyen (AOV), nombre de visites uniques, taux de conversion, mix sources de trafic (organique / IA / payé Google/Facebook/Microsoft / référents / email ; les visites directes sans référent ne sont pas enregistrées, voir trafficMix.note), top 5 produits par CA, et estimation du CA perdu sur paniers abandonnés. Compare automatiquement avec la période précédente. À utiliser pour répondre à 'comment va le business ?', 'CA du mois', 'évolution vs mois dernier'.",
   inputSchema: {
     type: 'object',
     properties: {
@@ -230,4 +273,4 @@ async function handler(args = {}) {
   });
 }
 
-module.exports = { definition, handler };
+module.exports = { definition, handler, trafficBucket };

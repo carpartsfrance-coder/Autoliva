@@ -3,6 +3,8 @@
 // Mise en forme du sous-document Order.attribution pour l'admin.
 // Pas d'I/O, fonction pure — facile à tester.
 
+const { classifyReferrer, refererHost } = require('./sourceVisite');
+
 const SOURCE_LABELS = {
   google: 'Google',
   bing: 'Bing',
@@ -36,7 +38,8 @@ const MEDIUM_LABELS = {
 function isEmpty(t) {
   if (!t || typeof t !== 'object') return true;
   return !t.gclid && !t.gbraid && !t.wbraid && !t.fbclid && !t.msclkid
-    && !t.utmSource && !t.utmMedium && !t.utmCampaign && !t.utmContent && !t.utmTerm;
+    && !t.utmSource && !t.utmMedium && !t.utmCampaign && !t.utmContent && !t.utmTerm
+    && !t.referrer;
 }
 
 // Détermine la source principale humainement lisible et la couleur de badge.
@@ -66,6 +69,15 @@ function classifyTouch(t) {
     else if (med === 'email' || src === 'newsletter') badge = 'purple';
     return { label: friendly + (med ? ' · ' + (MEDIUM_LABELS[med] || med) : ''), badge, icon: src === 'facebook' ? 'group' : 'public' };
   }
+  // Ni pub ni UTM : le référent dit d'où vient la visite (depuis 11/2026).
+  const kind = classifyReferrer(t.referrer || '');
+  if (kind === 'organic') {
+    const host = refererHost(t.referrer);
+    const engine = /bing/.test(host) ? 'Bing' : (/google/.test(host) ? 'Google' : (host || 'Moteur'));
+    return { label: engine + ' · Gratuit (SEO)', badge: 'emerald', icon: 'travel_explore' };
+  }
+  if (kind === 'ai') return { label: 'Assistant IA · ' + refererHost(t.referrer), badge: 'emerald', icon: 'smart_toy' };
+  if (kind === 'referral') return { label: 'Site référent · ' + refererHost(t.referrer), badge: 'emerald', icon: 'link' };
   return { label: 'Direct / SEO', badge: 'slate', icon: 'travel_explore' };
 }
 
@@ -110,6 +122,7 @@ function formatAttribution(attribution, formatDateTime) {
   }
   const first = formatTouch(attribution.firstTouch, formatDateTime);
   const last = formatTouch(attribution.lastTouch, formatDateTime);
+  const visit = formatTouch(attribution.visitTouch, formatDateTime);
 
   if (!first && !last) {
     return { hasAttribution: false };
@@ -131,6 +144,7 @@ function formatAttribution(attribution, formatDateTime) {
     },
     firstTouch: first,
     lastTouch: last,
+    visitTouch: visit,
     ga4ClientId: attribution.ga4ClientId || '',
     uploadedToGoogleAdsAt: attribution.uploadedToGoogleAdsAt || null,
     googleAdsConversionId: attribution.googleAdsConversionId || '',
