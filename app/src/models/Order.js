@@ -577,6 +577,35 @@ const orderSchema = new mongoose.Schema(
       uploadError: { type: String, default: '', trim: true },
     },
 
+    /* ── Ce que Google Ads sait de cette vente (googleAdsConversionSync) ──
+     *
+     * Depuis le 08/11/2026 la valeur envoyée est la MARGE (margeCommande.js),
+     * avec le n° de commande comme identifiant de transaction : un nouvel
+     * envoi avec le même identifiant corrige la valeur chez Google
+     * (remboursement → 0, prix d'achat saisi après coup → marge exacte).
+     * Sans ce bloc (ventes envoyées avant), aucune correction n'est possible :
+     * un envoi sans identifiant d'origine créerait une 2e conversion. */
+    googleAdsConversion: {
+      // 'purchase' = achat sur le site après un clic pub ;
+      // 'sale'     = vente (téléphone, site…) d'un client venu par une
+      //              demande de devis issue d'un clic pub.
+      action: { type: String, enum: ['', 'purchase', 'sale'], default: '' },
+      transactionId: { type: String, default: '', trim: true },
+      conversionAt: { type: Date, default: null },
+      uploadedAt: { type: Date, default: null },
+      valueCents: { type: Number, default: null },
+      estimated: { type: Boolean, default: false },
+      clickIds: {
+        gclid: { type: String, default: '', trim: true },
+        gbraid: { type: String, default: '', trim: true },
+        wbraid: { type: String, default: '', trim: true },
+      },
+      leadId: { type: mongoose.Schema.Types.ObjectId, default: null },
+      restatedAt: { type: Date, default: null },
+      // Valeur ramenée à 0 (remboursée) : Google n'accepte plus d'ajustement.
+      final: { type: Boolean, default: false },
+    },
+
     /* ── Connecteur Comptoir (getcomptoir.fr) ────────────────────────────
      * Trace l'envoi de la commande vers le tableau de bord des ventes.
      * `sentAt` fait office de verrou : posé, la commande n'est plus reprise
@@ -759,6 +788,8 @@ orderSchema.index(
 );
 orderSchema.index({ 'attribution.lastTouch.gclid': 1 });
 orderSchema.index({ 'attribution.uploadedToGoogleAdsAt': 1, paymentStatus: 1 });
+/* Corrections Google Ads (remboursements, prix d'achat saisi ensuite). */
+orderSchema.index({ 'googleAdsConversion.uploadedAt': 1, 'googleAdsConversion.final': 1 });
 /* Rattrapage Comptoir : les commandes encaissées pas encore poussées. */
 orderSchema.index({ 'comptoir.sentAt': 1, paymentStatus: 1, createdAt: -1 });
 

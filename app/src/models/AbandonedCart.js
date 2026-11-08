@@ -346,6 +346,11 @@ const abandonedCartSchema = new mongoose.Schema(
       leadAt: { type: Date, default: null },   // conversion "Lead - Devis" remontée
       quoteAt: { type: Date, default: null },  // conversion "Devis envoyé" remontée (étage qualité intermédiaire)
       saleAt: { type: Date, default: null },   // conversion "Vente moteur" remontée
+      // Comment la vente a été remontée : 'devis' = lead passé « gagné » dans
+      // l'outil devis ; 'commande' = commande (téléphone, site…) du même client
+      // rattachée à cette demande (même n° de dossier, téléphone ou e-mail).
+      saleVia: { type: String, default: '' },
+      saleOrderIds: { type: [mongoose.Schema.Types.ObjectId], default: [] },
     },
 
     /** Compteurs d'actions manuelles depuis le dashboard admin */
