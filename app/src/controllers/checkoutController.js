@@ -368,6 +368,12 @@ function mapMollieStatusToPaymentStatus(mollieStatus) {
   return 'failed';
 }
 
+const STATUTS_SCALAPAY_CONNUS = new Set([
+  'charged', 'captured', 'approved', 'authorized', 'authorised',
+  'pending', 'created', 'processing',
+  'declined', 'canceled', 'cancelled', 'expired', 'void',
+]);
+
 function mapScalapayStatusToPaymentStatus(scalapayStatus) {
   const s = getTrimmedString(scalapayStatus).toLowerCase();
   if (s === 'charged' || s === 'captured') return 'paid';
@@ -544,20 +550,92 @@ async function releaseOrderStockIfNeeded(order) {
   await Order.findByIdAndUpdate(order._id, { $set: { stockReleasedAt: new Date() } });
 }
 
+/* ── Ce qu'un paiement confirmé a le droit de changer sur une commande ──
+ *
+ * Diagnostic du 08/11/2026. Mollie rappelle le site à CHAQUE événement d'un
+ * paiement, remboursement compris, et un paiement remboursé reste « paid »
+ * chez Mollie. L'ancienne règle (« tout statut sauf payée / en préparation /
+ * expédiée / livrée / terminée passe en préparation ») renvoyait donc en
+ * préparation, quelques heures après, les commandes remboursées :
+ * CP2026-000755, 000785, 000713, 000666 (000751, elle, remise à la main).
+ * Elles revenaient dans les commandes à préparer, et comptaient de nouveau
+ * comme des ventes dans les tableaux. La même règle déplaçait aussi les
+ * commandes « étiquette créée ».
+ *
+ * Désormais :
+ *   - seul un statut d'AVANT paiement passe en préparation ;
+ *   - jamais pour un paiement déjà remboursé ou contesté, même en partie ;
+ *   - la date de paiement reste celle du premier paiement ;
+ *   - le « premier paiement » (facture, e-mail et SMS de confirmation) est
+ *     réservé de façon atomique : quand le webhook et le retour du client
+ *     arrivent ensemble, une seule des deux requêtes le traite. Avant, les
+ *     deux envoyaient la confirmation (reçue deux fois pour 000755, 000751,
+ *     000666) et chacune prenait un numéro de facture au compteur. */
+const STATUTS_AVANT_PAIEMENT = ['draft', 'pending_payment', 'cancelled'];
+
+function montantMollieCents(montant) {
+  const v = montant && typeof montant === 'object' ? parseFloat(montant.value) : NaN;
+  return Number.isFinite(v) ? Math.round(v * 100) : 0;
+}
+
+function paiementMollieRembourseOuConteste(payment) {
+  return montantMollieCents(payment && payment.amountRefunded) > 0
+    || montantMollieCents(payment && payment.amountChargedBack) > 0;
+}
+
+function dateValide(valeur) {
+  const d = valeur ? new Date(valeur) : null;
+  return d && !Number.isNaN(d.getTime()) ? d : null;
+}
+
+function nbModifies(res) {
+  return Number((res && (res.modifiedCount != null ? res.modifiedCount : res.nModified)) || 0);
+}
+
+/* Passe en « paid » si ce n'était pas déjà le cas. Renvoie true pour la seule
+   requête qui a fait le passage (c'est elle qui facture et confirme). */
+async function reserverPremierPaiement(orderId, champsEnPlus = {}) {
+  const res = await Order.updateOne(
+    { _id: orderId, paymentStatus: { $ne: 'paid' } },
+    { $set: { paymentStatus: 'paid', ...champsEnPlus } }
+  );
+  return nbModifies(res) === 1;
+}
+
+/* Passage en préparation, seulement depuis un statut d'avant paiement, et
+   jamais pour une commande qui a déjà un remboursement enregistré (annulée
+   puis remboursée, par exemple). La condition est dans la requête : deux
+   appels simultanés ne l'écrivent qu'une fois dans l'historique. */
+async function passerEnPreparationApresPaiement(orderId, changedBy) {
+  await Order.updateOne(
+    { _id: orderId, status: { $in: STATUTS_AVANT_PAIEMENT }, 'refunds.0': { $exists: false } },
+    {
+      $set: { status: 'processing' },
+      $push: {
+        statusHistory: {
+          $each: [
+            { status: 'paid', changedAt: new Date(), changedBy },
+            { status: 'processing', changedAt: new Date(), changedBy: 'system', note: 'Passage automatique en préparation après paiement' },
+          ],
+        },
+      },
+    }
+  );
+}
+
 async function applyMolliePaymentToOrder(order, payment) {
   if (!order || !order._id || !payment) return order;
-
-  const wasPaid = getTrimmedString(order.paymentStatus).toLowerCase() === 'paid';
 
   const mollieStatus = getTrimmedString(payment.status);
   const paymentStatus = mapMollieStatusToPaymentStatus(mollieStatus);
 
   const update = {
     paymentProvider: 'mollie',
-    paymentStatus,
     molliePaymentStatus: mollieStatus,
     mollieLastCheckedAt: new Date(),
   };
+  // « paid » s'écrit plus bas, de façon atomique (reserverPremierPaiement).
+  if (paymentStatus !== 'paid') update.paymentStatus = paymentStatus;
 
   /* Capture des frais Mollie quand la transaction est settled.
    * Mollie expose `amount.value` (brut) et `settlementAmount.value` (net
@@ -573,19 +651,17 @@ async function applyMolliePaymentToOrder(order, payment) {
     }
   } catch (_) { /* best effort */ }
 
+  let premierPaiement = false;
   if (paymentStatus === 'paid') {
-    update.molliePaidAt = new Date();
-
-    if (order.status !== 'paid' && order.status !== 'processing' && order.status !== 'shipped' && order.status !== 'delivered' && order.status !== 'completed') {
-      update.status = 'processing';
-      update.$push = {
-        statusHistory: {
-          $each: [
-            { status: 'paid', changedAt: new Date(), changedBy: 'mollie' },
-            { status: 'processing', changedAt: new Date(), changedBy: 'system', note: 'Passage automatique en préparation après paiement' },
-          ],
-        },
-      };
+    const payeLe = dateValide(payment.paidAt) || new Date();
+    premierPaiement = await reserverPremierPaiement(order._id, { molliePaidAt: payeLe });
+    // Commande déjà marquée payée par un autre chemin, sans date : on la pose
+    // une fois, sans jamais écraser une date existante.
+    if (!premierPaiement) {
+      await Order.updateOne({ _id: order._id, molliePaidAt: null }, { $set: { molliePaidAt: payeLe } });
+    }
+    if (!paiementMollieRembourseOuConteste(payment)) {
+      await passerEnPreparationApresPaiement(order._id, 'mollie');
     }
   }
 
@@ -605,7 +681,7 @@ async function applyMolliePaymentToOrder(order, payment) {
   await Order.findByIdAndUpdate(order._id, update);
   let refreshed = await Order.findById(order._id).lean();
 
-  if (paymentStatus === 'paid' && !wasPaid) {
+  if (premierPaiement) {
     try {
       await ensureInvoiceIssuedForPaidOrder(refreshed._id);
       refreshed = await Order.findById(refreshed._id).lean();
@@ -623,7 +699,7 @@ async function applyMolliePaymentToOrder(order, payment) {
     await promoCodes.redeemReservedForOrder(order._id);
   }
 
-  if (paymentStatus === 'paid' && !wasPaid) {
+  if (premierPaiement) {
     try {
       const alreadySent = refreshed
         && refreshed.notifications
@@ -783,25 +859,25 @@ async function applyScalapayPaymentToOrder(order, { scalapayStatus, paymentStatu
 
   const update = {
     paymentProvider: 'scalapay',
-    paymentStatus: safePaymentStatus,
     scalapayStatus: safeScalapayStatus,
     scalapayLastCheckedAt: new Date(),
   };
+  /* « paid » s'écrit plus bas, de façon atomique. Un statut Scalapay inconnu
+     (ex. après un remboursement) ne « dé-paie » pas une commande payée : il
+     tomberait sinon dans « pending » par défaut. */
+  const statutScalapayConnu = STATUTS_SCALAPAY_CONNUS.has(safeScalapayStatus.toLowerCase());
+  if (safePaymentStatus !== 'paid' && !(wasPaid && !statutScalapayConnu)) {
+    update.paymentStatus = safePaymentStatus;
+  }
 
+  let premierPaiement = false;
   if (safePaymentStatus === 'paid') {
-    if (captured) update.scalapayCapturedAt = new Date();
-
-    if (order.status !== 'paid' && order.status !== 'processing' && order.status !== 'shipped' && order.status !== 'delivered' && order.status !== 'completed') {
-      update.status = 'processing';
-      update.$push = {
-        statusHistory: {
-          $each: [
-            { status: 'paid', changedAt: new Date(), changedBy: 'scalapay' },
-            { status: 'processing', changedAt: new Date(), changedBy: 'system', note: 'Passage automatique en préparation après paiement' },
-          ],
-        },
-      };
+    premierPaiement = await reserverPremierPaiement(order._id);
+    // Date de capture : la première, jamais réécrite à chaque vérification.
+    if (captured) {
+      await Order.updateOne({ _id: order._id, scalapayCapturedAt: null }, { $set: { scalapayCapturedAt: new Date() } });
     }
+    await passerEnPreparationApresPaiement(order._id, 'scalapay');
   }
 
   if (safePaymentStatus === 'failed') {
@@ -820,7 +896,7 @@ async function applyScalapayPaymentToOrder(order, { scalapayStatus, paymentStatu
   await Order.findByIdAndUpdate(order._id, update);
   let refreshed = await Order.findById(order._id).lean();
 
-  if (safePaymentStatus === 'paid' && !wasPaid) {
+  if (premierPaiement) {
     try {
       await ensureInvoiceIssuedForPaidOrder(refreshed._id);
       refreshed = await Order.findById(refreshed._id).lean();
@@ -838,7 +914,7 @@ async function applyScalapayPaymentToOrder(order, { scalapayStatus, paymentStatu
     await promoCodes.redeemReservedForOrder(order._id);
   }
 
-  if (safePaymentStatus === 'paid' && !wasPaid) {
+  if (premierPaiement) {
     try {
       const alreadySent = refreshed
         && refreshed.notifications
