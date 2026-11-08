@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const AttributionTouch = require('../models/AttributionTouch');
+const { classifyReferrer, isBotUserAgent } = require('../services/sourceVisite');
 
 const QUERY_PARAMS = [
   'gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid',
@@ -126,14 +127,26 @@ function writeCookie(res, name, value) {
   res.append('Set-Cookie', parts.join('; '));
 }
 
+// Une visite sans gclid ni utm est-elle une ARRIVÉE à enregistrer ?
+// Oui si elle vient d'un moteur de recherche, d'un assistant IA ou d'un autre
+// site. Non pour la navigation interne, les retours de paiement, les visites
+// sans référent (impossible de distinguer un humain d'un robot, et chaque
+// enregistrement créerait une session en base — cf. le diagnostic des
+// « sessions fantômes » d'août 2026 dans app.js) et les robots déclarés.
+function isUnmarkedArrival(req) {
+  const kind = classifyReferrer(String(req.headers.referer || ''), req.hostname || '');
+  if (kind !== 'organic' && kind !== 'ai' && kind !== 'referral') return false;
+  return !isBotUserAgent(String(req.headers['user-agent'] || ''));
+}
+
 async function captureAttribution(req, res, next) {
   try {
     if (!shouldCapture(req)) return next();
 
     const extracted = extractFromQuery(req.query || {});
-    if (!extracted) return next();
+    if (!extracted && !isUnmarkedArrival(req)) return next();
 
-    const norm = normalize(extracted);
+    const norm = normalize(extracted || {});
     const touch = {
       ...norm,
       landingPath: trim(req.originalUrl || req.url || '/', MAX_PATH_LEN),
@@ -180,6 +193,13 @@ async function captureAttribution(req, res, next) {
         req.session.attribution.firstTouch = touch;
       }
       if (!preserveLast) req.session.attribution.lastTouch = touch;
+      // visitTouch : la DERNIÈRE arrivée enregistrée (pub, moteur, IA, autre
+      // site), toujours écrasée par la suivante. Contrairement à lastTouch, elle
+      // ne garde pas un vieux gclid quand le client revient par Google gratuit :
+      // c'est elle qui dit si une vente vient de la pub ou d'une visite gratuite
+      // (modèle « visit » du tableau marketing). Une visite directe ne l'écrase
+      // pas : elle garde alors l'arrivée précédente de la même session.
+      req.session.attribution.visitTouch = touch;
     }
 
     // 3. Cookies first-party (90j) — backup si la session expire.
@@ -242,12 +262,16 @@ function buildOrderAttribution(req) {
   return {
     firstTouch: shape(firstTouch),
     lastTouch: shape(lastTouch),
+    // Dernière arrivée de la session avant la commande (session seulement :
+    // un client qui n'est jamais arrivé que directement n'en a pas).
+    visitTouch: shape(session.visitTouch) || null,
     ga4ClientId: readGaClientId(req),
   };
 }
 
 module.exports = captureAttribution;
 module.exports.buildOrderAttribution = buildOrderAttribution;
+module.exports.isUnmarkedArrival = isUnmarkedArrival;
 module.exports.readCookie = readCookie;
 module.exports.readGaClientId = readGaClientId;
 module.exports.COOKIE_LAST = COOKIE_LAST;
