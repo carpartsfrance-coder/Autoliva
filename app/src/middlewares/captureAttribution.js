@@ -2,7 +2,7 @@
 
 const crypto = require('crypto');
 const AttributionTouch = require('../models/AttributionTouch');
-const { classifyReferrer, isBotUserAgent } = require('../services/sourceVisite');
+const { classifyReferrer, isBotUserAgent, refererHost } = require('../services/sourceVisite');
 
 const QUERY_PARAMS = [
   'gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid',
@@ -111,20 +111,26 @@ function readGaClientId(req) {
   return m ? m[1] : '';
 }
 
-function writeCookie(res, name, value) {
+function writeCookie(res, name, value, { maxAgeS = COOKIE_MAX_AGE_S, httpOnly = false } = {}) {
   const isProd = process.env.NODE_ENV === 'production';
   const payload = encodeURIComponent(JSON.stringify(value));
   if (payload.length > 3500) return; // garde-fou taille cookie
   const parts = [
     `${name}=${payload}`,
-    `Max-Age=${COOKIE_MAX_AGE_S}`,
+    `Max-Age=${maxAgeS}`,
     'Path=/',
     'SameSite=Lax',
   ];
   if (isProd) parts.push('Secure');
-  // Volontairement PAS HttpOnly : le snippet client le lit en backup.
-  // Données non sensibles (pas de PII, pas d'auth).
+  // cpf_attr / cpf_attr_first : volontairement PAS HttpOnly, le snippet
+  // client les lit en backup. Données non sensibles (pas de PII, pas d'auth).
+  if (httpOnly) parts.push('HttpOnly');
   res.append('Set-Cookie', parts.join('; '));
+}
+
+function clearCookie(res, name) {
+  const isProd = process.env.NODE_ENV === 'production';
+  res.append('Set-Cookie', [`${name}=`, 'Max-Age=0', 'Path=/', 'SameSite=Lax', ...(isProd ? ['Secure'] : []), 'HttpOnly'].join('; '));
 }
 
 // Une visite sans gclid ni utm est-elle une ARRIVÉE à enregistrer ?
@@ -132,83 +138,206 @@ function writeCookie(res, name, value) {
 // site. Non pour la navigation interne, les retours de paiement, les visites
 // sans référent (impossible de distinguer un humain d'un robot, et chaque
 // enregistrement créerait une session en base — cf. le diagnostic des
-// « sessions fantômes » d'août 2026 dans app.js) et les robots déclarés.
+// « sessions fantômes » d'août 2026 dans app.js), les robots déclarés et les
+// pages chargées dans un cadre (iframe) d'un autre site.
 function isUnmarkedArrival(req) {
+  const dest = String(req.headers['sec-fetch-dest'] || '').toLowerCase();
+  if (dest && dest !== 'document') return false;
   const kind = classifyReferrer(String(req.headers.referer || ''), req.hostname || '');
   if (kind !== 'organic' && kind !== 'ai' && kind !== 'referral') return false;
   return !isBotUserAgent(String(req.headers['user-agent'] || ''));
 }
 
+/* ── Visites gratuites : comptées seulement quand le navigateur revient ──
+ *
+ * Diagnostic du 08/11/2026, une heure après la mise en ligne du comptage des
+ * visites gratuites : 101 visites « Google gratuit » comptées en une heure,
+ * contre ~10 clics par heure dans Search Console et 14 sessions Google vues
+ * par le traceur du navigateur. Le surplus : des robots qui se présentent
+ * comme Chrome avec un faux référent Google, et les préchargements de Google
+ * (Chrome télécharge à l'avance les premiers résultats, que l'internaute
+ * clique ou non). Aucun des deux ne garde de cookie : chaque requête faisait
+ * une « visite » et une session en base.
+ *
+ * Désormais, la première requête d'une arrivée gratuite ne pose qu'un cookie
+ * d'attente (cpf_arr) : ni session, ni écriture en base. La visite est
+ * enregistrée quand le navigateur revient avec ce cookie — en quelques
+ * secondes par le traceur de la page (/api/analytics/track), sinon à la page
+ * suivante. Un robot sans mémoire ne revient jamais ; un préchargement non
+ * cliqué non plus. Un navigateur qui nous a déjà rendu un de nos cookies a
+ * prouvé qu'il les garde : son arrivée est enregistrée tout de suite.
+ *
+ * Les visites marquées (gclid, utm…) ne changent pas : enregistrées tout de
+ * suite, comme avant — l'import des conversions Google Ads en dépend. */
+const COOKIE_ARRIVAL = 'cpf_arr';
+const ARRIVAL_MAX_AGE_S = 30 * 60;
+const SESSION_COOKIE = 'carpartsfrance.sid';
+const OUR_COOKIES_REGEX = new RegExp(`(?:^|;\\s*)(?:${[COOKIE_LAST, COOKIE_FIRST, COOKIE_ARRIVAL, SESSION_COOKIE].map((c) => c.replace(/\./g, '\\.')).join('|')})=`);
+
+// Préchargement (Chrome, Google, Firefox) : personne ne regarde encore la page.
+function isPrefetch(req) {
+  const h = req.headers || {};
+  const purpose = String(h['sec-purpose'] || h.purpose || h['x-purpose'] || h['x-moz'] || '').toLowerCase();
+  return /prefetch|prerender|preview/.test(purpose);
+}
+
+// Le navigateur nous a-t-il renvoyé un cookie que nous avions posé ?
+function hasOurCookie(req) {
+  const raw = req && req.headers && req.headers.cookie;
+  return typeof raw === 'string' && OUR_COOKIES_REGEX.test(raw);
+}
+
+function buildTouch(req, norm, base = {}) {
+  return {
+    ...norm,
+    landingPath: trim(base.landingPath || req.originalUrl || req.url || '/', MAX_PATH_LEN),
+    referrer: trim(base.referrer != null ? String(base.referrer) : String(req.headers.referer || ''), MAX_PATH_LEN),
+    userAgent: trim(String(req.headers['user-agent'] || '')),
+    ipHash: hashIp(req.ip),
+    lang: trim(base.lang != null ? String(base.lang) : (req.lang || ''), 16),
+    capturedAt: base.capturedAt instanceof Date ? base.capturedAt : new Date(),
+  };
+}
+
+function readPendingArrival(req) {
+  const p = readCookie(req, COOKIE_ARRIVAL);
+  if (!p || typeof p !== 'object' || typeof p.id !== 'string' || !/^[a-f0-9]{16,32}$/.test(p.id)) return null;
+  const capturedAt = p.capturedAt ? new Date(p.capturedAt) : null;
+  if (!capturedAt || Number.isNaN(capturedAt.getTime())) return null;
+  return {
+    id: p.id,
+    referrer: typeof p.referrer === 'string' ? p.referrer : '',
+    landingPath: typeof p.landingPath === 'string' ? p.landingPath : '/',
+    lang: typeof p.lang === 'string' ? p.lang : '',
+    capturedAt,
+  };
+}
+
+/* Enregistre une arrivée : audit Mongo, session, cookies 90 jours. Commun aux
+   visites marquées (gclid, utm…) et aux visites gratuites confirmées. */
+function recordTouch(req, res, norm, touch, { arrivalId = '' } = {}) {
+  // 1. Audit trail Mongo (fire & forget — jamais bloquant).
+  const sessionId = (req.sessionID || (req.session && req.session.id) || '').toString();
+  const userId = (req.session && req.session.user && req.session.user._id) || null;
+  const hadFirstTouch = Boolean(
+    (req.session && req.session.attribution && req.session.attribution.firstTouch)
+      || readCookie(req, COOKIE_FIRST)
+  );
+  const doc = {
+    sessionId,
+    userId,
+    touchType: hadFirstTouch ? 'last' : 'first',
+    ...touch,
+  };
+  // Arrivée gratuite : la visite ne compte que confirmée par le navigateur
+  // (voir plus haut). Idempotent : deux requêtes qui confirment la même
+  // arrivée (traceur + page suivante) n'en font qu'une.
+  const ecriture = arrivalId
+    ? AttributionTouch.updateOne(
+      { arrivalId },
+      { $setOnInsert: { ...doc, arrivalId, confirmedArrival: true } },
+      { upsert: true }
+    )
+    : AttributionTouch.create(doc);
+  ecriture.catch((err) => {
+    console.warn('[captureAttribution] mongo insert failed:', err && err.message);
+  });
+
+  // 2. Session : firstTouch immuable, lastTouch écrasé — SAUF si le nouveau
+  //    touch n'a AUCUN identifiant de clic publicitaire alors que l'actuel en
+  //    a un. Cas réel : clic Google Ads (gclid) puis retour via un lien
+  //    email/newsletter (utm_source seul) → sans ce garde-fou le gclid était
+  //    remis à '' et la commande devenait invisible pour l'import Ads.
+  //    (L'audit AttributionTouch, lui, enregistre TOUS les touches.)
+  const hasClickId = (t) => !!(t && (t.gclid || t.gbraid || t.wbraid || t.fbclid || t.msclkid));
+  const sessionLast = req.session && req.session.attribution && req.session.attribution.lastTouch;
+  const cookieLast = readCookie(req, COOKIE_LAST);
+  // Le cookie compte aussi : un gclid d'une session précédente (fenêtre 90 j)
+  // reste attribuable — un touch sans clic ne doit pas l'effacer non plus.
+  const preserveLast = !hasClickId(norm) && (hasClickId(sessionLast) || hasClickId(cookieLast));
+
+  if (req.session) {
+    if (!req.session.attribution) req.session.attribution = {};
+    if (!req.session.attribution.firstTouch) {
+      req.session.attribution.firstTouch = touch;
+    }
+    if (!preserveLast) req.session.attribution.lastTouch = touch;
+    // visitTouch : la DERNIÈRE arrivée enregistrée (pub, moteur, IA, autre
+    // site), toujours écrasée par la suivante. Contrairement à lastTouch, elle
+    // ne garde pas un vieux gclid quand le client revient par Google gratuit :
+    // c'est elle qui dit si une vente vient de la pub ou d'une visite gratuite
+    // (modèle « visit » du tableau marketing). Une visite directe ne l'écrase
+    // pas : elle garde alors l'arrivée précédente de la même session.
+    req.session.attribution.visitTouch = touch;
+  }
+
+  // 3. Cookies first-party (90j) — backup si la session expire.
+  //    Deux arrivées dans la même requête (arrivée en attente confirmée + clic
+  //    pub) : le cookie « premier contact » garde la première.
+  const cookiePayload = buildCookiePayload(touch);
+  if (!preserveLast) writeCookie(res, COOKIE_LAST, cookiePayload);
+  if (!readCookie(req, COOKIE_FIRST) && !req._cpfPremierContactEcrit) {
+    writeCookie(res, COOKIE_FIRST, cookiePayload);
+    req._cpfPremierContactEcrit = true;
+  }
+}
+
+/* Même arrivée gratuite déjà enregistrée dans cette session il y a moins de
+   30 minutes (même site d'origine) : c'est la même visite. Évite qu'un robot
+   qui garde les cookies et envoie toujours le même référent crée un
+   enregistrement par page. */
+const MEME_VISITE_MS = 30 * 60 * 1000;
+function sameRecentArrival(req, referrer) {
+  const v = req.session && req.session.attribution && req.session.attribution.visitTouch;
+  if (!v || v.gclid || v.gbraid || v.wbraid || v.fbclid || v.msclkid || v.utmSource || v.utmMedium || v.utmCampaign) return false;
+  const quand = v.capturedAt ? new Date(v.capturedAt).getTime() : NaN;
+  if (!Number.isFinite(quand) || Date.now() - quand > MEME_VISITE_MS) return false;
+  return refererHost(String(v.referrer || '')) === refererHost(String(referrer || ''));
+}
+
 async function captureAttribution(req, res, next) {
   try {
+    // 0. Arrivée gratuite en attente : le navigateur revient avec le cookie
+    //    d'attente (traceur de la page, page suivante, ajout au panier…). C'est
+    //    une vraie visite : on l'enregistre, à la date de l'arrivée.
+    const enAttente = readPendingArrival(req);
+    if (enAttente && !isPrefetch(req)) {
+      recordTouch(req, res, normalize({}), buildTouch(req, normalize({}), enAttente), { arrivalId: enAttente.id });
+      clearCookie(res, COOKIE_ARRIVAL);
+    }
+
     if (!shouldCapture(req)) return next();
 
     const extracted = extractFromQuery(req.query || {});
-    if (!extracted && !isUnmarkedArrival(req)) return next();
+    if (extracted) {
+      // Visite marquée (gclid, utm…) : enregistrée tout de suite, comme avant.
+      const norm = normalize(extracted);
+      recordTouch(req, res, norm, buildTouch(req, norm));
+      return next();
+    }
 
-    const norm = normalize(extracted || {});
-    const touch = {
-      ...norm,
-      landingPath: trim(req.originalUrl || req.url || '/', MAX_PATH_LEN),
-      referrer: trim(String(req.headers.referer || ''), MAX_PATH_LEN),
-      userAgent: trim(String(req.headers['user-agent'] || '')),
-      ipHash: hashIp(req.ip),
-      lang: req.lang || '',
-      capturedAt: new Date(),
-    };
+    if (!isUnmarkedArrival(req)) return next();
 
-    // 1. Audit trail Mongo (fire & forget — jamais bloquant).
-    const sessionId = (req.sessionID || (req.session && req.session.id) || '').toString();
-    const userId = (req.session && req.session.user && req.session.user._id) || null;
-    const hadFirstTouch = Boolean(
-      (req.session && req.session.attribution && req.session.attribution.firstTouch)
-        || readCookie(req, COOKIE_FIRST)
-    );
-
-    AttributionTouch.create({
-      sessionId,
-      userId,
-      touchType: hadFirstTouch ? 'last' : 'first',
-      ...touch,
-    }).catch((err) => {
-      console.warn('[captureAttribution] mongo insert failed:', err && err.message);
-    });
-
-    // 2. Session : firstTouch immuable, lastTouch écrasé — SAUF si le nouveau
-    //    touch n'a AUCUN identifiant de clic publicitaire alors que l'actuel en
-    //    a un. Cas réel : clic Google Ads (gclid) puis retour via un lien
-    //    email/newsletter (utm_source seul) → sans ce garde-fou le gclid était
-    //    remis à '' et la commande devenait invisible pour l'import Ads.
-    //    (L'audit AttributionTouch, lui, enregistre TOUS les touches.)
-    const hasClickId = (t) => !!(t && (t.gclid || t.gbraid || t.wbraid || t.fbclid || t.msclkid));
-    const sessionLast = req.session && req.session.attribution && req.session.attribution.lastTouch;
-    const cookieLast = readCookie(req, COOKIE_LAST);
-    // Le cookie compte aussi : un gclid d'une session précédente (fenêtre 90 j)
-    // reste attribuable — un touch sans clic ne doit pas l'effacer non plus.
-    const preserveLast = !hasClickId(norm) && (hasClickId(sessionLast) || hasClickId(cookieLast));
-
-    if (req.session) {
-      if (!req.session.attribution) req.session.attribution = {};
-      if (!req.session.attribution.firstTouch) {
-        req.session.attribution.firstTouch = touch;
+    const norm = normalize({});
+    if (hasOurCookie(req) && !isPrefetch(req)) {
+      // Navigateur connu (il nous a rendu un cookie) : enregistrée tout de
+      // suite — sauf si c'est la même visite qu'il y a quelques minutes.
+      if (!sameRecentArrival(req, req.headers.referer)) {
+        recordTouch(req, res, norm, buildTouch(req, norm), { arrivalId: crypto.randomBytes(12).toString('hex') });
       }
-      if (!preserveLast) req.session.attribution.lastTouch = touch;
-      // visitTouch : la DERNIÈRE arrivée enregistrée (pub, moteur, IA, autre
-      // site), toujours écrasée par la suivante. Contrairement à lastTouch, elle
-      // ne garde pas un vieux gclid quand le client revient par Google gratuit :
-      // c'est elle qui dit si une vente vient de la pub ou d'une visite gratuite
-      // (modèle « visit » du tableau marketing). Une visite directe ne l'écrase
-      // pas : elle garde alors l'arrivée précédente de la même session.
-      req.session.attribution.visitTouch = touch;
+      return next();
     }
 
-    // 3. Cookies first-party (90j) — backup si la session expire.
-    const cookiePayload = buildCookiePayload(touch);
-    if (!preserveLast) writeCookie(res, COOKIE_LAST, cookiePayload);
-    if (!readCookie(req, COOKIE_FIRST)) {
-      writeCookie(res, COOKIE_FIRST, cookiePayload);
-    }
-
+    // Première requête d'un inconnu (ou préchargement) : cookie d'attente
+    // seulement — ni session, ni écriture en base.
+    const touch = buildTouch(req, norm);
+    writeCookie(res, COOKIE_ARRIVAL, {
+      id: crypto.randomBytes(12).toString('hex'),
+      referrer: touch.referrer,
+      landingPath: touch.landingPath,
+      lang: touch.lang,
+      capturedAt: touch.capturedAt.toISOString(),
+    }, { maxAgeS: ARRIVAL_MAX_AGE_S, httpOnly: true });
     return next();
   } catch (err) {
     console.warn('[captureAttribution] error:', err && err.message);
@@ -276,3 +405,6 @@ module.exports.readCookie = readCookie;
 module.exports.readGaClientId = readGaClientId;
 module.exports.COOKIE_LAST = COOKIE_LAST;
 module.exports.COOKIE_FIRST = COOKIE_FIRST;
+module.exports.isPrefetch = isPrefetch;
+module.exports.hasOurCookie = hasOurCookie;
+module.exports.COOKIE_ARRIVAL = COOKIE_ARRIVAL;

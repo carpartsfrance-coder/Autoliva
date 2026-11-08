@@ -69,7 +69,21 @@ function classifyReferrer(referrer, selfHost = '') {
   return 'referral';
 }
 
+// Les visites qui comptent (filtre Mongo sur AttributionTouch) : celles qui
+// portent un marqueur (gclid, utm…), comme avant, et les visites gratuites
+// confirmées par le navigateur. Les visites gratuites enregistrées entre le
+// 08/11/2026 vers 18 h et le correctif suivant (robots et préchargements
+// compris, une centaine par heure) n'ont pas de confirmation : exclues.
+const MARQUEURS = ['gclid', 'gbraid', 'wbraid', 'fbclid', 'msclkid', 'utmSource', 'utmMedium', 'utmCampaign', 'utmContent', 'utmTerm'];
+const FILTRE_VISITES_COMPTEES = {
+  $or: [
+    { confirmedArrival: true },
+    ...MARQUEURS.map((champ) => ({ [champ]: { $gt: '' } })),
+  ],
+};
+
 module.exports = {
+  FILTRE_VISITES_COMPTEES,
   ORGANIC_REFERRER_REGEX,
   AI_REFERRER_REGEX,
   AI_SOURCE_REGEX,

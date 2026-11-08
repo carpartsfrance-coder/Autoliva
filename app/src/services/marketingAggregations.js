@@ -14,7 +14,7 @@
 
 const Order = require('../models/Order');
 const AttributionTouch = require('../models/AttributionTouch');
-const { ORGANIC_REFERRER_REGEX, AI_REFERRER_REGEX } = require('./sourceVisite');
+const { FILTRE_VISITES_COMPTEES, ORGANIC_REFERRER_REGEX, AI_REFERRER_REGEX } = require('./sourceVisite');
 
 const PAID_ORDER_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
 
@@ -129,7 +129,9 @@ function emptyRow(key, campaign, source, medium, bucket) {
 // Pipeline visites : groupe par UTM + flags "auto-tag" et référent, compte
 // les sessions distinctes.
 async function aggregateVisits(startDate, endDate) {
-  const match = {};
+  // Visites gratuites : seulement celles confirmées par le navigateur (robots
+  // et préchargements exclus, voir captureAttribution).
+  const match = { ...FILTRE_VISITES_COMPTEES };
   const ca = createdAtFilter(startDate, endDate);
   if (ca) match.createdAt = ca;
 

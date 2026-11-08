@@ -8,6 +8,12 @@
  * portant gclid / utm_*. Search Console : 6 450 clics gratuits sur 28 jours ;
  * l'outil de stats : 1 visite organique sur 90 jours, et les commandes de ces
  * visiteurs rangées dans « Pré-tracking ».
+ *
+ * Puis, une heure après la correction : 101 visites « Google gratuit » en une
+ * heure (Search Console : ~10). Des robots déguisés en Chrome et les
+ * préchargements de Google, qui ne gardent pas les cookies. Une visite
+ * gratuite ne compte donc plus qu'une fois que le navigateur revient avec le
+ * cookie d'attente (cpf_arr).
  */
 
 const test = require('node:test');
@@ -35,17 +41,22 @@ const GOOGLEBOT = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.co
 // Pas de base dans les tests : on capture les écritures AttributionTouch.
 const created = [];
 AttributionTouch.create = async (doc) => { created.push(doc); return doc; };
+// Visite gratuite confirmée : écriture idempotente (upsert sur arrivalId).
+AttributionTouch.updateOne = (filtre, maj) => {
+  if (!created.some((d) => d.arrivalId && d.arrivalId === filtre.arrivalId)) created.push({ ...maj.$setOnInsert });
+  return Promise.resolve({ upsertedCount: 1 });
+};
 
-function fakeReq({ path = '/product/mecatronique-dq200/', query = {}, referer = '', ua = CHROME, session = {}, cookie = '' } = {}) {
+function fakeReq({ path = '/product/mecatronique-dq200/', query = {}, referer = '', ua = CHROME, session = {}, cookie = '', method = 'GET', accept = 'text/html,application/xhtml+xml', extra = {} } = {}) {
   const qs = new URLSearchParams(query).toString();
   return {
-    method: 'GET',
+    method,
     path,
     originalUrl: path + (qs ? '?' + qs : ''),
     query,
     hostname: 'autoliva.com',
     ip: '203.0.113.7',
-    headers: { accept: 'text/html,application/xhtml+xml', referer, 'user-agent': ua, cookie },
+    headers: { accept, referer, 'user-agent': ua, cookie, ...extra },
     session,
     sessionID: 'sid-test',
   };
@@ -103,16 +114,105 @@ test('robots : un navigateur passe, un robot déclaré ou sans user-agent non', 
 
 /* ── Middleware ────────────────────────────────────────────────────────── */
 
-test('visite Google gratuite : enregistrée, en session et en cookie', async () => {
-  const { req, res, touches } = await run({ referer: 'https://www.google.com/' });
-  assert.strictEqual(touches.length, 1, 'une visite enregistrée');
-  assert.strictEqual(touches[0].referrer, 'https://www.google.com/');
-  assert.strictEqual(touches[0].gclid, '');
-  const a = req.session.attribution;
+// Le cookie d'attente posé par la réponse, renvoyé tel quel par le navigateur.
+function cookieAttente(res) {
+  const c = res.cookies.find((x) => x.startsWith('cpf_arr=') && !x.startsWith('cpf_arr=;'));
+  return c ? c.split(';')[0] : '';
+}
+
+test('visite Google gratuite d\'un inconnu : rien en base ni en session tant que le navigateur ne revient pas', async () => {
+  const premiere = await run({ path: '/produits/mecatronique-dq200', referer: 'https://www.google.com/' });
+  assert.strictEqual(premiere.touches.length, 0, 'pas encore de visite');
+  assert.strictEqual(premiere.req.session.attribution, undefined, 'pas de session créée');
+  const attente = premiere.res.cookies.find((c) => c.startsWith('cpf_arr='));
+  assert.ok(attente, 'cookie d\'attente posé');
+  assert.match(attente, /HttpOnly/);
+  assert.match(attente, /Max-Age=1800/);
+  assert.ok(!premiere.res.cookies.some((c) => c.startsWith('cpf_attr')), 'pas encore de cookie 90 jours');
+
+  // Le traceur de la page (POST, quelques secondes après) rapporte le cookie : la visite compte.
+  const retour = await run({ method: 'POST', path: '/api/analytics/track', accept: '*/*', referer: 'https://autoliva.com/produits/mecatronique-dq200', cookie: cookieAttente(premiere.res) });
+  assert.strictEqual(retour.touches.length, 1, 'une visite enregistrée');
+  const t = retour.touches[0];
+  assert.strictEqual(t.referrer, 'https://www.google.com/', 'le référent de l\'arrivée, pas celui du traceur');
+  assert.strictEqual(t.landingPath, '/produits/mecatronique-dq200');
+  assert.strictEqual(t.confirmedArrival, true);
+  assert.ok(t.arrivalId);
+  assert.strictEqual(t.gclid, '');
+  const a = retour.req.session.attribution;
   assert.strictEqual(a.firstTouch.referrer, 'https://www.google.com/');
   assert.strictEqual(a.lastTouch.referrer, 'https://www.google.com/');
   assert.strictEqual(a.visitTouch.referrer, 'https://www.google.com/');
-  assert.ok(res.cookies.some((c) => c.startsWith('cpf_attr=')), 'cookie dernier contact posé');
+  assert.ok(retour.res.cookies.some((c) => c.startsWith('cpf_attr=')), 'cookie dernier contact posé');
+  assert.ok(retour.res.cookies.some((c) => c.startsWith('cpf_arr=;') && /Max-Age=0/.test(c)), 'cookie d\'attente effacé');
+});
+
+test('même arrivée confirmée deux fois (traceur + page suivante) : une seule visite', async () => {
+  const premiere = await run({ referer: 'https://chatgpt.com/' });
+  const cookie = cookieAttente(premiere.res);
+  created.length = 0;
+  const req1 = fakeReq({ method: 'POST', path: '/api/analytics/track', accept: '*/*', cookie });
+  const req2 = fakeReq({ path: '/panier', referer: 'https://autoliva.com/produits/x', cookie });
+  await captureAttribution(req1, fakeRes(), () => {});
+  await captureAttribution(req2, fakeRes(), () => {});
+  assert.strictEqual(created.length, 1);
+  assert.strictEqual(created[0].referrer, 'https://chatgpt.com/');
+});
+
+test('robot déguisé en Chrome avec un faux référent Google : jamais compté', async () => {
+  for (let i = 0; i < 5; i++) {
+    const { req, touches } = await run({ path: `/produits/piece-${i}`, referer: 'https://www.google.com/' });
+    assert.strictEqual(touches.length, 0);
+    assert.strictEqual(req.session.attribution, undefined, 'aucune session fantôme');
+  }
+});
+
+test('préchargement par Google (Chrome) : pas de visite, même avec le cookie d\'attente', async () => {
+  const pre = await run({ referer: 'https://www.google.com/', extra: { 'sec-purpose': 'prefetch;anonymous-client-ip' } });
+  assert.strictEqual(pre.touches.length, 0);
+  assert.ok(cookieAttente(pre.res), 'cookie d\'attente : servira si l\'internaute clique');
+  const encore = await run({ referer: 'https://www.google.com/', cookie: cookieAttente(pre.res), extra: { 'sec-purpose': 'prefetch' } });
+  assert.strictEqual(encore.touches.length, 0, 'un préchargement ne confirme rien');
+  // L'internaute clique : la page préchargée s'affiche, le traceur rapporte le cookie.
+  const clic = await run({ method: 'POST', path: '/api/analytics/track', accept: '*/*', cookie: cookieAttente(pre.res) });
+  assert.strictEqual(clic.touches.length, 1);
+});
+
+test('navigateur déjà connu (il nous a rendu un cookie) : enregistré tout de suite', async () => {
+  const { req, touches } = await run({ referer: 'https://www.google.com/', cookie: 'carpartsfrance.sid=s%3Aabc.def' });
+  assert.strictEqual(touches.length, 1);
+  assert.strictEqual(touches[0].confirmedArrival, true);
+  assert.strictEqual(req.session.attribution.visitTouch.referrer, 'https://www.google.com/');
+});
+
+test('navigateur connu qui revient de Google plusieurs fois en quelques minutes : une seule visite', async () => {
+  const session = {};
+  const cookie = 'carpartsfrance.sid=s%3Aabc.def';
+  const a = await run({ referer: 'https://www.google.com/', cookie, session });
+  const b = await run({ path: '/produits/autre', referer: 'https://www.google.com/', cookie, session });
+  assert.strictEqual(a.touches.length + b.touches.length, 1, 'même visite');
+  const c = await run({ referer: 'https://chatgpt.com/', cookie, session });
+  assert.strictEqual(c.touches.length, 1, 'autre origine : nouvelle visite');
+  session.attribution.visitTouch.capturedAt = new Date(Date.now() - 31 * 60 * 1000);
+  const d = await run({ referer: 'https://chatgpt.com/', cookie, session });
+  assert.strictEqual(d.touches.length, 1, 'plus de 30 minutes après : nouvelle visite');
+});
+
+test('arrivée en attente confirmée par un clic pub : le cookie « premier contact » garde l\'arrivée gratuite', async () => {
+  const premiere = await run({ referer: 'https://www.google.com/' });
+  const { res, touches, req } = await run({ query: { gclid: 'G-1', utm_source: 'google', utm_medium: 'cpc' }, referer: 'https://www.google.com/', cookie: cookieAttente(premiere.res) });
+  assert.strictEqual(touches.length, 2);
+  const premiers = res.cookies.filter((c) => c.startsWith('cpf_attr_first='));
+  assert.strictEqual(premiers.length, 1);
+  assert.ok(!decodeURIComponent(premiers[0]).includes('G-1'), 'premier contact = la visite gratuite');
+  assert.strictEqual(req.session.attribution.firstTouch.gclid, '');
+  assert.strictEqual(req.session.attribution.lastTouch.gclid, 'G-1');
+});
+
+test('page chargée dans un cadre d\'un autre site : pas une arrivée', async () => {
+  const { touches, res } = await run({ referer: 'https://forum.example.org/', extra: { 'sec-fetch-dest': 'iframe' } });
+  assert.strictEqual(touches.length, 0);
+  assert.strictEqual(res.cookies.length, 0);
 });
 
 test('navigation interne, retour de paiement, visite directe, robot : rien n\'est écrit', async () => {

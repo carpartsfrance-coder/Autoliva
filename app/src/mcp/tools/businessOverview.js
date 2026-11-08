@@ -12,6 +12,7 @@ const {
 } = require('../util/period');
 const { eurFromCents, pct, deltaPct, jsonResult } = require('../util/format');
 const {
+  FILTRE_VISITES_COMPTEES,
   ORGANIC_REFERRER_REGEX,
   AI_REFERRER_REGEX,
   AI_SOURCE_REGEX,
@@ -52,7 +53,7 @@ async function aggregateOrdersInRange(startDate, endDate) {
 }
 
 async function aggregateUniqueVisitsInRange(startDate, endDate) {
-  const match = {};
+  const match = { ...FILTRE_VISITES_COMPTEES };
   if (startDate || endDate) {
     match.createdAt = {};
     if (startDate) match.createdAt.$gte = startDate;
@@ -94,7 +95,7 @@ function trafficBucket(r) {
 }
 
 async function aggregateTrafficMix(startDate) {
-  const match = {};
+  const match = { ...FILTRE_VISITES_COMPTEES };
   if (startDate) match.createdAt = { $gte: startDate };
 
   const ref = { $ifNull: ['$referrer', ''] };
@@ -148,7 +149,8 @@ async function aggregateTrafficMix(startDate) {
 // Ce que ces chiffres ne voient pas : à rappeler à chaque lecture.
 const TRAFFIC_NOTE =
   "Visites enregistrées côté serveur : clics pub (gclid/utm), arrivées depuis un moteur de recherche, un assistant IA ou un autre site. "
-  + "Les visites directes (sans référent) ne sont pas comptées, et les visites gratuites (moteurs, IA, autres sites) ne le sont que depuis la correction de novembre 2026. "
+  + "Les visites directes (sans référent) ne sont pas comptées, et les visites gratuites (moteurs, IA, autres sites) ne le sont que depuis la correction de novembre 2026, "
+  + "et seulement quand le navigateur revient avec notre cookie (robots et préchargements exclus ; un visiteur qui refuse tous les cookies n'est pas compté). "
   + "Le chiffre exact des clics Google gratuits est dans Google Search Console.";
 
 async function topProducts(startDate, limit) {

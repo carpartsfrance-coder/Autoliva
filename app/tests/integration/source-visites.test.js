@@ -36,10 +36,24 @@ let http;
 let base;
 let octet = 1;
 
-async function visite(chemin, { referer = '', ua = UA_CHROME } = {}) {
-  const headers = { 'User-Agent': ua, Accept: 'text/html,application/xhtml+xml', 'CF-Connecting-IP': `198.51.100.${(octet++ % 250) + 1}` };
+async function visite(chemin, { referer = '', ua = UA_CHROME, cookie = '', extra = {} } = {}) {
+  const headers = { 'User-Agent': ua, Accept: 'text/html,application/xhtml+xml', 'CF-Connecting-IP': `198.51.100.${(octet++ % 250) + 1}`, ...extra };
   if (referer) headers.Referer = referer;
+  if (cookie) headers.Cookie = cookie;
   const r = await fetch(base + chemin, { redirect: 'manual', headers });
+  await r.text();
+  const attente = (r.headers.getSetCookie() || []).find((c) => c.startsWith('cpf_arr=') && !c.startsWith('cpf_arr=;'));
+  return { status: r.status, attente: attente ? attente.split(';')[0] : '', setCookies: r.headers.getSetCookie() || [] };
+}
+
+// Le traceur de la page (analytics-tracker.js) : POST quelques secondes après
+// l'affichage, avec les cookies du navigateur.
+async function traceur(cookie, ua = UA_CHROME) {
+  const r = await fetch(base + '/api/analytics/track', {
+    method: 'POST',
+    headers: { 'User-Agent': ua, 'Content-Type': 'application/json', Cookie: cookie, 'CF-Connecting-IP': `198.51.100.${(octet++ % 250) + 1}` },
+    body: JSON.stringify({ events: [{ type: 'pageview', page: '/' }] }),
+  });
   await r.text();
   return r.status;
 }
@@ -72,19 +86,33 @@ test('visites gratuites : enregistrées par le site, rangées par les tableaux',
 
   const AttributionTouch = require('../../src/models/AttributionTouch');
 
-  await t.test('le site enregistre Google gratuit et ChatGPT, pas le reste', async () => {
+  await AttributionTouch.init(); // index unique sur arrivalId construit
+
+  await t.test('le site enregistre Google gratuit et ChatGPT une fois le navigateur revenu, pas le reste', async () => {
     await AttributionTouch.deleteMany({});
 
     const page = '/';
-    assert.ok([200, 301, 302].includes(await visite(page, { referer: 'https://www.google.com/' })));
-    await visite(page, { referer: 'https://chatgpt.com/' });
-    await visite(page, { referer: 'https://forum.example.org/sujet/dq200' });
+    // Visites gratuites : la première requête ne pose que le cookie d'attente,
+    // le traceur de la page (avec ce cookie) fait compter la visite.
+    for (const referer of ['https://www.google.com/', 'https://chatgpt.com/', 'https://forum.example.org/sujet/dq200']) {
+      const arrivee = await visite(page, { referer });
+      assert.ok([200, 301, 302].includes(arrivee.status));
+      assert.ok(arrivee.attente, `cookie d'attente posé (${referer})`);
+      assert.ok(!arrivee.setCookies.some((c) => c.startsWith('carpartsfrance.sid=')), `pas de session pour un inconnu (${referer})`);
+      assert.strictEqual(await traceur(arrivee.attente), 204);
+    }
     // Rien de tout ça ne doit être enregistré :
     await visite(page, { referer: 'https://autoliva.com/produits' }); // navigation interne
     await visite(page, { referer: 'https://www.mollie.com/checkout/abc' }); // retour de paiement
     await visite(page); // sans référent
-    await visite(page, { referer: 'https://www.google.com/', ua: UA_GOOGLEBOT }); // robot
-    // Un clic pub reste enregistré comme avant :
+    await visite(page, { referer: 'https://www.google.com/', ua: UA_GOOGLEBOT }); // robot déclaré
+    for (let i = 0; i < 5; i++) { // robot déguisé en Chrome, sans cookie
+      const r = await visite(page, { referer: 'https://www.google.com/' });
+      assert.strictEqual(r.status, 200);
+    }
+    const pre = await visite(page, { referer: 'https://www.google.com/', extra: { 'Sec-Purpose': 'prefetch;anonymous-client-ip' } }); // préchargement non cliqué
+    assert.ok(pre.attente);
+    // Un clic pub reste enregistré comme avant, tout de suite :
     await visite(page + '?gclid=TEST-GCLID&utm_source=google&utm_medium=cpc&utm_campaign=pmax_feed', { referer: 'https://www.google.com/' });
 
     const n = await attendreTouches(4);
@@ -99,6 +127,17 @@ test('visites gratuites : enregistrées par le site, rangées par les tableaux',
       'https://www.google.com/',
     ]);
     assert.strictEqual(touches.filter((x) => x.gclid === 'TEST-GCLID').length, 1);
+    assert.strictEqual(touches.filter((x) => x.confirmedArrival).length, 3, 'les 3 visites gratuites sont confirmées');
+  });
+
+  await t.test('la même arrivée confirmée deux fois en même temps ne fait qu\'une visite', async () => {
+    const avant = await AttributionTouch.countDocuments({});
+    const arrivee = await visite('/', { referer: 'https://www.bing.com/' });
+    await Promise.all([traceur(arrivee.attente), visite('/', { referer: base + '/', cookie: arrivee.attente })]);
+    await attendreTouches(avant + 1);
+    await new Promise((r) => setTimeout(r, 150));
+    assert.strictEqual(await AttributionTouch.countDocuments({ referrer: 'https://www.bing.com/' }), 1);
+    await AttributionTouch.deleteMany({ referrer: 'https://www.bing.com/' }); // l'étape suivante compte les visites
   });
 
   await t.test('tableau marketing et vue de pilotage : les vraies agrégations Mongo', async () => {
@@ -124,6 +163,13 @@ test('visites gratuites : enregistrées par le site, rangées par les tableaux',
       // Ancienne commande sans canal renseigné : web par défaut.
       commande(5, {}),
     ]);
+
+    // Les visites gratuites enregistrées avant ce correctif (robots compris) :
+    // pas de confirmation du navigateur → plus comptées.
+    await AttributionTouch.collection.insertMany(Array.from({ length: 50 }, (_, i) => ({
+      sessionId: `robot-${i}`, referrer: 'https://www.google.com/', gclid: '', utmSource: '', utmMedium: '', utmCampaign: '',
+      landingPath: '/', createdAt: new Date(), updatedAt: new Date(),
+    })));
 
     const parBucket = (rows) => Object.fromEntries(rows.map((r) => [r.bucket || r.campaign, r]));
 
