@@ -3900,9 +3900,36 @@ async function getAdminOrderDetailPage(req, res, next) {
        commande. */
     const savTickets = await savCommande.ticketsPourCommande(orderDoc.number);
 
+    /* Ce que Google Ads a reçu pour cette vente (marge, correction, demande de
+       devis d'origine) — voir googleAdsConversionSync. Best-effort. */
+    let googleAdsVente = null;
+    try {
+      const g = orderDoc.googleAdsConversion;
+      if (g && g.uploadedAt) {
+        let dossier = '';
+        if (g.leadId) {
+          const AbandonedCart = require('../models/AbandonedCart');
+          const l = await AbandonedCart.findById(g.leadId).select('requested.ref').lean();
+          dossier = (l && l.requested && l.requested.ref) || '';
+        }
+        // La marge est un chiffre financier : même droit que le tableau de bord.
+        const voitLaMarge = hasAbility(req.session.admin && req.session.admin.role, 'dashboard.financial');
+        googleAdsVente = {
+          viaDemande: g.action === 'sale',
+          dossier,
+          valeur: voitLaMarge ? formatEuro(Number(g.valueCents) || 0) : '',
+          estimee: !!g.estimated,
+          envoyeeLe: formatDateTimeFR(g.uploadedAt),
+          corrigeeLe: g.restatedAt ? formatDateTimeFR(g.restatedAt) : '',
+          remiseAZero: !!g.final,
+        };
+      }
+    } catch (_) { /* non bloquant */ }
+
     return res.render('admin/order', {
       title: `Admin - ${orderDoc.number}`,
       savTickets,
+      googleAdsVente,
       savTicketOuvert: savTickets.find((t) => t.ouvert) || null,
       dbConnected,
       errorMessage,

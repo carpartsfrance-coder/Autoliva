@@ -148,9 +148,15 @@ async function getAccessToken() {
  * @param {string} [p.currency]   défaut 'EUR'
  * @param {Date|string} [p.dateTime]  date de la conversion (postérieure au clic)
  * @param {boolean} [p.dryRun]    true → validateOnly (Google valide sans enregistrer)
+ * @param {string} [p.transactionId]  identifiant unique de la conversion dans
+ *   son action (n° de commande). Google déduplique sur cet identifiant, et un
+ *   2e envoi avec le même identifiant CORRIGE la valeur du 1er (ajustement) —
+ *   https://developers.google.com/data-manager/api/devguides/events/google-ads/conversion-adjustments
+ * @param {boolean} [p.valeurExplicite]  true → la valeur part même à 0 (sert à
+ *   corriger à 0 une vente remboursée ; Google ne permet plus d'ajustement ensuite)
  * @returns {Promise<{ok:boolean, skipped?:boolean, reason?:string, status?:number, error?:any, validateOnly?:boolean, response?:any}>}
  */
-async function uploadConversion({ gclid, gbraid, wbraid, email, phone, action, value, currency, dateTime, dryRun = false }) {
+async function uploadConversion({ gclid, gbraid, wbraid, email, phone, action, value, currency, dateTime, dryRun = false, transactionId = '', valeurExplicite = false }) {
   if (!isConfigured()) return { ok: false, skipped: true, reason: 'not_configured' };
   const g = String(gclid || '').trim();
   const gb = String(gbraid || '').trim();
@@ -180,8 +186,10 @@ async function uploadConversion({ gclid, gbraid, wbraid, email, phone, action, v
       ? (typeof dateTime === 'string' ? dateTime : formatConversionDateTime(dateTime))
       : formatConversionDateTime(new Date()),
   };
-  if (typeof value === 'number' && isFinite(value) && value > 0) {
-    ev.conversionValue = value;
+  const tx = String(transactionId || '').trim();
+  if (tx) ev.transactionId = tx;
+  if (typeof value === 'number' && isFinite(value) && (value > 0 || (valeurExplicite && value >= 0))) {
+    ev.conversionValue = Math.round(value * 100) / 100;
     ev.currency = currency || 'EUR';
   }
 

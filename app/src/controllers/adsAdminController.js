@@ -53,6 +53,23 @@ async function getAdsDiagnostic(req, res) {
     out.dryRunError = String((e && e.message) || e).slice(0, 300);
   }
 
+  // Google accepte-t-il une correction à 0 (vente remboursée) ? Essai à blanc
+  // (validateOnly : rien n'est enregistré) sur le clic d'une commande récente.
+  try {
+    const Order = require('../models/Order');
+    const recente = await Order.findOne({ 'attribution.lastTouch.gclid': { $nin: ['', null] } })
+      .sort({ createdAt: -1 }).select('createdAt attribution.lastTouch.gclid').lean();
+    if (recente) {
+      const r = await gAds.uploadConversion({
+        gclid: recente.attribution.lastTouch.gclid, action: 'purchase', value: 0, valeurExplicite: true,
+        transactionId: 'VALIDATION-CORRECTION-0', dateTime: recente.createdAt, dryRun: true,
+      });
+      out.essaiCorrectionAZero = { ok: !!r.ok, status: r.status || null, error: r.ok ? null : JSON.stringify(r.error || r.reason || '').slice(0, 300) };
+    }
+  } catch (e) {
+    out.essaiCorrectionAZero = { ok: false, error: String((e && e.message) || e).slice(0, 300) };
+  }
+
   // Dénominateur réel : ce qui a été ENVOYÉ à Google sur 30 j — à comparer au
   // compteur « conversions » de l'interface Ads pour mesurer le taux de match.
   try {
@@ -81,6 +98,18 @@ async function getAdsDiagnostic(req, res) {
       note: 'comparer purchases au compteur « Achat site » de Google Ads (30 j) pour le taux de match',
       ordersWithClickId30d: purchasesClickIdTotal30,
     };
+    // Depuis le 08/11/2026 : ventes envoyées avec leur marge, ventes rattachées
+    // à une demande de devis, valeurs corrigées (remboursements, prix d'achat).
+    const [margeEnvoyees, ventesViaDemande, corrigees, remisesAZero] = await Promise.all([
+      Order.countDocuments({ 'googleAdsConversion.uploadedAt': { $gte: since30 } }),
+      Order.countDocuments({ 'googleAdsConversion.action': 'sale', 'googleAdsConversion.uploadedAt': { $gte: since30 } }),
+      Order.countDocuments({ 'googleAdsConversion.restatedAt': { $gte: since30 } }),
+      Order.countDocuments({ 'googleAdsConversion.final': true, 'googleAdsConversion.restatedAt': { $gte: since30 } }),
+    ]);
+    out.uploaded30d.avecMarge = margeEnvoyees;
+    out.uploaded30d.ventesApresDemandeDeDevis = ventesViaDemande;
+    out.uploaded30d.valeursCorrigees = corrigees;
+    out.uploaded30d.remisesAZero = remisesAZero;
   } catch (e) {
     out.uploaded30dError = String((e && e.message) || e).slice(0, 300);
   }

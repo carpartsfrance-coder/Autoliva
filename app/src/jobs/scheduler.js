@@ -211,7 +211,7 @@ function startScheduler() {
     if (!googleAdsConfigured()) return;
     try {
       const r = await syncConversions({ dryRun: false });
-      console.log('[scheduler] Google Ads conversions:', JSON.stringify({ leads: r.leads, quotes: r.quotes, sales: r.sales, purchases: r.purchases }));
+      console.log('[scheduler] Google Ads conversions:', JSON.stringify({ leads: r.leads, quotes: r.quotes, sales: r.sales, purchases: r.purchases, ventesCommandes: r.ventesCommandes, ajustements: r.ajustements }));
     } catch (err) {
       console.error('[scheduler] Erreur sync conversions Google Ads:', err.message || err);
     }
