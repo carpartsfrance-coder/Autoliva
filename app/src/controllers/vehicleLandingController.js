@@ -479,10 +479,11 @@ async function getModelCategoryLanding(req, res, next) {
          même véhicule dans la catégorie qui la remplace (audit SEO
          11/11/2026). Sinon, la landing modèle qui existe. */
       const cible = await require('../services/redirectionsCategories').resoudre(categorySlug);
+      const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
       if (cible) {
-        return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}/${encodeURIComponent(cible)}`);
+        return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}/${encodeURIComponent(cible)}${qs}`);
       }
-      return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}`);
+      return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}${qs}`);
     }
     /* Le partTypeName affiché à l'utilisateur est le dernier segment de la
      * catégorie (ex: "Transmission > Mécatronique" → "Mécatronique") pour un

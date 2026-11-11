@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-11-11 — Admin : l'adresse d'une catégorie ne change plus quand on l'enregistre
+
+### Backend
+- **Correction** : enregistrer une catégorie dans l'admin recalculait son adresse depuis son nom, même sans la renommer. Le 11/11/2026 au soir, changer l'ordre de « Mécatroniques & calculateurs » a fait passer `/categorie/mecatroniques` à `/categorie/mecatroniques-calculateurs` : l'ancienne adresse redirigeait, mais le texte de la famille ne s'affichait plus et `/categorie/transmission-mecatronique` répondait 404. L'adresse ne change plus que si le nom change, ou si elle est saisie.
+- **Nouveau champ « Adresse de la page »** dans la fiche d'une catégorie principale (admin → Catégories → Modifier) : `/categorie/<adresse>`. Une adresse déjà prise par une autre catégorie est refusée. L'ancienne adresse redirige vers la nouvelle ; revenir à une ancienne adresse la retire des redirections.
+- Une ancienne adresse de la table de redirections (`transmission-mecatronique`…) suit sa catégorie si celle-ci a été renommée depuis.
+- Les redirections de catégories gardent les paramètres de l'adresse (`gclid`, `utm_…`) : une annonce qui vise une ancienne adresse garde son suivi.
+
+### Tests
+- `tests/integration/audit-seo-novembre.test.js` : le cas réel (ordre et menu changés, nom identique → adresse gardée ; il échoue sur l'ancien code), adresse saisie, retour à l'ancienne adresse, adresse déjà prise, paramètres gardés.
+- `tests/unit/redirections-categories.test.js` : cible de la table renommée.
+
+### Mise en service
+- Après le déploiement : dans l'admin, remettre l'adresse de « Mécatroniques & calculateurs » à `mecatroniques`.
+
 ## 2026-11-11 — SEO : 50 fiches remises dans Google (lot 1), adresses des nouvelles fiches sans lettres cassées
 
 Audit SEO du 11/11/2026 (problèmes 3 et 13). S'applique après « pages des familles prioritaires et liens depuis le blog » (même date).
