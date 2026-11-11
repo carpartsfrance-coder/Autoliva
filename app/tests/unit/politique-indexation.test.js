@@ -64,11 +64,12 @@ const FICHES_GARDEES = fichesDe(path.join(FIXTURES, 'products-fr-keep.ids.tsv.gz
 const FICHES_RETIREES = fichesDe(path.join(LISTES, 'products-fr-noindex.ids.tsv.gz'));
 /* Fiches de la liste du plan remises dans Google par lots (audit SEO du
    11/11/2026, problème 3) : listes/products-fr-rouverts.tsv. */
-const ROUVERTES = (() => {
+const LIGNES_ROUVERTES = (() => {
   const [entete, ...lignes] = lire(path.join(LISTES, 'products-fr-rouverts.tsv'));
   assert.equal(entete, 'product_id\tsku\tlot\turl');
-  return new Set(lignes.map((l) => l.split('\t')[0]));
+  return lignes.map((l) => { const [_id, sku, lot] = l.split('\t'); return { _id, sku, lot }; });
 })();
+const ROUVERTES = new Set(LIGNES_ROUVERTES.map((l) => l._id));
 const FICHE_PAR_CHEMIN = new Map([...FICHES_GARDEES, ...FICHES_RETIREES].map((f) => [f.chemin, f]));
 
 const FAMILLES = politique.FAMILLES;
@@ -108,7 +109,12 @@ test('les listes commitées sont celles du plan : comptes et recoupements', () =
   assert.deepEqual(p.references.garder, ['0AM927769G', '4797786420', 'C2D3506']);
   assert.equal(p.produits.noindex.length + p.produits.rouverts.length, 11125, 'liste du plan = fiches encore retirées + fiches rouvertes');
   assert.deepEqual(p.produits.rouverts, [...ROUVERTES].sort());
-  assert.equal(ROUVERTES.size, 50, 'lot 1 du 11/11/2026');
+  /* Règle de l'audit : on rouvre par lots de 50 au plus, en surveillant la
+     Search Console entre deux lots. */
+  const parLot = new Map();
+  for (const l of LIGNES_ROUVERTES) parLot.set(l.lot, (parLot.get(l.lot) || 0) + 1);
+  for (const [lot, n] of parLot) assert.ok(n <= 50, `lot ${lot} : ${n} fiches, 50 au plus`);
+  assert.equal(parLot.get('2026-11-11-lot1'), 50, 'lot 1 du 11/11/2026');
   assert.deepEqual(p.produits.prefixesSku, ['DM-'], 'décision du 14/09/2026 : toutes les copies distrimotor');
   assert.ok(!p.piecesAuto.garder.includes('/pieces-auto'), 'la racine /pieces-auto n’est pas une page de la règle');
   assert.equal(MUST_STAY.length, 2820);
