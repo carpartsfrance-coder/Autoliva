@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-11-11 — SEO : 50 fiches remises dans Google (lot 1), adresses des nouvelles fiches sans lettres cassées
+
+Audit SEO du 11/11/2026 (problèmes 3 et 13). S'applique après « pages des familles prioritaires et liens depuis le blog » (même date).
+
+### Backend
+- **Lot 1 : 50 fiches rouvertes à Google.** Les fiches cachées par la liste du plan (« sans signal ») ne sortaient sur aucune recherche, même la référence exacte. Nouvelle liste `data/seo/listes/products-fr-rouverts.tsv` : `scripts/generer-index-policy.js` retire ces fiches de `produits.noindex` (11 125 → 11 075) et les note dans `produits.rouverts`. La liste du plan ne change pas. Le script refuse une fiche absente de la liste du plan, un SKU différent, un lot manquant, un doublon ou une copie distrimotor (DM-, toujours retirée par son préfixe).
+- Choix du lot 1 (relevé en ligne le 11/11/2026 sur les 229 fiches cachées des familles prioritaires : toutes en stock, avec prix, 136 à 248 mots de description) : les 13 mécatroniques et calculateurs de boîte, 17 boîtes de transfert et coupleurs, 20 ponts et différentiels — marques et modèles vendus en France d'abord (BMW, Mercedes, Toyota, Nissan, Kia, Hyundai, Mini). Écartées : les 8 fiches dont la référence a déjà une fiche ouverte, la fiche « différentiel avant » Nissan 331004BA0C (même référence que la boîte de transfert rouverte), et les modèles hors marché français (Hilux Vigo, Fortuner, Hiace, Buick, Lincoln…). Lots suivants : 50 toutes les deux semaines si la Search Console reste stable.
+- **Adresses des nouvelles fiches** (`services/slugNouvelleFiche.js`) : à la création dans l'admin et à l'import JSON, un slug fourni aux accents cassés (`diff-rentiel`, `arri-re`, `bo-te`, `r-ducteur`, `m-catronique`) reprend la forme juste des mots du nom (`differentiel`, `arriere`, `boite`…). Sans slug fourni : le slug du nom, accents retirés, comme avant. Les fiches existantes gardent leur adresse (une fiche n'a pas de redirection depuis un ancien slug).
+
+### Non modifié
+- Politique de retour dans les données produit (problème 11 de l'audit) : elle est déjà déclarée une fois, au niveau de l'entreprise (`services/organisationSchema.js`, accueil et /notre-histoire), forme acceptée par Google. La répéter dans chaque offre déclarerait aussi un droit de retour sur les pièces programmées au VIN, qui en sont exclues.
+
+### Tests
+- `tests/unit/slug-nouvelle-fiche.test.js` (3 cas, slugs réels du site).
+- `tests/unit/politique-indexation.test.js` : liste du plan = fiches retirées + rouvertes ; les 50 rouvertes restent indexables sous les 64 combinaisons de SEO_PRUNE ; le générateur refuse les lignes douteuses.
+- `tests/integration/audit-seo-novembre.test.js` : une fiche importée avec un slug cassé naît avec une adresse propre.
+
+### Mise en service
+- Aucune variable d'environnement nouvelle, aucune migration. Après la mise en ligne, les 50 fiches passent en « index, follow » et entrent dans `sitemap-products.xml` ; demander l'indexation de quelques-unes dans la Search Console.
+
 ## 2026-11-11 — SEO : pages des familles prioritaires et liens depuis le blog
 
 Audit SEO du 11/11/2026 (problèmes 4 et 8). S'applique après « titres sans « … », anciennes catégories redirigées, pages 2+ ouvertes » (même date).

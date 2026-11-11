@@ -14,6 +14,7 @@
  *   problème 5 : les titres de fiche n'ont plus de « … » et gardent la
  *                référence ;
  *   problème 8 : un article de la famille renvoie vers sa catégorie ;
+ *   problème 13 : une fiche importée naît avec un slug sans lettre cassée ;
  *   problème 6 : les pages 2+ d'une catégorie sont indexables, avec leur
  *                propre canonique, title et hreflang ;
  *   consigne 8 : la page 404 dit « noindex », robots.txt ne cite plus /_next/.
@@ -213,5 +214,22 @@ test('audit SEO du 11/11/2026 : redirections, pages 2+, titres, 404', async (t) 
     assert.equal(r.status, 200);
     assert.ok(!r.corps.includes('/_next/'), 'Disallow: /_next/ encore présent');
     assert.match(r.corps, /Sitemap: .*\/sitemap\.xml/);
+  });
+
+  await t.test('problème 13 : une fiche importée avec un slug aux accents cassés naît avec une adresse propre', async () => {
+    const admin = require('../../src/controllers/adminController');
+    const res = { code: 200, payload: null };
+    res.status = (c) => { res.code = c; return res; };
+    res.json = (p) => { res.payload = p; return res; };
+    const fiches = [
+      { nom: 'Différentiel avant Mercedes CLA, GLA — 2462800200', slug: 'diff-rentiel-avant-mercedes-cla-gla-2462800200', sku: 'IMP-SLUG-1', prix_ttc: 890, categorie: 'Ponts & différentiels', statut: 'brouillon' },
+      { nom: 'Pont arrière reconditionné BMW X3 F25', sku: 'IMP-SLUG-2', prix_ttc: 1190, categorie: 'Ponts & différentiels', statut: 'brouillon' },
+    ];
+    await admin.postAdminImportProducts({ body: fiches, session: { admin: { adminUserId: null } } }, res);
+    assert.equal(res.payload && res.payload.ok, true, JSON.stringify(res.payload));
+    assert.equal(res.payload.summary.created, 2, JSON.stringify(res.payload));
+    const slug = async (sku) => (await db.collection('products').findOne({ sku })).slug;
+    assert.equal(await slug('IMP-SLUG-1'), 'differentiel-avant-mercedes-cla-gla-2462800200');
+    assert.equal(await slug('IMP-SLUG-2'), 'pont-arriere-reconditionne-bmw-x3-f25');
   });
 });

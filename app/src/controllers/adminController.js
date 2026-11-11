@@ -48,6 +48,9 @@ const purchaseInvoice = require('../services/purchaseInvoice');
    choix d'indexation fiche par fiche, et fiches nées en noindex quand elles
    arrivent par lot d'import. */
 const seoIndexPolicy = require('../services/seoIndexPolicy');
+/* Slug d'une nouvelle fiche : accents retirés, jamais remplacés par un tiret
+   (audit SEO du 11/11/2026, problème 13). */
+const { slugNouvelleFiche } = require('../services/slugNouvelleFiche');
 
 const ADMIN_LOGIN_BUCKETS = new Map();
 const ADMIN_RESET_BUCKETS = new Map();
@@ -8480,7 +8483,7 @@ async function postAdminCreateProduct(req, res, next) {
     const warrantyMonths = Math.max(0, parseInt(form.warrantyMonths, 10) || 0);
     const warrantyText = form.warrantyText || '';
 
-    const baseSlug = slugify(form.slug || form.name) || 'produit';
+    const baseSlug = slugNouvelleFiche(form.slug, form.name);
 
     const slugCollision = await Product.findOne({ slug: baseSlug }).select('_id').lean();
     if (slugCollision) {
@@ -12280,7 +12283,7 @@ function mapAndValidateImportProduct(raw, ctx) {
   const galleryUrls = importStrArray(raw.images);
   const galleryTypes = galleryUrls.map(() => 'image');
 
-  let slug = slugify(importStr(raw.slug) || name) || 'produit';
+  let slug = slugNouvelleFiche(importStr(raw.slug), name);
   if (ctx.existingSlugById.has(slug) || ctx.batchSlugs.has(slug)) {
     errors.push(`Slug déjà utilisé : « ${slug} ». Renseignez un « slug » unique.`);
   }
