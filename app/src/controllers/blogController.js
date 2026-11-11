@@ -19,6 +19,7 @@ const datesSeo = require('../services/datesSeo');
    n'apparaissent nulle part, ceux en noindex quittent les listes. */
 const { publicBlogFilter, retirerLiensDisparus, articlesAMailler } = require('../services/seoIndexPolicy');
 const titreSeo = require('../services/titreSeo');
+const pagesFamilles = require('../services/pagesFamilles');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -970,6 +971,12 @@ async function getBlogPost(req, res) {
       relatedProducts: relatedView,
       similarPosts,
       blogLinking,
+      /* Lien de fin d'article vers la page catégorie de la famille (audit
+         SEO du 11/11/2026, problème 8). */
+      lienFamille: pagesFamilles.lienFamillePourArticle({
+        categorie: post.category && post.category.slug,
+        titre: titreArticle,
+      }, 'fr'),
     });
   })().catch((err) => {
     console.error(err);

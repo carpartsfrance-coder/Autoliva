@@ -9,8 +9,11 @@
  *   problème 2 : les anciennes adresses de catégories répondent 301 vers la
  *                catégorie qui les remplace (table, renommage dans l'admin,
  *                queue parasite), jamais vers une autre 404 ;
+ *   problème 4 : la catégorie d'une famille prioritaire a son title, son H1,
+ *                son texte, sa FAQ (page 1 seulement) ;
  *   problème 5 : les titres de fiche n'ont plus de « … » et gardent la
  *                référence ;
+ *   problème 8 : un article de la famille renvoie vers sa catégorie ;
  *   problème 6 : les pages 2+ d'une catégorie sont indexables, avec leur
  *                propre canonique, title et hreflang ;
  *   consigne 8 : la page 404 dit « noindex », robots.txt ne cite plus /_next/.
@@ -93,6 +96,21 @@ test('audit SEO du 11/11/2026 : redirections, pages 2+, titres, 404', async (t) 
     isPublished: true,
   });
 
+  /* Un article de la famille « ponts » : il doit renvoyer vers sa catégorie. */
+  await db.collection('blogposts').insertOne({
+    _id: new mongoose.Types.ObjectId(),
+    title: 'Bruit de pont arrière BMW X5 E70 : diagnostic et remplacement',
+    slug: 'bruit-pont-arriere-bmw-x5-e70-test',
+    excerpt: 'Hurlement, claquement : comment reconnaître un pont arrière usé.',
+    contentMarkdown: `Un pont arrière usé hurle à vitesse stabilisée. ${'Le diagnostic se fait roue levée, en écoutant le bruit des roulements et du couple conique. '.repeat(12)}`,
+    readingTimeMinutes: 4,
+    isPublished: true,
+    publishedAt: new Date('2026-06-01T09:00:00Z'),
+    createdAt: new Date('2026-06-01T09:00:00Z'),
+    category: { slug: 'transmission-pont-differentiel', label: 'Transmission > Pont / Différentiel' },
+    seo: { metaTitle: '', metaDescription: '' },
+  });
+
   const app = require('../../src/app');
   http = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   base = `http://127.0.0.1:${http.address().port}`;
@@ -161,6 +179,33 @@ test('audit SEO du 11/11/2026 : redirections, pages 2+, titres, 404', async (t) 
     assert.ok(tt.length <= 60, tt);
     assert.ok(!tt.includes('…'), tt);
     assert.ok(tt.includes('0AM325065'), tt);
+  });
+
+  await t.test('problème 4 : la catégorie d’une famille prioritaire a son title, son H1, son texte et sa FAQ', async () => {
+    const { familles } = require('../../src/data/seo/pages-familles.json');
+    const f = familles['ponts-differentiels'];
+    const p1 = await get('/categorie/ponts-differentiels');
+    assert.equal(p1.status, 200);
+    assert.equal(titre(p1.corps).replace(/&amp;/g, '&'), f.titre);
+    assert.match(p1.corps, new RegExp(`<h1[^>]*>${f.h1}</h1>`));
+    assert.match(p1.corps, /class="famille-intro/);
+    assert.match(p1.corps, /href="\/ponts-differentiels"/, 'lien vers le devis');
+    assert.match(p1.corps, /Questions fréquentes/);
+    assert.match(p1.corps, /"@type":"FAQPage"/);
+    assert.equal(attr(p1.corps, /<meta name="description" content="([^"]*)"/), f.description);
+
+    /* Page 2 : même H1, ni introduction ni FAQ (pas de texte répété). */
+    const p2 = await get('/categorie/ponts-differentiels?page=2');
+    assert.match(p2.corps, new RegExp(`<h1[^>]*>${f.h1}</h1>`));
+    assert.doesNotMatch(p2.corps, /class="famille-intro/);
+    assert.doesNotMatch(p2.corps, /"@type":"FAQPage"/);
+    assert.ok(titre(p2.corps).includes('– page 2'));
+  });
+
+  await t.test('problème 8 : un article de la famille renvoie vers sa catégorie', async () => {
+    const r = await get('/blog/bruit-pont-arriere-bmw-x5-e70-test');
+    assert.equal(r.status, 200);
+    assert.match(r.corps, /href="\/categorie\/ponts-differentiels"[^>]*>Voir tous nos ponts et différentiels reconditionnés/);
   });
 
   await t.test('consigne 8 : robots.txt ne cite plus /_next/', async () => {

@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-11-11 — SEO : pages des familles prioritaires et liens depuis le blog
+
+Audit SEO du 11/11/2026 (problèmes 4 et 8). S'applique après « titres sans « … », anciennes catégories redirigées, pages 2+ ouvertes » (même date).
+
+### Backend
+- **Pages catégorie des trois familles prioritaires** (`/categorie/ponts-differentiels`, `/categorie/boites-de-transfert`, `/categorie/mecatroniques`) : title et description écrits pour la recherche (« Pont arrière et différentiel reconditionnés | Autoliva », « Boîtes de transfert reconditionnées BMW, Mercedes, Porsche », « Mécatronique DSG et calculateur de boîte reconditionnés »), H1 avec « reconditionnés », texte d'introduction (reconditionnement, marques couvertes, comment trouver la bonne pièce), boutons vers le devis, et FAQ de 5 questions avec ses données FAQPage. Introduction et FAQ en page 1 seulement. Avant : « Ponts & différentiels - Pièces auto », un H1 nu, puis la grille.
+- Le texte vit dans `data/seo/pages-familles.json` (lu par `services/pagesFamilles.js`), pas en base : il est relu par un test avant chaque mise en ligne. Mêmes règles que `claims-policy.json` : ni ISO 9001, ni « notre atelier », ni durée de garantie générale (« indiquée sur chaque fiche »), ni paiement en plusieurs fois, ni délai promis. Français seulement (la couche allemande est hors de Google).
+- Les titles des catégories ne copient pas ceux des pages de devis `/ponts-differentiels` et `/boites-de-transfert` (landings Ads, inchangées) : la catégorie vise « reconditionné » et les marques, la page de devis « échange standard ».
+- **Blog → familles** : chaque article d'une famille prioritaire (catégorie de l'article, sinon son titre : DQ200, ATC, différentiel…) se termine par un lien vers sa page catégorie (« Voir tous nos ponts et différentiels reconditionnés »…). Sur 40 articles relus, un seul faisait ce lien.
+
+### Frontend
+- `products/index.ejs` : sur mobile, seul le premier paragraphe de l'introduction s'affiche, la suite derrière « Lire la suite » (sans JavaScript), pour garder les produits près du haut de l'écran. Sur ordinateur, tout le texte est visible.
+- `blog/show.ejs` : lien de famille entre le texte et l'encart de fin d'article.
+
+### Tests
+- `tests/unit/pages-familles.test.js` (8 cas) : longueurs (title ≤ 60 servi tel quel, description 120–160, introduction 80–250 mots), allégations interdites, liens, FAQPage, français seulement, famille d'un article.
+- `tests/integration/audit-seo-novembre.test.js` : 2 cas de plus sur la vraie application (catégorie « ponts » page 1 et page 2, lien de fin d'article).
+- `tests/fixtures/seo/rendu-avant-politique.json.gz` réenregistré : 3 pages différentes, toutes voulues — le title et les 2 boutons de `/categorie/boites-de-transfert`, le lien de famille de 2 articles (DQ200, boîte de transfert Audi Q3).
+
+### Mise en service
+- Aucune variable d'environnement nouvelle, aucune migration. Après la mise en ligne : demander l'indexation des trois catégories dans la Search Console.
+
 ## 2026-11-11 — SEO : titres sans « … », anciennes catégories redirigées, pages 2+ ouvertes
 
 Audit SEO du 11/11/2026 (problèmes 2, 5 et 6, consigne 8).
