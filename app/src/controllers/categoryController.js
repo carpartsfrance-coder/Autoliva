@@ -16,6 +16,8 @@ const { formatCategoryDisplayName } = require('../services/brandSanitizer');
 const internalLinking = require('../services/internalLinking');
 const productI18n = require('../services/productI18n');
 const { filtreAuDelaDuPreset } = require('../services/facettesListing');
+const titreSeo = require('../services/titreSeo');
+const redirectionsCategories = require('../services/redirectionsCategories');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -34,22 +36,22 @@ function normalizeMetaText(value) {
   return value.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 
-/* Garde-fou title SEO : 60 char max (limite SERP Google). */
-const SEO_TITLE_MAX = 60;
+/* Title SEO : 60 caractères au plus, coupé entre deux mots, sans « … »
+   (audit SEO du 11/11/2026, services/titreSeo.js). */
 function clampSeoTitle(t) {
   if (!t) return t;
-  const s = String(t).trim();
-  if (s.length <= SEO_TITLE_MAX) return s;
-  const suffix = ` | ${brand.NAME}`;
-  if (s.endsWith(suffix)) {
-    const head = s.slice(0, s.length - suffix.length).trim();
-    const maxHead = Math.max(20, SEO_TITLE_MAX - suffix.length - 1);
-    const cut = head.length > maxHead ? `${head.slice(0, maxHead).trim()}…` : head;
-    const candidate = `${cut}${suffix}`;
-    if (candidate.length <= SEO_TITLE_MAX) return candidate;
-    return `${candidate.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
-  }
-  return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+  const { texte, suffixe } = titreSeo.separerSuffixe(String(t), brand.NAME);
+  return titreSeo.ajusterTitre(texte, { suffixe, modeSuffixe: 'prefere' });
+}
+
+/* Title d'une page 2+ : « … – page N », la mention de page jamais coupée. */
+function titreAvecPage(titre, page, lang) {
+  if (!(page > 1)) return clampSeoTitle(titre);
+  const { texte, suffixe } = titreSeo.separerSuffixe(String(titre), brand.NAME);
+  const mention = lang === 'de' ? ` – Seite ${page}` : ` – page ${page}`;
+  const avecMarque = titreSeo.ajusterTitre(texte, { max: titreSeo.TITRE_MAX - mention.length - suffixe.length });
+  if (suffixe && avecMarque.length >= 20) return `${avecMarque}${mention}${suffixe}`;
+  return `${titreSeo.ajusterTitre(texte, { max: titreSeo.TITRE_MAX - mention.length })}${mention}`;
 }
 
 function toSafeJsonLd(value) {
@@ -223,6 +225,16 @@ async function getCategory(req, res, next) {
     }
 
     if (!category) {
+      /* Ancienne adresse (arborescence remplacée, renommage dans l'admin,
+         queue parasite) : 301 vers la catégorie qui la remplace plutôt
+         qu'un 404 (audit SEO du 11/11/2026, problème 2). */
+      if (dbConnected) {
+        const cible = await redirectionsCategories.resoudre(slug);
+        if (cible !== null) {
+          const prefixe = req.lang === 'de' ? '/de' : '';
+          return res.redirect(301, cible ? `${prefixe}/categorie/${encodeURIComponent(cible)}` : `${prefixe}/categorie`);
+        }
+      }
       return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
 
@@ -275,10 +287,15 @@ async function getCategory(req, res, next) {
     const dbMetaTitle = category.seo && typeof category.seo.metaTitle === 'string'
       ? category.seo.metaTitle.trim() : '';
     /* `seo.metaTitle` en DB est saisi en français : on ne l'applique qu'au FR. */
-    const title = clampSeoTitle((!isDe && dbMetaTitle) || t(req.lang, 'category.metaTitle', { name }));
-    const metaDescription = isDe
+    const title = titreAvecPage((!isDe && dbMetaTitle) || t(req.lang, 'category.metaTitle', { name }), data.page, req.lang);
+    const descriptionPage1 = isDe
       ? buildCategoryMetaDescriptionDe(name, data.totalCount)
       : buildCategoryMetaDescription(name, data.totalCount);
+    /* Pages 2 et suivantes : ouvertes à Google (voir metaRobots), elles ne
+       doivent pas répéter le title et la description de la page 1. */
+    const metaDescription = data.page > 1
+      ? truncateText(normalizeMetaText(`${isDe ? 'Seite' : 'Page'} ${data.page} – ${descriptionPage1}`), 160)
+      : descriptionPage1;
 
     const baseUrl = getPublicBaseUrlFromReq(req);
     const canonicalBase = isDe
@@ -302,11 +319,19 @@ async function getCategory(req, res, next) {
         { lang: 'x-default', href: _frHref },
       ];
     }
+    /* Page 2+ indexable : ses hreflang la désignent ELLE (et sa version
+       allemande), pas la page 1 — sinon Google lit deux signaux contraires. */
+    if (data.page > 1) {
+      const suffixePage = `?page=${encodeURIComponent(String(data.page))}`;
+      hreflangTags = hreflangTags
+        ? hreflangTags.map((tag) => ({ ...tag, href: `${tag.href}${suffixePage}` }))
+        : [{ lang: 'fr', href: canonicalUrl }, { lang: 'x-default', href: canonicalUrl }];
+    }
 
     /* Robots : on indexe la page catégorie nue (pas de filtres au-delà de la
-     * catégorie présélectionnée). Dès qu'un filtre additionnel est actif, qu'on
-     * est en page 2+, ou que la catégorie est vide, on noindex pour éviter le
-     * contenu dupliqué et le "thin content" signal sur les catégories vides. */
+     * catégorie présélectionnée), pages 2+ comprises. Dès qu'un filtre
+     * additionnel est actif ou que la catégorie est vide, on noindex pour
+     * éviter le contenu dupliqué et le "thin content" des catégories vides. */
     const isEmpty = !data.totalCount || data.totalCount === 0;
     const filtersBeyondCategory =
       data.searchQuery
@@ -317,7 +342,10 @@ async function getCategory(req, res, next) {
       || (data.minPriceEuros !== null && data.minPriceEuros !== undefined)
       || (data.maxPriceEuros !== null && data.maxPriceEuros !== undefined)
       || (data.sort && data.sort !== 'newest' && data.sort !== '')
-      || data.page > 1
+      /* Page 2 et suivantes : INDEXABLES depuis l'audit SEO du 11/11/2026
+         (problème 6). En noindex, 316 des 340 ponts n'étaient listés que sur
+         des pages que Google finit par ne plus suivre. Chaque page garde sa
+         propre adresse canonique (?page=N), son title et sa description. */
       /* Autre catégorie, état, véhicule… : même règle (audit du 25/09/2026,
          services/facettesListing.js). */
       || filtreAuDelaDuPreset(req.query, { categorie: category.name });

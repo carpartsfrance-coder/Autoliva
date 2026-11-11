@@ -17,6 +17,7 @@
  */
 
 const mongoose = require('mongoose');
+const titreSeo = require('../services/titreSeo');
 const brand = require('../config/brand');
 const vehicleService = require('../services/vehicleLandingService');
 const VehicleLanding = require('../models/VehicleLanding');
@@ -34,26 +35,13 @@ function toJsonLdSafe(value) {
     .replace(/&/g, '\\u0026');
 }
 
-/* Garde-fou title SEO : 60 char max pour éviter la troncature SERP Google.
- * Stratégie : si trop long, on retire d'abord la queue "| Brand" (l'auteur
- * peut l'écrire en pleine lettre), sinon on tronque le contenu en préservant
- * la queue " | Brand" pour garder la branding cohérence. */
-const SEO_TITLE_MAX = 60;
+/* Title SEO : 60 caractères au plus, coupé entre deux mots, sans « … »
+ * (audit SEO du 11/11/2026, services/titreSeo.js). La queue « | Autoliva »
+ * est gardée tant que le texte coupé reste parlant. */
 function clampSeoTitle(t) {
   if (!t) return t;
-  const s = String(t).trim();
-  if (s.length <= SEO_TITLE_MAX) return s;
-  const suffix = ` | ${brand.NAME}`;
-  // Si le title contient le suffix, on tronque la partie head pour le préserver.
-  if (s.endsWith(suffix)) {
-    const head = s.slice(0, s.length - suffix.length).trim();
-    const maxHead = Math.max(20, SEO_TITLE_MAX - suffix.length - 1);
-    const cut = head.length > maxHead ? `${head.slice(0, maxHead).trim()}…` : head;
-    const candidate = `${cut}${suffix}`;
-    if (candidate.length <= SEO_TITLE_MAX) return candidate;
-    return `${candidate.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
-  }
-  return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+  const { texte, suffixe } = titreSeo.separerSuffixe(String(t), brand.NAME);
+  return titreSeo.ajusterTitre(texte, { suffixe, modeSuffixe: 'prefere' });
 }
 
 /* Auto-templates de contenu SEO (utilisés quand pas de VehicleLanding admin) */
@@ -487,7 +475,13 @@ async function getModelCategoryLanding(req, res, next) {
     const catDoc = await Category.findOne({ slug: categorySlug, isActive: { $ne: false } })
       .select('name slug').lean();
     if (!catDoc) {
-      // Catégorie absente : on retombe sur la landing model qui existe.
+      /* Ancienne catégorie (« transmission-pont-differentiel »…) : la page du
+         même véhicule dans la catégorie qui la remplace (audit SEO
+         11/11/2026). Sinon, la landing modèle qui existe. */
+      const cible = await require('../services/redirectionsCategories').resoudre(categorySlug);
+      if (cible) {
+        return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}/${encodeURIComponent(cible)}`);
+      }
       return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}`);
     }
     /* Le partTypeName affiché à l'utilisateur est le dernier segment de la

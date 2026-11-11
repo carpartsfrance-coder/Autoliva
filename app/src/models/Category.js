@@ -26,6 +26,11 @@ const categorySchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     slug: { type: String, required: true, trim: true, lowercase: true, unique: true },
+    /* Anciens slugs français, gardés à chaque renommage dans l'admin pour
+       que l'ancienne adresse réponde 301 vers la nouvelle au lieu d'un 404
+       (audit SEO du 11/11/2026 : les catégories renommées avaient perdu leur
+       adresse). Résolus par services/redirectionsCategories.js. */
+    slugAliases: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
     isHomeFeatured: { type: Boolean, default: false },
     // Affichage dans le mega-menu « Catalogue » du header + icône (nom Material Symbol).
@@ -48,5 +53,6 @@ const categorySchema = new mongoose.Schema(
 );
 
 categorySchema.index({ 'localizations.de.translatedAt': 1 });
+categorySchema.index({ slugAliases: 1 });
 
 module.exports = mongoose.model('Category', categorySchema);

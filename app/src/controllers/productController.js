@@ -9,6 +9,7 @@ const demoProducts = require('../demoProducts');
 const sanitizeHtml = require('sanitize-html');
 const { markdownToHtml } = require('../services/blogContent');
 const productOptions = require('../services/productOptions');
+const titreSeo = require('../services/titreSeo');
 const { rankProducts, sortRankedProducts } = require('../services/search');
 const brand = require('../config/brand');
 const { idOrganisation } = require('../services/organisationSchema');
@@ -805,64 +806,38 @@ async function getProduct(req, res, next) {
       ? sanitizeBrandLeak(product.seo.metaTitle.trim())
       : '';
 
-    /* Construit un title SEO en tenant dans ~60 caractères (limite SERP Google).
-       Stratégie : on tente la version complète, si trop longue on retire d'abord
-       la SKU (info technique moins recherchée), puis le brand véhicule, puis on
-       tronque le nom pour préserver le suffix marque. */
-    const SEO_TITLE_MAX = 60;
-    function buildSeoTitleFitted(name, brandTxt, skuTxt) {
-      const suffix = ` | ${brand.NAME}`;
-      const variants = [
-        `${name}${brandTxt ? ` - ${brandTxt}` : ''}${skuTxt ? ` (Réf ${skuTxt})` : ''}${suffix}`,
-        `${name}${brandTxt ? ` - ${brandTxt}` : ''}${suffix}`,
-        `${name}${suffix}`,
+    /* Title SEO : 60 caractères au plus, sans « … », la référence jamais
+       coupée (audit SEO du 11/11/2026, services/titreSeo.js). On tente
+       d'abord les versions complètes avec la marque du véhicule et la SKU ;
+       sinon le nom seul, raccourci entre deux mots. « | Autoliva » n'est
+       gardé que s'il ne coûte rien au texte. */
+    const SUFFIXE_MARQUE = ` | ${brand.NAME}`;
+    /* Ce que le client tape dans Google : la référence fabricant, la première
+       référence compatible, le code boîte ou moteur. Jamais coupés. */
+    const identifiantsAProteger = [
+      findSpecValue('référence fabricant', 'reference fabricant', 'référence oe', 'reference oe', 'code boîte', 'code boite', 'code moteur'),
+      compatibleReferences[0] || '',
+    ].filter(Boolean);
+    function titreDepuisNom(name, brandTxt, skuTxt) {
+      const nom = String(name || '').trim();
+      const variantes = [
+        `${nom}${brandTxt ? ` - ${brandTxt}` : ''}${skuTxt ? ` (Réf ${skuTxt})` : ''}${SUFFIXE_MARQUE}`,
+        `${nom}${brandTxt ? ` - ${brandTxt}` : ''}${SUFFIXE_MARQUE}`,
       ];
-      for (const v of variants) {
-        if (v.length <= SEO_TITLE_MAX) return v;
+      for (const v of variantes) {
+        if (v.length <= titreSeo.TITRE_MAX) return v;
       }
-      // Toutes trop longues → on tronque le nom pour préserver " | Brand"
-      const maxNameLen = Math.max(10, SEO_TITLE_MAX - suffix.length - 1); // -1 pour ellipsis
-      const truncatedName = name.length > maxNameLen ? `${name.slice(0, maxNameLen).trim()}…` : name;
-      return `${truncatedName}${suffix}`;
+      return titreSeo.ajusterTitre(nom, { suffixe: SUFFIXE_MARQUE, modeSuffixe: 'facultatif', proteger: identifiantsAProteger });
     }
-    /* Si l'override DB n'a pas de suffix marque, on l'ajoute pour cohérence
-       SEO (sinon certaines fiches s'affichent sans " | Autoliva" en SERP).
-       Respecte STRICTEMENT SEO_TITLE_MAX (60 char) pour éviter la troncature
-       SERP de Google (cause des 37 alertes Semrush "title too long"). */
-    function ensureBrandSuffix(t) {
-      if (!t) return t;
-      const suffix = ` | ${brand.NAME}`;
-      const trimmed = t.trim();
-      // Déjà conforme avec ou sans suffix
-      if (trimmed.length <= SEO_TITLE_MAX && trimmed.endsWith(suffix)) return trimmed;
-      const lower = trimmed.toLowerCase();
-      const lowerName = brand.NAME.toLowerCase();
-      // Si le brand est déjà présent en fin (autre séparateur), on n'ajoute
-      // pas le suffix mais on tronque quand même si > 60.
-      if (lower.endsWith(lowerName)) {
-        if (trimmed.length <= SEO_TITLE_MAX) return trimmed;
-        return `${trimmed.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
-      }
-      // Cas standard : on essaie d'ajouter le suffix dans la limite 60 ; sinon
-      // on tronque la partie titre pour préserver " | Brand".
-      const candidate = `${trimmed}${suffix}`;
-      if (candidate.length <= SEO_TITLE_MAX) return candidate;
-      const maxLen = Math.max(20, SEO_TITLE_MAX - suffix.length - 1);
-      const cut = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen).trim()}…` : trimmed;
-      return `${cut}${suffix}`;
+    /* Un title saisi en base (seo.metaTitle) est réajusté de la même façon :
+       la marque y est ajoutée si elle tient, retirée s'il faut couper. */
+    function titreDepuisSaisie(saisi) {
+      const { texte } = titreSeo.separerSuffixe(saisi, brand.NAME);
+      return titreSeo.ajusterTitre(texte, { suffixe: SUFFIXE_MARQUE, modeSuffixe: 'facultatif', proteger: identifiantsAProteger });
     }
-    /* Garde-fou ultime : quoi qu'il arrive, jamais > SEO_TITLE_MAX. */
-    function clampTitle(t) {
-      if (!t) return t;
-      const s = String(t).trim();
-      if (s.length <= SEO_TITLE_MAX) return s;
-      return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
-    }
-    const seoTitle = clampTitle(
-      titleOverride
-        ? ensureBrandSuffix(titleOverride)
-        : buildSeoTitleFitted(product.name, brandText, skuText),
-    );
+    const seoTitle = titleOverride
+      ? titreDepuisSaisie(titleOverride)
+      : titreDepuisNom(product.name, brandText, skuText);
 
     const descriptionOverride = product.seo && typeof product.seo.metaDescription === 'string'
       ? sanitizeBrandLeak(product.seo.metaDescription.trim())
