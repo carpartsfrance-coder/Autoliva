@@ -1209,7 +1209,7 @@ async function postAdminUpdateCategory(req, res, next) {
       return res.redirect('/admin/categories');
     }
 
-    const existing = await Category.findById(categoryId).select('_id name sortOrder shippingClassId isHomeFeatured seoText showInMenu menuIcon').lean();
+    const existing = await Category.findById(categoryId).select('_id name slug sortOrder shippingClassId isHomeFeatured seoText showInMenu menuIcon').lean();
     if (!existing || typeof existing.name !== 'string' || !existing.name.trim()) {
       return res.redirect('/admin/categories');
     }
@@ -1233,7 +1233,9 @@ async function postAdminUpdateCategory(req, res, next) {
     const isHomeFeatured = isChecked(req.body && req.body.isHomeFeatured);
     const showInMenu = isChecked(req.body && req.body.showInMenu);
     const menuIcon = (typeof req.body.menuIcon === 'string' ? req.body.menuIcon.trim() : '').replace(/[^a-z0-9_]/gi, '').slice(0, 40);
-    const seoText = typeof req.body.seoText === 'string' ? req.body.seoText.trim() : '';
+    /* Champ absent du formulaire : on garde le texte en base (il n'était
+       jamais effacé exprès, seulement par oubli du champ). */
+    const seoText = typeof req.body.seoText === 'string' ? req.body.seoText.trim() : String(existing.seoText || '');
 
     if (!nextName) {
       req.session.adminCategoryError = 'Merci de renseigner un nom de catégorie.';
@@ -1266,7 +1268,7 @@ async function postAdminUpdateCategory(req, res, next) {
       const newMain = nextParts.main;
 
       const catRx = new RegExp(`^${escapeRegExp(oldMain)}(\\s*>|$)`);
-      const affectedCats = await Category.find({ name: { $regex: catRx } }).select('_id name sortOrder isHomeFeatured').lean();
+      const affectedCats = await Category.find({ name: { $regex: catRx } }).select('_id name slug sortOrder isHomeFeatured').lean();
 
       for (const cat of affectedCats) {
         const current = typeof cat.name === 'string' ? cat.name.trim() : '';
@@ -1293,6 +1295,8 @@ async function postAdminUpdateCategory(req, res, next) {
             sortOrder: updatedSortOrder,
             ...(String(cat._id) === String(existing._id) ? { shippingClassId, isHomeFeatured, seoText, showInMenu, menuIcon } : {}),
           },
+          /* L'ancienne adresse redirige vers la nouvelle (audit SEO 11/11/2026). */
+          ...(cat.slug && cat.slug !== updatedSlug ? { $addToSet: { slugAliases: cat.slug } } : {}),
         });
       }
 
@@ -1320,10 +1324,15 @@ async function postAdminUpdateCategory(req, res, next) {
         String(existing.shippingClassId || '') !== String(shippingClassId || '') ||
         (existing.isHomeFeatured === true) !== isHomeFeatured ||
         (existing.showInMenu === true) !== showInMenu ||
-        String(existing.menuIcon || '') !== menuIcon
+        String(existing.menuIcon || '') !== menuIcon ||
+        /* Le texte SEO seul ne s'enregistrait pas : aucune des conditions
+           ci-dessus ne le regardait (audit SEO du 11/11/2026). */
+        String(existing.seoText || '') !== seoText
       ) {
         await Category.findByIdAndUpdate(categoryId, {
           $set: { name: nextName, slug: nextSlug, sortOrder, shippingClassId, isHomeFeatured, seoText, showInMenu, menuIcon },
+          /* L'ancienne adresse redirige vers la nouvelle (audit SEO 11/11/2026). */
+          ...(existing.slug && existing.slug !== nextSlug ? { $addToSet: { slugAliases: existing.slug } } : {}),
         });
       }
 

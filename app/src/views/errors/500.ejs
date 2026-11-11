@@ -1,4 +1,4 @@
-<%- include('../partials/head') %>
+<%- include('../partials/head', { metaRobots: (typeof metaRobots !== 'undefined' && /noindex/i.test(String(metaRobots))) ? metaRobots : 'noindex, follow' }) %>
 <%- include('../partials/header') %>
 
 <main class="flex-1">

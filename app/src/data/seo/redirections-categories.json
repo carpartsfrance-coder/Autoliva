@@ -1,0 +1,35 @@
+{
+ "_lisezMoi": [
+  "Anciennes adresses de catégories → catégorie qui les remplace (audit SEO du 11/11/2026, problème 2). Lu par src/services/redirectionsCategories.js.",
+  "Ces slugs répondaient 404 : ils viennent de l'ancienne arborescence (« Transmission > Pont / Différentiel »…) remplacée par scripts/normalize-categories.js, et de catégories désactivées par scripts/migrate-ponts.js. La Search Console en listait 15 en « Introuvable (404) » le 11/11/2026.",
+  "La redirection n'est consultée QUE si aucune catégorie active ne porte ce slug : une catégorie recréée sous un de ces noms reprend la main.",
+  "Valeur vide = le sommaire des catégories (/categorie). Une cible inconnue ou désactivée n'est jamais servie (la page reste en 404).",
+  "Les renommages faits dans l'admin n'ont pas besoin d'entrer ici : l'ancien slug est gardé dans slugAliases et redirigé automatiquement."
+ ],
+ "redirections": {
+  "transmission-pont-differentiel": "ponts-differentiels",
+  "pont-differentiel-avant": "ponts-differentiels",
+  "pont-differentiel-arriere": "ponts-differentiels",
+  "ponts-neufs": "ponts-differentiels",
+  "ponts-occasions": "ponts-differentiels",
+  "ponts-arriere": "ponts-differentiels",
+  "ponts-avant": "ponts-differentiels",
+  "differentiels": "ponts-differentiels",
+  "transmission-boite-de-transfert": "boites-de-transfert",
+  "transmission-boite-transfert": "boites-de-transfert",
+  "boite-de-transfert": "boites-de-transfert",
+  "transmission-mecatronique": "mecatroniques",
+  "mecatronique": "mecatroniques",
+  "electricite-electronique-calculateurs": "mecatroniques",
+  "transmission-boite-de-vitesses": "boites-de-vitesses",
+  "transmission-boite-automatique": "boites-de-vitesses",
+  "boite-de-vitesses-manuelle": "boites-de-vitesses",
+  "transmission": "",
+  "moteur-bloc-moteur": "moteurs",
+  "moteur-diesel-echange-standard": "moteurs",
+  "moteur-diesel": "moteurs",
+  "moteur-vilebrequin": "moteurs",
+  "moteur-turbo-admission": "turbos",
+  "moteur-alternateur-demarreur": "demarreurs-alternateurs"
+ }
+}

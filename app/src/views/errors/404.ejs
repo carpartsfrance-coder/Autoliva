@@ -1,4 +1,6 @@
-<%- include('../partials/head') %>
+<%# Une page introuvable ne s'indexe pas : le code 404 le dit déjà, la balise
+    le redit (elle disait « index, follow », audit SEO du 11/11/2026). -%>
+<%- include('../partials/head', { metaRobots: (typeof metaRobots !== 'undefined' && /noindex/i.test(String(metaRobots))) ? metaRobots : 'noindex, follow' }) %>
 <%- include('../partials/header') %>
 
 <% const _is404De = typeof lang !== 'undefined' && lang === 'de'; %>

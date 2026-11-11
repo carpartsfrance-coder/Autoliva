@@ -18,28 +18,20 @@ const datesSeo = require('../services/datesSeo');
    toute requête publique passe par publicBlogFilter — les articles en 410
    n'apparaissent nulle part, ceux en noindex quittent les listes. */
 const { publicBlogFilter, retirerLiensDisparus, articlesAMailler } = require('../services/seoIndexPolicy');
+const titreSeo = require('../services/titreSeo');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-/* Garde-fou title SEO : 60 char max (limite SERP Google). Préserve le suffix
- * " | Brand" ou " - Brand" si présent, sinon tronque proprement. */
-const SEO_TITLE_MAX = 60;
+/* Title SEO : 60 caractères au plus, coupé entre deux mots, sans « … », les
+ * codes (DQ200, P17BF, références) jamais coupés — audit SEO du 11/11/2026,
+ * services/titreSeo.js. La marque « | Autoliva » est gardée tant que le texte
+ * coupé reste parlant (title ≠ h1, alertes Semrush). */
 function clampSeoTitle(t) {
   if (!t) return t;
-  const s = String(t).trim();
-  if (s.length <= SEO_TITLE_MAX) return s;
-  const suffixes = [` | ${brand.NAME}`, ` - ${brand.NAME}`];
-  for (const sx of suffixes) {
-    if (s.endsWith(sx)) {
-      const head = s.slice(0, s.length - sx.length).trim();
-      const maxHead = Math.max(20, SEO_TITLE_MAX - sx.length - 1);
-      const cut = head.length > maxHead ? `${head.slice(0, maxHead).trim()}…` : head;
-      return `${cut}${sx}`;
-    }
-  }
-  return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+  const { texte, suffixe } = titreSeo.separerSuffixe(String(t), brand.NAME);
+  return titreSeo.ajusterTitre(texte, { suffixe, modeSuffixe: 'prefere' });
 }
 
 function normalizeComparableText(value) {

@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-11-11 — SEO : titres sans « … », anciennes catégories redirigées, pages 2+ ouvertes
+
+Audit SEO du 11/11/2026 (problèmes 2, 5 et 6, consigne 8).
+
+### Backend
+- **Titres sans « … »** : nouvelle règle commune `services/titreSeo.js`, utilisée par les fiches, le blog, les catégories et les pages véhicule. Le titre est coupé entre deux mots, jamais au milieu, sans « … » ; la référence de la pièce (2462800200, CV6W-4000-DB…), les codes défaut (P17BF) et le code écrit après « — » (code boîte HNE) ne sont jamais coupés. Sur une fiche, « | Autoliva » saute plutôt que le texte ; sur un article, il reste tant que le texte coupé reste parlant. « échange standard » ne saute que s'il faut gagner de la place. Avant : 8 fiches sur 10 testées perdaient leur référence.
+- **Anciennes adresses de catégories** : `/categorie/transmission-pont-differentiel`, `-mecatronique`, `-boite-de-transfert`, `-boite-de-vitesses` et 11 autres répondaient 404 (15 relevées dans la Search Console). Elles répondent maintenant 301 vers la catégorie qui les remplace (`data/seo/redirections-categories.json`, `services/redirectionsCategories.js`), y compris avec une queue parasite et sous `/de`. Une cible absente ou désactivée n'est jamais servie (404 conservé). Même règle pour le segment catégorie des pages `/pieces-auto/<marque>/<modèle>/<catégorie>`.
+- **Renommer une catégorie dans l'admin** garde l'ancien slug (`Category.slugAliases`) : l'ancienne adresse redirige automatiquement. Correction au passage : le texte SEO d'une catégorie ne s'enregistrait pas quand il était le seul champ modifié.
+- **Pages 2 et suivantes des catégories indexables** : canonique sur elles-mêmes (déjà le cas), « – page N » dans le title et la description, hreflang sur elles-mêmes. Avant, 316 des 340 ponts n'étaient listés que sur des pages en noindex. Un filtre au-delà de la catégorie (tri, prix, véhicule…) garde le noindex.
+- Pages 404 et 500 en « noindex, follow » (elles disaient « index, follow »). `robots.txt` ne cite plus `/_next/` (le site n'utilise pas Next.js).
+
+### Tests
+- `tests/unit/titres-seo.test.js` (10 cas, titres réels du site), `tests/unit/redirections-categories.test.js` (5 cas), `tests/integration/audit-seo-novembre.test.js` (5 cas sur la vraie application : 301, 404 noindex, page 2, titre de fiche, robots.txt).
+- `tests/fixtures/seo/rendu-avant-politique.json.gz` réenregistré (SEO_PRUNE absent) : 10 différences, toutes voulues — 6 titres sans « … », la ligne `/_next/` de robots.txt, et la balise robots de 3 pages 404.
+
+### Mise en service
+- Aucune variable d'environnement nouvelle, aucune migration. Le champ `slugAliases` naît vide.
+
 ## 2026-10-12 — Connecteur MCP : les autorisations survivent aux redémarrages
 
 ### Backend

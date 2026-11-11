@@ -1050,7 +1050,6 @@ function getRobotsTxt(req, res) {
     '',
     '# --- Endpoints techniques ---',
     'Disallow: /api/',
-    'Disallow: /_next/',
     'Disallow: /feed/',
     '',
     '# --- Robots d’entraînement d’IA qui ne rendent rien ---',
