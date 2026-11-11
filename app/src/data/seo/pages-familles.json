@@ -1,0 +1,106 @@
+{
+ "_lisezMoi": [
+  "Contenu des pages catégorie des trois familles prioritaires (audit SEO du 11/11/2026, problème 4) : title, description, H1, texte d'introduction (page 1 seulement), FAQ (page 1, avec ses données FAQPage) et liens vers le devis. Lu par src/services/pagesFamilles.js, servi en français seulement.",
+  "Règle d'écriture : rien d'invérifiable. Pas d'« ISO 9001 », pas de « notre atelier », pas de durée de garantie générale (elle est sur chaque fiche) — même règle que src/data/seo/claims-policy.json. Les étapes de reconditionnement reprennent celles des pages /ponts-differentiels et /boites-de-transfert.",
+  "Les titles évitent de copier ceux des pages de devis (/ponts-differentiels, /boites-de-transfert, qui visent « échange standard ») : la catégorie vise « pont arrière / différentiel reconditionné » et les marques.",
+  "Pour modifier un texte : éditer ce fichier, relancer npm test (tests/unit/pages-familles.test.js vérifie longueurs et allégations)."
+ ],
+ "familles": {
+  "ponts-differentiels": {
+   "titre": "Pont arrière et différentiel reconditionnés | Autoliva",
+   "description": "Ponts arrière, ponts avant et différentiels reconditionnés en échange standard : BMW, Mercedes, Toyota, Land Rover… Roulements et joints neufs.",
+   "h1": "Ponts et différentiels reconditionnés",
+   "introHtml": "<p>Pont arrière, pont avant, différentiel ou renvoi d’angle : chaque pièce est reconditionnée et vendue en échange standard. Les roulements, les joints et les pièces d’usure sont remplacés, la précharge et le jeu de denture sont réglés aux tolérances du constructeur, puis la pièce est contrôlée avant l’expédition.</p><p>Le catalogue couvre surtout BMW (xDrive), Mercedes (4MATIC), Toyota, Audi, Ford, Land Rover et Nissan, en 4x4, SUV et utilitaires. Pour trouver la bonne pièce, comparez la référence gravée ou étiquetée sur votre ancien pont, et son rapport de pont, avec ceux de la fiche. Un doute : envoyez-nous votre plaque ou votre numéro de châssis (VIN), nous vérifions la compatibilité avant la commande.</p>",
+   "liens": [
+    { "href": "/ponts-differentiels", "texte": "Demander un devis échange standard" },
+    { "href": "/categorie/boites-de-transfert", "texte": "Voir les boîtes de transfert" }
+   ],
+   "faq": [
+    {
+     "question": "Qu’est-ce que l’échange standard ?",
+     "reponse": "Vous recevez un pont ou un différentiel reconditionné et vous nous renvoyez l’ancien. Quand la fiche indique une consigne, elle vous est remboursée une fois l’ancienne pièce reçue et vérifiée."
+    },
+    {
+     "question": "Comment savoir si un pont est compatible avec mon véhicule ?",
+     "reponse": "Comparez la référence de votre ancien pont (gravée sur le carter ou sur une étiquette) et son rapport de pont avec ceux indiqués sur la fiche. Si vous ne les trouvez pas, envoyez-nous votre plaque ou votre VIN : nous vérifions avant la commande."
+    },
+    {
+     "question": "Quels sont les signes d’un pont ou d’un différentiel usé ?",
+     "reponse": "Un hurlement qui change avec la vitesse, un claquement à l’accélération ou au lâcher de l’accélérateur, des vibrations, ou une fuite d’huile au niveau des joints."
+    },
+    {
+     "question": "Quelle est la garantie ?",
+     "reponse": "La durée de garantie est indiquée sur chaque fiche."
+    },
+    {
+     "question": "Que faut-il prévoir au montage ?",
+     "reponse": "Le remplissage avec l’huile préconisée par le constructeur, et le remplacement des pièces de fixation à usage unique. Une question pendant le montage : appelez-nous, nous vous aidons."
+    }
+   ]
+  },
+  "boites-de-transfert": {
+   "titre": "Boîtes de transfert reconditionnées BMW, Mercedes, Porsche",
+   "description": "Boîtes de transfert reconditionnées en échange standard : BMW xDrive (ATC), Mercedes 4MATIC, Porsche, Land Rover, Toyota, Audi. Contrôlées avant envoi.",
+   "h1": "Boîtes de transfert reconditionnées",
+   "introHtml": "<p>BMW xDrive (ATC400, ATC450, ATC500, ATC700), Mercedes 4MATIC, Porsche Cayenne et Macan, Land Rover, Toyota, Audi, Nissan ou Jeep : chaque boîte de transfert est reconditionnée et vendue en échange standard. La chaîne, les pignons, les roulements, les joints et l’actuateur sont contrôlés, les pièces usées remplacées, puis la boîte est testée en rotation et en étanchéité avant l’expédition.</p><p>Pour trouver la bonne boîte, comparez la référence de l’étiquette de votre ancienne boîte de transfert avec celle de la fiche. Un doute : envoyez-nous votre plaque ou votre numéro de châssis (VIN), nous vérifions la compatibilité avant la commande.</p>",
+   "liens": [
+    { "href": "/boites-de-transfert", "texte": "Demander un devis échange standard" },
+    { "href": "/categorie/ponts-differentiels", "texte": "Voir les ponts et différentiels" }
+   ],
+   "faq": [
+    {
+     "question": "Qu’est-ce que l’échange standard ?",
+     "reponse": "Vous recevez une boîte de transfert reconditionnée et vous nous renvoyez l’ancienne. Quand la fiche indique une consigne, elle vous est remboursée une fois l’ancienne pièce reçue et vérifiée."
+    },
+    {
+     "question": "Quels sont les signes d’une boîte de transfert en panne ?",
+     "reponse": "Des à-coups ou des claquements en braquant à basse vitesse, un bruit de chaîne, un voyant de transmission intégrale allumé, ou une transmission intégrale qui ne fonctionne plus."
+    },
+    {
+     "question": "Comment être sûr de commander la bonne boîte ?",
+     "reponse": "La référence est sur l’étiquette de votre boîte de transfert : comparez-la à celle de la fiche. Sur BMW, le type (ATC400, ATC450, ATC500, ATC700) dépend du modèle et de l’année. Dans le doute, envoyez-nous votre VIN."
+    },
+    {
+     "question": "Quelle huile utiliser ?",
+     "reponse": "Celle préconisée par le constructeur : chez BMW, l’huile de boîte de transfert DTF-1, disponible au catalogue."
+    },
+    {
+     "question": "Quelle est la garantie ?",
+     "reponse": "La durée de garantie est indiquée sur chaque fiche."
+    }
+   ]
+  },
+  "mecatroniques": {
+   "titre": "Mécatronique DSG et calculateur de boîte reconditionnés",
+   "description": "Mécatroniques DSG (DQ200, DQ250, DQ381, DQ500), S tronic, Multitronic et calculateurs de boîte reconditionnés en échange standard, programmés au VIN.",
+   "h1": "Mécatroniques et calculateurs de boîte reconditionnés",
+   "introHtml": "<p>DSG7 DQ200 (0AM/0CW), DSG6 DQ250 (02E), DSG7 DQ380/DQ381 (0DE/0GC) et DQ500 (0BH), S tronic DL501 et DL382, Multitronic 0AW, mais aussi calculateurs de boîte Mercedes 7G-Tronic (722.9), 9G-Tronic et 7G-DCT, GM 6T30/6T50 et 6L45/6L80, Renault EDC : mécatroniques et calculateurs de boîte (TCU) reconditionnés, contrôlés avant l’expédition et vendus en échange standard.</p><p>Une mécatronique ou un calculateur doit correspondre à votre boîte et à votre véhicule. Comparez la référence de votre ancienne pièce avec celle de la fiche. Quand la fiche l’indique, la pièce est programmée au numéro de châssis (VIN) de votre véhicule : nous vous le demandons à la commande.</p>",
+   "liens": [
+    { "href": "/devis", "texte": "Demander un devis avec votre VIN" },
+    { "href": "/categorie/boites-de-vitesses", "texte": "Voir les boîtes de vitesses" }
+   ],
+   "faq": [
+    {
+     "question": "Quels sont les signes d’une mécatronique DSG en panne ?",
+     "reponse": "Des à-coups au passage des rapports, des rapports qui ne passent plus, un voyant de boîte ou les lettres PRNDS qui clignotent, et une voiture qui passe en mode dégradé."
+    },
+    {
+     "question": "Faut-il programmer la mécatronique ou le calculateur ?",
+     "reponse": "Cela dépend de la pièce : la fiche indique si elle est livrée programmée au VIN de votre véhicule. Dans ce cas, le VIN vous est demandé à la commande."
+    },
+    {
+     "question": "Mécatronique complète ou kit de réparation ?",
+     "reponse": "Pour la DSG7 DQ200, un kit de réparation neuf (accumulateur de pression, filtre, joints) existe au catalogue quand le défaut vient de l’accumulateur, par exemple avec le code défaut P17BF. Pour une panne électronique ou hydraulique plus large, c’est la mécatronique complète."
+    },
+    {
+     "question": "Qu’est-ce que l’échange standard ?",
+     "reponse": "Vous recevez une pièce reconditionnée et vous nous renvoyez l’ancienne. Quand la fiche indique une consigne, elle vous est remboursée une fois l’ancienne pièce reçue et vérifiée."
+    },
+    {
+     "question": "Quelle est la garantie ?",
+     "reponse": "La durée de garantie est indiquée sur chaque fiche."
+    }
+   ]
+  }
+ }
+}

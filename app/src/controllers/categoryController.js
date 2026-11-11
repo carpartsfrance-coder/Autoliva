@@ -18,6 +18,7 @@ const productI18n = require('../services/productI18n');
 const { filtreAuDelaDuPreset } = require('../services/facettesListing');
 const titreSeo = require('../services/titreSeo');
 const redirectionsCategories = require('../services/redirectionsCategories');
+const pagesFamilles = require('../services/pagesFamilles');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -286,11 +287,18 @@ async function getCategory(req, res, next) {
      * Si DB a un metaTitle custom, on respecte mais on clamp toujours. */
     const dbMetaTitle = category.seo && typeof category.seo.metaTitle === 'string'
       ? category.seo.metaTitle.trim() : '';
+    /* Familles prioritaires (ponts, boîtes de transfert, mécatroniques) :
+       title, description, H1, introduction et FAQ rédigés et relus (audit SEO
+       du 11/11/2026, problème 4 ; src/data/seo/pages-familles.json). Un
+       `seo.metaTitle` en base garderait la main, comme prévu ci-dessus — mais
+       le modèle Category n'a pas ce champ et la requête ne le lit pas : pour
+       ces trois catégories, le title est celui du fichier. */
+    const famille = isDe ? null : pagesFamilles.pourCategorie(category.slug, 'fr');
     /* `seo.metaTitle` en DB est saisi en français : on ne l'applique qu'au FR. */
-    const title = titreAvecPage((!isDe && dbMetaTitle) || t(req.lang, 'category.metaTitle', { name }), data.page, req.lang);
+    const title = titreAvecPage((!isDe && dbMetaTitle) || (famille && famille.titre) || t(req.lang, 'category.metaTitle', { name }), data.page, req.lang);
     const descriptionPage1 = isDe
       ? buildCategoryMetaDescriptionDe(name, data.totalCount)
-      : buildCategoryMetaDescription(name, data.totalCount);
+      : ((famille && famille.description) || buildCategoryMetaDescription(name, data.totalCount));
     /* Pages 2 et suivantes : ouvertes à Google (voir metaRobots), elles ne
        doivent pas répéter le title et la description de la page 1. */
     const metaDescription = data.page > 1
@@ -387,6 +395,8 @@ async function getCategory(req, res, next) {
             { '@type': 'ListItem', position: 3, name, item: canonicalUrl },
           ],
         },
+        /* FAQ visible sur la page 1 seulement : ses données aussi. */
+        ...((famille && !(data.page > 1) && pagesFamilles.faqJsonLd(famille)) ? [pagesFamilles.faqJsonLd(famille)] : []),
       ],
     });
 
@@ -421,6 +431,15 @@ async function getCategory(req, res, next) {
         publicPath: isDe ? `/de/categorie/${encodeURIComponent(deCatSlug)}` : buildCategoryPublicPath(category),
         seoText: isDe ? ((deLoc && deLoc.seoText) || '') : (typeof category.seoText === 'string' ? category.seoText : ''),
         linking: linkingData,
+        /* H1 et contenu de famille : le H1 sur toutes les pages, le texte
+           d'introduction, les liens et la FAQ sur la page 1 seulement (les
+           pages 2+ indexables ne doivent pas répéter le même texte). */
+        h1: famille && famille.h1 ? famille.h1 : '',
+        famille: (famille && !(data.page > 1)) ? {
+          introHtml: famille.introHtml || '',
+          liens: Array.isArray(famille.liens) ? famille.liens : [],
+          faq: Array.isArray(famille.faq) ? famille.faq : [],
+        } : null,
       },
     });
   } catch (err) {

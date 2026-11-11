@@ -62,6 +62,15 @@
               <% } %>
             </div>
 
+            <% if (typeof lienFamille !== 'undefined' && lienFamille && lienFamille.href) { %>
+              <%/* Lien vers la page catégorie de la famille (audit SEO du
+                   11/11/2026, problème 8) : le blog transmet sa force aux
+                   pages qui vendent. */%>
+              <p class="lien-famille mt-8">
+                <a class="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-primary hover:bg-slate-100 transition-colors" href="<%= lienFamille.href %>"><%= lienFamille.texte %><span class="material-symbols-outlined text-base">arrow_forward</span></a>
+              </p>
+            <% } %>
+
             <!-- Gros CTA fin d'article : capture lead avec contexte produit/sujet -->
             <% var _ctaTopic = post && post.category && post.category.label ? post.category.label : (post && post.seo && post.seo.primaryKeyword ? post.seo.primaryKeyword : ''); %>
             <div id="blog-end-cta" class="mt-10 rounded-2xl border-2 border-red-100 bg-gradient-to-br from-red-50 via-white to-red-50/50 p-6 lg:p-8 relative overflow-hidden">
