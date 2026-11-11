@@ -62,6 +62,13 @@ const NOINDEX = {
 const DISPARUS = chemins(path.join(LISTES, 'gone-410-blog.txt'));
 const FICHES_GARDEES = fichesDe(path.join(FIXTURES, 'products-fr-keep.ids.tsv.gz'));
 const FICHES_RETIREES = fichesDe(path.join(LISTES, 'products-fr-noindex.ids.tsv.gz'));
+/* Fiches de la liste du plan remises dans Google par lots (audit SEO du
+   11/11/2026, problème 3) : listes/products-fr-rouverts.tsv. */
+const ROUVERTES = (() => {
+  const [entete, ...lignes] = lire(path.join(LISTES, 'products-fr-rouverts.tsv'));
+  assert.equal(entete, 'product_id\tsku\tlot\turl');
+  return new Set(lignes.map((l) => l.split('\t')[0]));
+})();
 const FICHE_PAR_CHEMIN = new Map([...FICHES_GARDEES, ...FICHES_RETIREES].map((f) => [f.chemin, f]));
 
 const FAMILLES = politique.FAMILLES;
@@ -99,7 +106,9 @@ test('les listes commitées sont celles du plan : comptes et recoupements', () =
   assert.equal(p.disparus.fr.length + p.disparus.de.length, 268);
   assert.equal(p.piecesAuto.garder.length, 242);
   assert.deepEqual(p.references.garder, ['0AM927769G', '4797786420', 'C2D3506']);
-  assert.equal(p.produits.noindex.length, 11125);
+  assert.equal(p.produits.noindex.length + p.produits.rouverts.length, 11125, 'liste du plan = fiches encore retirées + fiches rouvertes');
+  assert.deepEqual(p.produits.rouverts, [...ROUVERTES].sort());
+  assert.equal(ROUVERTES.size, 50, 'lot 1 du 11/11/2026');
   assert.deepEqual(p.produits.prefixesSku, ['DM-'], 'décision du 14/09/2026 : toutes les copies distrimotor');
   assert.ok(!p.piecesAuto.garder.includes('/pieces-auto'), 'la racine /pieces-auto n’est pas une page de la règle');
   assert.equal(MUST_STAY.length, 2820);
@@ -112,6 +121,35 @@ test('le générateur refuse une page à la fois gardée et en 410, et une racin
   assert.throws(() => generateur.construirePolitique({ ...brut, 'keep-blog-fr.txt': `${brut['keep-blog-fr.txt']}${unDisparu}\n` }), /gardé et en 410/);
   assert.throws(() => generateur.construirePolitique({ ...brut, 'keep-pieces-auto.txt': `${brut['keep-pieces-auto.txt']}${HOTE}/pieces-auto\n` }), /pas une page véhicule/);
   assert.equal(generateur.serialiser(generateur.construirePolitique(brut)), generateur.serialiser(generateur.construirePolitique(brut)), 'déterministe');
+});
+
+test('le générateur retire les fiches rouvertes de la liste du plan, et refuse une ligne douteuse', () => {
+  const brut = generateur.lireListes(generateur.DOSSIER_LISTES);
+  const p = generateur.construirePolitique(brut);
+  for (const id of p.produits.rouverts) assert.ok(!p.produits.noindex.includes(id), `${id} rouverte mais encore retirée`);
+
+  const NOM = generateur.LISTE_ROUVERTS;
+  const ENTETE = generateur.ENTETE_ROUVERTS;
+  const [, plan1, plan2] = brut['products-fr-noindex.ids.tsv'].split('\n');
+  const ligne = (l, lot = '2026-11-11-lot1') => { const [id, sku, , url] = l.split('\t'); return [id, sku, lot, url].join('\t'); };
+  const avec = (...l) => ({ ...brut, [NOM]: `${ENTETE}\n${l.join('\n')}\n` });
+
+  /* Liste absente ou vide : la liste du plan entière. */
+  const sans = { ...brut }; delete sans[NOM];
+  assert.equal(generateur.construirePolitique(sans).produits.noindex.length, 11125);
+  assert.equal(generateur.construirePolitique(avec()).produits.rouverts.length, 0);
+  /* Une ligne valide : une fiche de moins. */
+  assert.equal(generateur.construirePolitique(avec(ligne(plan1))).produits.noindex.length, 11124);
+
+  assert.throws(() => generateur.construirePolitique(avec(ligne(plan1), ligne(plan1))), /doublons/);
+  assert.throws(() => generateur.construirePolitique(avec(ligne(plan1).replace(/^[a-f0-9]{24}/, '0123456789abcdef01234567'))), /absente de la liste du plan/);
+  assert.throws(() => generateur.construirePolitique(avec(ligne(plan1).replace(/\t[^\t]+\t/, '\tAUTRE-SKU\t'))), /SKU différent/);
+  assert.throws(() => generateur.construirePolitique(avec(ligne(plan1, ''))), /lot manquant/);
+  assert.throws(() => generateur.construirePolitique({ ...brut, [NOM]: 'id\tsku\n' }), /en-tête inattendu/);
+  /* Une copie distrimotor resterait hors de Google par son préfixe : refusée. */
+  const dm = brut['products-fr-noindex.ids.tsv'].split('\n').find((l) => /\tDM-/.test(l));
+  assert.throws(() => generateur.construirePolitique(avec(ligne(dm))), /préfixe toujours retiré/);
+  assert.ok(plan2, 'liste du plan lue');
 });
 
 /* ─── L'interrupteur ──────────────────────────────────────────────────────── */
@@ -187,10 +225,14 @@ test('pages d’arrivée Google Ads (tier K2, 1 731 adresses publiques) : jamais
   }
 });
 
-test('products : les 11 125 fiches de la liste et toutes les DM- sortent avec « products » ; les autres gardées restent', () => {
+test('products : les fiches de la liste (sauf les rouvertes) et toutes les DM- sortent avec « products » ; les autres gardées restent', () => {
   for (const fiche of FICHES_RETIREES) {
-    assert.equal(politique.produitNoindex(fiche, seulement('products')), true, fiche.chemin);
+    assert.equal(politique.produitNoindex(fiche, seulement('products')), !ROUVERTES.has(fiche._id), fiche.chemin);
     assert.equal(politique.produitNoindex(fiche, sauf('products')), false, `${fiche.chemin} : « products » coupée`);
+  }
+  /* Les rouvertes restent indexables sous toutes les combinaisons. */
+  for (const fiche of FICHES_RETIREES.filter((f) => ROUVERTES.has(f._id))) {
+    for (const familles of COMBINAISONS) assert.equal(politique.produitNoindex(fiche, familles), false, fiche.chemin);
   }
   for (const fiche of FICHES_GARDEES) {
     assert.equal(politique.produitNoindex(fiche, seulement('products')), /^DM-/i.test(fiche.sku), fiche.chemin);
@@ -201,7 +243,7 @@ test('products : les 11 125 fiches de la liste et toutes les DM- sortent avec «
 });
 
 test('products : le choix de l’admin passe devant la liste et le préfixe — mais seulement avec « products »', () => {
-  const listee = FICHES_RETIREES[0];
+  const listee = FICHES_RETIREES.find((f) => !ROUVERTES.has(f._id));
   const gardee = FICHES_GARDEES.find((f) => !/^DM-/.test(f.sku));
   const dm = FICHES_GARDEES.find((f) => /^DM-/.test(f.sku));
   const avec = (f, o) => ({ ...f, seo: { indexOverride: o } });

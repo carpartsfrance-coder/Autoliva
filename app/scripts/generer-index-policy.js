@@ -36,6 +36,16 @@
  * mot pour mot de distrimotor.com (décision de Killian du 14/09/2026) ; toutes
  * sortent avec « products », y compris les 335 que le plan gardait.
  *
+ * Fiches ROUVERTES (audit SEO du 11/11/2026, problème 3) :
+ *   - products-fr-rouverts.tsv : fiches de la liste précédente remises dans
+ *                                Google, par lots (50 à la fois, les familles
+ *                                prioritaires d'abord). Elles sont retirées de
+ *                                produits.noindex. Une fiche rouverte doit
+ *                                figurer dans la liste du plan, avec le même
+ *                                SKU, et ne pas porter un préfixe toujours
+ *                                retiré (DM-) : sinon le script s'arrête.
+ *                                La liste du plan, elle, ne change pas.
+ *
  * Usage :
  *   node scripts/generer-index-policy.js
  *       relit src/data/seo/listes/ et réécrit index-policy.json ;
@@ -69,6 +79,8 @@ const LISTES_TEXTE = [
   'keep-reference.txt',
 ];
 const LISTE_PRODUITS = 'products-fr-noindex.ids.tsv';
+const LISTE_ROUVERTS = 'products-fr-rouverts.tsv';
+const ENTETE_ROUVERTS = 'product_id\tsku\tlot\turl';
 
 function empreinte(contenu) {
   return crypto.createHash('sha256').update(contenu).digest('hex');
@@ -92,6 +104,9 @@ function lireListes(dossier) {
     brut[nom] = fs.readFileSync(path.join(dossier, nom), 'utf8');
   }
   brut[LISTE_PRODUITS] = zlib.gunzipSync(fs.readFileSync(path.join(dossier, LISTE_PRODUITS + '.gz'))).toString('utf8');
+  /* Absente : aucune fiche rouverte (même résultat qu'une liste vide). */
+  const rouverts = path.join(dossier, LISTE_ROUVERTS);
+  brut[LISTE_ROUVERTS] = fs.existsSync(rouverts) ? fs.readFileSync(rouverts, 'utf8') : `${ENTETE_ROUVERTS}\n`;
   return brut;
 }
 
@@ -141,11 +156,35 @@ function construirePolitique(brut) {
   if (lignesProduits[0] !== 'product_id\tsku\tsegment\turl') {
     throw new Error(`${LISTE_PRODUITS} : en-tête inattendu : ${lignesProduits[0]}`);
   }
-  const produitsNoindex = lignesProduits.slice(1).map((l) => {
-    const id = l.split('\t')[0];
+  const skuParId = new Map();
+  const produitsListes = lignesProduits.slice(1).map((l) => {
+    const [id, sku] = l.split('\t');
     if (!/^[a-f0-9]{24}$/.test(id)) throw new Error(`${LISTE_PRODUITS} : identifiant invalide : ${l}`);
+    skuParId.set(id, String(sku || '').trim());
     return id;
   });
+
+  /* Fiches rouvertes : retirées de la liste du plan, lot par lot. */
+  const brutRouverts = brut[LISTE_ROUVERTS] || `${ENTETE_ROUVERTS}\n`;
+  const lignesRouverts = lignes(brutRouverts);
+  if (lignesRouverts[0] !== ENTETE_ROUVERTS) {
+    throw new Error(`${LISTE_ROUVERTS} : en-tête inattendu : ${lignesRouverts[0]}`);
+  }
+  const rouverts = lignesRouverts.slice(1).map((l) => {
+    const [id, sku, lot] = l.split('\t');
+    if (!/^[a-f0-9]{24}$/.test(id || '')) throw new Error(`${LISTE_ROUVERTS} : identifiant invalide : ${l}`);
+    if (!skuParId.has(id)) throw new Error(`${LISTE_ROUVERTS} : fiche absente de la liste du plan : ${l}`);
+    if (skuParId.get(id) !== String(sku || '').trim()) {
+      throw new Error(`${LISTE_ROUVERTS} : SKU différent de la liste du plan (${skuParId.get(id)}) : ${l}`);
+    }
+    if (PREFIXES_SKU_NOINDEX.some((p) => String(sku || '').trim().toUpperCase().startsWith(p))) {
+      throw new Error(`${LISTE_ROUVERTS} : préfixe toujours retiré, la fiche resterait hors de Google : ${l}`);
+    }
+    if (!String(lot || '').trim()) throw new Error(`${LISTE_ROUVERTS} : lot manquant : ${l}`);
+    return id;
+  });
+  const setRouverts = new Set(rouverts);
+  const produitsNoindex = produitsListes.filter((id) => !setRouverts.has(id));
 
   /* Contrôles de cohérence : une page n'est jamais gardée ET retirée. */
   const unique = (liste, nom) => {
@@ -156,7 +195,8 @@ function construirePolitique(brut) {
   unique(disparusDe, 'gone-410-blog.txt (DE)');
   unique(garderPiecesAuto, 'keep-pieces-auto.txt');
   unique(garderReferences, 'keep-reference.txt');
-  unique(produitsNoindex, LISTE_PRODUITS);
+  unique(produitsListes, LISTE_PRODUITS);
+  unique(rouverts, LISTE_ROUVERTS);
   const setGarder = new Set(garderBlog);
   const croises = disparusFr.filter((s) => setGarder.has(s));
   if (croises.length) throw new Error(`article à la fois gardé et en 410 : ${croises.join(', ')}`);
@@ -164,8 +204,9 @@ function construirePolitique(brut) {
   if (orphelins.length) throw new Error(`kept-posts-need-inlinks.txt : article non gardé : ${orphelins.join(', ')}`);
 
   const sources = {};
-  for (const nom of [...LISTES_TEXTE, LISTE_PRODUITS]) {
-    sources[nom] = { lignes: lignes(brut[nom]).length, sha256: empreinte(brut[nom]) };
+  for (const nom of [...LISTES_TEXTE, LISTE_PRODUITS, LISTE_ROUVERTS]) {
+    const contenu = nom === LISTE_ROUVERTS ? brutRouverts : brut[nom];
+    sources[nom] = { lignes: lignes(contenu).length, sha256: empreinte(contenu) };
   }
 
   const tri = (liste) => liste.slice().sort();
@@ -176,6 +217,7 @@ function construirePolitique(brut) {
       'Rien de ce fichier ne s’applique tant que la famille n’est pas citée dans la variable SEO_PRUNE (Render) : gone, blog, reference, pieces-auto, de, products.',
       'blog.garder et piecesAuto.garder et references.garder sont des LISTES BLANCHES : quand leur famille est active, toute autre page de la famille passe en noindex, follow.',
       'disparus : adresses servies en 410 quand « gone » est actif (le contenu reste en base). produits.noindex + produits.prefixesSku : fiches en noindex quand « products » est actif ; le choix fait fiche par fiche dans l’admin (seo.indexOverride) passe devant.',
+      'produits.rouverts : fiches de la liste du plan remises dans Google par lots (listes/products-fr-rouverts.tsv) ; elles ne sont plus dans produits.noindex.',
       'Les dates de bascule (lastmod des sitemaps de retrait) sont dans dates-bascule.json ou dans les variables SEO_PRUNE_SINCE_<FAMILLE>.',
     ],
     sources,
@@ -183,7 +225,7 @@ function construirePolitique(brut) {
     blog: { garder: tri(garderBlog), maillage: tri(maillage) },
     piecesAuto: { garder: tri(garderPiecesAuto) },
     references: { garder: tri(garderReferences) },
-    produits: { prefixesSku: PREFIXES_SKU_NOINDEX.slice(), noindex: tri(produitsNoindex) },
+    produits: { prefixesSku: PREFIXES_SKU_NOINDEX.slice(), noindex: tri(produitsNoindex), rouverts: tri(rouverts) },
   };
 }
 
@@ -221,11 +263,11 @@ function main(argv) {
   const p = JSON.parse(sortie);
   console.log(`index-policy.json écrit : ${p.blog.garder.length} articles gardés, ${p.disparus.fr.length}+${p.disparus.de.length} adresses en 410, `
     + `${p.piecesAuto.garder.length} pages véhicule et ${p.references.garder.length} références gardées, `
-    + `${p.produits.noindex.length} fiches listées + préfixe(s) ${p.produits.prefixesSku.join(', ')}.`);
+    + `${p.produits.noindex.length} fiches listées (${p.produits.rouverts.length} rouvertes) + préfixe(s) ${p.produits.prefixesSku.join(', ')}.`);
   return 0;
 }
 
-module.exports = { construirePolitique, serialiser, lireListes, DOSSIER_LISTES, FICHIER_POLITIQUE };
+module.exports = { construirePolitique, serialiser, lireListes, DOSSIER_LISTES, FICHIER_POLITIQUE, LISTE_ROUVERTS, ENTETE_ROUVERTS };
 
 if (require.main === module) {
   process.exitCode = main(process.argv.slice(2));
