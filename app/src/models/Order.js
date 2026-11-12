@@ -109,9 +109,13 @@ const creditNoteSchema = new mongoose.Schema(
     /* PDF binaire stocké en base (Render = filesystem éphémère) */
     pdfData: { type: Buffer, default: null, select: false },
     pdfSizeBytes: { type: Number, default: 0 },
-    /* Lien optionnel vers le refund correspondant (index dans refunds[]) */
+    /* Lien optionnel vers le refund correspondant (index dans refunds[]).
+       null = avoir émis SANS remboursement par le site (remboursé autrement :
+       virement, geste commercial…). */
     refundIndex: { type: Number, default: null },
     createdBy: { type: String, default: '', trim: true },
+    /* Notes internes — typiquement comment le client a réellement été remboursé. */
+    notes: { type: String, default: '', trim: true },
   },
   { timestamps: false }
 );
@@ -316,6 +320,15 @@ const orderSchema = new mongoose.Schema(
       updatedAt: { type: Date, default: null },
       updatedBy: { type: String, default: '', trim: true },
     },
+    /* Date de livraison ANNONCÉE AU CLIENT, saisie dans le panneau de la liste
+     * des commandes. Distincte de sourcing.expectedDays (réception fournisseur,
+     * interne). Chaque nouvelle date part au client par e-mail — voir
+     * notifications.deliveryEstimateSentFor. */
+    deliveryEstimate: {
+      date: { type: Date, default: null },
+      updatedAt: { type: Date, default: null },
+      updatedBy: { type: String, default: '', trim: true },
+    },
     statusHistory: { type: [statusHistorySchema], default: [] },
     // ── Archivage & corbeille (soft delete) ─────────────────────────────
     archived: { type: Boolean, default: false },
@@ -325,6 +338,11 @@ const orderSchema = new mongoose.Schema(
     deletedBy: { type: String, default: '', trim: true },
     deleteReason: { type: String, default: '', trim: true },
     accountType: { type: String, enum: ['particulier', 'pro'], required: true },
+    /* Langue du client, mémorisée à la création. Les e-mails partent bien
+       après la commande, souvent depuis un cron : la session n'existe plus,
+       et sans ce champ un acheteur allemand recevait tout en français. */
+    lang: { type: String, enum: ['fr', 'de'], default: 'fr' },
+
     paymentProvider: { type: String, default: 'mollie', trim: true },
     paymentStatus: { type: String, default: 'pending', trim: true },
     molliePaymentId: { type: String, default: '', trim: true, index: true },
@@ -364,6 +382,20 @@ const orderSchema = new mongoose.Schema(
       shipmentTrackingNumbersSent: { type: [String], default: [] },
       deliveryConfirmedSentAt: { type: Date, default: null },
       statusChangeSentAt: { type: Date, default: null },
+      /* Dernière date de livraison ENVOYÉE au client (AAAA-MM-JJ) : la même
+         date enregistrée deux fois ne réécrit pas au client. */
+      deliveryEstimateSentFor: { type: String, default: '', trim: true },
+      deliveryEstimateSentAt: { type: Date, default: null },
+      /* HISTORIQUE. Skeepers / Avis Vérifiés a été retiré en octobre 2026 :
+         plus rien n'écrit ce champ, il est conservé pour que les demandes
+         poussées avant cette date restent lisibles. */
+      skeepersReviewRequestedAt: { type: Date, default: null },
+      /* Demande d'avis GOOGLE (e-mail / SMS / WhatsApp), envoyée par nous
+         depuis le détail de la commande. `...At` = dernière demande, tous
+         canaux confondus ; `...Channels` = canaux déjà utilisés, pour que
+         l'admin voie d'un coup d'œil ce qui est déjà parti. */
+      googleReviewRequestedAt: { type: Date, default: null },
+      googleReviewChannels: { type: [String], default: [] },
     },
     emailsSent: { type: [emailSentSchema], default: [] },
     smsSent: { type: [smsSentSchema], default: [] },
@@ -420,6 +452,79 @@ const orderSchema = new mongoose.Schema(
       viesCheckedAt: { type: Date, default: null },
       legalMention: { type: String, default: '', trim: true },
     },
+    /**
+     * Régime de TVA de CETTE vente — décidé au cas par cas, après l'achat.
+     *
+     * ── POURQUOI SUR LA COMMANDE, ET PAS SUR LE PRODUIT ────────────────────
+     *
+     * L'article 297 A du CGI ne subordonne pas la marge au bien, mais au STATUT
+     * DU VENDEUR de la pièce. Or un même fournisseur facture tantôt sous marge,
+     * tantôt en autoliquidation intracommunautaire : le régime est donc une
+     * propriété de la FACTURE D'ACHAT, jamais de la fiche catalogue.
+     *
+     * Et la pièce est sourcée APRÈS la vente : au paiement, on ignore encore
+     * chez qui on achètera. Le régime ne peut donc se décider qu'ici, une fois
+     * la facture fournisseur en main — d'où le défaut `normal`.
+     *
+     * ⚠ NE PAS CONFONDRE avec `Product.vatRecoverable`, qui ne pilote que
+     * l'affichage du prix HT sur la fiche et l'éligibilité à l'autoliquidation.
+     * Ce champ-ci est le SEUL qui détermine la TVA facturée.
+     *
+     * `normal` est toujours défendable : l'article 297 C autorise expressément
+     * à renoncer à la marge, opération par opération et sans formalisme. Ne
+     * rien décider ne coûte qu'une économie manquée, jamais une irrégularité.
+     */
+    vatScheme: { type: String, enum: ['normal', 'margin'], default: 'normal', index: true },
+
+    /**
+     * L'achat correspondant, saisi au moment du règlement fournisseur.
+     *
+     * `priceCents` n'est pas un confort comptable : la marge se calcule sur
+     * (prix de vente − prix d'achat). Sans lui, le régime de la marge est
+     * mathématiquement inapplicable — d'où son caractère obligatoire dès que
+     * `vatScheme` vaut `margin`.
+     */
+    purchase: {
+      supplier: { type: String, default: '', trim: true },
+      priceCents: { type: Number, default: null, min: 0 },
+      invoiceRef: { type: String, default: '', trim: true },
+      /** Ce que porte la facture du fournisseur, tel quel. */
+      supplierRegime: {
+        type: String,
+        enum: ['', 'tva_deductible', 'marge', 'intracom_autoliquidation', 'non_assujetti'],
+        default: '',
+      },
+      decidedAt: { type: Date, default: null },
+      decidedByName: { type: String, default: '', trim: true },
+
+      /* ── La facture du fournisseur, en pièce jointe ────────────────────────
+       *
+       * ⚠ VOLONTAIREMENT HORS DE `documents[]`.
+       *
+       * `GET /compte/commandes/:orderId/documents/:docId` sert au client
+       * n'importe quelle entrée de `documents[]` de SA commande, sans regarder
+       * le type. Une facture d'achat y révélerait le prix payé au fournisseur,
+       * donc la marge, à l'acheteur lui-même.
+       *
+       * Rangée ici, aucune route client ne peut la lire : la fuite n'est pas
+       * évitée par un filtre qu'on pourrait oublier, elle est impossible.
+       *
+       * C'est aussi la pièce qui JUSTIFIE la marge en cas de contrôle : sans
+       * facture d'achat, l'administration ne peut pas vérifier la base (PV − PA)
+       * et reconstitue la TVA sur le prix de vente entier.
+       */
+      invoiceFile: {
+        originalName: { type: String, default: '', trim: true },
+        mimeType: { type: String, default: 'application/pdf', trim: true },
+        sizeBytes: { type: Number, default: 0 },
+        /* select:false — un `Order.find()` de liste ne doit jamais charger
+           plusieurs mégaoctets de PDF sans l'avoir demandé. */
+        data: { type: Buffer, default: null, select: false },
+        uploadedAt: { type: Date, default: null },
+        uploadedByName: { type: String, default: '', trim: true },
+      },
+    },
+
     items: { type: [orderItemSchema], required: true },
     shippingAddress: { type: addressSnapshotSchema, required: true },
     billingAddress: { type: addressSnapshotSchema, required: true },
@@ -460,11 +565,74 @@ const orderSchema = new mongoose.Schema(
     attribution: {
       firstTouch: { type: attributionTouchSubSchema, default: null },
       lastTouch: { type: attributionTouchSubSchema, default: null },
+      // Dernière arrivée avant la commande (pub, Google gratuit, ChatGPT, autre
+      // site), sans la préférence de 90 jours pour le gclid de lastTouch.
+      // Absente = client arrivé directement, ou commande d'avant le 11/2026.
+      // Voir captureAttribution.
+      visitTouch: { type: attributionTouchSubSchema, default: null },
       ga4ClientId: { type: String, default: '', trim: true },
       ga4SessionId: { type: String, default: '', trim: true },
       uploadedToGoogleAdsAt: { type: Date, default: null, index: true },
       googleAdsConversionId: { type: String, default: '', trim: true },
       uploadError: { type: String, default: '', trim: true },
+    },
+
+    /* ── Ce que Google Ads sait de cette vente (googleAdsConversionSync) ──
+     *
+     * Depuis le 08/11/2026 la valeur envoyée est la MARGE (margeCommande.js),
+     * avec le n° de commande comme identifiant de transaction : un nouvel
+     * envoi avec le même identifiant corrige la valeur chez Google
+     * (remboursement → 0, prix d'achat saisi après coup → marge exacte).
+     * Sans ce bloc (ventes envoyées avant), aucune correction n'est possible :
+     * un envoi sans identifiant d'origine créerait une 2e conversion. */
+    googleAdsConversion: {
+      // 'purchase' = achat sur le site après un clic pub ;
+      // 'sale'     = vente (téléphone, site…) d'un client venu par une
+      //              demande de devis issue d'un clic pub.
+      action: { type: String, enum: ['', 'purchase', 'sale'], default: '' },
+      transactionId: { type: String, default: '', trim: true },
+      conversionAt: { type: Date, default: null },
+      uploadedAt: { type: Date, default: null },
+      valueCents: { type: Number, default: null },
+      estimated: { type: Boolean, default: false },
+      clickIds: {
+        gclid: { type: String, default: '', trim: true },
+        gbraid: { type: String, default: '', trim: true },
+        wbraid: { type: String, default: '', trim: true },
+      },
+      leadId: { type: mongoose.Schema.Types.ObjectId, default: null },
+      restatedAt: { type: Date, default: null },
+      // Valeur ramenée à 0 (remboursée) : Google n'accepte plus d'ajustement.
+      final: { type: Boolean, default: false },
+    },
+
+    /* ── Connecteur Comptoir (getcomptoir.fr) ────────────────────────────
+     * Trace l'envoi de la commande vers le tableau de bord des ventes.
+     * `sentAt` fait office de verrou : posé, la commande n'est plus reprise
+     * (leur API ignore de toute façon un externalId déjà connu).
+     * `lastError` reste lisible — un échec d'envoi doit pouvoir se constater,
+     * pas disparaître dans un catch. */
+    comptoir: {
+      sentAt: { type: Date, default: null },
+      externalId: { type: String, default: '', trim: true },
+      duplicate: { type: Boolean, default: false },
+      attempts: { type: Number, default: 0, min: 0 },
+      lastAttemptAt: { type: Date, default: null },
+      lastError: { type: String, default: '', trim: true },
+      /* Erreur qui ne passera jamais en réessayant (400 montant, 401 clé) :
+         le rattrapage cesse de la reprendre. */
+      permanentError: { type: Boolean, default: false },
+      /* Dernier statut Comptoir ('preparation' | 'livree' | 'retour') accepté
+         par leur API pour cette vente. Vide = jamais confirmé : l'envoi initial
+         valait 'preparation'. Sert à ne renvoyer que ce qui a bougé. */
+      statusSentFor: { type: String, default: '', trim: true },
+      /* Pays (ISO 2 lettres) déjà accepté par Comptoir pour cette vente : leur
+         colonne « Pays » n'existe que depuis le 18/09/2026, les ventes plus
+         anciennes repartent une fois pour la remplir. */
+      countrySentFor: { type: String, default: '', trim: true },
+      statusSyncedAt: { type: Date, default: null },
+      statusAttempts: { type: Number, default: 0, min: 0 },
+      statusError: { type: String, default: '', trim: true },
     },
   },
   {
@@ -620,5 +788,9 @@ orderSchema.index(
 );
 orderSchema.index({ 'attribution.lastTouch.gclid': 1 });
 orderSchema.index({ 'attribution.uploadedToGoogleAdsAt': 1, paymentStatus: 1 });
+/* Corrections Google Ads (remboursements, prix d'achat saisi ensuite). */
+orderSchema.index({ 'googleAdsConversion.uploadedAt': 1, 'googleAdsConversion.final': 1 });
+/* Rattrapage Comptoir : les commandes encaissées pas encore poussées. */
+orderSchema.index({ 'comptoir.sentAt': 1, paymentStatus: 1, createdAt: -1 });
 
 module.exports = mongoose.model('Order', orderSchema);

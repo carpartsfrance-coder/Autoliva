@@ -9,6 +9,8 @@ const { sendConsigneReminders } = require('./sendConsigneReminders');
 const { checkSavSlaEscalation, runSavDailyReminders, runSavAutomations } = require('./savCronJobs');
 const { reconcileScalapayOrders } = require('./reconcileScalapayOrders');
 const { syncShipmentTracking } = require('./syncShipmentTracking');
+const { syncComptoirOrders, syncComptoirStatuses, resyncComptoirAll } = require('./syncComptoirOrders');
+const { traduireNouveautesDe } = require('./traduireNouveautesDe');
 const { runEngineQuoteReminders } = require('./sendEngineQuoteReminders');
 const { sendRepurchaseReminders } = require('./sendRepurchaseReminders');
 const { processScheduledAutoDevis } = require('./processScheduledAutoDevis');
@@ -117,6 +119,28 @@ function startScheduler() {
     }
   });
 
+  // Traduction allemande du contenu neuf ou modifié, à la 42e minute.
+  //
+  // Sans ça, chaque fiche et chaque article publié repart en français sur le
+  // site allemand, et il faut y repenser à la main — ce qui, en pratique, veut
+  // dire que personne n'y repense : les 2 fiches du 07/09/2026 étaient en
+  // ligne depuis un jour, en français, sous une interface allemande.
+  //
+  // No-op tant que DE_AUTO_TRANSLATE=true n'est pas posé sur Render.
+  //
+  // Et c'est voulu : plan de reprise SEO du 14/09/2026, décision 2 — la couche
+  // allemande sort de Google, la traduction automatique reste coupée. Le job
+  // reste inscrit ici, désarmé, parce qu'il alimente le flux Shopping allemand
+  // (google-merchant-feed-de.js ne prend que les fiches traduites) : le
+  // retirer figerait ce flux sans que personne l'ait décidé.
+  cron.schedule('42 * * * *', async () => {
+    try {
+      await traduireNouveautesDe();
+    } catch (err) {
+      console.error('[scheduler] Erreur traduction DE:', err.message || err);
+    }
+  });
+
   // Sync des suivis JUMiNGO toutes les 20 min : « Étiquette créée » → « Expédiée »
   // au scan transporteur (départ réel). No-op tant que JUMINGO_API_KEY +
   // JUMINGO_SYNC_ENABLED=true ne sont pas définis.
@@ -160,6 +184,25 @@ function startScheduler() {
     }
   });
 
+  // Rattrapage du connecteur Comptoir : toutes les heures à :33, reprend les
+  // commandes encaissées que l'envoi immédiat (au paiement) n'a pas pu pousser.
+  // No-op TOTAL tant que COMPTOIR_API_KEY n'est pas définie sur Render.
+  cron.schedule('33 * * * *', async () => {
+    try {
+      const r = await syncComptoirOrders();
+      if (r && r.sent) console.log('[scheduler] Comptoir: ' + r.sent + ' commande(s) rattrapée(s)');
+      /* Puis les statuts qui ont bougé depuis l'envoi (livrée, retour) : un
+         seul appel groupé, le seul que leur API accepte pour une mise à jour.
+         Une fois par jour (4 h du matin), on repousse TOUT : filet contre une
+         mise à jour perdue de leur côté, comme ils le recommandent. */
+      const complet = new Date().getHours() === 4;
+      const s = complet ? await resyncComptoirAll() : await syncComptoirStatuses();
+      if (s && s.updated) console.log('[scheduler] Comptoir: ' + s.updated + (complet ? ' vente(s) repoussée(s) (renvoi complet)' : ' statut(s) mis à jour'));
+    } catch (err) {
+      console.error('[scheduler] Erreur rattrapage Comptoir:', err.message || err);
+    }
+  });
+
   // Import de conversions hors-ligne vers Google Ads : toutes les heures à :40.
   // Remonte les VRAIES conversions du tunnel moteur (lead devis + vente gagnée)
   // via le gclid déjà capté. No-op TOTAL tant que les variables GOOGLE_ADS_*
@@ -168,7 +211,7 @@ function startScheduler() {
     if (!googleAdsConfigured()) return;
     try {
       const r = await syncConversions({ dryRun: false });
-      console.log('[scheduler] Google Ads conversions:', JSON.stringify({ leads: r.leads, sales: r.sales }));
+      console.log('[scheduler] Google Ads conversions:', JSON.stringify({ leads: r.leads, quotes: r.quotes, sales: r.sales, purchases: r.purchases, ventesCommandes: r.ventesCommandes, ajustements: r.ajustements }));
     } catch (err) {
       console.error('[scheduler] Erreur sync conversions Google Ads:', err.message || err);
     }
@@ -183,6 +226,7 @@ function startScheduler() {
   console.log('[scheduler] CRON expiration brouillons programmé (03:00 quotidien)');
   console.log('[scheduler] CRON réconciliation Scalapay programmé (toutes les 15 min)');
   console.log('[scheduler] CRON purge corbeille J+30 programmé (03:37 quotidien)');
+  console.log('[scheduler] CRON rattrapage Comptoir programmé (:33 horaire)');
 }
 
 module.exports = { startScheduler };

@@ -13,7 +13,7 @@ const AbandonedCart = require('../models/AbandonedCart');
 const mollie = require('../services/mollie');
 const emailService = require('../services/emailService');
 const { buildAcompteConfirmationHtml } = require('../services/engineQuoteEmail');
-const { partLexicon } = require('../services/partLexicon');
+const { partLexicon, leadCategoryFromSource } = require('../services/partLexicon');
 const brand = require('../config/brand');
 
 const MOLLIE_ENABLED = String(process.env.ENGINE_QUOTE_MOLLIE_ENABLED || '').toLowerCase() === 'true';
@@ -94,7 +94,7 @@ async function postMollieWebhook(req, res) {
 
       // Notification commerciale (best-effort, une seule fois)
       if (!alreadyPaid) {
-        const notifLex = partLexicon(cart.captureSource === 'landing_boites' ? 'boite' : 'moteur');
+        const notifLex = partLexicon(leadCategoryFromSource(cart.captureSource));
         const reservedNotice = notifLex.nounCap + ' ' + notifLex.reserve + '.'; // « Boîte réservée. » / « Moteur réservé. »
         const quoteRef = (cart.requested && cart.requested.ref) || '';
         const clientName = ((cart.firstName || '') + ' ' + (cart.lastName || '')).trim() || cart.email || cart.phone || '—';
@@ -122,7 +122,7 @@ async function postMollieWebhook(req, res) {
         // Confirmation AU CLIENT : son acompte est reçu, la pièce est réservée.
         // (best-effort, ne bloque jamais le webhook qui doit répondre 200 à Mollie)
         if (cart.email) {
-          const cat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+          const cat = leadCategoryFromSource(cart.captureSource);
           const lex = partLexicon(cat);
           const site = (brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
           const firstName = (cart.firstName || '').trim();

@@ -4,6 +4,7 @@ const fr = require('../locales/fr.json');
 const en = require('../locales/en.json');
 const de = require('../locales/de.json');
 const brand = require('../config/brand');
+const { estRobot } = require('./robots');
 
 const dictionaries = { fr, en, de };
 const SUPPORTED_LANGS = ['fr', 'en', 'de'];
@@ -39,14 +40,34 @@ function t(lang, key, params) {
  * @param {string} pathWithoutLang - e.g. "/produits" or "/product/slug/"
  * @returns {{ hreflangFr: string, hreflangDefault: string }}
  */
-function buildHreflangSet(baseUrl, pathWithoutLang) {
+function buildHreflangSet(baseUrl, pathWithoutLang, options) {
   const base = baseUrl || '';
-  const path = pathWithoutLang || '/';
+  /* Jamais de paramètres dans un hreflang (suivi Ads, page 2…) : seul le
+     chemin désigne la version d'une page. */
+  const path = String(pathWithoutLang || '/').split('?')[0].split('#')[0] || '/';
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const frHref = `${base}${normalizedPath}`;
+
+  /* Alternative allemande : OPT-IN, jamais déduite du chemin. La plupart des
+     pages FR n'ont pas d'équivalent DE (elles font un 301 vers le FR) —
+     déclarer un `hreflang=de` pour elles enverrait Google sur une redirection.
+     Seuls les gabarits réellement traduits passent `deHref`. */
+  const deHref = options && typeof options.deHref === 'string' && options.deHref ? options.deHref : '';
+  if (deHref) {
+    /* head.ejs sert `hreflangTags` OU le couple fr/x-default, jamais les deux :
+       on renvoie donc la liste complète et rien d'autre. */
+    return {
+      hreflangTags: [
+        { lang: 'fr', href: frHref },
+        { lang: 'de', href: deHref },
+        { lang: 'x-default', href: frHref },
+      ],
+    };
+  }
 
   return {
-    hreflangFr: `${base}${normalizedPath}`,
-    hreflangDefault: `${base}${normalizedPath}`,
+    hreflangFr: frHref,
+    hreflangDefault: frHref,
   };
 }
 
@@ -63,4 +84,24 @@ function applyCheckoutLocale(req, res) {
   return lang;
 }
 
-module.exports = { t, buildHreflangSet, SUPPORTED_LANGS, DEFAULT_LANG, applyCheckoutLocale };
+/**
+ * Cible d'une redirection depuis une URL /de vers la page FRANÇAISE (page pas
+ * encore traduite, catchall /de).
+ *
+ * Le 301 nu coûtait la LANGUE : le GET de la page française d'arrivée remettait
+ * `preferredLang = 'fr'` (middlewares/i18n.js), et le panier, le paiement,
+ * Order.lang puis les e-mails d'un acheteur allemand repassaient en français —
+ * pour avoir cliqué sur la loupe du menu ou ouvert les AGB avant de commander.
+ * On garde donc la langue dans la cible ; ?lang=de est déjà compris par le
+ * middleware.
+ *
+ * Jamais pour un ROBOT : Googlebot doit voir l'URL française nue, sans
+ * paramètre à explorer ni à indexer.
+ */
+function redirectionFrGardantLaLangue(req, chemin) {
+  const cible = String(chemin || '/');
+  if (estRobot(req && req.headers ? req.headers['user-agent'] : '')) return cible;
+  return cible + (cible.includes('?') ? '&' : '?') + 'lang=de';
+}
+
+module.exports = { t, buildHreflangSet, SUPPORTED_LANGS, DEFAULT_LANG, applyCheckoutLocale, redirectionFrGardantLaLangue };

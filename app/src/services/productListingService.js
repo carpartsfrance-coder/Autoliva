@@ -26,7 +26,8 @@ const Category = require('../models/Category');
 const demoProducts = require('../demoProducts');
 const { rankProducts, sortRankedProducts } = require('./search');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('./productPublic');
-const { buildHreflangSet } = require('./i18n');
+const { buildHreflangSet, t } = require('./i18n');
+const productI18n = require('./productI18n');
 const { buildSeoMediaUrl } = require('./mediaStorage');
 const brand = require('../config/brand');
 
@@ -42,6 +43,40 @@ function getProductHelpers() {
 }
 
 const PER_PAGE = 24;
+
+/* ── Mémo court des agrégations de facettes ───────────────────────────────
+ *
+ * Les compteurs « Boîtes (1 234) », la liste marques/modèles/motorisations
+ * et les comptes par état parcouraient TOUT le catalogue à chaque rendu —
+ * six agrégations sans index, pour un résultat qui ne change qu'à la
+ * publication d'une fiche. Les robots enchaînent des dizaines de
+ * combinaisons de filtres par minute sur /pieces-auto : c'était la charge
+ * de fond du serveur. On garde chaque résultat dix minutes, 300 combinaisons
+ * au plus (les plus anciennes sortent). Un compteur en retard de dix minutes
+ * après une publication, personne ne le remarque.
+ *
+ * La clé sérialise les RegExp explicitement : JSON.stringify les rend en
+ * `{}`, et deux catégories auraient partagé le même compteur.
+ */
+const MEMO_MS = 10 * 60 * 1000;
+const MEMO_MAX = 300;
+const memo = new Map();
+
+function cleMemo(prefixe, objet) {
+  return prefixe + ':' + JSON.stringify(objet, (k, v) => (v instanceof RegExp ? 'RegExp(' + v.toString() + ')' : v));
+}
+
+async function memoriser(cle, calcul) {
+  const maintenant = Date.now();
+  const entree = memo.get(cle);
+  if (entree && maintenant - entree.a < MEMO_MS) return entree.valeur;
+  const valeur = await calcul();
+  if (memo.size >= MEMO_MAX) memo.delete(memo.keys().next().value);
+  memo.set(cle, { a: maintenant, valeur });
+  return valeur;
+}
+
+function viderMemo() { memo.clear(); }
 
 /**
  * Prépare TOUT le payload nécessaire au render du template products/index.ejs.
@@ -63,9 +98,221 @@ const PER_PAGE = 24;
  * le caller bascule alors sur le moteur de classement JS (repli sûr). */
 const ATLAS_SEARCH_INDEX = 'product_search';
 
+/* ── Pourquoi ce disjoncteur existe (panne du 21/08/2026) ────────────────────
+ *
+ * Atlas Search est servi par un processus séparé (`mongot`) du côté du cluster.
+ * Quand il devient injoignable, le `$search` ne renvoie pas une erreur : il
+ * ATTEND. L'erreur observée était « Timed out connecting to localhost:28000
+ * after 20000ms » — vingt secondes pendant lesquelles la requête retient une
+ * connexion du pool.
+ *
+ * Le repli, lui, chargeait le catalogue ENTIER en mémoire pour le classer en
+ * JS : 14 464 produits × ~5,5 Ko ≈ 80 Mo par recherche. Quelques recherches
+ * simultanées suffisaient à saturer le pool (« Couldn't get a connection
+ * within the time limit » sur TOUTES les requêtes du site, pas seulement les
+ * recherches), puis la mémoire — et Render redémarrait l'instance en boucle.
+ *
+ * Autrement dit : le filet de sécurité coûtait plus cher que ce qu'il
+ * remplaçait. Trois garde-fous, du plus grossier au plus fin :
+ *   1. un interrupteur (ATLAS_SEARCH=off) actionnable depuis Render, sans
+ *      déploiement, quand ça brûle ;
+ *   2. ce disjoncteur : après 2 échecs, on cesse d'appeler Atlas pendant
+ *      5 minutes — la casse est bornée à 2 requêtes lentes par fenêtre ;
+ *   3. un plafond sur le repli (voir REPLI_MAX_PRODUITS).
+ */
+const DISJONCTEUR_SEUIL_ECHECS = 2;
+const DISJONCTEUR_PAUSE_MS = 5 * 60 * 1000;
+/* Au-delà, `$search` est abandonné côté serveur. 3 s suffisent très largement :
+   la voie normale répond en quelques dizaines de ms. */
+const ATLAS_TIMEOUT_MS = 3000;
+
+/* Plafond du repli. 1 500 fiches ≈ 8 Mo : assez pour classer correctement une
+   recherche réelle, assez peu pour qu'une rafale ne fasse pas tomber
+   l'instance. */
+const REPLI_MAX_PRODUITS = 1500;
+
+/* Champs sur lesquels le classement JS travaille — donc les seuls qui valent
+   la peine d'être préfiltrés. */
+/* `compatibleReferences` et `searchSynonyms` manquaient : une référence OEM
+   qui ne figure QUE dans la liste des références compatibles n'était ramenée
+   par aucun des deux chemins de recherche, ni Atlas ni le repli. Le classement
+   avait beau savoir la reconnaître, la fiche ne lui arrivait jamais. */
+const REPLI_CHAMPS = ['name', 'sku', 'engineCode', 'brand', 'category', 'description', 'compatibleReferences', 'searchSynonyms'];
+/* Sous /de, la recherche ne voyait que le français : « Getriebe » ne ramenait
+   rien alors que 3 327 fiches portent ce mot dans leur version allemande. Le
+   préfiltre interroge donc aussi les champs traduits. */
+/* Les champs où une référence a un sens. On n'y met pas `description` : le
+   motif sans séparateurs y ferait des rapprochements hasardeux. */
+const REF_CHAMPS = ['name', 'sku', 'engineCode', 'compatibleReferences', 'searchSynonyms'];
+
+const REPLI_CHAMPS_DE = ['localizations.de.name', 'localizations.de.shortDescription', 'localizations.de.description'];
+
+/* Mots vides français. Sans eux, « boîte de vitesses » remontait 13 094 fiches
+   sur 14 464 — le « de » matche à peu près toutes les descriptions, et le
+   plafond tronquait ensuite au hasard. Les retirer rend le préfiltre utile
+   plutôt que décoratif. */
+const MOTS_VIDES = new Set([
+  'de', 'du', 'des', 'la', 'le', 'les', 'un', 'une', 'et', 'ou', 'en',
+  'au', 'aux', 'pour', 'avec', 'sur', 'par', 'dans', 'sans',
+]);
+
+/* Variantes accentuées, par lettre de base. Le catalogue est écrit avec ses
+   accents (« Mécatronique », « Boîte de vitesses ») ; les clients tapent sans.
+   Sans cette table, « boite » ne trouvait AUCUNE des 3 293 boîtes — un préfiltre
+   qui exclut la première gamme du site est pire que pas de préfiltre. */
+const VARIANTES_ACCENTS = {
+  a: '[aàâäáã]', c: '[cç]', e: '[eéèêë]', i: '[iîïí]',
+  n: '[nñ]', o: '[oôöóõ]', u: '[uùûüú]', y: '[yÿ]',
+};
+
+/**
+ * Construit un motif insensible aux accents à partir d'un mot déjà nettoyé.
+ *
+ * MongoDB n'aide pas ici : la collation (`strength: 1`), qui rendrait la
+ * comparaison insensible aux accents, ne s'applique PAS à `$regex`. Il faut
+ * donc élargir le motif nous-mêmes, lettre par lettre.
+ *
+ * Le mot est d'abord décomposé en NFD puis débarrassé de ses diacritiques :
+ * « boîte » et « boite » produisent ainsi le même motif, et l'un comme l'autre
+ * trouvent les deux graphies.
+ */
+function motifSansAccent(mot) {
+  const base = String(mot).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  let out = '';
+  for (const c of base) {
+    if (Object.prototype.hasOwnProperty.call(VARIANTES_ACCENTS, c)) out += VARIANTES_ACCENTS[c];
+    else if (/[a-z0-9]/.test(c)) out += c;
+    /* Tout le reste est écarté : aucun métacaractère ne peut atteindre la
+       requête, donc aucun échappement à oublier. */
+  }
+  return out;
+}
+
+/**
+ * Restreint le repli aux fiches contenant au moins un des mots cherchés.
+ *
+ * Les mots d'un seul caractère sont écartés : ils ne discriminent rien et
+ * ramèneraient tout le catalogue — exactement ce qu'on veut éviter. Si aucun
+ * mot n'est exploitable, on renvoie le filtre d'origine et c'est le plafond
+ * qui protège.
+ *
+ * Aucun paramètre d'échappement : `motifSansAccent` ne laisse passer que
+ * [a-z0-9] et les classes qu'il fabrique lui-même. Un échappement en plus
+ * n'ajouterait rien et laisserait croire qu'il protège quelque chose.
+ */
+/* Une référence constructeur s'écrit « 0AM 325 025 D » dans le catalogue et
+ * « 0am325025d » sous les doigts du client. Un `$regex` sur l'un ne trouve
+ * jamais l'autre. On fabrique donc un motif qui accepte n'importe quel
+ * séparateur entre deux caractères, et qui tolère la lettre O à la place du
+ * zéro initial — la confusion se produit là et nulle part ailleurs.
+ *
+ * Réservé aux mots qui ressemblent à une référence (lettres ET chiffres, au
+ * moins 5 caractères) : sur un mot ordinaire ce motif ramènerait n'importe
+ * quoi, puisqu'il ignore les séparateurs.
+ */
+const REF_LONGUEUR_MIN = 5;
+
+function motifReference(mot) {
+  /* Volontairement sans `motifSansAccent` : celui-ci remplace chaque lettre
+     par une classe accentuée, qu'on ne peut plus découper caractère par
+     caractère. Une référence constructeur est de l'ASCII pur, donc un simple
+     filtrage [a-z0-9] suffit — et il garantit qu'aucun métacaractère ne passe. */
+  const base = String(mot)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+  if (base.length < REF_LONGUEUR_MIN) return '';
+  if (!/[a-z]/.test(base) || !/\d/.test(base)) return '';
+
+  const premier = base[0] === '0' || base[0] === 'o' ? '[0o]' : base[0];
+  const reste = base.slice(1).split('').join('[^a-z0-9]*');
+
+  return reste ? `${premier}[^a-z0-9]*${reste}` : premier;
+}
+
+function filtreTexteRepli(filter, searchQuery, lang) {
+  const tous = String(searchQuery || '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((m) => m.length >= 2);
+  /* On écarte les mots vides — SAUF s'il ne reste rien : « le » seul doit
+     encore chercher quelque chose plutôt que de tout ramener. */
+  const utiles = tous.filter((m) => !MOTS_VIDES.has(m.toLowerCase()));
+  const mots = (utiles.length ? utiles : tous).slice(0, 6);
+  if (!mots.length) return filter;
+
+  const ou = [];
+  for (const mot of mots) {
+    const motif = motifSansAccent(mot);
+    if (!motif) continue;
+    const rx = { $regex: motif, $options: 'i' };
+    for (const champ of REPLI_CHAMPS) ou.push({ [champ]: rx });
+    if (lang === 'de') for (const champ of REPLI_CHAMPS_DE) ou.push({ [champ]: rx });
+  }
+
+  /* Les motifs de référence : sur chaque mot, et sur la requête entière
+     recollée (« 0am 325 025 d » et « 0am325025d » désignent la même pièce). */
+  const candidatsRef = mots.slice();
+  /* Le recollage part des fragments BRUTS, pas de `mots` : celui-ci écarte les
+     fragments d'un seul caractère, or c'est exactement la lettre de variante
+     d'une référence. « 0am 325 025 d 000 » recollé sans le « d » donne
+     « 0am325025000 », qui ne correspond à aucune pièce — la fiche qui porte
+     « 0AM 325 025 D 000 » restait alors introuvable. */
+  const fragments = String(searchQuery || '')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+    .slice(0, 10);
+  if (fragments.length > 1) candidatsRef.push(fragments.join(''));
+  for (const candidat of candidatsRef) {
+    const motif = motifReference(candidat);
+    if (!motif) continue;
+    const rx = { $regex: motif, $options: 'i' };
+    for (const champ of REF_CHAMPS) ou.push({ [champ]: rx });
+  }
+  /* Aucun mot exploitable après nettoyage → on ne restreint rien, et c'est le
+     plafond qui protège. Mieux vaut un résultat large qu'un résultat vide. */
+  if (!ou.length) return filter;
+  /* $and pour ne pas écraser un éventuel $or déjà présent dans `filter`
+     (filtres véhicule, état…). */
+  return { $and: [filter, { $or: ou }] };
+}
+
+const disjoncteur = { echecs: 0, ouvertJusqua: 0 };
+
+function atlasSearchActif() {
+  /* Interrupteur d'exploitation : ATLAS_SEARCH=off sur Render coupe la voie
+     Atlas sans redéployer. Lu à chaque appel, donc effectif au redémarrage
+     de l'instance que Render fait de toute façon en changeant la variable. */
+  if (String(process.env.ATLAS_SEARCH || '').trim().toLowerCase() === 'off') return false;
+  return Date.now() >= disjoncteur.ouvertJusqua;
+}
+
+function signalerEchecAtlas() {
+  disjoncteur.echecs += 1;
+  if (disjoncteur.echecs >= DISJONCTEUR_SEUIL_ECHECS) {
+    disjoncteur.ouvertJusqua = Date.now() + DISJONCTEUR_PAUSE_MS;
+    disjoncteur.echecs = 0;
+    console.warn('[search] disjoncteur OUVERT : Atlas Search ignoré pendant '
+      + (DISJONCTEUR_PAUSE_MS / 60000) + ' min (repli JS plafonné).');
+  }
+}
+
+function signalerSuccesAtlas() {
+  if (disjoncteur.echecs) disjoncteur.echecs = 0;
+}
+
+/** Pour les tests : remet le disjoncteur à zéro. */
+function reinitialiserDisjoncteur() {
+  disjoncteur.echecs = 0;
+  disjoncteur.ouvertJusqua = 0;
+}
+
 async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, perPage }) {
   const q = String(searchQuery || '').trim();
   if (!q) return null;
+  /* Disjoncteur ouvert → on ne tente même pas : c'est tout l'intérêt. */
+  if (!atlasSearchActif()) return null;
 
   const searchStage = {
     $search: {
@@ -74,7 +321,12 @@ async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, per
         should: [
           { text: { query: q, path: 'name', score: { boost: { value: 10 } }, fuzzy: { maxEdits: 1, prefixLength: 1 } } },
           { autocomplete: { query: q, path: 'name', score: { boost: { value: 6 } } } },
-          { text: { query: q, path: ['sku', 'engineCode', 'reference', 'oemRef'], score: { boost: { value: 9 } } } },
+          /* `compatibleReferences` / `searchSynonyms` : sans eux, une pièce dont
+             la référence cherchée ne figure que dans ses références compatibles
+             restait introuvable. Un chemin absent de l'index Atlas ne fait rien
+             — il ne casse pas la requête — donc si ces champs n'y sont pas
+             encore mappés, c'est le repli qui les couvre. */
+          { text: { query: q, path: ['sku', 'engineCode', 'reference', 'oemRef', 'compatibleReferences', 'searchSynonyms'], score: { boost: { value: 9 } } } },
           { text: { query: q, path: ['brand', 'category', 'compatibility.make', 'compatibility.model', 'compatibility.engine'], score: { boost: { value: 4 } }, fuzzy: { maxEdits: 1 } } },
           { text: { query: q, path: 'description', score: { boost: { value: 1 } }, fuzzy: { maxEdits: 1 } } },
         ],
@@ -99,13 +351,17 @@ async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, per
   });
 
   try {
-    const out = await Product.aggregate(pipeline);
+    /* `maxTimeMS` : sans lui, une requête qui n'obtient pas `mongot` attend
+       vingt secondes en retenant une connexion du pool. */
+    const out = await Product.aggregate(pipeline).option({ maxTimeMS: ATLAS_TIMEOUT_MS });
     const facet = (out && out[0]) || {};
     const products = Array.isArray(facet.results) ? facet.results : [];
     const totalCount = (facet.total && facet.total[0] && facet.total[0].n) || 0;
+    signalerSuccesAtlas();
     return { products, totalCount };
   } catch (err) {
     console.warn('[search] Atlas Search indisponible, repli moteur JS :', err && err.message);
+    signalerEchecAtlas();
     return null;
   }
 }
@@ -114,9 +370,11 @@ async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, per
  * sur le champ texte libre badges.condition. Permet de filtrer
  * occasion / reconditionné / neuf sans normaliser la donnée existante. */
 const CONDITION_FILTERS = [
-  { key: 'occasion', label: 'Occasion', rx: /occasion|used|utilis/i },
-  { key: 'reconditionne', label: 'Reconditionné', rx: /recondition|refurb|[ée]change\s*standard/i },
-  { key: 'neuf', label: 'Neuf', rx: /\bneuf\b|\bneuve\b|\bnew\b/i },
+  /* `label` est une CLÉ de traduction, pas un texte : ces trois pastilles
+     s'affichaient en français au-dessus d'un catalogue allemand. */
+  { key: 'occasion', label: 'filters.conditionUsed', rx: /occasion|used|utilis/i },
+  { key: 'reconditionne', label: 'filters.conditionRecond', rx: /recondition|refurb|[ée]change\s*standard/i },
+  { key: 'neuf', label: 'filters.conditionNew', rx: /\bneuf\b|\bneuve\b|\bnew\b/i },
 ];
 function parseConditionParam(raw) {
   const valid = new Set(CONDITION_FILTERS.map((c) => c.key));
@@ -222,17 +480,39 @@ async function prepareProductListingData(req, options = {}) {
 
   let mainCategories = categories.slice();
   let subCategoriesByMain = {};
+  const categoryLabels = {};
 
   if (dbConnected) {
     const dbCategories = await Category.find({ isActive: true })
       .sort({ sortOrder: 1, name: 1 })
-      .select('_id name sortOrder')
+      .select('_id name sortOrder localizations.de.name')
       .lean();
 
-    const productCategoryCounts = await Product.aggregate([
+    /* Les noms de catégorie servent DEUX rôles : valeur de filtre (elle doit
+       rester le nom français stocké sur les produits) et libellé affiché. On
+       ne traduit donc pas la valeur — on fournit à la vue une table
+       « nom FR → libellé DE », qu'elle applique au seul affichage. */
+    if (req.lang === 'de') {
+      for (const c of dbCategories) {
+        const frName = typeof c.name === 'string' ? c.name.trim() : '';
+        const deName = c.localizations && c.localizations.de && c.localizations.de.name
+          ? String(c.localizations.de.name).trim() : '';
+        if (!frName || !deName) continue;
+        categoryLabels[frName] = deName;
+        /* Aussi segment par segment : le filtre est aplati en « parent » et
+           « enfant », jamais en nom complet. */
+        const fr = frName.split('>').map((x) => x.trim()).filter(Boolean);
+        const de = deName.split('>').map((x) => x.trim()).filter(Boolean);
+        if (fr.length === de.length) {
+          fr.forEach((seg, i) => { if (seg && de[i] && !categoryLabels[seg]) categoryLabels[seg] = de[i]; });
+        }
+      }
+    }
+
+    const productCategoryCounts = await memoriser(cleMemo('categories', {}), () => Product.aggregate([
       { $match: { category: { $type: 'string', $ne: '' } } },
       { $group: { _id: '$category', count: { $sum: 1 } } },
-    ]);
+    ]));
 
     const usedCountByCategory = new Map();
     const usedMainSet = new Set();
@@ -333,7 +613,11 @@ async function prepareProductListingData(req, options = {}) {
   // Exclut les brouillons (isPublished === false), ex. produits importés non
   // encore publiés, du listing public. Les produits existants ont isPublished
   // à true par défaut → aucun impact sur le catalogue actuel.
-  filter.isPublished = { $ne: false };
+  /* `$in` plutôt que `$ne: false` : même sens (publié, ou champ absent sur
+     une vieille fiche), mais deux valeurs ponctuelles que l'index
+     {isPublished, createdAt} sait parcourir déjà triées — fini le tri en
+     mémoire de 14 000 fiches à chaque page. */
+  filter.isPublished = { $in: [true, null] };
 
   if (selectedVehicleMake || selectedVehicleModel || selectedVehicleEngine) {
     const elem = {};
@@ -386,7 +670,7 @@ async function prepareProductListingData(req, options = {}) {
   // Motorisations par "marque|||modèle" pour le 3e niveau du sélecteur.
   let vehicleEnginesByMakeModel = {};
   if (dbConnected) {
-    const rows = await Product.aggregate([
+    const rows = await memoriser(cleMemo('vehicules', {}), () => Product.aggregate([
       { $unwind: '$compatibility' },
       {
         $match: {
@@ -409,7 +693,7 @@ async function prepareProductListingData(req, options = {}) {
           },
         },
       },
-    ]);
+    ]));
 
     const map = new Map();
     const engMap = new Map();
@@ -481,7 +765,14 @@ async function prepareProductListingData(req, options = {}) {
     if (searchQuery) {
       // 1) Atlas Search : page classée par pertinence, en ~dizaines de ms,
       //    quel que soit le volume du catalogue (voie normale).
-      const atlas = await searchProductsViaAtlas({ baseFilter: filter, searchQuery, sort, page, perPage });
+      /* L'index Atlas ne cartographie que les champs français : lui poser une
+         question allemande revient à chercher dans un dictionnaire qui ne
+         contient pas la langue. Sous /de on prend donc directement le repli,
+         qui, lui, sait lire `localizations.de`. À reconsidérer le jour où les
+         champs allemands seront ajoutés à l'index côté Atlas. */
+      const atlas = req.lang === 'de'
+        ? null
+        : await searchProductsViaAtlas({ baseFilter: filter, searchQuery, sort, page, perPage });
       if (atlas) {
         totalCount = atlas.totalCount;
         const totalPagesRaw = Math.max(1, Math.ceil(totalCount / perPage));
@@ -494,8 +785,38 @@ async function prepareProductListingData(req, options = {}) {
           products = atlas.products.map(normalizeProduct);
         }
       } else {
-        // 2) Repli (Atlas indisponible) : moteur de classement JS sur scan complet.
-        const matchedProducts = await Product.find(filter).lean();
+        /* 2) Repli (Atlas indisponible) : classement JS.
+         *
+         * Ce chemin chargeait `Product.find(filter)` en ENTIER — 14 464 fiches
+         * à ~5,5 Ko, soit ~80 Mo transférés et gardés en mémoire À CHAQUE
+         * RECHERCHE, puisque le texte cherché n'est pas dans `filter` (il ne
+         * sert qu'au classement). C'est ce qui a mis le site à terre le
+         * 21/08/2026, pas la panne d'Atlas elle-même.
+         *
+         * Deux garde-fous :
+         *   — un préfiltre regex côté MongoDB : le tri se fait toujours en JS,
+         *     mais on ne rapatrie que les fiches qui contiennent au moins un
+         *     des mots cherchés. Le filtrage coûte un balayage côté serveur
+         *     (bon marché) au lieu d'un transfert de 80 Mo (ruineux) ;
+         *   — un plafond dur, pour qu'une requête d'un seul caractère ne
+         *     puisse pas contourner le préfiltre.
+         */
+        const filtreRepli = filtreTexteRepli(filter, searchQuery, req.lang);
+        const matchedProductsBruts = await Product.find(filtreRepli)
+          .limit(REPLI_MAX_PRODUITS)
+          .lean();
+        /* Le classement travaille sur `name`, `description`, `keyPoints`… : en
+           allemand il faut lui donner la fiche traduite, sinon il rejette une
+           fiche que le préfiltre venait de retenir sur son titre allemand. */
+        const matchedProducts = req.lang === 'de'
+          ? matchedProductsBruts.map((p) => productI18n.localizeProduct(p, 'de'))
+          : matchedProductsBruts;
+        if (matchedProductsBruts.length >= REPLI_MAX_PRODUITS) {
+          /* Jamais silencieux : au plafond, le classement ne voit qu'une
+             partie du catalogue et les résultats sont incomplets. */
+          console.warn('[search] repli plafonné à ' + REPLI_MAX_PRODUITS
+            + ' fiches pour « ' + searchQuery + ' » — résultats potentiellement incomplets.');
+        }
         const rankedProducts = sortRankedProducts(rankProducts(matchedProducts, searchQuery), sort);
         totalCount = rankedProducts.length;
         const totalPagesRaw = Math.max(1, Math.ceil(totalCount / perPage));
@@ -623,9 +944,13 @@ async function prepareProductListingData(req, options = {}) {
 
   // 9) SEO meta (canonical, hreflang, robots, title, description)
   const baseUrl = getPublicBaseUrlFromReq(req);
-  const langPrefix = req.lang === 'en' ? '/en' : '';
+  /* `de` manquait ici : le catalogue allemand se déclarait canonique vers la
+     version FRANÇAISE, donc /de/produits ne pouvait pas être indexé. */
+  const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
   const pathWithoutLang = (req.res && req.res.locals && req.res.locals.currentPathWithoutLang) || req.path;
-  const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
+  const hreflang = buildHreflangSet(baseUrl, pathWithoutLang, {
+    deHref: baseUrl ? `${baseUrl}/de/produits` : '/de/produits',
+  });
   // Note: le canonical par défaut pointe vers /produits. Les controllers
   // peuvent l'override (la page catégorie veut son propre canonical).
   const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/produits` : `${langPrefix}/produits`;
@@ -647,12 +972,15 @@ async function prepareProductListingData(req, options = {}) {
   const metaRobots = hasAnyFilter ? 'noindex, follow' : defaultMetaRobots;
 
   const titleParts = [];
-  if (selectedCategoryLabel) titleParts.push(String(selectedCategoryLabel));
-  if (searchQuery) titleParts.push(`Recherche: ${searchQuery}`);
+  /* Le titre porte le libellé AFFICHÉ, pas la valeur de filtre : l'onglet du
+     catalogue allemand annonçait « Autoteile-Katalog (Mécatroniques &
+     calculateurs) » sous un H1 et une facette en allemand. */
+  if (selectedCategoryLabel) titleParts.push(String(categoryLabels[String(selectedCategoryLabel).trim()] || selectedCategoryLabel));
+  if (searchQuery) titleParts.push(`${t(req.lang, 'catalog.searchPrefix')}: ${searchQuery}`);
   const titleSuffix = titleParts.length ? ` (${titleParts.join(' • ')})` : '';
-  const title = `Catalogue pièces auto${titleSuffix} - ${brand.NAME}`;
+  const title = t(req.lang, 'catalog.metaTitle', { suffix: titleSuffix });
 
-  const metaDescription = 'Catalogue de pièces auto : recherche par référence, marque et catégorie. Livraison rapide. Paiement sécurisé.';
+  const metaDescription = t(req.lang, 'catalog.metaDescription');
 
   // Compteurs de facettes CROISÉS : chaque facette est comptée en appliquant
   // tous les AUTRES filtres actifs (on clone `filter` en retirant la clé de la
@@ -667,7 +995,7 @@ async function prepareProductListingData(req, options = {}) {
       const catScope = { ...filter }; delete catScope.category;
       const makeScope = { ...filter }; delete makeScope.compatibility;
       const condScope = { ...filter }; delete condScope['badges.condition'];
-      const [catRows, makeRows, condRows] = await Promise.all([
+      const [catRows, makeRows, condRows] = await memoriser(cleMemo('facettes', filter), () => Promise.all([
         Product.aggregate([
           { $match: { ...catScope, category: { $type: 'string', $ne: '' } } },
           { $group: { _id: '$category', n: { $sum: 1 } } },
@@ -683,7 +1011,7 @@ async function prepareProductListingData(req, options = {}) {
           key: c.key,
           n: await Product.countDocuments({ ...condScope, 'badges.condition': { $regex: c.rx } }),
         }))),
-      ]);
+      ]));
       for (const r of catRows) {
         const full = String(r._id || '').trim();
         const n = Number(r.n) || 0;
@@ -724,7 +1052,7 @@ async function prepareProductListingData(req, options = {}) {
     selectedCategoryLabel,
     selectedStock,
     selectedConditions,
-    conditionOptions: CONDITION_FILTERS.map((c) => ({ key: c.key, label: c.label })),
+    conditionOptions: CONDITION_FILTERS.map((c) => ({ key: c.key, label: t(req.lang, c.label) })),
     mainCategoryCounts,
     categoryCounts,
     conditionCounts,
@@ -735,6 +1063,7 @@ async function prepareProductListingData(req, options = {}) {
     categories,
     mainCategories,
     subCategoriesByMain,
+    categoryLabels,
     returnTo: req.originalUrl,
     products: productsWithPublicPath,
     page,
@@ -829,8 +1158,14 @@ async function getVehicleTree(dbConnected) {
 }
 
 module.exports = {
+  _memo: { cleMemo, memoriser, viderMemo, MEMO_MS, MEMO_MAX },
   prepareProductListingData,
   getVehicleTree,
   searchProductsViaAtlas,
+  filtreTexteRepli,
+  motifSansAccent,
+  motifReference,
+  reinitialiserDisjoncteur,
+  REPLI_MAX_PRODUITS,
   PER_PAGE,
 };

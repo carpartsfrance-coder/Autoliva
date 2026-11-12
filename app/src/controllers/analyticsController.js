@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 const AnalyticsEvent = require('../models/AnalyticsEvent');
 const Order = require('../models/Order');
+const { estRobot } = require('../services/robots');
 
 /* ------------------------------------------------------------------ */
 /*  API: receive tracking events from frontend                        */
@@ -11,6 +12,10 @@ async function postTrackEvent(req, res) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
     if (!dbConnected) return res.status(204).end();
+
+    /* Googlebot exécute le JavaScript : il déclenchait le traceur comme un
+       visiteur et gonflait « direct » de 70 000 sessions par semaine. */
+    if (estRobot(req.headers && req.headers['user-agent'])) return res.status(204).end();
 
     const body = req.body;
     if (!body || typeof body !== 'object') return res.status(204).end();

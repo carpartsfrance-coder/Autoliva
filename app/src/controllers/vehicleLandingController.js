@@ -17,12 +17,16 @@
  */
 
 const mongoose = require('mongoose');
+const titreSeo = require('../services/titreSeo');
 const brand = require('../config/brand');
 const vehicleService = require('../services/vehicleLandingService');
 const VehicleLanding = require('../models/VehicleLanding');
 const { buildHreflangSet } = require('../services/i18n');
 const { getPublicBaseUrlFromReq } = require('../services/productPublic');
 const internalLinking = require('../services/internalLinking');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
+const { filtreAuDelaDuPreset } = require('../services/facettesListing');
 
 function toJsonLdSafe(value) {
   return JSON.stringify(value)
@@ -31,37 +35,28 @@ function toJsonLdSafe(value) {
     .replace(/&/g, '\\u0026');
 }
 
-/* Garde-fou title SEO : 60 char max pour éviter la troncature SERP Google.
- * Stratégie : si trop long, on retire d'abord la queue "| Brand" (l'auteur
- * peut l'écrire en pleine lettre), sinon on tronque le contenu en préservant
- * la queue " | Brand" pour garder la branding cohérence. */
-const SEO_TITLE_MAX = 60;
+/* Title SEO : 60 caractères au plus, coupé entre deux mots, sans « … »
+ * (audit SEO du 11/11/2026, services/titreSeo.js). La queue « | Autoliva »
+ * est gardée tant que le texte coupé reste parlant. */
 function clampSeoTitle(t) {
   if (!t) return t;
-  const s = String(t).trim();
-  if (s.length <= SEO_TITLE_MAX) return s;
-  const suffix = ` | ${brand.NAME}`;
-  // Si le title contient le suffix, on tronque la partie head pour le préserver.
-  if (s.endsWith(suffix)) {
-    const head = s.slice(0, s.length - suffix.length).trim();
-    const maxHead = Math.max(20, SEO_TITLE_MAX - suffix.length - 1);
-    const cut = head.length > maxHead ? `${head.slice(0, maxHead).trim()}…` : head;
-    const candidate = `${cut}${suffix}`;
-    if (candidate.length <= SEO_TITLE_MAX) return candidate;
-    return `${candidate.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
-  }
-  return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+  const { texte, suffixe } = titreSeo.separerSuffixe(String(t), brand.NAME);
+  return titreSeo.ajusterTitre(texte, { suffixe, modeSuffixe: 'prefere' });
 }
 
 /* Auto-templates de contenu SEO (utilisés quand pas de VehicleLanding admin) */
 function buildAutoSeoText({ makeName, modelName, partTypeName, totalCount }) {
+  /* Plan SEO A11 : le paiement en 3x/4x n'est annoncé que si Scalapay est
+     actif — il est coupé depuis le 05/08 et ces textes le promettaient sur
+     les 7 782 pages véhicule. */
+  const actif = scalapay.estActif();
   if (modelName && partTypeName) {
-    return `<p>Notre catalogue propose ${totalCount} ${partTypeName.toLowerCase()} d'occasion et reconditionné(e)s compatibles avec ${makeName} ${modelName}, contrôlé(e)s et garanti(e)s. Paiement en 3x ou 4x sans frais, expédition en France et en Europe.</p>`;
+    return `<p>Notre catalogue propose ${totalCount} ${partTypeName.toLowerCase()} d'occasion et reconditionné(e)s compatibles avec ${makeName} ${modelName}, contrôlé(e)s et garanti(e)s.${actif ? ' Paiement en 3x ou 4x sans frais,' : ''} Expédition en France et en Europe.</p>`;
   }
   if (modelName) {
-    return `<p>Découvrez notre sélection de pièces auto ${makeName} ${modelName} (occasion et reconditionné) : ${totalCount} référence(s) contrôlées et garanties, paiement en 3x ou 4x sans frais, expédition rapide en France et en Europe.</p>`;
+    return `<p>Découvrez notre sélection de pièces auto ${makeName} ${modelName} (occasion et reconditionné) : ${totalCount} référence(s) contrôlées et garanties,${actif ? ' paiement en 3x ou 4x sans frais,' : ''} expédition rapide en France et en Europe.</p>`;
   }
-  return `<p>Notre catalogue de pièces auto ${makeName} (occasion, reconditionné et neuf) couvre l'ensemble des modèles de la marque : ${totalCount} référence(s) contrôlées et garanties, expédiées en France et en Europe. Toutes nos pièces ${makeName} bénéficient d'un paiement en 3x ou 4x sans frais.</p>`;
+  return `<p>Notre catalogue de pièces auto ${makeName} (occasion, reconditionné et neuf) couvre l'ensemble des modèles de la marque : ${totalCount} référence(s) contrôlées et garanties, expédiées en France et en Europe.${actif ? ` Toutes nos pièces ${makeName} bénéficient d'un paiement en 3x ou 4x sans frais.` : ''}</p>`;
 }
 
 /* Construit un title 60 char max EN PRÉSERVANT le nom modèle complet.
@@ -108,13 +103,14 @@ function buildAutoTitle({ makeName, modelName, partTypeName }) {
 
 function buildAutoMetaDescription({ makeName, modelName, partTypeName, totalCount }) {
   const count = totalCount > 0 ? `${totalCount} référence${totalCount > 1 ? 's' : ''}` : 'Large choix';
+  const paiement = scalapay.estActif() ? ' Paiement 3x/4x sans frais.' : '';
   if (modelName && partTypeName) {
-    return `${partTypeName} ${makeName} ${modelName} d'occasion et reconditionné — ${count} contrôlées et garanties. Livraison France & Europe. Paiement 3x/4x.`;
+    return `${partTypeName} ${makeName} ${modelName} d'occasion et reconditionné — ${count} contrôlées et garanties. Livraison France & Europe.${paiement}`;
   }
   if (modelName) {
-    return `Pièces auto ${makeName} ${modelName} occasion et reconditionné : ${count} contrôlées et garanties. Paiement 3x/4x sans frais. Expédition rapide.`;
+    return `Pièces auto ${makeName} ${modelName} occasion et reconditionné : ${count} contrôlées et garanties. Expédition rapide.${paiement}`;
   }
-  return `Pièces auto ${makeName} d'occasion, reconditionnées et neuves — ${count} contrôlées et garanties. Paiement 3x/4x. Livraison France & Europe.`;
+  return `Pièces auto ${makeName} d'occasion, reconditionnées et neuves — ${count} contrôlées et garanties. Livraison France & Europe.${paiement}`;
 }
 
 /* Lookup le VehicleLanding override pour un combo. Renvoie null si rien. */
@@ -138,7 +134,7 @@ async function listMakes(req, res, next) {
     const baseUrl = getPublicBaseUrlFromReq(req);
     const canonicalUrl = baseUrl ? `${baseUrl}/pieces-auto` : '/pieces-auto';
     const title = clampSeoTitle(`Pièces auto d'occasion et reconditionnées par marque | ${brand.NAME}`);
-    const metaDescription = `Trouvez vos pièces auto d'occasion et reconditionnées, contrôlées et garanties, classées par marque véhicule. Catalogue complet : Audi, BMW, Peugeot, Renault, Volkswagen et plus. Paiement 3x/4x sans frais.`;
+    const metaDescription = `Trouvez vos pièces auto d'occasion et reconditionnées, contrôlées et garanties, classées par marque véhicule. Catalogue complet : Audi, BMW, Peugeot, Renault, Volkswagen et plus.${scalapay.estActif() ? ' Paiement 3x/4x sans frais.' : ''}`;
 
     const jsonLd = toJsonLdSafe({
       '@context': 'https://schema.org',
@@ -213,12 +209,23 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
     ? `${canonicalBase}?page=${encodeURIComponent(String(data.page))}`
     : canonicalBase;
 
-  /* Lookup override admin */
-  const override = await findLanding({
-    make: makeName,
-    model: modelName,
-    partType: partTypeSlug,
-  });
+  /* Lookup override admin.
+   *
+   * Les 724 textes rédigés en base promettent tous « 3x ou 4x sans frais via
+   * Scalapay » (coupé depuis le 05/08), « nos ateliers » et une « garantie de
+   * 24 mois » pour des pièces garanties 6, 12 ou 24 mois. Aucun n'est servi
+   * aujourd'hui (leurs catégories sont inactives ou n'existent pas), mais il
+   * suffirait de réactiver « Transmission > Pont / Différentiel » pour qu'ils
+   * reviennent : ils passent donc par le même filtre que les fiches (plan SEO
+   * du 14/09/2026, action A3 e). Rien n'est modifié en base. */
+  const override = claimFilter.filtrerLanding(
+    await findLanding({
+      make: makeName,
+      model: modelName,
+      partType: partTypeSlug,
+    }),
+    claimFilter.contexteLanding({ scalapayActif: scalapay.estActif() })
+  );
 
   const title = clampSeoTitle((override && override.metaTitle)
     ? override.metaTitle
@@ -230,7 +237,9 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
     ? override.seoText
     : buildAutoSeoText({ makeName, modelName, partTypeName, totalCount: data.totalCount });
 
-  /* Robots : indexable si page nue, noindex si filtres au-delà du preset */
+  /* Robots : indexable si page nue, noindex si filtres au-delà du preset —
+     y compris une autre catégorie, un état ou un autre véhicule que ceux du
+     chemin (audit du 25/09/2026, services/facettesListing.js). */
   const filtersBeyond =
     data.searchQuery
     || data.selectedSubCategory
@@ -238,7 +247,8 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
     || (data.minPriceEuros !== null && data.minPriceEuros !== undefined)
     || (data.maxPriceEuros !== null && data.maxPriceEuros !== undefined)
     || (data.sort && data.sort !== 'newest' && data.sort !== '')
-    || data.page > 1;
+    || data.page > 1
+    || filtreAuDelaDuPreset(req.query, { categorie: presetCategoryName, marque: makeName, modele: modelName });
   /* Si on est sur une page model+partType et que l'utilisateur change vehicleModel
    * via le filtre, le path ne matche plus → noindex pour éviter du dup content. */
   const filterMismatch = (modelName && data.selectedVehicleModel && data.selectedVehicleModel.toLowerCase() !== modelName.toLowerCase());
@@ -465,8 +475,15 @@ async function getModelCategoryLanding(req, res, next) {
     const catDoc = await Category.findOne({ slug: categorySlug, isActive: { $ne: false } })
       .select('name slug').lean();
     if (!catDoc) {
-      // Catégorie absente : on retombe sur la landing model qui existe.
-      return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}`);
+      /* Ancienne catégorie (« transmission-pont-differentiel »…) : la page du
+         même véhicule dans la catégorie qui la remplace (audit SEO
+         11/11/2026). Sinon, la landing modèle qui existe. */
+      const cible = await require('../services/redirectionsCategories').resoudre(categorySlug);
+      const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+      if (cible) {
+        return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}/${encodeURIComponent(cible)}${qs}`);
+      }
+      return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}${qs}`);
     }
     /* Le partTypeName affiché à l'utilisateur est le dernier segment de la
      * catégorie (ex: "Transmission > Mécatronique" → "Mécatronique") pour un
@@ -496,4 +513,6 @@ module.exports = {
   getModelLanding,
   getModelCategoryLanding,
   renderLanding,
+  /* Exposé pour les tests : les promesses de ces textes sont vérifiées. */
+  _pourTests: { buildAutoSeoText, buildAutoMetaDescription },
 };

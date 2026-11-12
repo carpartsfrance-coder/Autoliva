@@ -1,9 +1,14 @@
 <!DOCTYPE html>
 <html class="light" lang="<%= typeof lang !== 'undefined' ? lang : 'fr' %>"><head>
 <meta charset="utf-8"/>
+<%# Validation du site autoliva.com dans Google Merchant Center (compte
+    5519257624, carparts.france@gmail.com) — ne pas retirer : Google la relit
+    pour garder la boutique « validée et revendiquée ». %>
+<meta name="google-site-verification" content="tWOBmNOmClaUSIJSLJKITSpHTQkc_I0F3tXolpW3lw0"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title><%= typeof title !== 'undefined' ? title : brand.NAME %></title>
 <link rel="icon" type="image/png" href="<%= brand.FAVICON_URL %>" />
+<% if (brand.APPLE_TOUCH_ICON_URL) { %><link rel="apple-touch-icon" sizes="180x180" href="<%= brand.APPLE_TOUCH_ICON_URL %>" /><% } %>
 <!-- Consent Mode V2 default state (MUST be before GTM) -->
 <script>
 window.dataLayer = window.dataLayer || [];
@@ -48,6 +53,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
   gtag('config', 'AW-16778404215', { allow_enhanced_conversions: true });
 </script>
 <!-- End Google Ads gtag -->
+<!-- Comptoir (getcomptoir.fr) — mesure d'audience du connecteur de ventes.
+     Sans cookie, sans donnée personnelle conservée, « Do Not Track » respecté :
+     il n'entre donc pas dans le bandeau de consentement, contrairement à GTM. -->
+<script defer src="https://getcomptoir.fr/t.js" data-site="cmp_A2WwfyFu8Prm-LT3"></script>
+<!-- Fin Comptoir -->
 <!-- Attribution capture (gclid + utm + GA4 client_id) -->
 <script>
 (function () {
@@ -118,7 +128,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
     visibility: hidden;
   }
 </style>
-<meta name="robots" content="<%= (typeof metaRobots !== 'undefined' && metaRobots) ? metaRobots : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' %>"/>
+<%# Politique d'indexation (plan SEO du 14/09/2026, action A5) : seoForceNoindex
+    n'est posé que par services/seoIndexPolicy.js, jamais par un contrôleur, et
+    passe devant tout metaRobots — les options de rendu écrasent res.locals, un
+    simple res.locals.metaRobots aurait perdu. Même texte que X-Robots-Tag. -%>
+<meta name="robots" content="<%= (typeof seoForceNoindex !== 'undefined' && seoForceNoindex) ? seoForceNoindex : ((typeof metaRobots !== 'undefined' && metaRobots) ? metaRobots : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1') %>"/>
 <% if (typeof metaDescription !== 'undefined' && metaDescription) { %>
 <meta name="description" content="<%= metaDescription %>"/>
 <% } %>
@@ -127,6 +141,10 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <% } %>
 <% if (typeof hreflangTags !== 'undefined' && Array.isArray(hreflangTags) && hreflangTags.length > 0) { %>
 <% hreflangTags.forEach(function(tag) { %>
+<%# Couche allemande sortie de Google (famille « de ») : on ne la déclare plus
+    comme alternative. Filtré ICI seulement : hreflangTags reste entier pour le
+    sélecteur FR/DE (header.ejs) et la suggestion de langue. -%>
+<% if (typeof seoHreflangSansDe !== 'undefined' && seoHreflangSansDe && tag && tag.lang === 'de') return; -%>
 <link rel="alternate" hreflang="<%= tag.lang %>" href="<%= tag.href %>"/>
 <% }); %>
 <% } else { %>
@@ -187,15 +205,23 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <% var _cssV = (typeof assetVersions !== 'undefined' && assetVersions.mainCss) || Date.now(); %>
 <link rel="preload" href="/css/styles.css?v=<%= _cssV %>" as="style"/>
 <link rel="stylesheet" href="/css/styles.css?v=<%= _cssV %>"/>
-<!-- Preconnect to Google Fonts -->
+<% var _polices = (typeof polices !== 'undefined' && polices && polices.disponible) ? polices : null; %>
+<% if (_polices) { %>
+<%# Polices servies depuis notre domaine (voir scripts/polices-locales.js) :
+    plus de feuille bloquante chez Google, et 210 Ko d'icônes au lieu des
+    6,4 Mo des deux polices Material complètes. Nouvelle icône dans une vue
+    → relancer le script, sinon elle s'affiche en toutes lettres. %>
+<% _polices.preloads.forEach(function (u) { %><link rel="preload" href="<%= u %>" as="font" type="font/woff2" crossorigin/>
+<% }); %><style><%- _polices.css %></style>
+<% } else { %>
+<!-- Repli sans manifest local (public/fonts/manifest.json absent) : feuilles Google -->
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<!-- Critical fonts: Inter (body) + Outfit (headings) loaded with display=swap -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
-<!-- Icon fonts -->
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:wght,FILL@100..700,0..1&amp;display=block" rel="stylesheet"/>
+<% } %>
 <script>
   (function () {
     var el = document.documentElement;

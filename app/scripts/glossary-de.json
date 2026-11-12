@@ -10,7 +10,8 @@
       "Pour les références OEM (0AM, 0B5, 02E, 1166503, etc.), garder la forme originale.",
       "Marques (Audi, BMW, Volkswagen, Porsche, Mercedes, Range Rover, etc.) : verbatim.",
       "CODES TECHNIQUES À NE JAMAIS RACCOURCIR : DSG7 reste DSG7 (jamais DSG seul), DSG6 reste DSG6, S-tronic reste S tronic (avec espace). Idem pour DQ200, DQ250, DQ380, DQ381."
-    ]
+    ],
+    "coherence": "Aligné sur src/services/productTranslator.js (09/2026) : une notion = un mot. « instandgesetzt » est écarté, il sous-entend une réparation et non une remise à neuf."
   },
   "transmission": {
     "boîte de vitesses": "Getriebe",
@@ -110,7 +111,7 @@
     "consommation d'huile": "Ölverbrauch",
     "surconsommation d'huile": "erhöhter Ölverbrauch",
     "dilution gazole dans l'huile": "Kraftstoffeintrag ins Motoröl",
-    "moteur reconditionné": "instandgesetzter Motor",
+    "moteur reconditionné": "generalüberholter Austauschmotor",
     "moteur échange standard": "Austauschmotor",
     "moteur d'occasion": "Gebrauchtmotor",
     "démarreur": "Anlasser",
@@ -141,8 +142,8 @@
     "usure": "Verschleiß",
     "remplacement": "Austausch",
     "réparation": "Reparatur",
-    "reconditionnement": "Instandsetzung",
-    "reconditionné": "instandgesetzt",
+    "reconditionnement": "Generalüberholung",
+    "reconditionné": "generalüberholt",
     "neuf": "neu",
     "occasion": "gebraucht",
     "échange standard": "Austausch",

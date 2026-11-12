@@ -27,11 +27,10 @@ async function loadArticlesForBody(text) {
   return map;
 }
 const { getMergedTemplates } = require('../services/leadTemplateSettings');
+const { journaliser, historique, resume } = require('../services/leadCommunications');
+const { demandesFournisseur } = require('../services/supplierRequest');
+const { buildLeadSearchConditions } = require('../services/leadSearch');
 const brand = require('../config/brand');
-
-function escapeRegExp(str) {
-  return String(str || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 function escapeHtml(value) {
   return String(value || '')
@@ -95,8 +94,10 @@ function getCaptureSourceLabel(captureSource) {
     devis: { label: 'Devis', className: 'bg-teal-50 text-teal-700' },
     landing_moteurs: { label: 'Moteur occasion', className: 'bg-red-50 text-red-700' },
     landing_boites: { label: 'Boîte occasion', className: 'bg-red-50 text-red-700' },
+    landing_ponts: { label: 'Pont / Transfert', className: 'bg-amber-50 text-amber-700' },
     cart_activity: { label: 'Panier', className: 'bg-slate-100 text-slate-700' },
     blog_cta: { label: 'Article blog', className: 'bg-emerald-50 text-emerald-700' },
+    appel_manque: { label: 'Appel manqué', className: 'bg-orange-50 text-orange-700' },
     manual: { label: 'Manuel', className: 'bg-yellow-50 text-yellow-700' },
   };
   return labels[captureSource] || { label: captureSource || '—', className: 'bg-slate-100 text-slate-500' };
@@ -108,7 +109,7 @@ function getCaptureSourceLabel(captureSource) {
  * acompte…). La vue « À traiter » de la page leads les exclut pour ne pas
  * traiter deux fois le même client dans deux écrans.
  */
-const ENGINE_PIPELINE_SOURCES = ['landing_moteurs', 'landing_boites'];
+const ENGINE_PIPELINE_SOURCES = ['landing_moteurs', 'landing_boites', 'landing_ponts'];
 
 /**
  * Sources qui ne représentent PAS un panier : la relance « votre commande en
@@ -116,7 +117,7 @@ const ENGINE_PIPELINE_SOURCES = ['landing_moteurs', 'landing_boites'];
  * demandes de devis/contact, déjà suivies par leur propre canal.
  * Doit rester aligné avec l'exclusion du cron (sendAbandonedCartReminders).
  */
-const NON_CART_SOURCES = ['landing_moteurs', 'landing_boites', 'contact', 'devis', 'blog_cta'];
+const NON_CART_SOURCES = ['landing_moteurs', 'landing_boites', 'landing_ponts', 'contact', 'devis', 'blog_cta'];
 
 /** Statuts de commande = vraie vente (exclut brouillons/annulées/remboursées). */
 const SALE_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
@@ -271,6 +272,10 @@ async function getAdminLeadsPage(req, res, next) {
        le même client). Un filtre explicitement incompatible (statut manuel,
        source moteur/boîte, statut recovered/expired) bascule sur « Tous ». */
     let view = req.query.view === 'all' ? 'all' : 'todo';
+    /* Une recherche doit retrouver le client où qu'il soit : la file « À
+       traiter » masque les leads déjà contactés, convertis, expirés et les
+       pipelines devis. Chercher dedans ne renvoyait presque jamais rien. */
+    if (q) view = 'all';
     if (manualStatusFilter && manualStatusFilter !== 'none') view = 'all';
     if (status && ['recovered', 'expired'].includes(status)) view = 'all';
     if (captureSource && ENGINE_PIPELINE_SOURCES.includes(captureSource)) view = 'all';
@@ -326,7 +331,7 @@ async function getAdminLeadsPage(req, res, next) {
     if (manualStatusFilter === 'none') query.manualStatus = null;
     else if (['contacted', 'converted', 'lost'].includes(manualStatusFilter)) query.manualStatus = manualStatusFilter;
 
-    const allowedSources = new Set(['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'landing_moteurs', 'landing_boites', 'cart_activity', 'blog_cta', 'manual']);
+    const allowedSources = new Set(['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'cart_activity', 'blog_cta', 'appel_manque', 'manual']);
     if (captureSource && allowedSources.has(captureSource)) query.captureSource = captureSource;
 
     if (channel === 'email') query.email = { $ne: '' };
@@ -336,16 +341,22 @@ async function getAdminLeadsPage(req, res, next) {
       query.phone = { $ne: '' };
     }
 
-    if (period && ['7d', '30d', '90d'].includes(period)) {
+    /* Hors recherche seulement : sur une recherche, la période (30 j par
+       défaut) écartait silencieusement les clients plus anciens — un client
+       qui appelle pour une commande de septembre était introuvable. */
+    if (!q && period && ['7d', '30d', '90d'].includes(period)) {
       const start = new Date();
       const days = parseInt(period, 10) || 30;
       start.setDate(start.getDate() - days);
       query.lastActivityAt = { $gte: start };
     }
 
+    /* Email, nom, prénom, « Prénom Nom », téléphone (toutes graphies),
+       pièce du panier, demande (plaque, VIN, référence), et numéro de
+       commande ou de facture — résolu en client puis en leads. */
     if (q) {
-      const rx = new RegExp(escapeRegExp(q), 'i');
-      query.$or = [{ email: rx }, { firstName: rx }, { lastName: rx }, { phone: rx }];
+      const searchConditions = await buildLeadSearchConditions(q);
+      if (searchConditions && searchConditions.length) query.$or = searchConditions;
     }
 
     /* Filtres utilisateur seuls (pour compter les onglets), puis contraintes
@@ -411,7 +422,7 @@ async function getAdminLeadsPage(req, res, next) {
       /* Demande explicite = formulaires devis/contact ET tunnels moteur/boîte
          (leur `requested` est l'info primaire ; sans ça un lead moteur sans
          panier affichait « 0,00 € » au lieu de sa demande) */
-      const isExplicitRequest = ['devis', 'contact', 'landing_moteurs', 'landing_boites'].includes(c.captureSource || '');
+      const isExplicitRequest = ['devis', 'contact', 'landing_moteurs', 'landing_boites', 'landing_ponts'].includes(c.captureSource || '');
       const hasRequested = !!(requested.vehicle || requested.vin || requested.plate || requested.ref || requested.message);
 
       /* ── Données « suivi commercial » (timeline de la carte) ── */
@@ -613,6 +624,12 @@ async function getAdminLeadDetail(req, res, next) {
     const ORDER_STATUS_FR = { paid: 'Payée', processing: 'En préparation', label_created: 'Étiquette créée', shipped: 'Expédiée', delivered: 'Livrée', completed: 'Terminée' };
 
     const requested = cart.requested || {};
+    const lignesComm = historique(cart);
+    const resumeComm = resume(lignesComm);
+    /* Demandes fournisseur prêtes à copier. Les quatre destinataires sont
+       calculés d'un coup : le commercial peut changer d'interlocuteur sans
+       aller-retour serveur, et la formulation n'a qu'une seule source. */
+    const fournisseur = demandesFournisseur(cart, { auteur: getAdminFromReq(req).firstName });
     return res.json({
       ok: true,
       cart: {
@@ -675,6 +692,28 @@ async function getAdminLeadDetail(req, res, next) {
           addedByName: n.addedByName || 'Admin',
           addedAt: formatDateTimeFR(n.addedAt),
         })),
+        /* Historique des messages : le journal des envois récents, complété par
+           tout ce qui est reconstituable des traces antérieures. */
+        communications: lignesComm.map((l) => ({
+          canal: l.canal,
+          entrant: l.sens === 'entrant',
+          auto: !!l.auto,
+          objet: l.objet || '',
+          corps: l.corps || '',
+          gabarit: l.gabarit || '',
+          echec: l.statut === 'echec',
+          motif: l.motif || '',
+          par: l.par || '',
+          at: formatDateTimeFR(l.at),
+          /* Trié côté serveur, mais l'ordre d'un tableau JSON n'est pas une
+             garantie que le front doit deviner : on donne aussi le brut. */
+          atIso: l.at ? new Date(l.at).toISOString() : '',
+          reconstitue: !!l.reconstitue,
+          partiel: !!l.partiel,
+          meta: l.meta || {},
+        })),
+        commResume: resumeComm,
+        fournisseur,
         recoveryToken: cart.recoveryToken,
         createdAt: formatDateTimeFR(cart.createdAt),
       },
@@ -816,10 +855,18 @@ async function postLeadSendEmail(req, res, next) {
       subject: finalSubject,
       html,
       text,
+      lang: cart.lang === 'de' ? 'de' : 'fr',
       replyTo: admin.email ? { email: admin.email, name: admin.name } : undefined,
     });
 
     if (!sendResult || !sendResult.ok) {
+      /* L'échec est journalisé AVANT d'être renvoyé. Un email qui n'est pas
+         parti est précisément ce qu'il faut voir sur la fiche : sans ça, le
+         client passe pour quelqu'un qui ne répond jamais. */
+      await journaliser(cart._id, {
+        canal: 'email', objet: finalSubject, corps: finalBody, gabarit: templateKey,
+        ok: false, motif: (sendResult && sendResult.reason) || 'inconnu', par: admin.name,
+      });
       return res.status(502).json({ ok: false, error: `Échec envoi email: ${sendResult && sendResult.reason ? sendResult.reason : 'inconnu'}` });
     }
 
@@ -829,6 +876,10 @@ async function postLeadSendEmail(req, res, next) {
       $set: { lastManualContactAt: now },
       $inc: { manualEmailsSent: 1 },
       $push: { notes: { text: `📧 Email envoyé${noteLabel} : "${finalSubject}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
+    });
+    await journaliser(cart._id, {
+      canal: 'email', objet: finalSubject, corps: finalBody,
+      gabarit: templateKey, par: admin.name, at: now,
     });
 
     return res.json({ ok: true, sentTo: cart.email });
@@ -925,6 +976,10 @@ async function postLeadSendSms(req, res, next) {
 
     const sendResult = await sendSms({ to: phoneFR, text: finalText });
     if (!sendResult || !sendResult.ok) {
+      await journaliser(cart._id, {
+        canal: 'sms', corps: finalText, gabarit: templateKey, ok: false,
+        motif: (sendResult && sendResult.reason) || 'inconnu', par: admin.name,
+      });
       return res.status(502).json({ ok: false, error: `Échec envoi SMS: ${sendResult && sendResult.reason ? sendResult.reason : 'inconnu'}` });
     }
 
@@ -934,6 +989,12 @@ async function postLeadSendSms(req, res, next) {
       $set: { lastManualContactAt: now },
       $inc: { manualSmsSent: 1 },
       $push: { notes: { text: `📱 SMS envoyé${noteLabel} : "${finalText.slice(0, 120)}${finalText.length > 120 ? '…' : ''}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
+    });
+    /* Le journal garde le texte ENTIER (à 600 caractères près), là où la note
+       s'arrête à 120 : relire un SMS tronqué au milieu d'une phrase ne dit pas
+       ce qu'on a promis au client. */
+    await journaliser(cart._id, {
+      canal: 'sms', corps: finalText, gabarit: templateKey, par: admin.name, at: now,
     });
 
     return res.json({ ok: true, sentTo: phoneFR });
@@ -982,6 +1043,13 @@ async function postLeadWhatsApp(req, res, next) {
     await AbandonedCart.updateOne({ _id: cart._id }, {
       $set: { lastManualContactAt: now },
       $push: { notes: { text: `📲 WhatsApp ouvert${noteLabel} : "${finalText.slice(0, 120)}${finalText.length > 120 ? '…' : ''}"`, addedBy: admin.id, addedByName: admin.name, addedAt: now } },
+    });
+    /* WhatsApp part depuis le téléphone du commercial : on enregistre une
+       INTENTION d'envoi, pas une remise. `meta.envoiNonGaranti` le dit, pour
+       qu'une absence de réponse ne soit pas imputée au client. */
+    await journaliser(cart._id, {
+      canal: 'whatsapp', corps: finalText, gabarit: templateKey, par: admin.name,
+      at: now, meta: { envoiNonGaranti: true },
     });
 
     return res.json({ ok: true, waUrl, sentTo: phoneFR });

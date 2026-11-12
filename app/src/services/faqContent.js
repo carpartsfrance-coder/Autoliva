@@ -18,7 +18,11 @@
 const FAQ_ITEMS = [
   {
     question: "Quels sont les délais de livraison ?",
-    answer: "Les expéditions sont effectuées sous 24 à 48 h ouvrées après validation de votre commande. La livraison prend ensuite 2 à 5 jours ouvrés selon votre localisation. Vous recevrez un e-mail avec le numéro de suivi dès l'envoi de votre colis.",
+    /* Mot pour mot les délais des CGV (article 7.2), qui font foi. La FAQ
+       promettait « 24 à 48 h » pour toute pièce, moteurs et boîtes compris,
+       et ce texte part tel quel dans le JSON-LD FAQPage lu par Google. */
+    answer: "Sauf délai différent indiqué sur la fiche produit : les pièces standards, mécatroniques et calculateurs sont expédiés sous 24 à 72 heures ouvrées, puis livrés sous 24 à 72 heures ; les moteurs, boîtes de vitesses, ponts, boîtes de transfert et autres ensembles lourds sont expédiés sous 3 à 6 jours ouvrés, puis livrés sous 1 à 4 jours ouvrés (<a href=\"/legal/cgv\" class=\"text-primary font-bold hover:underline\">CGV</a>, article 7.2). Vous recevez un e-mail avec le numéro de suivi dès l'envoi de votre colis.",
+    answerPlain: "Sauf délai différent indiqué sur la fiche produit : les pièces standards, mécatroniques et calculateurs sont expédiés sous 24 à 72 heures ouvrées, puis livrés sous 24 à 72 heures ; les moteurs, boîtes de vitesses, ponts, boîtes de transfert et autres ensembles lourds sont expédiés sous 3 à 6 jours ouvrés, puis livrés sous 1 à 4 jours ouvrés (CGV, article 7.2). Vous recevez un e-mail avec le numéro de suivi dès l'envoi de votre colis.",
   },
   {
     question: "Comment fonctionne l'échange standard ?",
@@ -31,7 +35,11 @@ const FAQ_ITEMS = [
   },
   {
     question: "Quels moyens de paiement acceptez-vous ?",
-    answer: "Nous acceptons les cartes bancaires (Visa, Mastercard) via Mollie, ainsi que le paiement en 3 ou 4 fois sans frais via Scalapay. Tous les paiements sont sécurisés et chiffrés.",
+    /* `%scalapay%` est remplacé au rendu selon que le paiement en plusieurs
+       fois est proposé ou non. Une FAQ qui promet le 3x alors qu'il a disparu
+       du tunnel fait abandonner le client au moment de payer — et cette page
+       est indexée, donc elle survivrait longtemps à la coupure. */
+    answer: "Nous acceptons les cartes bancaires (Visa, Mastercard) via Mollie%scalapay%. Tous les paiements sont sécurisés et chiffrés.",
   },
   {
     question: "Quelle est la durée de la garantie ?",
@@ -54,10 +62,14 @@ const FAQ_ITEMS = [
  * @returns {Array<{question:string, answer:string, answerPlain:string}>}
  */
 function getFaqItems({ phone = '', phoneIntl = '' } = {}) {
+  const scalapay = require('./scalapay').estActif()
+    ? ', ainsi que le paiement en 3 ou 4 fois sans frais via Scalapay'
+    : '';
   return FAQ_ITEMS.map((item) => {
     const replace = (s) => String(s || '')
       .replace(/%phone%/g, phone)
-      .replace(/%phoneIntl%/g, phoneIntl);
+      .replace(/%phoneIntl%/g, phoneIntl)
+      .replace(/%scalapay%/g, scalapay);
     return {
       question: item.question,
       answer: replace(item.answer),

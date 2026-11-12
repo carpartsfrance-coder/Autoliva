@@ -1,0 +1,18 @@
+{
+  "_meta": "Catégories du blog FR → DE, par SLUG (les libellés en base ont des variantes d'encodage : « Différentiel », « Differentiel », « DiffÃ©rentiel »). 19 valeurs distinctes, écrites à la main — aligné sur scripts/glossary-de.json.",
+  "transmission": "Antrieb",
+  "transmission-general": "Antrieb > Allgemein",
+  "transmission-pont-differentiel": "Antrieb > Differenzial",
+  "transmission-boite-de-transfert": "Antrieb > Verteilergetriebe",
+  "transmission-boite-transfert": "Antrieb > Verteilergetriebe",
+  "transmission-boite-de-vitesses": "Antrieb > Getriebe",
+  "transmission-boite-automatique": "Antrieb > Automatikgetriebe",
+  "transmission-mecatronique": "Antrieb > Mechatronik",
+  "transmission-calculateur": "Antrieb > Steuergerät",
+  "boite-de-transfert": "Verteilergetriebe",
+  "boite-de-vitesses-manuelle": "Getriebe > Schaltgetriebe",
+  "moteur-diesel": "Motor > Diesel",
+  "moteur-essence": "Motor > Benzin",
+  "moteur-bloc-moteur": "Motor > Motorblock",
+  "moteur-turbo-admission": "Motor > Turbolader / Ansaugung"
+}

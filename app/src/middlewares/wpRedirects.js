@@ -162,6 +162,15 @@ const EXACT_REDIRECTS = {
   '/wp-content/uploads/2025/12/Revue-technique-Mecatronique-dsg-7-DQ200-0AM.pdf':
     '/blog/mecatronique-dsg7-dq200-diagnostic-prix-remplacement',
 
+  // Slugs d'articles cités à tort → le vrai slug (audit du 25/09/2026).
+  // L'article le plus cliqué du blog (mecatronique-dsg7-dq200-diagnostic-
+  // prix-remplacement) lie « calculateur-edc-dc4-… », qui n'a jamais existé
+  // (404) : l'article gardé s'appelle « calculateur-boite-edc-dc4-… ».
+  '/blog/calculateur-edc-dc4-renault-diagnostic-prix-remplacement':
+    '/blog/calculateur-boite-edc-dc4-renault-diagnostic-prix-remplacement',
+  '/blog/calculateur-edc-dc4-renault-diagnostic-prix-remplacement/':
+    '/blog/calculateur-boite-edc-dc4-renault-diagnostic-prix-remplacement',
+
   // Duplicate content L538 vs L538-AWD : les 2 modèles partagent les mêmes
   // produits en DB et ont des titres quasi-identiques. On consolide vers
   // la version "parent" L538 pour résoudre les 2 alertes Semrush

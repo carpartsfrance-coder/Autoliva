@@ -21,10 +21,18 @@ const emailService = require('../services/emailService');
 const { buildQuotePdf } = require('../services/engineQuotePdf');
 const { getCompanyBrochureBuffer } = require('../services/companyBrochurePdf');
 
-// Pièce jointe « brochure de présentation » (statique, mise en cache) ajoutée à
-// chaque devis envoyé au client (auto + manuel). Échec silencieux = on envoie
-// quand même le devis.
+/* Pièce jointe « brochure de présentation » (statique, mise en cache).
+ *
+ * DÉSACTIVÉE PAR DÉFAUT depuis le 02/08/2026 : Killian la juge trop laide pour
+ * accompagner un devis. Un devis à plusieurs milliers d'euros se juge aussi sur
+ * sa présentation — une plaquette bâclée dessert le document qu'elle escorte.
+ *
+ * Le code de génération est CONSERVÉ (services/companyBrochurePdf.js) : la
+ * remettre le jour où elle sera refaite ne demandera qu'une variable, pas un
+ * développement. Poser DEVIS_BROCHURE=on pour la réactiver.
+ */
 async function brochureAttachment() {
+  if (String(process.env.DEVIS_BROCHURE || '').trim().toLowerCase() !== 'on') return null;
   try {
     const buf = await getCompanyBrochureBuffer();
     if (buf && buf.length) {
@@ -34,9 +42,10 @@ async function brochureAttachment() {
   return null;
 }
 const { buildQuoteEmailHtml, buildBundleQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
-const { partLexicon } = require('../services/partLexicon');
+const { partLexicon, leadCategoryFromSource, LEAD_SOURCES: LEXICON_LEAD_SOURCES } = require('../services/partLexicon');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
+const { journaliser } = require('../services/leadCommunications');
 const { compressImage } = require('../services/imageCompress');
 const mollie = require('../services/mollie');
 const brand = require('../config/brand');
@@ -97,6 +106,14 @@ const CONDITION_LABELS = {
 // Libellé client de l'état, accordé au genre (moteur masc. / boîte fém.). Rendu
 // sur le PDF + l'email du devis : ne doit JAMAIS imprimer « Moteur » pour une boîte.
 function conditionClientLabel(conditionKey, category) {
+  if (category === 'pont') {
+    switch (conditionKey) {
+      case 'occasion': return "Pièce d'occasion contrôlée";
+      case 'reconditionne_complet': return 'Pièce reconditionnée à neuf';
+      case 'reconditionne_chemise_fonte': return 'Pièce reconditionnée';
+      default: return '';
+    }
+  }
   const b = category === 'boite';
   switch (conditionKey) {
     case 'occasion':
@@ -350,6 +367,7 @@ async function getEngineQuotesList(req, res, next) {
         source: classifyLeadSource(c.attribution),
         category: leadCategoryLabel(c.captureSource),
         isBoite: c.captureSource === 'landing_boites',
+        isPont: c.captureSource === 'landing_ponts',
         ref: (c.requested && c.requested.ref) || '',
         plate: (c.requested && c.requested.plate) || '',
         vehicle: (c.requested && c.requested.vehicle) || '',
@@ -430,9 +448,9 @@ async function getEngineQuotesList(req, res, next) {
 
 /* ─── PAGE DÉTAIL ─────────────────────────────────────────────────────── */
 
-const LEAD_SOURCES = ['landing_moteurs', 'landing_boites'];
+const LEAD_SOURCES = LEXICON_LEAD_SOURCES;
 const LEAD_SOURCE_FILTER = { $in: LEAD_SOURCES };
-function leadCategoryLabel(src) { return src === 'landing_boites' ? 'Boîte' : 'Moteur'; }
+function leadCategoryLabel(src) { return src === 'landing_boites' ? 'Boîte' : src === 'landing_ponts' ? 'Pont/Transfert' : 'Moteur'; }
 
 async function getEngineQuoteDetail(req, res, next) {
   try {
@@ -461,6 +479,7 @@ async function getEngineQuoteDetail(req, res, next) {
         displayName,
         // Catégorie du lead → accorde le message commercial pré-rempli (boîte fém.)
         isBoite: cart.captureSource === 'landing_boites',
+        isPont: cart.captureSource === 'landing_ponts',
         email: cart.email,
         phone: cart.phone,
         firstName: cart.firstName,
@@ -505,7 +524,7 @@ async function getEngineQuoteDetail(req, res, next) {
       stockLabels: STOCK_LABELS,
       conditionLabels: CONDITION_LABELS,
       // Lexique genré → libellés de la fiche accordés (boîte fém. / moteur masc.)
-      lex: partLexicon(cart.captureSource === 'landing_boites' ? 'boite' : 'moteur'),
+      lex: partLexicon(leadCategoryFromSource(cart.captureSource)),
       fmt,
     });
   } catch (err) {
@@ -609,14 +628,23 @@ async function postCreateEngineQuote(req, res, next) {
             ``,
             `L'équipe Autoliva`,
           ].filter(Boolean).join('\n');
-          await emailService.sendEmail({
+          const r = await emailService.sendEmail({
             toEmail: email,
             subject: `Votre dossier ${ref} bien reçu — Autoliva`,
             html: ackHtml,
             text: ackText,
           });
+          await journaliser(created._id, {
+            canal: 'email', auto: true, objet: `Votre dossier ${ref} bien reçu`,
+            corps: ackText, gabarit: 'accuse_dossier',
+            ok: !!(r && r.ok), motif: (r && !r.ok) ? (r.reason || 'inconnu') : '',
+          });
         } catch (err) {
           console.error('[devis-manuel] ack email failed:', err && err.message);
+          await journaliser(created._id, {
+            canal: 'email', auto: true, objet: `Votre dossier ${ref} bien reçu`,
+            gabarit: 'accuse_dossier', ok: false, motif: (err && err.message) || 'exception',
+          });
         }
       }
 
@@ -625,8 +653,10 @@ async function postCreateEngineQuote(req, res, next) {
       // dans la fiche détail, comme pour un lead venu du formulaire.
       if (phone) {
         let ackSmsResult;
+        let ackSmsTexte = '';
         try {
           const { enabled: smsOn, text: smsText } = await resolveSms('moteur_ack', { quoteRef: ref, phoneMoteur: brand.PHONE_MOTEUR });
+          ackSmsTexte = smsText || '';
           if (smsOn && smsText) {
             const r = await sendSms({ to: phone, text: smsText });
             ackSmsResult = { status: r && r.ok ? 'sent' : 'failed', reason: (r && r.reason) || '', message: (r && r.message) || '', at: new Date(), phone };
@@ -641,6 +671,16 @@ async function postCreateEngineQuote(req, res, next) {
         try {
           await AbandonedCart.updateOne({ _id: created._id }, { $set: { 'engineQuote.ackSms': ackSmsResult } });
         } catch (e) { /* persistance non bloquante */ }
+        /* `disabled` n'est pas un échec d'envoi mais une absence d'envoi : on
+           ne l'inscrit pas au journal, qui ne recense que ce qui est parti. */
+        if (ackSmsResult && ackSmsResult.status !== 'disabled') {
+          await journaliser(created._id, {
+            canal: 'sms', auto: true, corps: ackSmsTexte, gabarit: 'moteur_ack',
+            ok: ackSmsResult.status === 'sent',
+            motif: ackSmsResult.message || ackSmsResult.reason || '',
+            at: ackSmsResult.at,
+          });
+        }
       }
     }
 
@@ -940,7 +980,7 @@ async function postShipment(req, res, next) {
     const plate = (cart.requested && cart.requested.plate) || '';
 
     // Email client (best-effort)
-    const cat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+    const cat = leadCategoryFromSource(cart.captureSource);
     const lex = partLexicon(cat);
     let emailSentAt = null;
     if (cart.email) {
@@ -958,7 +998,20 @@ async function postShipment(req, res, next) {
           replyTo: { email: brand.EMAIL_CONTACT, name: brand.NAME },
         });
         if (r && r.ok !== false) emailSentAt = new Date();
-      } catch (err) { console.error('[engine-quote] shipment email failed:', err && err.message); }
+        await journaliser(cart._id, {
+          canal: 'email', auto: true,
+          objet: `Votre ${lex.noun} ${quoteRef} est ${lex.expedie}`,
+          corps: text, gabarit: 'expedition',
+          ok: !(r && r.ok === false), motif: (r && r.ok === false) ? (r.reason || 'inconnu') : '',
+          meta: { carrier, trackingNumber },
+        });
+      } catch (err) {
+        console.error('[engine-quote] shipment email failed:', err && err.message);
+        await journaliser(cart._id, {
+          canal: 'email', auto: true, objet: `Votre ${lex.noun} ${quoteRef} est ${lex.expedie}`,
+          gabarit: 'expedition', ok: false, motif: (err && err.message) || 'exception',
+        });
+      }
     }
 
     // SMS client (best-effort)
@@ -966,9 +1019,15 @@ async function postShipment(req, res, next) {
       try {
         const trackingPart = `${trackingNumber ? ' Suivi ' + carrier + ' : ' + trackingNumber : ''}${trackingUrl ? ' ' + trackingUrl : ''}`;
         // SMS d'expédition accordé au genre : template dédié pour les boîtes.
-        const expeditionKey = cat === 'boite' ? 'boite_expedition' : 'moteur_expedition';
+        const expeditionKey = cat === 'boite' ? 'boite_expedition' : cat === 'pont' ? 'pont_expedition' : 'moteur_expedition';
         const { enabled: smsOn, text: smsBody } = await resolveSms(expeditionKey, { quoteRef, trackingPart, phoneMoteur: brand.PHONE_MOTEUR });
-        if (smsOn && smsBody) await sendSms({ to: cart.phone, text: smsBody.slice(0, 320) });
+        if (smsOn && smsBody) {
+          const r = await sendSms({ to: cart.phone, text: smsBody.slice(0, 320) });
+          await journaliser(cart._id, {
+            canal: 'sms', auto: true, corps: smsBody.slice(0, 320), gabarit: expeditionKey,
+            ok: !!(r && r.ok), motif: (r && !r.ok) ? (r.reason || 'inconnu') : '',
+          });
+        }
       } catch (err) { console.warn('[engine-quote] shipment SMS failed:', err && err.message); }
     }
 
@@ -1159,9 +1218,9 @@ async function prepareQuoteData(req, opts) {
     conditionKey, conditionInfo,
     allPhotos, pdfPhotos, firstNameForEmail,
     // Catégorie du lead (moteur/boîte) → vocabulaire du devis PDF/email
-    category: cart.captureSource === 'landing_boites' ? 'boite' : 'moteur',
+    category: leadCategoryFromSource(cart.captureSource),
     // Libellé d'état accordé au genre, imprimé sur le devis (PDF + email)
-    conditionLabelClient: conditionClientLabel(conditionKey, cart.captureSource === 'landing_boites' ? 'boite' : 'moteur'),
+    conditionLabelClient: conditionClientLabel(conditionKey, leadCategoryFromSource(cart.captureSource)),
     // Consigne / échange standard (caution remboursable hors-TVA) — bloc affiché si > 0
     consigne: { amount: (eq.consigne && eq.consigne.amount) || 0, delayDays: (eq.consigne && eq.consigne.delayDays) || 30 },
   };
@@ -1278,7 +1337,7 @@ async function getPreviewMail(req, res, next) {
     const pricing = eq.pricing || {};
     const sellTtc = computeQuoteTotals(pricing, leadIsReconditionne(eq, cart)).clientTotal;
     const lastSent = (eq.sentQuotes || []).slice().sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt))[0] || null;
-    const cat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+    const cat = leadCategoryFromSource(cart.captureSource);
     const phoneOpts = { category: cat, brandPhone: brand.PHONE_MOTEUR, brandPhoneIntl: brand.PHONE_MOTEUR_INTL };
     const base = (process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').replace(/\/$/, '');
 
@@ -1357,7 +1416,7 @@ async function postSendQuote(req, res, next) {
     // l'état : garantit recond → devis recond, occasion → devis occasion.
     const conditionKey = (eq.identifiedEngine && eq.identifiedEngine.condition) || defaultConditionFromLead(cart);
     const conditionInfo = CONDITION_LABELS[conditionKey] || CONDITION_LABELS[''];
-    const sendCat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+    const sendCat = leadCategoryFromSource(cart.captureSource);
     const conditionLabelClient = conditionClientLabel(conditionKey, sendCat);
     const sendConsigne = { amount: (eq.consigne && eq.consigne.amount) || 0, delayDays: (eq.consigne && eq.consigne.delayDays) || 30 };
 
@@ -1495,7 +1554,7 @@ async function postSendQuote(req, res, next) {
       payTrackUrl,
       pdfTrackUrl,
     });
-    const textLex = partLexicon(cart.captureSource === 'landing_boites' ? 'boite' : 'moteur');
+    const textLex = partLexicon(leadCategoryFromSource(cart.captureSource));
     const text = [
       `Bonjour,`,
       ``,
@@ -1625,7 +1684,7 @@ async function sendInstantDevis(cart, opts = {}) {
   if (!cart || !cart.email || !offersIn.length) return { ok: false, reason: 'precondition' };
 
   const eq = cart.engineQuote || {};
-  const sendCat = cart.captureSource === 'landing_boites' ? 'boite' : 'moteur';
+  const sendCat = leadCategoryFromSource(cart.captureSource);
   const quoteRef = (cart.requested && cart.requested.ref) || '';
   const plate = (cart.requested && cart.requested.plate) || '';
   let publicBase = String(process.env.PUBLIC_BASE_URL || brand.SITE_URL || 'https://autoliva.com').trim().replace(/\/+$/, '');
@@ -1922,6 +1981,11 @@ async function sendAvailabilityHook(cart, opts = {}) {
     try {
       const r = await emailService.sendEmail({ toEmail: cart.email, subject: 'Bonne nouvelle — votre moteur est disponible chez nous', html, text });
       okAny = okAny || !!(r && r.ok);
+      await journaliser(cart._id, {
+        canal: 'email', auto: true, objet: 'Bonne nouvelle — votre moteur est disponible chez nous',
+        corps: text, gabarit: 'moteur_disponible',
+        ok: !!(r && r.ok), motif: (r && !r.ok) ? (r.reason || 'inconnu') : '',
+      });
     } catch (err) { console.error('[availability-hook] email', err && err.message); }
   }
   if (cart.phone) {
@@ -1929,6 +1993,10 @@ async function sendAvailabilityHook(cart, opts = {}) {
       const smsText = `${firstName ? firstName + ', ' : ''}bonne nouvelle : votre moteur est disponible chez nous. Un conseiller Autoliva vous recontacte sous 24h. Ou appelez le ${phone}.`;
       const r = await sendSms({ to: cart.phone, text: smsText });
       okAny = okAny || !!(r && r.ok);
+      await journaliser(cart._id, {
+        canal: 'sms', auto: true, corps: smsText, gabarit: 'moteur_disponible',
+        ok: !!(r && r.ok), motif: (r && !r.ok) ? (r.reason || 'inconnu') : '',
+      });
     } catch (err) { console.error('[availability-hook] sms', err && err.message); }
   }
   // Le lead redevient « à rappeler » pour le commercial (le close est humain).

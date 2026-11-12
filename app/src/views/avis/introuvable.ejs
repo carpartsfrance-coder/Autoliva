@@ -1,0 +1,25 @@
+<%- include('../partials/head') %>
+
+<%/* Lien d'enquête périmé ou mal recopié. C'est le cas NORMAL ici (un SMS
+     coupé, un copier-coller incomplet), pas une anomalie : on ne parle pas
+     d'erreur, on donne les moyens de nous joindre. */%>
+
+<main class="flex-1 bg-slate-50">
+  <div class="mx-auto w-full max-w-xl px-4 sm:px-6 py-10 sm:py-16">
+    <a href="/" class="block"><img src="<%= brand.LOGO_URL %>" alt="<%= brand.NAME %>" class="h-9 w-auto mx-auto" /></a>
+    <div class="mt-8 rounded-2xl bg-white border border-slate-200 p-6 sm:p-8 shadow-sm text-center">
+      <h1 class="text-xl sm:text-2xl font-bold text-slate-900">Ce lien n'est plus valable</h1>
+      <p class="mt-3 text-sm sm:text-base leading-relaxed text-slate-600">
+        Il a peut-être été coupé en chemin — les SMS tronquent les longues adresses.
+        Rouvrez-le depuis le message d'origine, ou dites-nous directement ce que vous en avez pensé.
+      </p>
+      <p class="mt-5 text-sm text-slate-500">
+        <a href="tel:<%= brand.PHONE.replace(/\s/g, '') %>" class="font-semibold text-red-600 hover:text-red-700"><%= brand.PHONE %></a>
+        · <a href="mailto:<%= brand.EMAIL_CONTACT %>" class="font-semibold text-red-600 hover:text-red-700"><%= brand.EMAIL_CONTACT %></a>
+      </p>
+    </div>
+  </div>
+</main>
+
+</div>
+</body></html>

@@ -1,0 +1,18 @@
+<%# Rappel des consignes NON encaissées à la commande (échange standard sans
+    caution) : rien n'est ajouté au total, mais l'ancienne pièce doit revenir
+    dans le délai, sinon son montant est facturé. Ce coût conditionnel doit être
+    visible dans le panier, la livraison et le paiement, juste avant « Commander
+    avec obligation de paiement » (§ 312j Abs. 2 BGB) — il n'apparaissait que
+    sur la fiche. Variables : lignes (pricing.listConditionalConsigneLines),
+    classes (marges, optionnel). %>
+<% const _lignesCc = (typeof lignes !== 'undefined' && Array.isArray(lignes)) ? lignes : []; %>
+<% if (_lignesCc.length) { %>
+  <div class="<%= (typeof classes !== 'undefined' && classes) ? classes : 'mt-2' %> flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-900" data-core-charge-conditional>
+    <span class="material-symbols-outlined text-[16px] shrink-0">assignment_return</span>
+    <div class="space-y-1">
+      <% _lignesCc.forEach((l) => { %>
+        <div><% if (_lignesCc.length > 1) { %><strong><%= l.name %></strong> — <% } %><%= t('checkout.coreChargeConditional', { days: l.delayDays, amount: ((Number(l.amountCents) || 0) / 100).toFixed(2).replace('.', ',') }) %></div>
+      <% }) %>
+    </div>
+  </div>
+<% } %>

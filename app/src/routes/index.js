@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const rateLimit = require('express-rate-limit');
 
 const aboutController = require('../controllers/aboutController');
 const homeController = require('../controllers/homeController');
@@ -10,6 +11,8 @@ const legacyRedirectController = require('../controllers/legacyRedirectControlle
 const leadCaptureController = require('../controllers/leadCaptureController');
 const moteurOccasionController = require('../controllers/moteurOccasionController');
 const boiteOccasionController = require('../controllers/boiteOccasionController');
+const pontTransfertController = require('../controllers/pontTransfertController');
+const avisPublicController = require('../controllers/avisPublicController');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const brand = require('../config/brand');
 
@@ -21,6 +24,27 @@ router.get('/product', (req, res) => res.redirect(301, '/produits'));
 router.get('/product/:slug', productController.getProductBySlug);
 // Arbre véhicule (marques→modèles→motorisations) pour le sélecteur de véhicule.
 router.get('/api/vehicules', productController.getVehicleTreeApi);
+
+/* Enquête de satisfaction — la page ouverte depuis une demande d'avis.
+   Le jeton vaut authentification : pas de session, pas de CSRF à poser. URL
+   courte, parce qu'elle part aussi par SMS, où chaque caractère compte et où
+   une longue adresse se fait tronquer. Page en noindex (cf. contrôleur).
+
+   Limiteur dédié : deviner un jeton de 72 bits est déjà hors de portée, mais
+   rien n'empêchait d'essayer en boucle et de remplir les journaux. Un vrai
+   client fait trois requêtes (la page, la note, le message) — 40 par
+   quart d'heure laissent passer plusieurs personnes derrière un même NAT
+   mobile tout en coupant net l'essai systématique. */
+const monAvisLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Trop de tentatives. Réessayez dans quelques minutes.',
+});
+router.get('/mon-avis/:token', monAvisLimiter, avisPublicController.getEnquete);
+router.post('/mon-avis/:token', monAvisLimiter, avisPublicController.postNote);
+router.post('/mon-avis/:token/message', monAvisLimiter, avisPublicController.postMessage);
 
 router.get('/contact', contactController.getContactPage);
 router.post('/contact', contactController.postContact);
@@ -57,6 +81,14 @@ router.post('/boites-vitesse/devis', boiteOccasionController.postDevis);
 router.get('/boites-vitesse-reconditionnees', boiteOccasionController.getLanding);
 router.post('/boites-vitesse-reconditionnees/devis', boiteOccasionController.postDevis);
 
+// Landing « Pont / différentiel / boîte de transfert » : même machine que
+// /moteurs (capture leads + gclid), captureSource = 'landing_ponts'.
+// Deux URLs pour le message match Ads : ponts-différentiels vs boîtes de transfert.
+router.get('/ponts-differentiels', pontTransfertController.getLanding);
+router.post('/ponts-differentiels/devis', pontTransfertController.postDevis);
+router.get('/boites-de-transfert', pontTransfertController.getLanding);
+router.post('/boites-de-transfert/devis', pontTransfertController.postDevis);
+
 // Entrée principale : sélection du motif SAV
 router.get('/sav', savController.getMotifSelect);
 // Ancien wizard (pièce défectueuse 6 étapes) — accessible via motif=piece_defectueuse
@@ -77,18 +109,44 @@ router.post('/sav/demande',
     next();
   }),
   savController.postSimpleForm);
-router.get('/sav/notre-engagement', (req, res) => {
+router.get('/sav/notre-engagement', async (req, res) => {
+  /* Chiffres calculés ici, au rendu : la page ne montre plus de cases
+     vides « — » (services/savChiffresPublics.js). */
+  const { chiffresSavPublics } = require('../services/savChiffresPublics');
   res.render('sav-engagement', {
     title: `Notre engagement SAV — ${brand.NAME}`,
     metaDescription: 'Transparence, banc dédié, réponse sous 5 jours, équité. Découvrez notre engagement Service Après-Vente.',
     canonicalUrl: `${getSiteUrlFromReq(req)}/sav/notre-engagement`,
+    chiffresSav: await chiffresSavPublics(),
+    /* Aucune photo d'atelier pour l'instant : le bloc reste masqué (plus
+       d'« emplacements réservés »). Liste d'objets { url, alt }. */
+    photosAtelier: [],
+  });
+});
+/* Page de vérification anti-usurpation. L'URL est courte et mémorisable à
+   dessein : elle est faite pour être dictée au téléphone et collée en réponse
+   sous une fausse annonce. */
+router.get('/securite', (req, res) => {
+  res.render('securite', {
+    title: `Comment nous reconnaître — ${brand.NAME}`,
+    /* Pas de « nos seuls moyens de contact » ici non plus : cette description
+       s'affiche dans Google et doit dire la même chose que la page. */
+    /* Nom de marque en apposition (« les canaux officiels Autoliva ») et non
+       après « de » : brand.NAME est variable, l'élision ne peut pas être codée. */
+    metaDescription: `Des faux comptes usurpent notre identité. Les canaux officiels ${brand.NAME}, comment reconnaître nos liens de paiement, et quoi faire en cas de doute.`,
+    canonicalUrl: `${getSiteUrlFromReq(req)}/securite`,
   });
 });
 router.get('/legal/cgv-sav', (req, res) => {
+  const { CGV_SAV_VALIDEES, metaRobotsProvisoire } = require('../services/legalPages');
   res.render('legal/cgv-sav', {
     title: `CGV SAV — ${brand.NAME}`,
     metaDescription: `Conditions générales du Service Après-Vente ${brand.NAME}.`,
     canonicalUrl: `${getSiteUrlFromReq(req)}/legal/cgv-sav`,
+    /* « Version provisoire — en attente de validation juridique » : en ligne
+       (le formulaire SAV fait accepter ces conditions), hors de Google tant
+       que CGV_SAV_VALIDEES reste à false (services/legalPages.js). */
+    ...(CGV_SAV_VALIDEES ? {} : { metaRobots: metaRobotsProvisoire(res) }),
   });
 });
 router.post('/sav/check-commande', savController.postCheckCommande);

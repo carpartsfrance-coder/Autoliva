@@ -6,12 +6,12 @@ const { eurFromCents, jsonResult } = require('../util/format');
 const definition = {
   name: 'getCampaignPerformance',
   description:
-    "Performance par campagne et source de trafic : visites uniques, commandes, CA, panier moyen, taux de conversion. Inclut les campagnes UTM nommées + les buckets virtuels (Google Ads sans UTM, Facebook Ads sans UTM, Microsoft Ads sans UTM, Direct/SEO, pré-tracking). Choix du modèle d'attribution : 'last' (dernier clic, par défaut) ou 'first' (premier clic). À utiliser pour 'quelles campagnes performent', 'où mettre le budget Google Ads', 'comparer SEO vs paid', 'quelle source convertit le mieux'.",
+    "Performance par campagne et source de trafic : visites uniques, commandes, CA, panier moyen, taux de conversion. Inclut les campagnes UTM nommées + les buckets virtuels (Google Ads sans UTM, Facebook Ads sans UTM, Microsoft Ads sans UTM, trafic organique, assistants IA, sites référents, direct, commandes web sans source, commandes hors site). Choix du modèle d'attribution : 'last' (dernier clic ; garde un gclid jusqu'à 90 jours, donc favorise la pub, par défaut), 'first' (premier clic) ou 'visit' (dernière arrivée avant la commande, sans favoriser la pub : le plus juste pour comparer pub et gratuit, rempli pour les commandes depuis novembre 2026). Les visites directes sans référent ne sont pas comptées ; le chiffre exact des clics Google gratuits est dans Search Console. À utiliser pour 'quelles campagnes performent', 'où mettre le budget Google Ads', 'comparer SEO vs paid', 'quelle source convertit le mieux'.",
   inputSchema: {
     type: 'object',
     properties: {
       period: { type: 'string', enum: ['7d', '30d', '90d', '365d', 'all'], description: "Période d'analyse. Défaut : 30d." },
-      attributionModel: { type: 'string', enum: ['last', 'first'], description: "Modèle d'attribution. Défaut : last." },
+      attributionModel: { type: 'string', enum: ['last', 'first', 'visit'], description: "Modèle d'attribution. Défaut : last." },
       sortBy: {
         type: 'string',
         enum: ['revenue', 'orders', 'visits', 'aov', 'conversionRate', 'campaign'],

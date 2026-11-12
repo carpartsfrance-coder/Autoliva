@@ -105,9 +105,14 @@
                   <div class="mt-1 text-[11px] text-slate-500"><%= t('contact.vinHint') %></div>
                 </div>
                 <div>
+                <% if (!(typeof lang !== 'undefined' && lang === 'de')) { %>
                   <label class="block text-sm font-semibold text-slate-900 dark:text-slate-200 mb-2" for="plate"><%= t('contact.plate') %></label>
                   <input class="w-full h-12 px-4 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 focus:ring-primary focus:border-primary outline-none text-sm font-medium placeholder:text-slate-400" id="plate" name="plate" placeholder="<%= t('contact.phPlate') %>" type="text" value="<%= form && form.plate ? form.plate : '' %>" />
                   <div class="mt-1 text-[11px] text-slate-500"><%= t('contact.plateHint') %></div>
+                <% } else { %>
+                  <%/* Pas de plaque en allemand : le SIV ne connaît que la France. */%>
+                  <div class="text-[11px] text-slate-500"><%= t('contact.vinOnlyHint') %></div>
+                <% } %>
                 </div>
               </div>
 

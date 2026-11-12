@@ -12,6 +12,13 @@ const fs = require('fs');
 const path = require('path');
 const invoiceSettings = require('./invoiceSettings');
 const mediaStorage = require('./mediaStorage');
+const { estFormatTvaUe } = require('./viesValidator');
+
+/* Même intitulé que la facture : le champ accepte un SIRET comme une
+   USt-IdNr. (voir invoicePdf.js). */
+function intituleNumeroEntreprise(valeur) {
+  return estFormatTvaUe(valeur) ? 'N° TVA' : 'SIRET';
+}
 
 function formatEuro(totalCents) {
   const n = Number(totalCents);
@@ -183,7 +190,7 @@ async function buildCreditNotePdfBuffer({ order, user, creditNote, refund } = {}
       doc.fontSize(11).font('Helvetica-Bold').text('Client');
       doc.font('Helvetica').text(customerName);
       if (isPro && customerCompanyName) doc.text(customerCompanyName);
-      if (isPro && customerSiret) doc.text(`SIRET : ${customerSiret}`);
+      if (isPro && customerSiret) doc.text(`${intituleNumeroEntreprise(customerSiret)} : ${customerSiret}`);
       if (customerEmail) doc.text(customerEmail);
       if (billing) {
         if (billing.line1) doc.text(billing.line1);

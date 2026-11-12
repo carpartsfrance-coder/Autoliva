@@ -192,6 +192,9 @@ function buildSelectionFromBody(body, productOptions) {
 
   const selection = {};
   const errors = [];
+  /* Même erreurs, sous forme structurée (clé du groupe) : le panier les
+     reformule dans la langue du visiteur, avec le libellé traduit. */
+  const errorDetails = [];
 
   for (const g of opts) {
     const key = g && g.key ? String(g.key) : '';
@@ -206,6 +209,7 @@ function buildSelectionFromBody(body, productOptions) {
 
       if (!value && g.required) {
         errors.push(`Merci de choisir : ${g.label}`);
+        errorDetails.push({ kind: 'choice', key, label: g.label });
       }
 
       if (value) selection[key] = value;
@@ -216,6 +220,7 @@ function buildSelectionFromBody(body, productOptions) {
       const rawValue = getTrimmedString(source[fieldName]);
       if (!rawValue && g.required) {
         errors.push(`Merci de renseigner : ${g.label}`);
+        errorDetails.push({ kind: 'text', key, label: g.label });
       }
 
       if (rawValue) selection[key] = rawValue;
@@ -227,6 +232,7 @@ function buildSelectionFromBody(body, productOptions) {
     ok: errors.length === 0,
     selection,
     errors,
+    errorDetails,
     options: opts,
   };
 }
@@ -322,7 +328,7 @@ function hasCloningSelection(items) {
   return false;
 }
 
-function buildOptionsDisplay(productOptions, selection) {
+function buildOptionsDisplay(productOptions, selection, lang) {
   const opts = getProductPageOptions(productOptions);
   const sel = selection && typeof selection === 'object' ? selection : {};
 
@@ -359,8 +365,13 @@ function buildOptionsDisplay(productOptions, selection) {
     }
   }
 
+  /* L'espace avant les deux-points est une règle FRANÇAISE. Ce résumé est figé
+     dans la ligne de panier puis recopié sur la commande, le paiement, la page
+     commande et le suivi : « Programmierung : Mit Programmierung » restait
+     affiché tel quel à un acheteur allemand. */
+  const separateur = lang === 'de' ? ': ' : ' : ';
   const optionsSummary = lines.length
-    ? lines.map((x) => `${x.label} : ${x.value}`).join(' • ')
+    ? lines.map((x) => `${x.label}${separateur}${x.value}`).join(' • ')
     : '';
 
   return { lines, optionsSummary };

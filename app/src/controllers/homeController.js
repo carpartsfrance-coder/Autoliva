@@ -10,7 +10,9 @@ const { buildCategoryPublicPath } = require('../services/categoryPublic');
 const { buildHreflangSet } = require('../services/i18n');
 const productI18n = require('../services/productI18n');
 const siteSettingsService = require('../services/siteSettings');
+const { publicBlogFilter } = require('../services/seoIndexPolicy');
 const brand = require('../config/brand');
+const { organisationSchema, idOrganisation } = require('../services/organisationSchema');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -43,6 +45,22 @@ function estimateReadingTimeMinutes(text) {
   const minutes = words / 190;
   const floored = Math.max(1, Math.round(minutes));
   return Math.min(120, floored);
+}
+
+/* Le bloc blog de l'accueil sortait des articles FRANÇAIS sur /de : titres,
+   catégorie, date et « min de lecture », tous en français, sous un hero
+   allemand. On sert désormais les articles traduits, avec leurs libellés. */
+const BLOG_CATEGORIES_DE = require('../locales/blogCategoriesDe.json');
+
+function formatDateLang(value, lang) {
+  try {
+    if (!value) return '';
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat(lang === 'de' ? 'de-DE' : 'fr-FR', {
+      year: 'numeric', month: 'short', day: '2-digit',
+    }).format(d);
+  } catch (e) { return ''; }
 }
 
 function formatDateFR(value) {
@@ -241,7 +259,15 @@ async function getHome(req, res, next) {
 
     let homeBlogPosts = [];
     if (dbConnected) {
-      const pinned = await BlogPost.find({ isPublished: true, isHomeFeatured: true })
+      const isDeHome = req.lang === 'de';
+      /* En allemand on ne propose QUE des articles traduits : un lien vers un
+         article français depuis la home DE renvoyait le visiteur en français. */
+      const blogLangFilter = isDeHome ? { 'localizations.de.translatedAt': { $ne: null } } : {};
+      /* Politique d'indexation (plan SEO A5.5) : un article épinglé qui sort de
+         Google (2 des 3 épinglés aujourd'hui) ou répond 410 quitte le bloc, et
+         le complément ci-dessous le remplace par un article gardé. */
+      const filtreLangue = { lang: isDeHome ? 'de' : 'fr' };
+      const pinned = await BlogPost.find(publicBlogFilter({ isPublished: true, isHomeFeatured: true, ...blogLangFilter }, filtreLangue))
         .sort({ publishedAt: -1, createdAt: -1 })
         .limit(3)
         .lean();
@@ -249,10 +275,11 @@ async function getHome(req, res, next) {
       const pinnedSlugs = new Set((pinned || []).map((p) => String(p && p.slug ? p.slug : '')).filter(Boolean));
 
       const fill = pinnedSlugs.size < 3
-        ? await BlogPost.find({
+        ? await BlogPost.find(publicBlogFilter({
             isPublished: true,
+            ...blogLangFilter,
             ...(pinnedSlugs.size ? { slug: { $nin: Array.from(pinnedSlugs) } } : {}),
-          })
+          }, filtreLangue))
             .sort({ publishedAt: -1, createdAt: -1 })
             .limit(Math.max(0, 3 - pinnedSlugs.size))
             .lean()
@@ -264,27 +291,33 @@ async function getHome(req, res, next) {
         .slice(0, 3);
 
       homeBlogPosts = combined.map((d) => {
+        const deLoc = (d && d.localizations && d.localizations.de) || {};
+        const contentHtml = getTrimmedString(isDeHome ? (deLoc.contentHtml || d.contentHtml) : (d && d.contentHtml));
         const publishedAt = d && d.publishedAt ? d.publishedAt : d && d.createdAt ? d.createdAt : null;
         const minutes = Number.isFinite(d && d.readingTimeMinutes) && d.readingTimeMinutes > 0
           ? d.readingTimeMinutes
-          : estimateReadingTimeMinutes(getTrimmedString(d && d.contentHtml));
+          : estimateReadingTimeMinutes(contentHtml);
 
-        const excerpt = getTrimmedString(d && d.excerpt)
-          || truncateText(stripHtml(getTrimmedString(d && d.contentHtml)), 140);
+        const excerpt = getTrimmedString(isDeHome ? (deLoc.excerpt || d.excerpt) : (d && d.excerpt))
+          || truncateText(stripHtml(contentHtml), 140);
 
-        const categoryLabel = d && d.category && d.category.label
-          ? getTrimmedString(d.category.label)
-          : (d && d.category && d.category.slug ? getTrimmedString(d.category.slug) : 'Blog');
+        const catSlug = d && d.category && d.category.slug ? String(d.category.slug).trim().toLowerCase() : '';
+        const categoryLabel = (isDeHome && BLOG_CATEGORIES_DE[catSlug])
+          ? BLOG_CATEGORIES_DE[catSlug]
+          : (d && d.category && d.category.label
+            ? getTrimmedString(d.category.label)
+            : (catSlug ? getTrimmedString(d.category.slug) : 'Blog'));
 
+        const slug = getTrimmedString(d && d.slug);
         return {
-          slug: getTrimmedString(d && d.slug),
-          title: getTrimmedString(d && d.title),
+          slug,
+          title: getTrimmedString(isDeHome ? (deLoc.title || d.title) : (d && d.title)),
           excerpt,
           imageUrl: getTrimmedString(d && d.coverImageUrl),
           categoryLabel,
-          dateLabel: formatDateFR(publishedAt),
-          readTimeLabel: `${minutes} min de lecture`,
-          url: `/blog/${encodeURIComponent(getTrimmedString(d && d.slug))}`,
+          dateLabel: formatDateLang(publishedAt, req.lang),
+          readTimeLabel: isDeHome ? `${minutes} Min. Lesezeit` : `${minutes} min de lecture`,
+          url: `${isDeHome ? '/de' : ''}/blog/${encodeURIComponent(slug)}`,
         };
       });
     }
@@ -292,7 +325,11 @@ async function getHome(req, res, next) {
     const siteSettings = res && res.locals && res.locals.siteSettings ? res.locals.siteSettings : null;
     const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
-    const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
+    /* L'accueil existe vraiment en allemand (/de) : on le déclare des deux
+       côtés, sinon la home DE n'est jamais rattachée à la home FR. */
+    const hreflang = buildHreflangSet(baseUrl, pathWithoutLang, {
+      deHref: baseUrl ? `${baseUrl}/de` : '/de',
+    });
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/` : `${langPrefix}/`;
     const title = req.lang === 'de'
       ? `Aufbereitete, gebrauchte und geprüfte Autoteile | ${brand.NAME}`
@@ -311,7 +348,7 @@ async function getHome(req, res, next) {
     const ogTitle = title;
     const ogDescription = metaDescription;
     const ogUrl = canonicalUrl;
-    const ogImage = baseUrl ? `${baseUrl}/images/hero-home.png` : '/images/hero-home.png';
+    const ogImage = baseUrl ? `${baseUrl}/images/hero-home.jpg` : '/images/hero-home.jpg';
     const sameAs = [
       getTrimmedString(siteSettings && siteSettings.facebookUrl),
       getTrimmedString(siteSettings && siteSettings.instagramUrl),
@@ -321,17 +358,15 @@ async function getHome(req, res, next) {
     const jsonLd = JSON.stringify({
       '@context': 'https://schema.org',
       '@graph': [
-        {
-          '@type': 'Organization',
-          name: brand.NAME,
-          url: canonicalUrl,
-          logo: baseUrl ? `${baseUrl}/images/favicon.png` : '/images/favicon.png',
-          sameAs: sameAs.length ? sameAs : undefined,
-        },
+        /* Identité complète et politique de retour réelle, une seule entité
+           (services/organisationSchema.js) : l'ancien bloc n'avait que le nom,
+           l'URL et le favicon en guise de logo. */
+        organisationSchema(baseUrl, { sameAs }),
         {
           '@type': 'WebSite',
           name: brand.NAME,
           url: canonicalUrl,
+          publisher: { '@id': idOrganisation(baseUrl) },
           inLanguage: req.lang === 'en' ? 'en' : 'fr-FR',
           description: metaDescription,
           /* Sitelinks Search Box : permet à Google d'afficher un champ de recherche
@@ -403,7 +438,8 @@ async function redirectLegacyBlogSlug(req, res, next) {
     ]);
     if (reserved.has(slug)) return next();
 
-    const exists = await BlogPost.findOne({ slug, isPublished: true })
+    /* Un article en 410 ne reçoit pas de redirection depuis son ancienne adresse. */
+    const exists = await BlogPost.findOne(publicBlogFilter({ slug, isPublished: true }, { page: true }))
       .select('_id slug')
       .lean();
 

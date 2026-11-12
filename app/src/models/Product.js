@@ -41,6 +41,17 @@ const localizedProductSchema = new mongoose.Schema(
     /* Slug localisé (URL riche en mots-clés du pays). Optionnel : si vide, la
      * route réutilise le slug FR sous le préfixe de langue. */
     slug: { type: String, default: '', trim: true },
+    /* Empreinte du texte FRANÇAIS au moment de la traduction. Si elle diffère
+       de l'empreinte actuelle, la fiche a été réécrite depuis : la traduction
+       est périmée et le cron la reprend. Vide = jamais traduite. */
+    sourceHash: { type: String, default: '', trim: true },
+    /* Mise de côté après plusieurs échecs sur le MÊME texte : sans ça, une
+       fiche que le modèle n'arrive pas à traduire consomme un créneau et un
+       appel payant à chaque passage, indéfiniment. Elle repart dès que son
+       texte français change. */
+    failedHash: { type: String, default: '', trim: true },
+    failedCount: { type: Number, default: 0 },
+    failedAt: { type: Date, default: null },
     /* Gouvernance de traduction : qui/quand + relecture humaine. */
     translatedAt: { type: Date, default: null },
     translatedBy: { type: String, default: '', trim: true }, // ex: 'openai:gpt-4o-mini'
@@ -269,6 +280,14 @@ const productSchema = new mongoose.Schema(
     seo: {
       metaTitle: { type: String, default: '', trim: true },
       metaDescription: { type: String, default: '', trim: true },
+      /* Indexation choisie fiche par fiche dans l'admin (plan de reprise SEO
+         du 14/09/2026, action A5.7) : '' ou absent = la politique décide
+         (services/seoIndexPolicy.js), 'index' = toujours indexable, 'noindex'
+         = retirée de Google. Passe devant la liste du plan, mais n'agit que si
+         la famille « products » est active dans SEO_PRUNE — la couper remet
+         toutes les fiches à l'index d'un coup. Pas de valeur par défaut : une
+         fiche créée n'écrit rien de plus qu'avant. */
+      indexOverride: { type: String, enum: ['', 'index', 'noindex'], trim: true },
     },
 
     sections: {
@@ -299,5 +318,11 @@ productSchema.index({ 'localizations.de.translatedAt': 1 });
 productSchema.index({ 'localizations.de.slug': 1 }, { sparse: true });
 /* Filtre catalogue par état (occasion / reconditionné / neuf), champ texte libre. */
 productSchema.index({ 'badges.condition': 1 });
+/* Listing public : « publié » + tri nouveautés (le défaut), et « publié » +
+   catégorie pour les pages de catégorie. Sans eux, chaque page de listing
+   relisait les 14 700 fiches en entier (COLLSCAN) — jusqu'à quinze fois par
+   rendu, facettes comprises — et les triait en mémoire. */
+productSchema.index({ isPublished: 1, createdAt: -1 });
+productSchema.index({ isPublished: 1, category: 1 });
 
 module.exports = mongoose.model('Product', productSchema);

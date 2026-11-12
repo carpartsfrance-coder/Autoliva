@@ -69,6 +69,11 @@
                 Créer un retour
               </button>
             </form>
+
+            <button id="reviewRequestBtn" class="btn btn-secondary text-amber-600 hover:bg-amber-50 hover:border-amber-200" type="button" data-order-id="<%= order.id %>">
+              <span class="material-symbols-outlined mr-2 text-base">reviews</span>
+              Demander un avis
+            </button>
           <% } %>
 
           <% const _detailReturn = '/admin/commandes/' + order.id; %>
@@ -236,6 +241,44 @@
             });
           })();
         </script>
+      <% } %>
+
+      <%/* Dossiers SAV de cette commande. Placé AVANT tout le reste : quand un
+           dossier est en cours, c'est la première chose à savoir — avant de
+           relancer, de demander un avis ou de promettre quoi que ce soit. */%>
+      <% if (typeof savTickets !== 'undefined' && savTickets && savTickets.length) { %>
+        <% var _savOuvert = savTickets.filter(function (t) { return t.ouvert; }); %>
+        <div data-sav-bandeau="<%= _savOuvert.length ? 'ouvert' : 'clos' %>"
+             class="mt-6 rounded-2xl border p-5 <%= _savOuvert.length ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white' %>">
+          <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-base <%= _savOuvert.length ? 'text-red-600' : 'text-slate-400' %>">support_agent</span>
+            <span class="font-semibold <%= _savOuvert.length ? 'text-red-900' : 'text-slate-900' %>">
+              <% if (_savOuvert.length) { %>
+                Dossier SAV en cours<%= _savOuvert.length > 1 ? ' (' + _savOuvert.length + ')' : '' %>
+              <% } else { %>
+                SAV — <%= savTickets.length %> dossier<%= savTickets.length > 1 ? 's' : '' %> clos
+              <% } %>
+            </span>
+          </div>
+          <% if (_savOuvert.length) { %>
+            <div class="mt-1 text-xs text-red-800">
+              Pas de demande d'avis ni de relance commerciale tant que ce n'est pas réglé.
+            </div>
+          <% } %>
+          <div class="mt-3 space-y-2">
+            <% savTickets.forEach(function (t) { %>
+              <a href="/admin/sav/tickets/<%= encodeURIComponent(t.numero) %>"
+                 class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 hover:border-slate-300">
+                <span class="font-mono text-xs font-semibold text-slate-900"><%= t.numero %></span>
+                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide <%= t.statutClasse %>"><%= t.statutLabel %></span>
+                <% if (t.pieceLabel) { %><span class="text-xs text-slate-500"><%= t.pieceLabel %></span><% } %>
+                <span class="ml-auto text-[11px] text-slate-400">
+                  ouvert le <%= new Date(t.createdAt).toLocaleDateString('fr-FR') %>
+                </span>
+              </a>
+            <% }) %>
+          </div>
+        </div>
       <% } %>
 
       <div class="mt-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
@@ -429,6 +472,30 @@
                   </div>
                 <% } %>
 
+                <% if (typeof googleAdsVente !== 'undefined' && googleAdsVente) { %>
+                  <div class="mt-3 rounded-xl border border-green-200 bg-green-50 p-3 text-[12px] text-green-900" data-google-ads-vente>
+                    <div class="flex items-center gap-1 font-bold">
+                      <span class="material-symbols-outlined" style="font-size:15px">cloud_done</span>
+                      Vente envoyée à Google Ads le <%= googleAdsVente.envoyeeLe %>
+                    </div>
+                    <div class="mt-1">
+                      <% if (googleAdsVente.valeur) { %>
+                        Valeur envoyée : marge de <strong><%= googleAdsVente.valeur %></strong><%= googleAdsVente.estimee ? ' (estimée : prix d\'achat pas encore saisi)' : '' %>.
+                      <% } else { %>
+                        Valeur envoyée : la marge de la vente<%= googleAdsVente.estimee ? ' (estimée)' : '' %>.
+                      <% } %>
+                      <% if (googleAdsVente.viaDemande) { %>
+                        Rattachée à la demande de devis<%= googleAdsVente.dossier ? ' ' + googleAdsVente.dossier : '' %> faite après un clic pub.
+                      <% } %>
+                    </div>
+                    <% if (googleAdsVente.remiseAZero) { %>
+                      <div class="mt-1">Remise à 0 chez Google (vente remboursée ou annulée) le <%= googleAdsVente.corrigeeLe %>.</div>
+                    <% } else if (googleAdsVente.corrigeeLe) { %>
+                      <div class="mt-1">Valeur corrigée chez Google le <%= googleAdsVente.corrigeeLe %>.</div>
+                    <% } %>
+                  </div>
+                <% } %>
+
                 <% if (order.noteInternal) { %>
                   <div class="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
                     <div class="text-[10px] font-semibold uppercase tracking-widest text-amber-600">Note interne</div>
@@ -571,6 +638,7 @@
                       </form>
                       <p class="mt-1 text-[10px] text-slate-400">Indépendant du stock du site — as-tu la pièce, ou faut-il la commander au fournisseur ?</p>
                     </div>
+
                     <script>
                       (function () {
                         var sel = document.querySelector('[data-sourcing-detail-status]');
@@ -1050,6 +1118,139 @@
             <% } %>
           </div>
 
+          <%/* ── Régime de TVA de la vente ────────────────────────────────────────
+               Carte à part entière, et NON dans « Changement manuel de statut
+               (avancé) » : ce panneau-là est masqué par défaut, on ne trouvait
+               donc jamais le bloc. La décision se prend à chaque achat sous
+               marge — elle ne peut pas être enterrée derrière un lien gris.
+
+               Placée juste après les articles : c'est le prix qu'on vient de
+               lire qui donne la base de calcul. */%>
+          <% var tva = order.tva || {}; %>
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
+              <div class="flex items-center gap-2 font-semibold text-slate-900">
+                <span class="material-symbols-outlined text-base text-emerald-600">receipt_long</span>
+                Régime de TVA
+              </div>
+              <span class="px-2 py-1 rounded-lg text-xs font-bold <%= tva.scheme === 'margin' ? 'bg-emerald-100 text-emerald-700' : (tva.autoliquidee ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600') %>"><%= tva.label %></span>
+            </div>
+            <div class="p-6">
+              <% if (tva.autoliquidee) { %>
+                <p class="text-sm text-slate-500">Vente autoliquidée : la TVA est due par le client professionnel UE. Le régime de la marge ne s'applique pas.</p>
+              <% } else { %>
+                <form action="/admin/commandes/<%= order.id %>/tva" method="POST" enctype="multipart/form-data" class="flex flex-col gap-3 max-w-2xl">
+                  <select name="vatScheme" class="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900" data-tva-scheme>
+                    <option value="normal" <%= tva.scheme === 'margin' ? '' : 'selected' %>>TVA 20 % — taux normal (défaut)</option>
+                    <option value="margin" <%= tva.scheme === 'margin' ? 'selected' : '' %>>TVA sur marge — art. 297 A</option>
+                  </select>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="text-xs text-slate-500">Prix d'achat payé (TTC)
+                      <input type="text" inputmode="decimal" name="purchasePrice" value="<%= tva.purchaseInput %>" placeholder="0.00" data-tva-achat class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                    </label>
+                    <label class="text-xs text-slate-500">Fournisseur
+                      <input type="text" name="supplier" value="<%= tva.supplier %>" placeholder="Nom du fournisseur" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                    </label>
+                  </div>
+
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="text-xs text-slate-500">Ce que porte la facture d'achat
+                      <select name="supplierRegime" class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                        <option value="">— non renseigné —</option>
+                        <% (tva.regimesFournisseur || []).forEach(function (r) { %>
+                          <option value="<%= r.key %>" <%= tva.supplierRegime === r.key ? 'selected' : '' %>><%= r.label %></option>
+                        <% }) %>
+                      </select>
+                    </label>
+                    <label class="text-xs text-slate-500">N° de facture fournisseur
+                      <input type="text" name="invoiceRef" value="<%= tva.invoiceRef %>" placeholder="FA-2026-…" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                    </label>
+                  </div>
+
+                  <%/* Le justificatif. En contrôle, c'est LUI qui prouve la base
+                       (PV − PA) : sans lui, l'administration reconstitue la TVA
+                       sur le prix de vente entier. Il part aussi dans le ZIP
+                       mensuel du comptable. */%>
+                  <label class="text-xs text-slate-500">
+                    Facture d'achat (PDF, 10 Mo max) — le justificatif de la marge
+                    <input type="file" name="document" accept="application/pdf" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-200" />
+                  </label>
+
+                  <% if (tva.factureAchat) { %>
+                    <div class="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm">
+                      <span class="material-symbols-outlined text-base text-emerald-600">description</span>
+                      <a href="/admin/commandes/<%= order.id %>/facture-achat" target="_blank" class="font-semibold text-emerald-800 hover:underline"><%= tva.factureAchat.nom %></a>
+                      <span class="text-xs text-emerald-700"><%= tva.factureAchat.taille %> Ko · déposée le <%= tva.factureAchat.deposeeLe %><%= tva.factureAchat.deposeePar ? ' par ' + tva.factureAchat.deposeePar : '' %></span>
+                    </div>
+                    <p class="-mt-1 text-[11px] text-slate-400">Déposer un nouveau fichier remplace celui-ci.</p>
+                  <% } %>
+
+                  <%/* Le gain affiché AVANT de valider : c'est ce qui rend la
+                       saisie du prix d'achat rentable à l'œil nu. */%>
+                  <div class="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600" data-tva-apercu>
+                    <div>TVA au taux normal : <strong><%= ((tva.tvaNormaleCents || 0) / 100).toFixed(2) %> €</strong></div>
+                    <% if (tva.tvaMargeCents != null) { %>
+                      <div class="mt-1">TVA sur marge : <strong><%= (tva.tvaMargeCents / 100).toFixed(2) %> €</strong>
+                        — économie <strong class="text-emerald-600"><%= (tva.economieCents / 100).toFixed(2) %> €</strong></div>
+                    <% } else { %>
+                      <div class="mt-1 text-slate-400">Renseigne le prix d'achat pour voir l'économie possible.</div>
+                    <% } %>
+                  </div>
+
+                  <button type="submit" class="self-start rounded-xl bg-slate-800 text-white px-5 py-2.5 text-xs font-semibold uppercase tracking-wider hover:bg-slate-700 transition">Enregistrer le régime</button>
+                </form>
+
+                <%/* Hors du formulaire ci-dessus : un <form> ne peut pas en
+                     contenir un autre, et la suppression ne doit pas partir en
+                     même temps que l'enregistrement du régime. */%>
+                <% if (tva.factureAchat) { %>
+                  <form action="/admin/commandes/<%= order.id %>/facture-achat/supprimer" method="POST" class="mt-2"
+                        onsubmit="return confirm('Supprimer la facture d\'achat ? Le justificatif de la marge sera perdu.');">
+                    <button type="submit" class="text-xs text-slate-400 hover:text-red-600 transition">Supprimer la facture d'achat</button>
+                  </form>
+                <% } %>
+
+                <p class="mt-3 text-xs text-slate-400 max-w-2xl">
+                  Rester à 20 % est toujours régulier (art. 297 C du CGI). La marge ne se réclame qu'en tenant la facture fournisseur — c'est elle qui la justifie en cas de contrôle.
+                  <% if (tva.scheme === 'margin' && !tva.factureAchat) { %>
+                    <br /><span class="text-amber-600 font-semibold">⚠ Marge réclamée sans facture d'achat jointe : la base (PV − PA) n'est pas justifiable en contrôle.</span>
+                  <% } %>
+                  <% if (tva.decidedAt) { %><br />Dernière décision : <%= tva.decidedAt %><%= tva.decidedByName ? ' par ' + tva.decidedByName : '' %>.<% } %>
+                </p>
+              <% } %>
+            </div>
+          </div>
+          <script>
+            /* Recalcule l'économie pendant la frappe : sans ça, il faut
+               enregistrer pour savoir si le montant saisi a du sens. */
+            (function () {
+              var achat = document.querySelector('[data-tva-achat]');
+              var zone = document.querySelector('[data-tva-apercu]');
+              if (!achat || !zone) return;
+              var baseCents = <%= Number(tva.baseCents) || 0 %>;
+              var normaleCents = <%= Number(tva.tvaNormaleCents) || 0 %>;
+              var euro = function (c) { return (c / 100).toFixed(2) + ' €'; };
+              achat.addEventListener('input', function () {
+                var n = parseFloat(String(achat.value).replace(/\s/g, '').replace(',', '.'));
+                var html = '<div>TVA au taux normal : <strong>' + euro(normaleCents) + '</strong></div>';
+                if (isFinite(n) && n > 0) {
+                  var achatCents = Math.round(n * 100);
+                  if (achatCents > baseCents) {
+                    html += '<div class="mt-1 text-red-600 font-bold">Prix d\'achat supérieur au prix de vente — vérifie le montant.</div>';
+                  } else {
+                    var margeTva = Math.round(Math.max(0, baseCents - achatCents) / 6);
+                    html += '<div class="mt-1">TVA sur marge : <strong>' + euro(margeTva) + '</strong>'
+                      + ' — économie <strong class="text-emerald-600">' + euro(normaleCents - margeTva) + '</strong></div>';
+                  }
+                } else {
+                  html += '<div class="mt-1 text-slate-400">Renseigne le prix d\'achat pour voir l\'économie possible.</div>';
+                }
+                zone.innerHTML = html;
+              });
+            })();
+          </script>
+
           <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div class="px-6 py-4 bg-slate-50 flex items-center justify-between">
               <div class="font-semibold text-slate-900">Historique des statuts</div>
@@ -1371,12 +1572,20 @@
                   <span class="material-symbols-outlined text-base text-red-600">undo</span>
                   Remboursements et avoirs
                 </div>
-                <% if (order.refundableLeftCents > 0) { %>
-                  <button type="button" class="btn btn-danger" data-open-refund-modal>
-                    <span class="material-symbols-outlined mr-1 text-base">payments</span>
-                    Rembourser
-                  </button>
-                <% } %>
+                <div class="flex items-center gap-2">
+                  <% if (order.avoirableLeftCents > 0) { %>
+                    <button type="button" class="btn btn-secondary" data-open-avoir-modal>
+                      <span class="material-symbols-outlined mr-1 text-base">receipt_long</span>
+                      Créer un avoir
+                    </button>
+                  <% } %>
+                  <% if (order.refundableLeftCents > 0) { %>
+                    <button type="button" class="btn btn-danger" data-open-refund-modal>
+                      <span class="material-symbols-outlined mr-1 text-base">payments</span>
+                      Rembourser
+                    </button>
+                  <% } %>
+                </div>
               </div>
 
               <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
@@ -1424,6 +1633,74 @@
               <% } else { %>
                 <div class="mt-4 text-sm text-slate-500">Aucun remboursement émis pour cette commande.</div>
               <% } %>
+
+              <% if (order.creditNotesSeuls && order.creditNotesSeuls.length) { %>
+                <div class="mt-5 border-t border-slate-200 pt-4">
+                  <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Avoirs sans remboursement par le site</div>
+                  <div class="mt-3 space-y-3">
+                    <% order.creditNotesSeuls.forEach((c) => { %>
+                      <div class="rounded-xl border border-slate-200 p-4">
+                        <div class="font-semibold text-slate-900"><%= c.amount %> — <span class="text-xs uppercase tracking-wider text-slate-500">avoir seul</span></div>
+                        <% if (c.reason) { %><div class="mt-1 text-xs text-slate-500"><%= c.reason %></div><% } %>
+                        <% if (c.notes) { %><div class="mt-1 text-xs text-slate-500">Note interne : <%= c.notes %></div><% } %>
+                        <div class="mt-1 text-xs text-slate-500">Le <span class="font-semibold text-slate-500"><%= c.issuedAt %></span><% if (c.createdBy) { %> par <span class="font-semibold text-slate-500"><%= c.createdBy %></span><% } %></div>
+                        <div class="mt-2 flex items-center gap-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
+                          <span class="material-symbols-outlined text-base text-red-500">picture_as_pdf</span>
+                          <span class="text-xs font-semibold text-slate-700 truncate flex-1">Avoir <%= c.number %></span>
+                          <a href="<%= c.pdfUrl %>" target="_blank" class="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-slate-200 transition" title="Voir">
+                            <span class="material-symbols-outlined text-sm text-slate-600">visibility</span>
+                          </a>
+                          <a href="<%= c.pdfUrl %>?action=download" class="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-slate-200 transition" title="Télécharger">
+                            <span class="material-symbols-outlined text-sm text-slate-600">download</span>
+                          </a>
+                        </div>
+                      </div>
+                    <% }) %>
+                  </div>
+                </div>
+              <% } %>
+            </div>
+
+            <%# ─── Modal Créer un avoir (sans remboursement) ─────────── %>
+            <div data-avoir-modal class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+              <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+                <div class="flex items-center justify-between gap-3">
+                  <div class="text-base font-bold text-slate-900">Créer un avoir — commande #<%= order.number %></div>
+                  <button type="button" data-close-avoir-modal class="text-slate-400 hover:text-slate-700">
+                    <span class="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+
+                <form action="/admin/commandes/<%= order.id %>/avoir" method="POST" class="mt-4 space-y-4" data-avoir-form>
+                  <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="avoirAmount">Montant de l'avoir (€)</label>
+                    <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-900" id="avoirAmount" name="amount" type="text" inputmode="decimal" placeholder="Ex : 120,00" required />
+                    <div class="mt-1 text-[11px] text-slate-500">Reste à avoir : <strong><%= order.avoirableLeft %></strong></div>
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="avoirReason">Motif (visible sur l'avoir)</label>
+                    <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" id="avoirReason" name="reason" type="text" placeholder="Ex : Geste commercial" />
+                  </div>
+
+                  <div>
+                    <label class="block text-xs font-semibold uppercase tracking-widest text-slate-400" for="avoirNotes">Note interne (optionnel)</label>
+                    <textarea class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm" id="avoirNotes" name="notes" rows="2" placeholder="Ex : remboursé par virement le 23/09"></textarea>
+                  </div>
+
+                  <div class="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600">
+                    Cet avoir ne rembourse rien : aucun appel à Mollie ou Scalapay, aucun e-mail au client, et le statut de la commande ne change pas. Il compte en comptabilité et son PDF reste téléchargeable ici.
+                  </div>
+
+                  <div class="flex items-center justify-end gap-3 pt-2">
+                    <button type="button" data-close-avoir-modal class="btn btn-secondary">Annuler</button>
+                    <button type="submit" class="btn btn-primary">
+                      <span class="material-symbols-outlined mr-1 text-base">receipt_long</span>
+                      Créer l'avoir
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
 
             <%# ─── Modal Rembourser ──────────────────────────────────── %>
@@ -1524,6 +1801,41 @@
                     if (!amount) { e.preventDefault(); alert('Renseigne un montant.'); return; }
                     var ok = window.confirm('Émettre ce remboursement maintenant ? L\'action est immédiate côté Mollie/Scalapay.');
                     if (!ok) e.preventDefault();
+                  });
+                }
+              })();
+
+              /* Avoir seul : même mécanique de fenêtre, mais rien n'est envoyé
+                 à Mollie — donc pas d'avertissement d'action immédiate. */
+              (function () {
+                var openBtn = document.querySelector('[data-open-avoir-modal]');
+                var modal = document.querySelector('[data-avoir-modal]');
+                if (!modal) return;
+                var closeBtns = modal.querySelectorAll('[data-close-avoir-modal]');
+                var form = modal.querySelector('[data-avoir-form]');
+
+                function open() {
+                  modal.classList.remove('hidden');
+                  modal.classList.add('flex');
+                  document.body.style.overflow = 'hidden';
+                  var champ = modal.querySelector('[name=amount]');
+                  if (champ) setTimeout(function () { champ.focus(); }, 30);
+                }
+                function close() {
+                  modal.classList.add('hidden');
+                  modal.classList.remove('flex');
+                  document.body.style.overflow = '';
+                }
+                if (openBtn) openBtn.addEventListener('click', open);
+                closeBtns.forEach(function (b) { b.addEventListener('click', close); });
+                modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
+                document.addEventListener('keydown', function (e) {
+                  if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
+                });
+                if (form) {
+                  form.addEventListener('submit', function (e) {
+                    var amount = (form.querySelector('[name=amount]').value || '').trim();
+                    if (!amount) { e.preventDefault(); alert('Renseigne un montant.'); }
                   });
                 }
               })();
@@ -2195,5 +2507,254 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 <% } %>
+
+<!-- Composeur « Demander un avis » -->
+<div id="avisModal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/50 p-4 print:hidden">
+  <div class="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl">
+    <div class="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
+      <div>
+        <div class="text-lg font-semibold text-slate-900">Demander un avis Google</div>
+        <div class="mt-1 text-xs text-slate-500">
+          Le client sera envoyé vers
+          <a data-avis-lien href="#" target="_blank" rel="noopener noreferrer" class="font-mono text-red-600 hover:text-red-700 break-all"></a>.
+          Les textes se modifient dans <a href="/admin/parametres/avis" class="font-semibold text-slate-700 hover:text-slate-900">Paramètres → Demande d'avis</a>.
+        </div>
+        <div data-avis-deja hidden class="mt-2 text-xs font-semibold text-amber-700"></div>
+        <div data-avis-sav hidden class="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs text-red-900"></div>
+      </div>
+      <button type="button" data-avis-fermer class="shrink-0 text-slate-400 hover:text-slate-600">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div class="p-5">
+      <div class="flex gap-2">
+        <button type="button" data-avis-onglet="email" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">E-mail</button>
+        <button type="button" data-avis-onglet="sms" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">SMS</button>
+        <button type="button" data-avis-onglet="whatsapp" class="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100">WhatsApp</button>
+      </div>
+
+      <div data-avis-erreur hidden class="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800"></div>
+      <div data-avis-statut class="mt-4 text-sm font-medium text-emerald-700"></div>
+
+      <!-- E-mail -->
+      <div data-avis-panneau="email" hidden class="mt-4">
+        <div class="text-xs text-slate-500">Destinataire : <span data-avis-dest class="font-semibold text-slate-500"></span></div>
+        <label class="mt-3 block text-xs font-semibold uppercase tracking-wider text-slate-400">Objet</label>
+        <input data-avis-sujet type="text" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+        <label class="mt-3 block text-xs font-semibold uppercase tracking-wider text-slate-400">Message</label>
+        <textarea data-avis-corps rows="12" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+        <div class="mt-1 text-[11px] text-slate-400">Le lien seul sur sa ligne devient le gros bouton rouge dans l'e-mail.</div>
+        <button type="button" data-avis-envoyer="email" class="btn btn-primary mt-4">Envoyer l'e-mail</button>
+      </div>
+
+      <!-- SMS -->
+      <div data-avis-panneau="sms" hidden class="mt-4">
+        <div class="text-xs text-slate-500">Destinataire : <span data-avis-dest class="font-semibold text-slate-500"></span></div>
+        <div data-avis-optin hidden class="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Ce client n'a pas donné son accord pour les SMS. Envoi possible, mais c'est ta décision.
+        </div>
+        <label class="mt-3 block text-xs font-semibold uppercase tracking-wider text-slate-400">Message</label>
+        <textarea data-avis-corps rows="4" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+        <div class="mt-1 text-[11px] text-slate-400"><span data-avis-sms-count></span> · un lien dans un SMS « CarParts » peut être filtré par l'opérateur sans avertissement.</div>
+        <button type="button" data-avis-envoyer="sms" class="btn btn-primary mt-4">Envoyer le SMS</button>
+      </div>
+
+      <!-- WhatsApp -->
+      <div data-avis-panneau="whatsapp" hidden class="mt-4">
+        <div class="text-xs text-slate-500">Destinataire : <span data-avis-dest class="font-semibold text-slate-500"></span></div>
+        <label class="mt-3 block text-xs font-semibold uppercase tracking-wider text-slate-400">Message</label>
+        <textarea data-avis-corps rows="10" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono leading-relaxed focus:ring-2 focus:ring-red-500 focus:border-red-500"></textarea>
+        <div class="mt-1 text-[11px] text-slate-400">WhatsApp s'ouvre avec le message prérempli : l'envoi part de ton téléphone.</div>
+        <button type="button" data-avis-envoyer="whatsapp" class="btn btn-primary mt-4">Ouvrir WhatsApp</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+  /* Demande d'avis GOOGLE sur cette commande.
+     On ouvre un composeur : le texte vient des modèles (/admin/parametres/avis),
+     reste modifiable avant l'envoi, et chaque canal part séparément. POST
+     same-origin JSON, pas de CSRF (comme le reste du détail commande). */
+  (function () {
+    var btn = document.getElementById('reviewRequestBtn');
+    var modal = document.getElementById('avisModal');
+    if (!btn || !modal) return;
+
+    var id = btn.getAttribute('data-order-id');
+    var statut = modal.querySelector('[data-avis-statut]');
+    var erreur = modal.querySelector('[data-avis-erreur]');
+    var deja = modal.querySelector('[data-avis-deja]');
+    var sav = modal.querySelector('[data-avis-sav]');
+    var lien = modal.querySelector('[data-avis-lien]');
+    var charge = false;
+
+    function ouvrir() { modal.classList.remove('hidden'); modal.classList.add('flex'); }
+    function fermer() { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+
+    function montrerErreur(msg) {
+      erreur.textContent = msg || 'Erreur inconnue.';
+      erreur.hidden = false;
+    }
+
+    function onglet(canal) {
+      modal.querySelectorAll('[data-avis-onglet]').forEach(function (o) {
+        var actif = o.getAttribute('data-avis-onglet') === canal;
+        o.classList.toggle('bg-slate-900', actif);
+        o.classList.toggle('text-white', actif);
+        o.classList.toggle('text-slate-600', !actif);
+      });
+      modal.querySelectorAll('[data-avis-panneau]').forEach(function (p) {
+        p.hidden = p.getAttribute('data-avis-panneau') !== canal;
+      });
+    }
+
+    var savOuvert = null;
+
+    function remplir(j) {
+      lien.textContent = j.lienAvis || '';
+      lien.setAttribute('href', j.lienAvis || '#');
+
+      /* Dossier SAV en cours : on le met sous les yeux et on redemande
+         confirmation avant chaque envoi. Pas de blocage dur — un dossier
+         peut être une question anodine, et c'est à l'humain de trancher. */
+      savOuvert = j.savOuvert || null;
+      if (savOuvert) {
+        var depuis = savOuvert.depuis ? new Date(savOuvert.depuis).toLocaleDateString('fr-FR') : '';
+        sav.innerHTML = '<strong>Dossier SAV en cours : ' + savOuvert.numero + '</strong> ('
+          + savOuvert.statut + (depuis ? ', ouvert le ' + depuis : '') + ').<br>'
+          + 'Demander un avis maintenant, c\'est aller chercher l\'avis négatif que l\'enquête sert à éviter. '
+          + '<a href="/admin/sav/tickets/' + encodeURIComponent(savOuvert.numero) + '" class="font-semibold underline">Ouvrir le dossier</a>';
+        sav.hidden = false;
+      } else {
+        sav.hidden = true;
+      }
+
+      if (j.deja && j.deja.at) {
+        var d = new Date(j.deja.at);
+        var canaux = (j.deja.canaux || []).join(', ');
+        deja.textContent = 'Déjà demandé le ' + d.toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+          + (canaux ? ' (' + canaux + ')' : '') + '.';
+        deja.hidden = false;
+      } else {
+        deja.hidden = true;
+      }
+
+      ['email', 'sms', 'whatsapp'].forEach(function (canal) {
+        var c = (j.canaux && j.canaux[canal]) || {};
+        var panneau = modal.querySelector('[data-avis-panneau="' + canal + '"]');
+        if (!panneau) return;
+        var corps = panneau.querySelector('[data-avis-corps]');
+        var sujet = panneau.querySelector('[data-avis-sujet]');
+        var dest = panneau.querySelector('[data-avis-dest]');
+        var envoyer = panneau.querySelector('[data-avis-envoyer]');
+        if (corps) {
+          corps.value = c.corps || '';
+          /* Remplir en JS ne déclenche pas « input » : sans cet événement, le
+             compteur SMS resterait à « 0 caractères » devant un message plein. */
+          corps.dispatchEvent(new Event('input'));
+        }
+        if (sujet) sujet.value = c.sujet || '';
+
+        /* On dit POURQUOI un canal est indisponible plutôt que de griser un
+           bouton sans explication : pas d'adresse, pas de numéro, ou canal
+           désactivé dans les paramètres — trois causes, trois remèdes. */
+        var motif = '';
+        if (!c.enabled) motif = 'Canal désactivé dans les paramètres.';
+        else if (!c.destinataire) motif = canal === 'email' ? "Pas d'adresse e-mail sur ce client." : 'Pas de numéro de téléphone exploitable.';
+        if (dest) {
+          dest.textContent = motif || c.destinataire;
+          dest.classList.toggle('text-red-600', !!motif);
+          dest.classList.toggle('text-slate-500', !motif);
+        }
+        if (envoyer) envoyer.disabled = !!motif;
+
+        var optin = panneau.querySelector('[data-avis-optin]');
+        if (optin) optin.hidden = !!motif || c.optIn !== false;
+      });
+      onglet('email');
+    }
+
+    btn.addEventListener('click', function () {
+      if (!id) return;
+      ouvrir();
+      if (charge) return;
+      statut.textContent = 'Chargement…';
+      fetch('/admin/commandes/' + encodeURIComponent(id) + '/avis', {
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      }).then(function (r) { return r.json().catch(function () { return {}; }); }).then(function (j) {
+        statut.textContent = '';
+        if (j && j.ok) { charge = true; erreur.hidden = true; remplir(j); }
+        else { montrerErreur((j && j.error) || 'Chargement impossible.'); }
+      }).catch(function () { statut.textContent = ''; montrerErreur('Erreur réseau.'); });
+    });
+
+    modal.querySelectorAll('[data-avis-fermer]').forEach(function (b) { b.addEventListener('click', fermer); });
+    modal.addEventListener('click', function (e) { if (e.target === modal) fermer(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.classList.contains('hidden')) fermer(); });
+
+    modal.querySelectorAll('[data-avis-onglet]').forEach(function (o) {
+      o.addEventListener('click', function () { onglet(o.getAttribute('data-avis-onglet')); });
+    });
+
+    /* Compteur SMS : le texte est ici DÉJÀ substitué (lien et n° de commande
+       compris), donc le décompte est le vrai. */
+    var smsCorps = modal.querySelector('[data-avis-panneau="sms"] [data-avis-corps]');
+    var smsCount = modal.querySelector('[data-avis-sms-count]');
+    if (smsCorps && smsCount) {
+      var majSms = function () {
+        var n = smsCorps.value.length;
+        var seg = n ? (n <= 160 ? 1 : Math.ceil(n / 153)) : 0;
+        smsCount.textContent = n + ' caractères · ' + seg + ' SMS';
+        /* Au-delà d'un segment, on le signale : c'est facturé au segment, et
+           le texte par défaut a été écrit pour tenir en un seul. */
+        smsCount.classList.toggle('text-amber-600', seg > 1);
+        smsCount.classList.toggle('font-semibold', seg > 1);
+      };
+      smsCorps.addEventListener('input', majSms);
+      majSms();
+    }
+
+    modal.querySelectorAll('[data-avis-envoyer]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var canal = b.getAttribute('data-avis-envoyer');
+        var panneau = modal.querySelector('[data-avis-panneau="' + canal + '"]');
+        var corps = panneau.querySelector('[data-avis-corps]');
+        var sujet = panneau.querySelector('[data-avis-sujet]');
+        var payload = { corps: corps ? corps.value : '' };
+        if (sujet) payload.sujet = sujet.value;
+        if (!payload.corps.trim()) { montrerErreur('Le message est vide.'); return; }
+        if (savOuvert && !window.confirm(
+          'Le dossier SAV ' + savOuvert.numero + ' est encore en cours sur cette commande.\n\n'
+          + 'Envoyer quand même la demande d\'avis ?')) return;
+
+        erreur.hidden = true;
+        b.disabled = true;
+        var libelle = b.textContent;
+        b.textContent = 'Envoi…';
+        fetch('/admin/commandes/' + encodeURIComponent(id) + '/avis/' + canal, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify(payload),
+        }).then(function (r) { return r.json().catch(function () { return {}; }); }).then(function (j) {
+          if (!j || !j.ok) { montrerErreur((j && j.error) || 'Échec.'); return; }
+          if (canal === 'whatsapp' && j.waUrl) {
+            /* WhatsApp part du téléphone du commercial : on ouvre la
+               conversation préremplie, l'envoi reste un geste humain. */
+            window.open(j.waUrl, '_blank', 'noopener');
+            statut.textContent = 'WhatsApp ouvert pour ' + (j.destinataire || '') + ' — il reste à appuyer sur Envoyer.';
+          } else {
+            statut.textContent = j.message || 'Envoyé.';
+            if (j.avertissement) montrerErreur(j.avertissement);
+          }
+          deja.hidden = true;
+        }).catch(function () { montrerErreur('Erreur réseau.'); })
+          .then(function () { b.disabled = false; b.textContent = libelle; });
+      });
+    });
+  })();
+</script>
 
 <%- include('./partials/footer') %>

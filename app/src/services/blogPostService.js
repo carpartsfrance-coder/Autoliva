@@ -3,7 +3,8 @@
  *
  * Utilisé par :
  *   - blogAdminController (formulaire HTML admin)
- *   - routes/api/blogImport (endpoint API server-to-server)
+ *   - routes/api/blogImport (endpoint API server-to-server — brouillons
+ *     seulement, voir ses garde-fous)
  *
  * Centralise la validation, le mapping et la persistance pour éviter
  * la duplication de logique entre le form admin et l'API.
@@ -334,7 +335,19 @@ async function createBlogPost({ data, source = 'admin-form', options = {} } = {}
  * Crée OU met à jour un BlogPost selon que le slug existe déjà.
  * Mode upsert pour l'API. Réutilise buildBlogPostDoc pour la validation.
  *
+ * Un article PUBLIÉ n'est jamais réécrit par ce chemin : ConflictError (409).
+ *
+ * Pourquoi (plan de reprise SEO du 14/09/2026, action A4.1) : l'upsert
+ * remplaçait titre, corps, publication, date et SEO de N'IMPORTE QUEL slug. Un
+ * jeton d'import fuité — 134 articles ont été publiés les 05 et 06/09 depuis
+ * des machines que personne n'a identifiées — pouvait donc réécrire en silence
+ * un article qui rapporte, celui de la DQ200 par exemple. Et forcer seulement
+ * « brouillon » à l'entrée n'aurait pas suffi : un upsert rejoué aurait
+ * DÉPUBLIÉ l'article en ligne, qui répondait alors 404. Un article publié se
+ * modifie dans l'admin, par quelqu'un qui le relit.
+ *
  * @returns {Promise<{ post, created, updated, source }>}
+ * @throws {ConflictError} si le slug désigne un article publié
  */
 async function upsertBlogPost({ data, source = 'api-import', options = {} } = {}) {
   const { strictProducts = false } = options;
@@ -351,7 +364,14 @@ async function upsertBlogPost({ data, source = 'api-import', options = {} } = {}
     return { post, created: true, updated: false, source };
   }
 
-  // Update du document existant — on garde l'_id et le slug, on remplace le reste.
+  if (existing.isPublished) {
+    throw new ConflictError(
+      `L'article « ${existing.slug} » est publié : l'import ne le modifie pas. Le modifier depuis l'admin.`,
+      { slug: existing.slug, raison: 'article_publie' }
+    );
+  }
+
+  // Update d'un BROUILLON existant — on garde l'_id et le slug, on remplace le reste.
   existing.title = built.title;
   existing.excerpt = built.excerpt;
   existing.contentMarkdown = built.contentMarkdown;

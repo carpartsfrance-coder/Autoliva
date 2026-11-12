@@ -176,10 +176,14 @@ function minDate(a, b) { if (!a) return b || null; if (!b) return a; return a < 
         const src = losers.find((l) => l.attribution && l.attribution.source);
         if (src) set.attribution = src.attribution;
       }
-      if (!(winner.googleAdsUpload && winner.googleAdsUpload.leadAt)) {
-        const src = losers.find((l) => l.googleAdsUpload && l.googleAdsUpload.leadAt);
-        if (src) set['googleAdsUpload.leadAt'] = src.googleAdsUpload.leadAt;
-      }
+      /* flags d'idempotence Google Ads : SANS cette recopie, un gagnant sans
+         flag redevient éligible au cron → conversion uploadée en DOUBLE. */
+      ['leadAt', 'quoteAt', 'saleAt'].forEach((flag) => {
+        if (!(winner.googleAdsUpload && winner.googleAdsUpload[flag])) {
+          const src = losers.find((l) => l.googleAdsUpload && l.googleAdsUpload[flag]);
+          if (src) set[`googleAdsUpload.${flag}`] = src.googleAdsUpload[flag];
+        }
+      });
 
       /* Compteurs + notes */
       const sumE = bucket.reduce((s, d) => s + (d.manualEmailsSent || 0), 0);

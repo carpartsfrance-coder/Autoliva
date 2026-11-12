@@ -258,6 +258,102 @@ async function processOrderRefund({
 }
 
 /* ════════════════════════════════════════════════════════════════
+ * AVOIR SEUL (sans remboursement par le site)
+ * ════════════════════════════════════════════════════════════════
+ *
+ * Killian rembourse parfois autrement que par le site (virement, geste
+ * commercial, compensation sur une autre commande). L'avoir est le document
+ * comptable ; le mouvement d'argent, lui, se fait ailleurs. Jusqu'ici il
+ * fallait enregistrer un remboursement pour obtenir un avoir, ce qui faisait
+ * apparaître un remboursement qui n'avait pas eu lieu sur le site.
+ *
+ * Donc ici : un avoir, rien d'autre.
+ *   - aucune ligne dans `order.refunds` (« déjà remboursé » ne bouge pas) ;
+ *   - aucun appel Mollie/Scalapay ;
+ *   - le statut de la commande n'est pas touché ;
+ *   - aucun e-mail au client (le PDF est téléchargeable depuis la fiche).
+ *
+ * La comptabilité, elle, le voit : elle lit `Order.creditNotes[]`, quel que
+ * soit le lien avec un remboursement (accountingService).
+ *
+ * @param {{orderId:string, amountCents:number, reason?:string, notes?:string,
+ *          lines?:Array, adminEmail?:string}} args
+ */
+async function createStandaloneCreditNote({
+  orderId,
+  amountCents,
+  reason = '',
+  notes = '',
+  lines = [],
+  adminEmail = 'admin',
+} = {}) {
+  if (!orderId) return { ok: false, errorCode: 'missing_order', error: 'Commande introuvable.' };
+
+  const amount = Math.round(Number(amountCents));
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { ok: false, errorCode: 'invalid_amount', error: 'Montant invalide.' };
+  }
+
+  const order = await Order.findById(orderId);
+  if (!order) return { ok: false, errorCode: 'order_not_found', error: 'Commande introuvable.' };
+  if (order.deletedAt) return { ok: false, errorCode: 'order_deleted', error: 'Commande supprimée.' };
+
+  /* Plafond : on ne peut pas avoirer plus que ce que la commande a facturé,
+     avoirs déjà émis compris — ceux liés à un remboursement y compris. */
+  const orderTotal = Number(order.totalCents) || 0;
+  const dejaAvoir = (Array.isArray(order.creditNotes) ? order.creditNotes : [])
+    .reduce((s, c) => s + (Number(c && c.totalCents) || 0), 0);
+  if (dejaAvoir + amount > orderTotal) {
+    return {
+      ok: false,
+      errorCode: 'amount_exceeds_total',
+      error: `Le montant dépasse ce qui reste à avoir (déjà avoiré : ${(dejaAvoir / 100).toFixed(2)} €, plafond : ${(orderTotal / 100).toFixed(2)} €).`,
+    };
+  }
+
+  const now = new Date();
+  const number = await nextCreditNoteNumber(now);
+  const cnDraft = {
+    number,
+    issuedAt: now,
+    totalCents: amount,
+    reason: getTrimmedString(reason),
+    lines: Array.isArray(lines) ? lines : [],
+    /* null = avoir sans remboursement : le PDF n'affiche alors aucune méthode
+       de remboursement, et la fiche commande le montre à part. */
+    refundIndex: null,
+    createdBy: adminEmail,
+    notes: getTrimmedString(notes),
+  };
+
+  let pdfBuffer = null;
+  try {
+    const recipient = order.userId ? await User.findById(order.userId).lean() : null;
+    pdfBuffer = await buildCreditNotePdfBuffer({
+      order: order.toObject ? order.toObject() : order,
+      user: recipient,
+      creditNote: cnDraft,
+    });
+  } catch (cnErr) {
+    console.error('[credit-note] Génération PDF échouée :', cnErr && cnErr.message ? cnErr.message : cnErr);
+    return { ok: false, errorCode: 'pdf_failed', error: 'La génération du PDF de l’avoir a échoué : rien n’a été enregistré.' };
+  }
+  if (!pdfBuffer) {
+    return { ok: false, errorCode: 'pdf_failed', error: 'La génération du PDF de l’avoir a échoué : rien n’a été enregistré.' };
+  }
+
+  const creditNoteEntry = {
+    ...cnDraft,
+    pdfData: pdfBuffer,
+    pdfSizeBytes: Buffer.isBuffer(pdfBuffer) ? pdfBuffer.length : 0,
+  };
+  order.creditNotes.push(creditNoteEntry);
+  await order.save();
+
+  return { ok: true, creditNote: creditNoteEntry };
+}
+
+/* ════════════════════════════════════════════════════════════════
  * Remboursement de la CONSIGNE (caution hors-TVA) au retour du core
  * ════════════════════════════════════════════════════════════════
  *
@@ -572,6 +668,7 @@ async function syncMollieRefundsForOrder({ orderId, mollieRefunds = [] } = {}) {
 }
 
 module.exports = {
+  createStandaloneCreditNote,
   processOrderRefund,
   processConsigneRefund,
   syncMollieRefundsForOrder,

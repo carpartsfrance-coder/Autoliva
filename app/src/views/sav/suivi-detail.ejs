@@ -1,5 +1,5 @@
 <%- include('../partials/head') %>
-<link rel="stylesheet" href="/css/sav.css?v=7">
+<link rel="stylesheet" href="/css/sav.css?v=<%= (typeof assetVersions !== 'undefined' && assetVersions.savCss) || '' %>">
 <%- include('../partials/header') %>
 
 <main class="flex-1 bg-slate-50">

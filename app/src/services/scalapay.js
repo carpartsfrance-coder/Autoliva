@@ -213,8 +213,25 @@ async function refundPayment({ token, amountCents, refundId, reason, currency = 
   return requestJson(url, { method: 'POST', apiKey, body });
 }
 
+/**
+ * Scalapay est-il proposé aux clients ?
+ *
+ * RETIRÉ DE LA BOUTIQUE le 03/08/2026 sur décision de Killian. Poser
+ * `SCALAPAY_ENABLED=on` sur Render le remet en ligne, sans redéploiement.
+ *
+ * ⚠ Ne coupe QUE la vente : le paiement en plusieurs fois disparaît du tunnel
+ * de commande et des fiches produit. Tout le back-office reste opérationnel —
+ * remboursements, captures, réconciliation, comptabilité, SAV. Les commandes
+ * Scalapay déjà passées continuent d'être traitées normalement ; les couper
+ * aurait laissé des clients sans recours et des écritures orphelines.
+ */
+function estActif() {
+  return getTrimmedString(process.env.SCALAPAY_ENABLED).toLowerCase() === 'on';
+}
+
 module.exports = {
   formatAmountFromCents,
+  estActif,
   createOrder,
   getPayment,
   capturePayment,

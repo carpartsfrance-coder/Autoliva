@@ -91,6 +91,16 @@ function lastMessage(ticket) {
   };
 }
 
+/* Qui doit répondre ? « us » = le client a écrit en dernier (ou personne n'a
+ * encore répondu), « client » = notre dernier message attend sa réponse. */
+function waitingOn(ticket) {
+  const c = ticket.lastClientMessageAt ? new Date(ticket.lastClientMessageAt).getTime() : 0;
+  const a = ticket.lastAdminMessageAt ? new Date(ticket.lastAdminMessageAt).getTime() : 0;
+  // Même règle que le filtre `awaiting` de buildQueueQuery : tout ce qui
+  // n'attend pas le client nous attend (ticket sans message compris).
+  return a && (!c || a > c) ? 'client' : 'us';
+}
+
 function serializeQueueItem(ticket, pb) {
   const sla = slaInfo(ticket);
   return {
@@ -98,6 +108,10 @@ function serializeQueueItem(ticket, pb) {
     motif: ticket.motifSav,
     status: ticket.statut,
     status_label: FSM.labelOf(ticket.statut),
+    created_at: iso(ticket.createdAt),
+    last_client_message_at: iso(ticket.lastClientMessageAt),
+    last_admin_message_at: iso(ticket.lastAdminMessageAt),
+    waiting_on: waitingOn(ticket),
     client: { name: (ticket.client && ticket.client.nom) || '', email: (ticket.client && ticket.client.email) || '' },
     vehicle: {
       make: (ticket.vehicule && ticket.vehicule.marque) || '—',
@@ -168,15 +182,39 @@ async function serializeTicketDetail(ticket, pb) {
 
 /* ─── Queue ────────────────────────────────────────────────────────────── */
 
+/* Conditions « qui attend qui », partagées par les compteurs et les filtres. */
+const EXPR_CLIENT_REPLIED = { $and: [{ $ne: ['$lastClientMessageAt', null] }, { $or: [{ $eq: ['$lastAdminMessageAt', null] }, { $gt: ['$lastClientMessageAt', '$lastAdminMessageAt'] }] }] };
+const EXPR_AWAITING_CLIENT = { $and: [{ $ne: ['$lastAdminMessageAt', null] }, { $or: [{ $eq: ['$lastClientMessageAt', null] }, { $gt: ['$lastAdminMessageAt', '$lastClientMessageAt'] }] }] };
+
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function buildQueueQuery(params) {
   const q = { archivedAt: { $in: [null, undefined] } };
-  if (params.team) q.assignedTeam = params.team;
-  if (params.motif) q.motifSav = params.motif;
-  if (params.status) q.statut = params.status;
-  if (params.assignee) q.assignedToUserId = params.assignee;
+  // Chaînes seulement : `?status[$ne]=x` (objet venu de la query string) ne doit
+  // jamais devenir un opérateur Mongo.
+  const str = (v) => (typeof v === 'string' && v ? v : null);
+  if (str(params.team)) q.assignedTeam = params.team;
+  if (str(params.motif)) q.motifSav = params.motif;
+  if (str(params.status)) q.statut = params.status;
+  if (str(params.assignee)) q.assignedToUserId = params.assignee;
   if (String(params.only_overdue) === 'true') {
     q['sla.dateLimite'] = { $lt: new Date() };
     if (!q.statut) q.statut = { $nin: TERMINAL };
+  }
+  // Tickets encore ouverts seulement (ignoré si un statut précis est demandé).
+  if (String(params.open_only) === 'true' && !q.statut) q.statut = { $nin: TERMINAL };
+  // « us » : le client a écrit en dernier ; « client » : on attend sa réponse.
+  // « us » est le complément exact de « client » : un ticket sans aucun message
+  // (créé depuis le back-office) nous attend aussi.
+  if (params.awaiting === 'us') q.$expr = { $not: [EXPR_AWAITING_CLIENT] };
+  else if (params.awaiting === 'client') q.$expr = EXPR_AWAITING_CLIENT;
+  // Recherche libre : n° de ticket, n° de commande, nom ou e-mail du client.
+  const search = String(params.search || '').trim().slice(0, 80);
+  if (search) {
+    const rx = new RegExp(escapeRegex(search), 'i');
+    q.$or = [{ numero: rx }, { numeroCommande: rx }, { 'client.nom': rx }, { 'client.email': rx }];
   }
   return q;
 }
@@ -202,8 +240,8 @@ async function getQueue(params) {
   const [open, overdue, clientReplied, awaitingClient] = await Promise.all([
     SavTicket.countDocuments(notTerminal),
     SavTicket.countDocuments({ ...notTerminal, 'sla.dateLimite': { $lt: now } }),
-    SavTicket.countDocuments({ ...notTerminal, $expr: { $and: [{ $ne: ['$lastClientMessageAt', null] }, { $or: [{ $eq: ['$lastAdminMessageAt', null] }, { $gt: ['$lastClientMessageAt', '$lastAdminMessageAt'] }] }] } }),
-    SavTicket.countDocuments({ ...notTerminal, $expr: { $and: [{ $ne: ['$lastAdminMessageAt', null] }, { $or: [{ $eq: ['$lastClientMessageAt', null] }, { $gt: ['$lastAdminMessageAt', '$lastClientMessageAt'] }] }] } }),
+    SavTicket.countDocuments({ ...notTerminal, $expr: EXPR_CLIENT_REPLIED }),
+    SavTicket.countDocuments({ ...notTerminal, $expr: EXPR_AWAITING_CLIENT }),
   ]);
 
   return {
@@ -219,6 +257,16 @@ async function getTicket(numero) {
   if (!ticket) return null;
   const pb = playbookForTicket(ticket);
   return serializeTicketDetail(ticket, pb);
+}
+
+/* Même lecture que getTicket, mais rend aussi le document brut : le connecteur
+ * MCP y prend les champs que le contrat d'API « agent » n'expose pas
+ * (documents du client, diagnostic, montage…). Toujours en lecture seule. */
+async function getTicketWithRaw(numero) {
+  const raw = await SavTicket.findOne({ numero }).lean();
+  if (!raw) return null;
+  const detail = await serializeTicketDetail(raw, playbookForTicket(raw));
+  return { detail, raw };
 }
 
 /* ─── Templates (depuis les playbooks) ─────────────────────────────────── */
@@ -281,8 +329,10 @@ async function getReport(period) {
 module.exports = {
   getQueue,
   getTicket,
+  getTicketWithRaw,
   getTemplates,
   getReport,
+  waitingOn,
   // exportés pour tests
   _internal: { slaInfo, recommendedAction, serializeQueueItem, serializeTicketDetail, buildQueueQuery, TERMINAL },
 };

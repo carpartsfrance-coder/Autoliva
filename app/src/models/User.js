@@ -17,6 +17,7 @@ const addressSchema = new mongoose.Schema(
 
 const userSchema = new mongoose.Schema(
   {
+    lang: { type: String, enum: ['fr', 'de'], default: 'fr' },
     accountType: {
       type: String,
       enum: ['particulier', 'pro'],

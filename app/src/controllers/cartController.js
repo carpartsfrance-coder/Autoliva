@@ -10,7 +10,7 @@ const promoCodes = require('../services/promoCodes');
 const pricing = require('../services/pricing');
 const productOptions = require('../services/productOptions');
 const { getShippingMethods } = require('../services/shippingPricing');
-const { applyCheckoutLocale } = require('../services/i18n');
+const { applyCheckoutLocale, t } = require('../services/i18n');
 const productI18n = require('../services/productI18n');
 const { logCartEvent } = require('../services/cartEventLogger');
 const { track } = require('../services/eventTracker');
@@ -41,15 +41,25 @@ function wantsJsonResponse(req) {
   return acceptHeader.includes('application/json') || requestedWith.toLowerCase() === 'xmlhttprequest';
 }
 
-function buildCartProductPreview(product) {
+function buildCartProductPreview(product, lang) {
   if (!product || typeof product !== 'object') return null;
 
-  const gallery = Array.isArray(product.galleryUrls) ? product.galleryUrls.filter(Boolean) : [];
+  /* Le nom part dans la confirmation « ajouté au panier » : ajouté depuis une
+     fiche allemande, il revenait en français. */
+  const p = lang === 'de' ? productI18n.localizeProduct(product, 'de') : product;
+  const gallery = Array.isArray(p.galleryUrls) ? p.galleryUrls.filter(Boolean) : [];
   return {
-    id: product._id ? String(product._id) : '',
-    name: product.name ? String(product.name) : 'Produit',
-    imageUrl: product.imageUrl || gallery[0] || '',
+    id: p._id ? String(p._id) : '',
+    name: p.name ? String(p.name) : t(lang === 'de' ? 'de' : 'fr', 'cart.productFallback'),
+    imageUrl: p.imageUrl || gallery[0] || '',
   };
+}
+
+/* Langue des messages du panier : la session, comme le rendu du panier. Les
+   erreurs étaient en français en dur, affichées sous « Ihr Warenkorb » ou dans
+   le toast d'une carte allemande. */
+function langueTunnel(req) {
+  return (req && req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
 }
 
 function storeCartFeedback(req, payload) {
@@ -202,16 +212,23 @@ async function showCart(req, res, next) {
     });
 
     if (items.length === 0) {
-      const suggestedProducts = dbConnected
+      /* Le panier VIDE renvoyait avant d'atteindre applyCheckoutLocale plus
+         bas : un visiteur allemand tombait sur une page entièrement française
+         dès qu'il cliquait sur le panier. */
+      const emptyLang = applyCheckoutLocale(req, res);
+      let suggestedProducts = dbConnected
         ? (await Product.find({})
             .sort({ createdAt: -1 })
             .limit(4)
             .lean())
             .map(normalizeProduct)
         : demoProducts.slice(0, 4).map(normalizeProduct);
+      if (emptyLang === 'de') {
+        suggestedProducts = suggestedProducts.map((p) => productI18n.localizeProduct(p, 'de'));
+      }
 
       return res.render('cart/index', {
-        title: `Panier - ${brand.NAME}`,
+        title: emptyLang === 'de' ? `Warenkorb - ${brand.NAME}` : `Panier - ${brand.NAME}`,
         dbConnected,
         cartItemCount,
         items: [],
@@ -251,7 +268,13 @@ async function showCart(req, res, next) {
       const lineTotalCents = unitPriceCents * item.quantity;
       itemsSubtotalCents += lineTotalCents;
 
-      const fallbackSummary = productOptions.buildOptionsDisplay(product.options, item.optionsSelection).optionsSummary;
+      /* Repli pour les lignes déposées avant cette correction : on le calcule
+         dans la langue du visiteur plutôt que de resservir du français. */
+      const langueResume = (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
+      const produitPourResume = langueResume === 'de'
+        ? productI18n.localizeProduct(product, 'de')
+        : product;
+      const fallbackSummary = productOptions.buildOptionsDisplay(produitPourResume.options, item.optionsSelection, langueResume).optionsSummary;
       const optionsSummary = typeof item.optionsSummary === 'string' && item.optionsSummary.trim() ? item.optionsSummary.trim() : fallbackSummary;
 
       viewItems.push({
@@ -284,7 +307,7 @@ async function showCart(req, res, next) {
 
       if (!result.ok) {
         delete req.session.promoCode;
-        req.session.cartError = result.reason || 'Code promo invalide.';
+        req.session.cartError = promoCodes.promoReasonMessage(result, langueTunnel(req));
         return res.redirect('/panier');
       }
 
@@ -292,9 +315,15 @@ async function showCart(req, res, next) {
       appliedPromoCode = result.code;
     }
 
+    /* Aucune adresse connue au panier : un visiteur allemand est estimé vers
+       l'Allemagne, comme sur la fiche et au paiement. Au tarif France, le
+       panier affichait un port (et un total) plus bas que les deux autres. */
+    const panierAllemand = !!(req.session && req.session.preferredLang === 'de');
     const shippingMethods = await getShippingMethods(
       dbConnected,
-      viewItems.map((it) => it.product)
+      viewItems.map((it) => it.product),
+      panierAllemand ? { country: 'DE' } : undefined,
+      panierAllemand ? 'de' : 'fr'
     );
     const estimatedShippingMethod = shippingMethods.find((method) => method && method.id === 'domicile') || shippingMethods[0] || null;
     const shippingCostCents = estimatedShippingMethod && Number.isFinite(estimatedShippingMethod.priceCents)
@@ -336,6 +365,8 @@ async function showCart(req, res, next) {
       for (const it of viewItems) {
         if (it && it.product) it.product = productI18n.localizeProduct(it.product, 'de');
       }
+      /* Les cartes « Complétez votre commande » restaient en français. */
+      suggestedProducts = suggestedProducts.map((p) => productI18n.localizeProduct(p, 'de'));
     }
 
     return res.render('cart/index', {
@@ -352,6 +383,8 @@ async function showCart(req, res, next) {
       itemsTotalAfterDiscountCents: computed.itemsTotalAfterDiscountCents,
       shippingCostCents: computed.shippingCostCents,
       consigneChargeCents: computed.consigneChargeCents,
+      // Après la localisation : les noms affichés sont ceux de la langue du panier.
+      consigneConditionnelle: pricing.listConditionalConsigneLines(viewItems),
       estimatedShippingMethod,
       errorMessage,
       suggestedProducts,
@@ -373,7 +406,7 @@ async function postCartPromoCode(req, res, next) {
     }
 
     if (!promoCodes.isValidCode(code)) {
-      req.session.cartError = 'Code promo invalide.';
+      req.session.cartError = t(langueTunnel(req), 'promo.errInvalid');
       delete req.session.promoCode;
       return res.redirect('/panier');
     }
@@ -412,7 +445,7 @@ async function postCartPromoCode(req, res, next) {
       });
 
       if (!result.ok) {
-        req.session.cartError = result.reason || 'Code promo invalide.';
+        req.session.cartError = promoCodes.promoReasonMessage(result, langueTunnel(req));
         delete req.session.promoCode;
       } else {
         req.session.promoCode = result.code;
@@ -457,10 +490,12 @@ async function addToCart(req, res, next) {
         qty = Math.min(parsed, 99);
       }
     }
+    // Messages renvoyés au toast / au panier : langue de la session (fiche /de → allemand).
+    const msgLang = langueTunnel(req);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       if (jsonResponse) {
-        return res.status(404).json({ ok: false, error: 'Produit introuvable.' });
+        return res.status(404).json({ ok: false, error: t(msgLang, 'cart.errProductNotFound') });
       }
       return res.status(404).render('errors/404', {
         title: `Page introuvable - ${brand.NAME}`,
@@ -469,7 +504,11 @@ async function addToCart(req, res, next) {
 
     let product = null;
     if (dbConnected) {
-      product = await Product.findById(id).select('_id name imageUrl galleryUrls inStock stockQty options').lean();
+      /* `localizations.de` fait partie de la sélection : sans lui, la pastille
+         « ajouté au panier » d'une fiche allemande affichait le nom français. */
+      product = await Product.findById(id)
+        .select('_id name imageUrl galleryUrls inStock stockQty options localizations.de.name localizations.de.translatedAt')
+        .lean();
     }
 
     if (!product) {
@@ -480,7 +519,7 @@ async function addToCart(req, res, next) {
 
     if (!product) {
       if (jsonResponse) {
-        return res.status(404).json({ ok: false, error: 'Produit introuvable.' });
+        return res.status(404).json({ ok: false, error: t(msgLang, 'cart.errProductNotFound') });
       }
       return res.status(404).render('errors/404', {
         title: `Page introuvable - ${brand.NAME}`,
@@ -489,18 +528,28 @@ async function addToCart(req, res, next) {
 
     if (product.inStock === false) {
       if (jsonResponse) {
-        return res.status(400).json({ ok: false, error: 'Ce produit est actuellement indisponible.' });
+        return res.status(400).json({ ok: false, error: t(msgLang, 'cart.errUnavailable') });
       }
       storeCartFeedback(req, {
         type: 'error',
-        message: 'Ce produit est actuellement indisponible.',
+        message: t(msgLang, 'cart.errUnavailable'),
       });
       return res.redirect(returnTo || `/produits/${id}`);
     }
 
     const selectionResult = productOptions.buildSelectionFromBody(req.body, product.options);
     if (!selectionResult.ok) {
-      const selectionError = selectionResult.errors[0] || 'Merci de vérifier les options sélectionnées.';
+      /* Libellé de l'option dans la langue du visiteur (options traduites de la fiche). */
+      const detail = Array.isArray(selectionResult.errorDetails) ? selectionResult.errorDetails[0] : null;
+      let selectionError = t(msgLang, 'cart.errCheckOptions');
+      if (detail) {
+        const groupes = msgLang === 'de'
+          ? productOptions.getProductPageOptions(productI18n.localizeProduct(product, 'de').options)
+          : [];
+        const groupe = groupes.find((g) => g && String(g.key) === String(detail.key));
+        const label = (groupe && groupe.label) || detail.label;
+        selectionError = t(msgLang, detail.kind === 'text' ? 'cart.errFillOption' : 'cart.errChooseOption', { label });
+      }
       if (jsonResponse) {
         return res.status(400).json({ ok: false, error: selectionError });
       }
@@ -513,7 +562,13 @@ async function addToCart(req, res, next) {
     }
 
     const selection = selectionResult.selection;
-    const display = productOptions.buildOptionsDisplay(product.options, selection);
+    /* Le résumé d'options est FIGÉ dans la ligne de panier, puis recopié sur la
+       commande et dans les e-mails : s'il part en français, il y reste pour
+       toujours. On le construit donc dans la langue du visiteur. La sélection
+       (`selection`, `lineId`) reste bâtie sur les clés, jamais sur le texte. */
+    const optLang = (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
+    const produitAffiche = optLang === 'de' ? productI18n.localizeProduct(product, 'de') : product;
+    const display = productOptions.buildOptionsDisplay(produitAffiche.options, selection, optLang);
     const { lineId } = productOptions.buildCartLineId(id, selection);
 
     const cart = getCart(req);
@@ -527,12 +582,12 @@ async function addToCart(req, res, next) {
 
       if (existingQty + qty > product.stockQty) {
         if (jsonResponse) {
-          return res.status(400).json({ ok: false, error: 'Stock insuffisant pour la quantité demandée.' });
+          return res.status(400).json({ ok: false, error: t(msgLang, 'cart.errStockInsufficient') });
         }
-        req.session.cartError = 'Stock insuffisant pour la quantité demandée.';
+        req.session.cartError = t(msgLang, 'cart.errStockInsufficient');
         storeCartFeedback(req, {
           type: 'error',
-          message: 'Stock insuffisant pour la quantité demandée.',
+          message: t(msgLang, 'cart.errStockInsufficient'),
         });
         return res.redirect(returnTo || `/produits/${id}`);
       }
@@ -571,24 +626,28 @@ async function addToCart(req, res, next) {
       cartItemsCount: computeCartItemCount(cart),
     });
 
+    /* L'ajout se fait sur une URL FR (/panier/ajouter/:id) même depuis une
+       fiche DE : on lit la langue mémorisée, pas le chemin. */
+    const atcLang = (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
+
     if (jsonResponse) {
       return res.status(200).json({
         ok: true,
         cartItemCount: computeCartItemCount(cart),
-        product: buildCartProductPreview(product),
+        product: buildCartProductPreview(product, atcLang),
       });
     }
 
     storeCartFeedback(req, {
       type: 'success',
       cartItemCount: computeCartItemCount(cart),
-      product: buildCartProductPreview(product),
+      product: buildCartProductPreview(product, atcLang),
     });
 
     return res.redirect(returnTo || '/panier');
   } catch (err) {
     if (wantsJsonResponse(req)) {
-      return res.status(500).json({ ok: false, error: 'Impossible d’ajouter le produit au panier pour le moment.' });
+      return res.status(500).json({ ok: false, error: t(langueTunnel(req), 'cart.addError') });
     }
     return next(err);
   }

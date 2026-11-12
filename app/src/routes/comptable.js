@@ -106,6 +106,11 @@ router.get('/', requireComptableAuth, requireAbility('accounting.view'), comptab
 /* ── Factures ─────────────────────────────────────────────────── */
 router.get('/factures', requireComptableAuth, requireAbility('accounting.invoices.read'), comptableController.getInvoicesList);
 router.get('/factures/:orderId/pdf', requireComptableAuth, requireAbility('accounting.invoices.read'), comptableController.getInvoicePdf);
+/* Facture d'ACHAT (fournisseur) : le justificatif du régime de la marge.
+   Même droit que la facture de vente — sans elle, le comptable ne peut pas
+   vérifier la base (prix de vente − prix d'achat), il ne fait que recopier
+   notre chiffre. */
+router.get('/factures/:orderId/facture-achat', requireComptableAuth, requireAbility('accounting.invoices.read'), comptableController.getPurchaseInvoice);
 
 /* ── Avoirs ───────────────────────────────────────────────────── */
 router.get('/avoirs', requireComptableAuth, requireAbility('accounting.creditNotes.read'), comptableController.getCreditNotesList);

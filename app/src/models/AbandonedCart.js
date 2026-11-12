@@ -26,6 +26,38 @@ const abandonedCartNoteSchema = new mongoose.Schema(
 );
 
 /**
+ * Un message échangé avec le client — email, SMS, WhatsApp — quel que soit
+ * l'endroit du code qui l'a déclenché.
+ *
+ * `auto` distingue ce qui est parti tout seul de ce qu'un commercial a écrit :
+ * sans cette marque, on ne peut pas savoir si un client a été VRAIMENT suivi
+ * ou seulement arrosé par les relances automatiques.
+ *
+ * `statut` retient aussi les ÉCHECS. Un SMS non délivré est précisément ce
+ * qu'il faut voir avant de conclure qu'un client ne répond pas.
+ */
+const leadCommunicationSchema = new mongoose.Schema(
+  {
+    canal: { type: String, enum: ['email', 'sms', 'whatsapp', 'appel'], required: true },
+    sens: { type: String, enum: ['sortant', 'entrant'], default: 'sortant' },
+    auto: { type: Boolean, default: false },
+    /** Objet de l'email. Vide pour un SMS, qui n'en a pas. */
+    objet: { type: String, default: '', trim: true },
+    /** Contenu, tronqué à la lecture : le journal documente, il n'archive pas. */
+    corps: { type: String, default: '', trim: true },
+    /** Clé du gabarit employé, quand l'envoi en utilise un. */
+    gabarit: { type: String, default: '', trim: true },
+    statut: { type: String, enum: ['envoye', 'echec'], default: 'envoye' },
+    motif: { type: String, default: '', trim: true },
+    par: { type: String, default: '', trim: true },
+    at: { type: Date, default: Date.now },
+    /** Libre : montant d'un devis, n° de version, identifiant transporteur… */
+    meta: { type: Object, default: {} },
+  },
+  { _id: true }
+);
+
+/**
  * Sous-document pour le workflow "Devis moteur d'occasion".
  * Présent uniquement sur les leads avec captureSource = 'landing_moteurs'.
  * Permet au commercial de saisir l'identification moteur, le stock, la
@@ -199,6 +231,11 @@ const abandonedCartSchema = new mongoose.Schema(
     sessionId: { type: String, required: true, trim: true, index: true },
     userId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     email: { type: String, default: '', trim: true, index: true },
+    /* Langue du client, mémorisée à la création. Les e-mails partent bien
+       après la commande, souvent depuis un cron : la session n'existe plus,
+       et sans ce champ un acheteur allemand recevait tout en français. */
+    lang: { type: String, enum: ['fr', 'de'], default: 'fr' },
+
     firstName: { type: String, default: '', trim: true },
     lastName: { type: String, default: '', trim: true },
     phone: { type: String, default: '', trim: true },
@@ -210,7 +247,7 @@ const abandonedCartSchema = new mongoose.Schema(
      */
     captureSource: {
       type: String,
-      enum: ['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'cart_activity', 'blog_cta', 'landing_moteurs', 'landing_boites', 'manual', ''],
+      enum: ['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'cart_activity', 'blog_cta', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'appel_manque', 'manual', ''],
       default: '',
       index: true,
     },
@@ -240,6 +277,35 @@ const abandonedCartSchema = new mongoose.Schema(
 
     /** Notes internes admin (chronologique) */
     notes: { type: [abandonedCartNoteSchema], default: [] },
+
+    /**
+     * Journal des messages échangés avec ce client, tous canaux confondus.
+     *
+     * Avant ce champ, l'historique était éparpillé et incomplet : les envois
+     * manuels laissaient une note, les relances panier ne laissaient QUE
+     * `lastRemindedAt` (ni contenu, ni canal — et leur SMS partait en
+     * `.catch(() => {})`, donc même son échec était perdu), les devis vivaient
+     * dans `engineQuote.sentQuotes`, les relances devis dans
+     * `engineQuote.remindersSent`. Impossible de répondre à « qu'est-ce qu'on
+     * a envoyé à ce client, et quand ». C'est ce que ce tableau centralise.
+     *
+     * Toujours écrit via `services/leadCommunications.js`, jamais en direct :
+     * le journal ne doit jamais faire échouer l'envoi qu'il décrit.
+     */
+    communications: { type: [leadCommunicationSchema], default: [] },
+
+    /* Appels Ringover déjà traités sur cette fiche. Ringover réémet ses
+       webhooks en cas d'échec : sans cette liste, chaque rejeu ajoute une note
+       identique. La garde est posée dans la requête de mise à jour elle-même
+       (`ringoverCallIds: { $ne: callId }`), donc elle résiste aussi à deux
+       webhooks reçus en parallèle. */
+    ringoverCallIds: { type: [String], default: [], index: true },
+
+    /* Dernier SMS d'appel manqué envoyé à ce numéro. Sert de plafond : on
+       n'écrit qu'une fois par jour, même si la personne appelle cinq fois.
+       Trois SMS d'affilée donneraient l'impression d'un robot, pas d'un
+       accusé de réception. */
+    ringoverSmsSentAt: { type: Date, default: null },
 
     /** Workflow devis moteur (rempli par commercial dans /admin/devis-moteurs) */
     engineQuote: { type: engineQuoteSchema, default: null },
@@ -278,7 +344,13 @@ const abandonedCartSchema = new mongoose.Schema(
      */
     googleAdsUpload: {
       leadAt: { type: Date, default: null },   // conversion "Lead - Devis" remontée
+      quoteAt: { type: Date, default: null },  // conversion "Devis envoyé" remontée (étage qualité intermédiaire)
       saleAt: { type: Date, default: null },   // conversion "Vente moteur" remontée
+      // Comment la vente a été remontée : 'devis' = lead passé « gagné » dans
+      // l'outil devis ; 'commande' = commande (téléphone, site…) du même client
+      // rattachée à cette demande (même n° de dossier, téléphone ou e-mail).
+      saleVia: { type: String, default: '' },
+      saleOrderIds: { type: [mongoose.Schema.Types.ObjectId], default: [] },
     },
 
     /** Compteurs d'actions manuelles depuis le dashboard admin */

@@ -161,7 +161,7 @@
   "cart.checkout": "Checkout",
   "cart.guestCheckout": "Checkout as guest",
   "cart.shipping24": "24h shipping",
-  "cart.returns30": "30-day returns",
+  "cart.returns30": "14-day withdrawal",
   "checkout.stepCart": "Cart",
   "checkout.stepShipping": "Shipping",
   "checkout.stepPayment": "Payment",
@@ -306,6 +306,7 @@
   "checkout.protectedPayment": "Protected payment",
   "checkout.qualityChecked": "Quality checked",
   "checkout.securePayProviders": "Secure payment (Mollie / Scalapay)",
+  "checkout.securePayProvidersNoScalapay": "Secure payment (Mollie)",
   "checkout.easyReturns": "Easy returns",
   "home.allCategories": "All categories",
   "home.findPart": "Find the part for your vehicle",
@@ -385,8 +386,10 @@
   "product.cloningService": "TCU mechatronic software cloning",
   "product.reconditioningPro": "Professional reconditioning",
   "product.warranty24": "24-month warranty",
+  "product.warrantyAsk": "Warranty: please ask us",
   "product.progIncluded": "Programming included",
   "product.benchTested": "Bench-tested",
+  "product.freeVinCheck": "Free VIN check",
   "product.isoBadge": "Reconditioned to ISO 9001 standards",
   "product.isoNorm": "ISO 9001 standard",
   "product.isoProcessNote": "Reconditioning carried out in accordance with the ISO 9001 quality standard.",
@@ -419,6 +422,7 @@
   "product.quoteError": "Error. Check your email or try again.",
   "product.networkError": "Network error.",
   "product.readMore": "Read more",
+  "product.readLess": "Show less",
   "product.offerContent": "What's included",
   "product.seeAlsoCompat": "See also our compatible parts",
   "product.allPartsFor": "All %make% parts",
@@ -486,5 +490,6 @@
   "product.reassureSub3": "Old part collected at your place",
   "product.reassure4": "No deposit upfront",
   "product.reassureSub4": "No cash advance",
-  "product.descHeadline": "Rebuilt to zero kilometres, not a used part"
+  "product.descHeadline": "Rebuilt to zero kilometres, not a used part",
+  "product.faqA3Ask": "Warranty depends on the part: ask us for its length before ordering."
 }

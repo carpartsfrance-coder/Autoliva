@@ -14,13 +14,15 @@
 
 const Order = require('../models/Order');
 const AttributionTouch = require('../models/AttributionTouch');
+const { FILTRE_VISITES_COMPTEES, ORGANIC_REFERRER_REGEX, AI_REFERRER_REGEX } = require('./sourceVisite');
 
 const PAID_ORDER_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
 
 const ALLOWED_PERIODS = new Set(['7d', '30d', '90d', '365d', 'all']);
 const DEFAULT_PERIOD = '30d';
 
-const ALLOWED_MODELS = new Set(['last', 'first']);
+// 'visit' : la source de la visite où la commande a été passée (Order.attribution.visitTouch).
+const ALLOWED_MODELS = new Set(['last', 'first', 'visit']);
 const DEFAULT_MODEL = 'last';
 
 const ALLOWED_SORT_FIELDS = new Set(['campaign', 'visits', 'orders', 'revenue', 'aov', 'conversionRate']);
@@ -28,22 +30,36 @@ const DEFAULT_SORT_FIELD = 'revenue';
 const DEFAULT_SORT_DIR = 'desc';
 
 // Sentinelles pour les buckets virtuels (apparaissent dans `row.bucket`).
-const BUCKET_LEGACY = '__legacy__';      // Commandes d'avant le tracking
+const BUCKET_LEGACY = '__legacy__';      // Commande web sans source connue (visite directe, ou avant le suivi)
+const BUCKET_OFFLINE = '__offline__';    // Commande hors site : téléphone, WhatsApp, saisie manuelle…
 const BUCKET_DIRECT = '__direct__';      // Vrai direct (referrer vide, pas d'UTM, pas de clickid)
 const BUCKET_ORGANIC = '__organic__';    // SEO : referrer = moteur de recherche, pas d'UTM, pas de clickid
+const BUCKET_AI = '__ai__';              // Assistant IA (ChatGPT, Perplexity…) sans UTM
+const BUCKET_REFERRAL = '__referral__';  // Autre site référent, sans UTM
 const BUCKET_GADS_NO_UTM = '__gads__';   // Google Ads gclid sans UTM
 const BUCKET_FB_NO_UTM = '__fb__';       // Facebook Ads fbclid sans UTM
 const BUCKET_MS_NO_UTM = '__msads__';    // Microsoft Ads msclkid sans UTM
-const VIRTUAL_BUCKETS = new Set([BUCKET_LEGACY, BUCKET_DIRECT, BUCKET_ORGANIC, BUCKET_GADS_NO_UTM, BUCKET_FB_NO_UTM, BUCKET_MS_NO_UTM]);
+const VIRTUAL_BUCKETS = new Set([BUCKET_LEGACY, BUCKET_OFFLINE, BUCKET_DIRECT, BUCKET_ORGANIC, BUCKET_AI, BUCKET_REFERRAL, BUCKET_GADS_NO_UTM, BUCKET_FB_NO_UTM, BUCKET_MS_NO_UTM]);
 
-// Regex Mongo : détecte les referrers issus de moteurs de recherche.
-// Couvre Google (toutes TLD), Bing, DuckDuckGo, Brave, Qwant, Yahoo,
-// Ecosia, Startpage, Lilo, Yandex (ya.ru inclus).
-//
-// Note : chaque hostname doit se terminer par un séparateur (/?#) ou la fin
-// de string. Les TLD sont limitées à 2-4 chars pour éviter les faux
-// positifs type "google.someshady.com".
-const ORGANIC_REFERRER_REGEX = /^https?:\/\/(?:[a-z0-9-]+\.)*(google\.[a-z]{2,4}(?:\.[a-z]{2})?|bing\.com|duckduckgo\.com|search\.brave\.com|brave\.com|qwant\.com|[a-z]+\.search\.yahoo\.com|search\.yahoo\.com|yahoo\.com|ecosia\.org|startpage\.com|search\.lilo\.org|lilo\.org|yandex\.[a-z]{2,4}(?:\.[a-z]{2})?|ya\.ru)(?:[\/?#]|$)/i;
+// Regex des référents (moteurs, assistants IA) : src/services/sourceVisite.js.
+// Un référent vers nos propres domaines n'est pas une source.
+const OWN_REFERRER_REGEX = /^https?:\/\/(?:[a-z0-9-]+\.)*autoliva\.(com|fr|de)(?:[\/?#:]|$)/i;
+
+// Drapeaux de référent, communs aux visites et aux commandes.
+function referrerFlags(path) {
+  const ref = { $ifNull: [path, ''] };
+  return {
+    hasOrganicReferrer: { $cond: [{ $regexMatch: { input: ref, regex: ORGANIC_REFERRER_REGEX } }, true, false] },
+    hasAiReferrer: { $cond: [{ $regexMatch: { input: ref, regex: AI_REFERRER_REGEX } }, true, false] },
+    hasExternalReferrer: {
+      $cond: [
+        { $and: [{ $ne: [ref, ''] }, { $not: [{ $regexMatch: { input: ref, regex: OWN_REFERRER_REGEX } }] }] },
+        true,
+        false,
+      ],
+    },
+  };
+}
 
 function getStartDateForPeriod(period) {
   if (period === 'all') return null;
@@ -110,10 +126,12 @@ function emptyRow(key, campaign, source, medium, bucket) {
   };
 }
 
-// Pipeline visites : groupe par UTM + flags "auto-tag" booléens, compte
+// Pipeline visites : groupe par UTM + flags "auto-tag" et référent, compte
 // les sessions distinctes.
 async function aggregateVisits(startDate, endDate) {
-  const match = {};
+  // Visites gratuites : seulement celles confirmées par le navigateur (robots
+  // et préchargements exclus, voir captureAttribution).
+  const match = { ...FILTRE_VISITES_COMPTEES };
   const ca = createdAtFilter(startDate, endDate);
   if (ca) match.createdAt = ca;
 
@@ -130,13 +148,7 @@ async function aggregateVisits(startDate, endDate) {
           hasWbraid: { $cond: [{ $and: [{ $ifNull: ['$wbraid', false] }, { $ne: ['$wbraid', ''] }] }, true, false] },
           hasFbclid: { $cond: [{ $and: [{ $ifNull: ['$fbclid', false] }, { $ne: ['$fbclid', ''] }] }, true, false] },
           hasMsclkid: { $cond: [{ $and: [{ $ifNull: ['$msclkid', false] }, { $ne: ['$msclkid', ''] }] }, true, false] },
-          hasOrganicReferrer: {
-            $cond: [
-              { $regexMatch: { input: { $ifNull: ['$referrer', ''] }, regex: ORGANIC_REFERRER_REGEX } },
-              true,
-              false,
-            ],
-          },
+          ...referrerFlags('$referrer'),
         },
         sessions: { $addToSet: '$sessionId' },
       },
@@ -153,6 +165,8 @@ async function aggregateVisits(startDate, endDate) {
         hasFbclid: '$_id.hasFbclid',
         hasMsclkid: '$_id.hasMsclkid',
         hasOrganicReferrer: '$_id.hasOrganicReferrer',
+        hasAiReferrer: '$_id.hasAiReferrer',
+        hasExternalReferrer: '$_id.hasExternalReferrer',
         visits: { $size: '$sessions' },
       },
     },
@@ -161,8 +175,14 @@ async function aggregateVisits(startDate, endDate) {
   return AttributionTouch.aggregate(pipeline);
 }
 
+function touchFieldForModel(model) {
+  if (model === 'first') return 'attribution.firstTouch';
+  if (model === 'visit') return 'attribution.visitTouch';
+  return 'attribution.lastTouch';
+}
+
 async function aggregateOrders(startDate, endDate, model) {
-  const touchField = model === 'first' ? 'attribution.firstTouch' : 'attribution.lastTouch';
+  const touchField = touchFieldForModel(model);
   const match = {
     paymentStatus: 'paid',
     status: { $in: PAID_ORDER_STATUSES },
@@ -180,18 +200,26 @@ async function aggregateOrders(startDate, endDate, model) {
           source: { $ifNull: [`$${touchField}.utmSource`, ''] },
           medium: { $ifNull: [`$${touchField}.utmMedium`, ''] },
           hasAttribution: { $cond: [{ $ifNull: [`$${touchField}`, false] }, true, false] },
+          // Commande hors site (téléphone, WhatsApp, saisie admin) : elle n'a
+          // jamais eu de visite à rattacher.
+          isOffline: {
+            $cond: [
+              {
+                $or: [
+                  { $eq: [{ $ifNull: ['$isManual', false] }, true] },
+                  { $ne: [{ $ifNull: ['$source.channel', 'website'] }, 'website'] },
+                ],
+              },
+              true,
+              false,
+            ],
+          },
           hasGclid: { $cond: [{ $and: [{ $ifNull: [`$${touchField}.gclid`, false] }, { $ne: [`$${touchField}.gclid`, ''] }] }, true, false] },
           hasGbraid: { $cond: [{ $and: [{ $ifNull: [`$${touchField}.gbraid`, false] }, { $ne: [`$${touchField}.gbraid`, ''] }] }, true, false] },
           hasWbraid: { $cond: [{ $and: [{ $ifNull: [`$${touchField}.wbraid`, false] }, { $ne: [`$${touchField}.wbraid`, ''] }] }, true, false] },
           hasFbclid: { $cond: [{ $and: [{ $ifNull: [`$${touchField}.fbclid`, false] }, { $ne: [`$${touchField}.fbclid`, ''] }] }, true, false] },
           hasMsclkid: { $cond: [{ $and: [{ $ifNull: [`$${touchField}.msclkid`, false] }, { $ne: [`$${touchField}.msclkid`, ''] }] }, true, false] },
-          hasOrganicReferrer: {
-            $cond: [
-              { $regexMatch: { input: { $ifNull: [`$${touchField}.referrer`, ''] }, regex: ORGANIC_REFERRER_REGEX } },
-              true,
-              false,
-            ],
-          },
+          ...referrerFlags(`$${touchField}.referrer`),
         },
         orders: { $sum: 1 },
         revenueCents: { $sum: '$totalCents' },
@@ -204,12 +232,15 @@ async function aggregateOrders(startDate, endDate, model) {
         source: '$_id.source',
         medium: '$_id.medium',
         hasAttribution: '$_id.hasAttribution',
+        isOffline: '$_id.isOffline',
         hasGclid: '$_id.hasGclid',
         hasGbraid: '$_id.hasGbraid',
         hasWbraid: '$_id.hasWbraid',
         hasFbclid: '$_id.hasFbclid',
         hasMsclkid: '$_id.hasMsclkid',
         hasOrganicReferrer: '$_id.hasOrganicReferrer',
+        hasAiReferrer: '$_id.hasAiReferrer',
+        hasExternalReferrer: '$_id.hasExternalReferrer',
         orders: 1,
         revenueCents: 1,
       },
@@ -217,6 +248,10 @@ async function aggregateOrders(startDate, endDate, model) {
   ];
 
   return Order.aggregate(pipeline);
+}
+
+function bucketRow(bucket) {
+  return { key: bucket, bucket, campaign: '', source: '', medium: '' };
 }
 
 // Classification d'une ligne brute (visite OU commande) en bucket d'affichage.
@@ -227,7 +262,9 @@ async function aggregateOrders(startDate, endDate, model) {
 //                Pour les visites, toujours `true` (car AttributionTouch existe par définition).
 function classifyRow(row, hasAttr) {
   if (!hasAttr) {
-    return { key: BUCKET_LEGACY, bucket: BUCKET_LEGACY, campaign: '', source: '', medium: '' };
+    // Une commande téléphone / WhatsApp / saisie admin n'a pas de visite :
+    // on la sépare des commandes web dont la source est inconnue.
+    return bucketRow(row.isOffline ? BUCKET_OFFLINE : BUCKET_LEGACY);
   }
 
   // Une UTM identifiable → ligne campagne normale
@@ -242,23 +279,17 @@ function classifyRow(row, hasAttr) {
   }
 
   // Pas d'UTM mais un identifiant de clic publicitaire → bucket "sans UTM"
-  if (row.hasGclid || row.hasGbraid || row.hasWbraid) {
-    return { key: BUCKET_GADS_NO_UTM, bucket: BUCKET_GADS_NO_UTM, campaign: '', source: '', medium: '' };
-  }
-  if (row.hasFbclid) {
-    return { key: BUCKET_FB_NO_UTM, bucket: BUCKET_FB_NO_UTM, campaign: '', source: '', medium: '' };
-  }
-  if (row.hasMsclkid) {
-    return { key: BUCKET_MS_NO_UTM, bucket: BUCKET_MS_NO_UTM, campaign: '', source: '', medium: '' };
-  }
+  if (row.hasGclid || row.hasGbraid || row.hasWbraid) return bucketRow(BUCKET_GADS_NO_UTM);
+  if (row.hasFbclid) return bucketRow(BUCKET_FB_NO_UTM);
+  if (row.hasMsclkid) return bucketRow(BUCKET_MS_NO_UTM);
 
-  // Pas d'UTM, pas de clickid, mais referrer = moteur de recherche → SEO organique
-  if (row.hasOrganicReferrer) {
-    return { key: BUCKET_ORGANIC, bucket: BUCKET_ORGANIC, campaign: '', source: '', medium: '' };
-  }
+  // Pas d'UTM, pas de clickid : on regarde d'où vient la visite.
+  if (row.hasOrganicReferrer) return bucketRow(BUCKET_ORGANIC);
+  if (row.hasAiReferrer) return bucketRow(BUCKET_AI);
+  if (row.hasExternalReferrer) return bucketRow(BUCKET_REFERRAL);
 
   // Aucun identifiant : vrai direct (URL tapée, favoris, app email, etc.)
-  return { key: BUCKET_DIRECT, bucket: BUCKET_DIRECT, campaign: '', source: '', medium: '' };
+  return bucketRow(BUCKET_DIRECT);
 }
 
 function buildSorter(field, dir) {
@@ -293,7 +324,16 @@ function buildSorter(field, dir) {
 // Réutilisé par la vue, qui n'a alors plus aucune logique de classification.
 function getDisplayProps(row) {
   if (row.bucket === BUCKET_LEGACY) {
-    return { displayLabel: 'Pré-tracking', displaySource: '(pré-tracking)', displayBadge: 'slate', displayIcon: 'history', isVirtual: true, isCampaign: false };
+    return { displayLabel: 'Commandes web sans source', displaySource: '(direct ou avant suivi)', displayBadge: 'slate', displayIcon: 'history', isVirtual: true, isCampaign: false };
+  }
+  if (row.bucket === BUCKET_OFFLINE) {
+    return { displayLabel: 'Commandes hors site', displaySource: 'Téléphone, WhatsApp…', displayBadge: 'slate', displayIcon: 'call', isVirtual: true, isCampaign: false };
+  }
+  if (row.bucket === BUCKET_AI) {
+    return { displayLabel: 'Assistants IA', displaySource: 'ChatGPT, Perplexity…', displayBadge: 'emerald', displayIcon: 'smart_toy', isVirtual: true, isCampaign: false };
+  }
+  if (row.bucket === BUCKET_REFERRAL) {
+    return { displayLabel: 'Sites référents', displaySource: 'Liens depuis d\'autres sites', displayBadge: 'emerald', displayIcon: 'link', isVirtual: true, isCampaign: false };
   }
   if (row.bucket === BUCKET_DIRECT) {
     return { displayLabel: 'Direct', displaySource: '(direct)', displayBadge: 'slate', displayIcon: 'language', isVirtual: true, isCampaign: false };
@@ -364,11 +404,12 @@ async function getMarketingDashboardData({ period = DEFAULT_PERIOD, model = DEFA
 
   rows.sort(buildSorter(sortField || DEFAULT_SORT_FIELD, sortDir || DEFAULT_SORT_DIR));
 
-  // Le pré-tracking n'est jamais inclus dans les totaux (chiffres d'avant la PR 1).
-  // Tout le reste (Direct, sans UTM, campagnes nommées) est inclus.
+  // Les commandes sans source (web inconnue, hors site) ne sont jamais incluses
+  // dans les totaux : elles n'ont pas de visite en face.
+  // Tout le reste (organique, IA, référents, sans UTM, campagnes) est inclus.
   const totals = rows.reduce(
     (acc, r) => {
-      if (r.bucket === BUCKET_LEGACY) return acc;
+      if (r.bucket === BUCKET_LEGACY || r.bucket === BUCKET_OFFLINE) return acc;
       acc.visits += r.visits;
       acc.orders += r.orders;
       acc.revenueCents += r.revenueCents;
@@ -403,9 +444,14 @@ module.exports = {
   DEFAULT_SORT_FIELD,
   DEFAULT_SORT_DIR,
   // Exposé pour les tests
+  classifyRow,
+  touchFieldForModel,
   BUCKET_LEGACY,
+  BUCKET_OFFLINE,
   BUCKET_DIRECT,
   BUCKET_ORGANIC,
+  BUCKET_AI,
+  BUCKET_REFERRAL,
   BUCKET_GADS_NO_UTM,
   BUCKET_FB_NO_UTM,
   BUCKET_MS_NO_UTM,

@@ -1,0 +1,2814 @@
+{
+ "_source": "Copie en LECTURE SEULE de la base de production (client natif, find uniquement), le 14/09/2026. Champs publics des fiches uniquement : aucun prix d’achat, aucune donnée client.",
+ "produits": [
+  {
+   "_role": "DQ200 (fiche faite main, la plus vue)",
+   "_id": "6988d15c707eef3255a726b6",
+   "name": "Mécatronique DSG7 DQ200 (0AM/0CW) reconditionnée (VAG) avec huile et levier - 0AM325065",
+   "slug": "mecatronique-dsg-7-dq200-pour-volkswagen-audi-seat-et-skoda",
+   "sku": "0AM 325 025",
+   "category": "Mécatroniques & calculateurs",
+   "brand": "VAG",
+   "engineCode": "",
+   "priceCents": 129000,
+   "compareAtPriceCents": null,
+   "consigne": {
+    "enabled": true,
+    "amountCents": 9900,
+    "delayDays": 30,
+    "chargeUpfront": true
+   },
+   "inclusions": [],
+   "exclusions": [],
+   "warranty": {
+    "months": 24,
+    "text": ""
+   },
+   "inStock": true,
+   "isPublished": true,
+   "imageUrl": "/media/6a34436b0497e5a9b7e5188f",
+   "galleryUrls": [
+    "/media/6a0d68496006b3460437caf9",
+    "/media/6a0d684a6006b3460437cb02",
+    "/media/6a0d684a6006b3460437cb0a"
+   ],
+   "galleryTypes": [
+    "image",
+    "image",
+    "image"
+   ],
+   "shippingDelayText": "24 / 48h",
+   "compatibleReferences": [
+    "0AM 325 025 D",
+    "0AM 325 025 D 000",
+    "0AM 325 025 H",
+    "0AM 325 025 S",
+    "0AM 325 025 T",
+    "0AM 325 025 X",
+    "0AM 927 769 D",
+    "0AM 927 769 E",
+    "0CW 325 025",
+    "0CW 325 025 A",
+    "0CW 325 025 B",
+    "0CW 325 025 E",
+    "0CW 325 025 L",
+    "0CW 325 025 N",
+    "0CW 325 025 P",
+    "0CW 927 769 E"
+   ],
+   "badges": {
+    "topLeft": "GARANTIE 2 ANS",
+    "condition": "Reconditionné et testé sur banc",
+    "cards": [
+     "Mécatronique + 1L Huile + Outil T10407",
+     "GARANTIE 2 ANS",
+     "Reconditionné et testé sur banc",
+     "Programmé au VIN"
+    ]
+   },
+   "shortDescription": "Mécatronique DSG7 DQ200 (réf. 0AM / 0CW) reconditionnée, testée et garantie.\r\nCompatible Volkswagen / Audi / SEAT / Škoda selon version.",
+   "description": "La mécatronique est l’organe électro-hydraulique qui pilote la boîte DSG7 DQ200 (références 0AM / 0CW). Quand elle fatigue, on observe souvent des symptômes comme des à-coups, des passages de rapports incohérents, un mode dégradé ou l’apparition d’un défaut boîte au tableau de bord.\r\n\r\nCette mécatronique reconditionnée est destinée aux boîtes DQ200 “carter sec” du groupe VAG. Elle est contrôlée, testée et préparée pour une remise en service fiable, avec une approche orientée pro : identification de version, vérifications fonctionnelles et conditionnement soigné pour le transport.\r\nPour éviter toute erreur (DQ200 = plusieurs variantes, années et calibrations), la compatibilité doit être confirmée avant expédition via VIN et/ou code boîte. Selon le cas, une pré-programmation au VIN peut être proposée (VIN ou immatriculation obligatoire) afin de faciliter le remontage et limiter les risques d’incompatibilité logicielle.\r\n\r\nVendu par Autoliva avec un process clair : assistance à l’identification, conseils de montage, et expédition rapide. Idéal pour un remplacement propre sur véhicules Volkswagen, Audi, SEAT, Škoda équipés DQ200, uniquement après validation de la bonne référence.\r\n\r\nLa boîte DSG7 DQ200, développée par le groupe Volkswagen, est l'une des transmissions à double embrayage les plus répandues en Europe. Montée sur de nombreux modèles à motorisation essence de faible à moyenne cylindrée (1.0 TSI, 1.2 TSI, 1.4 TSI, 1.5 TSI), elle équipe notamment les Volkswagen Polo, Golf, Passat, Touran, T-Roc et Tiguan, les Audi A1, A3, Q2 et TT, les SEAT Ibiza, Leon, Arona et Ateca, ainsi que les Škoda Fabia, Octavia, Superb et Karoq. La mécatronique (aussi appelée unité de commande hydraulique ou TCU) est le cerveau de cette boîte : elle gère les passages de vitesses, la pression hydraulique et la communication avec le calculateur moteur.\r\n\r\nLes codes défaut les plus fréquents liés à une mécatronique défaillante incluent P17BF (pression régulation embrayage), P189C (apprentissage point de contact embrayage), P0841 (capteur pression huile boîte), P073A (coincé en position neutre) et les codes abort visibles sur VCDS ou ODIS. Un diagnostic complet avant remplacement permet de s'assurer que la panne provient bien de la mécatronique et non d'un élément périphérique (embrayage, volant moteur bi-masse, faisceau électrique, niveau d'huile).\r\n\r\nNotre processus de reconditionnement comprend le remplacement systématique des composants d'usure du corps de vanne, le test de chaque électrovanne et capteur, la calibration sur banc d'essai et une phase de rodage simulé. Chaque unité est livrée avec un rapport de test et bénéficie d'une garantie de 2 ans pièce et main-d'œuvre. La pré-programmation au VIN est disponible sur demande pour une installation simplifiée, sans passage obligatoire chez le concessionnaire.\r\n\r\nLe pack comprend mécatronique complet (Corps de valves, TCU programmé), huile de mécatronique ainsi que le levier de démontage T10407.",
+   "keyPoints": [],
+   "specs": [
+    {
+     "label": "Type",
+     "value": "Mécatronique + 1L Huile + Outil T10407",
+     "_id": "6aa803fc362c0844e5976adc"
+    },
+    {
+     "label": "Programmation",
+     "value": "Programmé au VIN",
+     "_id": "6aa803fc362c0844e5976add"
+    }
+   ],
+   "options": [],
+   "reconditioningSteps": [
+    {
+     "title": "Diagnostic",
+     "description": "Contrôle visuel et lecture des défauts initiaux.",
+     "_id": "6aa803fc362c0844e5976ad6"
+    },
+    {
+     "title": "Nettoyage",
+     "description": "Démontage complet et nettoyage ultrason.",
+     "_id": "6aa803fc362c0844e5976ad7"
+    },
+    {
+     "title": "Remplacement",
+     "description": "Électrovannes, joints et capteurs critiques changés.",
+     "_id": "6aa803fc362c0844e5976ad8"
+    },
+    {
+     "title": "Test Banc",
+     "description": "Simulation conditions réelles et programmation.",
+     "_id": "6aa803fc362c0844e5976ad9"
+    }
+   ],
+   "compatibility": [
+    {
+     "make": "Volkswagen",
+     "model": "Polo",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976abb"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Golf V",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976abc"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Golf VI",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976abd"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Golf VII",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976abe"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Golf Viii",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976abf"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Jetta IV",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ac0"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Jetta III",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ac1"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Caddy",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ac2"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Sharan",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ac3"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Scirocco",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ac4"
+    },
+    {
+     "make": "Audi",
+     "model": "A1",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ac5"
+    },
+    {
+     "make": "Audi",
+     "model": "A3 S3 8P",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ac6"
+    },
+    {
+     "make": "Audi",
+     "model": "A3 S3 8V",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ac7"
+    },
+    {
+     "make": "Seat",
+     "model": "Ibiza",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ac8"
+    },
+    {
+     "make": "Seat",
+     "model": "Leon",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ac9"
+    },
+    {
+     "make": "Skoda",
+     "model": "Fabia",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976aca"
+    },
+    {
+     "make": "Skoda",
+     "model": "Octavia",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976acb"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Touran I",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976acc"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Touran II",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976acd"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Touran III",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ace"
+    },
+    {
+     "make": "Seat",
+     "model": "Altea",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976acf"
+    },
+    {
+     "make": "Skoda",
+     "model": "Superb",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ad0"
+    },
+    {
+     "make": "Skoda",
+     "model": "Rapid",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ad1"
+    },
+    {
+     "make": "Skoda",
+     "model": "Yeti",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ad2"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Passat",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ad3"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "T Cross",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ad4"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "T ROC",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6aa803fc362c0844e5976ad5"
+    }
+   ],
+   "faqs": [
+    {
+     "question": "Comment vérifier que ma boîte est une DSG7 DQ200 (0AM/0CW) ?",
+     "answer": "Vérifie l’étiquette/PR codes du véhicule ou la référence de boîte indiquant DQ200 / 0AM / 0CW. En cas de doute, l’identification via VIN est la méthode la plus fiable.",
+     "_id": "6aa803fc362c0844e5976ab3"
+    },
+    {
+     "question": "Dois-je fournir le VIN pour commander ?",
+     "answer": "Oui, c’est fortement recommandé (et souvent nécessaire) pour garantir la bonne version/logiciel correspondant exactement à ton véhicule.",
+     "_id": "6aa803fc362c0844e5976ab4"
+    },
+    {
+     "question": "Quels sont les symptômes typiques d’une mécatronique DQ200 défaillante ?",
+     "answer": "À-coups, passages de rapports irréguliers, voyant défaut boîte, mode dégradé. Des défauts de pression ou de carte électronique sont fréquemment évoqués sur DQ200.",
+     "_id": "6aa803fc362c0844e5976ab5"
+    },
+    {
+     "question": "Cette mécatronique est-elle “prête à monter” ?",
+     "answer": "Elle peut l’être si la version correspond exactement (référence + VIN). Sinon, tu risques un montage incompatible (fonctionnement aléatoire ou défauts).",
+     "_id": "6aa803fc362c0844e5976ab6"
+    },
+    {
+     "question": "Quelles motorisations sont le plus souvent équipées de DQ200 ?",
+     "answer": "Très fréquemment sur des petites/moyennes motorisations du groupe VAG (ex. 1.2 TSI, 1.4 TSI, 1.8 TSI, 1.6 TDI, 1.9 TDI selon modèles)",
+     "_id": "6aa803fc362c0844e5976ab7"
+    },
+    {
+     "question": "Quelle est la différence entre une mécatronique 0AM et 0CW ?",
+     "answer": "La référence 0AM correspond aux premières générations de DQ200 (carter sec, à partir de 2008), tandis que la 0CW désigne l'évolution montée sur des modèles plus récents (à partir de ~2013-2014, notamment Audi A3 8V, Golf 7, etc.). Les deux partagent le même principe de fonctionnement mais diffèrent au niveau du logiciel et de certains composants internes.",
+     "_id": "6aa803fc362c0844e5976ab8"
+    },
+    {
+     "question": "Quels outils sont nécessaires pour remplacer la mécatronique DQ200 ?",
+     "answer": "Le remplacement nécessite un outil de diagnostic compatible (VCDS, ODIS ou équivalent) pour effectuer le réglage de base après montage. Il faut également prévoir de l'huile de boîte adaptée et suivre la procédure constructeur. Un professionnel équipé peut réaliser l'opération en 2 à 4 heures.",
+     "_id": "6aa803fc362c0844e5976ab9"
+    },
+    {
+     "question": "Livrez-vous en dehors de la France ?",
+     "answer": "Oui, nous expédions dans toute l'Europe (Belgique, Suisse, Luxembourg, Allemagne, Espagne, Italie, Portugal, etc.) ainsi que dans les DOM-TOM. Contactez-nous pour un devis de transport personnalisé.",
+     "_id": "6aa803fc362c0844e5976aba"
+    }
+   ],
+   "media": {
+    "videoUrl": "https://www.youtube.com/shorts/gxFTwanXX0I"
+   },
+   "seo": {
+    "metaTitle": "Mécatronique DSG7 DQ200 0AM reconditionnée | Autoliva",
+    "metaDescription": "Mécatronique DSG7 DQ200 (0AM/0CW) reconditionnée, testée et garantie. Préprogrammation au VIN (VIN requis). Expédition rapide en France."
+   },
+   "sections": {
+    "showCompatibility": true,
+    "showFaq": true,
+    "showKeyPoints": true,
+    "showReconditioning": true,
+    "showRelatedProducts": true,
+    "showSpecs": true,
+    "showSupportBox": true,
+    "showVideo": true
+   },
+   "localizations": {
+    "de": {
+     "name": "Mechatronik DSG7 DQ200 (0AM/0CW) generalüberholt (VAG) mit Öl und Hebel - 0AM325065",
+     "slug": "mechatronik-dsg7-dq200-0am-0cw-generalueberholt-vag-mit-oel-und-hebel-0am325065",
+     "shortDescription": "Mechatronik DSG7 DQ200 (Ref. 0AM / 0CW) generalüberholt, geprüft und garantiert.\r\nKompatibel mit Volkswagen / Audi / SEAT / Škoda je nach Version.",
+     "description": "Die Mechatronik ist das elektro-hydraulische Bauteil, das das DSG7 DQ200 Getriebe (Referenzen 0AM / 0CW) steuert. Wenn sie verschleißt, treten oft Symptome wie Ruckeln, inkonsistente Gangwechsel, Notlaufmodus oder das Auftreten eines Getriebefehlers im Armaturenbrett auf.\r\n\r\nDiese generalüberholte Mechatronik ist für die „trockene“ DQ200 Getriebe des VAG-Konzerns bestimmt. Sie wird kontrolliert, getestet und für einen zuverlässigen Wiedereinsatz vorbereitet, mit einem professionellen Ansatz: Versionsidentifikation, funktionale Überprüfungen und sorgfältige Verpackung für den Transport.\r\nUm Fehler zu vermeiden (DQ200 = mehrere Varianten, Jahre und Kalibrierungen), muss die Kompatibilität vor dem Versand über die VIN und/oder den Getriebecode bestätigt werden. Gegebenenfalls kann eine Vorprogrammierung auf die VIN angeboten werden (VIN oder Zulassung erforderlich), um die Montage zu erleichtern und das Risiko von Softwareinkompatibilitäten zu minimieren.\r\n\r\nVerkauft von Autoliva mit einem klaren Prozess: Unterstützung bei der Identifikation, Montageberatung und schneller Versand. Ideal für einen sauberen Austausch bei Fahrzeugen von Volkswagen, Audi, SEAT, Škoda mit DQ200, nur nach Validierung der richtigen Referenz.\r\n\r\nDas DSG7 DQ200 Getriebe, entwickelt vom Volkswagen-Konzern, ist eines der am weitesten verbreiteten Doppelkupplungsgetriebe in Europa. Es wird in vielen Modellen mit kleinen bis mittleren Benzinmotoren (1.0 TSI, 1.2 TSI, 1.4 TSI, 1.5 TSI) verbaut, darunter die Volkswagen Polo, Golf, Passat, Touran, T-Roc und Tiguan, die Audi A1, A3, Q2 und TT, die SEAT Ibiza, Leon, Arona und Ateca sowie die Škoda Fabia, Octavia, Superb und Karoq. Die Mechatronik (auch als hydraulische Steuerungseinheit oder TCU bezeichnet) ist das Gehirn dieses Getriebes: Sie steuert die Gangwechsel, den Hydraulikdruck und die Kommunikation mit dem Motorsteuergerät.\r\n\r\nDie häufigsten Fehlercodes, die mit einer defekten Mechatronik verbunden sind, umfassen P17BF (Druckregelung Kupplung), P189C (Lernpunkt Kupplung), P0841 (Öldrucksensor Getriebe), P073A (in Neutralposition blockiert) und die Fehlercodes, die auf VCDS oder ODIS sichtbar sind. Eine vollständige Diagnose vor dem Austausch stellt sicher, dass der Defekt tatsächlich von der Mechatronik und nicht von einem peripheren Element (Kupplung, Zweimassenschwungrad, Kabelbaum, Ölstand) stammt.\r\n\r\nUnser Generalüberholungsprozess umfasst den systematischen Austausch der Verschleißteile des Ventilkörpers, die Prüfung jedes Magnetventils und Sensors, die Kalibrierung auf dem Prüfstand und eine simulierte Einlaufphase. Jede Einheit wird mit einem Prüfbericht geliefert und erhält eine Garantie von 2 Jahren auf Teile und Arbeitszeit. Die Vorprogrammierung auf die VIN ist auf Anfrage für eine vereinfachte Installation verfügbar, ohne dass ein Besuch beim Händler erforderlich ist.\r\n\r\nDas Paket umfasst die komplette Mechatronik (Ventilkörper, programmierte TCU), Mechatroniköl sowie den Demontagehebel T10407.",
+     "keyPoints": [],
+     "inclusions": [],
+     "exclusions": [],
+     "specs": [
+      {
+       "label": "Typ",
+       "value": "Mechatronik + 1L Öl + Werkzeug T10407"
+      },
+      {
+       "label": "Programmierung",
+       "value": "Auf VIN programmiert"
+      }
+     ],
+     "reconditioningSteps": [
+      {
+       "title": "Diagnose",
+       "description": "Visuelle Kontrolle und Auslesen der ursprünglichen Fehler."
+      },
+      {
+       "title": "Reinigung",
+       "description": "Vollständige Demontage und Ultraschallreinigung."
+      },
+      {
+       "title": "Austausch",
+       "description": "Magnetventile, Dichtungen und kritische Sensoren werden gewechselt."
+      },
+      {
+       "title": "Teststand",
+       "description": "Simulation realer Bedingungen und Programmierung."
+      }
+     ],
+     "faqs": [
+      {
+       "question": "Wie überprüfe ich, ob mein Getriebe ein DSG7 DQ200 (0AM/0CW) ist?",
+       "answer": "Überprüfen Sie das Etikett/PR-Codes des Fahrzeugs oder die Getriebe-Referenz, die DQ200 / 0AM / 0CW angibt. Im Zweifelsfall ist die Identifikation über die VIN die zuverlässigste Methode."
+      },
+      {
+       "question": "Muss ich die VIN zur Bestellung angeben?",
+       "answer": "Ja, es wird dringend empfohlen (und ist oft notwendig), um die richtige Version/Software zu garantieren, die genau zu Ihrem Fahrzeug passt."
+      },
+      {
+       "question": "Was sind die typischen Symptome einer defekten DQ200 Mechatronik?",
+       "answer": "Ruckeln, unregelmäßige Gangwechsel, Getriebe-Warnleuchte, Notlaufmodus. Druck- oder elektronische Kartenfehler werden häufig bei DQ200 erwähnt."
+      },
+      {
+       "question": "Ist diese Mechatronik „einbaufertig“?",
+       "answer": "Sie kann es sein, wenn die Version genau übereinstimmt (Referenz + VIN). Andernfalls riskieren Sie eine inkompatible Montage (willkürliches Verhalten oder Fehler)."
+      },
+      {
+       "question": "Welche Motorisierungen sind am häufigsten mit DQ200 ausgestattet?",
+       "answer": "Sehr häufig bei kleinen/mittleren Motorisierungen des VAG-Konzerns (z. B. 1.2 TSI, 1.4 TSI, 1.8 TSI, 1.6 TDI, 1.9 TDI je nach Modell)"
+      },
+      {
+       "question": "Was ist der Unterschied zwischen einer Mechatronik 0AM und 0CW?",
+       "answer": "Die Referenz 0AM entspricht den ersten Generationen der DQ200 (trockene Bauweise, ab 2008), während 0CW die Weiterentwicklung bezeichnet, die in neueren Modellen verbaut ist (ab ca. 2013-2014, insbesondere Audi A3 8V, Golf 7 usw.). Beide teilen das gleiche Funktionsprinzip, unterscheiden sich jedoch in der Software und einigen internen Komponenten."
+      },
+      {
+       "question": "Welche Werkzeuge sind erforderlich, um die DQ200 Mechatronik auszutauschen?",
+       "answer": "Der Austausch erfordert ein kompatibles Diagnosetool (VCDS, ODIS oder gleichwertig), um die Grundeinstellung nach der Montage vorzunehmen. Außerdem sollte geeignetes Getriebeöl bereitgestellt werden, und die Herstellervorgaben sind zu befolgen. Ein ausgebildeter Fachmann kann den Vorgang in 2 bis 4 Stunden durchführen."
+      },
+      {
+       "question": "Liefern Sie außerhalb von Frankreich?",
+       "answer": "Ja, wir versenden in ganz Europa (Belgien, Schweiz, Luxemburg, Deutschland, Spanien, Italien, Portugal usw.) sowie in die Überseegebiete. Kontaktieren Sie uns für ein individuelles Transportangebot."
+      }
+     ],
+     "shippingDelayText": "24 / 48 Std.",
+     "badges": {
+      "topLeft": "GARANTIE 2 JAHRE",
+      "condition": "Generalüberholt und auf dem Prüfstand getestet",
+      "cards": [
+       "Mechatronik + 1L Öl + Werkzeug T10407",
+       "GARANTIE 2 JAHRE",
+       "Generalüberholt und auf dem Prüfstand getestet",
+       "Auf VIN programmiert"
+      ]
+     },
+     "seo": {
+      "metaTitle": "Mechatronik DSG7 DQ200 0AM generalüberholt",
+      "metaDescription": "Mechatronik DSG7 DQ200 (0AM/0CW) generalüberholt, geprüft und garantiert. Vorprogrammierung auf VIN (VIN erforderlich). Schneller Versand nach Deutschland."
+     },
+     "translatedAt": "2026-09-06T09:01:10.124Z"
+    }
+   }
+  },
+  {
+   "_role": "DQ250 (faite main, garantie non renseignée)",
+   "_id": "6988d15c707eef3255a7264f",
+   "name": "Mécatronique DSG6 DQ250 reconditionnée 02E927770AD / AQ / AJ 02E325025/ AM / AT / AS / AE.. avec TCU intégré - échange standard",
+   "slug": "mecatronique-dsg-6-reconditionnee-dq250-02e-tcu-integre",
+   "sku": "02E927770AD 02E927770AQ 02E927770AJ 02E927770AS",
+   "category": "Mécatroniques & calculateurs",
+   "brand": "Temic / VAG",
+   "engineCode": "",
+   "priceCents": 139000,
+   "compareAtPriceCents": null,
+   "consigne": {
+    "enabled": true,
+    "amountCents": 15000,
+    "delayDays": 30,
+    "chargeUpfront": false
+   },
+   "inclusions": [],
+   "exclusions": [],
+   "warranty": {
+    "months": 0,
+    "text": ""
+   },
+   "inStock": true,
+   "isPublished": true,
+   "imageUrl": "/media/6a0d612d6006b3460437c015",
+   "galleryUrls": [
+    "/media/6a0d612d6006b3460437c01e",
+    "/media/6a0d612d6006b3460437c02b"
+   ],
+   "galleryTypes": [
+    "image",
+    "image"
+   ],
+   "shippingDelayText": "Délai d'expédition sur demande",
+   "compatibleReferences": [
+    "02E927770AD",
+    "02E927770AE",
+    "02E927770AJ",
+    "02E927770AQ",
+    "02E927770AS",
+    "02E927770AL",
+    "02E927770AN",
+    "02E927770AT",
+    "02E927770AO",
+    "02E927770AM",
+    "02E325025",
+    "02E325025AM",
+    "02E325025AJ",
+    "02E325025AQ",
+    "02E325025AS",
+    "02E325025AE",
+    "02E325025AN",
+    "02E325025AL"
+   ],
+   "badges": {
+    "topLeft": "Garantie 2 ans",
+    "condition": "Reconditionnée",
+    "cards": []
+   },
+   "shortDescription": "Mécatronique DSG6 DQ250 reconditionnée en échange standard, livrée complète avec TCU intégré. Compatible avec plusieurs références 02E927770AD / AQ / AJ / AS. Sans programmation VIN. Clonage possible en option.",
+   "description": "Mécatronique DSG6 DQ250 reconditionnée en échange standard, livrée complète avec bloc hydraulique et calculateur TCU intégré. Cette version couvre les familles de références 02E927770AD, 02E927770AQ, 02E927770AJ et 02E927770AS pour boîtes DSG 6 à bain d’huile type 02E / DQ250, sous réserve de concordance avec la référence montée d’origine.\r\n\r\nElle constitue une solution adaptée en cas d’à-coups, passages de rapports durs, mode dégradé, défauts liés aux électrovannes, capteurs internes ou perte de pression hydraulique. Chaque unité est contrôlée, remise en état, testée et préparée avant expédition.\r\n\r\nÀ vérifier avant commande : référence de votre mécatronique déposée, code de boîte, connectique et besoin éventuel de clonage. Cette annonce est proposée sans programmation VIN. Une adaptation ou un réglage de base après montage peut rester nécessaire selon le véhicule. Le clonage 1:1 de votre ancienne unité est disponible en option pour faciliter la remise en service. Produit reconditionné avec garantie 2 ans. Retour de l’ancienne pièce requis dans le cadre de l’échange standard.",
+   "keyPoints": [
+    "Mécatronique DSG6 DQ250 reconditionnée avec TCU intégré — montage direct sans passage VAG",
+    "Compatible Golf GTI/GTD/R, Passat 2.0 TDI, Audi A3/TT, Seat Leon Cupra, Skoda Octavia RS (2003-2022)",
+    "Échange standard sans caution, garantie 2 ans pièces et main-d'œuvre",
+    "Testée sur banc à embrayages humides — pression, électrovannes et capteurs validés",
+    "Option clonage 1:1 disponible (+100 €) pour récupérer adaptations et compteur d'origine",
+    "Livraison 48-72h en France, paiement en 3× sans frais (463,33 €/mois)"
+   ],
+   "specs": [
+    {
+     "label": "Programmation VIN",
+     "value": "Sans programmation VIN",
+     "_id": "6a58b6d0e7233d80b92c4d55"
+    },
+    {
+     "label": "Type",
+     "value": "Mécatronique complète DSG6 DQ250 à embrayages humides avec TCU intégré",
+     "_id": "6a58b6d0e7233d80b92c4d56"
+    },
+    {
+     "label": "Programmation",
+     "value": "Programmation ou clonage possible",
+     "_id": "6a58b6d0e7233d80b92c4d57"
+    }
+   ],
+   "options": [
+    {
+     "templateId": "",
+     "key": "service_logiciel",
+     "label": "Service logiciel",
+     "type": "choice",
+     "required": false,
+     "placeholder": "",
+     "helpText": "Le clonage nécessite une ancienne unité exploitable ou des données lisibles.",
+     "priceDeltaCents": 0,
+     "choices": [
+      {
+       "key": "sans_programmation_vin",
+       "label": "Sans programmation VIN",
+       "priceDeltaCents": 0,
+       "absolutePriceCents": null,
+       "triggersCloning": false,
+       "_id": "6a58b6d0e7233d80b92c4d52"
+      },
+      {
+       "key": "clonage_1_1",
+       "label": "Clonage 1:1 de votre ancienne unité",
+       "priceDeltaCents": 10000,
+       "absolutePriceCents": null,
+       "triggersCloning": false,
+       "_id": "6a58b6d0e7233d80b92c4d53"
+      }
+     ],
+     "_id": "6a58b6d0e7233d80b92c4d51"
+    }
+   ],
+   "reconditioningSteps": [
+    {
+     "title": "Diagnostic et contrôle de base",
+     "description": "Identification de la référence, inspection visuelle, contrôle de l’état général et relevé des défauts courants de la mécatronique DQ250.",
+     "_id": "6a58b6d0e7233d80b92c4d4d"
+    },
+    {
+     "title": "Nettoyage et remise en état hydraulique",
+     "description": "Nettoyage approfondi du bloc, contrôle des circuits hydrauliques, des électrovannes et remplacement des éléments nécessaires selon l’état constaté.",
+     "_id": "6a58b6d0e7233d80b92c4d4e"
+    },
+    {
+     "title": "Révision électronique",
+     "description": "Contrôle du calculateur TCU intégré, reprise des points sensibles et remplacement des composants défaillants lorsque cela s’impose.",
+     "_id": "6a58b6d0e7233d80b92c4d4f"
+    },
+    {
+     "title": "Tests finaux et préparation",
+     "description": "Vérification fonctionnelle, contrôle de cohérence de la référence et préparation de l’unité pour une remise en service en échange standard.",
+     "_id": "6a58b6d0e7233d80b92c4d50"
+    }
+   ],
+   "compatibility": [
+    {
+     "make": "Volkswagen",
+     "model": "Beetle / New Beetle",
+     "years": "2003-2019",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d39"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Caddy",
+     "years": "2004-2020",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d3a"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Eos",
+     "years": "2006-2015",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d3b"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Golf V / VI / VII, Golf Plus, GTI",
+     "years": "2003-2020",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d3c"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Jetta V / VI",
+     "years": "2005-2018",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d3d"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Passat B6 / B7 / CC",
+     "years": "2005-2017",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d3e"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Scirocco III",
+     "years": "2008-2017",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d3f"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Sharan II",
+     "years": "2010-2022",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d40"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Tiguan I",
+     "years": "2007-2017",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d41"
+    },
+    {
+     "make": "Volkswagen",
+     "model": "Touran I / II",
+     "years": "2003-2015",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d42"
+    },
+    {
+     "make": "Audi",
+     "model": "A3 8P / 8V",
+     "years": "2003-2020",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d43"
+    },
+    {
+     "make": "Audi",
+     "model": "Q3 8U",
+     "years": "2011-2018",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d44"
+    },
+    {
+     "make": "Audi",
+     "model": "TT 8J / 8S",
+     "years": "2006-2018",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d45"
+    },
+    {
+     "make": "SEAT",
+     "model": "Alhambra II",
+     "years": "2010-2022",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d46"
+    },
+    {
+     "make": "SEAT",
+     "model": "Altea / Altea XL",
+     "years": "2004-2015",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d47"
+    },
+    {
+     "make": "SEAT",
+     "model": "Leon II / III",
+     "years": "2005-2020",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d48"
+    },
+    {
+     "make": "SEAT",
+     "model": "Toledo III",
+     "years": "2004-2011",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d49"
+    },
+    {
+     "make": "Skoda",
+     "model": "Octavia II / III",
+     "years": "2004-2020",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d4a"
+    },
+    {
+     "make": "Skoda",
+     "model": "Superb II / III",
+     "years": "2008-2020",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d4b"
+    },
+    {
+     "make": "Skoda",
+     "model": "Yeti",
+     "years": "2009-2017",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a58b6d0e7233d80b92c4d4c"
+    }
+   ],
+   "faqs": [
+    {
+     "question": "Comment vérifier la compatibilité de cette mécatronique DSG6 DQ250 ?",
+     "answer": "La vérification doit se faire d’abord avec la référence présente sur votre mécatronique d’origine, puis idéalement avec le code de boîte. Le simple modèle du véhicule ne suffit pas à lui seul.",
+     "_id": "6a58b6d0e7233d80b92c4d33"
+    },
+    {
+     "question": "La programmation VIN est-elle incluse ?",
+     "answer": "Non. Cette version est proposée sans programmation VIN. Le TCU est intégré, mais une personnalisation VIN n’est pas incluse dans cette configuration.",
+     "_id": "6a58b6d0e7233d80b92c4d34"
+    },
+    {
+     "question": "À quoi sert l’option clonage 1:1 ?",
+     "answer": "Le clonage permet de recopier les données de votre ancienne unité quand cela est possible, afin de simplifier la remise en service. Cette option est utile si vous souhaitez rester au plus proche de la configuration d’origine.",
+     "_id": "6a58b6d0e7233d80b92c4d35"
+    },
+    {
+     "question": "Faut-il faire une adaptation après le montage ?",
+     "answer": "Oui, dans la plupart des cas un réglage de base ou une adaptation DSG est recommandé après montage, avec diagnostic adapté et montage professionnel.",
+     "_id": "6a58b6d0e7233d80b92c4d36"
+    },
+    {
+     "question": "Que signifie échange standard ?",
+     "answer": "Vous recevez une mécatronique reconditionnée prête à être montée, puis vous retournez votre ancienne pièce selon les conditions prévues par le vendeur.",
+     "_id": "6a58b6d0e7233d80b92c4d37"
+    },
+    {
+     "question": "Quels symptômes peuvent orienter vers une mécatronique défectueuse ?",
+     "answer": "À-coups, passages de rapports durs ou irréguliers, mode dégradé, défauts électrovannes ou capteurs, absence de certains rapports et comportement anormal de boîte.",
+     "_id": "6a58b6d0e7233d80b92c4d38"
+    }
+   ],
+   "media": {
+    "videoUrl": ""
+   },
+   "seo": {
+    "metaTitle": "Mécatronique DSG6 DQ250 02E927770AD AQ AJ AS reconditionnée",
+    "metaDescription": "Mécatronique DSG6 DQ250 reconditionnée en échange standard, TCU intégré, sans programmation VIN, clonage possible, garantie 2 ans."
+   },
+   "sections": {
+    "showCompatibility": true,
+    "showFaq": true,
+    "showKeyPoints": true,
+    "showReconditioning": true,
+    "showRelatedProducts": true,
+    "showSpecs": true,
+    "showSupportBox": true,
+    "showVideo": true
+   },
+   "localizations": {
+    "de": {
+     "name": "Mechatronik DSG6 DQ250 generalüberholt 02E927770AD / AQ / AJ 02E325025/ AM / AT / AS / AE.. mit integriertem TCU - im Austausch",
+     "slug": "mechatronik-dsg6-dq250-generalueberholt-02e927770ad-aq-aj-02e325025-am-at-as-ae-",
+     "shortDescription": "Mechatronik DSG6 DQ250 generalüberholt im Austausch, komplett geliefert mit integriertem TCU. Kompatibel mit mehreren Referenzen 02E927770AD / AQ / AJ / AS. Ohne VIN-Programmierung. Klonen optional möglich.",
+     "description": "Mechatronik DSG6 DQ250 generalüberholt im Austausch, komplett geliefert mit Hydraulikblock und integriertem TCU-Steuergerät. Diese Version deckt die Referenzfamilien 02E927770AD, 02E927770AQ, 02E927770AJ und 02E927770AS für DSG 6-Getriebe mit Ölbad vom Typ 02E / DQ250 ab, vorbehaltlich der Übereinstimmung mit der original montierten Referenz.\r\n\r\nSie stellt eine geeignete Lösung bei Ruckeln, harten Gangwechseln, Notlauf, Fehlern im Zusammenhang mit den Elektroventilen, internen Sensoren oder Druckverlust dar. Jede Einheit wird kontrolliert, generalüberholt, getestet und vor dem Versand vorbereitet.\r\n\r\nVor der Bestellung zu überprüfen: Referenz Ihrer abgebauten Mechatronik, Getriebecode, Verkabelung und eventuell benötigtes Klonen. Diese Anzeige wird ohne VIN-Programmierung angeboten. Eine Anpassung oder Grundeinstellung nach dem Einbau kann je nach Fahrzeug erforderlich sein. Das 1:1-Klonen Ihrer alten Einheit ist optional verfügbar, um die Wiederinbetriebnahme zu erleichtern. Generalüberholtes Produkt mit 2 Jahren Garantie. Rückgabe des alten Teils erforderlich im Rahmen des Austauschs.",
+     "keyPoints": [
+      "Mechatronik DSG6 DQ250 generalüberholt mit integriertem TCU — direkter Einbau ohne VAG-Durchführung",
+      "Kompatibel mit Golf GTI/GTD/R, Passat 2.0 TDI, Audi A3/TT, Seat Leon Cupra, Skoda Octavia RS (2003-2022)",
+      "Austausch ohne Pfand, 2 Jahre Garantie auf Teile und Arbeitszeit",
+      "Auf dem Prüfstand getestet mit Nasskupplungen — Druck, Elektroventile und Sensoren validiert",
+      "Option 1:1-Klonen verfügbar (+100 €) zur Übernahme von Anpassungen und originalem Kilometerstand",
+      "Lieferung 48-72h in Deutschland, Zahlung in 3 Raten ohne Gebühren (463,33 €/Monat)"
+     ],
+     "inclusions": [],
+     "exclusions": [],
+     "specs": [
+      {
+       "label": "VIN-Programmierung",
+       "value": "Ohne VIN-Programmierung"
+      },
+      {
+       "label": "Typ",
+       "value": "Komplette Mechatronik DSG6 DQ250 mit Nasskupplungen und integriertem TCU"
+      },
+      {
+       "label": "Programmierung",
+       "value": "Programmierung oder Klonen möglich"
+      }
+     ],
+     "reconditioningSteps": [
+      {
+       "title": "Diagnose und Grundkontrolle",
+       "description": "Identifizierung der Referenz, Sichtprüfung, Kontrolle des allgemeinen Zustands und Erfassung der häufigen Fehler der Mechatronik DQ250."
+      },
+      {
+       "title": "Reinigung und hydraulische Wiederherstellung",
+       "description": "Gründliche Reinigung des Blocks, Kontrolle der hydraulischen Kreisläufe, der Elektroventile und Austausch der notwendigen Elemente je nach festgestelltem Zustand."
+      },
+      {
+       "title": "Elektronische Revision",
+       "description": "Kontrolle des integrierten TCU-Steuergeräts, Überarbeitung der kritischen Punkte und Austausch defekter Komponenten, wenn erforderlich."
+      },
+      {
+       "title": "Abschlusstests und Vorbereitung",
+       "description": "Funktionsprüfung, Überprüfung der Übereinstimmung der Referenz und Vorbereitung der Einheit für eine Wiederinbetriebnahme im Austausch."
+      }
+     ],
+     "faqs": [
+      {
+       "question": "Wie überprüfe ich die Kompatibilität dieser Mechatronik DSG6 DQ250?",
+       "answer": "Die Überprüfung sollte zunächst mit der Referenz auf Ihrer originalen Mechatronik erfolgen, idealerweise dann mit dem Getriebecode. Das bloße Modell des Fahrzeugs reicht nicht aus."
+      },
+      {
+       "question": "Ist die VIN-Programmierung enthalten?",
+       "answer": "Nein. Diese Version wird ohne VIN-Programmierung angeboten. Das TCU ist integriert, aber eine VIN-Anpassung ist nicht in dieser Konfiguration enthalten."
+      },
+      {
+       "question": "Wozu dient die 1:1-Klonoption?",
+       "answer": "Das Klonen ermöglicht es, die Daten Ihrer alten Einheit zu kopieren, wenn dies möglich ist, um die Wiederinbetriebnahme zu vereinfachen. Diese Option ist nützlich, wenn Sie so nah wie möglich an der Originalkonfiguration bleiben möchten."
+      },
+      {
+       "question": "Muss nach dem Einbau eine Anpassung erfolgen?",
+       "answer": "Ja, in den meisten Fällen wird eine Grundeinstellung oder DSG-Anpassung nach dem Einbau empfohlen, mit entsprechender Diagnose und professioneller Montage."
+      },
+      {
+       "question": "Was bedeutet Austausch?",
+       "answer": "Sie erhalten eine generalüberholte Mechatronik, die bereit zur Montage ist, und senden dann Ihr altes Teil gemäß den Bedingungen des Verkäufers zurück."
+      },
+      {
+       "question": "Welche Symptome können auf eine defekte Mechatronik hinweisen?",
+       "answer": "Ruckeln, harte oder unregelmäßige Gangwechsel, Notlauf, Fehler bei Elektroventilen oder Sensoren, Fehlen bestimmter Gänge und anormales Verhalten des Getriebes."
+      }
+     ],
+     "shippingDelayText": "Versandtermin auf Anfrage",
+     "badges": {
+      "topLeft": "Garantie 2 Jahre",
+      "condition": "Generalüberholt"
+     },
+     "seo": {
+      "metaTitle": "Mechatronik DSG6 DQ250 02E927770AD AQ AJ AS",
+      "metaDescription": "Mechatronik DSG6 DQ250 generalüberholt im Austausch, integriertes TCU, ohne VIN-Programmierung, Klonen möglich, 2 Jahre Garantie."
+     },
+     "translatedAt": "2026-09-06T09:00:10.434Z"
+    }
+   }
+  },
+  {
+   "_role": "ASY moteur (« dans notre atelier », « par notre atelier »)",
+   "_id": "6a31226e66f755d18cbca3d5",
+   "name": "Moteur Diesel YS23DDTT 2.3 190 ch reconditionné – Nissan",
+   "slug": "moteur-ys23ddtt-2-3-reconditionn-nissan-0100214793",
+   "sku": "ASY-0100214793",
+   "category": "Moteurs",
+   "brand": "Nissan",
+   "engineCode": "YS23DDTT",
+   "serviceType": "",
+   "priceCents": 667200,
+   "compareAtPriceCents": null,
+   "consigne": {
+    "enabled": true,
+    "amountCents": 91000,
+    "delayDays": 30,
+    "chargeUpfront": true
+   },
+   "inclusions": [
+    "Bloc moteur",
+    "Culasse",
+    "Distribution",
+    "Pompe d'huile"
+   ],
+   "exclusions": [],
+   "warranty": {
+    "months": 12,
+    "text": ""
+   },
+   "inStock": true,
+   "isPublished": true,
+   "imageUrl": "/media/6a3128c0d4ffdf24ecd79ed8",
+   "galleryUrls": [
+    "/media/6a3128c0d4ffdf24ecd79ed8"
+   ],
+   "galleryTypes": [],
+   "shippingDelayText": "6-9 jours",
+   "compatibleReferences": [],
+   "badges": {
+    "topLeft": "Garantie 12 mois",
+    "condition": "Reconditionné et testé",
+    "cards": [
+     "Échange standard",
+     "Garantie 12 mois",
+     "Testé sur banc",
+     "Livré nu (bloc + culasse)"
+    ]
+   },
+   "shortDescription": "",
+   "description": "Le moteur YS23DDTT est un diesel 2.3 16v reconditionné dans notre atelier selon les spécifications du constructeur. Bloc réalésé (ou rechemisé), pièces d'usure neuves et jointures neuves, validé par un contrôle de compression et de pression d'huile. Selon la version, ce moteur développe 190 ch. Le moteur est livré nu. Il comprend : bloc moteur, culasse, distribution, pompe d'huile. Injection, turbo, volant moteur et accessoires sont à reprendre sur votre moteur d'origine. La consigne de 910 € est encaissée à la commande puis remboursée, hors TVA, au retour de votre moteur d'origine sous 30 jours. Une retenue casse jusqu'à 710 € s'applique si le bloc rendu est inexploitable. Expédition sous 6-9 jours, sur palette. Communiquez votre numéro VIN avant commande : nous validons la correspondance exacte avec votre véhicule. Garanti 12 mois pièces et main d'œuvre ; rodage et vidange à 1 000 km nécessaires pour valider la garantie. Expédition sur palette, moteur calé sur support pour protéger le bloc et la culasse pendant le transport. Une solution fiable pour remettre votre Nissan en état sans recourir à un moteur d'occasion au kilométrage inconnu. Notre équipe technique vous accompagne pour confirmer la référence à partir de votre VIN et préparer le montage. Chaque commande est préparée et contrôlée avant expédition par notre atelier.",
+   "keyPoints": [],
+   "specs": [],
+   "options": [],
+   "reconditioningSteps": [],
+   "compatibility": [],
+   "faqs": [
+    {
+     "question": "Le moteur est-il prêt à monter ?",
+     "answer": "Livré nu (bloc moteur, culasse, distribution, pompe d'huile) ; l'habillage est à reprendre sur votre moteur.",
+     "_id": "6a31226e66f755d18cbca3d6"
+    },
+    {
+     "question": "Comment vérifier la compatibilité ?",
+     "answer": "Communiquez votre VIN : nous confirmons que le code YS23DDTT correspond à votre véhicule.",
+     "_id": "6a31226e66f755d18cbca3d7"
+    },
+    {
+     "question": "Quelle est la garantie ?",
+     "answer": "12 mois pièces et main d'œuvre, sous réserve du rodage et de la vidange à 1 000 km.",
+     "_id": "6a31226e66f755d18cbca3d8"
+    },
+    {
+     "question": "Quel est le délai de livraison ?",
+     "answer": "Expédition sous 6-9 jours, sur palette.",
+     "_id": "6a31226e66f755d18cbca3d9"
+    },
+    {
+     "question": "Comment fonctionne la consigne ?",
+     "answer": "La consigne de 910 € est encaissée à la commande puis remboursée, hors TVA, au retour de votre moteur d'origine sous 30 jours. Une retenue casse jusqu'à 710 € s'applique si le bloc rendu est inexploitable.",
+     "_id": "6a31226e66f755d18cbca3da"
+    },
+    {
+     "question": "Le moteur est-il neuf ou reconditionné ?",
+     "answer": "Reconditionné et testé en atelier.",
+     "_id": "6a31226e66f755d18cbca3db"
+    },
+    {
+     "question": "Sur quels véhicules se monte-t-il ?",
+     "answer": "Validez par votre VIN.",
+     "_id": "6a31226e66f755d18cbca3dc"
+    },
+    {
+     "question": "Faut-il une programmation ?",
+     "answer": "Le moteur nu ne nécessite pas de programmation ; conservez votre calculateur.",
+     "_id": "6a31226e66f755d18cbca3dd"
+    },
+    {
+     "question": "Les injecteurs et le turbo sont-ils inclus ?",
+     "answer": "Non, le moteur est nu ; disponibles en option à préciser.",
+     "_id": "6a31226e66f755d18cbca3de"
+    }
+   ],
+   "media": {
+    "videoUrl": ""
+   },
+   "seo": {
+    "metaTitle": "Moteur Diesel YS23DDTT 2.3 reconditionné Nissan | Autoliva",
+    "metaDescription": "Moteur YS23DDTT 2.3 diesel reconditionné pour Nissan. Livré nu, garantie 12 mois, prix TTC consigne incluse. Contactez-nous avec votre VIN pour..."
+   },
+   "sections": {
+    "showKeyPoints": true,
+    "showSpecs": true,
+    "showReconditioning": true,
+    "showCompatibility": true,
+    "showFaq": true,
+    "showVideo": true,
+    "showSupportBox": true,
+    "showRelatedProducts": true
+   },
+   "localizations": {
+    "de": {
+     "name": "Dieselmotor YS23DDTT 2.3 190 PS generalüberholt – Nissan",
+     "slug": "dieselmotor-ys23ddtt-2-3-190-ps-generalueberholt-nissan",
+     "shortDescription": "",
+     "description": "Der Motor YS23DDTT ist ein 2.3 16v Diesel, der in unserer Werkstatt gemäß den Spezifikationen des Herstellers generalüberholt wurde. Überholter Block (oder neu beschichtet), neue Verschleißteile und neue Dichtungen, validiert durch einen Kompressions- und Öldrucktest. Je nach Version entwickelt dieser Motor 190 PS. Der Motor wird ohne Zubehör geliefert. Er umfasst: Motorblock, Zylinderkopf, Steuerung, Ölpumpe. Einspritzung, Turbo, Schwungrad und Zubehör müssen von Ihrem Originalmotor übernommen werden. Das Pfand von 910 € wird bei der Bestellung eingezogen und dann, ohne MwSt., bei Rückgabe Ihres Originalmotors innerhalb von 30 Tagen zurückerstattet. Eine Schadensrückbehaltung von bis zu 710 € gilt, wenn der zurückgegebene Block nicht verwendbar ist. Versand innerhalb von 6-9 Tagen, auf Palette. Bitte teilen Sie uns Ihre VIN vor der Bestellung mit: Wir bestätigen die genaue Übereinstimmung mit Ihrem Fahrzeug. 2 Jahre Garantie auf Teile und Arbeitszeit; Einlauf und Ölwechsel bei 1.000 km sind erforderlich, um die Garantie zu validieren. Versand auf Palette, Motor auf Halterung gesichert, um Block und Zylinderkopf während des Transports zu schützen. Eine zuverlässige Lösung, um Ihr Nissan-Fahrzeug in Stand zu setzen, ohne auf einen Gebrauchtmotor mit unbekanntem Kilometerstand zurückgreifen zu müssen. Unser technisches Team unterstützt Sie bei der Bestätigung der Referenz anhand Ihrer VIN und bereitet die Montage vor. Jede Bestellung wird vor dem Versand von unserer Werkstatt vorbereitet und kontrolliert.",
+     "keyPoints": [],
+     "inclusions": [
+      "Motorblock",
+      "Zylinderkopf",
+      "Steuerung",
+      "Ölpumpe"
+     ],
+     "exclusions": [],
+     "specs": [],
+     "reconditioningSteps": [],
+     "faqs": [
+      {
+       "question": "Ist der Motor fahrbereit?",
+       "answer": "Wird ohne Zubehör geliefert (Motorblock, Zylinderkopf, Steuerung, Ölpumpe); die Verkleidung muss von Ihrem Motor übernommen werden."
+      },
+      {
+       "question": "Wie überprüfe ich die Kompatibilität?",
+       "answer": "Teilen Sie uns Ihre VIN mit: Wir bestätigen, dass der Code YS23DDTT zu Ihrem Fahrzeug passt."
+      },
+      {
+       "question": "Wie lange ist die Garantie?",
+       "answer": "12 Monate auf Teile und Arbeitszeit, vorbehaltlich des Einlaufens und des Ölwechsels bei 1.000 km."
+      },
+      {
+       "question": "Wie lange dauert die Lieferung?",
+       "answer": "Versand innerhalb von 6-9 Tagen, auf Palette."
+      },
+      {
+       "question": "Wie funktioniert das Pfand?",
+       "answer": "Das Pfand von 910 € wird bei der Bestellung eingezogen und dann, ohne MwSt., bei Rückgabe Ihres Originalmotors innerhalb von 30 Tagen zurückerstattet. Eine Schadensrückbehaltung von bis zu 710 € gilt, wenn der zurückgegebene Block nicht verwendbar ist."
+      },
+      {
+       "question": "Ist der Motor neu oder generalüberholt?",
+       "answer": "Generalüberholt und in der Werkstatt getestet."
+      },
+      {
+       "question": "Auf welchen Fahrzeugen kann er montiert werden?",
+       "answer": "Bestätigen Sie anhand Ihrer VIN."
+      },
+      {
+       "question": "Ist eine Programmierung erforderlich?",
+       "answer": "Der Motor ohne Zubehör benötigt keine Programmierung; behalten Sie Ihr Steuergerät."
+      },
+      {
+       "question": "Sind die Einspritzdüsen und der Turbo enthalten?",
+       "answer": "Nein, der Motor ist ohne Zubehör; verfügbar als Option auf Anfrage."
+      }
+     ],
+     "shippingDelayText": "6-9 Tage",
+     "badges": {
+      "topLeft": "Garantie 12 Monate",
+      "condition": "Generalüberholt und getestet",
+      "cards": [
+       "Im Austausch",
+       "Garantie 12 Monate",
+       "Auf dem Prüfstand getestet",
+       "Ohne Anbauteile geliefert (Block + Zylinderkopf)"
+      ]
+     },
+     "seo": {
+      "metaTitle": "YS23DDTT Dieselmotor 2.3 190 PS generalüberholt",
+      "metaDescription": "Generalüberholter Dieselmotor YS23DDTT 2.3 für Nissan. Ohne Zubehör, 12 Monate Garantie. Kontaktieren Sie uns mit Ihrer VIN."
+     },
+     "translatedAt": "2026-09-06T09:25:36.895Z"
+    }
+   }
+  },
+  {
+   "_role": "DEK boîte (ISO 9001, « équipent directement les concessionnaires »)",
+   "_id": "6a490236ba47c6ad649de9f2",
+   "name": "Boîte de vitesses reconditionnée Volkswagen Golf Caddy Touran 1.6 TDI — LZY",
+   "slug": "boite-vitesses-volkswagen-golf-caddy-touran-1-6-tdi-lzy-56779",
+   "sku": "DEK-18078556779",
+   "category": "Boîtes de vitesses",
+   "brand": "Volkswagen",
+   "engineCode": "LZY",
+   "serviceType": "",
+   "priceCents": 114900,
+   "compareAtPriceCents": null,
+   "consigne": {
+    "amountCents": 0,
+    "chargeUpfront": false,
+    "delayDays": 30,
+    "enabled": false
+   },
+   "inclusions": [],
+   "exclusions": [],
+   "warranty": {
+    "months": 24,
+    "text": "Garantie 2 ans, échange standard."
+   },
+   "inStock": true,
+   "isPublished": true,
+   "imageUrl": "/media/6a4903bf9e8f547f1bf4d144",
+   "galleryUrls": [
+    "/media/6a4903bf9e8f547f1bf4d144"
+   ],
+   "galleryTypes": [
+    "image"
+   ],
+   "shippingDelayText": "24-72h",
+   "compatibleReferences": [],
+   "badges": {
+    "cards": [
+     "Testée sur banc",
+     "Norme ISO 9001",
+     "Échange standard",
+     "Sans consigne à l'avance"
+    ],
+    "condition": "Reconditionnée · Échange standard",
+    "topLeft": ""
+   },
+   "shortDescription": "Boîte manuelle LZY pour Volkswagen Golf Caddy Touran 1.6 TDI en échange standard, reconstruite à zéro kilomètre (usine ISO 9001), testée sur banc, garantie 2 ans, sans consigne à l'avance.",
+   "description": "Boîte de vitesses manuelle LZY pour Volkswagen Golf Caddy Touran 1.6 TDI : reconditionnée dans des usines certifiées ISO 9001 qui équipent directement les concessionnaires. Parfaite pour corriger un point dur au passage des rapports, une marche arrière récalcitrante ou un jeu anormal. Ce n'est pas une pièce d'occasion : reconstruite à zéro kilomètre, chaque pièce d'usure est remplacée par une pièce neuve avant remontage et contrôle final. Livraison partout en Europe avec récupération de l'ancienne boîte incluse : aucune démarche d'expédition à votre charge. Contrairement à l'usage du marché, pas de consigne à régler d'avance : vous restituez simplement l'ancienne pièce après montage. Installation par un professionnel. Garantie 2 ans. Vérifiez la compatibilité avec votre référence avant de commander.",
+   "keyPoints": [
+    "Référence boîte : LZY",
+    "Type : boîte manuelle",
+    "Reconstruite à zéro kilomètre — pièces d'usure remplacées par des neuves",
+    "Reconditionnée en usine certifiée ISO 9001 (fournisseur des concessionnaires)",
+    "Échange standard, testée sur banc",
+    "Livraison + récupération de l'ancienne pièce incluses",
+    "Sans consigne facturée à l'avance",
+    "Garantie 2 ans"
+   ],
+   "specs": [
+    {
+     "label": "Type",
+     "value": "Manuelle",
+     "_id": "6a491845ddfbbfe9a3f7ce14"
+    }
+   ],
+   "options": [],
+   "reconditioningSteps": [
+    {
+     "title": "Démontage & diagnostic",
+     "description": "Ouverture complète et contrôle des pignons, synchros et roulements.",
+     "_id": "6a491845ddfbbfe9a3f7ce0b"
+    },
+    {
+     "title": "Remplacement des pièces d'usure",
+     "description": "Roulements, joints et synchros remplacés par des pièces neuves.",
+     "_id": "6a491845ddfbbfe9a3f7ce0c"
+    },
+    {
+     "title": "Remontage",
+     "description": "Remontage aux couples constructeur et réglages des jeux.",
+     "_id": "6a491845ddfbbfe9a3f7ce0d"
+    },
+    {
+     "title": "Essai sur banc",
+     "description": "Test de passage des rapports avant expédition.",
+     "_id": "6a491845ddfbbfe9a3f7ce0e"
+    }
+   ],
+   "compatibility": [
+    {
+     "make": "Volkswagen",
+     "model": "Golf Caddy Touran",
+     "years": "",
+     "engine": "1.6 TDI",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a491845ddfbbfe9a3f7ce13"
+    }
+   ],
+   "faqs": [
+    {
+     "question": "Cette boîte LZY est-elle compatible avec ma Volkswagen Golf Caddy Touran ?",
+     "answer": "Communiquez-nous votre plaque d'immatriculation ou le code de votre boîte d'origine : nous confirmons la compatibilité avant expédition.",
+     "_id": "6a491845ddfbbfe9a3f7ce0f"
+    },
+    {
+     "question": "Y a-t-il une consigne à payer ?",
+     "answer": "Non, aucune consigne n'est facturée à l'avance — vous restituez simplement l'ancienne boîte après montage, dans le cadre de l'échange standard.",
+     "_id": "6a491845ddfbbfe9a3f7ce10"
+    },
+    {
+     "question": "Comment se passe l'échange standard ?",
+     "answer": "Vous recevez une boîte reconstruite à zéro kilomètre. Livraison au garage ou à domicile et nous récupérons votre ancienne pièce lors d'un passage distinct : rien à expédier de votre côté.",
+     "_id": "6a491845ddfbbfe9a3f7ce11"
+    },
+    {
+     "question": "Quelle est la garantie ?",
+     "answer": "Cette boîte reconstruite à zéro kilomètre en usine (norme ISO 9001) et testée sur banc est garantie 2 ans.",
+     "_id": "6a491845ddfbbfe9a3f7ce12"
+    }
+   ],
+   "media": {
+    "videoUrl": ""
+   },
+   "seo": {
+    "metaDescription": "",
+    "metaTitle": ""
+   },
+   "sections": {
+    "showCompatibility": true,
+    "showFaq": true,
+    "showKeyPoints": true,
+    "showReconditioning": true,
+    "showRelatedProducts": true,
+    "showSpecs": true,
+    "showSupportBox": true,
+    "showVideo": true
+   },
+   "localizations": {
+    "de": {
+     "name": "Generalüberholtes Austauschgetriebe Volkswagen Golf Caddy Touran 1.6 TDI — LZY",
+     "slug": "generalueberholtes-austauschgetriebe-volkswagen-golf-caddy-touran-1-6-tdi-lzy",
+     "shortDescription": "Manuelles Getriebe LZY für Volkswagen Golf Caddy Touran 1.6 TDI im Austausch, generalüberholt auf null Kilometer (ISO 9001 Werk), auf dem Prüfstand getestet, 2 Jahre Garantie, ohne Pfand im Voraus.",
+     "description": "Manuelles Getriebe LZY für Volkswagen Golf Caddy Touran 1.6 TDI: generalüberholt in ISO 9001-zertifizierten Werken, die direkt die Händler beliefern. Perfekt zur Behebung eines harten Schaltpunktes, eines widerspenstigen Rückwärtsgangs oder eines abnormalen Spiels. Es handelt sich nicht um ein Gebrauchtteil: generalüberholt auf null Kilometer, jedes Verschleißteil wird vor der Endmontage und -kontrolle durch ein neues Teil ersetzt. Lieferung in ganz Europa mit Rückholung des alten Getriebes inklusive: keine Versandkosten für Sie. Im Gegensatz zur Marktpraxis wird kein Pfand im Voraus fällig: Sie geben einfach das alte Teil nach der Montage zurück. Installation durch einen Fachmann. 2 Jahre Garantie. Überprüfen Sie die Kompatibilität mit Ihrer Referenz vor der Bestellung.",
+     "keyPoints": [
+      "Getriebecode: LZY",
+      "Typ: manuelles Getriebe",
+      "Generalüberholt auf null Kilometer — Verschleißteile durch neue ersetzt",
+      "Generalüberholt in ISO 9001-zertifiziertem Werk (Lieferant der Händler)",
+      "Austausch, auf dem Prüfstand getestet",
+      "Lieferung + Rückholung des alten Teils inklusive",
+      "Ohne im Voraus berechnetes Pfand",
+      "2 Jahre Garantie"
+     ],
+     "inclusions": [],
+     "exclusions": [],
+     "specs": [
+      {
+       "label": "Typ",
+       "value": "Manuell"
+      }
+     ],
+     "reconditioningSteps": [
+      {
+       "title": "Demontage & Diagnose",
+       "description": "Vollständige Öffnung und Kontrolle der Zahnräder, Synchronisierungen und Lager."
+      },
+      {
+       "title": "Ersatz der Verschleißteile",
+       "description": "Lager, Dichtungen und Synchronisierungen werden durch neue Teile ersetzt."
+      },
+      {
+       "title": "Wiederzusammenbau",
+       "description": "Wiederzusammenbau nach Herstellervorgaben und Einstellung der Spiele."
+      },
+      {
+       "title": "Prüfung auf dem Prüfstand",
+       "description": "Test des Schaltvorgangs vor dem Versand."
+      }
+     ],
+     "faqs": [
+      {
+       "question": "Ist dieses Getriebe LZY mit meinem Volkswagen Golf Caddy Touran kompatibel?",
+       "answer": "Teilen Sie uns Ihr Kennzeichen oder den Code Ihres Originalgetriebes mit: wir bestätigen die Kompatibilität vor dem Versand."
+      },
+      {
+       "question": "Gibt es ein Pfand zu zahlen?",
+       "answer": "Nein, es wird kein Pfand im Voraus berechnet — Sie geben einfach das alte Getriebe nach der Montage im Rahmen des Austauschs zurück."
+      },
+      {
+       "question": "Wie funktioniert der Austausch?",
+       "answer": "Sie erhalten ein generalüberholtes Getriebe auf null Kilometer. Lieferung zur Werkstatt oder nach Hause und wir holen Ihr altes Teil bei einem separaten Besuch ab: nichts von Ihrer Seite zu versenden."
+      },
+      {
+       "question": "Wie lange ist die Garantie?",
+       "answer": "Dieses auf null Kilometer generalüberholte Getriebe aus dem Werk (ISO 9001-Norm) und auf dem Prüfstand getestet, hat eine Garantie von 2 Jahren."
+      }
+     ],
+     "shippingDelayText": "24-72 Std.",
+     "badges": {
+      "condition": "Generalüberholt · im Austausch",
+      "cards": [
+       "Auf dem Prüfstand getestet",
+       "ISO 9001 Norm",
+       "Im Austausch",
+       "Ohne Pfand im Voraus"
+      ]
+     },
+     "seo": {
+      "metaTitle": "",
+      "metaDescription": ""
+     },
+     "translatedAt": "2026-09-04T16:15:13.162Z"
+    }
+   }
+  },
+  {
+   "_role": "ALV-BX boîte (« en usine selon la norme ISO 9001 »)",
+   "_id": "6a467d2bba47c6ad649de2a2",
+   "name": "Boîte de vitesses reconditionnée Volkswagen Crafter 2.0 TDI 6 rapports — TWP",
+   "slug": "boite-vitesses-volkswagen-crafter-2-0-tdi-twp",
+   "sku": "ALV-BX-TWP-B7AB26",
+   "category": "Boîtes de vitesses",
+   "brand": "Volkswagen",
+   "engineCode": "TWP",
+   "serviceType": "",
+   "priceCents": 335900,
+   "compareAtPriceCents": null,
+   "consigne": {
+    "amountCents": 0,
+    "chargeUpfront": false,
+    "delayDays": 30,
+    "enabled": false
+   },
+   "inclusions": [],
+   "exclusions": [],
+   "warranty": {
+    "months": 24,
+    "text": "Garantie 2 ans, échange standard."
+   },
+   "inStock": true,
+   "isPublished": true,
+   "imageUrl": "/media/6a467d2b4ee3e3b829e65b84",
+   "galleryUrls": [
+    "/media/6a467d2b4ee3e3b829e65b84"
+   ],
+   "galleryTypes": [],
+   "shippingDelayText": "24-72h",
+   "compatibleReferences": [],
+   "badges": {
+    "cards": [
+     "Testée sur banc",
+     "Norme ISO 9001",
+     "Échange standard",
+     "Sans consigne à l'avance"
+    ],
+    "condition": "Reconditionnée · Échange standard",
+    "topLeft": ""
+   },
+   "shortDescription": "Boîte manuelle TWP pour Volkswagen Crafter 2.0 TDI en échange standard, reconstruite à zéro kilomètre (usine ISO 9001), testée sur banc, garantie 2 ans, sans consigne à l'avance.",
+   "description": "Cette boîte de vitesses manuelle à 6 rapports pour Volkswagen Crafter 2.0 TDI (référence TWP) est reconditionnée en usine selon la norme ISO 9001, puis testée sur banc avant expédition. Recommandée lorsque la boîte d'origine présente des à-coups, des fuites ou une usure des pignons. Ce n'est pas une pièce d'occasion : reconstruite à zéro kilomètre, chaque pièce d'usure est remplacée par une pièce neuve avant remontage et contrôle final. Fournie en échange standard : vous recevez une boîte reconstruite à zéro kilomètre et nous organisons la récupération de votre ancienne pièce — transport pris en charge, rien à expédier de votre côté. Notre avantage décisif : aucune consigne n'est facturée à l'avance — vous ne bloquez pas de trésorerie, là où la plupart des reconditionneurs l'exigent à la commande. À monter par un professionnel. Garantie 2 ans. Compatibilité à confirmer via votre plaque ou votre code boîte.",
+   "keyPoints": [
+    "Référence boîte : TWP",
+    "Type : boîte manuelle 6 rapports",
+    "Reconstruite à zéro kilomètre — pièces d'usure remplacées par des neuves",
+    "Reconditionnée en usine certifiée ISO 9001 (fournisseur des concessionnaires)",
+    "Échange standard, testée sur banc",
+    "Livraison + récupération de l'ancienne pièce incluses",
+    "Sans consigne facturée à l'avance",
+    "Garantie 2 ans"
+   ],
+   "specs": [
+    {
+     "label": "Type",
+     "value": "Manuelle 6 rapports",
+     "_id": "6a491985d3bf01ef26cd8e6c"
+    }
+   ],
+   "options": [],
+   "reconditioningSteps": [
+    {
+     "title": "Démontage & diagnostic",
+     "description": "Ouverture complète et contrôle des pignons, synchros et roulements.",
+     "_id": "6a491985d3bf01ef26cd8e62"
+    },
+    {
+     "title": "Remplacement des pièces d'usure",
+     "description": "Roulements, joints et synchros défectueux remplacés.",
+     "_id": "6a491985d3bf01ef26cd8e63"
+    },
+    {
+     "title": "Remontage",
+     "description": "Remontage aux couples constructeur et réglages des jeux.",
+     "_id": "6a491985d3bf01ef26cd8e64"
+    },
+    {
+     "title": "Essai & contrôle",
+     "description": "Test de passage des rapports avant expédition.",
+     "_id": "6a491985d3bf01ef26cd8e65"
+    }
+   ],
+   "compatibility": [
+    {
+     "make": "Volkswagen",
+     "model": "Crafter",
+     "years": "",
+     "engine": "2.0 TDI",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a491985d3bf01ef26cd8e6b"
+    }
+   ],
+   "faqs": [
+    {
+     "question": "Cette boîte TWP est-elle compatible avec ma Volkswagen Crafter ?",
+     "answer": "Communiquez-nous votre plaque d'immatriculation ou le code de votre boîte d'origine : nous confirmons la compatibilité avant expédition.",
+     "_id": "6a491985d3bf01ef26cd8e66"
+    },
+    {
+     "question": "Y a-t-il une consigne à payer ?",
+     "answer": "Non, aucune consigne n'est facturée à l'avance — c'est notre avantage. Vous restituez simplement votre ancienne boîte après montage, dans le cadre de l'échange standard.",
+     "_id": "6a491985d3bf01ef26cd8e67"
+    },
+    {
+     "question": "Comment se passe l'échange standard ?",
+     "answer": "Vous recevez une boîte reconstruite à zéro kilomètre. La livraison se fait au garage ou à domicile et nous récupérons votre ancienne pièce lors d'un passage distinct : rien à expédier ni à préparer à l'avance de votre côté.",
+     "_id": "6a491985d3bf01ef26cd8e68"
+    },
+    {
+     "question": "Faut-il un professionnel pour le montage ?",
+     "answer": "Oui, l'installation doit être réalisée par un professionnel. Le garage peut attendre d'avoir reçu la boîte reconditionnée avant de mettre le véhicule sur le pont.",
+     "_id": "6a491985d3bf01ef26cd8e69"
+    },
+    {
+     "question": "Quelle est la garantie ?",
+     "answer": "Cette boîte reconstruite à zéro kilomètre en usine (norme ISO 9001) et testée sur banc est garantie 2 ans.",
+     "_id": "6a491985d3bf01ef26cd8e6a"
+    }
+   ],
+   "media": {
+    "videoUrl": ""
+   },
+   "seo": {
+    "metaDescription": "",
+    "metaTitle": ""
+   },
+   "sections": {
+    "showCompatibility": true,
+    "showFaq": true,
+    "showKeyPoints": true,
+    "showReconditioning": true,
+    "showRelatedProducts": true,
+    "showSpecs": true,
+    "showSupportBox": true,
+    "showVideo": true
+   },
+   "localizations": {
+    "de": {
+     "name": "Generalüberholtes Austauschgetriebe Volkswagen Crafter 2.0 TDI 6 Gänge — TWP",
+     "slug": "generalueberholtes-austauschgetriebe-volkswagen-crafter-2-0-tdi-6-gaenge-twp",
+     "shortDescription": "Manuelles Getriebe TWP für Volkswagen Crafter 2.0 TDI im Austausch, generalüberholt auf null Kilometer (ISO 9001 Werk), auf dem Prüfstand getestet, 2 Jahre Garantie, ohne Pfand im Voraus.",
+     "description": "Dieses manuelle Getriebe mit 6 Gängen für Volkswagen Crafter 2.0 TDI (Referenz TWP) wird im Werk gemäß ISO 9001 standardisiert generalüberholt und anschließend auf dem Prüfstand getestet, bevor es versendet wird. Empfohlen, wenn das Originalgetriebe Ruckeln, Undichtigkeiten oder Verschleiß der Zahnräder aufweist. Es handelt sich nicht um ein Gebrauchtteil: generalüberholt auf null Kilometer, wird jedes Verschleißteil vor der Montage und der Endkontrolle durch ein Neuteil ersetzt. Im Austausch geliefert: Sie erhalten ein generalüberholtes Getriebe auf null Kilometer und wir organisieren die Rückholung Ihres alten Teils — Transportkosten werden übernommen, nichts muss von Ihrer Seite versendet werden. Unser entscheidender Vorteil: Es wird kein Pfand im Voraus berechnet — Sie blockieren kein Kapital, wo die meisten Generalüberholer dies bei der Bestellung verlangen. Montage durch einen Fachmann erforderlich. 2 Jahre Garantie. Kompatibilität über Ihr Typenschild oder Ihren Getriebecode zu bestätigen.",
+     "keyPoints": [
+      "Getriebe Referenz: TWP",
+      "Typ: manuelles Getriebe 6 Gänge",
+      "Generalüberholt auf null Kilometer — Verschleißteile durch neue ersetzt",
+      "Generalüberholt in einem ISO 9001 zertifizierten Werk (Lieferant der Händler)",
+      "Austausch, auf dem Prüfstand getestet",
+      "Lieferung + Rückholung des alten Teils inklusive",
+      "Ohne im Voraus berechnetes Pfand",
+      "2 Jahre Garantie"
+     ],
+     "inclusions": [],
+     "exclusions": [],
+     "specs": [
+      {
+       "label": "Typ",
+       "value": "Manuell 6 Gänge"
+      }
+     ],
+     "reconditioningSteps": [
+      {
+       "title": "Demontage & Diagnose",
+       "description": "Vollständige Öffnung und Kontrolle der Zahnräder, Synchronisierungen und Lager."
+      },
+      {
+       "title": "Ersatz der Verschleißteile",
+       "description": "Defekte Lager, Dichtungen und Synchronisierungen werden ersetzt."
+      },
+      {
+       "title": "Wiederzusammenbau",
+       "description": "Wiederzusammenbau nach Herstellervorgaben und Einstellung der Spielmaße."
+      },
+      {
+       "title": "Test & Kontrolle",
+       "description": "Test der Gangwechsel vor dem Versand."
+      }
+     ],
+     "faqs": [
+      {
+       "question": "Ist dieses TWP-Getriebe mit meinem Volkswagen Crafter kompatibel?",
+       "answer": "Teilen Sie uns Ihr Kennzeichen oder den Code Ihres Originalgetriebes mit: Wir bestätigen die Kompatibilität vor dem Versand."
+      },
+      {
+       "question": "Gibt es ein Pfand zu zahlen?",
+       "answer": "Nein, es wird kein Pfand im Voraus berechnet — das ist unser Vorteil. Sie geben einfach Ihr altes Getriebe nach der Montage im Rahmen des Austauschs zurück."
+      },
+      {
+       "question": "Wie funktioniert der Austausch?",
+       "answer": "Sie erhalten ein generalüberholtes Getriebe auf null Kilometer. Die Lieferung erfolgt an die Werkstatt oder nach Hause und wir holen Ihr altes Teil bei einem separaten Besuch ab: Nichts muss von Ihrer Seite im Voraus versendet oder vorbereitet werden."
+      },
+      {
+       "question": "Muss die Montage von einem Fachmann durchgeführt werden?",
+       "answer": "Ja, die Installation muss von einem Fachmann durchgeführt werden. Die Werkstatt kann warten, bis sie das generalüberholte Getriebe erhalten hat, bevor sie das Fahrzeug auf die Hebebühne stellt."
+      },
+      {
+       "question": "Wie lange ist die Garantie?",
+       "answer": "Dieses auf null Kilometer im Werk generalüberholte (ISO 9001 Norm) und auf dem Prüfstand getestete Getriebe hat eine Garantie von 2 Jahren."
+      }
+     ],
+     "shippingDelayText": "24-72 Std.",
+     "badges": {
+      "condition": "Generalüberholt · im Austausch",
+      "cards": [
+       "Auf dem Prüfstand getestet",
+       "ISO 9001 Norm",
+       "Im Austausch",
+       "Ohne Pfand im Voraus"
+      ]
+     },
+     "seo": {
+      "metaTitle": "",
+      "metaDescription": ""
+     },
+     "translatedAt": "2026-09-04T16:06:13.814Z"
+    }
+   }
+  },
+  {
+   "_role": "EDN boîte (« en usine ISO 9001 : »)",
+   "_id": "6a492634ba47c6ad649df325",
+   "name": "Boîte de vitesses reconditionnée Volkswagen Transporter 2.5 TDI — HNE",
+   "slug": "boite-vitesses-volkswagen-transporter-2-5-tdi-hne",
+   "sku": "EDN-HNE",
+   "category": "Boîtes de vitesses",
+   "brand": "Volkswagen",
+   "engineCode": "HNE",
+   "serviceType": "",
+   "priceCents": 161400,
+   "compareAtPriceCents": null,
+   "consigne": {
+    "amountCents": 0,
+    "chargeUpfront": false,
+    "delayDays": 30,
+    "enabled": false
+   },
+   "inclusions": [],
+   "exclusions": [],
+   "warranty": {
+    "months": 24,
+    "text": "Garantie 2 ans, échange standard."
+   },
+   "inStock": true,
+   "isPublished": true,
+   "imageUrl": "/media/6a492636bede8e98192693d3",
+   "galleryUrls": [
+    "/media/6a492636bede8e98192693d3"
+   ],
+   "galleryTypes": [
+    "image"
+   ],
+   "shippingDelayText": "24-72h",
+   "compatibleReferences": [],
+   "badges": {
+    "cards": [
+     "Testée sur banc",
+     "Norme ISO 9001",
+     "Échange standard",
+     "Sans consigne à l'avance"
+    ],
+    "condition": "Reconditionnée · Échange standard",
+    "topLeft": ""
+   },
+   "shortDescription": "Boîte manuelle HNE pour Volkswagen Transporter 2.5 TDI, reconditionnée à zéro kilomètre (usine ISO 9001), échange standard, garantie 2 ans, sans consigne à l'avance.",
+   "description": "Redonnez une seconde vie à la transmission de votre Volkswagen Transporter 2.5 TDI avec cette boîte à 6 rapports référence HNE, reconditionnée en usine (norme ISO 9001) et contrôlée sur banc. Idéale en cas de passages difficiles, de rapport qui saute, de craquements ou de bruit anormal en charge. Reconditionnement à zéro kilomètre en usine ISO 9001 : remplacement systématique des roulements, synchros et joints par des pièces neuves puis essai sur banc. Fournie en échange standard : vous recevez une boîte reconstruite à zéro kilomètre et nous récupérons votre ancienne pièce — transport pris en charge, rien à expédier. Contrairement à l'usage du marché, pas de consigne à régler d'avance : vous restituez l'ancienne pièce après montage. Pose par un professionnel recommandée. Garantie 2 ans. Contactez-nous pour valider la compatibilité exacte.",
+   "keyPoints": [
+    "Référence boîte : HNE",
+    "Type : boîte manuelle 6 rapports",
+    "Reconstruite à zéro kilomètre — pièces d'usure neuves",
+    "Usine certifiée ISO 9001 (fournisseur des concessionnaires)",
+    "Échange standard, testée sur banc",
+    "Livraison + récupération de l'ancienne pièce incluses",
+    "Sans consigne facturée à l'avance",
+    "Garantie 2 ans"
+   ],
+   "specs": [
+    {
+     "label": "Type",
+     "value": "Manuelle 6 rapports",
+     "_id": "6a492634e1440cd07c76f17e"
+    }
+   ],
+   "options": [],
+   "reconditioningSteps": [
+    {
+     "title": "Démontage & diagnostic",
+     "description": "Ouverture complète et contrôle des pignons, synchros et roulements.",
+     "_id": "6a492634e1440cd07c76f176"
+    },
+    {
+     "title": "Remplacement des pièces d'usure",
+     "description": "Roulements, joints et synchros remplacés par des pièces neuves.",
+     "_id": "6a492634e1440cd07c76f177"
+    },
+    {
+     "title": "Remontage",
+     "description": "Remontage aux couples constructeur et réglage des jeux.",
+     "_id": "6a492634e1440cd07c76f178"
+    },
+    {
+     "title": "Essai sur banc",
+     "description": "Test des passages de rapports avant expédition.",
+     "_id": "6a492634e1440cd07c76f179"
+    }
+   ],
+   "compatibility": [
+    {
+     "make": "Volkswagen",
+     "model": "Transporter",
+     "years": "",
+     "engine": "2.5 TDI",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a492634e1440cd07c76f17d"
+    }
+   ],
+   "faqs": [
+    {
+     "question": "Cette boîte HNE est-elle compatible avec ma Volkswagen Transporter ?",
+     "answer": "Communiquez-nous votre plaque ou le code de votre boîte d'origine : nous confirmons la compatibilité avant expédition.",
+     "_id": "6a492634e1440cd07c76f17a"
+    },
+    {
+     "question": "Y a-t-il une consigne à payer ?",
+     "answer": "Non, aucune consigne à l'avance — vous restituez l'ancienne boîte après montage, dans le cadre de l'échange standard.",
+     "_id": "6a492634e1440cd07c76f17b"
+    },
+    {
+     "question": "Quelle est la garantie ?",
+     "answer": "Cette boîte reconstruite à zéro kilomètre (usine ISO 9001) et testée sur banc est garantie 2 ans.",
+     "_id": "6a492634e1440cd07c76f17c"
+    }
+   ],
+   "media": {
+    "videoUrl": ""
+   },
+   "seo": {
+    "metaDescription": "",
+    "metaTitle": ""
+   },
+   "sections": {
+    "showCompatibility": true,
+    "showFaq": true,
+    "showKeyPoints": true,
+    "showReconditioning": true,
+    "showRelatedProducts": true,
+    "showSpecs": true,
+    "showSupportBox": true,
+    "showVideo": true
+   },
+   "localizations": {
+    "de": {
+     "name": "generalüberholtes Austauschgetriebe Volkswagen Transporter 2.5 TDI — HNE",
+     "slug": "generalueberholtes-austauschgetriebe-volkswagen-transporter-2-5-tdi-hne",
+     "shortDescription": "Manuelles Getriebe HNE für Volkswagen Transporter 2.5 TDI, generalüberholt mit null Kilometern (ISO 9001 Werk), im Austausch, 2 Jahre Garantie, ohne Pfand im Voraus.",
+     "description": "Geben Sie der Getriebe Ihres Volkswagen Transporter 2.5 TDI mit diesem 6-Gang-Getriebe, Referenz HNE, generalüberholt im Werk (ISO 9001 Norm) und auf dem Prüfstand getestet, ein zweites Leben. Ideal bei schwierigen Schaltvorgängen, wenn Gänge herausspringen, Knacken oder ungewöhnliche Geräusche unter Last auftreten. Generalüberholung mit null Kilometern im ISO 9001 Werk: systematischer Austausch von Lagern, Synchronisierern und Dichtungen durch neue Teile, gefolgt von einem Test auf dem Prüfstand. Wird im Austausch geliefert: Sie erhalten ein generalüberholtes Getriebe mit null Kilometern und wir holen Ihr altes Teil ab — Transportkosten übernommen, nichts zu versenden. Im Gegensatz zur Marktübung gibt es kein im Voraus zu zahlendes Pfand: Sie geben das alte Teil nach der Montage zurück. Montage durch einen Fachmann empfohlen. 2 Jahre Garantie. Kontaktieren Sie uns, um die genaue Kompatibilität zu bestätigen.",
+     "keyPoints": [
+      "Getriebecode: HNE",
+      "Typ: manuelles Getriebe 6-Gang",
+      "Generalüberholt mit null Kilometern — neue Verschleißteile",
+      "ISO 9001 zertifiziertes Werk (Zulieferer der Händler)",
+      "Im Austausch, auf dem Prüfstand getestet",
+      "Lieferung + Abholung des alten Teils inklusive",
+      "Ohne im Voraus berechnetes Pfand",
+      "2 Jahre Garantie"
+     ],
+     "inclusions": [],
+     "exclusions": [],
+     "specs": [
+      {
+       "label": "Typ",
+       "value": "Manuelles 6-Gang"
+      }
+     ],
+     "reconditioningSteps": [
+      {
+       "title": "Demontage & Diagnose",
+       "description": "Vollständige Öffnung und Kontrolle der Zahnräder, Synchronisierer und Lager."
+      },
+      {
+       "title": "Austausch der Verschleißteile",
+       "description": "Lager, Dichtungen und Synchronisierer werden durch neue Teile ersetzt."
+      },
+      {
+       "title": "Wiederzusammenbau",
+       "description": "Wiederzusammenbau nach Herstellerdrehmoment und Einstellung der Spielräume."
+      },
+      {
+       "title": "Test auf dem Prüfstand",
+       "description": "Test der Schaltvorgänge vor dem Versand."
+      }
+     ],
+     "faqs": [
+      {
+       "question": "Ist dieses Getriebe HNE mit meinem Volkswagen Transporter kompatibel?",
+       "answer": "Teilen Sie uns Ihr Typenschild oder den Code Ihres Originalgetriebes mit: Wir bestätigen die Kompatibilität vor dem Versand."
+      },
+      {
+       "question": "Gibt es ein Pfand zu zahlen?",
+       "answer": "Nein, kein Pfand im Voraus — Sie geben das alte Getriebe nach der Montage im Rahmen des Austauschs zurück."
+      },
+      {
+       "question": "Wie lange ist die Garantie?",
+       "answer": "Dieses generalüberholte Getriebe mit null Kilometern (ISO 9001 Werk) und auf dem Prüfstand getestet, hat eine Garantie von 2 Jahren."
+      }
+     ],
+     "shippingDelayText": "24-72 Std.",
+     "badges": {
+      "condition": "Generalüberholt · im Austausch",
+      "cards": [
+       "Auf dem Prüfstand getestet",
+       "ISO 9001 Norm",
+       "Im Austausch",
+       "Ohne Pfand im Voraus"
+      ]
+     },
+     "seo": {
+      "metaTitle": "",
+      "metaDescription": ""
+     },
+     "translatedAt": "2026-09-04T16:22:58.466Z"
+    }
+   }
+  },
+  {
+   "_role": "AUTO moteur d’occasion (carte et FAQ « 3× sans frais »)",
+   "_id": "6a416e63450590174e7611f7",
+   "name": "Moteur Opel Zafira Z17DTR-ZAFIRA — occasion",
+   "slug": "moteur-opel-z17dtr-zafira-18705387989",
+   "sku": "AUTO-18705387989",
+   "category": "Moteurs",
+   "brand": "Opel",
+   "engineCode": "Z17DTR-ZAFIRA",
+   "serviceType": "",
+   "priceCents": 198000,
+   "compareAtPriceCents": null,
+   "consigne": {
+    "amountCents": 0,
+    "chargeUpfront": false,
+    "delayDays": 30,
+    "enabled": false
+   },
+   "inclusions": [],
+   "exclusions": [],
+   "warranty": {
+    "months": 6,
+    "text": "Garantie 6 mois Autoliva."
+   },
+   "inStock": true,
+   "isPublished": true,
+   "imageUrl": "/media/6a416eeecefd5fd02fa91d75",
+   "galleryUrls": [
+    "/media/6a416eeecefd5fd02fa91d75",
+    "/media/6a416eeecefd5fd02fa91d77",
+    "/media/6a416eeecefd5fd02fa91d79",
+    "/media/6a416eefcefd5fd02fa91d7b"
+   ],
+   "galleryTypes": [
+    "image",
+    "image",
+    "image",
+    "image"
+   ],
+   "shippingDelayText": "Délai confirmé à la commande",
+   "compatibleReferences": [
+    "Z17DTR-ZAFIRA"
+   ],
+   "badges": {
+    "cards": [
+     "Garantie 6 mois",
+     "Occasion contrôlée",
+     "Paiement 3× sans frais",
+     "Livraison en Europe"
+    ],
+    "condition": "Occasion",
+    "topLeft": ""
+   },
+   "shortDescription": "Moteur complet d'occasion Z17DTR-ZAFIRA diesel pour Opel. Contrôlé, garanti 6 mois Autoliva.",
+   "description": "<p><strong>Z17DTR-ZAFIRA : moteur complet d'occasion — 1.7 L · 125 ch · Diesel pour remplacement.</strong></p><p>Véhicules concernés (1) : Opel Zafira.</p><ul><li><strong>Contrôle qualité :</strong> compression, analyse d'huile et contrôle extérieur avant départ.</li><li><strong>Livré avec ses accessoires</strong> visibles sur les photos (en appoint, non garantis individuellement).</li><li><strong>Carburant :</strong> Diesel.</li><li><strong>Kilométrage :</strong> env. 137 095 km (indicatif, confirmé à la commande).</li></ul><p>Couvert par notre <strong>garantie 6 mois</strong>. Expédié emballé sur palette. Photo du moteur réel.</p>",
+   "keyPoints": [
+    "Cylindrée : 1.7 L",
+    "Puissance : 125 ch",
+    "Carburant : Diesel",
+    "Kilométrage : env. 137 095 km"
+   ],
+   "specs": [
+    {
+     "label": "Type",
+     "value": "Moteur complet (avec accessoires)",
+     "_id": "6a416e6312593d7eae6a33ef"
+    }
+   ],
+   "options": [],
+   "reconditioningSteps": [
+    {
+     "title": "Contrôle extérieur",
+     "description": "Inspection de l'état des composants externes du moteur : carter, culasse, supports et accessoires.",
+     "_id": "6a416e6312593d7eae6a33e5"
+    },
+    {
+     "title": "Nettoyage",
+     "description": "Nettoyage extérieur du moteur avant contrôle.",
+     "_id": "6a416e6312593d7eae6a33e6"
+    },
+    {
+     "title": "Contrôles moteur",
+     "description": "Prise de compression sur chaque cylindre, analyse de l'huile et endoscopie de l'intérieur des cylindres.",
+     "_id": "6a416e6312593d7eae6a33e7"
+    },
+    {
+     "title": "Emballage & expédition",
+     "description": "Emballage sur palette, cerclage et film cellophane — prêt à être récupéré ou expédié partout en Europe.",
+     "_id": "6a416e6312593d7eae6a33e8"
+    }
+   ],
+   "compatibility": [
+    {
+     "make": "Opel",
+     "model": "Zafira",
+     "years": "",
+     "engine": "",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a416e6312593d7eae6a33ee"
+    }
+   ],
+   "faqs": [
+    {
+     "question": "Le moteur Z17DTR-ZAFIRA est-il compatible avec mon véhicule ?",
+     "answer": "Le code moteur Z17DTR-ZAFIRA équipe notamment : Opel Zafira. Vérifiez avec votre plaque ou votre VIN avant commande.",
+     "_id": "6a416e6312593d7eae6a33e9"
+    },
+    {
+     "question": "Quelle garantie sur ce moteur ?",
+     "answer": "Tous nos moteurs d'occasion sont garantis 6 mois par Autoliva.",
+     "_id": "6a416e6312593d7eae6a33ea"
+    },
+    {
+     "question": "Les accessoires sont-ils garantis ?",
+     "answer": "Le moteur est livré avec les accessoires visibles sur les photos, fournis en appoint. La garantie porte sur le moteur.",
+     "_id": "6a416e6312593d7eae6a33eb"
+    },
+    {
+     "question": "Comment se passe la livraison ?",
+     "answer": "La livraison s'effectue par transporteur, sur palette. Le délai vous est confirmé lors de la commande.",
+     "_id": "6a416e6312593d7eae6a33ec"
+    },
+    {
+     "question": "Puis-je payer en plusieurs fois ?",
+     "answer": "Oui, le paiement en 3× ou 4× sans frais est disponible pour les commandes de moins de 2 000 €.",
+     "_id": "6a416e6312593d7eae6a33ed"
+    }
+   ],
+   "media": {
+    "videoUrl": ""
+   },
+   "seo": {
+    "metaDescription": "",
+    "metaTitle": ""
+   },
+   "sections": {
+    "showCompatibility": true,
+    "showFaq": true,
+    "showKeyPoints": true,
+    "showReconditioning": true,
+    "showRelatedProducts": true,
+    "showSpecs": true,
+    "showSupportBox": true,
+    "showVideo": true
+   },
+   "localizations": {
+    "de": {
+     "name": "Gebrauchtmotor Opel Zafira Z17DTR-ZAFIRA",
+     "slug": "gebrauchtmotor-opel-zafira-z17dtr-zafira",
+     "shortDescription": "Vollständiger Gebrauchtmotor Z17DTR-ZAFIRA Diesel für Opel. Geprüft, 6 Monate Garantie von Autoliva.",
+     "description": "<p><strong>Z17DTR-ZAFIRA : vollständiger Gebrauchtmotor — 1.7 L · 125 PS · Diesel zum Austausch.</strong></p><p>Betroffene Fahrzeuge (1) : Opel Zafira.</p><ul><li><strong>Qualitätskontrolle :</strong> Kompression, Ölanalyse und äußerliche Kontrolle vor dem Versand.</li><li><strong>Geliefert mit seinen Zubehörteilen</strong>, die auf den Fotos sichtbar sind (als Ergänzung, nicht einzeln garantiert).</li><li><strong>Kraftstoff :</strong> Diesel.</li><li><strong>Kilometerstand :</strong> ca. 137 095 km (indikativ, bei der Bestellung bestätigt).</li></ul><p>Deckt sich mit unserer <strong>6 Monate Garantie</strong>. Versand verpackt auf Palette. Foto des tatsächlichen Motors.</p>",
+     "keyPoints": [
+      "Hubraum : 1.7 L",
+      "Leistung : 125 PS",
+      "Kraftstoff : Diesel",
+      "Kilometerstand : ca. 137 095 km"
+     ],
+     "inclusions": [],
+     "exclusions": [],
+     "specs": [
+      {
+       "label": "Typ",
+       "value": "Vollständiger Motor (mit Zubehör)"
+      }
+     ],
+     "reconditioningSteps": [
+      {
+       "title": "Äußere Kontrolle",
+       "description": "Inspektion des Zustands der externen Komponenten des Motors : Ölwanne, Zylinderkopf, Halterungen und Zubehör."
+      },
+      {
+       "title": "Reinigung",
+       "description": "Äußere Reinigung des Motors vor der Kontrolle."
+      },
+      {
+       "title": "Motorprüfungen",
+       "description": "Kompressionsmessung in jedem Zylinder, Ölanalyse und Endoskopie des Inneren der Zylinder."
+      },
+      {
+       "title": "Verpackung & Versand",
+       "description": "Verpackung auf Palette, Umreifung und Folie — bereit zur Abholung oder zum Versand in ganz Europa."
+      }
+     ],
+     "faqs": [
+      {
+       "question": "Ist der Motor Z17DTR-ZAFIRA mit meinem Fahrzeug kompatibel?",
+       "answer": "Der Motorcode Z17DTR-ZAFIRA wird unter anderem in Opel Zafira verwendet. Überprüfen Sie mit Ihrem Typenschild oder Ihrer VIN vor der Bestellung."
+      },
+      {
+       "question": "Welche Garantie gibt es auf diesen Motor?",
+       "answer": "Alle unsere Gebrauchtmotoren haben eine Garantie von 6 Monaten durch Autoliva."
+      },
+      {
+       "question": "Sind die Zubehörteile garantiert?",
+       "answer": "Der Motor wird mit den auf den Fotos sichtbaren Zubehörteilen geliefert, die als Ergänzung bereitgestellt werden. Die Garantie bezieht sich auf den Motor."
+      },
+      {
+       "question": "Wie erfolgt die Lieferung?",
+       "answer": "Die Lieferung erfolgt durch einen Spediteur, auf Palette. Der Zeitraum wird Ihnen bei der Bestellung bestätigt."
+      },
+      {
+       "question": "Kann ich in Raten zahlen?",
+       "answer": "Ja, die Zahlung in 3× oder 4× ohne Gebühren ist für Bestellungen unter 2 000 € verfügbar."
+      }
+     ],
+     "shippingDelayText": "Liefertermin wird bei der Bestellung bestätigt",
+     "badges": {
+      "topLeft": "",
+      "condition": "Gebraucht",
+      "cards": [
+       "Garantie 6 Monate",
+       "Geprüft gebraucht",
+       "Zahlung 3× ohne Gebühren",
+       "Lieferung in Europa"
+      ]
+     },
+     "seo": {
+      "metaTitle": "",
+      "metaDescription": ""
+     },
+     "translatedAt": "2026-09-08T07:39:42.953Z"
+    }
+   }
+  },
+  {
+   "_role": "WC boîte de transfert (« couverture la plus longue », meta « 3× »)",
+   "_id": "6988d15c707eef3255a72676",
+   "name": "Boîte de transfert Mercedes-Benz 4MATIC 7G-Tronic W204 W212 W221 reconditionnée",
+   "slug": "boite-transfert-mercedes-4matic-7g-tronic-w204-w212-w221-reconditionnee",
+   "sku": "WC-7756",
+   "category": "Boîtes de transfert",
+   "brand": "Mercedes-Benz",
+   "priceCents": 149000,
+   "compareAtPriceCents": null,
+   "consigne": {
+    "enabled": false,
+    "amountCents": 0,
+    "delayDays": 30
+   },
+   "inStock": true,
+   "isPublished": true,
+   "imageUrl": "/media/69c04f3de322b45070853b9d",
+   "galleryUrls": [
+    "/media/69c04f3de322b45070853b9d",
+    "/media/69c04f3ee322b45070853ba3",
+    "/media/69c04f3fe322b45070853baa",
+    "/media/69c04ed9e322b450708537a9",
+    "/media/69c04e8de322b45070853492"
+   ],
+   "galleryTypes": [
+    "image",
+    "image",
+    "image",
+    "image",
+    "image"
+   ],
+   "shippingDelayText": "Délai selon disponibilité",
+   "compatibleReferences": [
+    "A2212700043",
+    "A2212700045",
+    "A2212700326",
+    "A2212700345",
+    "A2212701843",
+    "A2212708604",
+    "A2212710248"
+   ],
+   "badges": {
+    "topLeft": "Garantie 2 ans",
+    "condition": "Reconditionnée"
+   },
+   "shortDescription": "Boîte de transfert Mercedes-Benz 4MATIC pour plateformes W204, X204, W212 et W221 équipée de transmission 7G-Tronic 722.9. Produit totalement reconditionné, vendu en échange standard, testé sur banc avant expédition et couvert par une garantie de 2 ans.",
+   "description": "Cette boîte de transfert Mercedes-Benz 4MATIC pour transmission 7G-Tronic 722.9 est destinée aux véhicules des familles W204, X204, W212 et W221 selon version, motorisation et référence montée d’origine. Elle constitue une solution fiable pour remplacer une boîte de transfert usée, bruyante, grippée ou présentant des à-coups de transmission sur les modèles à transmission intégrale.\r\n\r\nLe produit est vendu en échange standard et fait l’objet d’un reconditionnement complet avec contrôle des jeux, inspection des éléments internes, remplacement des composants d’usure nécessaires et validation finale sur banc avant expédition. L’objectif est de proposer une pièce prête à monter, plus rassurante qu’une occasion non contrôlée, avec une garantie de 2 ans.\r\n\r\nPoints forts du produit :\r\n\r\n- échange standard pour maîtriser le coût de remise en état\r\n\r\n- reconditionnement complet\r\n\r\n- essais et validation sur banc\r\n\r\n- solution adaptée aux Mercedes 4MATIC équipées de 7G-Tronic\r\n\r\n- garantie 2 ans\r\n\r\nAvant commande, il est fortement conseillé de vérifier la compatibilité à partir du numéro VIN, de la référence présente sur la pièce déposée et de la version exacte de boîte 722.9. Cette vérification est essentielle, car plusieurs variantes de boîte de transfert existent selon châssis, année, moteur et évolution de transmission. Idéal pour une remise en conformité durable sur véhicule routier ou utilitaire léger premium Mercedes-Benz.",
+   "keyPoints": [
+    "Boîte de transfert reconditionnée en France, testée sur banc avec rotation, pression et couple sous charge",
+    "Compatible Mercedes-Benz Classe C W204 C 280 4MATIC/Classe C W204 C 300 4MATIC/Classe C W204 C 350 4MATIC — références OEM A2212700043, A2212700045, A2212700326 — vérification VIN gratuite avant commande",
+    "Échange standard sans caution : votre ancienne pièce reprise sous 30 jours, frais de retour pris en charge",
+    "Garantie 2 ans pièces et main-d'œuvre — couverture la plus longue du marché sur ce modèle",
+    "Expédition sous 48-72 h en France métropolitaine, paiement en 3× sans frais (496,67 €/mois)",
+    "Équipe technique dédiée Mercedes-Benz — réponse en moins de 24 h pour validation de votre commande"
+   ],
+   "specs": [
+    {
+     "label": "Type",
+     "value": "Boîte de transfert 4MATIC pour transmission automatique 7G-Tronic 722.9",
+     "_id": "69f1c04f170451578d09dc69"
+    },
+    {
+     "label": "Programmation",
+     "value": "Aucune programmation nécessaire",
+     "_id": "69f1c04f170451578d09dc6a"
+    },
+    {
+     "label": "Reconditionnement",
+     "value": "Échange standard sans caution",
+     "_id": "6a0d56b6f285829b95f2693d"
+    },
+    {
+     "label": "Garantie",
+     "value": "2 ans pièces et main-d'œuvre",
+     "_id": "6a0d56b6f285829b95f2693e"
+    },
+    {
+     "label": "Délai de livraison",
+     "value": "48-72 h en France métropolitaine",
+     "_id": "6a0d56b6f285829b95f2693f"
+    },
+    {
+     "label": "Test qualité",
+     "value": "Banc d'essai avec rotation, pression et couple sous charge",
+     "_id": "6a0d56b6f285829b95f26940"
+    },
+    {
+     "label": "Reprise ancienne pièce",
+     "value": "Frais de retour pris en charge, délai 30 jours",
+     "_id": "6a0d56b6f285829b95f26941"
+    }
+   ],
+   "options": [
+    {
+     "templateId": "",
+     "key": "vin",
+     "label": "Numéro VIN du véhicule",
+     "type": "text",
+     "required": false,
+     "placeholder": "17 caractères",
+     "helpText": "Permet de vérifier la compatibilité avant expédition.",
+     "priceDeltaCents": 0,
+     "choices": [],
+     "_id": "69f1c04f170451578d09dc63"
+    },
+    {
+     "templateId": "",
+     "key": "old_part_return",
+     "label": "Retour de l’ancienne pièce",
+     "type": "choice",
+     "required": false,
+     "placeholder": "",
+     "helpText": "Choisissez votre mode de gestion de l’échange standard.",
+     "priceDeltaCents": 0,
+     "choices": [
+      {
+       "key": "return_after_receipt",
+       "label": "Retour de l’ancienne pièce après réception",
+       "priceDeltaCents": 0,
+       "absolutePriceCents": null,
+       "triggersCloning": false,
+       "_id": "69f1c04f170451578d09dc65"
+      },
+      {
+       "key": "contact_before_order",
+       "label": "Je souhaite être contacté avant commande pour l’échange standard",
+       "priceDeltaCents": 0,
+       "absolutePriceCents": null,
+       "triggersCloning": false,
+       "_id": "69f1c04f170451578d09dc66"
+      }
+     ],
+     "_id": "69f1c04f170451578d09dc64"
+    },
+    {
+     "templateId": "",
+     "key": "part_number",
+     "label": "Référence relevée sur votre pièce",
+     "type": "text",
+     "required": false,
+     "placeholder": "Exemple : A2212700326",
+     "helpText": "Utile si la référence d’origine est lisible sur la boîte déposée.",
+     "priceDeltaCents": 0,
+     "choices": [],
+     "_id": "69f1c04f170451578d09dc67"
+    }
+   ],
+   "reconditioningSteps": [
+    {
+     "title": "Démontage et expertise",
+     "description": "Ouverture complète de la boîte de transfert, nettoyage initial et contrôle visuel des carters, dentures, roulements, arbres et portées.",
+     "_id": "69f1c04f170451578d09dc5f"
+    },
+    {
+     "title": "Remise en état des organes d’usure",
+     "description": "Remplacement des composants usés ou non conformes, reprise des jeux fonctionnels et contrôle des éléments internes de transmission de couple.",
+     "_id": "69f1c04f170451578d09dc60"
+    },
+    {
+     "title": "Remontage avec contrôle qualité",
+     "description": "Remontage suivant une procédure stricte avec vérification de l’étanchéité, du fonctionnement mécanique et de la cohérence d’assemblage.",
+     "_id": "69f1c04f170451578d09dc61"
+    },
+    {
+     "title": "Test sur banc avant expédition",
+     "description": "Validation finale sur banc afin de contrôler le comportement de l’ensemble avant préparation et envoi.",
+     "_id": "69f1c04f170451578d09dc62"
+    }
+   ],
+   "compatibility": [
+    {
+     "make": "Mercedes-Benz",
+     "model": "Classe C W204 C 280 4MATIC",
+     "years": "2007-2009",
+     "engine": "3.0 V6 essence",
+     "_id": "69f1c04f170451578d09dc53"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "Classe C W204 C 300 4MATIC",
+     "years": "2008-2014",
+     "engine": "3.0 / 3.5 V6 essence",
+     "_id": "69f1c04f170451578d09dc54"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "Classe C W204 C 350 4MATIC",
+     "years": "2007-2014",
+     "engine": "3.5 V6 essence",
+     "_id": "69f1c04f170451578d09dc55"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "GLK X204 GLK 280 4MATIC",
+     "years": "2008-2012",
+     "engine": "3.0 V6 essence",
+     "_id": "69f1c04f170451578d09dc56"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "GLK X204 GLK 300 4MATIC",
+     "years": "2008-2012",
+     "engine": "3.0 V6 essence",
+     "_id": "69f1c04f170451578d09dc57"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "GLK X204 GLK 350 4MATIC",
+     "years": "2008-2015",
+     "engine": "3.5 V6 essence",
+     "_id": "69f1c04f170451578d09dc58"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "Classe E W212 E 300 4MATIC",
+     "years": "2009-2013",
+     "engine": "3.0 V6 essence",
+     "_id": "69f1c04f170451578d09dc59"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "Classe E W212 E 350 4MATIC",
+     "years": "2009-2016",
+     "engine": "3.5 V6 essence",
+     "_id": "69f1c04f170451578d09dc5a"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "Classe E W212 E 500 / E 550 4MATIC",
+     "years": "2009-2016",
+     "engine": "V8 essence",
+     "_id": "69f1c04f170451578d09dc5b"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "Classe S W221 S 350 4MATIC",
+     "years": "2006-2013",
+     "engine": "3.5 V6 essence",
+     "_id": "69f1c04f170451578d09dc5c"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "Classe S W221 S 450 4MATIC",
+     "years": "2006-2011",
+     "engine": "4.7 V8 essence",
+     "_id": "69f1c04f170451578d09dc5d"
+    },
+    {
+     "make": "Mercedes-Benz",
+     "model": "Classe S W221 S 500 / S 550 4MATIC",
+     "years": "2005-2013",
+     "engine": "V8 essence",
+     "_id": "69f1c04f170451578d09dc5e"
+    }
+   ],
+   "faqs": [
+    {
+     "question": "Cette boîte de transfert est-elle vraiment compatible avec mon véhicule Mercedes ?",
+     "answer": "La compatibilité doit être confirmée à partir du numéro VIN et de la référence relevée sur la pièce d’origine. La famille 7G-Tronic 4MATIC couvre plusieurs variantes très proches visuellement, mais différentes selon châssis, moteur, année et version de boîte 722.9. Les modèles W204, X204, W212 et W221 sont les plus probables, mais une vérification avant commande reste indispensable.",
+     "_id": "69f1c04f170451578d09dc4e"
+    },
+    {
+     "question": "Que signifie échange standard pour cette boîte de transfert ?",
+     "answer": "L’échange standard signifie que vous recevez une boîte de transfert reconditionnée prête à monter en contrepartie du retour de votre ancienne pièce. Ce fonctionnement permet d’obtenir un ensemble remis en état à coût maîtrisé tout en conservant une base technique réutilisable. Le retour de l’ancienne pièce est donc à prévoir selon les modalités du vendeur.",
+     "_id": "69f1c04f170451578d09dc4f"
+    },
+    {
+     "question": "Quels sont les signes d’une boîte de transfert défectueuse sur Mercedes 4MATIC ?",
+     "answer": "Les symptômes fréquents sont des vibrations dans la transmission, des bruits de roulement ou de frottement, des à-coups en manœuvre, des claquements à l’accélération ou à la décélération, et parfois des défauts liés à la transmission intégrale. Une usure interne peut aussi provoquer un fonctionnement irrégulier sans fuite apparente. Un diagnostic complet du véhicule est conseillé avant remplacement.",
+     "_id": "69f1c04f170451578d09dc50"
+    },
+    {
+     "question": "La pièce est-elle testée avant expédition ?",
+     "answer": "Oui, le produit est annoncé comme totalement reconditionné et testé sur banc avant expédition. Ce contrôle permet de valider le fonctionnement mécanique de l’ensemble avant envoi et d’offrir une solution plus rassurante qu’une boîte de transfert d’occasion non ouverte ni contrôlée.",
+     "_id": "69f1c04f170451578d09dc51"
+    },
+    {
+     "question": "Faut-il programmer ou coder la pièce après montage ?",
+     "answer": "Dans la plupart des cas, la boîte de transfert elle-même ne demande pas de programmation spécifique. En revanche, après montage, il est recommandé d’effectuer un contrôle des défauts, de l’huile, des arbres de transmission, des adaptations de boîte automatique et de l’état des organes périphériques. Cela sécurise la remise en service et évite d’attribuer à la nouvelle pièce un défaut provenant d’un autre élément.",
+     "_id": "69f1c04f170451578d09dc52"
+    }
+   ],
+   "media": {
+    "videoUrl": ""
+   },
+   "seo": {
+    "metaTitle": "Boîte de transfert Mercedes 4MATIC 7G-Tronic W204 W212 W221",
+    "metaDescription": "Boîte de transfert Mercedes. Reconditionnée 1 490 € TTC, garantie 2 ans, livraison 48-72 h. Échange standard sans caution, paiement en 3× sans frais."
+   },
+   "sections": {
+    "showCompatibility": true,
+    "showFaq": true,
+    "showKeyPoints": true,
+    "showReconditioning": true,
+    "showRelatedProducts": true,
+    "showSpecs": true,
+    "showSupportBox": true,
+    "showVideo": true
+   },
+   "localizations": {
+    "de": {
+     "name": "Verteilergetriebe Mercedes-Benz 4MATIC 7G-Tronic W204 W212 W221 generalüberholt",
+     "slug": "verteilergetriebe-mercedes-benz-4matic-7g-tronic-w204-w212-w221-generalueberholt",
+     "shortDescription": "Verteilergetriebe Mercedes-Benz 4MATIC für die Plattformen W204, X204, W212 und W221 mit 7G-Tronic 722.9. Vollständig generalüberholt, im Austausch verkauft, auf dem Prüfstand getestet vor dem Versand und mit 2 Jahren Garantie.",
+     "description": "Dieses Verteilergetriebe Mercedes-Benz 4MATIC für die 7G-Tronic 722.9 ist für Fahrzeuge der Baureihen W204, X204, W212 und W221 je nach Version, Motorisierung und originaler Referenz bestimmt. Es stellt eine zuverlässige Lösung dar, um ein abgenutztes, lautes, festgefahrenes oder ruckelndes Verteilergetriebe bei Allradmodellen zu ersetzen.\r\n\r\nDas Produkt wird im Austausch verkauft und unterliegt einer vollständigen Generalüberholung mit Kontrolle der Spielmaße, Inspektion der internen Elemente, Austausch der notwendigen Verschleißteile und abschließender Validierung auf dem Prüfstand vor dem Versand. Ziel ist es, ein montagefertiges Teil anzubieten, das vertrauenswürdiger ist als ein unkontrolliertes Gebrauchtteil, mit einer Garantie von 2 Jahren.\r\n\r\nProduktvorteile:\r\n\r\n- Austausch zur Kostenkontrolle der Instandsetzung\r\n\r\n- vollständige Generalüberholung\r\n\r\n- Tests und Validierung auf dem Prüfstand\r\n\r\n- Lösung geeignet für Mercedes 4MATIC mit 7G-Tronic\r\n\r\n- 2 Jahre Garantie\r\n\r\nVor der Bestellung wird dringend empfohlen, die Kompatibilität anhand der VIN-Nummer, der auf dem abgebauten Teil angegebenen Referenz und der genauen Version des Getriebes 722.9 zu überprüfen. Diese Überprüfung ist unerlässlich, da es mehrere Varianten von Verteilergetrieben gibt, die je nach Fahrgestell, Jahr, Motor und Getriebeentwicklung variieren. Ideal für eine nachhaltige Wiederherstellung der Konformität bei Premium Mercedes-Benz Straßenfahrzeugen oder leichten Nutzfahrzeugen.",
+     "keyPoints": [
+      "Generalüberholtes Verteilergetriebe aus Frankreich, auf dem Prüfstand mit Drehung, Druck und Drehmoment unter Last getestet",
+      "Kompatibel mit Mercedes-Benz Klasse C W204 C 280 4MATIC/Klasse C W204 C 300 4MATIC/Klasse C W204 C 350 4MATIC — OEM-Referenzen A2212700043, A2212700045, A2212700326 — kostenlose VIN-Überprüfung vor der Bestellung",
+      "Austausch ohne Pfand: Ihr altes Teil wird innerhalb von 30 Tagen zurückgenommen, Rücksendekosten werden übernommen",
+      "2 Jahre Garantie auf Teile und Arbeitszeit — die längste Abdeckung auf dem Markt für dieses Modell",
+      "Versand innerhalb von 48-72 h in Frankreich, Zahlung in 3× ohne Gebühren (496,67 €/Monat)",
+      "Dediziertes technisches Team für Mercedes-Benz — Antwort innerhalb von 24 h zur Validierung Ihrer Bestellung"
+     ],
+     "inclusions": [],
+     "exclusions": [],
+     "specs": [
+      {
+       "label": "Typ",
+       "value": "Verteilergetriebe 4MATIC für 7G-Tronic Automatikgetriebe 722.9"
+      },
+      {
+       "label": "Programmierung",
+       "value": "Keine Programmierung erforderlich"
+      },
+      {
+       "label": "Generalüberholung",
+       "value": "Austausch ohne Pfand"
+      },
+      {
+       "label": "Garantie",
+       "value": "2 Jahre auf Teile und Arbeitszeit"
+      },
+      {
+       "label": "Lieferzeit",
+       "value": "48-72 h in Frankreich"
+      },
+      {
+       "label": "Qualitätstest",
+       "value": "Prüfstand mit Drehung, Druck und Drehmoment unter Last"
+      },
+      {
+       "label": "Rücknahme des alten Teils",
+       "value": "Rücksendekosten werden übernommen, Frist 30 Tage"
+      }
+     ],
+     "reconditioningSteps": [
+      {
+       "title": "Demontage und Expertise",
+       "description": "Vollständige Öffnung des Verteilergetriebes, erste Reinigung und Sichtprüfung der Gehäuse, Zahnräder, Lager, Wellen und Auflagen."
+      },
+      {
+       "title": "Instandsetzung der Verschleißteile",
+       "description": "Austausch der abgenutzten oder nicht konformen Komponenten, Anpassung der funktionalen Spielmaße und Kontrolle der internen Elemente der Drehmomentübertragung."
+      },
+      {
+       "title": "Wiederzusammenbau mit Qualitätskontrolle",
+       "description": "Wiederzusammenbau gemäß striktem Verfahren mit Überprüfung der Dichtheit, der mechanischen Funktion und der Montagekohärenz."
+      },
+      {
+       "title": "Test auf dem Prüfstand vor dem Versand",
+       "description": "Abschließende Validierung auf dem Prüfstand zur Kontrolle des Verhaltens des gesamten Systems vor Vorbereitung und Versand."
+      }
+     ],
+     "faqs": [
+      {
+       "question": "Ist dieses Verteilergetriebe wirklich mit meinem Mercedes-Fahrzeug kompatibel?",
+       "answer": "Die Kompatibilität muss anhand der VIN-Nummer und der auf dem Originalteil angegebenen Referenz bestätigt werden. Die 7G-Tronic 4MATIC-Familie umfasst mehrere visuell sehr ähnliche Varianten, die jedoch je nach Fahrgestell, Motor, Jahr und Version des Getriebes 722.9 unterschiedlich sind. Die Modelle W204, X204, W212 und W221 sind am wahrscheinlichsten, aber eine Überprüfung vor der Bestellung bleibt unerlässlich."
+      },
+      {
+       "question": "Was bedeutet Austausch für dieses Verteilergetriebe?",
+       "answer": "Der Austausch bedeutet, dass Sie ein generalüberholtes Verteilergetriebe erhalten, das montagebereit ist, im Austausch für die Rückgabe Ihres alten Teils. Dieses Verfahren ermöglicht es, ein instandgesetztes Gesamtpaket zu einem kontrollierten Preis zu erhalten, während eine wiederverwendbare technische Basis erhalten bleibt. Die Rückgabe des alten Teils ist daher gemäß den Bedingungen des Verkäufers zu planen."
+      },
+      {
+       "question": "Was sind die Anzeichen für ein defektes Verteilergetriebe bei Mercedes 4MATIC?",
+       "answer": "Häufige Symptome sind Vibrationen in der Übertragung, Geräusche von Lagern oder Reibung, Ruckeln beim Manövrieren, Klopfen beim Beschleunigen oder Verzögern und manchmal Fehler im Zusammenhang mit dem Allradantrieb. Eine interne Abnutzung kann auch zu einem unregelmäßigen Betrieb ohne offensichtliche Leckage führen. Eine vollständige Diagnose des Fahrzeugs wird vor dem Austausch empfohlen."
+      },
+      {
+       "question": "Wird das Teil vor dem Versand getestet?",
+       "answer": "Ja, das Produkt wird als vollständig generalüberholt und auf dem Prüfstand getestet vor dem Versand angekündigt. Diese Kontrolle ermöglicht es, die mechanische Funktionsfähigkeit des gesamten Systems vor dem Versand zu validieren und eine vertrauenswürdigere Lösung anzubieten als ein unkontrolliertes Gebrauchtteil."
+      },
+      {
+       "question": "Muss das Teil nach dem Einbau programmiert oder codiert werden?",
+       "answer": "In den meisten Fällen erfordert das Verteilergetriebe selbst keine spezifische Programmierung. Nach dem Einbau wird jedoch empfohlen, eine Überprüfung der Fehler, des Öls, der Antriebswellen, der Anpassungen des Automatikgetriebes und des Zustands der peripheren Komponenten durchzuführen. Dies sichert die Wiederinbetriebnahme und verhindert, dass der neuen Komponente ein Fehler zugeschrieben wird, der von einem anderen Element stammt."
+      }
+     ],
+     "shippingDelayText": "Liefertermin je nach Verfügbarkeit",
+     "badges": {
+      "topLeft": "Garantie 2 Jahre",
+      "condition": "Generalüberholt",
+      "cards": []
+     },
+     "seo": {
+      "metaTitle": "Verteilergetriebe Mercedes 4MATIC 7G-Tronic W204",
+      "metaDescription": "Verteilergetriebe Mercedes. Generalüberholt 1.490 € inkl. MwSt., 2 Jahre Garantie, Lieferung 48-72 h. Austausch ohne Pfand, Zahlung in 3× ohne Gebühren."
+     },
+     "translatedAt": "2026-09-06T09:00:34.996Z"
+    }
+   }
+  },
+  {
+   "_role": "DM turbo (copie distrimotor.com)",
+   "_id": "6a53c3d071e27f913bb388e4",
+   "name": "Turbo reconditionné – Garett – échange standard",
+   "slug": "turbo-reconditionne-garett-echange-standard-7",
+   "sku": "DM-81318",
+   "category": "Turbos",
+   "brand": "",
+   "engineCode": "",
+   "serviceType": "",
+   "priceCents": 53880,
+   "compareAtPriceCents": null,
+   "consigne": {
+    "enabled": true,
+    "amountCents": 15000,
+    "delayDays": 30,
+    "chargeUpfront": false
+   },
+   "inclusions": [],
+   "exclusions": [],
+   "warranty": {
+    "months": 12,
+    "text": ""
+   },
+   "inStock": true,
+   "isPublished": true,
+   "imageUrl": "/media/6a53c29b39d945dc8144da1e",
+   "galleryUrls": [
+    "/media/6a53c29b39d945dc8144da1e"
+   ],
+   "galleryTypes": [
+    "image"
+   ],
+   "shippingDelayText": "",
+   "compatibleReferences": [
+    "80536744"
+   ],
+   "badges": {
+    "topLeft": "Garantie 12 mois",
+    "condition": "Échange standard",
+    "cards": []
+   },
+   "shortDescription": "Turbo Garett en échange standard, reconditionné et contrôlé, garanti 1 an. Livraison rapide, consigne remboursée au retour de l'ancienne pièce.",
+   "description": "Chez Car Parts France, nous vous proposons des turbos compresseur échange standard ou neuf origine de marques KKK, GARETT, IHI, MITSUBISHI, ALANKO. Turbos garantis 1 an Chaque turbo Echange Standard est passé au banc d’équilibrage, utilisée par les constructeurs de turbocompresseurs d'origine tel que GARRETT, KKK BorgWarner, IHI, Mitsubishi. Avant chaque expédition, les turbos compresseurs sont soumis à un contrôle de qualité. Ainsi, nous vous assurons une qualité sans faille. Dans le cadre de la vente d’un turbo échange standard, le retour de votre ancienne pièce défectueuse est obligatoire pour le remboursement de la consigne. Pour cela, vous devez conditionner votre vieux turbo dans le carton de livraison du turbo échange standard et nous tenir informer de sa disponibilité afin d’organiser son ramassage. En cas de question, n'hésitez pas à nous contacter.",
+   "keyPoints": [],
+   "specs": [
+    {
+     "label": "Marque",
+     "value": "OPEL",
+     "_id": "6a53cead85a6133fb7ea79a4"
+    },
+    {
+     "label": "Motorisation",
+     "value": "1.7L CDTI",
+     "_id": "6a53cead85a6133fb7ea79a5"
+    },
+    {
+     "label": "Référence fabricant",
+     "value": "80536744",
+     "_id": "6a53cead85a6133fb7ea79a6"
+    }
+   ],
+   "options": [],
+   "reconditioningSteps": [],
+   "compatibility": [],
+   "faqs": [],
+   "media": {
+    "videoUrl": ""
+   },
+   "seo": {
+    "metaTitle": "Turbo reconditionné Garett échange standard garanti",
+    "metaDescription": "Turbo Garett en échange standard, reconditionné et contrôlé, garanti 1 an. Livraison rapide, consigne remboursée au retour de l'ancienne pièce."
+   },
+   "sections": {
+    "showKeyPoints": true,
+    "showSpecs": true,
+    "showReconditioning": true,
+    "showCompatibility": true,
+    "showFaq": true,
+    "showVideo": true,
+    "showSupportBox": true,
+    "showRelatedProducts": true
+   },
+   "localizations": {
+    "de": {
+     "name": "Turbo generalüberholt – Garett – im Austausch (mit Altteilrückgabe)",
+     "slug": "turbo-generalueberholt-garett-im-austausch-mit-altteilrueckgabe",
+     "shortDescription": "Turbo Garett im Austausch, generalüberholt und kontrolliert, 1 Jahr Garantie. Schnelle Lieferung, Pfand wird bei Rückgabe des alten Teils erstattet.",
+     "description": "Bei Car Parts France bieten wir Ihnen Turbolader im Austausch oder neue Originalteile von Marken wie KKK, GARETT, IHI, MITSUBISHI, ALANKO an. Turbos mit 1 Jahr Garantie. Jeder Turbolader im Austausch wird auf dem Prüfstand getestet, verwendet von Herstellern von Originalturboladern wie GARRETT, KKK BorgWarner, IHI, Mitsubishi. Vor jedem Versand werden die Turbolader einer Qualitätskontrolle unterzogen. So garantieren wir Ihnen eine einwandfreie Qualität. Im Rahmen des Verkaufs eines Turbos im Austausch ist die Rückgabe Ihres defekten alten Teils obligatorisch, um das Pfand zurückzuerhalten. Dazu müssen Sie Ihren alten Turbo in dem Karton des Turbos im Austausch verpacken und uns über dessen Verfügbarkeit informieren, um die Abholung zu organisieren. Bei Fragen zögern Sie nicht, uns zu kontaktieren.",
+     "keyPoints": [],
+     "inclusions": [],
+     "exclusions": [],
+     "specs": [
+      {
+       "label": "Marke",
+       "value": "OPEL"
+      },
+      {
+       "label": "Motorisierung",
+       "value": "1.7L CDTI"
+      },
+      {
+       "label": "Herstellerreferenz",
+       "value": "80536744"
+      }
+     ],
+     "reconditioningSteps": [],
+     "faqs": [],
+     "shippingDelayText": "",
+     "badges": {
+      "topLeft": "Garantie 12 Monate",
+      "condition": "Im Austausch"
+     },
+     "seo": {
+      "metaTitle": "Turbo generalüberholt Garett im Austausch",
+      "metaDescription": "Turbo Garett im Austausch, generalüberholt und kontrolliert, 1 Jahr Garantie. Schnelle Lieferung, Pfand wird bei Rückgabe des alten Teils erstattet."
+     },
+     "translatedAt": "2026-09-04T16:42:05.203Z"
+    }
+   }
+  },
+  {
+   "_role": "Alibaba pont / différentiel (ALV-PT)",
+   "_id": "6a90a7910b34a4ae918c1a36",
+   "name": "Différentiel avant reconditionné Mercedes CLA, GLA, Classe A 4MATIC — 2462800200",
+   "slug": "diff-rentiel-avant-mercedes-cla-gla-classe-a-4matic-2462800200",
+   "sku": "ALV-PT-2462800200",
+   "category": "Ponts & différentiels",
+   "brand": "Mercedes",
+   "engineCode": "",
+   "serviceType": "",
+   "priceCents": 89000,
+   "compareAtPriceCents": null,
+   "consigne": {
+    "enabled": true,
+    "amountCents": 25000,
+    "delayDays": 30,
+    "chargeUpfront": false
+   },
+   "inclusions": [
+    "Différentiel avant complet",
+    "Joints d'étanchéité neufs",
+    "Facture et garantie 2 ans"
+   ],
+   "exclusions": [
+    "Huile",
+    "Joint de carter et visserie de fixation",
+    "Main-d'œuvre de dépose et de repose"
+   ],
+   "warranty": {
+    "months": 24,
+    "text": "Garantie 2 ans sur la pièce. Ne couvre pas la main-d'œuvre ni les dommages liés à un montage non conforme, un manque d'huile ou une référence non adaptée au véhicule."
+   },
+   "inStock": true,
+   "isPublished": true,
+   "imageUrl": "/media/6a90a7900b34a4ae918c1a2c",
+   "galleryUrls": [
+    "/media/6a90a7900b34a4ae918c1a2c",
+    "/media/6a90a7900b34a4ae918c1a2e",
+    "/media/6a90a7900b34a4ae918c1a30",
+    "/media/6a90a7900b34a4ae918c1a32",
+    "/media/6a90a7910b34a4ae918c1a34"
+   ],
+   "galleryTypes": [
+    "image",
+    "image",
+    "image",
+    "image",
+    "image"
+   ],
+   "shippingDelayText": "délai confirmé à la commande",
+   "compatibleReferences": [
+    "2462800200",
+    "2462801000"
+   ],
+   "badges": {
+    "topLeft": "Garantie 24 mois",
+    "condition": "Reconditionné",
+    "cards": [
+     "Échange standard",
+     "Contrôlé avant expédition",
+     "Réf. 2462800200"
+    ]
+   },
+   "shortDescription": "Différentiel avant Mercedes CLA, GLA, Classe A 4MATIC, référence 2462800200. Reconditionné et contrôlé, livré en échange standard avec garantie 2 ans.",
+   "description": "Le renvoi d'angle A2462800200 équipe les Mercedes 4MATIC transversales : Classe A, Classe B, CLA et GLA. Sur ces transmissions, la pièce est sollicitée dès la moindre perte d'adhérence et son usure est fréquente en usage urbain.\n\nLa pièce est livrée en échange standard : vous recevez un différentiel remis en état et contrôlé, vous nous renvoyez votre ancien différentiel. Chaque ensemble est démonté, ses éléments d'usure remplacés, puis remonté avec réglage des précharges et des jeux, et contrôlé en rotation avant expédition.\n\nPoints forts :\n\n- compatible CLA, GLA, Classe A 4MATIC\n\n- contrôle fonctionnel avant envoi\n\n- échange standard sans caution à avancer\n\n- garantie 2 ans\n\n- références OEM couvertes : 2462800200, 2462801000\n\nRelevez la référence gravée sur votre pièce et communiquez-nous votre numéro de châssis avant de commander : plusieurs versions coexistent souvent sur un même modèle selon la motorisation, et elles ne sont pas interchangeables. Notre équipe technique fait la vérification gratuitement, sous 1 h ouvrée.",
+   "keyPoints": [
+    "Différentiel avant",
+    "Compatible Classe A (W176, W177) (2012-2024) · CLA (C117), GLA (X156) (2013-2024) · Classe B (W246) (2011-2018)",
+    "Échange standard sans caution : le retour de votre ancien différentiel sous 30 jours est obligatoire",
+    "Références OEM couvertes : 2462800200, 2462801000"
+   ],
+   "specs": [
+    {
+     "label": "Type",
+     "value": "Différentiel avant",
+     "_id": "6a90a7910b34a4ae918c1a37"
+    },
+    {
+     "label": "Programmation",
+     "value": "Aucune programmation requise. Contrôle du niveau d'huile et respect des couples de serrage indispensables au remontage.",
+     "_id": "6a90a7910b34a4ae918c1a38"
+    }
+   ],
+   "options": [],
+   "reconditioningSteps": [
+    {
+     "title": "Démontage complet",
+     "description": "Ouverture du carter, dépose des organes internes, tri des composants réutilisables.",
+     "_id": "6a90a7910b34a4ae918c1a39"
+    },
+    {
+     "title": "Contrôle et remise en état",
+     "description": "Inspection des roulements, des portées et des jeux internes ; remplacement systématique des éléments d'usure.",
+     "_id": "6a90a7910b34a4ae918c1a3a"
+    },
+    {
+     "title": "Remontage avec réglages",
+     "description": "Remontage au couple avec réglage des précharges et des jeux, étanchéité neuve.",
+     "_id": "6a90a7910b34a4ae918c1a3b"
+    },
+    {
+     "title": "Contrôle final avant expédition",
+     "description": "Test de rotation et contrôle du bruit de fonctionnement avant mise en caisse.",
+     "_id": "6a90a7910b34a4ae918c1a3c"
+    }
+   ],
+   "compatibility": [
+    {
+     "make": "Mercedes",
+     "model": "Classe A (W176, W177)",
+     "years": "2012-2024",
+     "engine": "4MATIC",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a90a7910b34a4ae918c1a3d"
+    },
+    {
+     "make": "Mercedes",
+     "model": "CLA (C117), GLA (X156)",
+     "years": "2013-2024",
+     "engine": "4MATIC",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a90a7910b34a4ae918c1a3e"
+    },
+    {
+     "make": "Mercedes",
+     "model": "Classe B (W246)",
+     "years": "2011-2018",
+     "engine": "4MATIC",
+     "kw": 0,
+     "ch": 0,
+     "_id": "6a90a7910b34a4ae918c1a3f"
+    }
+   ],
+   "faqs": [
+    {
+     "question": "Comment vérifier que la référence 2462800200 est bien la mienne ?",
+     "answer": "Relevez la référence gravée sur votre pièce et comparez-la à celles couvertes par cette fiche (2462800200, 2462801000). Envoyez-nous votre numéro de châssis, nous validons gratuitement sous 1 h ouvrée avant que vous ne commandiez.",
+     "_id": "6a90a7910b34a4ae918c1a40"
+    },
+    {
+     "question": "Que signifie « échange standard » et y a-t-il une caution ?",
+     "answer": "Vous recevez la pièce remise en état et vous nous renvoyez la vôtre. Aucune caution n'est encaissée à la commande : vous ne payez que la pièce. En contrepartie, le retour de votre ancien différentiel est obligatoire dans les 30 jours suivant la livraison, complet et non cassé. Passé ce délai, une indemnité de 250 € est facturée.",
+     "_id": "6a90a7910b34a4ae918c1a41"
+    },
+    {
+     "question": "Le rapport avant et le rapport arrière doivent-ils être identiques ?",
+     "answer": "Oui, impérativement, sur tout véhicule à transmission intégrale. Si les deux rapports diffèrent, l'organe de répartition travaille en permanence, même sur route sèche. Vous aurez des à-coups en virage, une usure rapide, puis la casse.",
+     "_id": "6a90a7910b34a4ae918c1a42"
+    },
+    {
+     "question": "Quelle est la durée de la garantie et que couvre-t-elle ?",
+     "answer": "La garantie est de 2 ans sur la pièce à compter de la livraison. Elle couvre les défauts mécaniques. Elle ne couvre ni la main-d'œuvre, ni les dommages provoqués par une référence non adaptée, un niveau d'huile insuffisant ou un montage non conforme.",
+     "_id": "6a90a7910b34a4ae918c1a43"
+    }
+   ],
+   "media": {
+    "videoUrl": ""
+   },
+   "seo": {
+    "metaTitle": "Différentiel avant Mercedes — 2462800200 CLA reconditionné",
+    "metaDescription": "Différentiel avant Mercedes CLA, GLA, Classe A 4MATIC, référence 2462800200. Reconditionné, échange standard, garantie 2 ans, contrôlé avant expédition"
+   },
+   "sections": {
+    "showKeyPoints": true,
+    "showSpecs": true,
+    "showReconditioning": true,
+    "showCompatibility": true,
+    "showFaq": true,
+    "showVideo": true,
+    "showSupportBox": true,
+    "showRelatedProducts": true
+   },
+   "localizations": {
+    "de": {
+     "name": "Vorderachsdifferential generalüberholt Mercedes CLA, GLA, Klasse A 4MATIC — 2462800200",
+     "slug": "vorderachsdifferential-generalueberholt-mercedes-cla-gla-klasse-a-4matic-2462800",
+     "shortDescription": "Vorderachsdifferential Mercedes CLA, GLA, Klasse A 4MATIC, Referenz 2462800200. Generalüberholt und geprüft, im Austausch mit 2 Jahren Garantie geliefert.",
+     "description": "Das Winkelgetriebe A2462800200 ist für die Mercedes 4MATIC Quermotoren ausgestattet: Klasse A, Klasse B, CLA und GLA. Bei diesen Getrieben wird das Bauteil bereits bei der geringsten Haftungsverlust beansprucht und ist bei urbanem Einsatz häufig abgenutzt.\n\nDas Bauteil wird im Austausch geliefert: Sie erhalten ein generalüberholtes und geprüftes Differential, während Sie uns Ihr altes Differential zurücksenden. Jedes Set wird zerlegt, seine Verschleißteile werden ersetzt, dann wieder zusammengebaut mit Einstellung der Vorspannungen und Spiel, und vor dem Versand auf Rotation geprüft.\n\nHighlights:\n\n- kompatibel mit CLA, GLA, Klasse A 4MATIC\n\n- funktionale Prüfung vor dem Versand\n\n- Austausch ohne Pfand\n\n- 2 Jahre Garantie\n\n- abgedeckte OEM-Referenzen: 2462800200, 2462801000\n\nNotieren Sie die auf Ihrem Bauteil eingravierte Referenz und teilen Sie uns Ihre Fahrgestellnummer mit, bevor Sie bestellen: Oft gibt es mehrere Versionen eines Modells je nach Motorisierung, die nicht austauschbar sind. Unser technisches Team überprüft dies kostenlos innerhalb von 1 Stunde.",
+     "keyPoints": [
+      "Vorderachsdifferential",
+      "Kompatibel mit Klasse A (W176, W177) (2012-2024) · CLA (C117), GLA (X156) (2013-2024) · Klasse B (W246) (2011-2018)",
+      "Austausch ohne Pfand: Die Rücksendung Ihres alten Differentials innerhalb von 30 Tagen ist obligatorisch",
+      "Abgedeckte OEM-Referenzen: 2462800200, 2462801000"
+     ],
+     "inclusions": [
+      "Komplettes Vorderachsdifferential",
+      "Neue Dichtungen",
+      "Rechnung und 2 Jahre Garantie"
+     ],
+     "exclusions": [
+      "Öl",
+      "Ölwannendichtung und Befestigungsschrauben",
+      "Arbeitskosten für Ausbau und Einbau"
+     ],
+     "specs": [
+      {
+       "label": "Typ",
+       "value": "Vorderachsdifferential"
+      },
+      {
+       "label": "Programmierung",
+       "value": "Keine Programmierung erforderlich. Kontrolle des Ölstands und Einhaltung der Drehmomente, die für den Zusammenbau erforderlich sind."
+      }
+     ],
+     "reconditioningSteps": [
+      {
+       "title": "Komplette Demontage",
+       "description": "Öffnung des Gehäuses, Ausbau der inneren Teile, Sortierung der wiederverwendbaren Komponenten."
+      },
+      {
+       "title": "Prüfung und Instandsetzung",
+       "description": "Inspektion der Lager, der Auflagen und der inneren Spiele; systematischer Austausch der Verschleißteile."
+      },
+      {
+       "title": "Wiederzusammenbau mit Einstellungen",
+       "description": "Zusammenbau mit Drehmoment und Einstellung der Vorspannungen und Spiele, neue Dichtungen."
+      },
+      {
+       "title": "Endkontrolle vor dem Versand",
+       "description": "Drehtest und Geräuschkontrolle vor der Verpackung."
+      }
+     ],
+     "faqs": [
+      {
+       "question": "Wie überprüfe ich, ob die Referenz 2462800200 meine ist?",
+       "answer": "Notieren Sie die auf Ihrem Bauteil eingravierte Referenz und vergleichen Sie sie mit den in diesem Datenblatt abgedeckten (2462800200, 2462801000). Senden Sie uns Ihre Fahrgestellnummer, wir validieren dies kostenlos innerhalb von 1 Stunde, bevor Sie bestellen."
+      },
+      {
+       "question": "Was bedeutet „Austausch“ und gibt es ein Pfand?",
+       "answer": "Sie erhalten das generalüberholte Bauteil und senden uns Ihres zurück. Es wird kein Pfand bei der Bestellung eingezogen: Sie zahlen nur für das Bauteil. Im Gegenzug ist die Rücksendung Ihres alten Differentials innerhalb von 30 Tagen nach Lieferung, vollständig und unbeschädigt, obligatorisch. Nach Ablauf dieser Frist wird eine Gebühr von 250 € erhoben."
+      },
+      {
+       "question": "Müssen das vordere und das hintere Übersetzungsverhältnis identisch sein?",
+       "answer": "Ja, unbedingt, bei jedem Fahrzeug mit Allradantrieb. Wenn die beiden Übersetzungsverhältnisse unterschiedlich sind, arbeitet das Verteilungsorgan ständig, selbst auf trockener Straße. Sie werden Ruckeln in Kurven, schnellen Verschleiß und schließlich einen Bruch erleben."
+      },
+      {
+       "question": "Wie lange ist die Garantie und was deckt sie ab?",
+       "answer": "Die Garantie beträgt 2 Jahre auf das Bauteil ab dem Lieferdatum. Sie deckt mechanische Mängel ab. Sie deckt weder die Arbeitskosten noch Schäden ab, die durch eine nicht passende Referenz, einen unzureichenden Ölstand oder eine nicht konforme Montage verursacht werden."
+      }
+     ],
+     "shippingDelayText": "Liefertermin wird bei der Bestellung bestätigt",
+     "badges": {
+      "topLeft": "Garantie 24 Monate",
+      "condition": "Generalüberholt",
+      "cards": [
+       "Im Austausch",
+       "Vor dem Versand geprüft",
+       "Ref. 2462800200"
+      ]
+     },
+     "seo": {
+      "metaTitle": "2462800200 Vorderachsdifferential Mercedes CLA",
+      "metaDescription": "2462800200 Vorderachsdifferential für Mercedes CLA, GLA, Klasse A 4MATIC. Generalüberholt, im Austausch."
+     },
+     "translatedAt": "2026-09-04T16:47:17.509Z"
+    }
+   }
+  }
+ ],
+ "vehicleLandings": [
+  {
+   "_id": "69f27cf57feffbd6cb0fc331",
+   "model": "a1",
+   "partType": "transmission-mecatronique",
+   "make": "audi",
+   "h1Override": "Mécatronique pour Audi A1 reconditionnée",
+   "isActive": true,
+   "metaDescription": "Mécatronique Audi A1 reconditionnée (1.0 TSI, 1.2 TFSI) · 1 référence testée(s) sur banc · garantie 24 mois · livraison 24-48h · paiement 3x/4x sans frais.",
+   "metaTitle": "Mécatronique Audi A1 reconditionnée · garantie | Autoliva",
+   "seoText": "<p>Notre catalogue Autoliva propose <strong>1 référence</strong> de mécatronique reconditionnéee compatible avec la <strong>Audi A1</strong>, équipant les motorisations <strong>1.0 TSI</strong>, <strong>1.2 TFSI</strong> et les codes transmission <strong>DQ200</strong>, <strong>DSG7</strong>, <strong>0AM</strong>, <strong>0CW</strong>. Chaque mécatronique est démontée, contrôlée pièce par pièce et testée sur banc dans nos ateliers avant expédition.</p>\n\n<p>La mécatronique est l'organe hydraulique et électronique de commande de votre boîte automatique. Les pannes typiques surviennent au-delà de 80 000 km, principalement liées à l'usure des solénoïdes de pression, à la dégradation du capteur de pression hydraulique, et à la fatigue de la pompe interne. Notre reconditionnement remplace systématiquement ces composants critiques. Références OEM compatibles : <strong>0AM 325 025 D</strong>, <strong>0AM 325 025 D 000</strong>, <strong>0AM 325 025 H</strong>, <strong>0AM 325 025 S</strong>, <strong>0AM 325 025 T</strong>.</p>\n\n<p>Cette pièce Audi A1 bénéficie d'une <strong>garantie de 24 mois</strong>, expédiée sous <strong>24 à 48 heures</strong> en France métropolitaine. Échange standard avec consigne de 30 jours pour le retour de votre ancienne pièce. Paiement en <strong>3x ou 4x sans frais</strong> via Scalapay disponible au checkout.</p>\n\n<p>Avant commande, vérifiez la compatibilité avec votre véhicule via le numéro VIN (case E de votre carte grise) ou le code transmission inscrit sur votre boîte. Notre équipe technique vérifie gratuitement avant expédition via le formulaire de <a href=\"/contact\">contact</a>.</p>"
+  }
+ ]
+}

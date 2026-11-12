@@ -11,15 +11,65 @@ const nonEmptyStr = (v) => typeof v === 'string' && v.trim() !== '';
 const nonEmptyArr = (v) => Array.isArray(v) && v.length > 0;
 
 /* Glossaire FR → DE (termes métier moteurs/boîtes reconditionnés). */
+/* ── Un seul mot allemand par notion, jamais un choix ────────────────────────
+ *
+ * Le glossaire proposait « Austauschmotor / generalüberholter Motor » : le
+ * modèle tranchait au hasard à chaque fiche. Mesuré sur les 549 premières
+ * traductions : 319 « Austauschmotor », 173 « instandgesetzt », 130
+ * « generalüberholt », 58 sans aucun de ces mots. Sur une page de résultats,
+ * la même gamme apparaissait donc sous trois noms.
+ *
+ * Terminologie retenue, et pourquoi :
+ *   — « Austauschmotor » / « Austauschgetriebe » : c'est LE terme du commerce
+ *     allemand pour une pièce d'échange standard, celui que les acheteurs
+ *     tapent réellement. Il porte déjà l'idée du retour de l'ancienne pièce ;
+ *   — « generalüberholt » (entièrement révisé) qualifie l'état. On l'exige
+ *     dans le titre : sans lui, « Austauschmotor » seul laisse croire à un
+ *     simple échange, sans dire que la pièce a été refaite ;
+ *   — « instandgesetzt » (réparé) est ÉCARTÉ : il sous-entend qu'on a corrigé
+ *     une panne, pas remis à neuf. Il dévalorise l'offre.
+ *
+ * La barre oblique est bannie de ce tableau : une entrée = une traduction.
+ */
 const GLOSSARY = [
-  ['moteur reconditionné', 'Austauschmotor / generalüberholter Motor'],
-  ['boîte de vitesses reconditionnée', 'generalüberholtes Getriebe / Austauschgetriebe'],
+  ['moteur reconditionné', 'generalüberholter Austauschmotor'],
+  ['boîte de vitesses reconditionnée', 'generalüberholtes Austauschgetriebe'],
   ['reconditionné(e)', 'generalüberholt'],
+  /* « occasion » est un ADJECTIF : il s'accorde à la pièce, il ne la nomme pas.
+     Sans cette précision, une boîte de vitesses d'occasion devenait un
+     « Gebrauchtmotor » — un moteur d'occasion. */
+  ["d'occasion (adjectif, toute pièce)", 'gebraucht'],
+  ["moteur d'occasion", 'Gebrauchtmotor'],
+  ["boîte (de vitesses) d'occasion", 'Gebrauchtgetriebe'],
+  ["d'occasion contrôlé(e) / testé(e)", 'geprüft gebraucht'],
+  ['neuf / neuve', 'neu'],
+  ['NE JAMAIS employer', 'instandgesetzt (sous-entend une simple réparation)'],
   ['échange standard', 'im Austausch (mit Altteilrückgabe)'],
   ['testé sur banc / banc d’essai', 'auf dem Prüfstand getestet / Prüfstand'],
+  /* « Livré nu » = moteur SANS ses périphériques (alternateur, injection…).
+     Traduit hors contexte, il devenait « unverpackt » — un colis sans
+     emballage. L'acheteur allemand comprenait qu'on lui envoyait un moteur
+     en vrac, pas un bloc nu. */
+  ['livré nu / livrée nue (sans accessoires)', 'ohne Anbauteile geliefert (JAMAIS « unverpackt »)'],
+  ['moteur nu', 'Nacktmotor'],
   ['garantie 2 ans (ou 24 mois)', '2 Jahre Garantie'],
-  ['pont avant', 'Vorderachsdifferenzial'],
-  ['pont arrière', 'Hinterachsdifferenzial'],
+  /* Gammes principales d'Autoliva. Sans elles, le modele inventait :
+     « Transfergetriebe » au lieu de « Verteilergetriebe » (le terme reellement
+     employe et cherche en Allemagne) — c'est ce qui est arrive aux categories. */
+  ['boîte de transfert', 'Verteilergetriebe'],
+  ['boîte de vitesses', 'Getriebe'],
+  ['boîte automatique', 'Automatikgetriebe'],
+  ['boîte manuelle', 'Schaltgetriebe'],
+  ['boîte à double embrayage', 'Doppelkupplungsgetriebe'],
+  /* Une notion, un mot — y compris dans les composés. Ce glossaire disait
+     « Differential » seul mais « …differenzial » en composé, et il se
+     contredisait avec scripts/glossary-de.json qui tranchait pour « t ». Le
+     catalogue avait déjà tranché tout seul : 361 fiches en « Differential »,
+     zéro en « Differenzial ». C'est aussi la forme du métier en allemand
+     (Differentialsperre, Achsdifferential). */
+  ['différentiel', 'Differential'],
+  ['pont avant', 'Vorderachsdifferential'],
+  ['pont arrière', 'Hinterachsdifferential'],
   ['mécatronique', 'Mechatronik'],
   ['consigne (caution)', 'Pfand'],
   ['code boîte / code moteur', 'Getriebecode / Motorcode (laisser le CODE inchangé)'],
@@ -41,16 +91,46 @@ function buildSystemPrompt() {
     '3. Traduction FIDÈLE : n’invente aucune spec, n’en supprime aucune. Respecte l’accord en genre et la déclinaison allemande.',
     '4. Style commercial allemand naturel et SEO (emploie les termes réellement recherchés en Allemagne).',
     '5. Conserve la mise en forme (HTML, sauts de ligne, listes à puces) à l’identique.',
+    '6. L’ÉTAT de la pièce doit être RESPECTÉ À LA LETTRE et rester visible dans le titre.',
+    '   Il n’y a jamais d’équivalence entre ces trois états :',
+    '     • le français dit « reconditionné » → le titre allemand DOIT contenir',
+    '       « generalüberholt » (même si « Austauschmotor » est déjà présent) ;',
+    '     • le français dit « occasion » → emploie « Gebrauchtmotor » /',
+    '       « geprüftes Gebrauchteil ». N’écris JAMAIS « generalüberholt » ni',
+    '       « Austausch- » : une pièce d’occasion n’a pas été refaite à neuf, et le',
+    '       prétendre serait un mensonge commercial ;',
+    '     • le français dit « neuf » → « neu », et rien d’autre.',
+    '7. Emploie TOUJOURS le terme du glossaire, jamais un synonyme : deux fiches de la même',
+    '   gamme doivent porter exactement le même mot.',
     '',
     'GLOSSAIRE (à respecter pour la cohérence d’un bout à l’autre) :',
     glossaryText(),
     '',
     'SORTIE : réponds UNIQUEMENT par un JSON valide, avec EXACTEMENT les mêmes clés que l’entrée et la',
     'MÊME longueur pour chaque tableau ; valeurs traduites en allemand.',
+    'N’OMETS AUCUNE CLÉ, même courte ou imbriquée. En particulier `badges` (les pastilles',
+    'affichées sur la fiche : état, garantie) doit être présent avec ses sous-clés',
+    '`topLeft`, `condition` et `cards`, sinon la fiche allemande garde des pastilles',
+    'françaises sous un titre traduit.',
+    '',
+    'LONGUEURS SEO — contrainte, pas préférence :',
+    '  • `seo.metaTitle` : 49 caractères MAXIMUM. (Le gabarit ajoute « | Autoliva »',
+    '    APRÈS coup : 49 + 11 = 60, la limite de Google. Viser 60 ici fait tronquer.)',
+    '  • `seo.metaDescription` : 160 caractères MAXIMUM.',
+    'L’allemand est 7 à 12 % plus long que le français : une traduction fidèle dépasse la',
+    'limite et Google COUPE la fin — or c’est là que se trouve la référence OEM, seule chose',
+    'qui distingue deux fiches de la même gamme. Reformule plus court plutôt que de traduire',
+    'mot à mot, et place la RÉFÉRENCE et le VÉHICULE en premier, jamais à la fin.',
   ].join('\n');
 }
 
-const STR_FIELDS = ['name', 'shortDescription', 'description'];
+/* `shippingDelayText` part au modèle depuis qu'on a constaté qu'un libellé
+   inédit (« Expédition sous 7 à 9 jours ouvrés hors août ») laissait le champ
+   allemand VIDE : la table `delais-de.json` ne peut pas connaître un texte qui
+   n'existe pas encore. La table reste prioritaire pour les 62 libellés connus
+   — c'est elle qui garantit qu'ils sont formulés pareil partout — et le modèle
+   ne sert que pour l'inédit. */
+const STR_FIELDS = ['name', 'shortDescription', 'description', 'shippingDelayText'];
 const STR_ARRAYS = ['keyPoints', 'inclusions', 'exclusions'];
 
 /** Extrait les champs FR traduisibles (en préservant la structure). */
@@ -64,11 +144,28 @@ function collectFields(product) {
   if (product.seo && (nonEmptyStr(product.seo.metaTitle) || nonEmptyStr(product.seo.metaDescription))) {
     out.seo = { metaTitle: product.seo.metaTitle || '', metaDescription: product.seo.metaDescription || '' };
   }
+  /* Les badges (« Reconditionné », « Échange standard »…) étaient le seul
+     champ prévu par le schéma ET repris par la surcouche allemande
+     (services/productI18n.js) sans jamais être ENVOYÉ à la traduction : la
+     pastille de la fiche restait donc en français sur les pages allemandes,
+     juste au-dessus d'un titre traduit. Plomberie posée des deux côtés, mais
+     débranchée au milieu. */
+  if (product.badges && (nonEmptyStr(product.badges.topLeft) || nonEmptyStr(product.badges.condition)
+      || nonEmptyArr(product.badges.cards))) {
+    out.badges = {
+      topLeft: product.badges.topLeft || '',
+      condition: product.badges.condition || '',
+      cards: nonEmptyArr(product.badges.cards) ? product.badges.cards.slice() : [],
+    };
+  }
   return out;
 }
 
 /** Appel OpenAI (indirection via `impl` pour la testabilité). */
-async function callOpenAI(fields, { apiKey, model }) {
+/* `systemPrompt` / `userPrompt` sont optionnels : ils permettent de réutiliser
+   ce transport pour une tâche voisine (recadrage des métas) sans dupliquer la
+   gestion d'erreur ni le mode JSON. Sans eux, comportement inchangé. */
+async function callOpenAI(fields, { apiKey, model, systemPrompt, userPrompt }) {
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
@@ -77,8 +174,13 @@ async function callOpenAI(fields, { apiKey, model }) {
       temperature: 0.2,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: buildSystemPrompt() },
-        { role: 'user', content: 'Traduis en allemand les valeurs de ce JSON (garde EXACTEMENT les clés et la longueur des tableaux) :\n' + JSON.stringify(fields) },
+        { role: 'system', content: systemPrompt || buildSystemPrompt() },
+        {
+          role: 'user',
+          content: userPrompt
+            || (fields && typeof fields.__raw === 'string' ? fields.__raw : null)
+            || ('Traduis en allemand les valeurs de ce JSON (garde EXACTEMENT les clés et la longueur des tableaux) :\n' + JSON.stringify(fields)),
+        },
       ],
     }),
   });
@@ -127,7 +229,45 @@ function reconcile(fr, de) {
       metaDescription: nonEmptyStr(de.seo.metaDescription) ? de.seo.metaDescription : (fr.seo ? fr.seo.metaDescription : ''),
     };
   }
+  /* Badges : chaque sous-champ retombe sur le français si la traduction est
+     vide. Un tableau `cards` de longueur différente est REFUSÉ en bloc —
+     mieux vaut des pastilles françaises que des pastilles décalées. */
+  /* `de.badges` peut manquer : le modèle omet parfois une clé courte malgré la
+     consigne. On émet quand même le bloc, en retombant sur le français — la
+     pastille reste juste, et la prochaine traduction l'améliorera. */
+  if (fr.badges) {
+    const db = (de.badges && typeof de.badges === 'object') ? de.badges : {};
+    out.badges = {
+      topLeft: nonEmptyStr(db.topLeft) ? db.topLeft : (fr.badges.topLeft || ''),
+      condition: nonEmptyStr(db.condition) ? db.condition : (fr.badges.condition || ''),
+      cards: (Array.isArray(fr.badges.cards) && Array.isArray(db.cards)
+        && db.cards.length === fr.badges.cards.length)
+        ? db.cards.map((c, k) => (nonEmptyStr(c) ? c : fr.badges.cards[k]))
+        : (fr.badges.cards || []),
+    };
+  }
   return out;
+}
+
+/* Coupe au dernier mot entier avant la limite. Google indexe le titre complet
+   mais n'AFFICHE que le début : mieux vaut une phrase qui se termine qu'une
+   coupure au milieu d'une référence. Filet de sécurité — la consigne de
+   longueur est dans le prompt, ceci rattrape ce qui passe au travers. */
+/* Le budget réel d'un metaTitle n'est pas 60 mais 60 moins le suffixe de
+   marque que le gabarit ajoute après coup (« | Autoliva », 11 caractères).
+   Viser 60 ici, c'est se faire tronquer par le gabarit lui-même, avec des
+   points de suspension — ce qui était le cas de 5 564 fiches allemandes. */
+const MAX_META_TITRE = 60 - ' | Autoliva'.length;
+
+function clampSeo(texte, max) {
+  const t = String(texte || '').trim();
+  if (t.length <= max) return t;
+  const coupe = t.slice(0, max);
+  const espace = coupe.lastIndexOf(' ');
+  /* La barre verticale doit sauter comme les autres : le gabarit ajoute
+     « | Autoliva » ensuite, et un titre coupé sur un « | » donnait
+     « … generalüberholt | | Autoliva ». */
+  return (espace > max * 0.6 ? coupe.slice(0, espace) : coupe).replace(/[\s,;:|/·•–—-]+$/, '');
 }
 
 const UMLAUT = [[/ä/g, 'ae'], [/ö/g, 'oe'], [/ü/g, 'ue'], [/ß/g, 'ss'], [/Ä/g, 'ae'], [/Ö/g, 'oe'], [/Ü/g, 'ue']];
@@ -150,15 +290,34 @@ async function translateProduct(product, { apiKey, model = 'gpt-4o-mini', now } 
   const deRaw = await impl.callOpenAI(fr, { apiKey, model });
   const de = reconcile(fr, deRaw);
   de.slug = germanSlug(de.name || product.name);
+  if (de.seo) {
+    de.seo.metaTitle = clampSeo(de.seo.metaTitle, MAX_META_TITRE);
+    de.seo.metaDescription = clampSeo(de.seo.metaDescription, 160);
+  }
   de.translatedAt = now || new Date();
   de.translatedBy = 'openai:' + model;
   return de;
 }
 
+/* Empreinte du contenu TRADUISIBLE d'une fiche.
+ *
+ * Sert à savoir si une traduction est encore à jour. On ne peut pas se fier à
+ * `updatedAt` : il bouge à chaque changement de stock ou de prix — et il bouge
+ * aussi quand on ÉCRIT la traduction, donc une fiche serait éternellement
+ * « périmée ». L'empreinte ne dépend que de ce qu'on envoie au modèle : elle
+ * ne change que si le texte français change. */
+function sourceHash(product) {
+  const payload = JSON.stringify(collectFields(product || {}));
+  return require('crypto').createHash('sha1').update(payload).digest('hex');
+}
+
 module.exports = {
   GLOSSARY,
+  sourceHash,
   buildSystemPrompt,
   collectFields,
+  clampSeo,
+  MAX_META_TITRE,
   reconcile,
   germanSlug,
   callOpenAI,

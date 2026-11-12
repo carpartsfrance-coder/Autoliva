@@ -19,7 +19,12 @@ function getSafeUrl(value) {
 function buildEnvFallback() {
   return {
     promoBannerText: getTrimmedString(process.env.PROMO_BANNER_TEXT) || '',
+    promoBannerTextDe: getTrimmedString(process.env.PROMO_BANNER_TEXT_DE) || '',
     promoBannerCode: getTrimmedString(process.env.PROMO_BANNER_CODE) || '',
+    // Alerte sécurité : visible tant qu'on ne l'a pas explicitement masquée,
+    // y compris quand la base est injoignable (ce fallback sert aussi dans ce cas).
+    securityAlertHidden: false,
+    securityAlertText: '',
     aboutTitle: getTrimmedString(process.env.HOME_ABOUT_TITLE) || 'Notre histoire',
     aboutText:
       getTrimmedString(process.env.HOME_ABOUT_TEXT)
@@ -57,7 +62,10 @@ async function getSiteSettingsMergedWithFallback({ bypassCache = false } = {}) {
 
     const merged = {
       promoBannerText: saved.promoBannerText || '',
+      promoBannerTextDe: saved.promoBannerTextDe || '',
       promoBannerCode: saved.promoBannerCode || '',
+      securityAlertHidden: saved.securityAlertHidden === true,
+      securityAlertText: saved.securityAlertText || '',
       aboutTitle: saved.aboutTitle || fallback.aboutTitle,
       aboutText: saved.aboutText || fallback.aboutText,
       facebookUrl: getSafeUrl(saved.facebookUrl) || fallback.facebookUrl,
@@ -79,7 +87,11 @@ function sanitizeForm(body) {
   const b = body && typeof body === 'object' ? body : {};
   return {
     promoBannerText: getTrimmedString(b.promoBannerText),
+    promoBannerTextDe: getTrimmedString(b.promoBannerTextDe),
     promoBannerCode: getTrimmedString(b.promoBannerCode),
+    // Case décochée = champ absent du POST → false, donc bandeau visible.
+    securityAlertHidden: b.securityAlertHidden === 'on' || b.securityAlertHidden === true || b.securityAlertHidden === 'true',
+    securityAlertText: getTrimmedString(b.securityAlertText),
     aboutTitle: getTrimmedString(b.aboutTitle),
     aboutText: getTrimmedString(b.aboutText),
     facebookUrl: getSafeUrl(b.facebookUrl),
@@ -99,7 +111,10 @@ async function updateSiteSettingsFromForm(body) {
 
   cached = {
     promoBannerText: updated && updated.promoBannerText ? updated.promoBannerText : '',
+    promoBannerTextDe: updated && updated.promoBannerTextDe ? updated.promoBannerTextDe : '',
     promoBannerCode: updated && updated.promoBannerCode ? updated.promoBannerCode : '',
+    securityAlertHidden: !!(updated && updated.securityAlertHidden),
+    securityAlertText: updated && updated.securityAlertText ? updated.securityAlertText : '',
     aboutTitle: updated && updated.aboutTitle ? updated.aboutTitle : buildEnvFallback().aboutTitle,
     aboutText: updated && updated.aboutText ? updated.aboutText : buildEnvFallback().aboutText,
     facebookUrl: updated && updated.facebookUrl ? getSafeUrl(updated.facebookUrl) : '',
@@ -122,11 +137,14 @@ async function updateSiteSettingsFromForm(body) {
 function getDefaultHeroSlides() {
   return [
     {
-      imageUrl: '/images/hero-home.png',
+      imageUrl: '/images/hero-home.webp',
       imageAlt: brand.NAME,
       badge: 'Service Premium',
       title: 'Pièces auto reconditionnées, d’occasion et testées',
-      description: `${brand.NAME} accompagne particuliers et professionnels avec des pièces fiables, un devis rapide et une livraison express en 48/72h.`,
+      /* Plus de « livraison express en 48/72h » : les CGV (art. 7.2) prévoient
+         3 à 6 jours ouvrés d'expédition pour un moteur, une boîte ou un pont.
+         C'est la diapositive servie en production (aucune n'est en base). */
+      description: `${brand.NAME} accompagne particuliers et professionnels avec des pièces fiables, un devis rapide et une livraison suivie, chez vous ou à votre garage.`,
       ctaPrimaryText: 'Demander un Devis Gratuit',
       ctaPrimaryUrl: '/devis',
       ctaSecondaryText: 'Parcourir le catalogue',
@@ -135,11 +153,11 @@ function getDefaultHeroSlides() {
       isActive: true,
     },
     {
-      imageUrl: '/images/hero-boite-transfert.jpeg',
+      imageUrl: '/images/hero-boite-transfert.webp',
       imageAlt: 'Boîte de transfert et pont différentiel reconditionnés',
       badge: 'Transmission',
       title: 'Boîtes de transfert & ponts différentiels reconditionnés',
-      description: 'Notre gamme reconditionnée est testée et garantie 2 ans, pour une fiabilité maximale.',
+      description: 'Notre gamme reconditionnée est contrôlée avant expédition, avec une garantie indiquée sur chaque fiche.',
       ctaPrimaryText: 'Demander un Devis Gratuit',
       ctaPrimaryUrl: '/devis',
       ctaSecondaryText: 'Parcourir le catalogue',
@@ -148,7 +166,7 @@ function getDefaultHeroSlides() {
       isActive: true,
     },
     {
-      imageUrl: '/images/hero-moteur-reconditionne.jpeg',
+      imageUrl: '/images/hero-moteur-reconditionne.webp',
       imageAlt: 'Moteurs reconditionnés',
       badge: 'Moteur',
       title: 'Moteurs reconditionnés : performance & sérénité',
@@ -196,43 +214,48 @@ function sanitizeHeroSlidesArray(slides) {
  * Slides hero par défaut en ALLEMAND (mêmes visuels que la version FR, texte
  * DE). Servies sur la home allemande tant qu'aucune slide DE custom n'est
  * gérée en admin — un visiteur allemand voit un hero soigné et cohérent.
+ *
+ * Les URL internes sont préfixées /de : le bouton le plus visible de la page
+ * menait à /devis (français), dont le GET remettait la session en « fr » —
+ * panier, paiement, Order.lang et e-mails compris. La vue ne peut pas préfixer
+ * à l'affichage, ctaSecondaryUrl vaut déjà /de/produits.
  */
 function getDefaultHeroSlidesDe() {
   return [
     {
-      imageUrl: '/images/hero-home.png',
+      imageUrl: '/images/hero-home.webp',
       imageAlt: brand.NAME,
       badge: 'Premium-Service',
       title: 'Aufbereitete, gebrauchte und geprüfte Autoteile',
-      description: `${brand.NAME} unterstützt Privat- und Geschäftskunden mit zuverlässigen Teilen, schnellem Angebot und Expressversand in 48/72 Std.`,
+      description: `${brand.NAME} unterstützt Privat- und Geschäftskunden mit zuverlässigen Teilen, schnellem Angebot und Lieferung mit Sendungsverfolgung – zu Ihnen nach Hause oder in Ihre Werkstatt.`,
       ctaPrimaryText: 'Kostenloses Angebot anfordern',
-      ctaPrimaryUrl: '/devis',
+      ctaPrimaryUrl: '/de/devis',
       ctaSecondaryText: 'Katalog durchsuchen',
       ctaSecondaryUrl: '/de/produits',
       sortOrder: 0,
       isActive: true,
     },
     {
-      imageUrl: '/images/hero-boite-transfert.jpeg',
-      imageAlt: 'Aufbereitete Verteilergetriebe und Differenziale',
+      imageUrl: '/images/hero-boite-transfert.webp',
+      imageAlt: 'Aufbereitete Verteilergetriebe und Differentiale',
       badge: 'Antrieb',
       title: 'Aufbereitete Verteilergetriebe & Differenziale',
-      description: 'Unser aufbereitetes Sortiment ist geprüft und 2 Jahre garantiert — für maximale Zuverlässigkeit.',
+      description: 'Unser aufbereitetes Sortiment wird vor dem Versand geprüft, mit der auf jeder Produktseite angegebenen Garantie.',
       ctaPrimaryText: 'Kostenloses Angebot anfordern',
-      ctaPrimaryUrl: '/devis',
+      ctaPrimaryUrl: '/de/devis',
       ctaSecondaryText: 'Katalog durchsuchen',
       ctaSecondaryUrl: '/de/produits',
       sortOrder: 1,
       isActive: true,
     },
     {
-      imageUrl: '/images/hero-moteur-reconditionne.jpeg',
+      imageUrl: '/images/hero-moteur-reconditionne.webp',
       imageAlt: 'Austauschmotoren',
       badge: 'Motor',
       title: 'Austauschmotoren: Leistung & Sicherheit',
       description: 'Porsche, Range Rover, BMW… mit höchstem Anspruch geprüfte und aufbereitete Motoren, schnell verfügbar.',
       ctaPrimaryText: 'Kostenloses Angebot anfordern',
-      ctaPrimaryUrl: '/devis',
+      ctaPrimaryUrl: '/de/devis',
       ctaSecondaryText: 'Katalog durchsuchen',
       ctaSecondaryUrl: '/de/produits',
       sortOrder: 2,

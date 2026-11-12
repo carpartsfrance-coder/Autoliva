@@ -60,6 +60,9 @@ function mergeOne(def, channel, ov) {
     label: def.label,
     body: ov && isFilled(ov.body) ? ov.body : def.body,
     forSource: def.forSource || [],
+    // Restriction de canal (SMS / WhatsApp). Absent = les deux : c'est le cas
+    // de tous les modèles historiques, dont le comportement ne change pas.
+    channels: Array.isArray(def.channels) ? def.channels : null,
     enabled,
     isCustom: false,
   };
@@ -77,6 +80,9 @@ function customToComposer(c) {
     label: c.label || '(sans titre)',
     body: c.body || '',
     forSource: [],
+    // Un modèle créé au back-office n'a pas de restriction de canal : il reste
+    // proposé en SMS comme en WhatsApp.
+    channels: null,
     enabled: c.enabled !== false,
     isCustom: true,
   };
@@ -120,6 +126,7 @@ async function getTemplatesForAdmin() {
       key: d.key,
       channel,
       label: d.label,
+      channels: Array.isArray(d.channels) ? d.channels : null,
       isCustom: false,
       enabled: ov ? ov.enabled !== false : true,
       subject: channel === 'email' && ov && typeof ov.subject === 'string' ? ov.subject : '',
@@ -133,6 +140,7 @@ async function getTemplatesForAdmin() {
     key: c.id,
     channel,
     label: c.label || '',
+    channels: null,
     isCustom: true,
     enabled: c.enabled !== false,
     subject: channel === 'email' ? (c.subject || '') : '',

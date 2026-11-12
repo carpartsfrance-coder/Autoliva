@@ -8,19 +8,36 @@ const { renderInfoBlockHtml } = require('../services/infoBlockContent');
 const demoProducts = require('../demoProducts');
 const sanitizeHtml = require('sanitize-html');
 const { markdownToHtml } = require('../services/blogContent');
-const { buildCategoryPublicUrl } = require('../services/categoryPublic');
 const productOptions = require('../services/productOptions');
+const titreSeo = require('../services/titreSeo');
 const { rankProducts, sortRankedProducts } = require('../services/search');
 const brand = require('../config/brand');
+const { idOrganisation } = require('../services/organisationSchema');
+
+/* Port annoncé dans le JSON-LD des fiches : 3 requêtes (catégories, classes
+   d'expédition) par calcul, et les robots lisent des milliers de fiches
+   d'affilée. Gardé 10 min par (pays, service, classe, catégorie) : un tarif
+   changé dans l'admin rejoint le balisage au plus 10 min après ; le panier,
+   lui, recalcule toujours. */
+const PORT_JSONLD_TTL_MS = 10 * 60 * 1000;
+const cachePortJsonLd = new Map();
 const {
   buildProductPublicPath,
   buildProductPublicUrl,
   getPublicBaseUrlFromReq,
 } = require('../services/productPublic');
-const { buildHreflangSet, t } = require('../services/i18n');
+const { buildHreflangSet, t, redirectionFrGardantLaLangue } = require('../services/i18n');
 const productI18n = require('../services/productI18n');
+const blogI18n = require('../services/blogI18n');
+const categoryI18n = require('../services/categoryI18n');
 const { buildSeoMediaUrl } = require('../services/mediaStorage');
 const { sanitizeBrandLeak } = require('../services/brandSanitizer');
+const claimFilter = require('../services/claimFilter');
+const { etatDepuisTexte } = require('../services/etatPiece');
+const { promesseLivraisonJours } = require('../services/fluxMerchant');
+const scalapay = require('../services/scalapay');
+const produitsDisparus = require('../services/produitsDisparus');
+const seoIndexPolicy = require('../services/seoIndexPolicy');
 
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -236,6 +253,13 @@ function normalizeProduct(product) {
     ? product.shippingDelayText.trim()
     : '';
 
+  /* Promesse de livraison de la famille (mécatroniques : 4 jours ouvrés) —
+     lue sur le nom et la catégorie FRANÇAIS, normalizeProduct passant avant le
+     calque allemand. Elle remplace à l'affichage le délai écrit sur la fiche,
+     et le flux Merchant répartit les mêmes jours entre préparation et
+     transport : la page et Google annoncent le même total. */
+  const deliveryPromiseDays = promesseLivraisonJours(product) || 0;
+
   const compatibleReferences = Array.isArray(product.compatibleReferences)
     ? product.compatibleReferences
         .filter((v) => typeof v === 'string')
@@ -260,6 +284,7 @@ function normalizeProduct(product) {
     inStock,
     stockQty,
     shippingDelayText,
+    deliveryPromiseDays,
     compatibleReferences,
     priceCents: parseLegacyPriceCents(product),
     consigne: {
@@ -412,11 +437,17 @@ async function getProductBySlug(req, res, next) {
         return getProduct(req, res, next);
       }
       return res.status(404).render('errors/404', {
-        title: `Page introuvable - ${brand.NAME}`,
+        title: t(req.lang || 'fr', 'error.404.title'),
       });
     }
 
-    const hit = await Product.findOne({ slug }).select('_id').lean();
+    /* Slug EXACT d'abord : 75 fiches Dekram portent un double tiret
+       (« boite-vitesses-ford-kuga-2-0--19060 », nom d'origine sans code
+       boîte). slugifyLoose le ramène à un tiret, la recherche échouait, et la
+       fiche — publiée, présente au sitemap — partait en 301 vers la recherche
+       (noindex). Invisible aux clients comme à Google (contrôle du 25/09/2026). */
+    const hit = (raw !== slug ? await Product.findOne({ slug: raw }).select('_id').lean() : null)
+      || await Product.findOne({ slug }).select('_id').lean();
     if (!hit || !hit._id) {
       // Aucun produit pour ce slug. Si le paramètre est un ObjectId valide
       // (cas d'un produit sans slug : son URL canonique retombe sur l'id),
@@ -429,6 +460,18 @@ async function getProductBySlug(req, res, next) {
           req.params.id = String(byId._id);
           return getProduct(req, res, next);
         }
+      }
+      /* Fiche disparue (plan de reprise SEO du 14/09/2026, action A4.8) :
+         /product/wc-NNNN retrouve sa fiche par le SKU, et les 19 slugs morts
+         qui recevaient encore du trafic — dont 16 pages d'arrivée Ads — vont
+         vers leur fiche de remplacement plutôt que vers la recherche (noindex).
+         La chaîne de requête suit : le gclid d'un clic Ads arrive jusqu'à la
+         fiche. Tout autre slug garde le repli ci-dessous jusqu'à la fin du
+         changement d'adresse (31/10). */
+      const cible = await produitsDisparus.redirectionPourSlugInconnu(slug);
+      if (cible) {
+        const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+        return res.redirect(301, cible + qs);
       }
       return res.redirect(301, `/produits?q=${encodeURIComponent(raw)}`);
     }
@@ -506,26 +549,16 @@ function extractWarrantyYearsFromText(value) {
   return parsed;
 }
 
+/* La lecture du badge d'état est partagée avec les flux Google Merchant
+   (services/etatPiece) : Merchant compare l'état du flux à celui de la page. */
+const SCHEMA_CONDITION = {
+  refurbished: 'https://schema.org/RefurbishedCondition',
+  new: 'https://schema.org/NewCondition',
+  used: 'https://schema.org/UsedCondition',
+};
+
 function mapSchemaCondition(value) {
-  const input = typeof value === 'string' ? value.trim() : '';
-  if (!input) return '';
-
-  const normalized = input
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-
-  if (/(recondition|refurb|remanufact|echange standard)/.test(normalized)) {
-    return 'https://schema.org/RefurbishedCondition';
-  }
-  if (/(^|\b)(neuf|new)(\b|$)/.test(normalized)) {
-    return 'https://schema.org/NewCondition';
-  }
-  if (/(^|\b)(occasion|used|utilise)(\b|$)/.test(normalized)) {
-    return 'https://schema.org/UsedCondition';
-  }
-
-  return '';
+  return SCHEMA_CONDITION[etatDepuisTexte(value)] || '';
 }
 
 async function listProducts(req, res, next) {
@@ -611,7 +644,7 @@ async function getProduct(req, res, next) {
     if (dbConnected) {
       if (!mongoose.Types.ObjectId.isValid(id)) {
         return res.status(404).render('errors/404', {
-          title: `Page introuvable - ${brand.NAME}`,
+          title: t(req.lang || 'fr', 'error.404.title'),
         });
       }
 
@@ -647,9 +680,17 @@ async function getProduct(req, res, next) {
 
     if (!product) {
       return res.status(404).render('errors/404', {
-        title: `Page introuvable - ${brand.NAME}`,
+        title: t(req.lang || 'fr', 'error.404.title'),
       });
     }
+
+    /* Politique d'indexation, famille « products » (plan de reprise SEO du
+       14/09/2026, actions A5.7 et A14) : décidée ICI, sur l'_id, le SKU et le
+       choix fait dans l'admin — seul le contrôleur les connaît une fois le
+       slug résolu. Avant le calque allemand, qui remplace seo. La fiche reste
+       en ligne, en vente et dans les flux Merchant ; la page allemande d'une
+       fiche retirée sort aussi. SEO_PRUNE sans « products » : rien ne change. */
+    seoIndexPolicy.appliquerProduit(res, product);
 
     // Blocs d'information attachés (rendus markdown → HTML, groupés par position).
     product.infoBlocksByPosition = dbConnected
@@ -662,15 +703,49 @@ async function getProduct(req, res, next) {
     // fiche FR → jamais de page à moitié traduite indexée (leçon du /en).
     const pageLang = (req.lang === 'de' && productI18n.isSupportedLang('de')) ? 'de' : 'fr';
     const isLocalized = pageLang !== 'fr';
+    /* Nom FRANÇAIS de la catégorie, gardé pour le port affiché plus bas : la
+       classe d'expédition d'une catégorie se retrouve par Category.name
+       (français). Avec le nom traduit (« Getriebe »), elle n'était plus
+       trouvée et la fiche allemande annonçait le tarif de la classe par
+       défaut, plus bas que le port encaissé au paiement. */
+    const categorieFr = product.category;
     if (pageLang === 'de') {
       if (!productI18n.isTranslated(product, 'de')) {
         if (req.session) delete req.session.cartError;
-        return res.redirect(301, buildProductPublicPath(product)); // → fiche FR
+        /* → fiche FR, sans perdre l'allemand : le catalogue /de liste aussi les
+           fiches non traduites, et ce 301 renvoyait le visiteur sur une page
+           française dont le GET remettait la session en « fr ». */
+        return res.redirect(301, redirectionFrGardantLaLangue(req, buildProductPublicPath(product)));
       }
       product = productI18n.localizeProduct(product, 'de'); // calque DE non destructif
+      /* La catégorie n'est PAS un champ traduisible de la fiche : elle est
+         recopiée en clair sur le produit. Les 67 catégories, elles, sont
+         traduites dans Category.localizations.de — on rapproche les deux ici,
+         sinon « Typ » et le fil d'Ariane restaient en français sous un titre
+         allemand. */
+      product.category = await categoryI18n.traduire(product.category, 'de');
       // Pas de fuite de contenu FR : les blocs info ne sont pas (encore) traduits.
       product.infoBlocksByPosition = INFO_BLOCK_EMPTY_GROUPS;
     }
+
+    /* ─── Allégations non prouvées (plan SEO du 14/09/2026, action A3 e) ─────
+       La description revient à l'écran : avec elle, « usine certifiée ISO 9001 »,
+       « dans notre atelier », « 3× sans frais »… que personne n'a prouvés
+       (décision 4 en attente). Filtrés ICI, à l'affichage, sur tout texte de la
+       fiche qui finit dans la page — description, description courte (meta et
+       JSON-LD), badges, FAQ — dans la langue servie. Rien n'est réécrit en base.
+       Le filtre passe après le calque allemand pour couvrir ce qui est affiché ;
+       sanitizeBrandLeak (ancien nom de marque) est indépendant et déjà appliqué
+       par normalizeProduct. */
+    const allegations = claimFilter.contexteFiche(product, { scalapayActif: scalapay.estActif() });
+    product = claimFilter.filtrerFiche(product, allegations);
+    /* Bloc « Description » : français seulement, jamais pour les copies
+       distrimotor (DM-) ni pour les 264 fiches Alibaba (décision 4), coupé
+       d'un coup par SHOW_PRODUCT_DESCRIPTION=off. */
+    const motifSansDescription = claimFilter.motifDescriptionMasquee(product, { lang: pageLang });
+    /* DM / Alibaba : leur texte ne sert pas non plus de repli à la meta
+       description ni au JSON-LD — sinon la copie ressortait par la bande. */
+    const descriptionInterdite = !!claimFilter.familleADescriptionMasquee(product);
 
     // On ne redirige vers l'URL canonique /product/<slug>/ QUE si le produit a
     // un vrai slug ET qu'on est en FR. Sans slug, cette canonique retomberait
@@ -681,6 +756,20 @@ async function getProduct(req, res, next) {
     const requestedPath = `${req.baseUrl || ''}${req.path || ''}`;
     if (!isLocalized && hasRealSlug && canonicalPath && requestedPath && canonicalPath !== requestedPath) {
       return res.redirect(301, canonicalPath);
+    }
+
+    /* En allemand, l'URL porte l'_id : n'IMPORTE quel slug devant lui renvoyait
+       200. Une fiche était donc accessible sous une infinité d'adresses — et
+       depuis qu'on a corrigé 337 slugs, les anciennes continuaient de servir la
+       page au lieu de pointer vers la nouvelle. On renvoie vers l'adresse
+       canonique, celle que déclare déjà la balise. */
+    if (isLocalized && product._localizedSlug) {
+      const attendu = `/de/produits/${encodeURIComponent(product._localizedSlug)}-${id}`;
+      const demande = `${req.baseUrl || ''}${req.path || ''}`.replace(/\/+$/, '');
+      if (demande && demande !== attendu) {
+        const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+        return res.redirect(301, attendu + qs);
+      }
     }
 
     const canonicalUrl = isLocalized
@@ -717,72 +806,47 @@ async function getProduct(req, res, next) {
       ? sanitizeBrandLeak(product.seo.metaTitle.trim())
       : '';
 
-    /* Construit un title SEO en tenant dans ~60 caractères (limite SERP Google).
-       Stratégie : on tente la version complète, si trop longue on retire d'abord
-       la SKU (info technique moins recherchée), puis le brand véhicule, puis on
-       tronque le nom pour préserver le suffix marque. */
-    const SEO_TITLE_MAX = 60;
-    function buildSeoTitleFitted(name, brandTxt, skuTxt) {
-      const suffix = ` | ${brand.NAME}`;
-      const variants = [
-        `${name}${brandTxt ? ` - ${brandTxt}` : ''}${skuTxt ? ` (Réf ${skuTxt})` : ''}${suffix}`,
-        `${name}${brandTxt ? ` - ${brandTxt}` : ''}${suffix}`,
-        `${name}${suffix}`,
+    /* Title SEO : 60 caractères au plus, sans « … », la référence jamais
+       coupée (audit SEO du 11/11/2026, services/titreSeo.js). On tente
+       d'abord les versions complètes avec la marque du véhicule et la SKU ;
+       sinon le nom seul, raccourci entre deux mots. « | Autoliva » n'est
+       gardé que s'il ne coûte rien au texte. */
+    const SUFFIXE_MARQUE = ` | ${brand.NAME}`;
+    /* Ce que le client tape dans Google : la référence fabricant, la première
+       référence compatible, le code boîte ou moteur. Jamais coupés. */
+    const identifiantsAProteger = [
+      findSpecValue('référence fabricant', 'reference fabricant', 'référence oe', 'reference oe', 'code boîte', 'code boite', 'code moteur'),
+      compatibleReferences[0] || '',
+    ].filter(Boolean);
+    function titreDepuisNom(name, brandTxt, skuTxt) {
+      const nom = String(name || '').trim();
+      const variantes = [
+        `${nom}${brandTxt ? ` - ${brandTxt}` : ''}${skuTxt ? ` (Réf ${skuTxt})` : ''}${SUFFIXE_MARQUE}`,
+        `${nom}${brandTxt ? ` - ${brandTxt}` : ''}${SUFFIXE_MARQUE}`,
       ];
-      for (const v of variants) {
-        if (v.length <= SEO_TITLE_MAX) return v;
+      for (const v of variantes) {
+        if (v.length <= titreSeo.TITRE_MAX) return v;
       }
-      // Toutes trop longues → on tronque le nom pour préserver " | Brand"
-      const maxNameLen = Math.max(10, SEO_TITLE_MAX - suffix.length - 1); // -1 pour ellipsis
-      const truncatedName = name.length > maxNameLen ? `${name.slice(0, maxNameLen).trim()}…` : name;
-      return `${truncatedName}${suffix}`;
+      return titreSeo.ajusterTitre(nom, { suffixe: SUFFIXE_MARQUE, modeSuffixe: 'facultatif', proteger: identifiantsAProteger });
     }
-    /* Si l'override DB n'a pas de suffix marque, on l'ajoute pour cohérence
-       SEO (sinon certaines fiches s'affichent sans " | Autoliva" en SERP).
-       Respecte STRICTEMENT SEO_TITLE_MAX (60 char) pour éviter la troncature
-       SERP de Google (cause des 37 alertes Semrush "title too long"). */
-    function ensureBrandSuffix(t) {
-      if (!t) return t;
-      const suffix = ` | ${brand.NAME}`;
-      const trimmed = t.trim();
-      // Déjà conforme avec ou sans suffix
-      if (trimmed.length <= SEO_TITLE_MAX && trimmed.endsWith(suffix)) return trimmed;
-      const lower = trimmed.toLowerCase();
-      const lowerName = brand.NAME.toLowerCase();
-      // Si le brand est déjà présent en fin (autre séparateur), on n'ajoute
-      // pas le suffix mais on tronque quand même si > 60.
-      if (lower.endsWith(lowerName)) {
-        if (trimmed.length <= SEO_TITLE_MAX) return trimmed;
-        return `${trimmed.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
-      }
-      // Cas standard : on essaie d'ajouter le suffix dans la limite 60 ; sinon
-      // on tronque la partie titre pour préserver " | Brand".
-      const candidate = `${trimmed}${suffix}`;
-      if (candidate.length <= SEO_TITLE_MAX) return candidate;
-      const maxLen = Math.max(20, SEO_TITLE_MAX - suffix.length - 1);
-      const cut = trimmed.length > maxLen ? `${trimmed.slice(0, maxLen).trim()}…` : trimmed;
-      return `${cut}${suffix}`;
+    /* Un title saisi en base (seo.metaTitle) est réajusté de la même façon :
+       la marque y est ajoutée si elle tient, retirée s'il faut couper. */
+    function titreDepuisSaisie(saisi) {
+      const { texte } = titreSeo.separerSuffixe(saisi, brand.NAME);
+      return titreSeo.ajusterTitre(texte, { suffixe: SUFFIXE_MARQUE, modeSuffixe: 'facultatif', proteger: identifiantsAProteger });
     }
-    /* Garde-fou ultime : quoi qu'il arrive, jamais > SEO_TITLE_MAX. */
-    function clampTitle(t) {
-      if (!t) return t;
-      const s = String(t).trim();
-      if (s.length <= SEO_TITLE_MAX) return s;
-      return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
-    }
-    const seoTitle = clampTitle(
-      titleOverride
-        ? ensureBrandSuffix(titleOverride)
-        : buildSeoTitleFitted(product.name, brandText, skuText),
-    );
+    const seoTitle = titleOverride
+      ? titreDepuisSaisie(titleOverride)
+      : titreDepuisNom(product.name, brandText, skuText);
 
     const descriptionOverride = product.seo && typeof product.seo.metaDescription === 'string'
       ? sanitizeBrandLeak(product.seo.metaDescription.trim())
       : '';
-    const baseDesc = product.shortDescription || product.description || '';
+    const descriptionPourMeta = descriptionInterdite ? '' : product.description;
+    const baseDesc = product.shortDescription || descriptionPourMeta || '';
     const baseDescPlain = toPlainText(baseDesc);
     const refsText = compatibleReferences.length ? compatibleReferences.slice(0, 6).join(', ') : '';
-    const autoDesc = `Pièce auto ${product.name}${skuText ? ` (réf ${skuText})` : ''}${refsText ? ` (références compatibles ${refsText})` : ''}${compatText ? ` compatible ${compatText}` : ''}. Livraison rapide. Paiement sécurisé.`;
+    const autoDesc = `Pièce auto ${product.name}${skuText ? ` (réf ${skuText})` : ''}${refsText ? ` (références compatibles ${refsText})` : ''}${compatText ? ` compatible ${compatText}` : ''}. Paiement sécurisé.`;
     const metaDescription = truncateText(normalizeMetaText(toPlainText(descriptionOverride) || baseDescPlain || autoDesc), 160);
 
     const images = [];
@@ -796,12 +860,16 @@ async function getProduct(req, res, next) {
     const ogImage = resolveAbsoluteUrl(req, mainImage);
 
     const price = Number.isFinite(product.priceCents) ? (product.priceCents / 100).toFixed(2) : undefined;
-    const descriptionForSchema = normalizeMetaText(metaDescription || toPlainText(product.shortDescription || product.description || autoDesc));
+    const descriptionForSchema = normalizeMetaText(metaDescription || toPlainText(product.shortDescription || descriptionPourMeta || autoDesc));
     const schemaBrandName = brandText || (firstCompat && typeof firstCompat.make === 'string' ? firstCompat.make.trim() : '');
     const conditionText = findSpecValue('état', 'etat') || (product.badges && product.badges.condition ? String(product.badges.condition).trim() : '');
     const schemaCondition = mapSchemaCondition(conditionText);
     const warrantyText = findSpecValue('garantie') || (product.badges && product.badges.topLeft ? String(product.badges.topLeft).trim() : '');
     const warrantyYears = extractWarrantyYearsFromText(warrantyText);
+    /* La fiche affiche la garantie en MOIS quand warranty.months est saisi
+       (show.ejs) : c'est cette durée que le JSON-LD doit reprendre, pas une
+       durée devinée dans un libellé (« 2 ans » d'un badge générique). */
+    const garantieMois = (product.warranty && Number(product.warranty.months) > 0) ? Math.round(Number(product.warranty.months)) : 0;
     const priceValidUntil = formatDateIso(new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)));
 
     /* Compatibilité véhicule pour les rich results.
@@ -838,26 +906,28 @@ async function getProduct(req, res, next) {
         enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.jsonldCompatRef'), value: r });
       });
     }
-    if (warrantyYears) {
+    if (garantieMois) {
+      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.guarantee'), value: `${garantieMois} ${t(pageLang, 'product.monthsWord')}` });
+    } else if (warrantyYears) {
       enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.guarantee'), value: `${warrantyYears} ${t(pageLang, 'product.yearsWord')}` });
     }
-    if (product.shippingDelayText) {
-      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.shippingLabel'), value: String(product.shippingDelayText).trim() });
-    }
-    /* Test qualité, Programmation, État : tirés des specs si dispo, sinon
-     * fallback constants pour signaler le positionnement reconditionné. */
-    enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: t(pageLang, 'product.jsonldQualityTest'), value: t(pageLang, 'product.benchTested') });
-    if (Array.isArray(product.specs)) {
-      product.specs.forEach((s) => {
-        if (s && typeof s === 'object') {
-          const k = String(s.key || s.name || s.label || '').trim();
-          const v = String(s.value || '').trim();
-          if (k && v && !['Référence', 'Type', 'Garantie', 'Expédition'].includes(k)) {
-            // Évite doublons avec champs déjà ajoutés
-            enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: k, value: v });
-          }
-        }
-      });
+    /* Caractéristiques : les MÊMES que le tableau de la fiche (show.ejs, les
+       6 premières de product.specs, libellé + valeur, sans doublon), déjà
+       passées au filtre des allégations. Retirés (audit du 25/09/2026) :
+       « Test qualité : Testé sur banc », ajouté d'office à toutes les fiches et
+       faux pour l'occasion, les kits neufs et le clonage ; le délai
+       d'expédition, qui contredisait souvent celui affiché. Google demande de
+       ne baliser que ce que la page montre. */
+    const libellesVus = new Set();
+    for (const s of (Array.isArray(product.specs) ? product.specs : [])) {
+      if (libellesVus.size >= 6) break;
+      if (!s || typeof s !== 'object') continue;
+      const k = String(s.label || '').trim(); // la vue ne lit que label
+      const v = String(s.value || '').trim();
+      if (!k || !v || libellesVus.has(k.toLowerCase())) continue;
+      libellesVus.add(k.toLowerCase());
+      if (['référence', 'type', 'garantie', 'expédition'].includes(k.toLowerCase())) continue;
+      enrichedAdditionalProperties.push({ '@type': 'PropertyValue', name: k, value: v });
     }
 
     const categoryNameForSchema = typeof product.category === 'string' ? product.category.trim() : '';
@@ -878,6 +948,41 @@ async function getProduct(req, res, next) {
         }
       : undefined;
 
+    /* Port réel vers le pays de la page (audit du 25/09/2026). Le JSON-LD
+       annonçait « livraison gratuite en 1 à 3 jours » sur toutes les fiches,
+       alors que les CGV (art. 4 et 7.2) facturent le port et prévoient 3 à 6
+       jours ouvrés d'expédition pour les pièces lourdes : Google peut
+       l'afficher tel quel dans les fiches marchandes — fausse déclaration.
+       Même fonction que le panier : le montant annoncé est celui qui sera
+       encaissé (0 pour le service de clonage, aller-retour inclus). Aucun
+       délai : il dépend de la pièce et du stock, la fiche l'affiche. */
+    const paysPage = pageLang === 'de' ? 'DE' : 'FR';
+    let portDomicileCents = null;
+    const clePort = [paysPage, product.serviceType || '', product.shippingClassId ? String(product.shippingClassId) : '', categorieFr || ''].join('|');
+    const portEnCache = cachePortJsonLd.get(clePort);
+    if (portEnCache && Date.now() - portEnCache.t < PORT_JSONLD_TTL_MS) {
+      portDomicileCents = portEnCache.v;
+    } else if (dbConnected) {
+      try {
+        const { getShippingMethods } = require('../services/shippingPricing');
+        const methodes = await getShippingMethods(dbConnected, [{ ...product, category: categorieFr }], { country: paysPage }, pageLang);
+        const domicile = methodes.find((m) => m && m.id === 'domicile');
+        portDomicileCents = domicile && Number.isFinite(domicile.priceCents) ? domicile.priceCents : null;
+        if (cachePortJsonLd.size > 500) cachePortJsonLd.clear();
+        cachePortJsonLd.set(clePort, { v: portDomicileCents, t: Date.now() });
+      } catch (err) {
+        console.error('[product] port JSON-LD :', err && err.message);
+      }
+    }
+
+    /* MPN : une vraie référence de pièce seulement. Le code moteur ou boîte
+       (« DQ200 », « 2KD-FTV » sur un différentiel) n'est pas un numéro de
+       pièce ; un gabarit jamais rempli (« A176350XXXX ») non plus. */
+    const refPiece = compatibleReferences.find((r) => {
+      const v = String(r || '').trim();
+      return v.length >= 5 && /\d/.test(v) && /^[A-Z0-9][A-Z0-9 .\-\/]*$/i.test(v) && !/X{3,}/i.test(v);
+    }) || undefined;
+
     const schemaProduct = {
       /* @type='Product' uniquement : AutomotivePart n'est pas un type
        * Schema.org valide (causait 908 erreurs structured data). Le signal
@@ -886,11 +991,13 @@ async function getProduct(req, res, next) {
       name: product.name,
       description: truncateText(descriptionForSchema, 5000),
       sku: skuText || undefined,
-      mpn: engineCode || (compatibleReferences.length ? compatibleReferences[0] : undefined),
+      mpn: refPiece,
       productID: skuText || undefined,
       category: categoryNameForSchema || undefined,
       brand: schemaBrandName ? { '@type': 'Brand', name: schemaBrandName } : undefined,
-      manufacturer: { '@type': 'Organization', name: brand.NAME },
+      /* manufacturer : retiré. Autoliva ne fabrique ni ne reconditionne
+         lui-même (partenaire reconditionneur, pièces d'occasion) : le déclarer
+         fabricant de chaque pièce était faux. */
       itemCondition: schemaCondition || undefined,
       image: ogImage || undefined,
       /* isAccessoryOrSparePartFor : retiré. Le champ exigeait Vehicle objects
@@ -900,16 +1007,11 @@ async function getProduct(req, res, next) {
        * commentaire sur fitsVehicles). */
       // isAccessoryOrSparePartFor: <removed>,
       additionalProperty: enrichedAdditionalProperties.length ? enrichedAdditionalProperties : undefined,
-      /* hasMerchantReturnPolicy : retour ancien organe sous 30 jours (échange
-       * standard). Active le rich snippet "free returns" dans Google Shopping. */
-      hasMerchantReturnPolicy: {
-        '@type': 'MerchantReturnPolicy',
-        applicableCountry: 'FR',
-        returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
-        merchantReturnDays: 30,
-        returnMethod: 'https://schema.org/ReturnByMail',
-        returnFees: 'https://schema.org/FreeReturn',
-      },
+      /* hasMerchantReturnPolicy : retiré de la fiche. Il annonçait un retour
+         GRATUIT sous 30 jours (confusion avec le retour de l'ancienne pièce en
+         échange standard), alors que les CGV (art. 9) prévoient 14 jours, frais
+         de retour à la charge du client. La politique réelle est déclarée une
+         fois, sur l'organisation (services/organisationSchema.js). */
       aggregateRating: aggregateRatingBlock,
       offers: price
         ? {
@@ -920,37 +1022,32 @@ async function getProduct(req, res, next) {
             priceValidUntil: priceValidUntil || undefined,
             availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
             itemCondition: schemaCondition || undefined,
-            seller: { '@type': 'Organization', name: brand.NAME },
-            /* shippingDetails : signal "fast & free shipping" pour Google
-             * Shopping et les rich results SERP. Livraison 24h FR. */
-            shippingDetails: {
-              '@type': 'OfferShippingDetails',
-              shippingRate: { '@type': 'MonetaryAmount', value: '0.00', currency: 'EUR' },
-              shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'FR' },
-              deliveryTime: {
-                '@type': 'ShippingDeliveryTime',
-                handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
-                transitTime: { '@type': 'QuantitativeValue', minValue: 1, maxValue: 2, unitCode: 'DAY' },
-              },
-            },
-            warranty: warrantyYears
+            seller: { '@type': 'OnlineStore', '@id': idOrganisation(getPublicBaseUrlFromReq(req)), name: brand.NAME },
+            shippingDetails: portDomicileCents != null
+              ? {
+                  '@type': 'OfferShippingDetails',
+                  shippingRate: { '@type': 'MonetaryAmount', value: (portDomicileCents / 100).toFixed(2), currency: 'EUR' },
+                  shippingDestination: { '@type': 'DefinedRegion', addressCountry: paysPage },
+                }
+              : undefined,
+            warranty: (garantieMois || warrantyYears)
               ? {
                   '@type': 'WarrantyPromise',
-                  durationOfWarranty: {
-                    '@type': 'QuantitativeValue',
-                    value: warrantyYears,
-                    unitCode: 'ANN',
-                  },
-                  /* PartsAndLabor : couverture pièce + main d'œuvre montage
-                   * (positionnement reconditionné Autoliva), plus précis que
-                   * BrokenCondition. */
+                  durationOfWarranty: garantieMois
+                    ? { '@type': 'QuantitativeValue', value: garantieMois, unitCode: 'MON' }
+                    : { '@type': 'QuantitativeValue', value: warrantyYears, unitCode: 'ANN' },
+                  /* PartsAndLabor : la garantie commerciale « n'entraîne aucun
+                     frais pour le consommateur (main-d'œuvre, pièces, transport
+                     retour) » (CGV art. 12.2) — la main-d'œuvre de la REMISE EN
+                     ÉTAT, pas celle de la pose, que la fiche exclut. */
                   warrantyScope: 'https://schema.org/PartsAndLabor',
                 }
               : undefined,
           }
         : undefined,
     };
-    const schemaFaqPage = Array.isArray(product.faqs) && product.faqs.length
+    /* Même condition que la vue (show.ejs) : pas de FAQ balisée qu'on ne voit pas. */
+    const schemaFaqPage = product.sections && product.sections.showFaq && Array.isArray(product.faqs) && product.faqs.length
       ? {
           '@type': 'FAQPage',
           mainEntity: product.faqs
@@ -972,21 +1069,29 @@ async function getProduct(req, res, next) {
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
     const categoryName = typeof product.category === 'string' ? product.category.trim() : '';
-    const categorySlug = categoryName ? slugifyLoose(categoryName) : '';
-    const categoryUrl = categorySlug ? buildCategoryPublicUrl({ slug: categorySlug }, { req }) : '';
+    /* Lien du fil d'Ariane : le VRAI slug du document Category (et sa version
+       allemande sous /de). Il était fabriqué en slugifiant le nom affiché —
+       « Mécatroniques & calculateurs » → /categorie/mecatroniques-calculateurs,
+       404 en français ; et sous /de, l'URL française avec un slug allemand
+       (/categorie/transfergetriebe), 404 elle aussi. Le nom AFFICHÉ, lui, reste
+       celui de la page (traduit en allemand). */
+    const cheminCategorie = await categoryI18n.lienCategorie(categorieFr, pageLang);
+    const categoryUrl = cheminCategorie ? (baseUrl ? `${baseUrl}${cheminCategorie}` : cheminCategorie) : '';
 
     const breadcrumbItems = [
       {
         '@type': 'ListItem',
         position: 1,
-        name: 'Accueil',
-        item: baseUrl ? `${baseUrl}/` : '/',
+        /* Le fil VISIBLE était traduit, celui des données structurées non —
+           et c'est celui-là que Google lit. */
+        name: t(req.lang, 'breadcrumb.homeLd'),
+        item: baseUrl ? `${baseUrl}${req.lang === 'de' ? '/de' : ''}/` : '/',
       },
       {
         '@type': 'ListItem',
         position: 2,
-        name: 'Catalogue',
-        item: baseUrl ? `${baseUrl}/produits` : '/produits',
+        name: t(req.lang, 'breadcrumb.catalogLd'),
+        item: baseUrl ? `${baseUrl}${req.lang === 'de' ? '/de' : ''}/produits` : '/produits',
       },
     ];
 
@@ -1017,9 +1122,11 @@ async function getProduct(req, res, next) {
         },
       ],
     })
-      .replace(/</g, '\u003c')
-      .replace(/>/g, '\u003e')
-      .replace(/&/g, '\u0026');
+      /* '\\u003c' (six caractères) et non '\u003c', qui ne remplaçait « < »
+         que par lui-même : un « </script> » dans un nom de fiche fermait le bloc. */
+      .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e')
+      .replace(/&/g, '\\u0026');
 
     let relatedProducts = [];
     let relatedBlogPosts = [];
@@ -1049,38 +1156,45 @@ async function getProduct(req, res, next) {
         relatedProducts = relatedProducts.concat(fallback.map(normalizeProduct));
       }
 
+      /* Les articles liés d'une fiche allemande étaient servis en français,
+         titre et lien compris. */
+      const blogLang = req.lang === 'de' ? 'de' : 'fr';
       const mappedBlogCard = (b) => {
+        const f = blogI18n.blogFields(b, blogLang);
         const publishedAt = b.publishedAt || b.createdAt || null;
         const minutes = Number.isFinite(b.readingTimeMinutes) && b.readingTimeMinutes > 0
           ? b.readingTimeMinutes
-          : estimateReadingTimeMinutes(b.contentHtml || '');
-        const excerpt = (b.excerpt || '').trim() || truncateText(stripHtml(b.contentHtml || ''), 140);
-        const categoryLabel = b.category && b.category.label
-          ? String(b.category.label).trim()
-          : (b.category && b.category.slug ? String(b.category.slug).trim() : 'Blog');
+          : estimateReadingTimeMinutes(f.contentHtml);
+        const excerpt = (f.excerpt || '').trim() || truncateText(stripHtml(f.contentHtml), 140);
+        const categoryLabel = blogI18n.blogCategoryLabel(b.category, blogLang) || 'Blog';
 
         return {
           id: String(b._id),
           slug: String(b.slug),
-          title: b.title || '',
+          title: f.title,
           excerpt,
           imageUrl: b.coverImageUrl || '',
           categoryLabel,
           dateLabel: formatDateFRShort(publishedAt),
-          readTimeLabel: `${minutes} min`,
-          url: `/blog/${encodeURIComponent(String(b.slug))}`,
+          readTimeLabel: blogLang === 'de' ? `${minutes} Min.` : `${minutes} min`,
+          url: blogI18n.blogUrl(b.slug, blogLang),
         };
       };
 
-      const blogProjection = 'slug title excerpt coverImageUrl category publishedAt createdAt readingTimeMinutes contentHtml';
+      const blogProjection = `slug title excerpt coverImageUrl category publishedAt createdAt readingTimeMinutes contentHtml ${blogI18n.DE_PROJECTION}`;
+      /* Ne proposer que des articles traduits : sinon le lien allemand mène à
+         un article français. */
+      const blogFilterLang = blogI18n.blogLangFilter(blogLang);
 
       const chosenIds = Array.isArray(product.relatedBlogPostIds) ? product.relatedBlogPostIds : [];
       const chosenObjectIds = chosenIds
         .filter((v) => mongoose.Types.ObjectId.isValid(v))
         .map((v) => new mongoose.Types.ObjectId(v));
 
+      /* Articles en 410 ou sortis de Google : jamais proposés depuis une fiche
+         (politique d'indexation, plan SEO A5.5). */
       const chosenDocs = chosenObjectIds.length
-        ? await BlogPost.find({ _id: { $in: chosenObjectIds }, isPublished: true })
+        ? await BlogPost.find(seoIndexPolicy.publicBlogFilter({ _id: { $in: chosenObjectIds }, isPublished: true, ...blogFilterLang }, { lang: blogLang }))
             .select(`_id ${blogProjection}`)
             .lean()
         : [];
@@ -1090,10 +1204,11 @@ async function getProduct(req, res, next) {
         .map((oid) => chosenById.get(String(oid)))
         .filter(Boolean);
 
-      const fromArticlesDocs = await BlogPost.find({
+      const fromArticlesDocs = await BlogPost.find(seoIndexPolicy.publicBlogFilter({
         isPublished: true,
+        ...blogFilterLang,
         relatedProductIds: new mongoose.Types.ObjectId(id),
-      })
+      }, { lang: blogLang }))
         .sort({ publishedAt: -1, createdAt: -1 })
         .limit(6)
         .select(`_id ${blogProjection}`)
@@ -1136,12 +1251,19 @@ async function getProduct(req, res, next) {
       };
     });
 
-    const descriptionRaw = product.description || product.shortDescription || '';
+    /* Maintenant que la description est de nouveau AFFICHÉE, l'ancien nom ne doit
+       pas y ressortir : 6 325 fiches importées disent encore « Car Parts France ».
+       Description masquée (voir plus haut) : rien n'est calculé, et la vue ne
+       retombe pas sur product.description (drapeau descriptionAffichee). */
+    const descriptionRaw = motifSansDescription
+      ? ''
+      : sanitizeBrandLeak(product.description || product.shortDescription || '');
     const descriptionNormalized = normalizeImportedText(descriptionRaw);
     const htmlCandidate = looksLikeHtml(descriptionNormalized)
       ? descriptionNormalized
       : markdownToHtml(descriptionNormalized);
-    const safeDescriptionHtml = sanitizeProductHtml(htmlCandidate);
+    /* Un lien vers un article en 410 ne survit pas dans la description. */
+    const safeDescriptionHtml = seoIndexPolicy.retirerLiensDisparus(sanitizeProductHtml(htmlCandidate));
 
     product = {
       ...product,
@@ -1201,7 +1323,12 @@ async function getProduct(req, res, next) {
         productAccessories = accIds
           .map((accId) => byId.get(String(accId)))
           .filter(Boolean)
-          .map((p) => {
+          .map((pBrut) => {
+            /* Même calque que les cartes du catalogue allemand : sans lui, la
+               section « Complétez votre montage » d'une fiche /de affichait des
+               noms français et renvoyait vers la fiche FR, dont le GET remettait
+               la session — donc la commande et les e-mails — en français. */
+            const p = req.lang === 'de' ? productI18n.localizeProduct(pBrut, 'de') : pBrut;
             const rawImg = p.imageUrl
               || (Array.isArray(p.galleryUrls) && p.galleryUrls.find((u) => typeof u === 'string' && u.trim()))
               || '';
@@ -1212,13 +1339,37 @@ async function getProduct(req, res, next) {
               priceCents: Number(p.priceCents) || 0,
               inStock: p.inStock !== false,
               condition: (p.badges && p.badges.condition) || '',
+              /* Pfand encaissé à la commande : la carte allemande l'annonce à
+                 côté du prix, avant son bouton d'ajout au panier (PAngV). */
+              depositUpfrontCents: (p.consigne && p.consigne.enabled === true && p.consigne.chargeUpfront === true
+                && Number(p.consigne.amountCents) > 0) ? Math.floor(Number(p.consigne.amountCents)) : 0,
               imageUrl: buildSeoMediaUrl(rawImg, p.name),
-              publicPath: buildProductPublicPath(p),
+              publicPath: req.lang === 'de'
+                ? '/de/produits/' + encodeURIComponent(productI18n.localizedSlug(pBrut, 'de')) + '-' + pBrut._id
+                : buildProductPublicPath(p),
             };
           });
       }
     } catch (err) {
       console.error('[product] accessories error :', err && err.message);
+    }
+
+    /* Loi allemande sur l'affichage des prix (PAngV) : la fiche allemande doit
+       dire « zzgl. Versand » près du prix. On donne le montant réel vers
+       l'Allemagne (zone Europe de la classe d'expédition), pas un renvoi vague.
+       Même fonction que le panier et le paiement (getShippingMethods), avec la
+       catégorie française : le montant annoncé est celui qui sera encaissé.
+       Pas pour le service de clonage : aller-retour inclus, aucun port facturé. */
+    let versandDeCents = null;
+    if (res.locals.lang === 'de' && dbConnected && product.serviceType !== 'standalone_cloning') {
+      try {
+        const { getShippingMethods } = require('../services/shippingPricing');
+        const methodes = await getShippingMethods(dbConnected, [{ ...product, category: categorieFr }], { country: 'DE' }, 'de');
+        const domicile = methodes.find((m) => m && m.id === 'domicile');
+        versandDeCents = domicile && Number.isFinite(domicile.priceCents) ? domicile.priceCents : null;
+      } catch (err) {
+        console.error('[product] versand DE :', err && err.message);
+      }
     }
 
     if (req.session) delete req.session.cartError;
@@ -1242,12 +1393,19 @@ async function getProduct(req, res, next) {
       returnTo: req.originalUrl,
       errorMessage,
       product,
+      /* Voir « Allégations non prouvées » plus haut. La vue masque le bloc
+         description, les mentions ISO 9001 du gabarit, et fait passer ses
+         propres textes (« nos ateliers ») par le même filtre que la fiche. */
+      descriptionAffichee: !motifSansDescription,
+      iso9001Affichable: !allegations.regles.has('iso9001'),
+      filtreAllegations: (texte) => claimFilter.filtrer(texte, allegations),
       categoryUrl,
       categoryName,
       relatedProducts,
       relatedBlogPosts,
       productAccessories,
       productLinking,
+      versandDeCents,
     });
   } catch (err) {
     return next(err);

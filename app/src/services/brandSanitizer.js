@@ -21,6 +21,9 @@ const brand = require('../config/brand');
 /* Variantes du legacy brand qu'on remplace par brand.NAME courant.
    On va du plus spécifique au plus générique pour éviter les collisions. */
 const LEGACY_VARIANTS = [
+  /* Écrit d'un seul bloc dans des articles (« pont reconditionné
+     CarPartsFrance à 1 890 € ») : jamais remplacé jusqu'au 14/09/2026. */
+  'CarPartsFrance',
   'CarParts France',
   'Carparts France',
   'CARPARTS FRANCE',

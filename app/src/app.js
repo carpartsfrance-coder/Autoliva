@@ -8,6 +8,7 @@ const wpRedirects = require('./middlewares/wpRedirects');
 const wwwCanonical = require('./middlewares/wwwCanonical');
 const cpfRedirects = require('./middlewares/cpfRedirects');
 const i18nMiddleware = require('./middlewares/i18n');
+const { t, redirectionFrGardantLaLangue } = require('./services/i18n');
 const captureAttribution = require('./middlewares/captureAttribution');
 const brand = require('./config/brand');
 
@@ -22,6 +23,33 @@ const sessionSecret = typeof process.env.SESSION_SECRET === 'string' ? process.e
 if (isProd && (!sessionSecret || sessionSecret === 'dev_secret_change_me')) {
   throw new Error('SESSION_SECRET manquant en production');
 }
+
+/* ── Sonde de santé — AVANT TOUT LE RESTE ────────────────────────────────────
+ *
+ * Volontairement en première position, et volontairement SANS accès à la base.
+ *
+ * Panne du 21/08/2026 : le port ne s'ouvrait qu'une fois MongoDB connectée.
+ * Render, ne recevant rien, concluait à une instance morte et redémarrait —
+ * ce qui relançait un démarrage qui attendait une base déjà surchargée. La
+ * boucle « ==> Instance restarted » s'auto-entretenait.
+ *
+ * Cette route répond tant que le processus Node est vivant. Elle renvoie
+ * l'état de la base à titre d'INFORMATION, jamais comme condition : un site
+ * dégradé doit rester joignable, sinon on perd aussi les pages statiques, le
+ * back-office et toute chance de diagnostiquer.
+ *
+ * ⚠ À pointer comme « Health Check Path » dans les réglages Render.
+ */
+app.get('/health', (req, res) => {
+  const etats = ['deconnectee', 'connectee', 'connexion', 'deconnexion'];
+  const readyState = require('mongoose').connection.readyState;
+  res.status(200).json({
+    ok: true,
+    base: etats[readyState] || String(readyState),
+    uptimeSec: Math.round(process.uptime()),
+    memoireMo: Math.round(process.memoryUsage().rss / 1048576),
+  });
+});
 
 app.use((req, res, next) => {
   if (isProd) {
@@ -179,6 +207,7 @@ app.use(helmet({
         "https://www.google.com",
         "https://js.mollie.com",
         "https://js.scalapay.com",
+        "https://getcomptoir.fr",
       ],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
@@ -198,6 +227,7 @@ app.use(helmet({
         "https://www.google.fr",
         "https://*.mollie.com",
         "https://*.scalapay.com",
+        "https://getcomptoir.fr",
       ],
       frameSrc: [
         "'self'",
@@ -290,6 +320,12 @@ const siteSettings = require('./services/siteSettings');
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+/* Webhooks Ringover — monté AVANT express.json() à dessein : la vérification
+   de signature porte sur les OCTETS REÇUS, et un parseur JSON global les aurait
+   déjà consommés. `JSON.stringify(JSON.parse(x))` ne redonne pas `x` (ordre des
+   clés, espaces, flottants), ce qui invaliderait toute signature. */
+app.use('/api/ringover', require('./routes/api/ringover'));
+
 // Limite relevée à 2 Mo : l'import produits par JSON (/admin/api/products/import)
 // peut envoyer un lot de plusieurs centaines de fiches.
 app.use(express.json({ limit: '2mb' }));
@@ -336,21 +372,159 @@ app.get('/favicon.ico', (req, res) => {
    "Impossible de lire le sitemap" et le CDN ne peut plus cacher la réponse.
    Ces handlers n'ont pas besoin de session, ni de cart, ni de res.locals
    applicatifs : ils interrogent directement les modèles Mongoose. */
+/* Limiteur dédié aux routes de crawl (sitemaps, flux Merchant).
+ *
+ * Pourquoi (diagnostic du 08/2026) : ces routes sont montées AVANT le
+ * limiteur général `publicSiteLimiter` (plus bas), donc aucun robot n'y était
+ * freiné. Or elles sont les plus coûteuses du site : /sitemap-vehicles.xml ne
+ * finissait pas (>120 s), le flux Merchant pèse 28 Mo, /sitemap-products.xml
+ * 11 Mo. Mesuré : un seul appel suffisait à faire passer /produits de 2 s à
+ * 8 s pour tous les visiteurs.
+ *
+ * Pas d'exception sur le seul user-agent : n'importe qui peut se déclarer
+ * « Googlebot ». Google demande un sitemap quelques fois par jour, jamais vingt
+ * fois en dix minutes ; un scraper, lui, est freiné. Les caches et verrous
+ * posés sur chaque route font le reste.
+ *
+ * Plan de reprise SEO du 14/09/2026 (action A4.3) — deux corrections, à mettre
+ * en ligne AVANT de resoumettre le moindre sitemap :
+ *   - la clé est l'adresse du VISITEUR (CF-Connecting-IP / True-Client-IP),
+ *     plus req.ip : derrière Cloudflare, req.ip peut être le nœud Cloudflare,
+ *     partagé — un scraper épuisait alors le quota de Googlebot, et Google
+ *     compte un 429 comme une erreur serveur ;
+ *   - Googlebot, Storebot-Google, AdsBot-Google et Bingbot VÉRIFIÉS (DNS
+ *     inverse puis direct, en cache, attente bornée) passent sans compter.
+ *     Un faux Googlebot reste sous la limite. Voir services/robotsVerifies.js. */
+const robotsVerifies = require('./services/robotsVerifies');
+const { creerJournalAgents } = require('./services/journalAgents');
+
+/* Langue du visiteur AVANT le middleware i18n (les limiteurs s'exécutent plus
+   haut) : préfixe d'URL, sinon la préférence mémorisée — la même que lit le
+   tunnel, dont les URL sont françaises. */
+function langueAvantI18n(req) {
+  const chemin = String((req && req.path) || '').toLowerCase();
+  if (chemin === '/de' || chemin.startsWith('/de/')) return 'de';
+  return (req && req.session && req.session.preferredLang === 'de') ? 'de' : 'fr';
+}
+
+/** L'appel attend-il du JSON (fetch de l'ajout au panier) plutôt qu'une page ? */
+function attendDuJson(req) {
+  const h = (req && req.headers) || {};
+  if (h['x-requested-with']) return true;
+  return typeof h.accept === 'string' && /application\/json/i.test(h.accept);
+}
+
+const crawlerRoutesLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  /* Une passe complète = l'index + ses 8 sous-sitemaps, soit ~9 requêtes.
+     30 par 10 min et par IP laisse trois passes à un crawler pressé. */
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => robotsVerifies.cleLimiteur(req),
+  skip: (req) => robotsVerifies.estRobotVerifie(req),
+  handler: (req, res) => res.status(429).type('text/plain').send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
+});
+app.use(['/sitemap.xml', /^\/sitemap-.*\.xml$/, '/google-merchant-feed.xml', '/google-merchant-feed-de.xml'], crawlerRoutesLimiter);
+
+/* ─── Pages véhicules aspirées (30/09/2026) ───────────────────────────────────
+ *
+ * Un robot a pris /pieces-auto pour un catalogue à télécharger : 123 397
+ * requêtes en 24 h, la MOITIÉ du trafic du site, à ~5 000 par heure sans
+ * discontinuer, contre quelques centaines par jour jusque-là. L'instance
+ * (1 CPU, 2 Go) est restée à 100 % de processeur toute la nuit ; Render l'a
+ * redémarrée douze fois, dont trois pour dépassement mémoire. Chaque
+ * redémarrage = le site indisponible pour tout le monde.
+ *
+ * Ces pages ne sont plus indexées depuis le 25/09 (famille « pieces-auto » de
+ * SEO_PRUNE) et notre mesure d'audience n'y voit que 27 visites par jour : les
+ * freiner ne coûte rien à personne. Un robot vérifié (Googlebot, Storebot,
+ * AdsBot, Bingbot — DNS inverse, pas la simple déclaration) n'est jamais
+ * compté : il doit pouvoir repasser lire le noindex qu'on vient d'y poser.
+ *
+ * 90 pages par 10 minutes et par visiteur : un humain qui parcourt les pages
+ * véhicules n'en ouvre pas neuf par minute ; l'aspirateur, lui, en demande
+ * plus de quatre-vingts. Un 429 porte Retry-After, que les moteurs respectent.
+ *
+ * Le limiteur ne suffira pas si le robot se répartit sur des centaines
+ * d'adresses : c'est le journal des agents (posé juste avant, il compte TOUT,
+ * y compris ce qui est freiné) qui dira alors qui appeler — ou qu'il faut
+ * passer le domaine derrière Cloudflare. */
+const journalPiecesAuto = creerJournalAgents({ nom: '/pieces-auto' });
+const piecesAutoLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 90,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => robotsVerifies.cleLimiteur(req),
+  skip: (req) => robotsVerifies.estRobotVerifie(req),
+  handler: (req, res) => res
+    .status(429)
+    .set('Retry-After', '600')
+    .type('text/plain')
+    .send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
+});
+/* Et un PLAFOND GLOBAL, parce que le limiteur par visiteur ne suffit pas.
+ *
+ * Première mesure, une fois le journal en ligne (30/09/2026, 10 h 14) : 867
+ * requêtes en cinq minutes — ~10 400 par heure — réparties sur 33 agents et,
+ * pour le seul premier d'entre eux, 172 adresses IP. Aucun ne se déclare
+ * robot : ce sont des agents de Chrome mobile ordinaires. Un aspirateur qui
+ * tourne sur un parc de proxys résidentiels ne dépasse jamais un quota par
+ * adresse — 228 requêtes sur 172 adresses, c'est une requête et demie chacune.
+ *
+ * On protège donc la machine, pas les adresses : au-delà de 60 pages par
+ * minute TOUS visiteurs confondus, la page n'est plus construite. Ces pages ne
+ * sont plus indexées et reçoivent 27 visites par jour : le plafond ne gêne
+ * personne, sauf celui qui en demande 170 par minute. Les robots vérifiés
+ * n'y sont pas soumis, et un 429 refusé ici ne touche ni la base ni le
+ * gabarit — il coûte mille fois moins cher qu'une page servie.
+ *
+ * Ce n'est pas la solution durable : le domaine derrière Cloudflare le serait.
+ * C'est ce qui remet le site debout aujourd'hui. */
+const PIECES_AUTO_PLAFOND_MIN = Number(process.env.PIECES_AUTO_PLAFOND_MIN) > 0
+  ? Number(process.env.PIECES_AUTO_PLAFOND_MIN)
+  : 60;
+const piecesAutoPlafond = rateLimit({
+  windowMs: 60 * 1000,
+  /* Réglable sur Render sans redéploiement (PIECES_AUTO_PLAFOND_MIN) : pendant
+     une attaque, on serre ; quand elle passe, on desserre. */
+  max: PIECES_AUTO_PLAFOND_MIN,
+  standardHeaders: false,
+  legacyHeaders: false,
+  keyGenerator: () => 'pieces-auto',
+  skip: (req) => robotsVerifies.estRobotVerifie(req),
+  handler: (req, res) => res
+    .status(429)
+    .set('Retry-After', '60')
+    .type('text/plain')
+    .send(t(langueAvantI18n(req), 'error.tooManyRequestsResource')),
+});
+app.use('/pieces-auto', journalPiecesAuto, piecesAutoLimiter, piecesAutoPlafond);
+
 app.get('/sitemap.xml', seoController.getSitemapXml);
 app.get('/sitemap-pages.xml', seoController.getSitemapPages);
 app.get('/sitemap-categories.xml', seoController.getSitemapCategories);
+app.get('/sitemap-categories-de.xml', seoController.getSitemapCategoriesDe);
 app.get('/sitemap-products.xml', seoController.getSitemapProducts);
 app.get('/sitemap-products-de.xml', seoController.getSitemapProductsDe);
 app.get('/sitemap-vehicles.xml', seoController.getSitemapVehicles);
 app.get('/sitemap-references.xml', seoController.getSitemapReferences);
 app.get('/sitemap-blog.xml', seoController.getSitemapBlog);
 app.get('/sitemap-blog-de.xml', seoController.getSitemapBlogDe);
+/* Sitemaps de retrait (plan de reprise SEO, action A5.6) : ils n'existent que
+   pendant les huit semaines qui suivent l'allumage d'une famille de SEO_PRUNE ;
+   sinon la requête continue son chemin jusqu'au 404, comme avant. */
+app.get(/^\/sitemap-retraits-([a-z-]+)\.xml$/, seoController.getSitemapRetraits);
 app.get('/robots.txt', seoController.getRobotsTxt);
 
 /* Feed Google Shopping (Merchant Center). Monté avant session pour les
  * mêmes raisons que les sitemaps : pas de Set-Cookie sur la réponse, cache
  * CDN propre, pas de pollution session sur un endpoint public crawlé. */
 app.get('/google-merchant-feed.xml', require('./routes/google-merchant-feed'));
+/* Flux allemand pour Merchant Center (fiches gratuites Google Shopping DE).
+   Séparé du français : langue, liens /de/ et port zone Europe. */
+app.get('/google-merchant-feed-de.xml', require('./routes/google-merchant-feed-de'));
 
 /* /go/whatsapp — endpoint de redirect 301 vers WhatsApp wa.me.
  *
@@ -393,6 +567,11 @@ app.use(
       sessionOptions.store = MongoStore.create({
         mongoUrl,
         ttl: 30 * 24 * 60 * 60,
+        /* Avec `rolling: true`, express-session « touche » la session à
+           chaque réponse pour prolonger le cookie ; sans `touchAfter`,
+           connect-mongo réécrit alors le document Mongo à CHAQUE page vue.
+           Une fois par jour suffit largement pour un TTL de 30 jours. */
+        touchAfter: 24 * 60 * 60,
       });
     }
 
@@ -436,16 +615,42 @@ function _safeMtime(relPath) {
 const ASSET_VERSIONS = {
   mainCss: _safeMtime('css/styles.css'),
   adminCss: _safeMtime('admin/style.css'),
+  adminCommandesCss: _safeMtime('admin/commandes.css'),
+  adminCommandesJs: _safeMtime('js/admin-commandes.js'),
+  /* Le SAV portait un numéro de version écrit à la main (?v=48) : une
+     correction livrée le 01/10/2026 n'est jamais arrivée dans le navigateur de
+     l'équipe, qui a gardé sept jours le fichier en cache. Le mtime du fichier
+     s'en charge désormais tout seul. */
+  savAdminJs: _safeMtime('js/sav-admin.js'),
+  savCss: _safeMtime('css/sav.css'),
 };
+/* Polices servies depuis notre domaine (CSS inline + préchargements du
+   gabarit) — lues une fois, voir services/policesLocales.js. */
+const POLICES = require('./services/policesLocales').charger();
 
 app.use((req, res, next) => {
   res.locals.brand = brand;
   res.locals.assetVersions = ASSET_VERSIONS;
+  res.locals.polices = POLICES;
   // Helper d'embed vidéo (YouTube/Vimeo) dispo dans toutes les vues — voir
   // services/videoEmbed.js. Permet d'afficher un lecteur intégré dans la galerie
   // produit sans stocker la vidéo en base.
   res.locals.parseVideoEmbed = require('./services/videoEmbed').parseVideoEmbed;
-  res.locals.shippingCountryOptions = require('./config/shippingZones').COUNTRY_OPTIONS;
+  /* Le tunnel vit sur des URLs FRANÇAISES (/panier, /commande) : `req.lang`
+     y vaut toujours 'fr'. On lit donc la langue mémorisée, comme le reste du
+     tunnel — sinon un acheteur allemand cherchait « Deutschland » dans une
+     liste en français. */
+  const _langPays = (req.lang === 'de' || (req.session && req.session.preferredLang === 'de')) ? 'de' : req.lang;
+  res.locals.shippingCountryOptions = require('./config/shippingZones').countryOptionsFor(_langPays);
+  /* Pays d'une adresse dans la langue du RENDU. Lue à l'affichage (pas ici) :
+     le tunnel et les pages commande ne passent en allemand qu'ensuite, dans
+     applyCheckoutLocale. */
+  res.locals.libellePays = (pays) => require('./config/shippingZones').countryLabelFor(pays, res.locals.lang);
+  /* Le paiement en plusieurs fois est-il proposé ? Exposé à TOUTES les vues :
+     les mentions « 3x sans frais » vivent aussi bien sur les fiches produit que
+     sur les pages véhicule, et une seule d'entre elles laissée en place
+     promettrait un moyen de paiement qui n'existe plus au moment de payer. */
+  res.locals.scalapayActif = require('./services/scalapay').estActif();
   next();
 });
 
@@ -477,7 +682,25 @@ app.use((req, res, next) => {
   const accountTypeFromSession = req.session.accountType === 'pro' ? 'pro' : 'particulier';
   const accountType = accountTypeFromUser || accountTypeFromSession;
 
-  req.session.accountType = accountType;
+  /* N'écrire en session QUE si cela change quelque chose.
+   *
+   * Pourquoi (diagnostic du 08/2026) : cette ligne écrivait `accountType`
+   * à CHAQUE requête, y compris « particulier » (la valeur par défaut) dans
+   * une session encore vierge. Or `saveUninitialized: false` ne protège que
+   * les sessions dans lesquelles rien n'a été écrit : dès la première page,
+   * tout visiteur, robot compris, se retrouvait persisté 30 jours dans Mongo.
+   * Résultat mesuré : 1 897 283 sessions, dont 92 % vides, créées au rythme
+   * de 52 000 à 76 000 par jour ; et le cron horaire des paniers abandonnés
+   * devait toutes les relire.
+   *
+   * Le défaut « particulier » se déduit déjà à la lecture (ligne ci-dessus) :
+   * il n'a aucune raison d'exister en base. On n'écrit donc que « pro », ou
+   * un retour à « particulier » quand la session portait autre chose. */
+  if (accountType === 'pro') {
+    if (req.session.accountType !== 'pro') req.session.accountType = 'pro';
+  } else if (req.session.accountType !== undefined && req.session.accountType !== 'particulier') {
+    req.session.accountType = 'particulier';
+  }
 
   const cartItemCount = Object.values(cart.items).reduce(
     (sum, item) => sum + (Number(item && item.quantity) || 0),
@@ -559,6 +782,13 @@ app.use('/uploads/sav', express.static(path.join(__dirname, '..', '..', 'uploads
 // gêner un visiteur réel, même derrière un NAT d'entreprise/mobile. On épargne
 // le back-office (usage intensif) et les moteurs de recherche légitimes (SEO).
 // NB : coupe les bursts agressifs, pas un scraper LENT — pour ça, Cloudflare.
+//
+// AdsBot-Google, Storebot-Google et Google-InspectionTool ne contiennent PAS
+// « googlebot » : ils passaient sous la limite. Or AdsBot contrôle les pages
+// d'arrivée des annonces (un 429 = « destination inaccessible » côté Ads),
+// Storebot les fiches Shopping, et Google compte tout 429 comme une erreur
+// serveur (plan de reprise SEO du 14/09/2026, action A4.3). Même règle que
+// pour Googlebot : exemptés sur leur User-Agent.
 const publicSiteLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 300,
@@ -568,9 +798,17 @@ const publicSiteLimiter = rateLimit({
     const p = (req.path || '').toLowerCase();
     if (p.startsWith('/admin') || p.startsWith('/comptable') || p.startsWith('/media') || p.startsWith('/uploads')) return true;
     const ua = (req.headers['user-agent'] || '').toLowerCase();
-    return /googlebot|bingbot|slurp|duckduckbot|applebot|yandexbot|facebookexternalhit|twitterbot|linkedinbot/.test(ua);
+    return /googlebot|adsbot-google|storebot-google|google-inspectiontool|bingbot|slurp|duckduckbot|applebot|yandexbot|facebookexternalhit|twitterbot|linkedinbot/.test(ua);
   },
-  handler: (req, res) => res.status(429).type('text/plain').send('Trop de requêtes, réessayez dans une minute.'),
+  /* Le toast d'ajout au panier lit `error` dans la réponse JSON ; un corps
+     text/plain le faisait tomber sur son repli écrit en dur. On répond donc en
+     JSON quand l'appel en demande, et dans la langue du visiteur — ce limiteur
+     s'exécute AVANT le middleware i18n, d'où la lecture directe. */
+  handler: (req, res) => {
+    const message = t(langueAvantI18n(req), 'error.tooManyRequests');
+    if (attendDuJson(req)) return res.status(429).json({ ok: false, error: message });
+    return res.status(429).type('text/plain').send(message);
+  },
 });
 app.use(publicSiteLimiter);
 
@@ -618,6 +856,20 @@ app.use('/sav-files', require('./routes/savFiles'));
 // i18n SAV : injecte tSav() et savLocale dans toutes les vues
 const i18nSav = require('./services/i18nSav');
 app.use(i18nSav.middleware());
+
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5) :
+   410 sur les articles retirés, noindex (balise ET en-tête) sur les familles
+   citées dans SEO_PRUNE — blog, /reference, /pieces-auto, /de. Les fiches
+   produit se décident dans leur contrôleur, sur l'_id. SEO_PRUNE absent : ce
+   middleware ne fait rien. Voir services/seoIndexPolicy.js. Avant baseRequise :
+   un 410 n'a pas besoin de la base. */
+app.use(require('./services/seoIndexPolicy').middleware);
+
+/* Base de données indisponible : 503 + Retry-After sur les fiches, le blog,
+   /pieces-auto, /reference et /categorie (et leurs pages allemandes), plutôt
+   qu'un 404, une redirection ou une fiche de démonstration que Google
+   prendrait au mot. Plan de reprise SEO du 14/09/2026, action A4.4. */
+app.use(require('./middlewares/baseRequise'));
 
 // French routes (default)
 app.use('/', indexRouter);
@@ -681,6 +933,20 @@ app.use('/de/produits', require('./routes/productsDe'));
 /* Pages catégorie en allemand (détail) — calque sur getCategory. */
 app.use('/de/categorie', require('./routes/categoriesDe'));
 
+/* Pages légales allemandes — MÊME contrôleur, lang-aware : il sert la version
+ * traduite si elle existe, et redirige vers le français sinon. Le pied de page
+ * allemand pointait vers /de/legal/… depuis toujours ; ces URLs tombaient
+ * dans le catchall et renvoyaient un document français sous une étiquette
+ * allemande (« Impressum », « AGB »). */
+app.use('/de/legal', require('./routes/legal'));
+
+/* Page de recherche allemande — MÊME contrôleur, lang-aware. La loupe du
+ * header et l'onglet « Suchen » de la barre mobile pointent vers
+ * /de/rechercher sur CHAQUE page allemande : sans routeur, elles tombaient
+ * dans le catchall, ramenaient la page française et faisaient basculer tout
+ * le reste de la commande en français. */
+app.use('/de/rechercher', require('./routes/search'));
+
 /* Accueil allemand (/de) — MÊME contrôleur que la home FR, lang-aware
  * (hero DE, produits vedette + catégories localisés, libellés via t()).
  * Déclaré AVANT le catchall /de. */
@@ -708,12 +974,23 @@ app.use('/de', (req, res) => {
   // ci-dessus sont déclarées AVANT ce catchall, donc le blog DE reste
   // accessible. Quand on ajoutera des produits/catégories DE, on déclarera
   // simplement leur router au-dessus, ils auront la priorité sur ce 301.
-  res.redirect(301, targetPath);
+  /* …mais la redirection ne doit PAS coûter la langue. Le menu allemand pointe
+     vers /de/rechercher (la loupe mobile et l'onglet « Suchen »), /de/moteurs
+     et /de/notre-histoire : trois URL sans routeur DE. Le 301 amenait sur la
+     page française, dont le GET remettait `preferredLang = 'fr'` — et le
+     panier, le paiement, Order.lang puis les e-mails d'un acheteur allemand
+     repassaient en français d'un simple clic sur la loupe. On garde donc la
+     langue dans la cible (?lang=de, que le middleware i18n sait lire).
+     Jamais pour un ROBOT : Googlebot doit voir l'URL française nue, sans
+     paramètre à explorer ni à indexer. */
+  res.redirect(301, redirectionFrGardantLaLangue(req, targetPath));
 });
 
 app.use((req, res) => {
+  /* Le <title> doit suivre la langue de la page : une 404 servie sous /de
+     affichait un titre français au-dessus d'un corps allemand. */
   res.status(404).render('errors/404', {
-    title: `Page introuvable - ${brand.NAME}`,
+    title: t(req.lang || 'fr', 'error.404.title'),
   });
 });
 
@@ -721,8 +998,11 @@ app.use((err, req, res, next) => {
   console.error(err);
 
   res.status(500).render('errors/500', {
-    title: `Erreur - ${brand.NAME}`,
+    title: t(req.lang || 'fr', 'error.500.title'),
   });
 });
 
 module.exports = app;
+/* Pour les tests : la langue et le format de réponse des limiteurs, qui
+   s'exécutent AVANT le middleware i18n. */
+module.exports.__limiteurs = { langueAvantI18n, attendDuJson };

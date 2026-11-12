@@ -1,5 +1,5 @@
 <%- include('./partials/head') %>
-<link rel="stylesheet" href="/css/sav.css?v=32">
+<link rel="stylesheet" href="/css/sav.css?v=<%= (typeof assetVersions !== 'undefined' && assetVersions.savCss) || '' %>">
 <%- include('./partials/sidebar', { active: 'sav' }) %>
 
 <main class="flex-1 sav-module" data-sav-token="<%= savApiToken %>" data-sav-numero="<%= numero %>" data-current-statut="" data-current-user-id="<%= (typeof currentAdmin !== 'undefined' && currentAdmin && currentAdmin.adminUserId) || '' %>">
@@ -16,7 +16,7 @@
         <span class="text-slate-300">/</span>
         <a href="/admin/sav" class="hover:text-slate-900">SAV</a>
         <span class="text-slate-300">/</span>
-        <a href="/admin/sav/tickets" class="hover:text-slate-900">Tickets</a>
+        <a href="/admin/sav/tickets" data-back-to-list class="hover:text-slate-900">Tickets</a>
         <span class="text-slate-300">/</span>
         <span class="font-mono text-slate-700"><%= numero %></span>
       </nav>
@@ -46,10 +46,11 @@
     <div class="px-6 lg:px-10 py-2">
       <div class="flex items-center justify-between gap-3 flex-wrap">
         <div class="flex items-center gap-2 min-w-0">
-          <a href="/admin/sav/tickets" title="Retour à la liste" aria-label="Retour"
+          <a href="/admin/sav/tickets" data-back-to-list title="Retour à la liste (u)" aria-label="Retour"
              class="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition">
             <span class="material-symbols-outlined" style="font-size:18px;" aria-hidden="true">arrow_back</span>
           </a>
+          <span id="sav-queue-nav" class="sav-queue-nav hidden" aria-label="Naviguer dans la liste"></span>
           <h1 class="text-base font-mono font-bold text-slate-900 truncate"><%= numero %></h1>
           <button type="button" id="sav-copy-numero" data-copy="<%= numero %>" title="Copier le numéro" aria-label="Copier"
             class="inline-flex items-center justify-center w-6 h-6 rounded-md text-slate-400 hover:text-primary hover:bg-slate-100 transition">
@@ -152,34 +153,9 @@
                   </button>
                 </div>
                 <input type="hidden" name="canal" id="sav-canal-input" value="inapp">
-                <div id="sav-templates-chips" class="flex gap-1 flex-wrap">
-                  <% const _tpls = [
-                    ['reception','Piece recue','inventory'],
-                    ['analyse_ok','Defaut confirme','verified'],
-                    ['analyse_neg','Pas de defaut','euro'],
-                    ['relance_doc','Relance docs','description'],
-                    ['rdv','RDV','event'],
-                  ]; %>
-                  <% _tpls.forEach(function(t){ %>
-                    <button type="button" data-template="<%= t[0] %>" title="<%= t[1] %>" class="sav-tpl-chip sav-tpl-chip--sm">
-                      <span>#<%= t[1] %></span>
-                    </button>
-                  <% }); %>
-                </div>
-                <!-- Playbook templates -->
-                <div id="sav-playbook-templates-wrap" class="hidden">
-                  <div id="sav-playbook-templates-chips" class="flex gap-1 flex-wrap"></div>
-                </div>
+                <!-- Modèles d'équipe : chargés depuis /shared-templates, filtrés selon le motif du ticket -->
+                <div id="sav-templates-chips" class="flex gap-1 flex-wrap"></div>
               </div>
-
-              <select id="sav-template" class="hidden">
-                <option value=""></option>
-                <option value="reception"></option>
-                <option value="analyse_ok"></option>
-                <option value="analyse_neg"></option>
-                <option value="relance_doc"></option>
-                <option value="rdv"></option>
-              </select>
 
               <!-- Sujet retiré : toute conversation passe par l'espace SAV (in-app), seules
                    des notifications courtes sont envoyées par email. Pas de champ sujet utile. -->
@@ -256,6 +232,9 @@
                   <button type="button" id="sav-reformulate-btn" class="sav-composer__icon-btn" title="Reformuler avec l'IA (ton <%= brand.NAME %>)">
                     <span class="material-symbols-outlined" style="font-size:18px;">auto_awesome</span>
                   </button>
+                  <button type="button" id="sav-save-shared-template" class="sav-composer__icon-btn" title="Créer un modèle d'équipe à partir de ce message (et de ses pièces jointes)">
+                    <span class="material-symbols-outlined" style="font-size:18px;">bookmark_add</span>
+                  </button>
                   <input type="file" id="sav-attach-input" class="hidden" multiple accept="application/pdf,image/*">
                   <input type="file" id="sav-return-label-input" class="hidden" accept="application/pdf">
                   <span id="sav-draft-status" class="text-[10px] text-slate-400 ml-1"></span>
@@ -269,6 +248,10 @@
                       <span class="material-symbols-outlined" style="font-size:16px;">arrow_drop_down</span>
                     </button>
                     <div id="sav-send-menu" class="hidden absolute right-0 bottom-full mb-1 w-72 rounded-xl border border-slate-200 bg-white shadow-lg z-20 py-1" role="menu">
+                      <button type="button" data-send-action="send_and_next" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2" title="⌘⇧↵">
+                        <span class="material-symbols-outlined" style="font-size:16px;">fast_forward</span>
+                        Envoyer et ticket suivant
+                      </button>
                       <button type="button" data-send-action="send_and_status" data-next-statut="analyse_terminee" class="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex items-center gap-2">
                         <span class="material-symbols-outlined" style="font-size:16px;">flag</span>
                         Envoyer et passer en « Analyse terminee »
@@ -619,7 +602,7 @@
             <div class="px-3 pb-3">
               <button type="button" id="sav-fourn-whatsapp" class="w-full mb-3 btn btn-primary text-xs py-2 inline-flex items-center justify-center gap-1.5">
                 <span class="material-symbols-outlined" style="font-size:16px;">chat</span>
-                📲 WhatsApp fournisseur
+                Dossier fournisseur (WhatsApp)
               </button>
               <form id="sav-fourn-form" class="space-y-2">
                 <label class="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2">
@@ -880,24 +863,107 @@
   </div>
 </div>
 
-<!-- Modale WhatsApp fournisseur -->
+<!-- Modale dossier fournisseur (WhatsApp, en anglais) -->
 <div id="sav-wa-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-wa-modal-title">
-  <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-    <div class="flex items-center justify-between mb-3">
-      <h3 id="sav-wa-modal-title" class="text-lg font-semibold flex items-center gap-2"><span class="material-symbols-outlined text-emerald-600">chat</span> WhatsApp fournisseur</h3>
+  <div class="bg-white rounded-2xl shadow-xl max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-start justify-between mb-4 gap-3">
+      <div>
+        <h3 id="sav-wa-modal-title" class="text-lg font-semibold flex items-center gap-2"><span class="material-symbols-outlined text-emerald-600">chat</span> Dossier fournisseur</h3>
+        <p class="text-xs text-slate-500 mt-0.5">Message et PDF en anglais, à envoyer sur WhatsApp.</p>
+        <p id="sav-wa-status" class="hidden mt-1 text-xs font-medium text-emerald-700"></p>
+      </div>
       <button type="button" data-close-wa aria-label="Fermer" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
     </div>
-    <div class="space-y-3">
-      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Numéro (ex: 33612345678)</label><input type="tel" id="sav-wa-phone" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="33612345678"></div>
-      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Message</label><textarea id="sav-wa-text" rows="14" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-mono"></textarea></div>
-      <div class="flex gap-2 flex-wrap">
-        <a id="sav-wa-link" target="_blank" rel="noopener" class="btn btn-secondary text-emerald-700 border-emerald-200">wa.me ↗</a>
-        <button type="button" id="sav-wa-copy" class="btn btn-secondary">Copier</button>
-        <button type="button" id="sav-wa-send" class="btn btn-primary">Envoyer</button>
-      </div>
-      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Réponse fournisseur</label><textarea id="sav-wa-reply" rows="3" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs"></textarea><button type="button" id="sav-wa-save-reply" class="mt-2 btn btn-secondary text-xs">Enregistrer</button></div>
-      <div><label class="block text-xs font-semibold text-slate-600 mb-1">Script client</label><textarea id="sav-wa-client-script" rows="4" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs"></textarea></div>
+    <div class="space-y-5">
+      <section>
+        <h4 class="text-sm font-semibold text-slate-800 mb-2">1. Ce que demande le fournisseur</h4>
+        <ul id="sav-wa-checklist" class="grid sm:grid-cols-2 gap-1.5 text-xs"></ul>
+        <div id="sav-wa-missing" class="hidden mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 flex items-center justify-between gap-3 flex-wrap">
+          <span>Photo manquante : le client peut l'envoyer en réponse à un message.</span>
+          <button type="button" id="sav-wa-ask-client" class="btn btn-secondary text-xs">Demander au client</button>
+        </div>
+      </section>
+      <section>
+        <h4 class="text-sm font-semibold text-slate-800 mb-1">2. Photos du dossier</h4>
+        <p class="text-xs text-slate-500 mb-2">Indiquez ce que montre chaque fichier. Une photo reçue par message peut servir de photo du réglage de base.</p>
+        <div id="sav-wa-photos" class="grid grid-cols-2 sm:grid-cols-3 gap-2"></div>
+      </section>
+      <section>
+        <h4 class="text-sm font-semibold text-slate-800 mb-1">3. Envoi</h4>
+        <p class="text-xs text-slate-500 mb-3">Pour un groupe WhatsApp (ex. « CLAIM Mechatronic AUTOLIVA ») : « Partager » envoie le PDF et les photos vers WhatsApp, où vous choisissez le groupe, et copie le message : collez-le ensuite dans le groupe (⌘V). Sinon, copiez le message et glissez le PDF téléchargé dans la conversation.</p>
+        <div class="space-y-3">
+          <div class="flex gap-2 flex-wrap">
+            <button type="button" id="sav-wa-share" class="hidden btn btn-primary inline-flex items-center gap-1.5"><span class="material-symbols-outlined" style="font-size:16px;">share</span>Partager (PDF + photos)</button>
+            <button type="button" id="sav-wa-copy" class="btn btn-secondary inline-flex items-center gap-1.5"><span class="material-symbols-outlined" style="font-size:16px;">content_copy</span>Copier le message</button>
+            <a id="sav-wa-pdf-download" href="#" download class="btn btn-secondary inline-flex items-center gap-1.5"><span class="material-symbols-outlined" style="font-size:16px;">download</span>Télécharger le PDF</a>
+            <a id="sav-wa-pdf" href="#" target="_blank" rel="noopener" class="btn btn-secondary inline-flex items-center gap-1.5"><span class="material-symbols-outlined" style="font-size:16px;">picture_as_pdf</span>Voir le PDF</a>
+            <button type="button" id="sav-wa-mark-sent" class="btn btn-secondary inline-flex items-center gap-1.5"><span class="material-symbols-outlined" style="font-size:16px;">done</span>Marquer comme envoyé</button>
+          </div>
+          <div><label for="sav-wa-text" class="block text-xs font-semibold text-slate-600 mb-1">Message (anglais)</label><textarea id="sav-wa-text" rows="12" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs font-mono"></textarea></div>
+          <p id="sav-wa-translation" class="hidden text-xs text-amber-700"></p>
+          <details class="rounded-xl border border-slate-200 px-3 py-2">
+            <summary class="cursor-pointer text-xs font-semibold text-slate-600">Envoyer plutôt à un numéro WhatsApp</summary>
+            <div class="mt-2 space-y-2">
+              <div><label for="sav-wa-phone" class="block text-xs font-semibold text-slate-600 mb-1">Numéro (ex : 34612345678)</label><input type="tel" id="sav-wa-phone" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm" placeholder="34612345678"></div>
+              <div class="flex gap-2 flex-wrap">
+                <a id="sav-wa-link" href="#" target="_blank" rel="noopener" class="btn btn-secondary inline-flex items-center gap-1.5"><span class="material-symbols-outlined" style="font-size:16px;">send</span>Ouvrir WhatsApp</a>
+                <button type="button" id="sav-wa-send" class="hidden btn btn-secondary">Envoyer via l'API WhatsApp</button>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
+      <section class="border-t border-slate-100 pt-4 space-y-3">
+        <div><label for="sav-wa-reply" class="block text-xs font-semibold text-slate-600 mb-1">Réponse du fournisseur</label><textarea id="sav-wa-reply" rows="3" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs"></textarea><button type="button" id="sav-wa-save-reply" class="mt-2 btn btn-secondary text-xs">Enregistrer la réponse</button></div>
+        <div><label for="sav-wa-client-script" class="block text-xs font-semibold text-slate-600 mb-1">Message pour le client</label><textarea id="sav-wa-client-script" rows="4" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs"></textarea></div>
+      </section>
     </div>
+  </div>
+</div>
+
+<!-- Modale modèle de message (création / modification) -->
+<div id="sav-tpl-modal" class="hidden fixed inset-0 z-50 items-center justify-center bg-slate-900/60 px-4" role="dialog" aria-modal="true" aria-labelledby="sav-tpl-modal-title">
+  <div class="bg-white rounded-2xl shadow-xl max-w-xl w-full p-6 max-h-[90vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-4">
+      <h3 id="sav-tpl-modal-title" class="text-lg font-semibold">Modèle de message</h3>
+      <button type="button" data-close-tpl aria-label="Fermer" class="text-slate-400 hover:text-slate-700 text-2xl leading-none">×</button>
+    </div>
+    <form id="sav-tpl-form" class="space-y-4">
+      <div>
+        <label for="sav-tpl-title" class="block text-xs font-semibold text-slate-600 mb-1">Nom du modèle</label>
+        <input id="sav-tpl-title" maxlength="80" required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label for="sav-tpl-body" class="block text-xs font-semibold text-slate-600 mb-1">Texte</label>
+        <textarea id="sav-tpl-body" rows="10" maxlength="5000" required class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"></textarea>
+        <p class="mt-1 text-xs text-slate-500">Remplacés à l'envoi : {client_prenom}, {nom}, {ticket_numero}, {piece_type}, {vehicule}, {garage_nom}</p>
+      </div>
+      <div>
+        <label for="sav-tpl-scope" class="block text-xs font-semibold text-slate-600 mb-1">Proposer ce modèle</label>
+        <select id="sav-tpl-scope" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm">
+          <option value="all">Sur tous les tickets</option>
+          <option value="motifs">Seulement pour certains motifs</option>
+        </select>
+        <div id="sav-tpl-motifs" class="hidden mt-2 grid grid-cols-2 gap-1.5 text-sm">
+          <% [['piece_defectueuse','Pièce défectueuse'],['retard_livraison','Retard de livraison'],['colis_abime','Colis abîmé'],['colis_non_recu','Colis non reçu'],['erreur_preparation','Erreur de préparation'],['retractation','Rétractation'],['non_compatible','Non compatible'],['facture_document','Facture / document'],['remboursement','Remboursement'],['autre','Autre']].forEach(function (m) { %>
+            <label class="inline-flex items-center gap-2"><input type="checkbox" value="<%= m[0] %>" data-tpl-motif class="rounded"><span><%= m[1] %></span></label>
+          <% }); %>
+        </div>
+      </div>
+      <div>
+        <div class="text-xs font-semibold text-slate-600 mb-1">Pièces jointes (images ou PDF, 5 maximum)</div>
+        <ul id="sav-tpl-files" class="space-y-1 text-sm"></ul>
+        <button type="button" id="sav-tpl-add-file" class="mt-2 btn btn-secondary text-xs inline-flex items-center gap-1"><span class="material-symbols-outlined" style="font-size:16px;">attach_file</span>Ajouter un fichier</button>
+        <input type="file" id="sav-tpl-file-input" class="hidden" multiple accept="image/*,application/pdf">
+      </div>
+      <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+        <button type="button" id="sav-tpl-delete" class="hidden text-sm font-medium text-red-600 hover:underline">Supprimer le modèle</button>
+        <div class="flex gap-2 ml-auto">
+          <button type="button" data-close-tpl class="btn btn-secondary">Annuler</button>
+          <button type="submit" id="sav-tpl-submit" class="btn btn-primary">Enregistrer</button>
+        </div>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -909,6 +975,10 @@
       <button type="button" data-close-kbd aria-label="Fermer" class="text-slate-400 text-2xl leading-none">×</button>
     </div>
     <ul class="text-sm space-y-2">
+      <li class="flex justify-between"><span>Ticket suivant / précédent</span><span><kbd class="px-2 py-0.5 rounded border bg-slate-50">j</kbd> / <kbd class="px-2 py-0.5 rounded border bg-slate-50">k</kbd></span></li>
+      <li class="flex justify-between"><span>Retour à la liste</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">u</kbd></li>
+      <li class="flex justify-between"><span>Envoyer</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">⌘↵</kbd></li>
+      <li class="flex justify-between"><span>Envoyer et ticket suivant</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">⌘⇧↵</kbd></li>
       <li class="flex justify-between"><span>Composer un message</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">c</kbd></li>
       <li class="flex justify-between"><span>Statut suivant</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">s</kbd></li>
       <li class="flex justify-between"><span>Assigner</span><kbd class="px-2 py-0.5 rounded border bg-slate-50">a</kbd></li>
@@ -1002,6 +1072,6 @@
 </div>
 
 <div class="sav-toast-root" id="sav-toast-root" aria-live="polite"></div>
-<script src="/js/sav-labels.js?v=4" defer></script>
-<script src="/js/sav-admin.js?v=38" defer></script>
+<script src="/js/sav-labels.js?v=5" defer></script>
+<script src="/js/sav-admin.js?v=<%= (typeof assetVersions !== 'undefined' && assetVersions.savAdminJs) || '' %>" defer></script>
 <%- include('./partials/footer') %>

@@ -1,4 +1,6 @@
 const brand = require('../config/brand');
+const { buildUnsubscribeUrl } = require('./emailSuppression');
+const { signatureHtml, signatureTexte } = require('./emailSignature');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -901,7 +903,7 @@ function buildAbandonedCartReminder1({ cart, baseUrl } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
-  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
+  const unsubscribeUrl = safeBaseUrl ? buildUnsubscribeUrl(safeBaseUrl, cart && cart.email) : '';
 
   const itemsText = renderCartItemRowsSimple(items);
 
@@ -946,7 +948,7 @@ function buildAbandonedCartReminder2({ cart, baseUrl } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
-  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
+  const unsubscribeUrl = safeBaseUrl ? buildUnsubscribeUrl(safeBaseUrl, cart && cart.email) : '';
 
   const itemsText = renderCartItemRowsSimple(items);
 
@@ -991,7 +993,7 @@ function buildAbandonedCartReminder3({ cart, baseUrl, promoCode } = {}) {
   const token = cart && cart.recoveryToken ? String(cart.recoveryToken) : '';
   const safeBaseUrl = getTrimmedString(baseUrl);
   const recoveryUrl = token && safeBaseUrl ? `${safeBaseUrl}/panier/recuperer/${encodeURIComponent(token)}` : '';
-  const unsubscribeUrl = safeBaseUrl ? `${safeBaseUrl}/newsletter/desinscription` : '';
+  const unsubscribeUrl = safeBaseUrl ? buildUnsubscribeUrl(safeBaseUrl, cart && cart.email) : '';
   const safePromoCode = getTrimmedString(promoCode);
 
   const itemsText = renderCartItemRowsSimple(items);
@@ -1200,6 +1202,69 @@ ${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
       baseUrl,
     }),
     text: `Commande${number ? ` #${number}` : ''} : statut mis \u00e0 jour \u2192 ${statusLabel}.${safeMessage ? ` Message : ${safeMessage}` : ''}`,
+  };
+}
+
+/**
+ * Date de livraison annoncée au client — saisie dans le panneau de la liste des
+ * commandes (16/09/2026). `date` : AAAA-MM-JJ ; `changement` : une date avait
+ * déjà été annoncée.
+ *
+ * Comme les autres gabarits, les phrases restent en français et emailI18n les
+ * traduit (clés dans locales/emails-de.json). Seule la DATE est écrite
+ * directement dans la langue du client, dans son propre nœud : « mardi 23
+ * septembre 2026 » n'est pas une chaîne qu'une table peut traduire.
+ */
+function buildDeliveryEstimateEmail({ order, user, date, changement = false, baseUrl, lang = 'fr' } = {}) {
+  const number = order && order.number ? String(order.number) : '';
+  const orderId = order && order._id ? String(order._id) : '';
+  const firstName = user && user.firstName ? String(user.firstName).trim() : '';
+  const greeting = firstName ? escapeHtml(firstName) : 'Bonjour';
+  const jour = new Date(`${date}T12:00:00Z`);
+  const dateLongue = Number.isNaN(jour.getTime())
+    ? String(date || '')
+    : jour.toLocaleDateString(lang === 'de' ? 'de-DE' : 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Paris' });
+  const items = order && Array.isArray(order.items) ? order.items.filter((it) => it && it.name) : [];
+  const orderUrl = baseUrl && orderId ? `${baseUrl.replace(/\/$/, '')}/compte/commandes/${encodeURIComponent(orderId)}` : '';
+
+  const phrase = changement
+    ? 'La date de livraison de votre commande a changé.'
+    : 'Nous avons une date de livraison pour votre commande.';
+  const subject = changement
+    ? (number ? `Nouvelle date de livraison — commande #${number}` : 'Nouvelle date de livraison')
+    : (number ? `Livraison prévue — commande #${number}` : 'Livraison prévue');
+
+  const bodyHtml = `
+<div style="font-size:16px;font-weight:900;">${greeting},</div>
+<div style="margin-top:10px;font-size:14px;line-height:1.6;color:#334155;">${phrase}</div>
+
+<div style="margin-top:14px;padding:16px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:14px;color:#1e3a8a;">
+  <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Livraison prévue</div>
+  <div style="margin-top:6px;font-size:18px;font-weight:900;">${escapeHtml(dateLongue)}</div>
+  ${number ? `<div style="margin-top:6px;font-size:13px;">Commande <strong>#${escapeHtml(number)}</strong></div>` : ''}
+</div>
+
+${items.length ? `<div style="margin-top:12px;font-size:13px;line-height:1.6;color:#334155;">${items.map((it) => `<div>${escapeHtml(String(it.quantity || 1))} × ${escapeHtml(it.name)}</div>`).join('')}</div>` : ''}
+
+<div style="margin-top:14px;font-size:13px;line-height:1.6;color:#334155;">Cette date est une estimation. Dès l'expédition, vous recevrez le numéro de suivi par e-mail.</div>
+
+${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
+
+<div style="margin-top:14px;font-size:12px;line-height:1.6;color:#64748b;">
+  Si vous avez une question, répondez directement à cet email.
+</div>`;
+
+  return {
+    subject,
+    html: renderEmailLayout({ title: subject, preheader: subject, bodyHtml, baseUrl }),
+    /* Une idée par ligne : emailI18n traduit la version texte ligne à ligne. */
+    text: [
+      phrase,
+      number ? `Commande #${number}` : '',
+      'Livraison prévue :',
+      dateLongue,
+      "Cette date est une estimation. Dès l'expédition, vous recevrez le numéro de suivi par e-mail.",
+    ].filter(Boolean).join('\n'),
   };
 }
 
@@ -1420,6 +1485,154 @@ ${renderPrimaryButton({ href: orderUrl, label: 'Voir ma commande' })}
   };
 }
 
+/**
+ * Demande d'avis — e-mail au format LETTRE + SIGNATURE.
+ *
+ * Volontairement dépouillé du gabarit maison (logo en bandeau d'en-tête,
+ * gros bouton rouge, pied de page) : c'est cette allure de newsletter que
+ * l'onglet Promotions de Gmail attrape, et un e-mail en Promotions n'est pas
+ * lu. Ce qu'on envoie ici a la forme de ce que n'importe quel professionnel
+ * écrit — du texte, puis sa signature.
+ *
+ * Le corps arrive en TEXTE BRUT depuis les réglages back-office, variables
+ * déjà substituées. On ne fait que la mise en forme : échappement,
+ * paragraphes, et le lien transformé en lien cliquable nommé plutôt qu'en
+ * URL nue au milieu du texte.
+ */
+function buildAvisGoogleEmail({ sujet, corps, lien } = {}) {
+  const url = getTrimmedString(lien);
+  const subject = getTrimmedString(sujet) || 'Votre avis nous intéresse';
+  const texteBrut = String(corps == null ? '' : corps).replace(/\r\n/g, '\n');
+
+  const blocs = texteBrut.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  const corpsHtml = blocs.map((p) => {
+    /* Un paragraphe réduit au seul lien devient un lien NOMMÉ : « Donner mon
+       avis » se lit, « https://autoliva.com/mon-avis/g5v8uEmjqUDD » non. Pas
+       de bouton pour autant — un bouton, c'est la signature visuelle d'une
+       campagne. */
+    if (url && p === url) {
+      return `<p style="margin:0 0 14px;"><a href="${escapeHtml(url)}" style="color:#1d4ed8;font-weight:bold;">Donner mon avis en 10 secondes</a></p>`;
+    }
+    let html = escapeHtml(p).replace(/\n/g, '<br />');
+    if (url) {
+      /* Le lien est déjà échappé dans `html` : on remplace sa forme échappée,
+         sinon le remplacement échoue dès que l'URL contient un &. */
+      const lienEchappe = escapeHtml(url);
+      html = html.split(lienEchappe).join(`<a href="${lienEchappe}" style="color:#1d4ed8;">${lienEchappe}</a>`);
+    }
+    return `<p style="margin:0 0 14px;">${html}</p>`;
+  }).join('\n');
+
+  const html = `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>${escapeHtml(subject)}</title></head>
+<body style="margin:0;padding:0;background:#ffffff;">
+<div style="max-width:620px;margin:0;padding:18px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#0f172a;">
+${corpsHtml}
+${signatureHtml()}
+</div>
+</body></html>`;
+
+  return { subject, html, text: `${texteBrut}\n\n${signatureTexte()}` };
+}
+
+function buildAvisNegatifAlerteEmail({ feedback, baseUrl, adminUrl } = {}) {
+  const f = feedback || {};
+  const note = Number.isFinite(f.rating) ? f.rating : '?';
+  const numero = getTrimmedString(f.orderNumber);
+  const subject = `⚠ Avis ${note}/5 — commande ${numero || 'inconnue'}`;
+  const tel = getTrimmedString(f.rappelTelephone) || getTrimmedString(f.clientTelephone);
+
+  const ligne = (label, valeur) => (valeur
+    ? `<tr><td style="padding:4px 12px 4px 0;color:#64748b;font-size:13px;white-space:nowrap;">${escapeHtml(label)}</td>
+          <td style="padding:4px 0;font-size:13px;font-weight:700;color:#0f172a;">${escapeHtml(valeur)}</td></tr>`
+    : '');
+
+  const bodyHtml = `
+<div style="font-size:16px;font-weight:900;color:#b91c1c;">Note ${escapeHtml(note)}/5 — à rappeler</div>
+<div style="margin-top:8px;font-size:14px;line-height:1.6;color:#334155;">
+  Ce client n'a pas été renvoyé vers Google. Son retour est resté chez nous : c'est le moment de régler le problème.
+</div>
+
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:14px;">
+  ${ligne('Commande', numero)}
+  ${ligne('Client', getTrimmedString(f.clientNom))}
+  ${ligne('E-mail', getTrimmedString(f.clientEmail))}
+  ${ligne('Téléphone', tel)}
+</table>
+
+${getTrimmedString(f.message) ? `
+<div style="margin-top:14px;padding:12px 14px;border:1px solid #fecaca;background:#fef2f2;border-radius:14px;color:#7f1d1d;font-size:13px;line-height:1.6;">
+  <div style="font-weight:900;">Ce qu'il nous dit</div>
+  <div style="margin-top:6px;white-space:pre-line;">${escapeHtml(f.message)}</div>
+</div>` : `
+<div style="margin-top:14px;font-size:13px;color:#64748b;">
+  Il a mis la note sans laisser de message. Le détail de la commande dira peut-être pourquoi.
+</div>`}
+
+${renderPrimaryButton({ href: adminUrl, label: 'Ouvrir le retour' })}`;
+
+  return {
+    subject,
+    html: renderEmailLayout({ title: subject, preheader: `Note ${note}/5 sur ${numero}`, bodyHtml, baseUrl }),
+    text: `Note ${note}/5 — commande ${numero}\n`
+      + `Client : ${getTrimmedString(f.clientNom)} ${getTrimmedString(f.clientEmail)} ${tel}\n\n`
+      + (getTrimmedString(f.message) || '(aucun message)') + `\n\n${getTrimmedString(adminUrl)}`,
+  };
+}
+
+/**
+ * Le bon d'achat qui récompense la RÉPONSE à l'enquête.
+ *
+ * ⚠ La formulation n'est pas cosmétique. Cet e-mail ne doit jamais remercier
+ * d'un AVIS ni le mentionner comme une condition : il récompense une réponse
+ * à une enquête de satisfaction, et c'est exactement ce qui le sépare d'une
+ * pratique commerciale trompeuse. Voir models/AvisSettings (schéma `bon`).
+ */
+function buildBonAvisEmail({ feedback, baseUrl } = {}) {
+  const f = feedback || {};
+  const bon = f.bon || {};
+  const code = getTrimmedString(bon.code);
+  const montant = formatEuro(bon.montantCents);
+  const prenom = getTrimmedString(f.clientNom).split(/\s+/)[0];
+  const expire = bon.expireLe ? formatDateFR(bon.expireLe) : '';
+  const subject = `Votre bon de ${montant} — merci d'avoir répondu`;
+
+  const bodyHtml = `
+<div style="font-size:16px;font-weight:900;">Merci${prenom ? ' ' + escapeHtml(prenom) : ''} !</div>
+<div style="margin-top:10px;font-size:14px;line-height:1.6;color:#334155;">
+  Vous avez pris dix secondes pour nous dire ce que vous pensiez de votre commande${f.orderNumber ? ` <strong>#${escapeHtml(f.orderNumber)}</strong>` : ''}.
+  Voici le bon promis, à utiliser sur votre prochaine commande.
+</div>
+
+<div style="margin-top:16px;padding:18px;border:2px dashed #cbd5e1;border-radius:14px;text-align:center;background:#f8fafc;">
+  <div style="font-size:12px;font-weight:900;letter-spacing:0.08em;text-transform:uppercase;color:#94a3b8;">Votre code</div>
+  <div style="margin-top:6px;font-size:26px;font-weight:900;letter-spacing:0.12em;color:#0f172a;font-family:monospace;">${escapeHtml(code)}</div>
+  <div style="margin-top:6px;font-size:14px;font-weight:700;color:#334155;">${escapeHtml(montant)} de remise</div>
+  ${expire ? `<div style="margin-top:4px;font-size:12px;color:#64748b;">Valable jusqu'au ${escapeHtml(expire)}</div>` : ''}
+</div>
+
+<div style="margin-top:14px;font-size:13px;line-height:1.6;color:#64748b;">
+  À saisir dans le panier, au moment de valider. Utilisable une fois.
+</div>
+
+${renderPrimaryButton({ href: baseUrl, label: 'Voir le catalogue' })}
+
+<div style="margin-top:18px;font-size:12px;line-height:1.6;color:#94a3b8;">
+  Ce bon vous est offert pour votre réponse à notre enquête, quelle qu'elle soit — il ne dépend
+  d'aucune note et ne vous engage à rien d'autre.
+</div>`;
+
+  return {
+    subject,
+    html: renderEmailLayout({ title: subject, preheader: `Votre code ${code} — ${montant} de remise`, bodyHtml, baseUrl }),
+    text: `Merci d'avoir répondu à notre enquête.\n\n`
+      + `Votre code : ${code} (${montant} de remise`
+      + (expire ? `, valable jusqu'au ${expire}` : '') + `).\n`
+      + `À saisir dans le panier. Utilisable une fois.\n\n`
+      + `Ce bon vous est offert pour votre réponse, quelle qu'elle soit.`,
+  };
+}
+
 module.exports = {
   buildOrderConfirmationEmail,
   buildConsigneStartEmail,
@@ -1437,9 +1650,13 @@ module.exports = {
   buildAbandonedCartReminder3,
   buildDeliveryConfirmedEmail,
   buildOrderStatusChangeEmail,
+  buildDeliveryEstimateEmail,
   buildCloningLabelEmail,
   buildCloningPieceReceivedEmail,
   buildCloningDoneEmail,
   buildCloningFailedEmail,
   buildRefundIssuedEmail,
+  buildAvisGoogleEmail,
+  buildAvisNegatifAlerteEmail,
+  buildBonAvisEmail,
 };

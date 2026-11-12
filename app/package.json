@@ -11,7 +11,7 @@
     "css:watch": "npx tailwindcss -i src/styles/main.css -o public/css/styles.css --watch",
     "dev": "concurrently \"npm run css:watch\" \"npm run css:watch:admin\" \"nodemon src/server.js\"",
     "start": "node src/server.js",
-    "test": "node --test --test-reporter=spec tests/integration/*.test.js",
+    "test": "node --test --test-reporter=spec tests/unit/*.test.js tests/integration/*.test.js",
     "build": "npm run build:assets",
     "heroku-postbuild": "npm run build:assets",
     "emails:consigne:reminders": "node src/jobs/sendConsigneReminders.js",

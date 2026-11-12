@@ -13,6 +13,7 @@ const mongoose = require('mongoose');
 
 const accountingService = require('../services/accountingService');
 const audit = require('../services/auditLogger');
+const purchaseInvoice = require('../services/purchaseInvoice');
 const { getRoleLabel } = require('../permissions');
 
 const SAFE_PAGE_LIMITS = [25, 50, 100, 200];
@@ -229,6 +230,39 @@ async function getInvoicePdf(req, res, next) {
   }
 }
 
+/**
+ * Facture d'ACHAT (fournisseur) — le justificatif du régime de la marge.
+ *
+ * Même droit que la facture de vente : le comptable qui saisit une vente sous
+ * marge doit pouvoir vérifier la base (prix de vente − prix d'achat), sinon il
+ * ne peut que reprendre notre chiffre sur parole.
+ */
+async function getPurchaseInvoice(req, res, next) {
+  try {
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).send('Identifiant de commande invalide.');
+    }
+
+    const found = await purchaseInvoice.charger(orderId);
+    if (!found) return res.status(404).send('Aucune facture d\'achat sur cette commande.');
+
+    await audit.log({
+      req,
+      action: 'comptable.purchaseInvoice.download',
+      entityType: 'order',
+      entityId: String(orderId),
+    });
+
+    res.setHeader('Content-Type', found.meta.mimeType || 'application/pdf');
+    res.setHeader('Content-Disposition',
+      `inline; filename="${purchaseInvoice.nomFichier(found.orderNumber, found.meta)}"`);
+    return res.end(found.bytes);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════
  * Avoirs
  * ════════════════════════════════════════════════════════════════ */
@@ -411,6 +445,7 @@ module.exports = {
   getDashboard,
   getInvoicesList,
   getInvoicePdf,
+  getPurchaseInvoice,
   getCreditNotesList,
   getCreditNotePdf,
   getRefundsList,

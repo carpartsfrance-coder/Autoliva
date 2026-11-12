@@ -17,10 +17,49 @@ const mongoose = require('mongoose');
 const BlogPost = require('../models/BlogPost');
 const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
-const { buildSeoMediaUrl } = require('../services/mediaStorage');
+const blogProductCta = require('../services/blogProductCta');
+const nettoyageArticle = require('../services/nettoyageArticle');
+const signatureArticle = require('../services/signatureArticle');
+const { directivesProduitHtml, slugsEncadresProduit, remplirEncadresProduit } = require('../services/blogContent');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
+const mediaStorage = require('../services/mediaStorage');
+const { buildSeoMediaUrl } = mediaStorage;
 const brand = require('../config/brand');
+const datesSeo = require('../services/datesSeo');
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.5) :
+   les 134 articles allemands en 410 n'apparaissent dans aucune liste. La
+   couche allemande entière relève de la famille « de » (noindex par le
+   chemin), qui la garde en ligne : rien d'autre n'est écarté ici. */
+const { publicBlogFilter, retirerLiensDisparus } = require('../services/seoIndexPolicy');
 
 const LANG_PREFIX = '/de';
+
+/* Les catégories du blog ne sont pas traduites en base : la liste allemande
+   affichait « Transmission > Boîte de transfert » sous des titres allemands.
+   19 valeurs distinctes, indexées par SLUG parce que les libellés stockés ont
+   des variantes d'encodage (« Différentiel », « DiffÃ©rentiel »). */
+const BLOG_CATEGORIES_DE = require('../locales/blogCategoriesDe.json');
+
+/* Les fiches produit existent en allemand : un article allemand ne doit plus
+   renvoyer vers la fiche française, ni citer son titre français. */
+function produitNomDe(p) {
+  const de = (p && p.localizations && p.localizations.de) || {};
+  return (de.translatedAt && de.name) ? de.name : ((p && p.name) || '');
+}
+
+function produitUrlDe(p) {
+  const de = (p && p.localizations && p.localizations.de) || {};
+  if (!de.translatedAt) return buildProductPublicPath(p);
+  const slug = (de.slug && String(de.slug).trim()) || p.slug || String(p._id);
+  return `/de/produits/${encodeURIComponent(slug)}-${p._id}`;
+}
+
+function blogCategoryLabelDe(category) {
+  if (!category) return '';
+  const slug = String(category.slug || '').trim().toLowerCase();
+  return BLOG_CATEGORIES_DE[slug] || String(category.label || slug || '');
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -135,11 +174,11 @@ async function rewriteInternalBlogLinks(html, currentSlug) {
   if (slugs.size === 0) return html;
 
   // Vérifie en BDD lesquels sont traduits en DE
-  const translated = await BlogPost.find({
+  const translated = await BlogPost.find(publicBlogFilter({
     slug: { $in: Array.from(slugs) },
     isPublished: true,
     'localizations.de.translatedAt': { $ne: null },
-  }).select('slug').lean();
+  }, { lang: 'de' })).select('slug').lean();
 
   const translatedSet = new Set(translated.map((d) => String(d.slug || '').toLowerCase()));
   if (translatedSet.size === 0) return html;
@@ -158,29 +197,14 @@ async function rewriteInternalBlogLinks(html, currentSlug) {
 // ── CTA produit allemand inline (remplace le placeholder dans contentHtml) ──
 
 function buildGermanProductCta(product) {
-  const cents = Number.isFinite(product.priceCents) ? product.priceCents : 0;
-  const priceEuros = (cents / 100).toFixed(2).replace('.', ',');
-  const dreiRaten = cents > 50000
-    ? `bzw. 3 Raten à ${(cents / 300).toFixed(2).replace('.', ',')} € ohne Aufpreis`
-    : '';
-  const prodUrl = buildProductPublicPath(product); // FR pour l'instant (Phase 3 = produits DE)
-  const safeName = escapeHtml(product.name || '');
-  const safeUrl = escapeHtml(prodUrl);
-
-  return `<div class="blog-product-cta" data-product-cta="1">`
-    + `<span class="cta-eyebrow">Instandgesetztes Teil — 2 Jahre Garantie</span>`
-    + `<h3 class="cta-title">${safeName}</h3>`
-    + `<span class="cta-price">${priceEuros} € inkl. MwSt.</span>`
-    + (dreiRaten ? `<span class="cta-price-sub">${dreiRaten}</span>` : '')
-    + `<ul class="cta-features">`
-    + `<li>Geprüft, 24 Monate Garantie</li>`
-    + `<li>Lieferung 3-5 Werktage</li>`
-    + `<li>Dedizierter Technik-Support</li>`
-    + `<li>Sichere Zahlung in 3 Raten ohne Aufpreis</li>`
-    + `</ul>`
-    + `<a class="cta-btn" href="${safeUrl}">Zum Produkt</a>`
-    + `<a class="cta-btn-outline" href="/de/contact">Techniker kontaktieren</a>`
-    + `</div>`;
+  /* Même encadré que le français, même règle : il ne dit que ce que dit la
+     fiche (état traduit, garantie saisie, délai traduit) — plan SEO A11.
+     Il promettait « 2 Jahre Garantie » et « 24 Monate » sur toute pièce. */
+  return blogProductCta.construireCta(product, {
+    lang: 'de',
+    url: produitUrlDe(product),
+    nom: produitNomDe(product),
+  });
 }
 
 // ── Index DE — liste des articles traduits (avec pagination) ────────────────
@@ -216,10 +240,10 @@ async function getBlogIndexDe(req, res) {
       return res.render('blog/index', { ...baseLocals, articles: [], popularArticles: [], page: 1, totalPages: 1 });
     }
 
-    const filter = {
+    const filter = publicBlogFilter({
       isPublished: true,
       'localizations.de.translatedAt': { $ne: null },
-    };
+    }, { lang: 'de' });
 
     const total = await BlogPost.countDocuments(filter);
     const totalPages = Math.max(1, Math.ceil(total / perPage));
@@ -239,7 +263,7 @@ async function getBlogIndexDe(req, res) {
         title: de.title || d.title,
         excerpt: de.excerpt || d.excerpt,
         imageUrl: buildSeoMediaUrl(d.coverImageUrl, de.title || d.title),
-        category: d.category && d.category.slug ? { slug: d.category.slug, label: d.category.label || d.category.slug } : null,
+        category: d.category && d.category.slug ? { slug: d.category.slug, label: blogCategoryLabelDe(d.category) } : null,
         dateLabel: formatDateDE(publishedAt),
         readTimeLabel: `${estimateReadingTimeMinutes(de.contentHtml || '')} Min.`,
         featured: false,
@@ -255,7 +279,7 @@ async function getBlogIndexDe(req, res) {
     const popularArticles = popularDocs.map((p, idx) => ({
       rank: String(idx + 1).padStart(2, '0'),
       title: (p.localizations && p.localizations.de && p.localizations.de.title) || p.title,
-      meta: `${(p.category && p.category.label) ? p.category.label : 'Blog'} • aktuell`,
+      meta: `${blogCategoryLabelDe(p.category) || 'Blog'} • aktuell`,
       url: `/de/blog/${encodeURIComponent(p.slug)}`,
     }));
 
@@ -289,7 +313,7 @@ async function getBlogPostDe(req, res) {
       return res.status(503).render('errors/500', { title: `Fehler - ${brand.NAME}` });
     }
 
-    const post = await BlogPost.findOne({ slug: slugParam, isPublished: true }).lean();
+    const post = await BlogPost.findOne(publicBlogFilter({ slug: slugParam, isPublished: true }, { lang: 'de', page: true })).lean();
     if (!post) {
       // Article DE inexistant → on essaie l'équivalent FR avant de 404.
       return res.redirect(301, `/blog/${encodeURIComponent(slugParam)}`);
@@ -303,65 +327,109 @@ async function getBlogPostDe(req, res) {
     }
 
     const de = post.localizations.de;
+    /* « :::product[slug] » resté en clair dans la traduction : même
+       emplacement que dans l'article français, rempli plus bas. */
+    const corpsDe = directivesProduitHtml(de.contentHtml || '');
+    /* Titre sans l'ancien sigle « CPF » ni l'ancien nom. */
+    const titreDe = nettoyageArticle.nettoyerTexte(de.title);
 
     const canonicalUrl = baseUrl
       ? `${baseUrl}/de/blog/${encodeURIComponent(post.slug)}`
       : `/de/blog/${encodeURIComponent(post.slug)}`;
 
-    const computedDesc = truncateText(stripHtml(de.excerpt || de.contentHtml || ''), 160);
+    /* Même filtre que le corps pour le résumé et la description Google
+       (5 résumés et 4 descriptions promettaient encore « Ratenzahlung »). */
+    const sansAllegation = (t) => (t ? nettoyageArticle.nettoyerTexte(claimFilter.filtrer(t, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }))) : '');
+    const excerptPropre = sansAllegation(de.excerpt);
+    const computedDesc = truncateText(stripHtml(excerptPropre || sansAllegation(nettoyageArticle.nettoyerHtml(corpsDe, { lang: 'de' })) || ''), 160);
     const metaDescription = normalizeMetaText(
-      (de.seo && de.seo.metaDescription) ? de.seo.metaDescription : computedDesc
+      (de.seo && de.seo.metaDescription && sansAllegation(de.seo.metaDescription)) || computedDesc
     );
     const titleTag = normalizeMetaText(
-      (de.seo && de.seo.metaTitle) ? de.seo.metaTitle : `${de.title} - ${brand.NAME}`
+      (de.seo && de.seo.metaTitle) ? nettoyageArticle.nettoyerTexte(de.seo.metaTitle) : `${titreDe} - ${brand.NAME}`
     );
 
     const hreflang = buildHreflangSetForBlogPost(baseUrl, post.slug);
 
     const publishedAt = post.publishedAt || post.createdAt || null;
-    const updatedAt = de.translatedAt || post.updatedAt || publishedAt || null;
-
-    const ogImageRaw = (post.seo && post.seo.ogImageUrl) ? post.seo.ogImageUrl : post.coverImageUrl;
-    const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
+    /* Dernière modification de la page ALLEMANDE : sa traduction, sinon la
+       publication. Jamais updatedAt (plan de reprise SEO, action A4.5). */
+    const modifieLe = datesSeo.dateModificationArticleDe(post);
 
     // Réécriture des liens internes /blog/X → /de/blog/X quand X est traduit
-    let contentHtml = await rewriteInternalBlogLinks(de.contentHtml || '', post.slug);
+    /* Mêmes restes de chaîne que le français, retirés avant la réécriture des
+       liens internes (les liens de préproduction deviennent /blog/x, puis
+       /de/blog/x) — plan SEO A12. */
+    let contentHtml = await rewriteInternalBlogLinks(
+      claimFilter.filtrer(
+        nettoyageArticle.nettoyerHtml(corpsDe, { lang: 'de' }),
+        claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() })
+      ),
+      post.slug
+    );
+    /* Liens vers un article en 410 (/blog/x, /de/blog/x, autoliva.com,
+       carpartsfrance.fr) : le texte reste, la balise <a> part. */
+    contentHtml = retirerLiensDisparus(contentHtml);
 
     // Produits liés : on récupère, on construit le CTA inline avec labels DE,
     // on remplace le placeholder <div class="blog-product-cta" data-product-cta="1"></div>.
     let related = [];
     if (Array.isArray(post.relatedProductIds) && post.relatedProductIds.length) {
       related = await Product.find({ _id: { $in: post.relatedProductIds } })
-        .select('_id name priceCents imageUrl slug')
+        .select('_id name priceCents imageUrl slug localizations.de.name localizations.de.slug localizations.de.translatedAt ' + blogProductCta.CHAMPS_FICHE)
         .lean();
     }
 
+    /* L'allemand n'avait pas le repli du français : sans couverture, la page
+       partait sans og:image ni image de JSON-LD. Il lui fallait donc attendre
+       que les produits liés soient chargés. Même règle qu'en français : une
+       image dont le fichier a disparu compte comme absente, et le repli prend
+       le relais avec la photo du premier produit lié. */
+    const imagePremierProduitLie = (related.find((p) => p && p.imageUrl) || {}).imageUrl || '';
+    const absentsCouverture = await mediaStorage.idsAbsentsEnCache([
+      post.coverImageUrl,
+      post.seo && post.seo.ogImageUrl,
+      imagePremierProduitLie,
+    ]);
+    const siVivante = (url) => (url && !mediaStorage.estMediaAbsent(url, absentsCouverture) ? url : '');
+    const couvertureEffective = siVivante(post.coverImageUrl) || siVivante(imagePremierProduitLie);
+    const ogImageRaw = siVivante(post.seo && post.seo.ogImageUrl) || couvertureEffective;
+    const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
+
     const relatedProducts = (related || []).map((p) => {
       const priceEuros = Number.isFinite(p.priceCents) ? (p.priceCents / 100).toFixed(2).replace('.', ',') : '';
+      const nom = produitNomDe(p);
       return {
         id: String(p._id),
-        name: p.name || '',
+        name: nom,
         priceLabel: priceEuros ? `${priceEuros} € inkl. MwSt.` : '',
-        imageUrl: buildSeoMediaUrl(p.imageUrl, p.name),
-        url: buildProductPublicPath(p), // /produits/<slug> FR — Phase 3 = produits DE
+        imageUrl: buildSeoMediaUrl(p.imageUrl, nom),
+        url: produitUrlDe(p),
       };
     });
 
-    if (related.length && contentHtml) {
-      const ctaHtml = buildGermanProductCta(related[0]);
-      contentHtml = contentHtml.replace(
-        /<div class="blog-product-cta" data-product-cta="1"><\/div>/g,
-        ctaHtml
-      );
-    }
+    /* « :::product » : la 1re fiche liée ; « :::product[slug] » : la fiche de
+       ce slug si elle est publiée. Sans fiche, l'emplacement disparaît — ni
+       directive en clair, ni cadre vide. */
+    const slugsNommes = slugsEncadresProduit(contentHtml);
+    const fichesNommees = slugsNommes.length
+      ? await Product.find({ slug: { $in: slugsNommes }, isPublished: { $in: [true, null] } })
+        .select('_id name priceCents imageUrl slug localizations.de.name localizations.de.slug localizations.de.translatedAt ' + blogProductCta.CHAMPS_FICHE)
+        .lean()
+      : [];
+    const ficheParSlug = new Map(fichesNommees.map((p) => [p.slug, p]));
+    contentHtml = remplirEncadresProduit(contentHtml, {
+      nomme: (slug) => (ficheParSlug.has(slug) ? buildGermanProductCta(ficheParSlug.get(slug)) : ''),
+      lie: () => (related.length ? buildGermanProductCta(related[0]) : ''),
+    });
 
     // Articles similaires : uniquement parmi ceux traduits en DE, même catégorie
-    const similarDocs = await BlogPost.find({
+    const similarDocs = await BlogPost.find(publicBlogFilter({
       isPublished: true,
       slug: { $ne: post.slug },
       'localizations.de.translatedAt': { $ne: null },
       ...(post.category && post.category.slug ? { 'category.slug': post.category.slug } : {}),
-    })
+    }, { lang: 'de' }))
       .sort({ publishedAt: -1, createdAt: -1 })
       .limit(4)
       .select('slug title localizations.de.title coverImageUrl')
@@ -380,7 +448,7 @@ async function getBlogPostDe(req, res) {
     const breadcrumbItems = [
       { '@type': 'ListItem', position: 1, name: 'Startseite', item: baseUrl ? `${baseUrl}/de` : '/de' },
       { '@type': 'ListItem', position: 2, name: 'Blog',       item: baseUrl ? `${baseUrl}/de/blog` : '/de/blog' },
-      { '@type': 'ListItem', position: 3, name: de.title,     item: canonicalUrl },
+      { '@type': 'ListItem', position: 3, name: titreDe,      item: canonicalUrl },
     ];
 
     const jsonLd = toSafeJsonLd({
@@ -388,13 +456,13 @@ async function getBlogPostDe(req, res) {
       '@graph': [
         {
           '@type': 'BlogPosting',
-          headline: de.title,
+          headline: titreDe,
           description: computedDesc || undefined,
           image: ogImage ? [ogImage] : undefined,
           datePublished: publishedAt ? new Date(publishedAt).toISOString() : undefined,
-          dateModified: updatedAt ? new Date(updatedAt).toISOString() : undefined,
+          dateModified: datesSeo.isoPasse(modifieLe) || undefined,
           inLanguage: 'de',
-          author: { '@type': 'Person', name: post.authorName || brand.NAME },
+          author: signatureArticle.signature(post, { lang: 'de', marque: brand.NAME, baseUrl }).auteurJsonLd,
           publisher: {
             '@type': 'Organization',
             name: brand.NAME,
@@ -423,17 +491,20 @@ async function getBlogPostDe(req, res) {
       ogLocale: 'de_DE',
       ogLocaleAlternate: 'fr_FR',
       ogArticlePublishedTime: publishedAt ? new Date(publishedAt).toISOString() : '',
-      ogArticleModifiedTime:  updatedAt   ? new Date(updatedAt).toISOString()   : '',
+      ogArticleModifiedTime:  datesSeo.isoPasse(modifieLe),
       ogImage,
       jsonLd,
       metaRobots: 'index, follow',
       post: {
-        title: de.title,
+        title: titreDe,
         slug: post.slug,
-        excerpt: de.excerpt || computedDesc,
-        coverImageUrl: buildSeoMediaUrl(post.coverImageUrl, de.title),
-        category: post.category && post.category.slug ? { slug: post.category.slug, label: post.category.label || post.category.slug } : null,
-        authorName: post.authorName || 'Autoliva-Experte',
+        excerpt: excerptPropre || computedDesc,
+        coverImageUrl: buildSeoMediaUrl(couvertureEffective, de.title),
+        category: post.category && post.category.slug ? { slug: post.category.slug, label: blogCategoryLabelDe(post.category) } : null,
+        ...(() => {
+          const signe = signatureArticle.signature(post, { lang: 'de', marque: brand.NAME, baseUrl });
+          return { authorName: signe.nom, verification: signe.verification, mentionIa: signe.mentionIa };
+        })(),
         dateLabel: formatDateDE(publishedAt),
         readingTimeLabel: `${estimateReadingTimeMinutes(de.contentHtml)} Min. Lesezeit`,
         contentHtml: contentHtml || '',

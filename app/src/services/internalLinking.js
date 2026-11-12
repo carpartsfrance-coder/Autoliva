@@ -26,11 +26,24 @@
 
 const mongoose = require('mongoose');
 const { slugify } = require('./productPublic');
+const { compterFichesPubliees } = require('./categoryPublic');
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.5) :
+   les blocs d'articles liés n'affichent ni un article en 410 ni un article
+   sorti de Google. Le cache dépend donc aussi de l'état de SEO_PRUNE. */
+const seoIndexPolicy = require('./seoIndexPolicy');
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const _cache = new Map();
 
+/* Même clé qu'avant tant que SEO_PRUNE est absent ; sinon l'état de
+   l'interrupteur en fait partie. */
+function cleAvecPolitique(key) {
+  const sig = seoIndexPolicy.signature();
+  return sig ? `${key}|${sig}` : key;
+}
+
 function getCached(key) {
+  key = cleAvecPolitique(key);
   const entry = _cache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.at > CACHE_TTL_MS) {
@@ -41,7 +54,7 @@ function getCached(key) {
 }
 
 function setCached(key, value) {
-  _cache.set(key, { value, at: Date.now() });
+  _cache.set(cleAvecPolitique(key), { value, at: Date.now() });
 }
 
 function clearCache() {
@@ -131,14 +144,14 @@ async function getMakeLinkingData(makeName) {
   })).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
 
   /* Articles blog liés : titre OU slug OU primaryKeyword contient la marque. */
-  const relatedBlogPosts = await BlogPost.find({
+  const relatedBlogPosts = await BlogPost.find(seoIndexPolicy.publicBlogFilter({
     isPublished: true,
     $or: [
       { title: { $regex: escMake, $options: 'i' } },
       { slug: { $regex: makeSlug, $options: 'i' } },
       { 'seo.primaryKeyword': { $regex: escMake, $options: 'i' } },
     ],
-  })
+  }))
     .select('slug title coverImageUrl publishedAt readingTimeMinutes')
     .sort({ publishedAt: -1 })
     .limit(6)
@@ -217,7 +230,7 @@ async function getModelLinkingData(makeName, modelName) {
      on prend le premier token significatif. */
   const modelToken = modelName.split(/\s+/)[0];
   const escModelToken = safeRegexEscape(modelToken);
-  const relatedBlogPosts = await BlogPost.find({
+  const relatedBlogPosts = await BlogPost.find(seoIndexPolicy.publicBlogFilter({
     isPublished: true,
     $and: [
       { $or: [
@@ -232,7 +245,7 @@ async function getModelLinkingData(makeName, modelName) {
         { 'seo.primaryKeyword': { $regex: escModel, $options: 'i' } },
       ] },
     ],
-  })
+  }))
     .select('slug title coverImageUrl publishedAt readingTimeMinutes')
     .sort({ publishedAt: -1 })
     .limit(6)
@@ -365,7 +378,7 @@ async function getMoneyPageLinkingData(makeName, modelName, categorySlug) {
       ],
     });
   }
-  const relatedBlogPosts = await BlogPost.find(blogQuery)
+  const relatedBlogPosts = await BlogPost.find(seoIndexPolicy.publicBlogFilter(blogQuery))
     .select('slug title coverImageUrl publishedAt readingTimeMinutes')
     .sort({ publishedAt: -1 })
     .limit(4)
@@ -392,13 +405,17 @@ async function getMoneyPageLinkingData(makeName, modelName, categorySlug) {
  *   - topMakesForCategory[] : top 8 marques avec produits dans cette catégorie
  *   - relatedBlogPosts[]    : 6 articles blog dont category.slug match
  */
-async function getCategoryLinkingData(category) {
+async function getCategoryLinkingData(category, lang) {
   if (!category || !dbReady()) {
     return { siblingCategories: [], subCategories: [], topMakesForCategory: [], relatedBlogPosts: [] };
   }
-  const cacheKey = `cat:${category.slug}`;
+  /* La langue fait partie de la clé : sans ça le maillage allemand et le
+     maillage français se seraient écrasés l'un l'autre dans le cache. */
+  const isDe = lang === 'de';
+  const cacheKey = `cat:${category.slug}:${isDe ? 'de' : 'fr'}`;
   const cached = getCached(cacheKey);
   if (cached) return cached;
+  const blogI18n = require('./blogI18n');
 
   const Product = require('../models/Product');
   const Category = require('../models/Category');
@@ -406,23 +423,42 @@ async function getCategoryLinkingData(category) {
 
   /* Sibling categories : autres catégories actives, sauf celle-ci. */
   const allCats = await Category.find({ isActive: { $ne: false } })
-    .select('name slug sortOrder')
+    .select('name slug sortOrder localizations.de.name localizations.de.slug localizations.de.translatedAt')
     .sort({ sortOrder: 1, name: 1 })
     .lean();
-  const siblingCategories = allCats
+  /* En allemand : nom et URL allemands, et on écarte les catégories non
+     traduites — leur page /de fait un 301 vers le français. */
+  const deOf = (c) => (c.localizations && c.localizations.de) || {};
+  const catName = (c) => (isDe && deOf(c).name) ? deOf(c).name : c.name;
+  const catUrl = (c) => (isDe
+    ? `/de/categorie/${(deOf(c).slug || c.slug)}`
+    : `/categorie/${c.slug}`);
+  const traduites = isDe ? allCats.filter((c) => deOf(c).translatedAt) : allCats;
+  /* Aucune catégorie VIDE dans le maillage (audit du 25/09/2026) : chaque
+     page catégorie liait jusqu'à 7 catégories sans fiche publiée, servies en
+     noindex. Même comptage que la page, le sommaire /categorie et le sitemap.
+     Si le comptage échoue, on garde les liens d'avant. */
+  let comptes = null;
+  try {
+    comptes = await compterFichesPubliees(traduites.map((c) => c.name));
+  } catch (err) {
+    console.error('[internalLinking] catégories : comptage impossible :', err && err.message ? err.message : err);
+  }
+  const linkableCats = comptes ? traduites.filter((c) => comptes.get(c.name) > 0) : traduites;
+  const siblingCategories = linkableCats
     .filter((c) => c.slug !== category.slug && !c.name.includes('>'))
     .slice(0, 10)
-    .map((c) => ({ name: c.name, slug: c.slug, url: `/categorie/${c.slug}` }));
+    .map((c) => ({ name: catName(c), slug: c.slug, url: catUrl(c) }));
 
   /* Sub-categories : catégories dont le name commence par "{category.name} >". */
   const escName = safeRegexEscape(category.name);
-  const subCategories = allCats
+  const subCategories = linkableCats
     .filter((c) => new RegExp(`^${escName}\\s*>`, 'i').test(c.name))
     .map((c) => ({
-      name: c.name.split('>').pop().trim(),
-      fullName: c.name,
+      name: String(catName(c)).split('>').pop().trim(),
+      fullName: catName(c),
       slug: c.slug,
-      url: `/categorie/${c.slug}`,
+      url: catUrl(c),
     }));
 
   /* Top makes : 8 marques avec le plus de produits dans cette catégorie. */
@@ -445,7 +481,10 @@ async function getCategoryLinkingData(category) {
     { $sort: { productCount: -1 } },
     { $limit: 8 },
   ]);
-  const topMakesForCategory = makeRows.map((r) => ({
+  /* Les pages /pieces-auto n'existent qu'en français : sous /de, chaque lien
+     de ce bloc ferait sortir le visiteur de sa langue. On préfère ne pas
+     afficher le bloc plutôt que de le remplir de sorties. */
+  const topMakesForCategory = isDe ? [] : makeRows.map((r) => ({
     name: r._id,
     slug: slugify(r._id),
     url: `/pieces-auto/${slugify(r._id)}`,
@@ -457,17 +496,26 @@ async function getCategoryLinkingData(category) {
     ? category.name.split('>').pop().trim()
     : category.name;
   const escCatNameTop = safeRegexEscape(catNameTop);
-  const relatedBlogPosts = await BlogPost.find({
+  const relatedBlogPostsDocs = await BlogPost.find(seoIndexPolicy.publicBlogFilter({
     isPublished: true,
+    ...blogI18n.blogLangFilter(isDe ? 'de' : 'fr'),
     $or: [
       { 'category.slug': category.slug },
       { title: { $regex: escCatNameTop, $options: 'i' } },
     ],
-  })
-    .select('slug title coverImageUrl publishedAt readingTimeMinutes')
+  }, { lang: isDe ? 'de' : 'fr' }))
+    .select(`slug title coverImageUrl publishedAt readingTimeMinutes ${blogI18n.DE_PROJECTION}`)
     .sort({ publishedAt: -1 })
     .limit(6)
     .lean();
+  const relatedBlogPosts = relatedBlogPostsDocs.map((d) => ({
+    slug: d.slug,
+    title: blogI18n.blogFields(d, isDe ? 'de' : 'fr').title,
+    coverImageUrl: d.coverImageUrl,
+    publishedAt: d.publishedAt,
+    readingTimeMinutes: d.readingTimeMinutes,
+    url: blogI18n.blogUrl(d.slug, isDe ? 'de' : 'fr'),
+  }));
 
   const result = { siblingCategories, subCategories, topMakesForCategory, relatedBlogPosts };
   setCached(cacheKey, result);
@@ -586,7 +634,7 @@ async function getProductLinkingData(product) {
     orClauses.push({ _id: { $in: product.relatedBlogPostIds } });
   }
   if (orClauses.length > 0) {
-    const posts = await BlogPost.find({ isPublished: true, $or: orClauses })
+    const posts = await BlogPost.find(seoIndexPolicy.publicBlogFilter({ isPublished: true, $or: orClauses }))
       .select('slug title coverImageUrl publishedAt readingTimeMinutes')
       .sort({ publishedAt: -1 })
       .limit(4)
@@ -725,7 +773,7 @@ async function getBlogPostLinkingData(post) {
   if (post.category && post.category.slug) {
     siblingFilter['category.slug'] = post.category.slug;
   }
-  const siblingBlogPosts = await BlogPost.find(siblingFilter)
+  const siblingBlogPosts = await BlogPost.find(seoIndexPolicy.publicBlogFilter(siblingFilter))
     .select('slug title coverImageUrl publishedAt readingTimeMinutes')
     .sort({ publishedAt: -1 })
     .limit(4)

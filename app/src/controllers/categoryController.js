@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const scalapay = require('../services/scalapay');
 
 const Category = require('../models/Category');
 const demoProducts = require('../demoProducts');
@@ -8,11 +9,16 @@ const {
   buildCategoryPublicPath,
   buildCategoryPublicUrl,
   getPublicBaseUrlFromReq,
+  compterFichesPubliees,
 } = require('../services/categoryPublic');
-const { buildHreflangSet } = require('../services/i18n');
+const { buildHreflangSet, t, redirectionFrGardantLaLangue } = require('../services/i18n');
 const { formatCategoryDisplayName } = require('../services/brandSanitizer');
 const internalLinking = require('../services/internalLinking');
 const productI18n = require('../services/productI18n');
+const { filtreAuDelaDuPreset } = require('../services/facettesListing');
+const titreSeo = require('../services/titreSeo');
+const redirectionsCategories = require('../services/redirectionsCategories');
+const pagesFamilles = require('../services/pagesFamilles');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -31,22 +37,22 @@ function normalizeMetaText(value) {
   return value.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
 }
 
-/* Garde-fou title SEO : 60 char max (limite SERP Google). */
-const SEO_TITLE_MAX = 60;
+/* Title SEO : 60 caractères au plus, coupé entre deux mots, sans « … »
+   (audit SEO du 11/11/2026, services/titreSeo.js). */
 function clampSeoTitle(t) {
   if (!t) return t;
-  const s = String(t).trim();
-  if (s.length <= SEO_TITLE_MAX) return s;
-  const suffix = ` | ${brand.NAME}`;
-  if (s.endsWith(suffix)) {
-    const head = s.slice(0, s.length - suffix.length).trim();
-    const maxHead = Math.max(20, SEO_TITLE_MAX - suffix.length - 1);
-    const cut = head.length > maxHead ? `${head.slice(0, maxHead).trim()}…` : head;
-    const candidate = `${cut}${suffix}`;
-    if (candidate.length <= SEO_TITLE_MAX) return candidate;
-    return `${candidate.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
-  }
-  return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+  const { texte, suffixe } = titreSeo.separerSuffixe(String(t), brand.NAME);
+  return titreSeo.ajusterTitre(texte, { suffixe, modeSuffixe: 'prefere' });
+}
+
+/* Title d'une page 2+ : « … – page N », la mention de page jamais coupée. */
+function titreAvecPage(titre, page, lang) {
+  if (!(page > 1)) return clampSeoTitle(titre);
+  const { texte, suffixe } = titreSeo.separerSuffixe(String(titre), brand.NAME);
+  const mention = lang === 'de' ? ` – Seite ${page}` : ` – page ${page}`;
+  const avecMarque = titreSeo.ajusterTitre(texte, { max: titreSeo.TITRE_MAX - mention.length - suffixe.length });
+  if (suffixe && avecMarque.length >= 20) return `${avecMarque}${mention}${suffixe}`;
+  return `${titreSeo.ajusterTitre(texte, { max: titreSeo.TITRE_MAX - mention.length })}${mention}`;
 }
 
 function toSafeJsonLd(value) {
@@ -66,15 +72,37 @@ async function listCategories(req, res, next) {
     if (dbConnected) {
       categories = await Category.find({ isActive: true })
         .sort({ sortOrder: 1, name: 1 })
-        .select('_id name slug')
+        .select('_id name slug localizations.de.name localizations.de.slug localizations.de.translatedAt')
         .lean();
 
-      categories = (categories || []).map((c) => ({
-        id: String(c._id),
-        name: c.name || '',
-        slug: c.slug || '',
-        publicPath: buildCategoryPublicPath(c),
-      }));
+      /* Catégories VIDES hors du sommaire (audit du 25/09/2026) : 42 des
+         catégories actives n'ont aucune fiche publiée. Leur page se sert en
+         noindex et le sitemap les écarte déjà (plan SEO A4.6) ; les lister ici
+         envoyait visiteurs et robots vers 42 pages vides. Même comptage que la
+         page et le sitemap : une catégorie qui se remplit revient d'elle-même.
+         Si le comptage échoue, la liste reste entière. */
+      try {
+        const comptes = await compterFichesPubliees((categories || []).map((c) => c && c.name).filter(Boolean));
+        categories = (categories || []).filter((c) => c && comptes.get(c.name) > 0);
+      } catch (err) {
+        console.error('[categories] comptage impossible, sommaire complet :', err && err.message ? err.message : err);
+      }
+
+      categories = (categories || []).map((c) => {
+        /* Sous /de : nom ET slug allemands. Le sommaire listait les 64
+           catégories avec leurs URL françaises — 64 liens qui partaient tous
+           en redirection depuis une page allemande. */
+        const de = (req.lang === 'de' && c.localizations && c.localizations.de
+          && c.localizations.de.translatedAt) ? c.localizations.de : null;
+        return {
+          id: String(c._id),
+          name: (de && de.name) ? de.name : (c.name || ''),
+          slug: c.slug || '',
+          publicPath: de
+            ? '/de/categorie/' + encodeURIComponent(de.slug || c.slug)
+            : buildCategoryPublicPath(c),
+        };
+      });
     } else {
       const used = new Set();
       const derived = [];
@@ -98,10 +126,10 @@ async function listCategories(req, res, next) {
         }));
     }
 
-    const title = clampSeoTitle(`Catégories - ${brand.NAME}`);
-    const metaDescription = 'Découvre toutes nos catégories de pièces auto : moteur, freinage, carrosserie, électricité, entretien et plus.';
+    const title = clampSeoTitle(t(req.lang, 'categories.indexTitle'));
+    const metaDescription = t(req.lang, 'categories.indexMeta');
     const baseUrl = getPublicBaseUrlFromReq(req);
-    const langPrefix = req.lang === 'en' ? '/en' : '';
+    const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/categorie` : `${langPrefix}/categorie`;
@@ -110,7 +138,7 @@ async function listCategories(req, res, next) {
       '@graph': [
         {
           '@type': 'CollectionPage',
-          name: 'Catégories',
+          name: t(req.lang, 'breadcrumb.categoriesLd'),
           url: canonicalUrl,
           description: metaDescription,
         },
@@ -120,13 +148,13 @@ async function listCategories(req, res, next) {
             {
               '@type': 'ListItem',
               position: 1,
-              name: 'Accueil',
-              item: baseUrl ? `${baseUrl}/` : '/',
+              name: t(req.lang, 'breadcrumb.homeLd'),
+              item: baseUrl ? `${baseUrl}${langPrefix}/` : '/',
             },
             {
               '@type': 'ListItem',
               position: 2,
-              name: 'Catégories',
+              name: t(req.lang, 'breadcrumb.categoriesLd'),
               item: canonicalUrl,
             },
           ],
@@ -163,9 +191,28 @@ async function getCategory(req, res, next) {
 
     let category = null;
     if (dbConnected) {
-      category = await Category.findOne({ slug, isActive: { $ne: false } })
-        .select('_id name slug updatedAt seoText localizations')
-        .lean();
+      const CAT_FIELDS = '_id name slug updatedAt seoText localizations';
+      /* Sous /de, on cherche D'ABORD par le slug allemand : le canonical et le
+         hreflang de ces pages pointent depuis toujours vers /de/categorie/
+         <slug-de>, une URL que la route ne savait pas résoudre — Google se
+         voyait donc désigner une 404 comme page canonique. */
+      if (req.lang === 'de') {
+        category = await Category.findOne({ 'localizations.de.slug': slug, isActive: { $ne: false } })
+          .select(CAT_FIELDS)
+          .lean();
+        /* Ancien slug (avant translittération des umlauts) : on le résout
+           quand même, et la redirection plus bas envoie vers le nouveau. */
+        if (!category) {
+          category = await Category.findOne({ 'localizations.de.slugAliases': slug, isActive: { $ne: false } })
+            .select(CAT_FIELDS)
+            .lean();
+        }
+      }
+      if (!category) {
+        category = await Category.findOne({ slug, isActive: { $ne: false } })
+          .select(CAT_FIELDS)
+          .lean();
+      }
     } else {
       const all = new Map();
       for (const p of demoProducts || []) {
@@ -179,6 +226,19 @@ async function getCategory(req, res, next) {
     }
 
     if (!category) {
+      /* Ancienne adresse (arborescence remplacée, renommage dans l'admin,
+         queue parasite) : 301 vers la catégorie qui la remplace plutôt
+         qu'un 404 (audit SEO du 11/11/2026, problème 2). */
+      if (dbConnected) {
+        const cible = await redirectionsCategories.resoudre(slug);
+        if (cible !== null) {
+          const prefixe = req.lang === 'de' ? '/de' : '';
+          /* Les paramètres suivent (gclid, utm…) : une annonce ou un lien
+             suivi qui vise l'ancienne adresse garde son attribution. */
+          const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+          return res.redirect(301, (cible ? `${prefixe}/categorie/${encodeURIComponent(cible)}` : `${prefixe}/categorie`) + qs);
+        }
+      }
       return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
 
@@ -193,9 +253,17 @@ async function getCategory(req, res, next) {
     const isDe = req.lang === 'de' && productI18n.isSupportedLang('de');
     const deLoc = category.localizations && category.localizations.de;
     if (isDe && !(deLoc && deLoc.translatedAt)) {
-      return res.redirect(301, '/categorie/' + encodeURIComponent(category.slug));
+      /* Même règle que la fiche : la page française d'arrivée ne doit pas
+         remettre la session — donc la commande et les e-mails — en français. */
+      return res.redirect(301, redirectionFrGardantLaLangue(req, '/categorie/' + encodeURIComponent(category.slug)));
     }
     const deCatSlug = (isDe && deLoc && deLoc.slug && deLoc.slug.trim()) ? deLoc.slug.trim() : category.slug;
+    /* Une catégorie allemande = UNE URL. Arrivé par le slug français sous /de,
+       on renvoie vers le slug allemand, celui que déclare le canonical. */
+    if (isDe && deCatSlug !== slug) {
+      const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+      return res.redirect(301, '/de/categorie/' + encodeURIComponent(deCatSlug) + qs);
+    }
 
     const { prepareProductListingData } = require('../services/productListingService');
     const data = await prepareProductListingData(req, { presetCategoryName: category.name });
@@ -222,8 +290,23 @@ async function getCategory(req, res, next) {
      * Si DB a un metaTitle custom, on respecte mais on clamp toujours. */
     const dbMetaTitle = category.seo && typeof category.seo.metaTitle === 'string'
       ? category.seo.metaTitle.trim() : '';
-    const title = clampSeoTitle(dbMetaTitle || `${name} - Pièces auto | ${brand.NAME}`);
-    const metaDescription = buildCategoryMetaDescription(name, data.totalCount);
+    /* Familles prioritaires (ponts, boîtes de transfert, mécatroniques) :
+       title, description, H1, introduction et FAQ rédigés et relus (audit SEO
+       du 11/11/2026, problème 4 ; src/data/seo/pages-familles.json). Un
+       `seo.metaTitle` en base garderait la main, comme prévu ci-dessus — mais
+       le modèle Category n'a pas ce champ et la requête ne le lit pas : pour
+       ces trois catégories, le title est celui du fichier. */
+    const famille = isDe ? null : pagesFamilles.pourCategorie(category.slug, 'fr');
+    /* `seo.metaTitle` en DB est saisi en français : on ne l'applique qu'au FR. */
+    const title = titreAvecPage((!isDe && dbMetaTitle) || (famille && famille.titre) || t(req.lang, 'category.metaTitle', { name }), data.page, req.lang);
+    const descriptionPage1 = isDe
+      ? buildCategoryMetaDescriptionDe(name, data.totalCount)
+      : ((famille && famille.description) || buildCategoryMetaDescription(name, data.totalCount));
+    /* Pages 2 et suivantes : ouvertes à Google (voir metaRobots), elles ne
+       doivent pas répéter le title et la description de la page 1. */
+    const metaDescription = data.page > 1
+      ? truncateText(normalizeMetaText(`${isDe ? 'Seite' : 'Page'} ${data.page} – ${descriptionPage1}`), 160)
+      : descriptionPage1;
 
     const baseUrl = getPublicBaseUrlFromReq(req);
     const canonicalBase = isDe
@@ -233,7 +316,7 @@ async function getCategory(req, res, next) {
       ? `${canonicalBase}?page=${encodeURIComponent(String(data.page))}`
       : canonicalBase;
 
-    const langPrefix = req.lang === 'en' ? '/en' : '';
+    const langPrefix = req.lang === 'de' ? '/de' : (req.lang === 'en' ? '/en' : '');
     const pathWithoutLang = res.locals.currentPathWithoutLang || req.path;
     const hreflang = buildHreflangSet(baseUrl, pathWithoutLang);
     // hreflang FR↔DE dès qu'une traduction DE de la catégorie existe.
@@ -247,11 +330,19 @@ async function getCategory(req, res, next) {
         { lang: 'x-default', href: _frHref },
       ];
     }
+    /* Page 2+ indexable : ses hreflang la désignent ELLE (et sa version
+       allemande), pas la page 1 — sinon Google lit deux signaux contraires. */
+    if (data.page > 1) {
+      const suffixePage = `?page=${encodeURIComponent(String(data.page))}`;
+      hreflangTags = hreflangTags
+        ? hreflangTags.map((tag) => ({ ...tag, href: `${tag.href}${suffixePage}` }))
+        : [{ lang: 'fr', href: canonicalUrl }, { lang: 'x-default', href: canonicalUrl }];
+    }
 
     /* Robots : on indexe la page catégorie nue (pas de filtres au-delà de la
-     * catégorie présélectionnée). Dès qu'un filtre additionnel est actif, qu'on
-     * est en page 2+, ou que la catégorie est vide, on noindex pour éviter le
-     * contenu dupliqué et le "thin content" signal sur les catégories vides. */
+     * catégorie présélectionnée), pages 2+ comprises. Dès qu'un filtre
+     * additionnel est actif ou que la catégorie est vide, on noindex pour
+     * éviter le contenu dupliqué et le "thin content" des catégories vides. */
     const isEmpty = !data.totalCount || data.totalCount === 0;
     const filtersBeyondCategory =
       data.searchQuery
@@ -262,7 +353,13 @@ async function getCategory(req, res, next) {
       || (data.minPriceEuros !== null && data.minPriceEuros !== undefined)
       || (data.maxPriceEuros !== null && data.maxPriceEuros !== undefined)
       || (data.sort && data.sort !== 'newest' && data.sort !== '')
-      || data.page > 1;
+      /* Page 2 et suivantes : INDEXABLES depuis l'audit SEO du 11/11/2026
+         (problème 6). En noindex, 316 des 340 ponts n'étaient listés que sur
+         des pages que Google finit par ne plus suivre. Chaque page garde sa
+         propre adresse canonique (?page=N), son title et sa description. */
+      /* Autre catégorie, état, véhicule… : même règle (audit du 25/09/2026,
+         services/facettesListing.js). */
+      || filtreAuDelaDuPreset(req.query, { categorie: category.name });
     const metaRobots = (filtersBeyondCategory || isEmpty)
       ? 'noindex, follow'
       : (res.locals.metaRobots || undefined);
@@ -301,13 +398,15 @@ async function getCategory(req, res, next) {
             { '@type': 'ListItem', position: 3, name, item: canonicalUrl },
           ],
         },
+        /* FAQ visible sur la page 1 seulement : ses données aussi. */
+        ...((famille && !(data.page > 1) && pagesFamilles.faqJsonLd(famille)) ? [pagesFamilles.faqJsonLd(famille)] : []),
       ],
     });
 
     /* Maillage interne (sibling categories, sous-cat, top makes, related blog). */
     let linkingData = {};
     try {
-      linkingData = await internalLinking.getCategoryLinkingData(category);
+      linkingData = await internalLinking.getCategoryLinkingData(category, req.lang);
     } catch (err) {
       console.error('[category] internalLinking error :', err && err.message);
     }
@@ -335,6 +434,15 @@ async function getCategory(req, res, next) {
         publicPath: isDe ? `/de/categorie/${encodeURIComponent(deCatSlug)}` : buildCategoryPublicPath(category),
         seoText: isDe ? ((deLoc && deLoc.seoText) || '') : (typeof category.seoText === 'string' ? category.seoText : ''),
         linking: linkingData,
+        /* H1 et contenu de famille : le H1 sur toutes les pages, le texte
+           d'introduction, les liens et la FAQ sur la page 1 seulement (les
+           pages 2+ indexables ne doivent pas répéter le même texte). */
+        h1: famille && famille.h1 ? famille.h1 : '',
+        famille: (famille && !(data.page > 1)) ? {
+          introHtml: famille.introHtml || '',
+          liens: Array.isArray(famille.liens) ? famille.liens : [],
+          faq: Array.isArray(famille.faq) ? famille.faq : [],
+        } : null,
       },
     });
   } catch (err) {
@@ -342,15 +450,30 @@ async function getCategory(req, res, next) {
   }
 }
 
+/* Version allemande : le gabarit français produisait « Drehmomentwandler
+   reconditionnées et testées sur banc… » — un nom allemand dans une phrase
+   française, sur chacune des pages catégorie DE. */
+function buildCategoryMetaDescriptionDe(name, totalCount) {
+  const countText = totalCount > 0
+    ? t('de', 'category.countRefs', { count: totalCount })
+    : t('de', 'category.wideChoice');
+  return truncateText(normalizeMetaText(t('de', 'category.metaDescription', { name, countText })), 160);
+}
+
 function buildCategoryMetaDescription(name, totalCount) {
   const n = name.toLowerCase();
   const count = totalCount > 0 ? totalCount : '';
   const countText = count ? `${count} références` : 'Large choix';
+  /* Plan SEO A11 : ces descriptions promettaient « garantie 2 ans » et
+     « 3x/4x sans frais » à toute la catégorie. La garantie dépend de la pièce
+     (6, 12 ou 24 mois) et le paiement en plusieurs fois est coupé depuis le
+     05/08 : il ne réapparaît que si Scalapay est rallumé. */
+  const paiement = scalapay.estActif() ? ' Paiement en 3x/4x sans frais.' : '';
 
   const templates = [
-    `${name} reconditionnées et testées sur banc. Garantie 2 ans, expédition 24/48h. ${countText} à prix compétitifs. Paiement en 3x/4x sans frais.`,
-    `${countText} de ${n} reconditionnées avec garantie 2 ans. Testées sur banc, expédiées sous 24/48h. Commandez en 3x/4x sans frais.`,
-    `${name} d'occasion et reconditionnées. ${countText} testées et garanties 2 ans. Livraison express 24/48h. Paiement en 3x/4x disponible.`,
+    `${name} reconditionnées et d'occasion, contrôlées avant expédition. Garantie selon la pièce. ${countText} à prix compétitifs.${paiement}`,
+    `${countText} de ${n} d'occasion et reconditionnées, contrôlées avant expédition, garantie indiquée sur chaque fiche.${paiement}`,
+    `${name} d'occasion et reconditionnées. ${countText} contrôlées, garantie indiquée sur chaque fiche. Livraison en France et en Europe.${paiement}`,
   ];
 
   for (const t of templates) {
@@ -358,11 +481,13 @@ function buildCategoryMetaDescription(name, totalCount) {
     if (clean.length >= 140 && clean.length <= 160) return clean;
   }
 
-  const fallback = `${name} reconditionnées, testées sur banc et garanties 2 ans. ${countText} disponibles, expédition 24/48h. Paiement en 3x/4x.`;
+  const fallback = `${name} d'occasion et reconditionnées, garantie indiquée sur chaque fiche. ${countText} disponibles, livraison en France et en Europe.${paiement}`;
   return truncateText(normalizeMetaText(fallback), 160);
 }
 
 module.exports = {
   listCategories,
   getCategory,
+  /* Exposé pour les tests : les promesses de ces descriptions sont vérifiées. */
+  _pourTests: { buildCategoryMetaDescription, buildCategoryMetaDescriptionDe },
 };

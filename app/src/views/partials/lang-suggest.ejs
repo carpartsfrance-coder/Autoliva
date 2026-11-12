@@ -16,7 +16,12 @@
   if (!_hidden) {
     if (_curLang === 'fr' && _pref === 'de' && _deAlt) {
       _suggest = { href: _deAlt.href, msg: 'Diese Seite ist auch auf Deutsch verfügbar.', cta: 'Auf Deutsch ansehen', flag: '🇩🇪', aria: 'Sprachvorschlag' };
-    } else if (_curLang === 'de' && _pref && _pref !== 'de' && _frAlt) {
+    /* Symétrique de la règle FR→DE ci-dessus : on ne propose le français qu'à
+       un navigateur qui demande le FRANÇAIS. « tout sauf de » proposait un
+       bandeau français — et un bouton qui fait basculer toute la session,
+       paiement et e-mails compris — à un visiteur en-US, nl ou pl arrivé
+       d'une annonce sur la fiche /de, dans une langue qu'il ne lit pas. */
+    } else if (_curLang === 'de' && _pref === 'fr' && _frAlt) {
       _suggest = { href: _frAlt.href, msg: 'Cette page est aussi disponible en français.', cta: 'Voir en français', flag: '🇫🇷', aria: 'Suggestion de langue' };
     }
   }

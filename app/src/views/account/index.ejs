@@ -1,21 +1,24 @@
 <%- include('../partials/head') %>
 <%- include('../partials/header') %>
+<%# Tableau de bord : page d'arrivée après la connexion, suit la langue du tunnel
+    (allemand si la visite venait de /de). %>
+<% const _de = typeof lang !== 'undefined' && lang === 'de'; %>
 
 <main class="flex-1">
   <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-6 sm:py-8">
     <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 flex flex-col md:flex-row md:items-end md:justify-between gap-3 sm:gap-4">
       <div>
         <div class="flex flex-wrap items-center gap-2">
-          <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Mon compte</h2>
+          <h2 class="text-2xl sm:text-3xl font-bold text-slate-900"><%= _de ? "Mein Konto" : "Mon compte" %></h2>
         </div>
-        <p class="mt-1.5 sm:mt-2 text-sm sm:text-base text-slate-600">Gérez vos informations, vos commandes et vos préférences.</p>
+        <p class="mt-1.5 sm:mt-2 text-sm sm:text-base text-slate-600"><%= _de ? "Verwalten Sie Ihre Daten, Bestellungen und Einstellungen." : "Gérez vos informations, vos commandes et vos préférences." %></p>
       </div>
     </div>
 
     <% if (!dbConnected) { %>
       <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-5 text-amber-900">
-        <div class="font-bold">Mode démo activé</div>
-        <div class="mt-1 text-sm">Le site fonctionne sans base de données, avec des données d'exemple.</div>
+        <div class="font-bold"><%= _de ? "Demomodus aktiv" : "Mode démo activé" %></div>
+        <div class="mt-1 text-sm"><%= _de ? "Die Website läuft ohne Datenbank, mit Beispieldaten." : "Le site fonctionne sans base de données, avec des données d'exemple." %></div>
       </div>
     <% } %>
 
@@ -28,7 +31,7 @@
         <div class="grid grid-cols-3 max-[360px]:grid-cols-1 gap-2 sm:gap-6 md:grid-cols-3">
           <div class="bg-white p-3 sm:p-6 rounded-2xl border border-slate-200">
             <div class="flex items-center justify-between gap-2">
-              <span class="text-slate-500 text-[10px] sm:text-sm font-semibold leading-tight">Commandes</span>
+              <span class="text-slate-500 text-[10px] sm:text-sm font-semibold leading-tight"><%= _de ? "Bestellungen" : "Commandes" %></span>
               <div class="p-1.5 sm:p-2 bg-blue-50 rounded-lg text-blue-600">
                 <span class="material-symbols-outlined text-[18px] sm:text-[22px]">local_shipping</span>
               </div>
@@ -38,7 +41,7 @@
 
           <div class="bg-white p-3 sm:p-6 rounded-2xl border border-slate-200">
             <div class="flex items-center justify-between gap-2">
-              <span class="text-slate-500 text-[10px] sm:text-sm font-semibold leading-tight">Véhicules</span>
+              <span class="text-slate-500 text-[10px] sm:text-sm font-semibold leading-tight"><%= _de ? "Fahrzeuge" : "Véhicules" %></span>
               <div class="p-1.5 sm:p-2 bg-green-50 rounded-lg text-green-600">
                 <span class="material-symbols-outlined text-[18px] sm:text-[22px]">garage</span>
               </div>
@@ -48,7 +51,7 @@
 
           <div class="bg-white p-3 sm:p-6 rounded-2xl border border-slate-200">
             <div class="flex items-center justify-between gap-2">
-              <span class="text-slate-500 text-[10px] sm:text-sm font-semibold leading-tight">Adresses</span>
+              <span class="text-slate-500 text-[10px] sm:text-sm font-semibold leading-tight"><%= _de ? "Adressen" : "Adresses" %></span>
               <div class="p-1.5 sm:p-2 bg-primary/10 rounded-lg text-primary">
                 <span class="material-symbols-outlined text-[18px] sm:text-[22px]">location_on</span>
               </div>
@@ -56,20 +59,20 @@
             <div class="mt-1 text-xl sm:text-3xl font-black text-slate-900"><%= typeof addressCount !== 'undefined' ? addressCount : 0 %></div>
             <div class="hidden sm:block mt-3 text-xs text-slate-500">
               <% if (typeof defaultAddress !== 'undefined' && defaultAddress) { %>
-                Par défaut :
+                <%= _de ? "Standard:" : "Par défaut :" %>
                 <span class="font-bold text-slate-700"><%= defaultAddress.line1 %>, <%= defaultAddress.postalCode %> <%= defaultAddress.city %></span>
               <% } else { %>
-                Aucune adresse par défaut
+                <%= _de ? "Keine Standardadresse" : "Aucune adresse par défaut" %>
               <% } %>
-              • <a class="text-primary font-bold hover:underline" href="/compte/adresses">Gérer</a>
+              • <a class="text-primary font-bold hover:underline" href="/compte/adresses"><%= _de ? "Verwalten" : "Gérer" %></a>
             </div>
           </div>
         </div>
 
         <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div class="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center gap-4">
-            <h3 class="text-lg sm:text-xl font-bold text-slate-900">Dernières commandes</h3>
-            <a class="text-primary text-xs sm:text-sm font-bold hover:underline" href="/compte/commandes">Voir tout</a>
+            <h3 class="text-lg sm:text-xl font-bold text-slate-900"><%= _de ? "Letzte Bestellungen" : "Dernières commandes" %></h3>
+            <a class="text-primary text-xs sm:text-sm font-bold hover:underline" href="/compte/commandes"><%= _de ? "Alle anzeigen" : "Voir tout" %></a>
           </div>
 
           <% if (orders && orders.length) { %>
@@ -89,7 +92,7 @@
                       <div class="font-black text-slate-900 text-sm"><%= o.total || '—' %></div>
                       <% if (o.id) { %>
                         <a class="mt-2 inline-flex items-center justify-center rounded-xl bg-slate-100 px-3 py-2 text-xs font-black uppercase tracking-wider text-slate-700 hover:bg-slate-200 transition" href="/compte/commandes/<%= o.id %>">
-                          Détails
+                          <%= _de ? "Details" : "Détails" %>
                         </a>
                       <% } %>
                     </div>
@@ -102,11 +105,11 @@
               <table class="w-full text-left">
                 <thead>
                   <tr class="text-xs font-black text-slate-400 uppercase tracking-widest bg-slate-50">
-                    <th class="px-6 py-4">Commande</th>
-                    <th class="px-6 py-4">Date</th>
-                    <th class="px-6 py-4">Statut</th>
-                    <th class="px-6 py-4">Total</th>
-                    <th class="px-6 py-4 text-right">Actions</th>
+                    <th class="px-6 py-4"><%= _de ? "Bestellung" : "Commande" %></th>
+                    <th class="px-6 py-4"><%= _de ? "Datum" : "Date" %></th>
+                    <th class="px-6 py-4"><%= _de ? "Status" : "Statut" %></th>
+                    <th class="px-6 py-4"><%= _de ? "Gesamt" : "Total" %></th>
+                    <th class="px-6 py-4 text-right"><%= _de ? "Aktionen" : "Actions" %></th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
@@ -135,11 +138,11 @@
           <% } else { %>
             <div class="p-6">
               <div class="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-                <div class="font-black text-slate-900">Aucune commande</div>
-                <div class="mt-1 text-sm text-slate-600">Quand vous passerez une commande, elle apparaîtra ici.</div>
-                <a class="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-2 text-xs font-black uppercase tracking-wider" href="/produits">
+                <div class="font-black text-slate-900"><%= _de ? "Keine Bestellungen" : "Aucune commande" %></div>
+                <div class="mt-1 text-sm text-slate-600"><%= _de ? "Sobald Sie eine Bestellung aufgeben, erscheint sie hier." : "Quand vous passerez une commande, elle apparaîtra ici." %></div>
+                <a class="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-2 text-xs font-black uppercase tracking-wider" href="<%= _de ? '/de' : '' %>/produits">
                   <span class="material-symbols-outlined text-base">search</span>
-                  Parcourir le catalogue
+                  <%= _de ? "Katalog ansehen" : "Parcourir le catalogue" %>
                 </a>
               </div>
             </div>
@@ -153,8 +156,8 @@
                 <span class="material-symbols-outlined">support_agent</span>
               </span>
               <div>
-                <div class="font-bold text-slate-900">Mes tickets SAV</div>
-                <div class="text-xs text-slate-500"><%= (savOpen || 0) %> en cours<% if ((savUnread || 0) > 0) { %> · <span class="text-primary font-semibold"><%= savUnread %> nouvelle(s) réponse(s)</span><% } %></div>
+                <div class="font-bold text-slate-900"><%= _de ? "Meine Serviceanfragen" : "Mes tickets SAV" %></div>
+                <div class="text-xs text-slate-500"><%= (savOpen || 0) %> <%= _de ? "offen" : "en cours" %><% if ((savUnread || 0) > 0) { %> · <span class="text-primary font-semibold"><%= savUnread %> <%= _de ? "neue Antwort(en)" : "nouvelle(s) réponse(s)" %></span><% } %></div>
               </div>
             </div>
             <span class="material-symbols-outlined text-slate-300">chevron_right</span>
@@ -165,7 +168,7 @@
           <div class="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6">
             <h3 class="text-xl font-bold mb-6 flex items-center gap-2 text-slate-900">
               <span class="material-symbols-outlined text-primary">garage</span>
-              Mon garage
+              <%= _de ? "Meine Fahrzeuge" : "Mon garage" %>
             </h3>
 
             <% if (vehicles && vehicles.length) { %>
@@ -176,7 +179,7 @@
                       <span class="material-symbols-outlined text-slate-400 group-hover:text-primary">minor_crash</span>
                     </div>
                     <div class="flex-1">
-                      <div class="font-black text-sm text-slate-900"><%= v.name || 'Véhicule' %></div>
+                      <div class="font-black text-sm text-slate-900"><%= v.name || (_de ? 'Fahrzeug' : 'Véhicule') %></div>
                       <div class="text-xs text-slate-500 uppercase"><%= v.details || '' %></div>
                     </div>
                     <span class="material-symbols-outlined text-slate-300">chevron_right</span>
@@ -185,11 +188,11 @@
               </div>
             <% } else { %>
               <div class="rounded-2xl border border-slate-200 bg-slate-50 p-6">
-                <div class="font-black text-slate-900">Aucun véhicule</div>
-                <div class="mt-1 text-sm text-slate-600">Ajoutez votre premier véhicule pour personnaliser les compatibilités.</div>
+                <div class="font-black text-slate-900"><%= _de ? "Kein Fahrzeug" : "Aucun véhicule" %></div>
+                <div class="mt-1 text-sm text-slate-600"><%= _de ? "Fügen Sie Ihr erstes Fahrzeug hinzu, um passende Teile schneller zu finden." : "Ajoutez votre premier véhicule pour personnaliser les compatibilités." %></div>
                 <a class="mt-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 text-white px-4 py-2 text-xs font-black uppercase tracking-wider" href="/compte/garage">
                   <span class="material-symbols-outlined text-base">add</span>
-                  Ouvrir le garage
+                  <%= _de ? "Fahrzeuge verwalten" : "Ouvrir le garage" %>
                 </a>
               </div>
             <% } %>

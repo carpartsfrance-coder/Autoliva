@@ -48,7 +48,9 @@ async function main() {
   const report = await syncConversions({ dryRun });
 
   console.log('LEADS  :', JSON.stringify(report.leads));
+  console.log('DEVIS  :', JSON.stringify(report.quotes));
   console.log('VENTES :', JSON.stringify(report.sales));
+  console.log('ACHATS :', JSON.stringify(report.purchases));
   if (report.details.length) {
     console.log('\nDétails (erreurs/échantillon) :');
     for (const d of report.details.slice(0, 20)) console.log(' -', JSON.stringify(d));

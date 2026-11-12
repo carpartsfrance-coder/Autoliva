@@ -194,6 +194,10 @@ exports.postSimpleForm = async (req, res) => {
     const userAgent = (req.headers['user-agent'] || '').toString().slice(0, 500);
 
     const ticket = new SavTicket({
+      /* Langue reprise de la session de dépôt du dossier ; à défaut, le
+         français. Une reprise depuis la commande serait plus sûre encore —
+         c'est le prochain palier si des SAV allemands apparaissent. */
+      lang: (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr',
       motifSav: motifKey,
       numeroCommande: numeroCommande || undefined,
       client: { nom, email, telephone: String(b.telephone || '').trim() || undefined, type: 'B2C' },

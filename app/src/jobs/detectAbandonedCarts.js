@@ -6,6 +6,10 @@ const Product = require('../models/Product');
 
 const ABANDON_DELAY_MS = 60 * 60 * 1000; // 1 hour
 
+/* Forme exacte d'un panier non vide dans le JSON de session. Exporté pour
+   que le test puisse la confronter à un vrai `JSON.stringify`. */
+const SESSION_AVEC_ARTICLE = /"cart":\{"items":\{"/;
+
 /**
  * Scans MongoDB sessions for carts that have items but no associated order
  * for more than 1 hour. Only considers sessions with a logged-in user (email).
@@ -28,10 +32,26 @@ async function detectAbandonedCarts() {
     const db = mongoose.connection.db;
     const sessionsCollection = db.collection('sessions');
 
-    // Find sessions that were last modified more than 1h ago
-    // connect-mongo stores sessions as { _id, expires, session (JSON string) }
+    /* connect-mongo stocke { _id, expires, session } où `session` est une
+     * CHAÎNE JSON. On ne peut donc pas filtrer sur `cart.items` comme sur un
+     * objet : la seule prise côté serveur est le texte lui-même.
+     *
+     * Pourquoi ce préfiltre (diagnostic du 08/2026) : sans lui, la requête
+     * rapatriait TOUTES les sessions vivantes, soit 1 897 283 documents
+     * (~1,4 Go) chaque heure pile, pour en garder 334 (celles qui ont un
+     * article). Mesuré : à 09:00, /produits passait de 1,3 s à 24 s et la
+     * mémoire du processus de 923 Mo à 1 417 Mo en trois minutes.
+     *
+     * `JSON.stringify` d'un panier non vide produit exactement la séquence
+     * `"cart":{"items":{"` suivie de la première clé d'article ; un panier
+     * vide donne `"items":{}` et n'y correspond pas. Vérifié sur les
+     * documents réels de production. Le balayage reste côté serveur
+     * (~20 s sur 1,9 M de documents, en attendant que la collection fonde
+     * grâce aux sessions qui ne sont plus créées pour rien), mais le
+     * transfert et la mémoire tombent à quelques dizaines de Ko. */
     const cursor = sessionsCollection.find({
       expires: { $gt: now }, // session not expired
+      session: { $regex: SESSION_AVEC_ARTICLE },
     });
 
     const sessions = await cursor.toArray();
@@ -96,9 +116,19 @@ async function detectAbandonedCarts() {
         //   - un lead expired dont le cycle a démarré < 30 j → la séquence de
         //     relances a déjà été jouée ce mois-ci pour ce panier (sinon un
         //     panier qui dort en session relançait le client tous les ~10 jours,
-        //     indéfiniment).
+        //     indéfiniment) ;
+        //   - un lead relancé depuis < 90 j, quel que soit son statut → voir
+        //     ci-dessous.
+        //
+        // Le critère sur lastRemindedAt ferme le dernier trou : une relance
+        // envoyée bascule le lead en 'recovered' quelques secondes plus tard,
+        // et le critère « recovered depuis < 7 j » cesse alors de protéger au
+        // bout d'une semaine. Un panier jamais vidé repartait donc en relance
+        // n°1 tous les 7 jours, sans fin — constaté en production sur 155
+        // destinataires, jusqu'à 15 cycles pour un même client.
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
         const existingCart = await AbandonedCart.findOne({
           $and: [
             { $or: [{ sessionId }, { email }] },
@@ -107,6 +137,7 @@ async function detectAbandonedCarts() {
                 { status: { $nin: ['recovered', 'expired'] } },
                 { status: 'recovered', recoveredAt: { $gte: sevenDaysAgo } },
                 { status: 'expired', abandonedAt: { $gte: thirtyDaysAgo } },
+                { lastRemindedAt: { $gte: ninetyDaysAgo } },
               ],
             },
           ],
@@ -204,6 +235,10 @@ async function detectAbandonedCarts() {
           lastName,
           phone,
           isGuest,
+          /* La langue de navigation est dans la session que ce cron lit déjà :
+             une relance de panier partait en français vers un visiteur qui
+             n'avait vu que des pages allemandes. */
+          lang: sessionData && sessionData.preferredLang === 'de' ? 'de' : 'fr',
           items: abandonedItems,
           totalAmountCents,
           status: 'abandoned',
@@ -225,4 +260,4 @@ async function detectAbandonedCarts() {
   return report;
 }
 
-module.exports = { detectAbandonedCarts };
+module.exports = { detectAbandonedCarts, SESSION_AVEC_ARTICLE };

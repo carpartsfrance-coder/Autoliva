@@ -18,6 +18,14 @@ const blogPostSchema = new mongoose.Schema(
 
     authorName: { type: String, default: 'Expert CarParts', trim: true },
 
+    /* Relecture humaine (plan SEO du 14/09/2026, A12). Remplis à la main dans
+       l'admin, par la personne qui a VRAIMENT relu l'article : ce sont eux, et
+       eux seuls, qui mettent un nom de personne en signature et dans le
+       JSON-LD. Vides → l'article est signé par l'équipe. */
+    reviewedBy: { type: String, default: '', trim: true },
+    reviewerRole: { type: String, default: '', trim: true },
+    reviewedAt: { type: Date, default: null },
+
     readingTimeMinutes: { type: Number, default: 0, min: 0, max: 120 },
 
     relatedProductIds: {
@@ -64,11 +72,17 @@ const blogPostSchema = new mongoose.Schema(
           metaTitle: { type: String, default: '', trim: true },
           metaDescription: { type: String, default: '', trim: true },
         },
+        /* Voir Product : empreinte du texte source, pas `updatedAt`. */
+        sourceHash: { type: String, default: '', trim: true },
+        failedHash: { type: String, default: '', trim: true },
+        failedCount: { type: Number, default: 0 },
+        failedAt: { type: Date, default: null },
         translatedAt: { type: Date, default: null },
         translatedBy: { type: String, default: '', trim: true }, // ex: 'claude-sonnet-4-6'
         translationBucket: { type: String, default: '', trim: true }, // 'technical' | 'comparative' | 'simple'
         reviewedAt: { type: Date, default: null },
         reviewedBy: { type: String, default: '', trim: true },
+        reviewerRole: { type: String, default: '', trim: true },
       },
     },
   },
@@ -76,5 +90,9 @@ const blogPostSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+/* Listing du blog et articles de l'accueil : publiés, du plus récent au plus
+   ancien. La collection ne pesait que 45 Mo, mais relue à chaque page. */
+blogPostSchema.index({ isPublished: 1, publishedAt: -1 });
 
 module.exports = mongoose.model('BlogPost', blogPostSchema);

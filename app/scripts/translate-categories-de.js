@@ -1,4 +1,8 @@
 'use strict';
+
+/* Charge .env comme les autres scripts du projet : sans ça il fallait
+   repasser OPENAI_API_KEY et MONGODB_URI à la main sur chaque appel. */
+require('dotenv').config();
 /* Traduction DE des catégories (name + seoText) → Category.localizations.de.
  * Réutilise l'infra OpenAI du traducteur produits (même glossaire/prompt).
  *

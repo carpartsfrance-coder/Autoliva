@@ -27,24 +27,28 @@ function isWithinPeriod(promo, now) {
   return true;
 }
 
+/* `reason` reste la phrase française (back-office, journaux). `reasonKey` (+
+   `reasonParams`) sert au panier et au tunnel, qui l'affichent dans la langue
+   du visiteur : un code refusé s'affichait en français sous « Ihr Warenkorb ».
+   Voir promoReasonMessage(). */
 async function getApplicablePromo({ code, userId = null, itemsSubtotalCents = 0 } = {}) {
   const normalized = normalizeCode(code);
   if (!normalized || !isValidCode(normalized)) {
-    return { ok: false, reason: 'Code invalide.', promo: null, code: normalized };
+    return { ok: false, reason: 'Code invalide.', reasonKey: 'promo.errInvalidFormat', promo: null, code: normalized };
   }
 
   const promo = await PromoCode.findOne({ code: normalized }).lean();
   if (!promo) {
-    return { ok: false, reason: 'Code promo introuvable.', promo: null, code: normalized };
+    return { ok: false, reason: 'Code promo introuvable.', reasonKey: 'promo.errNotFound', promo: null, code: normalized };
   }
 
   if (promo.isActive === false) {
-    return { ok: false, reason: 'Ce code promo est inactif.', promo: null, code: normalized };
+    return { ok: false, reason: 'Ce code promo est inactif.', reasonKey: 'promo.errInactive', promo: null, code: normalized };
   }
 
   const now = new Date();
   if (!isWithinPeriod(promo, now)) {
-    return { ok: false, reason: 'Ce code promo n’est pas valide à cette date.', promo: null, code: normalized };
+    return { ok: false, reason: 'Ce code promo n’est pas valide à cette date.', reasonKey: 'promo.errNotInPeriod', promo: null, code: normalized };
   }
 
   const subtotal = Number(itemsSubtotalCents) || 0;
@@ -53,6 +57,8 @@ async function getApplicablePromo({ code, userId = null, itemsSubtotalCents = 0 
     return {
       ok: false,
       reason: `Montant minimum requis : ${(minSubtotal / 100).toFixed(2).replace('.', ',')} €`,
+      reasonKey: 'promo.errMinSubtotal',
+      reasonParams: { amount: (minSubtotal / 100).toFixed(2).replace('.', ',') },
       promo: null,
       code: normalized,
     };
@@ -72,7 +78,7 @@ async function getApplicablePromo({ code, userId = null, itemsSubtotalCents = 0 
       });
 
       if (activeCount >= max) {
-        return { ok: false, reason: 'Ce code promo a atteint sa limite d’utilisation.', promo: null, code: normalized };
+        return { ok: false, reason: 'Ce code promo a atteint sa limite d’utilisation.', reasonKey: 'promo.errMaxUses', promo: null, code: normalized };
       }
     }
   }
@@ -90,7 +96,7 @@ async function getApplicablePromo({ code, userId = null, itemsSubtotalCents = 0 
       });
 
       if (activeUserCount >= max) {
-        return { ok: false, reason: 'Ce code promo a déjà été utilisé sur ce compte.', promo: null, code: normalized };
+        return { ok: false, reason: 'Ce code promo a déjà été utilisé sur ce compte.', reasonKey: 'promo.errAlreadyUsed', promo: null, code: normalized };
       }
     }
   }
@@ -137,7 +143,15 @@ async function releaseReservedForOrder(orderId) {
   });
 }
 
+/** Raison du refus d'un code, dans la langue demandée (repli : le français). */
+function promoReasonMessage(result, lang) {
+  const { t } = require('./i18n');
+  if (result && result.reasonKey) return t(lang, result.reasonKey, result.reasonParams);
+  return (result && result.reason) || t(lang, 'promo.errInvalid');
+}
+
 module.exports = {
+  promoReasonMessage,
   normalizeCode,
   isValidCode,
   getApplicablePromo,

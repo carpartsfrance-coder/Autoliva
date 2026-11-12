@@ -35,21 +35,10 @@ async function saveAttachments(numero, files) {
   return out;
 }
 
-const STATUTS_LABELS = {
-  ouvert: ['Ouvert', 'bg-sky-100 text-sky-800'],
-  pre_qualification: ['En pré-qualification', 'bg-sky-100 text-sky-800'],
-  en_attente_documents: ['Documents attendus', 'bg-amber-100 text-amber-800'],
-  retour_demande: ['Retour demandé', 'bg-violet-100 text-violet-800'],
-  en_transit_retour: ['En transit', 'bg-violet-100 text-violet-800'],
-  recu_atelier: ['Reçu atelier', 'bg-violet-100 text-violet-800'],
-  en_analyse: ['En analyse', 'bg-violet-100 text-violet-800'],
-  analyse_terminee: ['Analyse terminée', 'bg-emerald-100 text-emerald-800'],
-  en_attente_decision_client: ['Décision attendue', 'bg-amber-100 text-amber-800'],
-  resolu_garantie: ['Résolu (garantie)', 'bg-emerald-100 text-emerald-800'],
-  resolu_facture: ['Résolu (facturé)', 'bg-emerald-100 text-emerald-800'],
-  clos: ['Clos', 'bg-slate-100 text-slate-700'],
-  refuse: ['Refusé', 'bg-red-100 text-red-700'],
-};
+/* Source unique dans services/savCommande : la même liste vivait ici et
+   servait aussi au rapprochement commande ↔ SAV. Deux copies qui divergent,
+   c'est un ticket affiché « Clos » d'un côté et « Ouvert » de l'autre. */
+const { STATUTS_LABELS } = require('../services/savCommande');
 
 exports.STATUTS_LABELS = STATUTS_LABELS;
 

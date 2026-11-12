@@ -10,6 +10,7 @@ const Category = require('../models/Category');
 const ReturnRequest = require('../models/ReturnRequest');
 const PromoCode = require('../models/PromoCode');
 const PromoRedemption = require('../models/PromoRedemption');
+const savCommande = require('../services/savCommande');
 const VehicleMake = require('../models/VehicleMake');
 const ShippingClass = require('../models/ShippingClass');
 const ProductOptionTemplate = require('../models/ProductOptionTemplate');
@@ -30,6 +31,7 @@ const adminUsers = require('../services/adminUsers');
 const AdminUser = require('../models/AdminUser');
 const CartEvent = require('../models/CartEvent');
 const openaiProductGenerator = require('../services/openaiProductGenerator');
+const comptoir = require('../services/comptoir');
 const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const { getNextOrderNumber } = require('../services/orderNumber');
 const { formatAttribution } = require('../services/attributionDisplay');
@@ -38,6 +40,17 @@ const { listRecentSessions, getSessionTimeline } = require('../services/visitorT
 const { hasAbility, getRoleLabel, isComptable, defaultLandingForRole, ROLES } = require('../permissions');
 const brand = require('../config/brand');
 const sourcingStatus = require('../config/sourcingStatus');
+const commandesFiles = require('../services/commandesFiles');
+const { identifiantsVehicule } = require('../services/vehiculeCommande');
+const vatScheme = require('../services/vatScheme');
+const purchaseInvoice = require('../services/purchaseInvoice');
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.7) :
+   choix d'indexation fiche par fiche, et fiches nées en noindex quand elles
+   arrivent par lot d'import. */
+const seoIndexPolicy = require('../services/seoIndexPolicy');
+/* Slug d'une nouvelle fiche : accents retirés, jamais remplacés par un tiret
+   (audit SEO du 11/11/2026, problème 13). */
+const { slugNouvelleFiche } = require('../services/slugNouvelleFiche');
 
 const ADMIN_LOGIN_BUCKETS = new Map();
 const ADMIN_RESET_BUCKETS = new Map();
@@ -1184,6 +1197,15 @@ async function postAdminCreateCategory(req, res, next) {
   }
 }
 
+/* Anciens slugs d'une catégorie après un changement d'adresse : l'ancienne
+   adresse s'ajoute (elle redirigera), la nouvelle sort de la liste (une
+   catégorie revenue à une ancienne adresse ne se redirige pas vers elle-même). */
+function anciensSlugsApres(anciens, ancien, nouveau) {
+  const liste = new Set((Array.isArray(anciens) ? anciens : []).filter((a) => a && a !== nouveau));
+  if (ancien && ancien !== nouveau) liste.add(ancien);
+  return [...liste];
+}
+
 async function postAdminUpdateCategory(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -1199,7 +1221,7 @@ async function postAdminUpdateCategory(req, res, next) {
       return res.redirect('/admin/categories');
     }
 
-    const existing = await Category.findById(categoryId).select('_id name sortOrder shippingClassId isHomeFeatured seoText showInMenu menuIcon').lean();
+    const existing = await Category.findById(categoryId).select('_id name slug slugAliases sortOrder shippingClassId isHomeFeatured seoText showInMenu menuIcon').lean();
     if (!existing || typeof existing.name !== 'string' || !existing.name.trim()) {
       return res.redirect('/admin/categories');
     }
@@ -1223,7 +1245,9 @@ async function postAdminUpdateCategory(req, res, next) {
     const isHomeFeatured = isChecked(req.body && req.body.isHomeFeatured);
     const showInMenu = isChecked(req.body && req.body.showInMenu);
     const menuIcon = (typeof req.body.menuIcon === 'string' ? req.body.menuIcon.trim() : '').replace(/[^a-z0-9_]/gi, '').slice(0, 40);
-    const seoText = typeof req.body.seoText === 'string' ? req.body.seoText.trim() : '';
+    /* Champ absent du formulaire : on garde le texte en base (il n'était
+       jamais effacé exprès, seulement par oubli du champ). */
+    const seoText = typeof req.body.seoText === 'string' ? req.body.seoText.trim() : String(existing.seoText || '');
 
     if (!nextName) {
       req.session.adminCategoryError = 'Merci de renseigner un nom de catégorie.';
@@ -1234,6 +1258,22 @@ async function postAdminUpdateCategory(req, res, next) {
     if (!nextSlug) {
       req.session.adminCategoryError = 'Nom de catégorie invalide.';
       return res.redirect('/admin/categories');
+    }
+
+    /* Adresse de la page (/categorie/<slug>). Elle ne change que si le nom
+       change, ou si elle est saisie dans le formulaire. Avant le 11/11/2026,
+       chaque enregistrement la recalculait depuis le nom : une catégorie à
+       l'adresse choisie (« mecatroniques » pour « Mécatroniques &
+       calculateurs ») en changeait dès qu'on modifiait son ordre. */
+    const slugSaisi = typeof req.body.slug === 'string' ? slugify(req.body.slug) : '';
+    const slugActuel = getTrimmedString(existing.slug);
+    const slugVoulu = slugSaisi || (nextName !== oldName ? nextSlug : (slugActuel || nextSlug));
+    if (slugVoulu !== slugActuel) {
+      const prise = await Category.findOne({ slug: slugVoulu, _id: { $ne: existing._id } }).select('_id').lean();
+      if (prise) {
+        req.session.adminCategoryError = `L'adresse « /categorie/${slugVoulu} » est déjà celle d'une autre catégorie.`;
+        return res.redirect('/admin/categories');
+      }
     }
 
     const nextParts = splitCategoryName(nextName);
@@ -1256,7 +1296,7 @@ async function postAdminUpdateCategory(req, res, next) {
       const newMain = nextParts.main;
 
       const catRx = new RegExp(`^${escapeRegExp(oldMain)}(\\s*>|$)`);
-      const affectedCats = await Category.find({ name: { $regex: catRx } }).select('_id name sortOrder isHomeFeatured').lean();
+      const affectedCats = await Category.find({ name: { $regex: catRx } }).select('_id name slug slugAliases sortOrder isHomeFeatured').lean();
 
       for (const cat of affectedCats) {
         const current = typeof cat.name === 'string' ? cat.name.trim() : '';
@@ -1269,7 +1309,7 @@ async function postAdminUpdateCategory(req, res, next) {
           updatedName = current.replace(new RegExp(`^${escapeRegExp(oldMain)}\\s*>\\s*`), `${newMain} > `);
         }
 
-        const updatedSlug = slugify(updatedName);
+        const updatedSlug = String(cat._id) === String(existing._id) ? slugVoulu : slugify(updatedName);
         if (!updatedSlug) continue;
 
         const updatedSortOrder = String(cat._id) === String(existing._id)
@@ -1280,6 +1320,8 @@ async function postAdminUpdateCategory(req, res, next) {
           $set: {
             name: updatedName,
             slug: updatedSlug,
+            /* L'ancienne adresse redirige vers la nouvelle (audit SEO 11/11/2026). */
+            slugAliases: anciensSlugsApres(cat.slugAliases, cat.slug, updatedSlug),
             sortOrder: updatedSortOrder,
             ...(String(cat._id) === String(existing._id) ? { shippingClassId, isHomeFeatured, seoText, showInMenu, menuIcon } : {}),
           },
@@ -1306,14 +1348,24 @@ async function postAdminUpdateCategory(req, res, next) {
     } else {
       if (
         nextName !== oldName ||
+        slugVoulu !== slugActuel ||
         sortOrder !== (Number.isFinite(existing.sortOrder) ? existing.sortOrder : 0) ||
         String(existing.shippingClassId || '') !== String(shippingClassId || '') ||
         (existing.isHomeFeatured === true) !== isHomeFeatured ||
         (existing.showInMenu === true) !== showInMenu ||
-        String(existing.menuIcon || '') !== menuIcon
+        String(existing.menuIcon || '') !== menuIcon ||
+        /* Le texte SEO seul ne s'enregistrait pas : aucune des conditions
+           ci-dessus ne le regardait (audit SEO du 11/11/2026). */
+        String(existing.seoText || '') !== seoText
       ) {
         await Category.findByIdAndUpdate(categoryId, {
-          $set: { name: nextName, slug: nextSlug, sortOrder, shippingClassId, isHomeFeatured, seoText, showInMenu, menuIcon },
+          $set: {
+            name: nextName,
+            slug: slugVoulu,
+            /* L'ancienne adresse redirige vers la nouvelle (audit SEO 11/11/2026). */
+            slugAliases: anciensSlugsApres(existing.slugAliases, slugActuel, slugVoulu),
+            sortOrder, shippingClassId, isHomeFeatured, seoText, showInMenu, menuIcon,
+          },
         });
       }
 
@@ -2422,6 +2474,23 @@ async function getAdminDashboard(req, res, next) {
       pipeline = await computePipelineCounts();
     } catch (_) { /* ignore */ }
 
+    /* Santé de la traduction allemande. Deux pannes silencieuses en deux jours
+       ont montré que le mécanisme se tait quand il déraille : on l'affiche donc
+       là où on regarde. Best-effort — un tableau de bord ne tombe pas parce
+       qu'un compteur secondaire a échoué. */
+    let santeDe = null;
+    try {
+      santeDe = await require('../services/santeTraductionDe').etatTraductionDe();
+    } catch (_) { /* ignore */ }
+
+    /* Santé du SMS d'accusé de réception. Même raison : le 25/09/2026, Ringover
+       s'est mis à tout refuser et le mécanisme a continué sans un mot pendant
+       19 jours — 692 clients appelés sans réponse. Best-effort. */
+    let santeSms = null;
+    try {
+      santeSms = await require('../services/santeSmsRingover').etatSmsRingover();
+    } catch (_) { /* ignore */ }
+
     return res.render('admin/dashboard', {
       title: 'Admin - Dashboard',
       dbConnected,
@@ -2435,6 +2504,8 @@ async function getAdminDashboard(req, res, next) {
         ordersThisMonth: showFinancials ? ordersThisMonth : null,
         topProducts: showFinancials ? topProducts : [],
       },
+      santeDe,
+      santeSms,
       pipeline,
       weeklyChart: { labels: weekLabels, values: weekValues, prevValues: prevWeekValues },
       monthlyChart: { labels: monthLabels, values: monthValues },
@@ -2449,6 +2520,381 @@ async function getAdminDashboard(req, res, next) {
   } catch (err) {
     return next(err);
   }
+}
+
+/* ─── Files de traitement des commandes (liste /admin/commandes) ───────────── */
+
+const LIBELLES_CLONAGE = {
+  pending_label: 'Étiquette récup à envoyer',
+  label_sent: 'Étiquette récup envoyée',
+  client_piece_in_transit: 'Pièce client en transit',
+  client_piece_received: 'Pièce client reçue',
+  cloning_in_progress: 'Clonage en cours',
+  cloning_done: 'Clonage terminé',
+  cloning_failed: 'Clonage échoué',
+};
+
+const CANAUX_COMMANDE = {
+  website: { label: 'Web', icon: 'language' },
+  phone: { label: 'Tél', icon: 'call' },
+  email: { label: 'Email', icon: 'mail' },
+  whatsapp: { label: 'WA', icon: 'chat' },
+  leboncoin: { label: 'LBC', icon: 'sell' },
+  marketplace: { label: 'Mktp', icon: 'storefront' },
+  salon: { label: 'Salon', icon: 'groups' },
+  manual: { label: 'Manuel', icon: 'edit_note' },
+  other: { label: 'Autre', icon: 'more_horiz' },
+};
+
+/* Une date de livraison n'a plus de sens à annoncer une fois la commande
+   livrée, terminée, annulée ou remboursée. */
+function LIVRAISON_ANNONCABLE(status) {
+  return !['draft', 'delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded'].includes(status);
+}
+
+/** « 2026-09-16 » en heure de Paris, pour un <input type="date">. */
+function dateSaisie(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+}
+
+/** « 16/09 » en heure de Paris. */
+function dateCourte(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Paris' });
+}
+
+function envoisClient(o) {
+  return (Array.isArray(o.shipments) ? o.shipments : [])
+    .filter((s) => s && String(s.trackingNumber || '').trim() && !/r[ée]cup[ée]ration clonage/i.test(String(s.label || '')));
+}
+
+function dernierPassage(o, statut) {
+  const h = Array.isArray(o.statusHistory) ? o.statusHistory : [];
+  for (let i = h.length - 1; i >= 0; i--) if (h[i] && h[i].status === statut && h[i].changedAt) return h[i].changedAt;
+  return null;
+}
+
+/**
+ * Ce que la liste « files » ajoute à une ligne : file, retard, appro, action
+ * suivante, et les données du panneau latéral. Tout est calculé ici, côté
+ * serveur, par commandesFiles : le JavaScript de la page ne fait qu'afficher.
+ */
+function champsFilesCommande(o, { user = null, noteInfo = null, maintenant = new Date(), total = '', date = '' } = {}) {
+  const id = String(o._id);
+  const appro = commandesFiles.approEffectif(o);
+  const infoAppro = commandesFiles.APPRO[appro];
+  const action = commandesFiles.actionSuivante(o);
+  const possibles = commandesFiles.actionsPossibles(o);
+  const retard = commandesFiles.retard(o, maintenant);
+  const partie = ['shipped', 'delivered', 'completed', 'cancelled', 'refunded', 'partially_refunded'].includes(o.status);
+  const serviceClonage = o.orderType === 'standalone_cloning';
+  const envois = envoisClient(o);
+  const dernierEnvoi = envois.length ? envois[envois.length - 1] : null;
+  const items = (Array.isArray(o.items) ? o.items : []).filter(Boolean);
+  const premier = items[0] || null;
+  const autres = items.length - 1;
+  const statusBadge = getOrderStatusBadge(o.status);
+  const orderTypeLabel = getOrderTypeLabel(o.orderType);
+
+  let sousStatut = null;
+  if (o.status === 'label_created') {
+    sousStatut = { texte: 'Étiquette prête, pas encore partie', icon: 'label', ton: 'ambre' };
+  } else if (o.status === 'shipped' && dernierEnvoi) {
+    sousStatut = { texte: [dernierEnvoi.carrier, dernierEnvoi.trackingNumber].filter(Boolean).join(' · '), icon: 'local_shipping', ton: 'bleu' };
+  } else if (commandesFiles.retourAttendu(o) && ['delivered', 'completed'].includes(o.status)) {
+    const echeance = o.returnDates && o.returnDates.returnDueDate ? new Date(o.returnDates.returnDueDate) : null;
+    const enRetard = o.returnStatus === 'overdue' || (echeance && echeance.getTime() < maintenant.getTime());
+    sousStatut = enRetard
+      ? { texte: 'Retour consigne en retard', icon: 'assignment_return', ton: 'rouge' }
+      : { texte: echeance ? `Retour consigne attendu avant le ${dateCourte(echeance)}` : 'Retour consigne attendu', icon: 'assignment_return', ton: 'ambre' };
+  } else if ((o.orderType === 'exchange_cloning' || serviceClonage) && LIBELLES_CLONAGE[o.cloningStatus]) {
+    sousStatut = { texte: LIBELLES_CLONAGE[o.cloningStatus], icon: 'memory', ton: o.cloningStatus === 'cloning_failed' ? 'rouge' : 'violet' };
+  }
+
+  const telephone = (user && user.phone) || (o.shippingAddress && o.shippingAddress.phone) || '';
+  const nomClient = user
+    ? (user.accountType === 'pro' ? (user.companyName || `${user.firstName} ${user.lastName}`) : `${user.firstName} ${user.lastName}`)
+    : ((o.shippingAddress && o.shippingAddress.fullName) || 'Client');
+  const canal = CANAUX_COMMANDE[(o.source && o.source.channel) || 'website'] || CANAUX_COMMANDE.other;
+  const s = o.sourcing || {};
+  const echeanceFournisseur = sourcingStatus.dueDate({ ...s, status: s.status });
+
+  /* Date de livraison annoncée au client (≠ réception fournisseur, interne). */
+  const estimation = o.deliveryEstimate || {};
+  const notifs = o.notifications || {};
+  const dateLivraison = dateSaisie(estimation.date);
+  const annonceePour = String(notifs.deliveryEstimateSentFor || '');
+  const livraisonPertinente = LIVRAISON_ANNONCABLE(o.status);
+  let livraison = null;
+  if (livraisonPertinente && dateLivraison) {
+    const depassee = dateLivraison < dateSaisie(maintenant) && ['pending_payment', ...commandesFiles.AVANT_EXPEDITION].includes(o.status);
+    livraison = {
+      texte: depassee ? `Livraison annoncée au ${dateCourte(estimation.date)} dépassée` : `Livraison prévue le ${dateCourte(estimation.date)}`,
+      ton: depassee ? 'rouge' : 'bleu',
+      prevenu: annonceePour === dateLivraison,
+    };
+  }
+
+  /* Avancement : Payée → Appro tranchée → Pièce reçue → Étiquette → Expédiée → Livrée. */
+  const atteint = {
+    paid: !['draft', 'pending_payment'].includes(o.status),
+    sourced: appro !== 'a_verifier' || serviceClonage,
+    received: appro === 'en_stock' || serviceClonage,
+    label_created: ['label_created', 'shipped', 'delivered', 'completed'].includes(o.status),
+    shipped: ['shipped', 'delivered', 'completed'].includes(o.status),
+    delivered: ['delivered', 'completed'].includes(o.status),
+  };
+  const dates = {
+    paid: dernierPassage(o, 'paid') || o.createdAt,
+    sourced: s.updatedAt,
+    received: appro === 'en_stock' ? s.updatedAt : null,
+    label_created: dernierPassage(o, 'label_created'),
+    shipped: dernierPassage(o, 'shipped'),
+    delivered: dernierPassage(o, 'delivered'),
+  };
+  const etapes = [
+    ['paid', 'Payée'], ['sourced', 'Appro tranchée'], ['received', 'Pièce reçue atelier'],
+    ['label_created', 'Étiquette créée'], ['shipped', 'Expédiée'], ['delivered', 'Livrée'],
+  ];
+  const premiereNonAtteinte = etapes.findIndex(([cle]) => !atteint[cle]);
+  const avancement = etapes.map(([cle, label], i) => ({
+    label,
+    etat: atteint[cle] ? 'fait' : (i === premiereNonAtteinte ? 'courant' : 'avenir'),
+    meta: atteint[cle] ? (dateCourte(dates[cle]) || 'fait') : (i === premiereNonAtteinte ? 'en cours' : ''),
+  }));
+
+  const filesApres = {};
+  for (const idAction of possibles) filesApres[idAction] = commandesFiles.filesApres(o, idAction);
+
+  const reference = premier ? String(premier.sku || '').trim() : '';
+  const recherche = [
+    o.number, nomClient, user && user.email, reference,
+    ...items.map((it) => `${it.name} ${it.sku || ''}`),
+    ...envois.map((e) => e.trackingNumber),
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  return {
+    statusKey: o.status,
+    files: commandesFiles.files(o),
+    etat: { status: o.status, appro },
+    retard,
+    action,
+    actionsPossibles: possibles,
+    filesApres,
+    appro: {
+      cle: appro,
+      label: serviceClonage ? 'Service clonage' : infoAppro.label,
+      icon: serviceClonage ? 'memory' : infoAppro.icon,
+      ton: (partie || serviceClonage) ? 'neutre-fin' : infoAppro.ton,
+      suite: partie ? 'Rien à faire côté appro' : (serviceClonage ? 'Pas de pièce à sourcer' : infoAppro.suite),
+      pertinente: !partie && !serviceClonage && commandesFiles.AVANT_EXPEDITION.includes(o.status),
+    },
+    alerteAppro: commandesFiles.alerteAppro(o, maintenant),
+    sousStatut,
+    livraison,
+    canal,
+    pieceResume: premier ? `${premier.quantity || 1} × ${premier.name}${autres > 0 ? ` + ${autres} autre${autres > 1 ? 's' : ''}` : ''}` : '—',
+    reference,
+    recherche,
+    panneau: {
+      id,
+      number: o.number,
+      statusLabel: statusBadge.label,
+      statusKey: o.status,
+      subline: [date, o.accountType === 'pro' ? 'Professionnel' : 'Particulier', orderTypeLabel].filter(Boolean).join(' · '),
+      vehicule: identifiantsVehicule(o),
+      avancement,
+      appro: {
+        cle: appro,
+        brut: sourcingStatus.normalizeStatus(s.status),
+        pertinente: !partie && !serviceClonage,
+        commandeeLe: dateSaisie(s.orderedAt),
+        receptionPrevue: dateSaisie(echeanceFournisseur),
+        delaiJours: Number.isFinite(s.expectedDays) ? s.expectedDays : null,
+        note: s.note || '',
+        fournisseur: (o.purchase && o.purchase.supplier) || '',
+        majLe: dateCourte(s.updatedAt),
+        majPar: s.updatedBy || '',
+      },
+      livraison: {
+        pertinente: livraisonPertinente,
+        date: dateLivraison,
+        annonceePour,
+        annonceeLe: dateCourte(notifs.deliveryEstimateSentAt),
+        aujourdhui: dateSaisie(maintenant),
+        emailClient: Boolean(user && user.email),
+      },
+      pieces: items.map((it) => ({ qte: it.quantity || 1, nom: it.name, sku: it.sku || '' })),
+      montant: total,
+      paiement: statusBadge.label,
+      envois: envois.map((e) => ({ label: e.label || '', transporteur: e.carrier || '', suivi: e.trackingNumber, le: dateCourte(e.createdAt) })),
+      client: { nom: nomClient, email: (user && user.email) || '', telephone },
+      notes: noteInfo ? noteInfo.count : 0,
+      clonage: o.orderType === 'exchange_cloning' || serviceClonage,
+      action,
+      actionsPossibles: possibles,
+      etat: { status: o.status, appro },
+      filesApres,
+    },
+  };
+}
+
+/**
+ * Compteurs des files, résumé et identifiants par file, à partir des seules
+ * commandes EN COURS (avant expédition, expédiées, livrées) — une projection
+ * légère : quelques centaines de commandes, pas le catalogue. « Toutes »
+ * compte, elle, toutes les commandes actives.
+ */
+async function chargerFilesCommandes(maintenant = new Date()) {
+  const base = { archived: { $ne: true }, deletedAt: null };
+  const [enCours, toutesActives] = await Promise.all([
+    Order.find({ ...base, status: { $in: [...commandesFiles.AVANT_EXPEDITION, 'shipped', 'delivered'] } })
+      .select('_id status orderType sourcing statusHistory.status statusHistory.changedAt shipments.label shipments.trackingNumber shipments.createdAt returnStatus cloningStatus purchase.supplier createdAt')
+      .lean(),
+    Order.countDocuments({ ...base, status: { $ne: 'draft' } }),
+  ]);
+  const compteurs = commandesFiles.compter(enCours, maintenant);
+  compteurs.all.total = toutesActives;
+  const idsParFile = {};
+  for (const id of commandesFiles.IDS_FILES) idsParFile[id] = [];
+  for (const o of enCours) for (const f of commandesFiles.files(o)) idsParFile[f].push(o._id);
+  return { compteurs, resume: commandesFiles.resume(enCours, maintenant), idsParFile };
+}
+
+/**
+ * Une ligne de la liste des commandes (et le panneau latéral qui la détaille).
+ * Partagée par la page et par les endpoints qui renvoient une ligne à jour
+ * après une action.
+ */
+function construireLigneCommande(o, { userMap = new Map(), noteMap = new Map(), maintenant = new Date() } = {}) {
+  const u = o.userId ? userMap.get(String(o.userId)) : null;
+  const customer = u
+    ? u.accountType === 'pro'
+      ? u.companyName || `${u.firstName} ${u.lastName}`
+      : `${u.firstName} ${u.lastName}`
+    : 'Client';
+
+  const itemCount = Array.isArray(o.items)
+    ? o.items.reduce((sum, it) => {
+        if (!it || !Number.isFinite(it.quantity)) return sum;
+        return sum + it.quantity;
+      }, 0)
+    : 0;
+
+  const hasCloningItem = Array.isArray(o.items) && o.items.some((it) => it && it.itemType === 'exchange_cloning');
+
+  const noteInfo = noteMap.get(String(o._id));
+
+  // Compute return days info for exchange orders (NOT exchange_cloning)
+  let returnDaysLeft = null;
+  let returnDaysTotal = 30;
+  if (o.orderType === 'exchange' && o.returnStatus === 'pending' && o.returnDates && o.returnDates.returnDueDate) {
+    const now = new Date();
+    const due = new Date(o.returnDates.returnDueDate);
+    returnDaysLeft = Math.ceil((due.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+  }
+
+  // Cloning tracking info
+  const cloningTrackingNumber = o.cloningTracking && o.cloningTracking.trackingNumber ? o.cloningTracking.trackingNumber : '';
+
+  return {
+    id: String(o._id),
+    number: o.number,
+    date: formatDateTimeFR(o.createdAt),
+    archived: !!o.archived,
+    archivedAt: o.archivedAt ? formatDateTimeFR(o.archivedAt) : '',
+    archivedBy: o.archivedBy || '',
+    deletedAt: o.deletedAt ? formatDateTimeFR(o.deletedAt) : '',
+    deletedAtRaw: o.deletedAt || null,
+    deletedBy: o.deletedBy || '',
+    deleteReason: o.deleteReason || '',
+    customer,
+    customerEmail: u && u.email ? u.email : '',
+    accountType: o.accountType,
+    itemCount,
+    hasCloningItem,
+    total: formatEuro(o.totalCents),
+    statusBadge: getOrderStatusBadge(o.status),
+    orderType: o.orderType || 'standard',
+    orderTypeLabel: getOrderTypeLabel(o.orderType),
+    cloningStatus: o.cloningStatus || null,
+    cloningStatusBadge: (o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') ? getCloningStatusBadge(o.cloningStatus) : null,
+    cloningTrackingNumber,
+    returnStatus: o.returnStatus || 'not_applicable',
+    returnDaysLeft,
+    sourcing: (() => {
+      const s = o.sourcing || {};
+      const st = sourcingStatus.normalizeStatus(s.status);
+      const lbl = sourcingStatus.LABELS[st];
+      const due = sourcingStatus.dueDate(s);
+      return {
+        status: st,
+        label: lbl.label,
+        badge: lbl.badge,
+        dot: lbl.dot,
+        orderedAt: s.orderedAt ? formatDateTimeFR(s.orderedAt) : '',
+        expectedDays: Number.isFinite(s.expectedDays) ? s.expectedDays : null,
+        dueDate: due ? formatDateTimeFR(due) : '',
+        overdue: sourcingStatus.isOverdue(s),
+        note: s.note || '',
+        // Sourcing pertinent uniquement avant expédition.
+        relevant: sourcingStatus.PRESHIP_STATUSES.indexOf(o.status) !== -1,
+      };
+    })(),
+    notesCount: noteInfo ? noteInfo.count : 0,
+    hasImportantNote: noteInfo ? !!noteInfo.hasImportant : false,
+    lastNotePreview: noteInfo && noteInfo.lastContent ? noteInfo.lastContent.substring(0, 100) : '',
+    lastNoteAuthor: noteInfo ? noteInfo.lastAuthor || '' : '',
+    lastNoteDate: noteInfo && noteInfo.lastDate ? formatDateTimeFR(noteInfo.lastDate) : '',
+    isManual: !!o.isManual,
+    sourceChannel: o.source && o.source.channel ? o.source.channel : 'website',
+    attribution: formatAttribution(o.attribution, formatDateTimeFR),
+    docCount: (Array.isArray(o.documents) ? o.documents.length : 0)
+      + (Array.isArray(o.shipments) ? o.shipments.filter((s) => s && s.document).length : 0),
+    hasShippingLabel: Array.isArray(o.documents) && o.documents.some((d) => d && d.docType === 'etiquette_envoi'),
+    lastShippingLabelUrl: (function() {
+      // Check direct documents for etiquette_envoi first (most recent)
+      if (Array.isArray(o.documents)) {
+        const labels = o.documents.filter((d) => d && d.docType === 'etiquette_envoi');
+        if (labels.length) {
+          const last = labels[labels.length - 1];
+          return `/admin/commandes/${String(o._id)}/documents/${String(last._id)}/view`;
+        }
+      }
+      // Fallback: shipment documents with "Envoi" label
+      if (Array.isArray(o.shipments)) {
+        const withDoc = o.shipments.filter((s) => s && s.document && (s.label === 'Envoi' || s.label === 'Envoi partiel'));
+        if (withDoc.length) {
+          const last = withDoc[withDoc.length - 1];
+          return `/admin/commandes/${String(o._id)}/suivi/${String(last._id)}/document`;
+        }
+      }
+      return '';
+    })(),
+  ...champsFilesCommande(o, { user: u, noteInfo, maintenant, total: formatEuro(o.totalCents), date: formatDateTimeFR(o.createdAt) }),
+  };
+}
+
+/**
+ * Ce que les files ne portent pas et que le bandeau d'alertes disait : retours
+ * de consigne en retard et étapes de clonage bloquées. Les alertes d'appro,
+ * elles, sont devenues les files.
+ */
+function autresSuivisCommandes(alertes) {
+  const a = alertes || {};
+  const pluriel = (n, un, plusieurs) => (n > 1 ? plusieurs : un);
+  return [
+    a.overdueReturns > 0 && { href: '/admin/commandes?file=all&orderType=exchange&returnFilter=overdue', ton: 'rouge', icon: 'assignment_return', texte: `${a.overdueReturns} ${pluriel(a.overdueReturns, 'retour consigne en retard', 'retours consigne en retard')}` },
+    a.failedClonings > 0 && { href: '/admin/commandes?file=all&orderType=exchange_cloning&cloningStatus=cloning_failed', ton: 'rouge', icon: 'warning', texte: `${a.failedClonings} ${pluriel(a.failedClonings, 'clonage échoué', 'clonages échoués')}` },
+    a.pieceWaiting > 0 && { href: '/admin/commandes?file=all&orderType=exchange_cloning&cloningStatus=label_sent', ton: 'ambre', icon: 'schedule', texte: `${a.pieceWaiting} ${pluriel(a.pieceWaiting, 'pièce client attendue', 'pièces client attendues')} depuis plus de 10 j` },
+    a.cloningLong > 0 && { href: '/admin/commandes?file=all&orderType=exchange_cloning&cloningStatus=cloning_in_progress', ton: 'ambre', icon: 'hourglass_top', texte: `${a.cloningLong} ${pluriel(a.cloningLong, 'clonage', 'clonages')} en cours depuis plus de 5 j` },
+    a.readyToShip > 0 && { href: '/admin/commandes?file=all&orderType=exchange_cloning&cloningStatus=cloning_done', ton: 'vert', icon: 'inventory_2', texte: `${a.readyToShip} ${pluriel(a.readyToShip, 'clonage terminé', 'clonages terminés')} à expédier` },
+  ].filter(Boolean);
 }
 
 async function getAdminOrdersPage(req, res, next) {
@@ -2487,6 +2933,14 @@ async function getAdminOrdersPage(req, res, next) {
     const viewRaw = typeof req.query.view === 'string' ? req.query.view.trim() : '';
     const view = ['archived', 'trash'].includes(viewRaw) ? viewRaw : 'active';
 
+    /* File de traitement (« qu'est-ce que je traite maintenant ? »). Sans file
+       demandée, la page s'ouvre sur « Toutes » (choix de Killian, 16/09/2026) ;
+       les autres files restent à un clic. */
+    const maintenant = new Date();
+    const fileDemandee = typeof req.query.file === 'string' ? req.query.file.trim() : '';
+    const vueFiles = view === 'active' && status !== 'draft';
+    const file = vueFiles && commandesFiles.IDS_FILES.includes(fileDemandee) ? fileDemandee : 'all';
+
     /* Count drafts for the tab badge */
     let draftsCount = 0;
     let archivedCount = 0;
@@ -2501,6 +2955,11 @@ async function getAdminOrdersPage(req, res, next) {
         archivedCount: 0,
         trashCount: 0,
         view,
+        vueFiles: false,
+        fileActive: 'all',
+        filesCommandes: [],
+        resumeFiles: '',
+        autresSuivis: [],
         productCategories: [],
         filters: { q, status, type, period, source: sourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, product: productFilter, category: categoryFilter },
         pagination: { page: 1, perPage, totalItems: 0, totalPages: 1, from: 0, to: 0, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1 },
@@ -2516,6 +2975,8 @@ async function getAdminOrdersPage(req, res, next) {
     try {
       orderAlerts = await computeOrderAlerts();
     } catch (_) { /* ignore */ }
+
+    const filesEtat = vueFiles ? await chargerFilesCommandes(maintenant) : null;
 
     const query = {};
 
@@ -2611,7 +3072,19 @@ async function getAdminOrdersPage(req, res, next) {
         .map((u) => (u && u._id ? u._id : null))
         .filter(Boolean);
 
-      query.$or = [{ number: rx }];
+      /* Le champ promet « n° commande, client, réf OE, n° de suivi » : la
+         recherche serveur (Entrée) doit trouver les mêmes choses que le filtre
+         immédiat de la liste — avant, un numéro de suivi ou une référence de
+         pièce ne renvoyait rien. */
+      query.$or = [
+        { number: rx },
+        { 'invoice.number': rx },
+        { 'items.sku': rx },
+        { 'items.name': rx },
+        { 'shipments.trackingNumber': rx },
+        { 'shippingAddress.fullName': rx },
+        { 'shippingAddress.phone': rx },
+      ];
       if (userIds.length) {
         query.$or.push({ userId: { $in: userIds } });
       }
@@ -2657,15 +3130,22 @@ async function getAdminOrdersPage(req, res, next) {
       query.$and = (query.$and || []).concat(attributionAndClauses);
     }
 
+    /* Une file est courte (moins de 10 commandes par jour) : tout sur une page,
+       la plus ancienne en premier — c'est la plus en retard. Plafond de
+       sécurité à 300 lignes. */
+    const enFile = vueFiles && file !== 'all';
+    if (enFile) query._id = { $in: filesEtat.idsParFile[file] };
+    const parPage = enFile ? 300 : perPage;
+
     const totalItems = await Order.countDocuments(query);
-    const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
-    const page = Math.min(requestedPage, totalPages);
-    const skip = (page - 1) * perPage;
+    const totalPages = Math.max(1, Math.ceil(totalItems / parPage));
+    const page = enFile ? 1 : Math.min(requestedPage, totalPages);
+    const skip = (page - 1) * parPage;
 
     const orders = await Order.find(query)
-      .sort(mongoOrderSort)
+      .sort(enFile ? { createdAt: 1 } : mongoOrderSort)
       .skip(skip)
-      .limit(perPage)
+      .limit(parPage)
       .lean();
 
     const userIds = orders
@@ -2674,7 +3154,7 @@ async function getAdminOrdersPage(req, res, next) {
       .filter((id) => mongoose.Types.ObjectId.isValid(id));
 
     const users = await User.find({ _id: { $in: userIds } })
-      .select('_id accountType firstName lastName email companyName')
+      .select('_id accountType firstName lastName email companyName phone')
       .lean();
     const userMap = new Map(users.map((u) => [String(u._id), u]));
 
@@ -2703,113 +3183,10 @@ async function getAdminOrdersPage(req, res, next) {
       } catch (_) { /* ignore */ }
     }
 
-    const viewOrders = orders.map((o) => {
-      const u = o.userId ? userMap.get(String(o.userId)) : null;
-      const customer = u
-        ? u.accountType === 'pro'
-          ? u.companyName || `${u.firstName} ${u.lastName}`
-          : `${u.firstName} ${u.lastName}`
-        : 'Client';
-
-      const itemCount = Array.isArray(o.items)
-        ? o.items.reduce((sum, it) => {
-            if (!it || !Number.isFinite(it.quantity)) return sum;
-            return sum + it.quantity;
-          }, 0)
-        : 0;
-
-      const hasCloningItem = Array.isArray(o.items) && o.items.some((it) => it && it.itemType === 'exchange_cloning');
-
-      const noteInfo = noteMap.get(String(o._id));
-
-      // Compute return days info for exchange orders (NOT exchange_cloning)
-      let returnDaysLeft = null;
-      let returnDaysTotal = 30;
-      if (o.orderType === 'exchange' && o.returnStatus === 'pending' && o.returnDates && o.returnDates.returnDueDate) {
-        const now = new Date();
-        const due = new Date(o.returnDates.returnDueDate);
-        returnDaysLeft = Math.ceil((due.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-      }
-
-      // Cloning tracking info
-      const cloningTrackingNumber = o.cloningTracking && o.cloningTracking.trackingNumber ? o.cloningTracking.trackingNumber : '';
-
-      return {
-        id: String(o._id),
-        number: o.number,
-        date: formatDateTimeFR(o.createdAt),
-        archived: !!o.archived,
-        archivedAt: o.archivedAt ? formatDateTimeFR(o.archivedAt) : '',
-        archivedBy: o.archivedBy || '',
-        deletedAt: o.deletedAt ? formatDateTimeFR(o.deletedAt) : '',
-        deletedAtRaw: o.deletedAt || null,
-        deletedBy: o.deletedBy || '',
-        deleteReason: o.deleteReason || '',
-        customer,
-        customerEmail: u && u.email ? u.email : '',
-        accountType: o.accountType,
-        itemCount,
-        hasCloningItem,
-        total: formatEuro(o.totalCents),
-        statusBadge: getOrderStatusBadge(o.status),
-        orderType: o.orderType || 'standard',
-        orderTypeLabel: getOrderTypeLabel(o.orderType),
-        cloningStatus: o.cloningStatus || null,
-        cloningStatusBadge: (o.orderType === 'exchange_cloning' || o.orderType === 'standalone_cloning') ? getCloningStatusBadge(o.cloningStatus) : null,
-        cloningTrackingNumber,
-        returnStatus: o.returnStatus || 'not_applicable',
-        returnDaysLeft,
-        sourcing: (() => {
-          const s = o.sourcing || {};
-          const st = sourcingStatus.normalizeStatus(s.status);
-          const lbl = sourcingStatus.LABELS[st];
-          const due = sourcingStatus.dueDate(s);
-          return {
-            status: st,
-            label: lbl.label,
-            badge: lbl.badge,
-            dot: lbl.dot,
-            orderedAt: s.orderedAt ? formatDateTimeFR(s.orderedAt) : '',
-            expectedDays: Number.isFinite(s.expectedDays) ? s.expectedDays : null,
-            dueDate: due ? formatDateTimeFR(due) : '',
-            overdue: sourcingStatus.isOverdue(s),
-            note: s.note || '',
-            // Sourcing pertinent uniquement avant expédition.
-            relevant: sourcingStatus.PRESHIP_STATUSES.indexOf(o.status) !== -1,
-          };
-        })(),
-        notesCount: noteInfo ? noteInfo.count : 0,
-        hasImportantNote: noteInfo ? !!noteInfo.hasImportant : false,
-        lastNotePreview: noteInfo && noteInfo.lastContent ? noteInfo.lastContent.substring(0, 100) : '',
-        lastNoteAuthor: noteInfo ? noteInfo.lastAuthor || '' : '',
-        lastNoteDate: noteInfo && noteInfo.lastDate ? formatDateTimeFR(noteInfo.lastDate) : '',
-        isManual: !!o.isManual,
-        sourceChannel: o.source && o.source.channel ? o.source.channel : 'website',
-        attribution: formatAttribution(o.attribution, formatDateTimeFR),
-        docCount: (Array.isArray(o.documents) ? o.documents.length : 0)
-          + (Array.isArray(o.shipments) ? o.shipments.filter((s) => s && s.document).length : 0),
-        hasShippingLabel: Array.isArray(o.documents) && o.documents.some((d) => d && d.docType === 'etiquette_envoi'),
-        lastShippingLabelUrl: (function() {
-          // Check direct documents for etiquette_envoi first (most recent)
-          if (Array.isArray(o.documents)) {
-            const labels = o.documents.filter((d) => d && d.docType === 'etiquette_envoi');
-            if (labels.length) {
-              const last = labels[labels.length - 1];
-              return `/admin/commandes/${String(o._id)}/documents/${String(last._id)}/view`;
-            }
-          }
-          // Fallback: shipment documents with "Envoi" label
-          if (Array.isArray(o.shipments)) {
-            const withDoc = o.shipments.filter((s) => s && s.document && (s.label === 'Envoi' || s.label === 'Envoi partiel'));
-            if (withDoc.length) {
-              const last = withDoc[withDoc.length - 1];
-              return `/admin/commandes/${String(o._id)}/suivi/${String(last._id)}/document`;
-            }
-          }
-          return '';
-        })(),
-      };
-    });
+    const viewOrders = orders.map((o) => construireLigneCommande(o, { userMap, noteMap, maintenant }));
+    /* Dans une file : les plus en retard d'abord (tri stable : à retard égal,
+       la plus ancienne reste devant). */
+    if (enFile) viewOrders.sort((a, b) => (b.retard.jours - a.retard.jours));
 
     // Urgency sort (client-side reorder after DB fetch)
     if (isUrgencySort) {
@@ -2825,7 +3202,7 @@ async function getAdminOrdersPage(req, res, next) {
 
     const pagination = {
       page,
-      perPage,
+      perPage: parPage,
       totalItems,
       totalPages,
       from: totalItems ? skip + 1 : 0,
@@ -2849,13 +3226,358 @@ async function getAdminOrdersPage(req, res, next) {
       trashCount,
       view,
       orderAlerts,
+      vueFiles,
+      fileActive: file,
+      filesCommandes: commandesFiles.FILES.map((f) => ({
+        ...f,
+        total: filesEtat ? filesEtat.compteurs[f.id].total : 0,
+        enRetard: filesEtat ? filesEtat.compteurs[f.id].enRetard : 0,
+      })),
+      resumeFiles: filesEtat ? filesEtat.resume : '',
+      autresSuivis: autresSuivisCommandes(orderAlerts),
       productCategories,
       sourcingOptions: sourcingStatus.options(),
-      filters: { q, status, type, period, source: sourceFilter, utmCampaign: utmCampaignFilter, utmSource: utmSourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, product: productFilter, category: categoryFilter, sourcing: sourcingFilter, sort: activeSortField, order: activeSortDir === 1 ? 'asc' : 'desc', limit: perPage },
+      filters: { q, status, type, period, source: sourceFilter, utmCampaign: utmCampaignFilter, utmSource: utmSourceFilter, orderType: orderTypeFilter, cloningStatus: cloningStatusFilter, returnFilter, product: productFilter, category: categoryFilter, sourcing: sourcingFilter, sort: activeSortField, order: activeSortDir === 1 ? 'asc' : 'desc', limit: perPage, file },
       pagination,
     });
   } catch (err) {
     return next(err);
+  }
+}
+
+/* ─── Actions en un clic de la liste des commandes ─────────────────────────── */
+
+/** Recharge UNE commande sous forme de ligne de liste (avec son panneau). */
+async function chargerLigneCommande(orderId, maintenant = new Date()) {
+  const o = await Order.findById(orderId).lean();
+  if (!o) return null;
+  const user = o.userId && mongoose.Types.ObjectId.isValid(String(o.userId))
+    ? await User.findById(o.userId).select('_id accountType firstName lastName email companyName phone').lean()
+    : null;
+  const userMap = new Map(user ? [[String(user._id), user]] : []);
+  const noteMap = new Map();
+  try {
+    const [n] = await InternalNote.aggregate([
+      { $match: { entityType: 'order', entityId: o._id } },
+      { $sort: { createdAt: -1 } },
+      { $group: { _id: '$entityId', count: { $sum: 1 }, hasImportant: { $max: { $cond: ['$isImportant', true, false] } }, lastContent: { $first: '$content' }, lastAuthor: { $first: '$authorName' }, lastDate: { $first: '$createdAt' } } },
+    ]);
+    if (n) noteMap.set(String(n._id), n);
+  } catch (_) { /* les notes ne bloquent pas la ligne */ }
+  return construireLigneCommande(o, { userMap, noteMap, maintenant });
+}
+
+/** HTML d'une ligne, par le même partiel que la page. */
+function rendreLigneCommande(res, ligne, { fileActive = 'all' } = {}) {
+  return new Promise((resolve, reject) => {
+    res.render('admin/partials/commande-ligne', { o: ligne, contexteListe: { vue: 'active', fileActive } }, (err, html) => (err ? reject(err) : resolve(html)));
+  });
+}
+
+function nomAdminPourAppro(req) {
+  return (req.session && req.session.admin && (req.session.admin.displayName || req.session.admin.email)) || 'Admin';
+}
+
+/**
+ * POST /admin/commandes/:orderId/avancer — { action, attendu: { status, appro }, file }
+ *
+ * Applique l'action suivante d'une commande depuis la liste. La page attend
+ * 6 secondes (bouton « Annuler ») AVANT d'appeler cet endpoint : c'est ce
+ * délai, et non un retour arrière après coup, qui rend l'action annulable —
+ * un e-mail parti au client ne se rattrape pas.
+ *
+ * Garde-fous :
+ *   409 — la commande a changé entre-temps (deux personnes sur la même file) ;
+ *   422 — l'action ne s'applique pas à son étape : « expédiée » sans numéro de
+ *         suivi (le client recevrait un suivi vide), « terminer » alors que
+ *         l'ancienne pièce n'est pas revenue.
+ */
+async function postAdminAvancerCommande(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'Base indisponible.' });
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+
+    const b = req.body || {};
+    const actionId = typeof b.action === 'string' ? b.action.trim() : '';
+    const fileActive = commandesFiles.IDS_FILES.includes(b.file) ? b.file : 'all';
+    if (!commandesFiles.IDS_ACTIONS.includes(actionId)) return res.status(400).json({ ok: false, error: 'Action inconnue.' });
+
+    const maintenant = new Date();
+    const order = await Order.findById(orderId)
+      .select('_id number status orderType sourcing shipments.label shipments.trackingNumber returnStatus cloningStatus deletedAt archived')
+      .lean();
+    if (!order || order.deletedAt) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+
+    const etat = { status: order.status, appro: commandesFiles.approEffectif(order) };
+    const attendu = b.attendu && typeof b.attendu === 'object' ? b.attendu : {};
+    if (attendu.status !== etat.status || attendu.appro !== etat.appro) {
+      const ligne = await chargerLigneCommande(orderId, maintenant);
+      return res.status(409).json({
+        ok: false,
+        code: 'etat_change',
+        error: `${order.number} a changé entre-temps : la ligne est à jour.`,
+        ligne: { html: await rendreLigneCommande(res, ligne, { fileActive }), files: ligne.files },
+      });
+    }
+
+    if (!commandesFiles.actionsPossibles(order).includes(actionId)) {
+      const suivante = commandesFiles.actionSuivante(order);
+      const besoin = suivante && suivante.besoin;
+      if (actionId === 'expediee' && besoin === 'suivi') {
+        return res.status(422).json({ ok: false, code: 'suivi_manquant', error: `${order.number} — renseigne le numéro de suivi avant de passer en expédiée` });
+      }
+      if (actionId === 'terminer' && besoin === 'retour') {
+        return res.status(422).json({ ok: false, code: 'retour_attendu', error: `${order.number} — l’ancienne pièce n’est pas revenue : le dossier reste ouvert` });
+      }
+      return res.status(422).json({ ok: false, code: 'action_impossible', error: `${order.number} — cette action ne correspond pas à son étape` });
+    }
+
+    const apres = commandesFiles.etatApres(order, actionId);
+    if (['en_stock', 'a_commander', 'commandee', 'recue'].includes(actionId)) {
+      await appliquerApproCommande(orderId, apres.sourcingStatus, { adminName: nomAdminPourAppro(req) });
+    }
+    if (apres.status !== order.status) {
+      const changedBy = req.session && req.session.admin && req.session.admin.email ? String(req.session.admin.email) : 'admin';
+      /* Passer « En préparation » depuis la liste n'écrit pas au client (voir
+         appliquerStatutCommande). La livraison, elle, le prévient toujours. */
+      await appliquerStatutCommande(orderId, apres.status, { changedBy, notifierClient: apres.status !== 'processing' });
+    }
+
+    const [ligne, filesEtat] = await Promise.all([chargerLigneCommande(orderId, maintenant), chargerFilesCommandes(maintenant)]);
+    return res.json({
+      ok: true,
+      message: `${order.number} → ${commandesFiles.ACTIONS[actionId].message}`,
+      ligne: { html: await rendreLigneCommande(res, ligne, { fileActive }), files: ligne.files },
+      compteurs: filesEtat.compteurs,
+      resume: filesEtat.resume,
+    });
+  } catch (err) {
+    console.error('[admin] postAdminAvancerCommande:', err && err.message ? err.message : err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur : rien n’a été modifié ou la modification est partielle, recharge la page.' });
+  }
+}
+
+/**
+ * GET /admin/commandes/:orderId/ligne?file=… — la ligne à jour (HTML + files)
+ * et les compteurs, après une modification faite depuis le panneau latéral
+ * (appro, étiquette, suivi).
+ */
+async function getAdminOrderRow(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'Base indisponible.' });
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+    const fileActive = commandesFiles.IDS_FILES.includes(req.query.file) ? req.query.file : 'all';
+    const maintenant = new Date();
+    const [ligne, filesEtat] = await Promise.all([chargerLigneCommande(orderId, maintenant), chargerFilesCommandes(maintenant)]);
+    if (!ligne) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+    return res.json({
+      ok: true,
+      ligne: { html: await rendreLigneCommande(res, ligne, { fileActive }), files: ligne.files },
+      compteurs: filesEtat.compteurs,
+      resume: filesEtat.resume,
+    });
+  } catch (err) {
+    console.error('[admin] getAdminOrderRow:', err && err.message ? err.message : err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur.' });
+  }
+}
+
+/**
+ * POST /admin/commandes/:orderId/livraison-prevue — { date: 'AAAA-MM-JJ' | '', file }
+ *
+ * Date de livraison ANNONCÉE AU CLIENT. Chaque date nouvelle part au client
+ * par e-mail ; la même date enregistrée deux fois n'écrit pas deux fois
+ * (notifications.deliveryEstimateSentFor). Une date vide retire la date, sans
+ * rien envoyer.
+ *
+ * L'envoi est RÉSERVÉ avant d'appeler le fournisseur d'e-mails : un double
+ * clic, ou deux personnes sur la même commande, n'envoient qu'un e-mail. Si
+ * l'envoi échoue, la réservation est rendue, pour qu'un nouvel essai reparte.
+ */
+async function postAdminDeliveryEstimate(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'Base indisponible.' });
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+
+    const b = req.body || {};
+    const fileActive = commandesFiles.IDS_FILES.includes(b.file) ? b.file : 'all';
+    const date = typeof b.date === 'string' ? b.date.trim() : '';
+    const maintenant = new Date();
+    const aujourdhui = dateSaisie(maintenant);
+
+    if (date) {
+      const jour = /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T12:00:00Z`) : null;
+      if (!jour || Number.isNaN(jour.getTime()) || jour.toISOString().slice(0, 10) !== date) {
+        return res.status(400).json({ ok: false, error: 'Date invalide.' });
+      }
+      if (date < aujourdhui) return res.status(400).json({ ok: false, error: 'Cette date est déjà passée.' });
+      if (jour.getTime() - maintenant.getTime() > 366 * 86400000) return res.status(400).json({ ok: false, error: 'Date à plus d’un an : vérifie l’année.' });
+    }
+
+    const order = await Order.findById(orderId)
+      .select('_id number status userId lang items deletedAt deliveryEstimate notifications.deliveryEstimateSentFor')
+      .lean();
+    if (!order || order.deletedAt) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
+    if (!LIVRAISON_ANNONCABLE(order.status)) {
+      return res.status(422).json({ ok: false, code: 'statut', error: `${order.number} — commande ${getOrderStatusBadge(order.status).label.toLowerCase()} : plus de date de livraison à annoncer.` });
+    }
+
+    const adminName = nomAdminPourAppro(req);
+    await Order.updateOne({ _id: order._id }, {
+      $set: {
+        'deliveryEstimate.date': date ? new Date(`${date}T12:00:00Z`) : null,
+        'deliveryEstimate.updatedAt': maintenant,
+        'deliveryEstimate.updatedBy': adminName,
+      },
+    });
+
+    const dejaAnnoncee = String((order.notifications && order.notifications.deliveryEstimateSentFor) || '');
+    let email = { envoye: false, raison: date ? 'meme_date' : 'date_retiree' };
+    if (date && date !== dejaAnnoncee) {
+      const reserve = await Order.findOneAndUpdate(
+        { _id: order._id, 'notifications.deliveryEstimateSentFor': dejaAnnoncee ? dejaAnnoncee : { $in: ['', null] } },
+        { $set: { 'notifications.deliveryEstimateSentFor': date } },
+        { projection: { _id: 1 } },
+      ).lean();
+      const rendre = () => Order.updateOne(
+        { _id: order._id, 'notifications.deliveryEstimateSentFor': date },
+        { $set: { 'notifications.deliveryEstimateSentFor': dejaAnnoncee } },
+      );
+
+      if (!reserve) {
+        email = { envoye: false, raison: 'en_cours' };
+      } else {
+        const user = order.userId && mongoose.Types.ObjectId.isValid(String(order.userId))
+          ? await User.findById(order.userId).select('_id email firstName lang').lean()
+          : null;
+        if (!user || !user.email) {
+          await rendre();
+          email = { envoye: false, raison: 'sans_email' };
+        } else {
+          let sent = null;
+          try {
+            sent = await emailService.sendDeliveryEstimateEmail({ order, user, date, changement: Boolean(dejaAnnoncee) });
+          } catch (err) {
+            sent = { ok: false, reason: err && err.message ? err.message : 'exception' };
+          }
+          await emailService.logEmailSent({ orderId: order._id, emailType: 'delivery_estimate', recipientEmail: user.email, result: sent });
+          if (sent && sent.ok) {
+            await Order.updateOne({ _id: order._id }, { $set: { 'notifications.deliveryEstimateSentAt': new Date() } });
+            email = { envoye: true, destinataire: user.email, changement: Boolean(dejaAnnoncee) };
+          } else {
+            await rendre();
+            email = { envoye: false, raison: (sent && sent.reason) || 'echec' };
+          }
+        }
+      }
+    }
+
+    const [ligne, filesEtat] = await Promise.all([chargerLigneCommande(orderId, maintenant), chargerFilesCommandes(maintenant)]);
+    return res.json({
+      ok: true,
+      date,
+      email,
+      ligne: { html: await rendreLigneCommande(res, ligne, { fileActive }), files: ligne.files },
+      compteurs: filesEtat.compteurs,
+      resume: filesEtat.resume,
+    });
+  } catch (err) {
+    console.error('[admin] postAdminDeliveryEstimate:', err && err.message ? err.message : err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur : recharge la page avant de réessayer.' });
+  }
+}
+
+/**
+ * POST /admin/commandes/corbeille-multi — { orderIds: [] }
+ *
+ * La suppression groupée de la liste met à la CORBEILLE (restaurable 30 jours),
+ * comme la suppression unitaire. L'ancien bouton faisait un deleteMany
+ * définitif, y compris sur des commandes payées — que la loi oblige à garder.
+ */
+async function postAdminBulkTrashOrders(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'Base indisponible.' });
+    const brut = req.body && req.body.orderIds;
+    const ids = Array.from(new Set((Array.isArray(brut) ? brut : (brut ? [brut] : []))
+      .map((v) => String(v).trim())
+      .filter((v) => mongoose.Types.ObjectId.isValid(v))));
+    if (!ids.length) return res.status(400).json({ ok: false, error: 'Aucune commande sélectionnée.' });
+
+    const resultat = await Order.updateMany(
+      { _id: { $in: ids }, deletedAt: null },
+      { $set: { deletedAt: new Date(), deletedBy: getAdminActorLabel(req), deleteReason: 'Mise à la corbeille depuis la liste', archived: false, archivedAt: null } }
+    );
+    const n = resultat && Number.isFinite(resultat.modifiedCount) ? resultat.modifiedCount : 0;
+    const filesEtat = await chargerFilesCommandes();
+    return res.json({
+      ok: true,
+      message: `${n} commande${n > 1 ? 's' : ''} mise${n > 1 ? 's' : ''} à la corbeille (restaurable${n > 1 ? 's' : ''} 30 jours)`,
+      ids,
+      compteurs: filesEtat.compteurs,
+      resume: filesEtat.resume,
+    });
+  } catch (err) {
+    console.error('[admin] postAdminBulkTrashOrders:', err && err.message ? err.message : err);
+    return res.status(500).json({ ok: false, error: 'Erreur serveur.' });
+  }
+}
+
+/**
+ * GET /admin/commandes/etiquettes.pdf?ids=a,b,c — les étiquettes d'envoi des
+ * commandes choisies, réunies dans UN PDF à imprimer d'un coup (le navigateur
+ * bloque l'ouverture de plusieurs fenêtres). Même source que le bouton
+ * « imprimer » d'une ligne : dernière étiquette d'envoi jointe, sinon document
+ * du dernier envoi.
+ */
+async function getAdminOrdersLabelsPdf(req, res) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).send('Base indisponible.');
+    const ids = String(req.query.ids || '').split(',').map((v) => v.trim())
+      .filter((v) => mongoose.Types.ObjectId.isValid(v)).slice(0, 100);
+    if (!ids.length) return res.status(400).send('Aucune commande.');
+
+    const commandes = await Order.collection.find(
+      { _id: { $in: ids.map((v) => new mongoose.Types.ObjectId(v)) } },
+      { projection: { number: 1, documents: 1, shipments: 1 } }
+    ).toArray();
+    const parId = new Map(commandes.map((c) => [String(c._id), c]));
+
+    const { PDFDocument } = require('pdf-lib');
+    const fusion = await PDFDocument.create();
+    const sansEtiquette = [];
+    const enBuffer = (d) => (d && d.fileData ? Buffer.from(d.fileData.buffer || d.fileData) : null);
+
+    for (const id of ids) {
+      const c = parId.get(id);
+      if (!c) continue;
+      const etiquettes = (c.documents || []).filter((d) => d && d.docType === 'etiquette_envoi');
+      let fichier = etiquettes.length ? enBuffer(etiquettes[etiquettes.length - 1]) : null;
+      if (!fichier) {
+        const envois = (c.shipments || []).filter((sh) => sh && sh.document && (sh.label === 'Envoi' || sh.label === 'Envoi partiel'));
+        fichier = envois.length ? enBuffer(envois[envois.length - 1].document) : null;
+      }
+      if (!fichier) { sansEtiquette.push(c.number); continue; }
+      try {
+        const source = await PDFDocument.load(fichier, { ignoreEncryption: true });
+        const pages = await fusion.copyPages(source, source.getPageIndices());
+        pages.forEach((pg) => fusion.addPage(pg));
+      } catch (_) {
+        sansEtiquette.push(c.number);
+      }
+    }
+
+    if (!fusion.getPageCount()) return res.status(404).send(`Aucune étiquette PDF jointe (${sansEtiquette.join(', ') || 'sélection'}).`);
+    if (sansEtiquette.length) res.setHeader('X-Sans-Etiquette', encodeURIComponent(sansEtiquette.join(',')));
+    const octets = await fusion.save();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="etiquettes.pdf"');
+    return res.send(Buffer.from(octets));
+  } catch (err) {
+    console.error('[admin] getAdminOrdersLabelsPdf:', err && err.message ? err.message : err);
+    return res.status(500).send('Erreur lors de la préparation des étiquettes.');
   }
 }
 
@@ -2875,7 +3597,21 @@ async function getAdminOrderDetailPage(req, res, next) {
       });
     }
 
+    /* La fiche accepte AUSSI un numéro de commande (« CP2026-000446 »), pas
+       seulement un ObjectId, et redirige vers l'URL canonique.
+
+       Plusieurs écrans ne disposent que du numéro — l'encart « Commande liée »
+       d'un ticket SAV, l'en-tête du ticket, la fiche imprimable — et
+       fabriquaient des liens qui tombaient tous en 404. Corriger chaque appel
+       aurait demandé de faire remonter l'identifiant jusqu'à eux ; l'accepter
+       ici règle le cas une fois pour toutes, y compris pour un numéro tapé à
+       la main dans la barre d'adresse.
+
+       Aucune ambiguïté possible : un numéro de commande ne ressemble jamais à
+       un ObjectId (24 caractères hexadécimaux). */
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      const parNumero = await Order.findOne({ number: String(orderId).trim() }).select('_id').lean();
+      if (parNumero) return res.redirect(302, '/admin/commandes/' + parNumero._id);
       return res.status(404).render('errors/404', {
         title: `Page introuvable - ${brand.NAME}`,
       });
@@ -3070,6 +3806,25 @@ async function getAdminOrderDetailPage(req, res, next) {
           : '',
       }));
 
+    /* Avoirs émis SANS remboursement (remboursés autrement) : ils ne sont
+       rattachés à aucune ligne de remboursement, donc affichés à part. */
+    const creditNotesList = Array.isArray(orderDoc.creditNotes) ? orderDoc.creditNotes : [];
+    const creditNotesTotalCents = creditNotesList.reduce((s, c) => s + (Number(c && c.totalCents) || 0), 0);
+    const viewCreditNotesSeuls = creditNotesList
+      .filter((c) => c && !Number.isInteger(c.refundIndex))
+      .slice()
+      .sort((a, b) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime())
+      .map((c) => ({
+        number: c.number,
+        amount: formatEuro(c.totalCents || 0),
+        reason: c.reason || '',
+        notes: c.notes || '',
+        issuedAt: c.issuedAt ? formatDateTimeFR(c.issuedAt) : '',
+        createdBy: c.createdBy || '',
+        pdfUrl: `/admin/commandes/${String(orderDoc._id)}/avoir/${encodeURIComponent(c.number)}/pdf`,
+      }));
+    const avoirableLeftCents = Math.max(0, orderTotalCents - creditNotesTotalCents);
+
     const refundDefaultMethod = orderDoc.molliePaymentId && orderDoc.molliePaymentStatus === 'paid'
       ? 'mollie'
       : (orderDoc.scalapayOrderToken && (orderDoc.scalapayStatus === 'charged' || orderDoc.scalapayStatus === 'captured') ? 'scalapay' : 'manual');
@@ -3182,8 +3937,42 @@ async function getAdminOrderDetailPage(req, res, next) {
       if (evt && evt.sessionId) visitorSessionId = evt.sessionId;
     } catch (_) { /* non bloquant */ }
 
+    /* Tickets SAV de cette commande. Best-effort : le rapprochement se fait
+       sur le numéro, et un SAV illisible ne doit pas empêcher d'ouvrir la
+       commande. */
+    const savTickets = await savCommande.ticketsPourCommande(orderDoc.number);
+
+    /* Ce que Google Ads a reçu pour cette vente (marge, correction, demande de
+       devis d'origine) — voir googleAdsConversionSync. Best-effort. */
+    let googleAdsVente = null;
+    try {
+      const g = orderDoc.googleAdsConversion;
+      if (g && g.uploadedAt) {
+        let dossier = '';
+        if (g.leadId) {
+          const AbandonedCart = require('../models/AbandonedCart');
+          const l = await AbandonedCart.findById(g.leadId).select('requested.ref').lean();
+          dossier = (l && l.requested && l.requested.ref) || '';
+        }
+        // La marge est un chiffre financier : même droit que le tableau de bord.
+        const voitLaMarge = hasAbility(req.session.admin && req.session.admin.role, 'dashboard.financial');
+        googleAdsVente = {
+          viaDemande: g.action === 'sale',
+          dossier,
+          valeur: voitLaMarge ? formatEuro(Number(g.valueCents) || 0) : '',
+          estimee: !!g.estimated,
+          envoyeeLe: formatDateTimeFR(g.uploadedAt),
+          corrigeeLe: g.restatedAt ? formatDateTimeFR(g.restatedAt) : '',
+          remiseAZero: !!g.final,
+        };
+      }
+    } catch (_) { /* non bloquant */ }
+
     return res.render('admin/order', {
       title: `Admin - ${orderDoc.number}`,
+      savTickets,
+      googleAdsVente,
+      savTicketOuvert: savTickets.find((t) => t.ouvert) || null,
       dbConnected,
       errorMessage,
       successMessage,
@@ -3240,6 +4029,41 @@ async function getAdminOrderDetailPage(req, res, next) {
             relevant: sourcingStatus.PRESHIP_STATUSES.indexOf(orderDoc.status) !== -1,
           };
         })(),
+        tva: (() => {
+          const p = orderDoc.purchase || {};
+          const scheme = String(orderDoc.vatScheme || 'normal');
+          const a = vatScheme.apercu(orderDoc, {});
+          const autoliquidee = !!(orderDoc.vat && orderDoc.vat.reverseCharge);
+          return {
+            scheme,
+            /* Le libellé dit le régime ET son fondement : sur une facture, un
+               régime sans texte n'aide personne à le vérifier plus tard. */
+            label: autoliquidee
+              ? 'Autoliquidation UE (art. 283-1)'
+              : (scheme === 'margin' ? 'TVA sur marge (art. 297 A)' : 'TVA 20 % (taux normal)'),
+            autoliquidee,
+            decidedAt: p.decidedAt ? formatDateTimeFR(p.decidedAt) : '',
+            decidedByName: p.decidedByName || '',
+            supplier: p.supplier || '',
+            invoiceRef: p.invoiceRef || '',
+            supplierRegime: p.supplierRegime || '',
+            purchaseInput: Number.isFinite(p.priceCents) ? (p.priceCents / 100).toFixed(2) : '',
+            factureAchat: (p.invoiceFile && p.invoiceFile.uploadedAt)
+              ? {
+                  nom: p.invoiceFile.originalName || 'facture-achat.pdf',
+                  taille: Math.max(1, Math.round((p.invoiceFile.sizeBytes || 0) / 1024)),
+                  deposeeLe: formatDateTimeFR(p.invoiceFile.uploadedAt),
+                  deposeePar: p.invoiceFile.uploadedByName || '',
+                }
+              : null,
+            baseCents: a.baseCents,
+            tvaNormaleCents: a.tvaNormaleCents,
+            tvaMargeCents: a.tvaMargeCents,
+            economieCents: a.economieCents,
+            margeCommercialeCents: a.margeCommercialeCents,
+            regimesFournisseur: vatScheme.REGIMES_FOURNISSEUR,
+          };
+        })(),
         statusHistory,
         customer,
         customerEmail: user && user.email ? user.email : '',
@@ -3287,6 +4111,10 @@ async function getAdminOrderDetailPage(req, res, next) {
         refundsTotalCents,
         refundableLeft: formatEuro(refundableLeftCents),
         refundableLeftCents,
+        creditNotesSeuls: viewCreditNotesSeuls,
+        creditNotesTotal: formatEuro(creditNotesTotalCents),
+        avoirableLeft: formatEuro(avoirableLeftCents),
+        avoirableLeftCents,
         refundDefaultMethod,
         molliePaymentId: orderDoc.molliePaymentId || '',
         molliePaymentStatus: orderDoc.molliePaymentStatus || '',
@@ -3314,6 +4142,8 @@ async function getAdminOrderDetailPage(req, res, next) {
                 consigne_reminder_soon: 'Rappel consigne',
                 consigne_overdue: 'Consigne en retard',
                 status_change_validee: 'Statut : Validée',
+                status_change: 'Changement de statut',
+                delivery_estimate: 'Date de livraison annoncée',
               };
               return {
                 type: e.type || '',
@@ -3357,6 +4187,135 @@ async function getAdminOrderDetailPage(req, res, next) {
   }
 }
 
+/**
+ * Change le statut d'une commande, avec TOUT ce qui s'y rattache : historique,
+ * lignes de consigne à la livraison, décrément de stock à la sortie du
+ * brouillon, e-mails et SMS au client, rapprochement des leads.
+ *
+ * Partagé par le formulaire de la fiche (postAdminUpdateOrderStatus) et les
+ * actions en un clic de la liste (postAdminAvancerCommande) : un changement de
+ * statut produit les mêmes effets, d'où qu'il vienne — sauf le message
+ * « commande validée », voir `notifierClient`.
+ *
+ * `notifierClient: false` n'envoie pas l'e-mail ni le SMS « commande validée »
+ * du passage en payée / en préparation. La liste s'en sert : pour elle, « En
+ * préparation » n'est qu'une étape interne (appro tranchée), franchie sur
+ * CHAQUE commande — le client a déjà sa confirmation de commande au paiement
+ * (159 envoyées en 90 jours) ; ce second message n'était parti que 3 fois en
+ * 90 jours avant la liste, et serait devenu systématique.
+ *
+ * @returns {Promise<{ changed: boolean, existing: object|null }>}
+ */
+async function appliquerStatutCommande(orderId, status, { changedBy = 'admin', notifierClient = true } = {}) {
+  const existing = await Order.findById(orderId)
+    .select('_id number userId status items consigne notifications')
+    .lean();
+  if (!existing) return { changed: false, existing: null };
+  if (existing.status === status) return { changed: false, existing };
+
+  const setPatch = { status };
+  if (status === 'delivered') {
+    const lines = existing && existing.consigne && Array.isArray(existing.consigne.lines)
+      ? existing.consigne.lines
+      : [];
+
+    if (lines.length) {
+      const now = new Date();
+      const updatedLines = lines.map((l) => {
+        if (!l) return l;
+        if (l.receivedAt) return l;
+        if (l.startAt && l.dueAt) return l;
+        const delayDays = Number.isFinite(l.delayDays) ? Math.max(0, Math.floor(l.delayDays)) : 30;
+        const dueAt = new Date(now);
+        dueAt.setDate(dueAt.getDate() + delayDays);
+        /* Spread pour PRÉSERVER les champs d'encaissement (charged,
+         * chargedCents, refundedAt, refundedCents) — sinon le passage en
+         * « delivered » effacerait l'info de consigne encaissée. */
+        return {
+          ...l,
+          delayDays,
+          startAt: now,
+          dueAt,
+        };
+      });
+      /* Chemin pointé : ne PAS écraser le reste de l'objet consigne
+       * (chargedTotalCents, refundedTotalCents…). */
+      setPatch['consigne.lines'] = updatedLines;
+    }
+  }
+
+  await Order.findByIdAndUpdate(orderId, {
+    $set: setPatch,
+    $push: {
+      statusHistory: {
+        status,
+        changedAt: new Date(),
+        changedBy,
+      },
+    },
+  });
+
+  /* When transitioning FROM draft to any active status, decrement stock */
+  if (existing.status === 'draft' && status !== 'draft' && status !== 'cancelled') {
+    const items = Array.isArray(existing.items) ? existing.items : [];
+    for (const item of items) {
+      if (item && item.productId) {
+        await Product.updateOne(
+          { _id: item.productId, stockQty: { $ne: null } },
+          { $inc: { stockQty: -item.quantity } }
+        );
+      }
+    }
+  }
+
+  if (status === 'delivered') {
+    /* Consigne (retour ancienne pièce) + confirmation de livraison —
+       factorisé dans un service, aussi appelé par le robot de suivi
+       (jobs/syncShipmentTracking) quand la livraison est détectée
+       automatiquement. Idempotent (anti-doublon notifications.*SentAt). */
+    const { sendDeliveredNotifications } = require('../services/orderDeliveredNotifications');
+    await sendDeliveredNotifications(orderId);
+  } else if (status === 'paid' || status === 'processing') {
+    // Send status change notification for paid/processing orders
+    if (notifierClient) {
+      try {
+        const user = existing && existing.userId
+          ? await User.findById(existing.userId).select('_id email firstName').lean()
+          : null;
+
+        if (user && user.email) {
+          const sent = await emailService.sendOrderStatusChangeEmail({
+            order: existing,
+            user,
+            newStatus: status,
+            message: 'Votre commande a été validée et va être préparée dans les meilleurs délais.',
+          });
+          emailService.logEmailSent({ orderId: existing._id, emailType: 'status_change', recipientEmail: user.email, result: sent });
+          smsService.sendOrderStatusChangeSms({ order: existing, user, newStatus: status }).catch(() => {});
+          if (sent && sent.ok) {
+            await Order.updateOne(
+              { _id: existing._id },
+              { $set: { 'notifications.statusChangeSentAt': new Date() } }
+            );
+          }
+        }
+      } catch (err) {
+        console.error('Erreur email changement statut (admin) :', err && err.message ? err.message : err);
+      }
+    }
+
+    /* Rapprochement leads : commande passée « payée » À LA MAIN (virement,
+       téléphone…) → sortir les leads du client de « À traiter » et poser
+       le badge « A commandé ». Le checkout en ligne le fait déjà ; sans
+       cet appel, un client encaissé manuellement restait « à relancer ». */
+    try {
+      const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
+      await markLeadsRecoveredForOrder(existing);
+    } catch (_) { /* non-bloquant */ }
+  }
+  return { changed: true, existing };
+}
+
 async function postAdminUpdateOrderStatus(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -3371,118 +4330,14 @@ async function postAdminUpdateOrderStatus(req, res, next) {
       return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
     }
 
-    const existing = await Order.findById(orderId)
-      .select('_id number userId status items consigne notifications')
-      .lean();
+    const changedBy = req.session && req.session.admin && req.session.admin.email
+      ? String(req.session.admin.email)
+      : 'admin';
+    const { existing } = await appliquerStatutCommande(orderId, status, { changedBy });
     if (!existing) {
       if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: 'Commande introuvable.' });
       req.session.adminOrderError = 'Commande introuvable.';
       return res.redirect('/admin/commandes');
-    }
-
-    if (existing.status !== status) {
-      const changedBy = req.session && req.session.admin && req.session.admin.email
-        ? String(req.session.admin.email)
-        : 'admin';
-
-      const setPatch = { status };
-      if (status === 'delivered') {
-        const lines = existing && existing.consigne && Array.isArray(existing.consigne.lines)
-          ? existing.consigne.lines
-          : [];
-
-        if (lines.length) {
-          const now = new Date();
-          const updatedLines = lines.map((l) => {
-            if (!l) return l;
-            if (l.receivedAt) return l;
-            if (l.startAt && l.dueAt) return l;
-            const delayDays = Number.isFinite(l.delayDays) ? Math.max(0, Math.floor(l.delayDays)) : 30;
-            const dueAt = new Date(now);
-            dueAt.setDate(dueAt.getDate() + delayDays);
-            /* Spread pour PRÉSERVER les champs d'encaissement (charged,
-             * chargedCents, refundedAt, refundedCents) — sinon le passage en
-             * « delivered » effacerait l'info de consigne encaissée. */
-            return {
-              ...l,
-              delayDays,
-              startAt: now,
-              dueAt,
-            };
-          });
-          /* Chemin pointé : ne PAS écraser le reste de l'objet consigne
-           * (chargedTotalCents, refundedTotalCents…). */
-          setPatch['consigne.lines'] = updatedLines;
-        }
-      }
-
-      await Order.findByIdAndUpdate(orderId, {
-        $set: setPatch,
-        $push: {
-          statusHistory: {
-            status,
-            changedAt: new Date(),
-            changedBy,
-          },
-        },
-      });
-
-      /* When transitioning FROM draft to any active status, decrement stock */
-      if (existing.status === 'draft' && status !== 'draft' && status !== 'cancelled') {
-        const items = Array.isArray(existing.items) ? existing.items : [];
-        for (const item of items) {
-          if (item && item.productId) {
-            await Product.updateOne(
-              { _id: item.productId, stockQty: { $ne: null } },
-              { $inc: { stockQty: -item.quantity } }
-            );
-          }
-        }
-      }
-
-      if (status === 'delivered') {
-        /* Consigne (retour ancienne pièce) + confirmation de livraison —
-           factorisé dans un service, aussi appelé par le robot de suivi
-           (jobs/syncShipmentTracking) quand la livraison est détectée
-           automatiquement. Idempotent (anti-doublon notifications.*SentAt). */
-        const { sendDeliveredNotifications } = require('../services/orderDeliveredNotifications');
-        await sendDeliveredNotifications(orderId);
-      } else if (status === 'paid' || status === 'processing') {
-        // Send status change notification for paid/processing orders
-        try {
-          const user = existing && existing.userId
-            ? await User.findById(existing.userId).select('_id email firstName').lean()
-            : null;
-
-          if (user && user.email) {
-            const sent = await emailService.sendOrderStatusChangeEmail({
-              order: existing,
-              user,
-              newStatus: status,
-              message: 'Votre commande a été validée et va être préparée dans les meilleurs délais.',
-            });
-            emailService.logEmailSent({ orderId: existing._id, emailType: 'status_change', recipientEmail: user.email, result: sent });
-            smsService.sendOrderStatusChangeSms({ order: existing, user, newStatus: status }).catch(() => {});
-            if (sent && sent.ok) {
-              await Order.updateOne(
-                { _id: existing._id },
-                { $set: { 'notifications.statusChangeSentAt': new Date() } }
-              );
-            }
-          }
-        } catch (err) {
-          console.error('Erreur email changement statut (admin) :', err && err.message ? err.message : err);
-        }
-
-        /* Rapprochement leads : commande passée « payée » À LA MAIN (virement,
-           téléphone…) → sortir les leads du client de « À traiter » et poser
-           le badge « A commandé ». Le checkout en ligne le fait déjà ; sans
-           cet appel, un client encaissé manuellement restait « à relancer ». */
-        try {
-          const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
-          await markLeadsRecoveredForOrder(existing);
-        } catch (_) { /* non-bloquant */ }
-      }
     }
 
     req.session.adminOrderSuccess = 'Statut mis à jour.';
@@ -3491,6 +4346,39 @@ async function postAdminUpdateOrderStatus(req, res, next) {
   } catch (err) {
     return next(err);
   }
+}
+
+/**
+ * Met à jour l'approvisionnement de la pièce (order.sourcing). Partagé par le
+ * formulaire (postAdminUpdateOrderSourcing) et les actions en un clic de la
+ * liste (postAdminAvancerCommande). Au passage en « commandée », horodate la
+ * commande fournisseur et pose un délai attendu (saisi, sinon le précédent,
+ * sinon le défaut) : c'est ce qui alimente l'alerte de retard fournisseur.
+ *
+ * @returns {Promise<boolean>} false si la commande n'existe pas
+ */
+async function appliquerApproCommande(orderId, status, { adminName = 'Admin', orderedAt, expectedDays, note } = {}) {
+  const order = await Order.findById(orderId).select('sourcing').lean();
+  if (!order) return false;
+  const prev = order.sourcing || {};
+
+  const set = { 'sourcing.status': status, 'sourcing.updatedAt': new Date(), 'sourcing.updatedBy': adminName };
+
+  if (status === 'commandee') {
+    let dateCommande = prev.orderedAt ? new Date(prev.orderedAt) : null;
+    if (orderedAt) { const d = new Date(orderedAt); if (!Number.isNaN(d.getTime())) dateCommande = d; }
+    if (!dateCommande) dateCommande = new Date();
+    set['sourcing.orderedAt'] = dateCommande;
+    let days = Number.parseInt(expectedDays, 10);
+    if (!Number.isFinite(days) || days <= 0) {
+      days = (Number.isFinite(prev.expectedDays) && prev.expectedDays > 0) ? prev.expectedDays : sourcingStatus.DEFAULT_EXPECTED_DAYS;
+    }
+    set['sourcing.expectedDays'] = Math.min(3650, days);
+  }
+  if (typeof note === 'string') set['sourcing.note'] = note.trim().slice(0, 1000);
+
+  await Order.updateOne({ _id: orderId }, { $set: set });
+  return true;
 }
 
 /* Approvisionnement de la pièce : édition inline (liste) + formulaire (détail).
@@ -3516,30 +4404,14 @@ async function postAdminUpdateOrderSourcing(req, res) {
       return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
     }
 
-    const order = await Order.findById(orderId).select('sourcing').lean();
-    if (!order) {
+    const adminName = (req.session && req.session.admin && (req.session.admin.displayName || req.session.admin.email)) || 'Admin';
+    const trouvee = await appliquerApproCommande(orderId, status, {
+      adminName, orderedAt: b.orderedAt, expectedDays: b.expectedDays, note: b.note,
+    });
+    if (!trouvee) {
       if (wantsJsonResponse(req)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
       return res.redirect('/admin/commandes');
     }
-    const prev = order.sourcing || {};
-    const adminName = (req.session && req.session.admin && (req.session.admin.displayName || req.session.admin.email)) || 'Admin';
-
-    const set = { 'sourcing.status': status, 'sourcing.updatedAt': new Date(), 'sourcing.updatedBy': adminName };
-
-    if (status === 'commandee') {
-      let orderedAt = prev.orderedAt ? new Date(prev.orderedAt) : null;
-      if (b.orderedAt) { const d = new Date(b.orderedAt); if (!Number.isNaN(d.getTime())) orderedAt = d; }
-      if (!orderedAt) orderedAt = new Date();
-      set['sourcing.orderedAt'] = orderedAt;
-      let days = Number.parseInt(b.expectedDays, 10);
-      if (!Number.isFinite(days) || days <= 0) {
-        days = (Number.isFinite(prev.expectedDays) && prev.expectedDays > 0) ? prev.expectedDays : sourcingStatus.DEFAULT_EXPECTED_DAYS;
-      }
-      set['sourcing.expectedDays'] = Math.min(3650, days);
-    }
-    if (typeof b.note === 'string') set['sourcing.note'] = b.note.trim().slice(0, 1000);
-
-    await Order.updateOne({ _id: orderId }, { $set: set });
 
     const fresh = await Order.findById(orderId).select('sourcing').lean();
     const s = fresh.sourcing || {};
@@ -3566,6 +4438,166 @@ async function postAdminUpdateOrderSourcing(req, res) {
     req.session.adminOrderError = 'Erreur lors de la mise à jour de l\'approvisionnement.';
     return res.redirect(`/admin/commandes/${encodeURIComponent(req.params.orderId || '')}`);
   }
+}
+
+/** Convertit un montant saisi (« 1 234,56 », « 1234.56 ») en centimes. null si vide/invalide. */
+function montantSaisiEnCentimes(valeur) {
+  if (valeur == null) return null;
+  const txt = String(valeur).replace(/\s/g, '').replace(',', '.').trim();
+  if (!txt) return null;
+  const n = Number.parseFloat(txt);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * 100);
+}
+
+/**
+ * Régime de TVA d'une vente — décision manuelle, après réception de la facture
+ * fournisseur.
+ *
+ * Le refus est volontairement bloquant quand la marge n'est pas justifiable :
+ * une facture émise sous marge à tort est un redressement, alors que rester à
+ * 20 % n'est jamais irrégulier (art. 297 C). Entre les deux erreurs possibles,
+ * on choisit toujours celle qui ne coûte que de l'argent.
+ */
+async function postAdminUpdateOrderVatScheme(req, res) {
+  const orderId = req.params.orderId;
+  const echec = (message, code) => {
+    if (wantsJsonResponse(req)) return res.status(code || 400).json({ ok: false, error: message });
+    req.session.adminOrderError = message;
+    return res.redirect(`/admin/commandes/${encodeURIComponent(orderId || '')}`);
+  };
+
+  try {
+    if (mongoose.connection.readyState !== 1) return echec('Base indisponible.', 503);
+    if (!mongoose.Types.ObjectId.isValid(orderId)) return echec('Commande introuvable.', 404);
+    /* L'upload est optionnel, mais un fichier refusé (trop gros, pas un PDF)
+       doit le dire — sinon on enregistrerait le régime en laissant croire que
+       le justificatif est joint. */
+    if (req.uploadError) return echec(req.uploadError);
+
+    const order = await Order.findById(orderId)
+      .select('totalCents consigne vat vatScheme purchase invoice number')
+      .lean();
+    if (!order) return echec('Commande introuvable.', 404);
+
+    const b = req.body || {};
+    const scheme = String(b.vatScheme || '').trim() === 'margin' ? 'margin' : 'normal';
+    const purchaseCents = montantSaisiEnCentimes(b.purchasePrice);
+    const supplierRegime = vatScheme.REGIME_FOURNISSEUR_KEYS.indexOf(String(b.supplierRegime || '')) !== -1
+      ? String(b.supplierRegime)
+      : '';
+
+    if (scheme === 'margin') {
+      const verdict = vatScheme.verifierMarge(order, { purchaseCents, supplierRegime });
+      if (!verdict.ok) return echec(verdict.raison);
+    }
+
+    const adminName = (req.session && req.session.admin
+      && (req.session.admin.displayName || req.session.admin.email)) || 'Admin';
+
+    const set = {
+      vatScheme: scheme,
+      'purchase.decidedAt': new Date(),
+      'purchase.decidedByName': adminName,
+    };
+    /* Seuls les champs RÉELLEMENT envoyés sont écrits. Le formulaire les poste
+       tous, donc vider une case la vide bien ; mais un appel partiel n'efface
+       plus au passage le fournisseur ou la référence de facture — c'est la
+       trace qui justifie la marge en cas de contrôle. */
+    if (b.supplier !== undefined) set['purchase.supplier'] = String(b.supplier || '').trim().slice(0, 200);
+    if (b.invoiceRef !== undefined) set['purchase.invoiceRef'] = String(b.invoiceRef || '').trim().slice(0, 200);
+    if (b.supplierRegime !== undefined) set['purchase.supplierRegime'] = supplierRegime;
+    /* Le prix d'achat se conserve même en régime normal : c'est lui qui donne
+       la marge réelle, et il évite de rouvrir la facture fournisseur si la
+       vente bascule plus tard. */
+    if (purchaseCents != null) set['purchase.priceCents'] = purchaseCents;
+
+    /* Facture fournisseur jointe : elle remplace la précédente. Un seul
+       justificatif par vente — une commande = une pièce = une facture d'achat
+       (223 lignes sur 224 sont en quantité 1). */
+    let fichierJoint = false;
+    if (req.file && req.file.buffer && req.file.buffer.length) {
+      set['purchase.invoiceFile'] = {
+        originalName: String(req.file.originalname || 'facture-achat.pdf').slice(0, 200),
+        mimeType: req.file.mimetype || 'application/pdf',
+        sizeBytes: req.file.size || req.file.buffer.length,
+        data: req.file.buffer,
+        uploadedAt: new Date(),
+        uploadedByName: adminName,
+      };
+      fichierJoint = true;
+    }
+
+    await Order.updateOne({ _id: orderId }, { $set: set });
+
+    const apercu = vatScheme.apercu(
+      { ...order, vatScheme: scheme },
+      { purchaseCents: purchaseCents != null ? purchaseCents : undefined }
+    );
+
+    if (wantsJsonResponse(req)) {
+      return res.json({ ok: true, vatScheme: scheme, apercu, factureAchatJointe: fichierJoint });
+    }
+
+    /* On annonce l'effet en euros, pas juste « enregistré » : c'est le seul
+       retour qui permet de repérer une saisie à côté de la plaque (un prix
+       d'achat en HT au lieu de TTC, un zéro en trop). */
+    let msg = scheme === 'margin'
+      ? `TVA sur marge appliquée — TVA due ${(apercu.tvaMargeCents / 100).toFixed(2)} € `
+        + `au lieu de ${(apercu.tvaNormaleCents / 100).toFixed(2)} € `
+        + `(économie ${(apercu.economieCents / 100).toFixed(2)} €).`
+      : 'Vente au taux normal (20 %).';
+    /* Une facture déjà émise porte l'ancien régime : le PDF se régénère à la
+       volée, mais le client, lui, a peut-être déjà reçu l'ancienne version. */
+    if (order.invoice && order.invoice.number) {
+      msg += ' ⚠ La facture ' + order.invoice.number + ' était déjà émise : renvoie-la au client si elle est partie.';
+    }
+    if (fichierJoint) msg += ' Facture d\'achat jointe.';
+    /* Réclamer la marge sans le justificatif, c'est tenir une position qu'on ne
+       peut pas défendre : en contrôle, l'administration qui ne peut pas
+       vérifier (PV − PA) reconstitue la TVA sur le prix de vente entier. On ne
+       bloque pas — le PDF n'est pas toujours sous la main — mais on le dit. */
+    const aDejaUnJustificatif = fichierJoint
+      || !!(order.purchase && order.purchase.invoiceFile && order.purchase.invoiceFile.uploadedAt);
+    if (scheme === 'margin' && !aDejaUnJustificatif) {
+      msg += ' ⚠ Aucune facture d\'achat jointe : sans elle, la marge est indéfendable en cas de contrôle.';
+    }
+    req.session.adminOrderSuccess = msg;
+    return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+  } catch (err) {
+    console.error('[admin] postAdminUpdateOrderVatScheme failed:', err && err.message);
+    return echec('Erreur lors de la mise à jour du régime de TVA.', 500);
+  }
+}
+
+async function getAdminOrderPurchaseInvoice(req, res) {
+  try {
+    const found = await purchaseInvoice.charger(req.params.orderId);
+    if (!found) return res.status(404).send('Aucune facture d\'achat sur cette commande.');
+    res.setHeader('Content-Type', found.meta.mimeType || 'application/pdf');
+    res.setHeader('Content-Disposition',
+      `inline; filename="${purchaseInvoice.nomFichier(found.orderNumber, found.meta)}"`);
+    return res.send(found.bytes);
+  } catch (err) {
+    console.error('[admin] getAdminOrderPurchaseInvoice failed:', err && err.message);
+    return res.status(500).send('Erreur serveur.');
+  }
+}
+
+async function postAdminDeleteOrderPurchaseInvoice(req, res) {
+  const orderId = req.params.orderId;
+  try {
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      req.session.adminOrderError = 'Commande introuvable.';
+      return res.redirect('/admin/commandes');
+    }
+    await Order.updateOne({ _id: orderId }, { $unset: { 'purchase.invoiceFile': '' } });
+    req.session.adminOrderSuccess = 'Facture d\'achat supprimée.';
+  } catch (err) {
+    console.error('[admin] postAdminDeleteOrderPurchaseInvoice failed:', err && err.message);
+    req.session.adminOrderError = 'Suppression impossible.';
+  }
+  return res.redirect(`/admin/commandes/${encodeURIComponent(orderId || '')}`);
 }
 
 async function postAdminUpdateOrderType(req, res) {
@@ -3675,11 +4707,13 @@ async function postAdminAddOrderShipment(req, res, next) {
       .select('_id number userId notifications')
       .lean();
     if (!existing) {
+      if (wantsJsonResponse(req)) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
       req.session.adminOrderError = 'Commande introuvable.';
       return res.redirect('/admin/commandes');
     }
 
     if (req.uploadError) {
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: req.uploadError });
       req.session.adminOrderError = req.uploadError;
       return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
     }
@@ -3691,6 +4725,7 @@ async function postAdminAddOrderShipment(req, res, next) {
     const stampDocument = req.body.stampDocument === 'on' || req.body.stampDocument === 'true' || req.body.stampDocument === '1';
 
     if (!trackingNumber) {
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: 'Merci de renseigner un numéro de suivi.' });
       req.session.adminOrderError = 'Merci de renseigner un numéro de suivi.';
       return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
     }
@@ -4091,6 +5126,70 @@ async function postAdminRefundOrder(req, res, next) {
         ok: true,
         message: req.session.adminOrderSuccess,
         data: { refund: { amountCents, method: result.refund.method }, creditNote: result.creditNote ? { number: result.creditNote.number } : null },
+      });
+    }
+    return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/**
+ * POST /admin/commandes/:orderId/avoir — créer un avoir SANS remboursement.
+ *
+ * Pour les remboursements faits hors du site (virement, geste commercial) :
+ * l'avoir est le document comptable, l'argent part par ailleurs. Rien n'est
+ * envoyé à Mollie, aucun remboursement n'est enregistré, le statut de la
+ * commande ne bouge pas et le client ne reçoit pas d'e-mail.
+ */
+async function postAdminCreateCreditNote(req, res, next) {
+  try {
+    if (mongoose.connection.readyState !== 1) {
+      req.session.adminOrderError = 'La base de données n’est pas disponible.';
+      return res.redirect('/admin/commandes');
+    }
+    const { orderId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
+    }
+
+    const echec = (message) => {
+      req.session.adminOrderError = message;
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: message });
+      return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+    };
+
+    const rawAmount = getTrimmedString(req.body.amount).replace(/\s/g, '').replace(',', '.');
+    const amountFloat = Number.parseFloat(rawAmount);
+    const amountCents = Number.isFinite(amountFloat) ? Math.round(amountFloat * 100) : NaN;
+    if (!Number.isFinite(amountCents) || amountCents <= 0) {
+      return echec('Montant invalide. Saisis un montant en euros (ex : 12,50).');
+    }
+
+    const adminEmail = req.session && req.session.admin && req.session.admin.email
+      ? String(req.session.admin.email)
+      : 'admin';
+
+    const refundService = require('../services/refundService');
+    const result = await refundService.createStandaloneCreditNote({
+      orderId,
+      amountCents,
+      reason: getTrimmedString(req.body.reason),
+      notes: getTrimmedString(req.body.notes),
+      adminEmail,
+    });
+
+    if (!result.ok) {
+      console.error(`[admin-avoir] Échec pour commande ${orderId} :`, result.errorCode, result.error);
+      return echec(result.error || 'La création de l’avoir a échoué.');
+    }
+
+    req.session.adminOrderSuccess = `Avoir ${result.creditNote.number} créé pour ${(amountCents / 100).toFixed(2)} €. Aucun remboursement n’a été émis par le site.`;
+    if (wantsJsonResponse(req)) {
+      return res.json({
+        ok: true,
+        message: req.session.adminOrderSuccess,
+        data: { creditNote: { number: result.creditNote.number, totalCents: amountCents } },
       });
     }
     return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
@@ -7238,6 +8337,7 @@ async function postAdminCreateProduct(req, res, next) {
       videoUrl: getTrimmedString(req.body.videoUrl),
       metaTitle: getTrimmedString(req.body.metaTitle),
       metaDescription: getTrimmedString(req.body.metaDescription),
+      seoIndexOverride: seoIndexPolicy.normaliserOverride(req.body.seoIndexOverride),
       consigneEnabled: req.body.consigneEnabled === 'on' || req.body.consigneEnabled === 'true',
       consigneChargeUpfront: req.body.consigneChargeUpfront === 'on' || req.body.consigneChargeUpfront === 'true',
       consigneAmount: getTrimmedString(req.body.consigneAmount),
@@ -7413,7 +8513,7 @@ async function postAdminCreateProduct(req, res, next) {
     const warrantyMonths = Math.max(0, parseInt(form.warrantyMonths, 10) || 0);
     const warrantyText = form.warrantyText || '';
 
-    const baseSlug = slugify(form.slug || form.name) || 'produit';
+    const baseSlug = slugNouvelleFiche(form.slug, form.name);
 
     const slugCollision = await Product.findOne({ slug: baseSlug }).select('_id').lean();
     if (slugCollision) {
@@ -7542,6 +8642,8 @@ async function postAdminCreateProduct(req, res, next) {
       seo: {
         metaTitle: form.metaTitle,
         metaDescription: form.metaDescription,
+        /* Rien d'écrit tant que le choix reste « Automatique ». */
+        ...(form.seoIndexOverride ? { indexOverride: form.seoIndexOverride } : {}),
       },
     };
 
@@ -7734,6 +8836,7 @@ async function getAdminEditProductPage(req, res, next) {
         videoUrl: product.media && product.media.videoUrl ? product.media.videoUrl : '',
         metaTitle: product.seo && product.seo.metaTitle ? product.seo.metaTitle : '',
         metaDescription: product.seo && product.seo.metaDescription ? product.seo.metaDescription : '',
+        seoIndexOverride: seoIndexPolicy.normaliserOverride(product.seo && product.seo.indexOverride),
         consigneEnabled: !!(product.consigne && product.consigne.enabled),
         consigneAmount: formatPriceForInput(product.consigne && Number.isFinite(product.consigne.amountCents) ? product.consigne.amountCents : 0),
         consigneDelayDays: String(product.consigne && Number.isFinite(product.consigne.delayDays) ? product.consigne.delayDays : 30),
@@ -7783,6 +8886,7 @@ async function getAdminEditProductPage(req, res, next) {
       selectedInfoBlockIds,
       compatIndex,
       productId: String(product._id),
+      seoIndexState: seoIndexPolicy.etatProduitPourAdmin(product),
       latestAiDraftJob: buildProductDraftJobView(latestAiDraftJobDoc, { includeDraft: true }),
       ...buildAiProfileViewData(),
     });
@@ -7848,6 +8952,7 @@ async function postAdminUpdateProduct(req, res, next) {
       videoUrl: getTrimmedString(req.body.videoUrl),
       metaTitle: getTrimmedString(req.body.metaTitle),
       metaDescription: getTrimmedString(req.body.metaDescription),
+      seoIndexOverride: seoIndexPolicy.normaliserOverride(req.body.seoIndexOverride),
       consigneEnabled: req.body.consigneEnabled === 'on' || req.body.consigneEnabled === 'true',
       consigneChargeUpfront: req.body.consigneChargeUpfront === 'on' || req.body.consigneChargeUpfront === 'true',
       consigneAmount: getTrimmedString(req.body.consigneAmount),
@@ -7903,7 +9008,7 @@ async function postAdminUpdateProduct(req, res, next) {
       });
     }
 
-    const existing = await Product.findById(productId).select('_id imageUrl slug galleryUrls').lean();
+    const existing = await Product.findById(productId).select('_id imageUrl slug galleryUrls seo.indexOverride').lean();
     if (!existing) {
       cleanupUploadedFiles(req);
 
@@ -8198,6 +9303,10 @@ async function postAdminUpdateProduct(req, res, next) {
 
     const resolvedInfoBlockIds = await resolveInfoBlockIds(req.body.infoBlockIds);
 
+    const indexOverride = Object.prototype.hasOwnProperty.call(req.body, 'seoIndexOverride')
+      ? form.seoIndexOverride
+      : seoIndexPolicy.normaliserOverride(existing.seo && existing.seo.indexOverride);
+
     const updated = await Product.findByIdAndUpdate(
       productId,
       {
@@ -8248,6 +9357,10 @@ async function postAdminUpdateProduct(req, res, next) {
           seo: {
             metaTitle: form.metaTitle,
             metaDescription: form.metaDescription,
+            /* Choix d'indexation (plan SEO A5.7) : `seo` est réécrit en bloc,
+               on repose donc le choix — celui du formulaire, sinon celui déjà
+               en base (une requête qui n'envoie pas le champ ne l'efface pas). */
+            ...(indexOverride ? { indexOverride } : {}),
           },
         },
       },
@@ -10155,6 +11268,9 @@ async function postAdminCreateManualOrder(req, res) {
         const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
         await markLeadsRecoveredForOrder(created, { email: user && user.email ? user.email : '' });
       } catch (_) { /* non-bloquant */ }
+
+      /* Comptoir : une vente au téléphone compte autant qu'une vente en ligne. */
+      comptoir.syncOrderInBackground(created._id);
     }
 
     return res.json({
@@ -10215,6 +11331,9 @@ async function postAdminValidateDraftOrder(req, res) {
         const { markLeadsRecoveredForOrder } = require('../services/leadRecovery');
         await markLeadsRecoveredForOrder(orderDoc);
       } catch (_) { /* non-bloquant */ }
+
+      /* Comptoir : le brouillon validé devient une vente à compter. */
+      comptoir.syncOrderInBackground(orderDoc._id);
     }
 
     /* Decrement stock */
@@ -11209,7 +12328,7 @@ function mapAndValidateImportProduct(raw, ctx) {
   const galleryUrls = importStrArray(raw.images);
   const galleryTypes = galleryUrls.map(() => 'image');
 
-  let slug = slugify(importStr(raw.slug) || name) || 'produit';
+  let slug = slugNouvelleFiche(importStr(raw.slug), name);
   if (ctx.existingSlugById.has(slug) || ctx.batchSlugs.has(slug)) {
     errors.push(`Slug déjà utilisé : « ${slug} ». Renseignez un « slug » unique.`);
   }
@@ -11563,6 +12682,15 @@ async function postAdminImportProducts(req, res) {
 
     const ctx = { categoryNames, shippingByName, existingSlugById, infoBlockBySlug, batchSlugs: new Set() };
 
+    /* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.7,
+       décision 3) : un lot de plus de 3 fiches, c'est un catalogue fournisseur
+       importé en masse — ce qui a fait déclasser le site. Quand « products » est
+       active, les fiches CRÉÉES par ce lot naissent hors de Google (en vente,
+       dans le catalogue et le flux Merchant) ; Killian les y remet une à une
+       depuis la fiche. Une fiche seule et le formulaire ne sont pas visés, et
+       une mise à jour par SKU ne touche pas à l'indexation. */
+    const lotHorsIndex = items.length > seoIndexPolicy.SEUIL_IMPORT_LOT && seoIndexPolicy.familleActive('products');
+
     const results = [];
     let created = 0;
     let updated = 0;
@@ -11675,6 +12803,10 @@ async function postAdminImportProducts(req, res) {
         importFieldsApplied.push('images');
       }
       if (importHas(raw, 'stock')) importFieldsApplied.push('stockQty');
+      if (lotHorsIndex) {
+        createData.seo = { ...(createData.seo || {}), indexOverride: 'noindex' };
+        warnings.push('Import en lot : fiche créée hors de Google (noindex). À remettre dans Google depuis la fiche (Indexation Google).');
+      }
 
       try {
         const doc = await Product.create(createData);
@@ -11692,6 +12824,7 @@ async function postAdminImportProducts(req, res) {
           slug: createData.slug,
           id: String(doc._id),
           fields: importFieldsApplied,
+          ...(lotHorsIndex ? { indexation: 'noindex' } : {}),
           warnings,
         });
       } catch (e) {
@@ -12664,6 +13797,14 @@ module.exports = {
   getAdminOrderDetailPage,
   postAdminUpdateOrderStatus,
   postAdminUpdateOrderSourcing,
+  postAdminAvancerCommande,
+  getAdminOrderRow,
+  postAdminDeliveryEstimate,
+  postAdminBulkTrashOrders,
+  getAdminOrdersLabelsPdf,
+  postAdminUpdateOrderVatScheme,
+  getAdminOrderPurchaseInvoice,
+  postAdminDeleteOrderPurchaseInvoice,
   postAdminUpdateOrderType,
   postAdminMarkOrderConsigneReceived,
   postAdminAddOrderShipment,
@@ -12671,6 +13812,7 @@ module.exports = {
   postAdminRefundOrder,
   postAdminRefundConsigne,
   getAdminOrderCreditNotePdf,
+  postAdminCreateCreditNote,
   postAdminUploadOrderDocument,
   getAdminOrderDocument,
   getAdminOrderDocumentDownload,

@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
+
+/* Nom du bucket GridFS des médias du catalogue (fichiers + chunks). */
+const BUCKET_NAME = 'media';
 const { Readable } = require('stream');
+const { optimiserImageCatalogue } = require('./imageCompress');
 
 let cachedBucket = null;
 let cachedDbId = null;
@@ -25,7 +29,7 @@ function getBucket() {
 
   const dbId = getDbIdentity(db);
   if (!cachedBucket || cachedDbId !== dbId) {
-    cachedBucket = new mongoose.mongo.GridFSBucket(db, { bucketName: 'media' });
+    cachedBucket = new mongoose.mongo.GridFSBucket(db, { bucketName: BUCKET_NAME });
     cachedDbId = dbId;
   }
 
@@ -44,14 +48,33 @@ function buildFilenameFallback(originalName, fallbackPrefix = 'file') {
   return `${fallbackPrefix}-${Date.now()}`;
 }
 
-async function saveBuffer({ buffer, filename, mimeType, metadata } = {}) {
-  const buf = Buffer.isBuffer(buffer) ? buffer : null;
+/* `optimiser: false` pour enregistrer un fichier tel quel (aucun appelant n'en
+   a besoin aujourd'hui ; c'est la porte de sortie si un jour on stocke une
+   image qui doit rester au pixel près). */
+async function saveBuffer({ buffer, filename, mimeType, metadata, optimiser = true } = {}) {
+  let buf = Buffer.isBuffer(buffer) ? buffer : null;
   if (!buf || !buf.length) {
     throw new Error('Fichier vide');
   }
 
-  const safeFilename = buildFilenameFallback(filename, 'upload');
-  const contentType = normalizeContentType(mimeType);
+  let safeFilename = buildFilenameFallback(filename, 'upload');
+  let contentType = normalizeContentType(mimeType);
+
+  /* Les images lourdes sont réduites à l'entrée — voir imageCompress.js. Une
+     photo PNG convertie en JPEG change d'extension pour que le nom annoncé
+     (Content-Disposition) reste vrai. */
+  if (optimiser !== false) {
+    const r = await optimiserImageCatalogue(buf, contentType);
+    if (r.modifie) {
+      const avant = buf.length;
+      buf = r.buffer;
+      if (r.mime !== contentType) {
+        contentType = r.mime;
+        safeFilename = safeFilename.replace(/\.(png|jpe?g)$/i, '') + (r.mime === 'image/jpeg' ? '.jpg' : '.png');
+      }
+      metadata = { ...(metadata && typeof metadata === 'object' ? metadata : {}), optimise: { avantOctets: avant, apresOctets: buf.length, largeur: r.largeur, hauteur: r.hauteur } };
+    }
+  }
 
   const bucket = getBucket();
 
@@ -202,8 +225,131 @@ function buildSeoMediaUrl(rawUrl, label, contentType) {
   return `/media/${String(id)}.${ext}`;
 }
 
+/**
+ * Parmi ces adresses, lesquelles désignent un média que nous n'avons PAS ?
+ * Rend un Set des identifiants absents, en UNE requête quelle que soit la
+ * taille du catalogue.
+ *
+ * ── Pourquoi (02/10/2026) ──────────────────────────────────────────────────
+ *
+ * Quand le fichier manque, la route /media sert un carré gris plutôt qu'une
+ * erreur : la page du site reste présentable. Mais ce carré gris ne doit JAMAIS
+ * être annoncé à l'extérieur — ni dans un sitemap d'images, ni dans un flux
+ * Merchant. L'adresse annonce une photo en .jpeg et renvoie un SVG : Google
+ * refuse le produit au lieu de le montrer sans photo.
+ *
+ * Mesuré ce jour-là : 10 médias absents, référencés 164 fois par 79 fiches, et
+ * déclarés à Google plus de 150 fois dans sitemap-products.xml.
+ */
+async function idsAbsents(urls) {
+  const ids = new Set();
+  for (const u of Array.isArray(urls) ? urls : []) {
+    const id = extractMediaIdFromUrl(u);
+    if (id) ids.add(String(id));
+  }
+  if (!ids.size) return new Set();
+  if (mongoose.connection.readyState !== 1) return new Set();
+
+  const tous = [...ids];
+  const presents = new Set();
+  const collection = mongoose.connection.db.collection(`${BUCKET_NAME}.files`);
+  /* Stockage vide : on ne juge rien. Une base de test (ou une base fraîche dont
+     les médias n'ont pas encore été restaurés) déclarerait sinon TOUTES les
+     photos absentes, et viderait d'un coup le flux et les sitemaps. */
+  const stockageVide = (await collection.estimatedDocumentCount()) === 0;
+  if (stockageVide) return new Set();
+  const LOT = 5000;
+  for (let i = 0; i < tous.length; i += LOT) {
+    const lot = tous.slice(i, i + LOT)
+      .filter((x) => mongoose.Types.ObjectId.isValid(x))
+      .map((x) => new mongoose.Types.ObjectId(x));
+    if (!lot.length) continue;
+    /* eslint-disable no-await-in-loop */
+    const docs = await collection.find({ _id: { $in: lot } }).project({ _id: 1, length: 1 }).toArray();
+    /* eslint-enable no-await-in-loop */
+    for (const d of docs) if ((d.length || 0) > 0) presents.add(String(d._id));
+  }
+  return new Set(tous.filter((x) => !presents.has(x)));
+}
+
+/** L'adresse désigne-t-elle un média absent du stockage ? (`absents` vient de
+ *  idsAbsents). Une adresse qui n'est pas un /media/<id> n'est jamais jugée. */
+function estMediaAbsent(url, absents) {
+  if (!absents || !absents.size) return false;
+  const id = extractMediaIdFromUrl(url);
+  return !!id && absents.has(String(id));
+}
+
+/* ── Même question, mais posée à chaque page vue ──────────────────────────────
+ *
+ * idsAbsents interroge GridFS. Sur les sitemaps et les flux, c'est une fois par
+ * construction : négligeable. Sur une page d'article, ce serait une requête par
+ * visite, sur une instance à 1 processeur qui s'est déjà effondrée sous la
+ * charge fin septembre. D'où ce cache.
+ *
+ * Il tient la réponse PAR IDENTIFIANT, pas par page : les couvertures du blog
+ * sont très partagées (la plus utilisée sert 18 articles), donc un seul aller
+ * en base sert ensuite tout le monde. Dix minutes : assez pour absorber une
+ * rafale de visites, assez court pour qu'un ré-envoi d'image se voie vite.
+ *
+ * Un identifiant ré-envoyé reçoit un NOUVEL identifiant (GridFS ne réutilise
+ * pas), donc une réponse « absent » ne peut pas devenir fausse en sens inverse
+ * sans que l'adresse change aussi.
+ */
+const CACHE_MEDIAS = new Map();
+const CACHE_DUREE_MS = 10 * 60 * 1000;
+const CACHE_TAILLE_MAX = 5000;
+
+async function idsAbsentsEnCache(urls) {
+  const ids = new Set();
+  for (const u of Array.isArray(urls) ? urls : []) {
+    const id = extractMediaIdFromUrl(u);
+    if (id) ids.add(String(id));
+  }
+  if (!ids.size) return new Set();
+
+  const maintenant = Date.now();
+  const absents = new Set();
+  const aDemander = [];
+  for (const id of ids) {
+    const connu = CACHE_MEDIAS.get(id);
+    if (connu && connu.expire > maintenant) {
+      if (connu.absent) absents.add(id);
+    } else {
+      aDemander.push(id);
+    }
+  }
+  if (!aDemander.length) return absents;
+
+  const frais = await idsAbsents(aDemander.map((id) => `/media/${id}`));
+  /* Rien en base (hors ligne, ou stockage vide) : idsAbsents rend un ensemble
+     vide par prudence. On ne met alors RIEN en cache, sinon dix minutes de
+     « tout va bien » masqueraient une vraie panne. */
+  if (mongoose.connection.readyState !== 1) return absents;
+
+  /* Cache plein : on le vide d'un coup plutôt que d'y chercher le plus ancien.
+     Cinq mille entrées de deux champs, c'est quelques dizaines de kilo-octets ;
+     le vider coûte moins cher que de le trier. */
+  if (CACHE_MEDIAS.size + aDemander.length > CACHE_TAILLE_MAX) CACHE_MEDIAS.clear();
+  for (const id of aDemander) {
+    const absent = frais.has(id);
+    CACHE_MEDIAS.set(id, { absent, expire: maintenant + CACHE_DUREE_MS });
+    if (absent) absents.add(id);
+  }
+  return absents;
+}
+
+/** Pour les tests : repartir d'un cache propre. */
+function viderCacheMedias() {
+  CACHE_MEDIAS.clear();
+}
+
 module.exports = {
   saveBuffer,
+  idsAbsents,
+  idsAbsentsEnCache,
+  estMediaAbsent,
+  viderCacheMedias,
   saveMulterFile,
   extractMediaIdFromUrl,
   deleteById,

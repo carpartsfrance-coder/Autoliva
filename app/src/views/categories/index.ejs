@@ -15,7 +15,7 @@
         <h1 class="text-2xl sm:text-3xl font-black tracking-tight">Catégories</h1>
         <p class="mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-300">Choisissez une catégorie pour voir toutes les pièces disponibles.</p>
       </div>
-      <a class="text-xs sm:text-sm font-black uppercase tracking-wider text-primary hover:underline" href="/produits">Voir tout le catalogue</a>
+      <a class="text-xs sm:text-sm font-black uppercase tracking-wider text-primary hover:underline" href="<%= (typeof langPrefix !== 'undefined' ? langPrefix : '') %>/produits"><%= t('header.viewCatalog') %></a>
     </div>
 
     <% if (!categories || !categories.length) { %>

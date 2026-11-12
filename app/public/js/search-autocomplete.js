@@ -2,6 +2,19 @@
   var roots = Array.from(document.querySelectorAll('[data-search-autocomplete]'));
   if (!roots.length) return;
 
+  /* Libellés dans la langue de la page, posés par partials/header.ejs
+     (window.CPF_SEARCH_I18N), comme CART_TOAST_I18N pour le toast panier. Les
+     valeurs françaises restent en repli : si l'objet manque (page servie sans
+     le header, cache), l'affichage FR est exactement celui d'avant. */
+  var I18N = (window.CPF_SEARCH_I18N && typeof window.CPF_SEARCH_I18N === 'object')
+    ? window.CPF_SEARCH_I18N
+    : {};
+
+  function tr(key, repli) {
+    var value = I18N[key];
+    return (typeof value === 'string' && value) ? value : repli;
+  }
+
   function escapeHtml(value) {
     return String(value || '')
       .replace(/&/g, '&amp;')
@@ -42,10 +55,25 @@
       else el.classList.add('hidden');
     }
 
+    /* Href et texte rendus par le serveur : ils portent déjà le préfixe de
+       langue (/de/produits) et le bon libellé (« Katalog ansehen » dans le
+       header, « Zum Katalog » sur /de/rechercher). On les mémorise au lieu de
+       les écraser : avant, setAllLink() posait « /produits » dès le chargement,
+       et l'acheteur allemand atterrissait sur le catalogue FRANÇAIS — dont le
+       GET remet la session en « fr ». */
+    var allLinkBaseHref = allLink.getAttribute('href') || '/produits';
+    var allLinkBaseText = String(allLink.textContent || '').trim();
+
     function setAllLink(query) {
       var q = String(query || '').trim();
-      allLink.href = q ? ('/produits?q=' + encodeURIComponent(q)) : '/produits';
-      allLink.textContent = q ? ('Voir tous les résultats pour "' + q + '"') : 'Voir le catalogue';
+      if (!q) {
+        allLink.href = allLinkBaseHref;
+        allLink.textContent = allLinkBaseText;
+        return;
+      }
+      var separateur = allLinkBaseHref.indexOf('?') === -1 ? '?' : '&';
+      allLink.href = allLinkBaseHref + separateur + 'q=' + encodeURIComponent(q);
+      allLink.textContent = tr('allResultsFor', 'Voir tous les résultats pour "%q%"').replace('%q%', q);
     }
 
     function getOptions() {
@@ -100,13 +128,13 @@
         : '<div class="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400"><span class="material-symbols-outlined text-xl">inventory_2</span></div>';
 
       var metaParts = [];
-      if (item.sku) metaParts.push('Réf: ' + escapeHtml(item.sku));
+      if (item.sku) metaParts.push(escapeHtml(tr('ref', 'Réf:')) + ' ' + escapeHtml(item.sku));
       if (item.brand) metaParts.push(escapeHtml(item.brand));
 
       row.innerHTML =
         image +
         '<div class="min-w-0 flex-1">' +
-          '<div class="truncate text-sm font-black text-slate-900">' + escapeHtml(item.name || 'Produit') + '</div>' +
+          '<div class="truncate text-sm font-black text-slate-900">' + escapeHtml(item.name || tr('product', 'Produit')) + '</div>' +
           '<div class="mt-0.5 truncate text-[11px] text-slate-500">' + (metaParts.join(' • ') || '') + '</div>' +
         '</div>' +
         '<div class="text-right text-sm font-black text-slate-900">' + escapeHtml(item.price || '') + '</div>';
@@ -125,13 +153,24 @@
       row.setAttribute('aria-selected', 'false');
 
       var icon = type === 'brands' ? 'directions_car' : 'category';
-      var count = Number.isFinite(item.count) && item.count > 0 ? item.count + ' résultat' + (item.count > 1 ? 's' : '') : '';
+      /* Pluriel porté par la langue : « 1 résultat / 3 résultats » en français,
+         « 1 Treffer / 3 Treffer » en allemand (invariable). */
+      var count = '';
+      if (Number.isFinite(item.count) && item.count > 0) {
+        var modele = item.count > 1
+          ? tr('countResults', '%count% résultats')
+          : tr('countResult', '%count% résultat');
+        count = modele.replace('%count%', String(item.count));
+      }
+      var typeLabel = type === 'brands'
+        ? tr('vehicleMake', 'Marque véhicule')
+        : tr('category', 'Catégorie');
 
       row.innerHTML =
         '<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><span class="material-symbols-outlined text-xl">' + icon + '</span></div>' +
         '<div class="min-w-0 flex-1">' +
           '<div class="truncate text-sm font-black text-slate-900">' + escapeHtml(item.label || item.name || '') + '</div>' +
-          '<div class="mt-0.5 truncate text-[11px] text-slate-500">' + (type === 'brands' ? 'Marque véhicule' : 'Catégorie') + (count ? ' • ' + escapeHtml(count) : '') + '</div>' +
+          '<div class="mt-0.5 truncate text-[11px] text-slate-500">' + escapeHtml(typeLabel) + (count ? ' • ' + escapeHtml(count) : '') + '</div>' +
         '</div>';
 
       return row;

@@ -34,9 +34,20 @@ const attributionTouchSchema = new mongoose.Schema(
     userAgent: { type: String, default: '', trim: true },
     ipHash: { type: String, default: '', trim: true },
     lang: { type: String, default: '', trim: true },
+
+    // Visite gratuite (sans gclid ni utm) : enregistrée seulement quand le
+    // navigateur est revenu avec notre cookie (captureAttribution, 08/11/2026).
+    // Les visites gratuites enregistrées avant ce correctif (robots compris)
+    // n'ont pas ce drapeau et ne sont plus comptées.
+    confirmedArrival: { type: Boolean, default: false },
+    // Identifiant de l'arrivée (cookie d'attente) : une même arrivée confirmée
+    // deux fois (traceur + page suivante) ne fait qu'une visite.
+    arrivalId: { type: String, trim: true },
   },
   { timestamps: true }
 );
+
+attributionTouchSchema.index({ arrivalId: 1 }, { unique: true, sparse: true });
 
 attributionTouchSchema.index({ createdAt: -1 });
 attributionTouchSchema.index({ gclid: 1, createdAt: -1 });

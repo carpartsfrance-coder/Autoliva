@@ -62,7 +62,8 @@
       <input type="hidden" name="view" value="<%= view %>" />
       <div class="grid grid-cols-2 lg:grid-cols-7 gap-3">
 
-        <input type="text" name="q" value="<%= filters.q || '' %>" placeholder="Email, nom, tél…"
+        <input type="text" name="q" value="<%= filters.q || '' %>" placeholder="Email, nom, tél, n° commande, pièce…"
+          title="Email, nom, prénom, téléphone (toutes graphies), numéro de commande ou de facture, pièce du panier, plaque, VIN, référence"
           class="col-span-2 lg:col-span-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
 
         <select name="manual" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
@@ -80,6 +81,7 @@
           <option value="devis" <%= filters.captureSource === 'devis' ? 'selected' : '' %>>Demande devis</option>
           <option value="landing_moteurs" <%= filters.captureSource === 'landing_moteurs' ? 'selected' : '' %>>Landing Moteurs occasion</option>
           <option value="landing_boites" <%= filters.captureSource === 'landing_boites' ? 'selected' : '' %>>Landing Boîtes occasion</option>
+          <option value="landing_ponts" <%= filters.captureSource === 'landing_ponts' ? 'selected' : '' %>>Landing Ponts / Transfert</option>
           <option value="contact" <%= filters.captureSource === 'contact' ? 'selected' : '' %>>Contact</option>
           <option value="newsletter" <%= filters.captureSource === 'newsletter' ? 'selected' : '' %>>Newsletter</option>
           <option value="cart_activity" <%= filters.captureSource === 'cart_activity' ? 'selected' : '' %>>Panier</option>
@@ -110,6 +112,14 @@
         <button class="btn btn-primary text-sm" type="submit">Appliquer</button>
         <a href="/admin/activite-panier" class="btn btn-ghost text-sm">Réinitialiser</a>
       </div>
+
+      <% if (filters.q) { %>
+        <div class="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+          <span class="material-symbols-outlined text-sm">search</span>
+          <span>Recherche « <strong><%= filters.q %></strong> » sur <strong>tout l'historique</strong>, tous statuts confondus — la période et la file « À traiter » ne s'appliquent pas.</span>
+          <a href="/admin/activite-panier" class="ml-auto font-semibold underline">Effacer</a>
+        </div>
+      <% } %>
     </form>
 
     <!-- Liste de leads -->
@@ -668,8 +678,157 @@
             html += '<div class="pt-3 flex justify-between items-center"><div class="font-semibold text-slate-900">Total</div><div class="font-bold text-slate-900">' + escapeHtml(c.totalAmount) + '</div></div></div>';
           }
 
+          /* ── Demande fournisseur ────────────────────────────────────────
+             Le commercial doit interroger Asysum avant de chiffrer.
+
+             RIEN N'EST PRÉSÉLECTIONNÉ. Une version précédente devinait le
+             destinataire et le nom de la pièce : elle s'est trompée deux fois
+             en production. Le commercial choisit, le code rédige. Les libellés
+             connus (formulaire de devis, articles du panier) sont offerts en
+             raccourcis de saisie — proposer un texte qu'on lit avant de le
+             valider n'engage rien ; présélectionner un destinataire qu'on ne
+             relit pas envoie un e-mail au mauvais fournisseur. */
+          if (c.fournisseur && c.fournisseur.demandes) {
+            var F = c.fournisseur;
+            html += '<div class="rounded-xl border border-slate-200 p-4" id="lead-fournisseur">';
+            html += '<div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Demande fournisseur</div>';
+
+            html += '<div class="flex items-center gap-2 flex-wrap mb-2">';
+            html += '<select id="fourn-cible" class="rounded-lg border border-slate-200 px-2 py-1.5 text-sm">';
+            html += '<option value="" selected>— choisir le destinataire —</option>';
+            ['moteurs', 'boites', 'injection', 'ponts'].forEach(function (k) {
+              var d = F.demandes[k];
+              if (!d) return;
+              html += '<option value="' + k + '">'
+                + escapeHtml(d.libelle + ' — ' + d.contact) + '</option>';
+            });
+            html += '</select>';
+            html += '<span id="fourn-mail" class="text-xs text-slate-500"></span>';
+            html += '</div>';
+
+            /* Pièce saisie à la main. Les raccourcis en dessous remplissent le
+               champ d'un clic, mais restent modifiables : le libellé catalogue
+               n'est pas toujours ce qu'il faut écrire au fournisseur. */
+            html += '<div class="mb-2">';
+            html += '<input id="fourn-piece" type="text" maxlength="200" placeholder="Pièce demandée (ex. culasse Mazda CX-5 2.2D)" '
+              + 'class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />';
+            if (F.suggestions && F.suggestions.length) {
+              html += '<div class="flex items-start gap-2 flex-wrap mt-1.5">';
+              html += '<span class="text-xs text-slate-400 pt-0.5">Demandé par le client :</span>';
+              F.suggestions.forEach(function (s, i) {
+                html += '<button type="button" class="fourn-sugg rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2 py-1 text-left" '
+                  + 'data-i="' + i + '">' + escapeHtml(s.length > 70 ? s.slice(0, 69) + '…' : s) + '</button>';
+              });
+              html += '</div>';
+            }
+            html += '</div>';
+
+            /* Le VIN n'est réclamé que par Jose Angel. On ne l'a quasiment
+               jamais : le commercial le convertit depuis la plaque. */
+            html += '<div id="fourn-vin-bloc" class="mb-2 hidden">';
+            html += '<div class="flex items-center gap-2 flex-wrap">';
+            html += '<input id="fourn-vin" type="text" maxlength="20" placeholder="VIN (17 caractères)" '
+              + 'class="rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-mono uppercase" />';
+            html += '<a href="' + escapeHtml(F.lienVin) + '" target="_blank" rel="noopener" '
+              + 'class="text-xs text-primary hover:underline">convertir la plaque en VIN ↗</a>';
+            html += '</div>';
+            html += '<div class="text-xs text-slate-400 mt-1">Ce fournisseur demande le VIN. Sans lui, la demande part incomplète.</div>';
+            html += '</div>';
+
+            /* Références pompe / injecteurs : réclamées par Sergi seulement.
+               Saisie manuelle, jamais reprise du dossier — la référence citée
+               par le client est précisément celle dont il n'est pas sûr. */
+            html += '<div id="fourn-refs-bloc" class="mb-2 hidden">';
+            html += '<input id="fourn-refs" type="text" maxlength="120" placeholder="Références pompe et/ou injecteurs" '
+              + 'class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono" />';
+            html += '<div class="text-xs text-slate-400 mt-1">Ce fournisseur demande les références. Ne reprends pas celle du client sans l\'avoir vérifiée.</div>';
+            html += '</div>';
+
+            html += '<textarea id="fourn-corps" rows="10" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono"></textarea>';
+            html += '<div class="flex items-center gap-2 flex-wrap mt-2">';
+            html += '<button type="button" id="fourn-copier" class="btn btn-primary text-xs">Copier</button>';
+            html += '<a id="fourn-mailto" href="#" class="btn btn-ghost text-xs">Ouvrir dans mon mail</a>';
+            html += '<button type="button" id="fourn-fait" class="btn btn-ghost text-xs">Demande envoyée</button>';
+            html += '<span id="fourn-retour" class="text-xs text-emerald-700"></span>';
+            html += '</div>';
+            html += '</div>';
+          }
+
+          /* ── Messages échangés ──────────────────────────────────────────
+             Tous canaux, envois automatiques compris. Séparé des notes : une
+             note est ce qu'un commercial a ÉCRIT POUR LUI, un message est ce
+             que le CLIENT a reçu. Les mélanger empêchait de répondre à
+             « qu'est-ce qu'on lui a envoyé ». */
+          if (c.communications && c.communications.length) {
+            var r = c.commResume || {};
+            html += '<div class="rounded-xl border border-slate-200 p-4">';
+            html += '<div class="flex items-baseline justify-between mb-3 gap-2 flex-wrap">';
+            html += '<div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Messages échangés (' + c.communications.length + ')</div>';
+            var compteurs = [];
+            if (r.email) compteurs.push(r.email + ' email' + (r.email > 1 ? 's' : ''));
+            if (r.sms) compteurs.push(r.sms + ' SMS');
+            if (r.whatsapp) compteurs.push(r.whatsapp + ' WhatsApp');
+            if (r.manuel) compteurs.push(r.manuel + ' manuel' + (r.manuel > 1 ? 's' : ''));
+            if (r.auto) compteurs.push(r.auto + ' auto');
+            html += '<div class="text-xs text-slate-500">' + escapeHtml(compteurs.join(' · ')) + '</div>';
+            html += '</div>';
+            /* Les échecs remontent en tête : un message non délivré explique un
+               silence client qu'on prendrait sinon pour un désintérêt. */
+            if (r.echecs) {
+              html += '<div class="rounded-lg bg-red-50 text-red-700 text-xs px-3 py-2 mb-3">'
+                + '<strong>' + r.echecs + ' message' + (r.echecs > 1 ? 's' : '') + ' non délivré' + (r.echecs > 1 ? 's' : '')
+                + '</strong> — le client ne les a jamais reçus.</div>';
+            }
+
+            var ICONES = { email: 'mail', sms: 'sms', whatsapp: 'chat', appel: 'call' };
+            c.communications.forEach(function (m) {
+              var entrant = !!m.entrant;
+              html += '<div class="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">';
+              html += '<span class="material-symbols-outlined text-base flex-shrink-0 '
+                + (m.echec ? 'text-red-500' : entrant ? 'text-emerald-600' : 'text-slate-400') + '">'
+                + (ICONES[m.canal] || 'mail') + '</span>';
+              html += '<div class="flex-1 min-w-0">';
+
+              html += '<div class="flex items-center gap-1.5 flex-wrap">';
+              if (entrant) html += '<span class="text-xs font-semibold text-emerald-700">Reçu du client</span>';
+              if (m.echec) html += '<span class="rounded bg-red-50 text-red-700 text-xs px-1.5 py-0.5 font-semibold">Non délivré</span>';
+              if (m.auto && !entrant) html += '<span class="rounded bg-slate-100 text-slate-500 text-xs px-1.5 py-0.5">Auto</span>';
+              if (m.reconstitue) {
+                html += '<span class="rounded bg-amber-50 text-amber-700 text-xs px-1.5 py-0.5" '
+                  + 'title="Reconstitué depuis les anciennes traces : le contenu exact n\'a pas été conservé à l\'époque.">Reconstitué</span>';
+              }
+              if (m.meta && m.meta.envoiNonGaranti) {
+                html += '<span class="rounded bg-amber-50 text-amber-700 text-xs px-1.5 py-0.5" '
+                  + 'title="Ouvert dans WhatsApp depuis le poste du commercial : rien ne prouve que le message a bien été envoyé.">Envoi non confirmé</span>';
+              }
+              html += '</div>';
+
+              if (m.objet) {
+                html += '<div class="text-sm font-semibold text-slate-900">' + escapeHtml(m.objet);
+                /* Le montant d'un devis fait partie de ce qu'on a envoyé : sans
+                   lui, deux révisions successives sont indiscernables. */
+                if (m.meta && m.meta.montant) {
+                  html += ' <span class="text-slate-500 font-normal">· '
+                    + escapeHtml(String(Math.round(m.meta.montant)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')) + ' €</span>';
+                }
+                html += '</div>';
+              }
+              if (m.corps) html += '<div class="text-sm text-slate-700 whitespace-pre-line">' + escapeHtml(m.corps) + '</div>';
+              if (m.echec && m.motif) html += '<div class="text-xs text-red-600">Motif : ' + escapeHtml(m.motif) + '</div>';
+
+              var pied = [m.par || (m.auto ? 'Système' : ''), m.at].filter(Boolean).join(' · ');
+              if (m.gabarit) pied += ' · modèle « ' + m.gabarit + ' »';
+              html += '<div class="text-xs text-slate-400">' + escapeHtml(pied) + '</div>';
+              html += '</div></div>';
+            });
+            html += '</div>';
+          } else {
+            html += '<div class="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">'
+              + 'Aucun message envoyé à ce contact.</div>';
+          }
+
           if (c.notes && c.notes.length) {
-            html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Historique (' + c.notes.length + ')</div>';
+            html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Notes internes (' + c.notes.length + ')</div>';
             c.notes.slice().reverse().forEach(function (n) {
               html += '<div class="text-sm text-slate-700 py-1.5 border-b border-slate-100 last:border-0">' + escapeHtml(n.text);
               html += '<div class="text-xs text-slate-400">' + escapeHtml(n.addedByName || 'Admin') + ' · ' + escapeHtml(n.addedAt) + '</div></div>';
@@ -684,6 +843,133 @@
 
           html += '</div>';
           content.innerHTML = html;
+
+          /* Demande fournisseur : un seul texte, celui du serveur. Le front ne
+             fait qu'échanger de destinataire et remplir les blancs (pièce,
+             VIN) — réécrire la formulation ici créerait une seconde version à
+             maintenir, qui divergerait à la première retouche. */
+          (function () {
+            var bloc = document.getElementById('lead-fournisseur');
+            if (!bloc || !c.fournisseur) return;
+            var F = c.fournisseur;
+            var cible = document.getElementById('fourn-cible');
+            var corps = document.getElementById('fourn-corps');
+            var piece = document.getElementById('fourn-piece');
+            var vin = document.getElementById('fourn-vin');
+            var vinBloc = document.getElementById('fourn-vin-bloc');
+            var refs = document.getElementById('fourn-refs');
+            var refsBloc = document.getElementById('fourn-refs-bloc');
+            var mailto = document.getElementById('fourn-mailto');
+            var mail = document.getElementById('fourn-mail');
+            var retour = document.getElementById('fourn-retour');
+
+            function courant() { return F.demandes[cible.value]; }
+
+            /* Les blancs du message sont remplis ici, à l'identique de ce que
+               le serveur aurait écrit s'il avait connu les valeurs. */
+            function remplir(texte, d) {
+              var p = (piece.value || '').trim();
+              var v = (vin.value || '').trim().toUpperCase();
+              var r = (refs.value || '').trim();
+              if (p) texte = texte.split('Demande client : ' + F.aRemplir).join('Demande client : ' + p);
+              if (v) texte = texte.split('VIN : ' + F.aRemplir).join('VIN : ' + v);
+              if (r && d && d.refsLibelle) {
+                texte = texte.split(d.refsLibelle + ' : ' + F.aRemplir).join(d.refsLibelle + ' : ' + r);
+              }
+              return texte;
+            }
+
+            /* L'objet reprend la pièce saisie, sinon il annoncerait un blanc. */
+            function objetCourant(d) {
+              var p = (piece.value || '').trim();
+              if (!p) return d.objet;
+              var court = p.length > 60 ? p.slice(0, 59).trim() + '…' : p;
+              return d.objet.split(F.aRemplir).join(court);
+            }
+
+            function majMailto() {
+              var d = courant();
+              if (!d) { mailto.removeAttribute('href'); return; }
+              mailto.href = 'mailto:' + d.email
+                + '?subject=' + encodeURIComponent(objetCourant(d))
+                + '&body=' + encodeURIComponent(corps.value);
+            }
+
+            function rendre() {
+              var d = courant();
+              if (!d) {
+                /* Aucun destinataire choisi : pas de message tout prêt qu'on
+                   pourrait copier sans savoir à qui l'envoyer. */
+                corps.value = '';
+                corps.placeholder = 'Choisis d\'abord un destinataire ci-dessus.';
+                mail.textContent = '';
+                vinBloc.className = 'mb-2 hidden';
+                refsBloc.className = 'mb-2 hidden';
+                mailto.removeAttribute('href');
+                return;
+              }
+              corps.value = remplir(d.corps, d);
+              mail.textContent = d.email;
+              vinBloc.className = d.vinRequis ? 'mb-2' : 'mb-2 hidden';
+              refsBloc.className = d.refsRequises ? 'mb-2' : 'mb-2 hidden';
+              /* On reconstruit le mailto à partir du texte AFFICHÉ : sinon les
+                 retouches du commercial seraient perdues à l'ouverture du
+                 client de messagerie. */
+              majMailto();
+            }
+
+            cible.addEventListener('change', rendre);
+            piece.addEventListener('input', rendre);
+            vin.addEventListener('input', rendre);
+            refs.addEventListener('input', rendre);
+            /* Une retouche directe du message ne doit pas être écrasée : on ne
+               met à jour que le lien, pas le corps. */
+            corps.addEventListener('input', majMailto);
+
+            Array.prototype.forEach.call(bloc.querySelectorAll('.fourn-sugg'), function (b) {
+              b.addEventListener('click', function () {
+                piece.value = F.suggestions[Number(b.dataset.i)] || '';
+                rendre();
+                piece.focus();
+              });
+            });
+
+            document.getElementById('fourn-copier').addEventListener('click', function () {
+              if (!corps.value.trim()) {
+                retour.textContent = 'Choisis un destinataire';
+                setTimeout(function () { retour.textContent = ''; }, 2500);
+                return;
+              }
+              corps.select();
+              var ok = false;
+              try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(corps.value).then(function () {
+                  retour.textContent = 'Copié';
+                }, function () { retour.textContent = ok ? 'Copié' : 'Copie impossible — Ctrl+C'; });
+              } else {
+                retour.textContent = ok ? 'Copié' : 'Copie impossible — Ctrl+C';
+              }
+              setTimeout(function () { retour.textContent = ''; }, 2500);
+            });
+
+            /* Trace la démarche sur la fiche : sans elle, personne ne sait si
+               le fournisseur a été relancé ou si le dossier dort. */
+            document.getElementById('fourn-fait').addEventListener('click', function () {
+              var d = courant();
+              if (!d) return;
+              fetch('/admin/api/leads/' + leadId + '/note', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: 'Demande de tarif envoyée à ' + d.contact + ' (' + d.email + ')' }),
+              }).then(function (r) { return r.json(); }).then(function (j) {
+                retour.textContent = j && j.ok ? 'Noté sur la fiche' : 'Échec de l\'enregistrement';
+                setTimeout(function () { retour.textContent = ''; }, 2500);
+              }).catch(function () { retour.textContent = 'Échec de l\'enregistrement'; });
+            });
+
+            rendre();
+          })();
 
           var noteForm = document.getElementById('lead-note-form');
           if (noteForm) {
@@ -727,6 +1013,24 @@
   // ─ Templates injectés depuis le serveur ─
   var EMAIL_TEMPLATES = <%- JSON.stringify(emailTemplates || []) %>;
   var SMS_TEMPLATES = <%- JSON.stringify(smsTemplates || []) %>;
+
+  /* La même liste alimente le composeur SMS et le composeur WhatsApp, mais les
+     deux canaux n'ont pas les mêmes règles (en SMS le client ne peut pas
+     répondre et les liens sont jetés). Un modèle peut donc déclarer
+     `channels: ['whatsapp']` ; sans ce champ il reste proposé partout. */
+  function smsTemplatesFor(channel) {
+    return SMS_TEMPLATES.filter(function (t) {
+      return !t.channels || t.channels.indexOf(channel) >= 0;
+    });
+  }
+
+  /* Le lead n'a ni plaque ni VIN → on ne peut rien lui confirmer. Le composeur
+     préselectionne alors le modèle qui réclame l'info plutôt qu'un modèle de
+     relance commerciale qui tomberait à plat. Concerne 45 % des leads. */
+  function leadMissesPlate(c) {
+    var r = (c && c.requested) || {};
+    return !String(r.plate || '').trim() && !String(r.vin || '').trim();
+  }
 
   var EMAIL_VARIABLES = [
     { key: 'prenom', label: 'Prénom' },
@@ -1074,8 +1378,9 @@
     var c = lead || {};
     openModal('Envoyer un SMS');
 
+    var smsList = smsTemplatesFor('sms');
     var templatesOptions = '<option value="">— Choisir un template —</option>';
-    SMS_TEMPLATES.forEach(function (t) {
+    smsList.forEach(function (t) {
       templatesOptions += '<option value="' + escapeHtml(t.key) + '">' + escapeHtml(t.label) + '</option>';
     });
 
@@ -1127,14 +1432,16 @@
       updateCount();
     }
 
-    var presetSms = presetTemplateKey ? SMS_TEMPLATES.find(function (t) { return t.key === presetTemplateKey; }) : null;
-    var defaultSms = presetSms || SMS_TEMPLATES.find(function (t) {
-      return t.forSource && t.forSource.indexOf(c.captureSource) >= 0;
-    }) || SMS_TEMPLATES.find(function (t) { return t.key === 'sms_tried_to_call'; });
+    var presetSms = presetTemplateKey ? smsList.find(function (t) { return t.key === presetTemplateKey; }) : null;
+    var defaultSms = presetSms
+      || (leadMissesPlate(c) && smsList.find(function (t) { return t.key === 'sms_need_plate'; }))
+      || smsList.find(function (t) {
+        return t.forSource && t.forSource.indexOf(c.captureSource) >= 0;
+      }) || smsList.find(function (t) { return t.key === 'sms_tried_to_call'; });
     if (defaultSms) { templateEl.value = defaultSms.key; applyTemplate(defaultSms); }
 
     templateEl.addEventListener('change', function () {
-      var tpl = SMS_TEMPLATES.find(function (t) { return t.key === templateEl.value; });
+      var tpl = smsList.find(function (t) { return t.key === templateEl.value; });
       if (tpl) applyTemplate(tpl);
     });
 
@@ -1168,8 +1475,9 @@
     var c = lead || {};
     openModal('Message WhatsApp');
 
+    var waList = smsTemplatesFor('whatsapp');
     var templatesOptions = '<option value="">— Choisir un modèle —</option>';
-    SMS_TEMPLATES.forEach(function (t) {
+    waList.forEach(function (t) {
       templatesOptions += '<option value="' + escapeHtml(t.key) + '">' + escapeHtml(t.label) + '</option>';
     });
 
@@ -1197,13 +1505,16 @@
     attachArticlePicker(form, 'lead-wa-text');
 
     function applyTemplate(tpl) { if (tpl) ta.value = tpl.body || ''; }
-    var presetWa = presetTemplateKey ? SMS_TEMPLATES.find(function (t) { return t.key === presetTemplateKey; }) : null;
+    var presetWa = presetTemplateKey ? waList.find(function (t) { return t.key === presetTemplateKey; }) : null;
+    /* Pas de plaque → en WhatsApp on demande la photo de la carte grise :
+       elle donne l'immat ET le VIN d'un coup, ce que le SMS ne permet pas. */
     var defaultWa = presetWa
-      || SMS_TEMPLATES.find(function (t) { return t.forSource && t.forSource.indexOf(c.captureSource) >= 0; })
-      || SMS_TEMPLATES.find(function (t) { return t.key === 'sms_tried_to_call'; });
+      || (leadMissesPlate(c) && waList.find(function (t) { return t.key === 'wa_need_plate_photo'; }))
+      || waList.find(function (t) { return t.forSource && t.forSource.indexOf(c.captureSource) >= 0; })
+      || waList.find(function (t) { return t.key === 'sms_tried_to_call'; });
     if (defaultWa) { templateEl.value = defaultWa.key; applyTemplate(defaultWa); }
     templateEl.addEventListener('change', function () {
-      var tpl = SMS_TEMPLATES.find(function (t) { return t.key === templateEl.value; });
+      var tpl = waList.find(function (t) { return t.key === templateEl.value; });
       if (tpl) applyTemplate(tpl);
     });
 

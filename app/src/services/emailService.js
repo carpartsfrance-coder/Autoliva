@@ -15,6 +15,7 @@ const {
   buildAbandonedCartReminder3,
   buildDeliveryConfirmedEmail,
   buildOrderStatusChangeEmail,
+  buildDeliveryEstimateEmail,
   buildCloningLabelEmail,
   buildCloningPieceReceivedEmail,
   buildCloningDoneEmail,
@@ -31,6 +32,8 @@ const Order = require('../models/Order');
 const User = require('../models/User');
 
 const { buildOrderInvoicePdfBuffer } = require('./invoicePdf');
+const { CATEGORY_MARKETING, CATEGORY_TRANSACTIONAL, isSuppressed } = require('./emailSuppression');
+const { traduireEmail, langueDe } = require('./emailI18n');
 const { buildLegalPdfBuffer } = require('./legalPdf');
 const { getLegalPageBySlug } = require('./legalPages');
 const { getSiteUrlFromEnv } = require('./siteUrl');
@@ -183,7 +186,19 @@ function getFrom() {
   };
 }
 
-async function sendEmail({ toEmail, subject, html, text, attachments, replyTo } = {}) {
+async function sendEmail({ toEmail, subject, html, text, attachments, replyTo, lang, sansSuivi, category } = {}) {
+  /* Point de passage UNIQUE de tous les e-mails : c'est ici, et nulle part
+     ailleurs, que la version allemande est produite. Les gabarits restent
+     français ; seuls les nœuds de texte du HTML rendu sont substitués, jamais
+     l'intérieur d'une balise. Une chaîne absente de la table reste en
+     français — pas de trou, pas de texte inventé. */
+  if (lang === 'de') {
+    const traduit = traduireEmail({ subject, html, text }, 'de');
+    subject = traduit.subject;
+    html = traduit.html;
+    text = traduit.text;
+  }
+
   const apiKey = getMailerSendApiKey();
   const from = getFrom();
 
@@ -194,6 +209,19 @@ async function sendEmail({ toEmail, subject, html, text, attachments, replyTo } 
   if (!from.email) {
     console.error('MAIL_FROM_EMAIL manquant : email non envoyé');
     return { ok: false, reason: 'missing_from_email' };
+  }
+
+  // Garde-fou opt-out : vérifié sur l'adresse réelle du destinataire, avant
+  // tout envoi, pour qu'aucun appelant ne puisse le contourner. Les e-mails
+  // marketing sont bloqués dès qu'une suppression existe ; les transactionnels
+  // ne le sont qu'en portée 'all'.
+  const emailCategory = category === CATEGORY_MARKETING ? CATEGORY_MARKETING : CATEGORY_TRANSACTIONAL;
+  const suppression = await isSuppressed(toEmail, emailCategory);
+  if (suppression.blocked) {
+    console.log(
+      `[emailService] Envoi bloqué (opt-out ${suppression.scope}) — ${emailCategory} — ${getTrimmedString(subject) || 'sans objet'}`
+    );
+    return { ok: false, reason: 'suppressed', scope: suppression.scope };
   }
 
   const resolved = resolveToEmail(toEmail);
@@ -212,6 +240,20 @@ async function sendEmail({ toEmail, subject, html, text, attachments, replyTo } 
     html: typeof html === 'string' && html.trim() ? html : undefined,
     text: typeof text === 'string' && text.trim() ? text : undefined,
   };
+
+  /* `sansSuivi` : coupe le suivi POUR CE MESSAGE, sans toucher aux réglages
+     du compte (ils restent actifs pour les autres e-mails).
+     Deux raisons, toutes deux visibles par le client :
+      - le suivi des CLICS réécrit chaque lien vers un domaine de redirection
+        MailerSend. Dans un e-mail en texte brut, l'URL est lue telle quelle :
+        on enverrait un lien qui ne ressemble pas à autoliva.com, c'est-à-dire
+        exactement ce qu'on apprend aux gens à ne pas cliquer ;
+      - le suivi des OUVERTURES injecte un pixel image, signal classique de
+        l'onglet Promotions.
+     Clés validées par l'API : track_clicks, track_opens, track_content. */
+  if (sansSuivi) {
+    payload.settings = { track_clicks: false, track_opens: false };
+  }
 
   // Reply-To header (MailerSend accepts an array of { email, name })
   if (replyTo) {
@@ -277,16 +319,43 @@ async function sendOrderConfirmationEmail({ order, user } = {}) {
   let hasInvoice = false;
   let hasCgv = false;
 
-  try {
-    const invoiceBuffer = await buildOrderInvoicePdfBuffer({ order: orderWithImages, user: fullUser });
-    if (invoiceBuffer && Buffer.isBuffer(invoiceBuffer) && invoiceBuffer.length) {
-      const number = orderWithImages && orderWithImages.number ? String(orderWithImages.number).trim() : '';
-      const filename = number ? `Facture-${number}.pdf` : 'Facture.pdf';
-      attachments.push({ filename, content: invoiceBuffer.toString('base64'), disposition: 'attachment' });
-      hasInvoice = true;
+  /* ── Pourquoi le particulier ne reçoit PAS sa facture ici ────────────────
+   *
+   * La pièce est SOURCÉE APRÈS la vente : au moment du paiement, on ignore
+   * encore chez quel fournisseur on l'achètera, donc sous quel régime de TVA
+   * (normal 20 % ou marge, art. 297 A du CGI). Envoyer la facture maintenant,
+   * c'est graver un régime qu'on ne connaît pas — et le corriger ensuite
+   * imposerait un avoir, alors que le client a déjà le PDF dans sa boîte mail.
+   *
+   * Le mail d'EXPÉDITION joint déjà la même facture (sendShipmentTrackingEmail).
+   * Elle part donc après l'achat fournisseur, au bon régime du premier coup.
+   * Délai médian paiement → expédition mesuré : 5,7 jours.
+   *
+   * C'est légal parce qu'il n'y a AUCUNE obligation de facturer un particulier
+   * (BOI-TVA-DECLA-30-20-10-10 § 20) — 68 % du chiffre d'affaires.
+   *
+   * ⚠ Le PRO, lui, la reçoit immédiatement : la facture lui est obligatoire
+   * (art. 289 I-1-a CGI) et il en a besoin pour déduire sa TVA. Il est de toute
+   * façon toujours facturé au régime normal — la marge ne fait apparaître
+   * aucune TVA (art. 297 E) et lui retirerait sa déduction.
+   *
+   * La facture reste accessible à tout moment depuis l'espace client : elle est
+   * regénérée à la demande, jamais figée dans un fichier.
+   */
+  const estPro = String((orderWithImages && orderWithImages.accountType) || '').toLowerCase() === 'pro';
+
+  if (estPro) {
+    try {
+      const invoiceBuffer = await buildOrderInvoicePdfBuffer({ order: orderWithImages, user: fullUser });
+      if (invoiceBuffer && Buffer.isBuffer(invoiceBuffer) && invoiceBuffer.length) {
+        const number = orderWithImages && orderWithImages.number ? String(orderWithImages.number).trim() : '';
+        const filename = number ? `Facture-${number}.pdf` : 'Facture.pdf';
+        attachments.push({ filename, content: invoiceBuffer.toString('base64'), disposition: 'attachment' });
+        hasInvoice = true;
+      }
+    } catch (err) {
+      console.warn('Facture PDF: génération impossible');
     }
-  } catch (err) {
-    console.warn('Facture PDF: génération impossible');
   }
 
   const cgvBuffer = await getCgvPdfBuffer({ dbConnected: getDbConnected() });
@@ -330,6 +399,7 @@ async function sendOrderConfirmationEmail({ order, user } = {}) {
     meta: { hasInvoice, hasCgv },
   });
   return sendEmail({
+    lang: langueDe({ order, user }),
     toEmail: fullUser.email,
     subject: built.subject,
     html: built.html,
@@ -344,21 +414,21 @@ async function sendConsigneStartEmail({ order, user } = {}) {
   const baseUrl = getBaseUrl();
   const built = buildConsigneStartEmail({ order, user, baseUrl });
   if (!built) return { ok: false, reason: 'no_consigne' };
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo(), lang: langueDe({ order, user }) });
 }
 
 async function sendConsigneReceivedEmail({ order, user } = {}) {
   if (!order || !user || !user.email) return { ok: false, reason: 'missing_data' };
   const baseUrl = getBaseUrl();
   const built = buildConsigneReceivedEmail({ order, user, baseUrl });
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo(), lang: langueDe({ order, user }) });
 }
 
 async function sendConsigneRefundEmail({ order, user, amountCents, method } = {}) {
   if (!order || !user || !user.email) return { ok: false, reason: 'missing_data' };
   const baseUrl = getBaseUrl();
   const built = buildConsigneRefundEmail({ order, user, amountCents, method, baseUrl });
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo(), lang: langueDe({ order, user }) });
 }
 
 async function sendShipmentTrackingEmail({ order, user, shipment } = {}) {
@@ -399,6 +469,7 @@ async function sendShipmentTrackingEmail({ order, user, shipment } = {}) {
     meta: { hasInvoice, hasCgv },
   });
   return sendEmail({
+    lang: langueDe({ order, user }),
     toEmail: fullUser.email,
     subject: built.subject,
     html: built.html,
@@ -413,7 +484,7 @@ async function sendConsigneReminderSoonEmail({ order, user } = {}) {
   const baseUrl = getBaseUrl();
   const built = buildConsigneReminderSoonEmail({ order, user, baseUrl });
   if (!built) return { ok: false, reason: 'no_consigne' };
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo(), lang: langueDe({ order, user }) });
 }
 
 async function sendConsigneOverdueEmail({ order, user } = {}) {
@@ -421,14 +492,14 @@ async function sendConsigneOverdueEmail({ order, user } = {}) {
   const baseUrl = getBaseUrl();
   const built = buildConsigneOverdueEmail({ order, user, baseUrl });
   if (!built) return { ok: false, reason: 'no_consigne' };
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo(), lang: langueDe({ order, user }) });
 }
 
 async function sendWelcomeEmail({ user } = {}) {
   if (!user || !user.email) return { ok: false, reason: 'missing_data' };
   const baseUrl = getBaseUrl();
   const built = buildWelcomeEmail({ user, baseUrl });
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text , lang: langueDe({ user }) });
 }
 
 async function sendGuestAccountCreatedEmail({ user, resetUrl } = {}) {
@@ -437,7 +508,7 @@ async function sendGuestAccountCreatedEmail({ user, resetUrl } = {}) {
   if (!url) return { ok: false, reason: 'missing_reset_url' };
   const baseUrl = getBaseUrl();
   const built = buildGuestAccountCreatedEmail({ user, resetUrl: url, baseUrl });
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text , lang: langueDe({ user }) });
 }
 
 async function sendResetPasswordEmail({ user, resetUrl } = {}) {
@@ -446,7 +517,7 @@ async function sendResetPasswordEmail({ user, resetUrl } = {}) {
   if (!url) return { ok: false, reason: 'missing_reset_url' };
   const baseUrl = getBaseUrl();
   const built = buildResetPasswordEmail({ user, resetUrl: url, baseUrl });
-  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text });
+  return sendEmail({ toEmail: user.email, subject: built.subject, html: built.html, text: built.text , lang: langueDe({ user }) });
 }
 
 async function sendNewBlogPostToSubscribers({ post, baseUrl } = {}) {
@@ -457,7 +528,10 @@ async function sendNewBlogPostToSubscribers({ post, baseUrl } = {}) {
 
   let subscribers = [];
   try {
-    subscribers = await NewsletterSubscriber.find({ status: 'active' }).select('email').limit(500).lean();
+    subscribers = await NewsletterSubscriber.find({ status: 'active', unsubscribedAt: null })
+      .select('email')
+      .limit(500)
+      .lean();
   } catch (err) {
     console.error('[Newsletter] Erreur lecture abonnés :', err.message);
     return { sent: 0, errors: 1 };
@@ -473,8 +547,16 @@ async function sendNewBlogPostToSubscribers({ post, baseUrl } = {}) {
 
   for (const sub of subscribers) {
     try {
-      const result = await sendEmail({ toEmail: sub.email, subject: email.subject, html: email.html, text: email.text });
-      if (result && result.ok) {
+      const result = await sendEmail({
+        toEmail: sub.email,
+        subject: email.subject,
+        html: email.html,
+        text: email.text,
+        category: CATEGORY_MARKETING,
+      });
+      if (result && result.reason === 'suppressed') {
+        // Désinscrit : ce n'est pas une erreur, on passe au suivant.
+      } else if (result && result.ok) {
         sent++;
       } else {
         errors++;
@@ -513,10 +595,12 @@ async function sendAbandonedCartReminder({ cart, reminderNumber, promoCode } = {
   if (!built) return { ok: false, reason: 'build_failed' };
 
   return sendEmail({
+    lang: langueDe({ lead: cart }),
     toEmail: cart.email,
     subject: built.subject,
     html: built.html,
     text: built.text,
+    category: CATEGORY_MARKETING,
   });
 }
 
@@ -529,7 +613,7 @@ async function sendDeliveryConfirmedEmail({ order, user } = {}) {
   const orderWithImages = await addProductImagesToOrder({ order: fullOrder, baseUrl });
 
   const built = buildDeliveryConfirmedEmail({ order: orderWithImages, user: fullUser, baseUrl });
-  return sendEmail({ toEmail: fullUser.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
+  return sendEmail({ toEmail: fullUser.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo(), lang: langueDe({ order, user: fullUser }) });
 }
 
 async function sendOrderStatusChangeEmail({ order, user, newStatus, message } = {}) {
@@ -539,7 +623,21 @@ async function sendOrderStatusChangeEmail({ order, user, newStatus, message } = 
   const fullUser = await hydrateUserForEmail(user);
 
   const built = buildOrderStatusChangeEmail({ order, user: fullUser, newStatus, message, baseUrl });
-  return sendEmail({ toEmail: fullUser.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo() });
+  return sendEmail({ toEmail: fullUser.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo(), lang: langueDe({ order, user: fullUser }) });
+}
+
+/**
+ * Date de livraison annoncée au client (liste des commandes).
+ * @param {{ order, user, date: string, changement?: boolean }} params  date AAAA-MM-JJ
+ */
+async function sendDeliveryEstimateEmail({ order, user, date, changement = false } = {}) {
+  if (!order || !user || !user.email || !date) return { ok: false, reason: 'missing_data' };
+  const baseUrl = getBaseUrl();
+  const fullUser = await hydrateUserForEmail(user);
+  /* La réhydratation ne relit pas `lang` : on garde celle du compte transmis. */
+  const lang = langueDe({ order, user: { lang: (fullUser && fullUser.lang) || user.lang } });
+  const built = buildDeliveryEstimateEmail({ order, user: fullUser, date, changement, baseUrl, lang });
+  return sendEmail({ toEmail: fullUser.email, subject: built.subject, html: built.html, text: built.text, replyTo: commercialReplyTo(), lang });
 }
 
 /**
@@ -590,6 +688,7 @@ async function sendCloningLabelEmail({ order, user, labelPdfBuffer } = {}) {
   if (!built) return { ok: false, reason: 'template_failed' };
 
   const result = await sendEmail({
+    lang: langueDe({ order, user }),
     toEmail: fullUser.email,
     subject: built.subject,
     html: built.html,
@@ -628,6 +727,7 @@ async function sendCloningStepEmail({ order, user, step } = {}) {
   if (!built) return { ok: false, reason: 'template_failed' };
 
   const result = await sendEmail({
+    lang: langueDe({ order, user }),
     toEmail: fullUser.email,
     subject: built.subject,
     html: built.html,
@@ -660,6 +760,7 @@ async function sendRefundIssuedEmail({ order, user, refund, creditNote, creditNo
     attachments.push({ filename, content: creditNotePdfBuffer.toString('base64'), disposition: 'attachment' });
   }
   return sendEmail({
+    lang: langueDe({ order, user }),
     toEmail: user.email,
     subject: built.subject,
     html: built.html,
@@ -685,6 +786,7 @@ module.exports = {
   sendAbandonedCartReminder,
   sendDeliveryConfirmedEmail,
   sendOrderStatusChangeEmail,
+  sendDeliveryEstimateEmail,
   sendCloningLabelEmail,
   sendCloningStepEmail,
   sendRefundIssuedEmail,

@@ -85,6 +85,11 @@ const messageSchema = new mongoose.Schema(
       required: true,
     },
     contenu: { type: String, required: true },
+    /* Mise en page du message, quand il a été rédigé ailleurs puis collé
+       (ChatGPT, document) : paragraphes, listes, gras. Déjà nettoyé à
+       l'enregistrement (services/savMessageHtml). Vide = on affiche `contenu`,
+       comme tous les messages d'avant le 01/10/2026. */
+    html: { type: String, default: '' },
     attachments: { type: [messageAttachmentSchema], default: [] },
     // Modification admin (champs absents = jamais édité)
     editedAt: { type: Date },
@@ -130,12 +135,19 @@ const savTicketSchema = new mongoose.Schema(
       verifie: { type: Boolean, default: false },
     },
 
+    /* Langue du client, reprise de sa commande à l'ouverture du dossier :
+       un SAV se joue en semaines, bien après la session de navigation. */
+    lang: { type: String, enum: ['fr', 'de'], default: 'fr' },
     client: {
       nom: { type: String, trim: true, required: true },
       email: { type: String, trim: true, lowercase: true, required: true, index: true },
       telephone: { type: String, trim: true },
       adresse: { type: String, trim: true },
-      type: { type: String, enum: ['B2C', 'B2B'], default: 'B2C' },
+      // Pro (B2B) ou particulier (B2C). Résolu automatiquement à la création via
+      // savClientType (email → User, puis commande). 'inconnu' quand le rapprochement
+      // échoue : on préfère l'assumer plutôt que de masquer un pro derrière un défaut.
+      type: { type: String, enum: ['B2C', 'B2B', 'inconnu'], default: 'inconnu', index: true },
+      typeSource: { type: String, trim: true, default: '' }, // email | reverseCharge | commande | non_resolu
     },
 
     garage: {
@@ -396,6 +408,15 @@ const savTicketSchema = new mongoose.Schema(
       dateEnvoi: { type: Date },
       dateRetour: { type: Date },
       reponse: { type: String, trim: true },
+      // Dossier en anglais envoyé au fournisseur : rôle de chaque fichier du ticket
+      // dans le PDF (vide = rôle déduit du type de document) et description traduite.
+      photosDossier: [{
+        _id: false,
+        url: { type: String, trim: true },
+        role: { type: String, enum: ['obd', 'reglage', 'autre', 'exclu'] },
+      }],
+      descriptionEn: { type: String, trim: true },
+      descriptionEnSource: { type: String, trim: true }, // empreinte du texte d'origine traduit
     },
 
     // Assignation
@@ -513,14 +534,44 @@ savTicketSchema.pre('save', async function preSave(next) {
     if (this.isNew && !this.numero) {
       this.numero = await this.constructor.generateNumero();
     }
+
+    // Type de client (pro/particulier) : résolu une seule fois, à la création.
+    // Non bloquant — un échec de résolution laisse 'inconnu' et n'empêche pas la
+    // création du ticket (le client ne doit jamais être pénalisé par ce rapprochement).
+    if (this.isNew && (!this.client.type || this.client.type === 'inconnu')) {
+      try {
+        const { resolveClientType } = require('../services/savClientType');
+        const r = await resolveClientType({
+          email: this.client && this.client.email,
+          numeroCommande: this.numeroCommande,
+        });
+        this.client.type = r.type;
+        this.client.typeSource = r.source;
+      } catch (_) {
+        this.client.type = 'inconnu';
+        this.client.typeSource = 'erreur';
+      }
+    }
+
     if (!this.sla) this.sla = {};
     if (!this.sla.dateOuverture) this.sla.dateOuverture = new Date();
     if (!this.sla.dateLimite) {
       const cfg = MOTIF_CONFIG[this.motifSav] || MOTIF_CONFIG.piece_defectueuse;
+      // SLA raccourci pour les pros : un garage a un véhicule client immobilisé.
+      // Facteur configurable dans SavSettings (défaut 0,5). Jamais < 1 h / 1 jour ouvré.
+      let factor = 1;
+      if (this.client && this.client.type === 'B2B') {
+        try {
+          const SavSettings = require('./SavSettings');
+          factor = await SavSettings.getProSlaFactor();
+        } catch (_) { factor = 0.5; }
+      }
       if (cfg.slaHours) {
-        this.sla.dateLimite = new Date(this.sla.dateOuverture.getTime() + cfg.slaHours * 3600 * 1000);
+        const hours = Math.max(1, Math.round(cfg.slaHours * factor));
+        this.sla.dateLimite = new Date(this.sla.dateOuverture.getTime() + hours * 3600 * 1000);
       } else {
-        this.sla.dateLimite = addBusinessDays(this.sla.dateOuverture, cfg.slaDays || 5);
+        const days = Math.max(1, Math.ceil((cfg.slaDays || 5) * factor));
+        this.sla.dateLimite = addBusinessDays(this.sla.dateOuverture, days);
       }
     }
     if (this.isNew && !this.assignedTeam) {
@@ -535,9 +586,10 @@ savTicketSchema.pre('save', async function preSave(next) {
 
 // ---------- Methods ----------
 
-savTicketSchema.methods.addMessage = function addMessage(auteur, canal, contenu, attachments) {
+savTicketSchema.methods.addMessage = function addMessage(auteur, canal, contenu, attachments, html) {
   const date = new Date();
   const msg = { auteur, canal, contenu, date };
+  if (html) msg.html = String(html);
   if (Array.isArray(attachments) && attachments.length) {
     msg.attachments = attachments
       .filter((a) => a && a.url)

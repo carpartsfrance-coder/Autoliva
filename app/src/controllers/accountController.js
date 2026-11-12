@@ -21,6 +21,10 @@ const { getSiteUrlFromEnv } = require('../services/siteUrl');
 const { buildUserData } = require('../services/enhancedConversionData');
 const { track: trackEvent, rememberEmail } = require('../services/eventTracker');
 const brand = require('../config/brand');
+const { applyCheckoutLocale, t: traduire } = require('../services/i18n');
+const productI18n = require('../services/productI18n');
+const { cleDelaiLivraison } = require('../services/shippingPricing');
+const { estFormatTvaUe } = require('../services/viesValidator');
 
 const LOGIN_BUCKETS = new Map();
 const REGISTER_BUCKETS = new Map();
@@ -63,10 +67,12 @@ function getCart(req) {
 }
 
 function getForgotPassword(req, res) {
+  // Lien « Passwort vergessen? » de la connexion allemande : même langue que le tunnel.
+  const lang = applyCheckoutLocale(req, res);
   const dbConnected = mongoose.connection.readyState === 1;
 
   return res.render('account/forgot-password', {
-    title: `Mot de passe oublié - ${brand.NAME}`,
+    title: `${traduire(lang, 'account.forgotTitle')} - ${brand.NAME}`,
     dbConnected,
     errorMessage: null,
     successMessage: null,
@@ -76,6 +82,7 @@ function getForgotPassword(req, res) {
 
 async function postForgotPassword(req, res, next) {
   try {
+    const lang = applyCheckoutLocale(req, res);
     const dbConnected = mongoose.connection.readyState === 1;
     const email = normalizeEmail(req.body.email);
 
@@ -83,10 +90,10 @@ async function postForgotPassword(req, res, next) {
     const honeypot = getTrimmedString(req.body && req.body.website);
     if (honeypot) {
       return res.render('account/forgot-password', {
-        title: `Mot de passe oublié - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.forgotTitle')} - ${brand.NAME}`,
         dbConnected,
         errorMessage: null,
-        successMessage: "Si un compte existe avec cet email, vous allez recevoir un lien de réinitialisation.",
+        successMessage: traduire(lang, 'account.forgotSent'),
         email: '',
       });
     }
@@ -94,9 +101,9 @@ async function postForgotPassword(req, res, next) {
     const limit = consumeRateLimit(FORGOT_BUCKETS, ip, { limit: 10, windowMs: 10 * 60 * 1000 });
     if (limit.limited) {
       return res.status(429).render('account/forgot-password', {
-        title: `Mot de passe oublié - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.forgotTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Trop de tentatives. Merci de patienter quelques minutes puis de réessayer.',
+        errorMessage: traduire(lang, 'account.errTooManyAttempts'),
         successMessage: null,
         email,
       });
@@ -104,9 +111,9 @@ async function postForgotPassword(req, res, next) {
 
     if (!email) {
       return res.status(400).render('account/forgot-password', {
-        title: `Mot de passe oublié - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.forgotTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Merci de renseigner votre email.',
+        errorMessage: traduire(lang, 'account.errEmailRequired'),
         successMessage: null,
         email,
       });
@@ -114,15 +121,17 @@ async function postForgotPassword(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('account/forgot-password', {
-        title: `Mot de passe oublié - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.forgotTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: "La base de données n'est pas disponible. Réessayez plus tard.",
+        errorMessage: traduire(lang, 'account.errForgotDbUnavailable'),
         successMessage: null,
         email,
       });
     }
 
-    const user = await User.findOne({ email }).select('_id email firstName').lean();
+    /* `lang` : l'e-mail de réinitialisation part dans la langue du compte
+       (langueDe lit user.lang) — sans ce champ, il partait toujours en français. */
+    const user = await User.findOne({ email }).select('_id email firstName lang').lean();
     if (user) {
       const token = crypto.randomBytes(32).toString('hex');
       const tokenHash = sha256Hex(token);
@@ -139,7 +148,7 @@ async function postForgotPassword(req, res, next) {
         }
       );
 
-      const resetUrl = buildResetUrl(token);
+      const resetUrl = buildResetUrl(token, user.lang);
       if (resetUrl) {
         try {
           await emailService.sendResetPasswordEmail({ user, resetUrl });
@@ -150,10 +159,10 @@ async function postForgotPassword(req, res, next) {
     }
 
     return res.render('account/forgot-password', {
-      title: `Mot de passe oublié - ${brand.NAME}`,
+      title: `${traduire(lang, 'account.forgotTitle')} - ${brand.NAME}`,
       dbConnected,
       errorMessage: null,
-      successMessage: "Si un compte existe avec cet email, vous allez recevoir un lien de réinitialisation.",
+      successMessage: traduire(lang, 'account.forgotSent'),
       email: '',
     });
   } catch (err) {
@@ -163,15 +172,18 @@ async function postForgotPassword(req, res, next) {
 
 async function getResetPassword(req, res, next) {
   try {
+    /* Page ouverte depuis l'e-mail (souvent avec ?lang=de) ou la connexion
+       allemande : même langue que le tunnel, comme « mot de passe oublié ». */
+    const lang = applyCheckoutLocale(req, res);
     const dbConnected = mongoose.connection.readyState === 1;
     const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
     const tokenHash = token ? sha256Hex(token) : '';
 
     if (!dbConnected) {
       return res.status(503).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: "La base de données n'est pas disponible. Réessayez plus tard.",
+        errorMessage: traduire(lang, 'account.errForgotDbUnavailable'),
         successMessage: null,
         token,
       });
@@ -179,9 +191,9 @@ async function getResetPassword(req, res, next) {
 
     if (!tokenHash) {
       return res.status(400).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Lien invalide.',
+        errorMessage: traduire(lang, 'account.errResetLinkInvalid'),
         successMessage: null,
         token: '',
       });
@@ -194,16 +206,16 @@ async function getResetPassword(req, res, next) {
 
     if (!user) {
       return res.status(400).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Lien expiré ou invalide. Merci de refaire une demande.',
+        errorMessage: traduire(lang, 'account.errResetLinkExpired'),
         successMessage: null,
         token: '',
       });
     }
 
     return res.render('account/reset-password', {
-      title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+      title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
       dbConnected,
       errorMessage: null,
       successMessage: null,
@@ -216,6 +228,7 @@ async function getResetPassword(req, res, next) {
 
 async function postResetPassword(req, res, next) {
   try {
+    const lang = applyCheckoutLocale(req, res);
     const dbConnected = mongoose.connection.readyState === 1;
     const token = typeof req.body.token === 'string' ? req.body.token.trim() : '';
     const newPassword = typeof req.body.newPassword === 'string' ? req.body.newPassword : '';
@@ -225,9 +238,9 @@ async function postResetPassword(req, res, next) {
     const honeypot = getTrimmedString(req.body && req.body.website);
     if (honeypot) {
       return res.status(400).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Lien expiré ou invalide. Merci de refaire une demande.',
+        errorMessage: traduire(lang, 'account.errResetLinkExpired'),
         successMessage: null,
         token: '',
       });
@@ -236,9 +249,9 @@ async function postResetPassword(req, res, next) {
     const limit = consumeRateLimit(RESET_BUCKETS, ip, { limit: 15, windowMs: 10 * 60 * 1000 });
     if (limit.limited) {
       return res.status(429).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Trop de tentatives. Merci de patienter quelques minutes puis de réessayer.',
+        errorMessage: traduire(lang, 'account.errTooManyAttempts'),
         successMessage: null,
         token,
       });
@@ -246,9 +259,9 @@ async function postResetPassword(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: "La base de données n'est pas disponible. Réessayez plus tard.",
+        errorMessage: traduire(lang, 'account.errForgotDbUnavailable'),
         successMessage: null,
         token,
       });
@@ -256,9 +269,9 @@ async function postResetPassword(req, res, next) {
 
     if (!token) {
       return res.status(400).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Lien invalide.',
+        errorMessage: traduire(lang, 'account.errResetLinkInvalid'),
         successMessage: null,
         token: '',
       });
@@ -266,9 +279,9 @@ async function postResetPassword(req, res, next) {
 
     if (!newPassword || !confirmPassword) {
       return res.status(400).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Merci de remplir tous les champs.',
+        errorMessage: traduire(lang, 'account.errFillAllFields'),
         successMessage: null,
         token,
       });
@@ -276,9 +289,9 @@ async function postResetPassword(req, res, next) {
 
     if (newPassword.length < 6) {
       return res.status(400).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Le mot de passe doit faire au moins 6 caractères.',
+        errorMessage: traduire(lang, 'account.errPasswordTooShort'),
         successMessage: null,
         token,
       });
@@ -286,9 +299,9 @@ async function postResetPassword(req, res, next) {
 
     if (newPassword !== confirmPassword) {
       return res.status(400).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'La confirmation du mot de passe ne correspond pas.',
+        errorMessage: traduire(lang, 'account.errPasswordMismatch'),
         successMessage: null,
         token,
       });
@@ -315,16 +328,16 @@ async function postResetPassword(req, res, next) {
 
     if (!updateResult || updateResult.modifiedCount !== 1) {
       return res.status(400).render('account/reset-password', {
-        title: `Réinitialiser le mot de passe - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.resetTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Lien expiré ou invalide. Merci de refaire une demande.',
+        errorMessage: traduire(lang, 'account.errResetLinkExpired'),
         successMessage: null,
         token: '',
       });
     }
 
     if (req.session) {
-      req.session.accountSuccess = 'Mot de passe réinitialisé. Vous pouvez vous connecter.';
+      req.session.accountSuccess = traduire(lang, 'account.passwordResetDone');
     }
     return res.redirect('/compte/connexion');
   } catch (err) {
@@ -356,13 +369,23 @@ function getResetPasswordTtlMinutes() {
   return Math.min(24 * 60, n);
 }
 
-function buildResetUrl(token) {
+function buildResetUrl(token, lang) {
   const base = getPublicBaseUrl();
   if (!base) return '';
-  return `${base.replace(/\/$/, '')}/compte/reinitialiser-mot-de-passe?token=${encodeURIComponent(String(token))}`;
+  /* Le lien s'ouvre souvent dans une session neuve (autre appareil, messagerie) :
+     ?lang=de y rétablit la langue du compte, sinon la page était en français. */
+  const suffixeLangue = lang === 'de' ? '&lang=de' : '';
+  return `${base.replace(/\/$/, '')}/compte/reinitialiser-mot-de-passe?token=${encodeURIComponent(String(token))}${suffixeLangue}`;
 }
 
-function computeConsigneSummaryForOrder(order) {
+/* Consigne ENCAISSÉE à la commande (caution) : l'argent est déjà chez nous.
+   Passé l'échéance, rien n'est « dû » — seul le remboursement est perdu. Les
+   pages client annonçaient pourtant un « Montant dû » sur ces lignes. */
+function consigneLigneEncaissee(ligne) {
+  return !!(ligne && (ligne.charged === true || Number(ligne.chargedCents) > 0));
+}
+
+function computeConsigneSummaryForOrder(order, lang = 'fr') {
   const lines = order && order.consigne && Array.isArray(order.consigne.lines)
     ? order.consigne.lines
     : [];
@@ -381,6 +404,7 @@ function computeConsigneSummaryForOrder(order) {
 
   let minDaysLeft = null;
   let hasOverdue = false;
+  let hasChargedOverdue = false;
   let hasPending = false;
   let totalDueCents = 0;
 
@@ -404,8 +428,12 @@ function computeConsigneSummaryForOrder(order) {
     }
 
     if (!isReceived && daysLeft !== null && daysLeft < 0) {
-      hasOverdue = true;
-      totalDueCents += lineTotalCents;
+      if (consigneLigneEncaissee(l)) {
+        hasChargedOverdue = true;
+      } else {
+        hasOverdue = true;
+        totalDueCents += lineTotalCents;
+      }
     }
 
     if (!isReceived && daysLeft !== null) {
@@ -413,10 +441,24 @@ function computeConsigneSummaryForOrder(order) {
     }
   }
 
+  /* Liste « Meine Bestellungen » en allemand : ces libellés restaient en
+     français à côté du statut traduit. */
+  const de = lang === 'de';
+
   if (hasOverdue) {
     return {
       hasConsigne: true,
-      label: `Consigne en retard • Montant dû : ${formatEuro(totalDueCents)}`,
+      label: de
+        ? `Pfand überfällig • Fälliger Betrag: ${formatEuro(totalDueCents)}`
+        : `Consigne en retard • Montant dû : ${formatEuro(totalDueCents)}`,
+      className: 'text-red-700',
+    };
+  }
+
+  if (hasChargedOverdue) {
+    return {
+      hasConsigne: true,
+      label: de ? 'Pfand • Rückgabefrist überschritten' : 'Consigne • Délai de retour dépassé',
       className: 'text-red-700',
     };
   }
@@ -424,7 +466,7 @@ function computeConsigneSummaryForOrder(order) {
   if (minDaysLeft !== null) {
     return {
       hasConsigne: true,
-      label: `Consigne • Jours restants : ${minDaysLeft}`,
+      label: de ? `Pfand • Verbleibende Tage: ${minDaysLeft}` : `Consigne • Jours restants : ${minDaysLeft}`,
       className: 'text-amber-800',
     };
   }
@@ -432,14 +474,14 @@ function computeConsigneSummaryForOrder(order) {
   if (hasPending) {
     return {
       hasConsigne: true,
-      label: 'Consigne • À retourner après livraison',
+      label: de ? 'Pfand • Rücksendung nach Zustellung' : 'Consigne • À retourner après livraison',
       className: 'text-slate-700',
     };
   }
 
   return {
     hasConsigne: true,
-    label: 'Consigne • Reçue',
+    label: de ? 'Pfand • Eingegangen' : 'Consigne • Reçue',
     className: 'text-green-700',
   };
 }
@@ -497,6 +539,10 @@ async function getInvoicesPage(req, res, next) {
 
 async function getOrderDetailPage(req, res, next) {
   try {
+    /* Page d'arrivée après le paiement Mollie : un client allemand y tombait
+       sur une confirmation entièrement en français. Même langue que le tunnel. */
+    const lang = applyCheckoutLocale(req, res);
+    const formatDateHeure = lang === 'de' ? formatDateTimeDE : formatDateTimeFR;
     const dbConnected = mongoose.connection.readyState === 1;
     const sessionUser = req.session.user;
     const { orderId } = req.params;
@@ -507,13 +553,13 @@ async function getOrderDetailPage(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('errors/500', {
-        title: `Erreur - ${brand.NAME}`,
+        title: traduire(lang, 'error.500.title'),
       });
     }
 
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
       return res.status(404).render('errors/404', {
-        title: `Page introuvable - ${brand.NAME}`,
+        title: traduire(lang, 'error.404.title'),
       });
     }
 
@@ -521,7 +567,7 @@ async function getOrderDetailPage(req, res, next) {
 
     if (!order) {
       return res.status(404).render('errors/404', {
-        title: `Page introuvable - ${brand.NAME}`,
+        title: traduire(lang, 'error.404.title'),
       });
     }
 
@@ -535,8 +581,11 @@ async function getOrderDetailPage(req, res, next) {
       const validProductIds = productIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
 
       if (validProductIds.length) {
+        /* `name` + traduction allemande : la confirmation affichait le nom
+           français figé sur la commande, alors que le panier et le paiement
+           montraient la fiche traduite. */
         const products = await Product.find({ _id: { $in: validProductIds } })
-          .select('_id imageUrl inStock brand category compatibility')
+          .select('_id name imageUrl inStock brand category compatibility localizations.de.name localizations.de.translatedAt')
           .lean();
 
         for (const p of products) {
@@ -574,10 +623,51 @@ async function getOrderDetailPage(req, res, next) {
       ? order.totalCents
       : itemsTotalAfterDiscountCents + shippingCostCents;
 
-    const htCents = Math.round(totalCents / 1.2);
-    const vatCents = totalCents - htCents;
+    /* La consigne ENCAISSÉE est une caution remboursable : hors base TVA, comme
+       sur la facture PDF (invoicePdf.js, computeTotals). Calculée sur le total
+       Pfand compris, la TVA de la confirmation (248 €) contredisait le panier et
+       la facture (231,50 €), et aucune ligne n'expliquait les 99 € d'écart. */
+    const consigneLignesBrutes = order && order.consigne && Array.isArray(order.consigne.lines)
+      ? order.consigne.lines.filter(Boolean)
+      : [];
+    const consigneChargedCents = order && order.consigne && Number.isFinite(order.consigne.chargedTotalCents) && order.consigne.chargedTotalCents > 0
+      ? order.consigne.chargedTotalCents
+      : consigneLignesBrutes
+        .filter((l) => consigneLigneEncaissee(l))
+        .reduce((sum, l) => sum + (Number(l.chargedCents) || 0), 0);
+    const taxableCents = Math.max(0, totalCents - consigneChargedCents);
+    const htCents = Math.round(taxableCents / 1.2);
+    const vatCents = taxableCents - htCents;
 
     const statusBanner = getOrderStatusBanner(order);
+    /* Délai du bandeau « expédiée » : celui du PAYS de livraison (mêmes clés que
+       le tunnel), pas de la langue — l'Autriche voyait « 2–4 Werktage » après
+       avoir lu « 4-6 Werktage » au paiement. Le texte français d'une commande
+       livrée en métropole ne change pas. */
+    let statusSubtitle = texteCommande(lang, statusBanner.subtitle);
+    if (
+      order.status === 'shipped'
+      && statusBanner.subtitle === SOUS_TITRE_EXPEDIEE
+      && order.shippingMethod !== 'retrait'
+      && order.shippingAddress
+    ) {
+      const cleDelai = cleDelaiLivraison({
+        country: order.shippingAddress.country,
+        postalCode: order.shippingAddress.postalCode,
+      });
+      if (!(lang !== 'de' && cleDelai === 'shipping.homeDesc')) {
+        statusSubtitle = `${traduire(lang, cleDelai)}.`;
+      }
+    }
+
+    /* Nom affiché d'un article (ou d'une ligne de consigne) : la fiche traduite
+       quand la page est en allemand, sinon le nom figé sur la commande. */
+    const nomAffiche = (productId, nomCommande) => {
+      if (lang !== 'de' || !productId) return nomCommande;
+      const p = productMap.get(String(productId));
+      const traduit = p ? productI18n.localizeProduct(p, 'de') : null;
+      return (traduit && traduit.name) || nomCommande;
+    };
 
     const invoiceNumber = order && order.invoice && typeof order.invoice.number === 'string' ? order.invoice.number.trim() : '';
     const hasInvoice = getTrimmedString(order.paymentStatus).toLowerCase() === 'paid';
@@ -610,31 +700,45 @@ async function getOrderDetailPage(req, res, next) {
 
         const isReceived = !!receivedAt;
         const isOverdue = !isReceived && daysLeft !== null && daysLeft < 0;
+        const charged = consigneLigneEncaissee(l);
 
         return {
-          name: l.name || 'Produit',
+          name: nomAffiche(l.productId, l.name) || (lang === 'de' ? 'Produkt' : 'Produit'),
           sku: l.sku || '',
           quantity: qty,
           amount: formatEuro(amountCents),
           total: formatEuro(totalLineCents),
-          startAt: l.startAt ? formatDateTimeFR(l.startAt) : '',
-          dueAt: dueAt ? formatDateTimeFR(dueAt) : '',
-          receivedAt: receivedAt ? formatDateTimeFR(receivedAt) : '',
+          startAt: l.startAt ? formatDateHeure(l.startAt) : '',
+          /* Le délai de retour, tel qu'annoncé dans tout le tunnel : la page
+             commande disait « Frist beginnt nach der Zustellung » sans le
+             nombre de jours affiché partout ailleurs. */
+          delayDays: Number.isFinite(l.delayDays) && l.delayDays > 0 ? Math.floor(l.delayDays) : null,
+          dueAt: dueAt ? formatDateHeure(dueAt) : '',
+          receivedAt: receivedAt ? formatDateHeure(receivedAt) : '',
           daysLeft,
           isReceived,
           isOverdue,
+          /* Encaissée à la commande : le texte, le statut et le montant dû en
+             dépendent (une caution déjà payée n'est jamais « due »). */
+          charged,
+          isRefunded: !!l.refundedAt,
           totalCents: totalLineCents,
         };
       });
 
+    // Seules les consignes NON encaissées peuvent devenir un montant dû.
     const totalDueCents = viewConsigneLines
-      .filter((l) => l && l.isOverdue)
+      .filter((l) => l && l.isOverdue && !l.charged)
       .reduce((sum, l) => sum + (Number(l.totalCents) || 0), 0);
 
     const consigne = {
       hasConsigne: viewConsigneLines.length > 0,
-      hasOverdue: viewConsigneLines.some((l) => l && l.isOverdue),
+      hasOverdue: viewConsigneLines.some((l) => l && l.isOverdue && !l.charged),
       hasPending: viewConsigneLines.some((l) => l && !l.isReceived),
+      hasCharged: viewConsigneLines.some((l) => l && l.charged),
+      hasUncharged: viewConsigneLines.some((l) => l && !l.charged),
+      chargedTotal: formatEuro(consigneChargedCents),
+      chargedTotalCents: consigneChargedCents,
       lines: viewConsigneLines,
       totalDue: formatEuro(totalDueCents),
       totalDueCents,
@@ -674,14 +778,14 @@ async function getOrderDetailPage(req, res, next) {
     try {
       const productIds = (order.items || []).map((it) => it.productId).filter(Boolean);
       if (productIds.length) {
-        const docProducts = await Product.find({ _id: { $in: productIds } }).select('name technicalDocs').lean();
+        const docProducts = await Product.find({ _id: { $in: productIds } }).select('name technicalDocs localizations.de.name').lean();
         const oid = String(order._id);
         for (const p of docProducts) {
           for (const d of (Array.isArray(p.technicalDocs) ? p.technicalDocs : [])) {
             if (!d || !d.fileId) continue;
             technicalDocs.push({
               title: (d.title && String(d.title).trim()) || d.filename || 'Document technique',
-              productName: p.name || '',
+              productName: (lang === 'de' ? productI18n.localizeProduct(p, 'de').name : p.name) || '',
               url: `/compte/commandes/${oid}/doc-technique/${d._id}`,
             });
           }
@@ -690,7 +794,7 @@ async function getOrderDetailPage(req, res, next) {
     } catch (_) {}
 
     return res.render('account/order', {
-      title: `Commande ${order.number} - ${brand.NAME}`,
+      title: `${traduire(lang, 'account.orderTitle', { number: order.number })} - ${brand.NAME}`,
       dbConnected,
       enhancedConversionUserData,
       technicalDocs,
@@ -701,22 +805,22 @@ async function getOrderDetailPage(req, res, next) {
         invoiceUrl,
         hasInvoice,
         date: formatDateFR(order.createdAt),
-        dateTime: formatDateTimeFR(order.createdAt),
-        status: formatOrderStatus(order.status),
+        dateTime: formatDateHeure(order.createdAt),
+        status: texteCommande(lang, formatOrderStatus(order.status)),
         statusKey: order.status,
-        statusTitle: statusBanner.title,
-        statusSubtitle: statusBanner.subtitle,
+        statusTitle: texteCommande(lang, statusBanner.title),
+        statusSubtitle,
         statusBgClass: statusBanner.bgClass || 'bg-blue-600',
         statusIcon: statusBanner.icon || 'inventory_2',
         paymentRetryUrl: order.status === 'pending_payment' ? (order.mollieCheckoutUrl || order.scalapayCheckoutUrl || '') : '',
         orderType: order.orderType || 'standard',
         cloningStatus: order.cloningStatus || null,
         cloningDates: {
-          labelSentAt: order.cloningDates && order.cloningDates.labelSentAt ? formatDateTimeFR(order.cloningDates.labelSentAt) : null,
-          clientPieceReceivedAt: order.cloningDates && order.cloningDates.clientPieceReceivedAt ? formatDateTimeFR(order.cloningDates.clientPieceReceivedAt) : null,
-          cloningStartedAt: order.cloningDates && order.cloningDates.cloningStartedAt ? formatDateTimeFR(order.cloningDates.cloningStartedAt) : null,
-          cloningCompletedAt: order.cloningDates && order.cloningDates.cloningCompletedAt ? formatDateTimeFR(order.cloningDates.cloningCompletedAt) : null,
-          shippedToClientAt: order.cloningDates && order.cloningDates.shippedToClientAt ? formatDateTimeFR(order.cloningDates.shippedToClientAt) : null,
+          labelSentAt: order.cloningDates && order.cloningDates.labelSentAt ? formatDateHeure(order.cloningDates.labelSentAt) : null,
+          clientPieceReceivedAt: order.cloningDates && order.cloningDates.clientPieceReceivedAt ? formatDateHeure(order.cloningDates.clientPieceReceivedAt) : null,
+          cloningStartedAt: order.cloningDates && order.cloningDates.cloningStartedAt ? formatDateHeure(order.cloningDates.cloningStartedAt) : null,
+          cloningCompletedAt: order.cloningDates && order.cloningDates.cloningCompletedAt ? formatDateHeure(order.cloningDates.cloningCompletedAt) : null,
+          shippedToClientAt: order.cloningDates && order.cloningDates.shippedToClientAt ? formatDateHeure(order.cloningDates.shippedToClientAt) : null,
         },
         cloningTracking: order.cloningTracking || { carrier: '', trackingNumber: '', trackingUrl: '' },
         cloningFailureNote: order.cloningFailureNote || '',
@@ -728,7 +832,7 @@ async function getOrderDetailPage(req, res, next) {
             return {
               originalName: labelDoc.originalName || 'Étiquette de récupération.pdf',
               url: `/compte/commandes/${encodeURIComponent(String(order._id))}/documents/${encodeURIComponent(String(labelDoc._id))}`,
-              uploadedAt: labelDoc.uploadedAt ? formatDateTimeFR(labelDoc.uploadedAt) : null,
+              uploadedAt: labelDoc.uploadedAt ? formatDateHeure(labelDoc.uploadedAt) : null,
             };
           }
           // Fallback: check shipments with label "Récupération clonage"
@@ -738,7 +842,7 @@ async function getOrderDetailPage(req, res, next) {
             return {
               originalName: shipment.document.originalName || 'Étiquette de récupération.pdf',
               url: `/compte/commandes/${encodeURIComponent(String(order._id))}/shipment-doc/${encodeURIComponent(String(shipment._id))}`,
-              uploadedAt: shipment.document.uploadedAt ? formatDateTimeFR(shipment.document.uploadedAt) : (shipment.createdAt ? formatDateTimeFR(shipment.createdAt) : null),
+              uploadedAt: shipment.document.uploadedAt ? formatDateHeure(shipment.document.uploadedAt) : (shipment.createdAt ? formatDateHeure(shipment.createdAt) : null),
             };
           }
           return null;
@@ -750,7 +854,7 @@ async function getOrderDetailPage(req, res, next) {
           return {
             originalName: labelDoc.originalName || 'Bon de retour.pdf',
             url: `/compte/commandes/${encodeURIComponent(String(order._id))}/documents/${encodeURIComponent(String(labelDoc._id))}`,
-            uploadedAt: labelDoc.uploadedAt ? formatDateTimeFR(labelDoc.uploadedAt) : null,
+            uploadedAt: labelDoc.uploadedAt ? formatDateHeure(labelDoc.uploadedAt) : null,
           };
         })(),
         shippingLabel: (() => {
@@ -760,7 +864,7 @@ async function getOrderDetailPage(req, res, next) {
           return {
             originalName: labelDoc.originalName || 'Étiquette d\'envoi.pdf',
             url: `/compte/commandes/${encodeURIComponent(String(order._id))}/documents/${encodeURIComponent(String(labelDoc._id))}`,
-            uploadedAt: labelDoc.uploadedAt ? formatDateTimeFR(labelDoc.uploadedAt) : null,
+            uploadedAt: labelDoc.uploadedAt ? formatDateHeure(labelDoc.uploadedAt) : null,
           };
         })(),
         total: formatEuro(totalCents),
@@ -779,9 +883,12 @@ async function getOrderDetailPage(req, res, next) {
         itemsTotalAfterDiscountCents,
         shippingCost: formatEuro(shippingCostCents),
         shippingCostCents,
+        // Ligne « Consigne (hors TVA) » des totaux : sans elle, ils ne tombaient pas juste.
+        consigneCharged: formatEuro(consigneChargedCents),
+        consigneChargedCents,
         currency: order.currency || 'EUR',
         shippingMethod: order.shippingMethod || 'domicile',
-        shippingMethodLabel: formatShippingMethod(order.shippingMethod),
+        shippingMethodLabel: texteCommande(lang, formatShippingMethod(order.shippingMethod)),
         shippingAddress: order.shippingAddress,
         billingAddress: order.billingAddress,
         consigne,
@@ -797,7 +904,7 @@ async function getOrderDetailPage(req, res, next) {
                 productId: pid,
                 imageUrl: p && p.imageUrl ? p.imageUrl : '',
                 inStock: p && typeof p.inStock === 'boolean' ? p.inStock : null,
-                name: it.name,
+                name: nomAffiche(pid, it.name),
                 sku: it.sku,
                 brand: brandRaw || compatBrand,
                 category: p && typeof p.category === 'string' ? p.category : '',
@@ -867,11 +974,11 @@ async function getOrderInvoicePdf(req, res, next) {
   }
 }
 
-function formatPrettyDateFR(value) {
+function formatPrettyDateFR(value, lang = 'fr') {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
-  const raw = d.toLocaleDateString('fr-FR', {
+  const raw = d.toLocaleDateString(lang === 'de' ? 'de-DE' : 'fr-FR', {
     weekday: 'long',
     day: '2-digit',
     month: 'long',
@@ -879,10 +986,23 @@ function formatPrettyDateFR(value) {
   return capitalizeFirst(raw);
 }
 
-function formatTimelineTimeLabel(value) {
+function formatTimelineTimeLabel(value, lang = 'fr') {
   if (!value) return '—';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '—';
+  if (lang === 'de') {
+    /* Suivi de commande allemand (bouton « Sendung verfolgen ») : dates et
+       « Aujourd'hui / Hier » restaient en français. */
+    const auj = new Date();
+    auj.setHours(0, 0, 0, 0);
+    const jour = new Date(d);
+    jour.setHours(0, 0, 0, 0);
+    const ecart = Math.round((auj.getTime() - jour.getTime()) / (24 * 60 * 60 * 1000));
+    const heure = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    if (ecart === 0) return `${heure} Uhr - Heute`;
+    if (ecart === 1) return `${heure} Uhr - Gestern`;
+    return `${heure} Uhr - ${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+  }
 
   const now = new Date();
   const startToday = new Date(now);
@@ -998,13 +1118,6 @@ function getTimelineTitleForStatus(status) {
   }
 }
 
-function addDays(date, days) {
-  const d = new Date(date);
-  if (Number.isNaN(d.getTime())) return null;
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
 function getTrackingUiForParcelStatusCode(statusCode, fallbackOrderStatus) {
   const code = Number.isFinite(statusCode) ? statusCode : null;
 
@@ -1077,6 +1190,12 @@ function parseParcelEventDate(value) {
 
 async function getOrderTrackingPage(req, res, next) {
   try {
+    /* Ouverte par « Sendung verfolgen » depuis la commande allemande : elle était
+       entièrement en français. Les libellés restent produits en français plus
+       bas (ils pilotent aussi l'état de la frise) et sont traduits à la sortie
+       par texteCommande. */
+    const lang = applyCheckoutLocale(req, res);
+    const formatDateHeure = lang === 'de' ? formatDateTimeDE : formatDateTimeFR;
     const dbConnected = mongoose.connection.readyState === 1;
     const sessionUser = req.session.user;
     const { orderId } = req.params;
@@ -1087,7 +1206,7 @@ async function getOrderTrackingPage(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('account/order-tracking', {
-        title: `Suivi de commande - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.trackingTitleGeneric')} - ${brand.NAME}`,
         dbConnected,
         order: null,
         tracking: null,
@@ -1096,14 +1215,14 @@ async function getOrderTrackingPage(req, res, next) {
 
     if (!mongoose.Types.ObjectId.isValid(orderId)) {
       return res.status(404).render('errors/404', {
-        title: `Page introuvable - ${brand.NAME}`,
+        title: traduire(lang, 'error.404.title'),
       });
     }
 
     const order = await Order.findOne({ _id: orderId, userId: sessionUser._id }).lean();
     if (!order) {
       return res.status(404).render('errors/404', {
-        title: `Page introuvable - ${brand.NAME}`,
+        title: traduire(lang, 'error.404.title'),
       });
     }
 
@@ -1118,7 +1237,7 @@ async function getOrderTrackingPage(req, res, next) {
 
       if (validProductIds.length) {
         const products = await Product.find({ _id: { $in: validProductIds } })
-          .select('_id imageUrl')
+          .select('_id name imageUrl localizations.de.name localizations.de.translatedAt')
           .lean();
 
         for (const p of products) {
@@ -1325,7 +1444,7 @@ async function getOrderTrackingPage(req, res, next) {
         sortTime,
         title: milestoneTitle,
         description: descriptionParts.length ? descriptionParts.join(' • ') : '',
-        timeLabel: dateObj ? formatTimelineTimeLabel(dateObj) : (ev.date ? String(ev.date) : '—'),
+        timeLabel: dateObj ? formatTimelineTimeLabel(dateObj, lang) : (ev.date ? String(ev.date) : '—'),
       });
     }
 
@@ -1343,7 +1462,7 @@ async function getOrderTrackingPage(req, res, next) {
           sortTime: Number.isNaN(d.getTime()) ? 0 : d.getTime(),
           title: getTimelineTitleForStatus(h.status),
           description: '',
-          timeLabel: formatTimelineTimeLabel(h.changedAt),
+          timeLabel: formatTimelineTimeLabel(h.changedAt, lang),
         });
       }
     }
@@ -1352,20 +1471,20 @@ async function getOrderTrackingPage(req, res, next) {
     if (isCloning) {
       const cd = order.cloningDates || {};
       if (cd.labelSentAt) {
-        orderTimeline.push({ sortTime: new Date(cd.labelSentAt).getTime(), title: 'Étiquette de récupération envoyée', description: '', timeLabel: formatTimelineTimeLabel(cd.labelSentAt) });
+        orderTimeline.push({ sortTime: new Date(cd.labelSentAt).getTime(), title: 'Étiquette de récupération envoyée', description: '', timeLabel: formatTimelineTimeLabel(cd.labelSentAt, lang) });
       }
       if (cd.clientPieceReceivedAt) {
-        orderTimeline.push({ sortTime: new Date(cd.clientPieceReceivedAt).getTime(), title: 'Votre pièce a été reçue par nos ateliers', description: '', timeLabel: formatTimelineTimeLabel(cd.clientPieceReceivedAt) });
+        orderTimeline.push({ sortTime: new Date(cd.clientPieceReceivedAt).getTime(), title: 'Votre pièce a été reçue par nos ateliers', description: '', timeLabel: formatTimelineTimeLabel(cd.clientPieceReceivedAt, lang) });
       }
       if (cd.cloningStartedAt) {
-        orderTimeline.push({ sortTime: new Date(cd.cloningStartedAt).getTime(), title: 'Clonage/programmation démarré', description: '', timeLabel: formatTimelineTimeLabel(cd.cloningStartedAt) });
+        orderTimeline.push({ sortTime: new Date(cd.cloningStartedAt).getTime(), title: 'Clonage/programmation démarré', description: '', timeLabel: formatTimelineTimeLabel(cd.cloningStartedAt, lang) });
       }
       if (cd.cloningCompletedAt) {
         const isFailed = order.cloningStatus === 'cloning_failed';
-        orderTimeline.push({ sortTime: new Date(cd.cloningCompletedAt).getTime(), title: isFailed ? 'Problème détecté lors du clonage' : 'Clonage terminé avec succès', description: '', timeLabel: formatTimelineTimeLabel(cd.cloningCompletedAt) });
+        orderTimeline.push({ sortTime: new Date(cd.cloningCompletedAt).getTime(), title: isFailed ? 'Problème détecté lors du clonage' : 'Clonage terminé avec succès', description: '', timeLabel: formatTimelineTimeLabel(cd.cloningCompletedAt, lang) });
       }
       if (cd.shippedToClientAt) {
-        orderTimeline.push({ sortTime: new Date(cd.shippedToClientAt).getTime(), title: 'Pièce clonée expédiée', description: '', timeLabel: formatTimelineTimeLabel(cd.shippedToClientAt) });
+        orderTimeline.push({ sortTime: new Date(cd.shippedToClientAt).getTime(), title: 'Pièce clonée expédiée', description: '', timeLabel: formatTimelineTimeLabel(cd.shippedToClientAt, lang) });
       }
     }
 
@@ -1386,10 +1505,11 @@ async function getOrderTrackingPage(req, res, next) {
       : null;
 
     if (parcelExpectedMs) {
-      estimatedDateLabel = formatPrettyDateFR(new Date(parcelExpectedMs));
+      estimatedDateLabel = formatPrettyDateFR(new Date(parcelExpectedMs), lang);
       if (parcelExpectedEndMs && parcelExpectedEndMs > parcelExpectedMs) {
-        const start = new Date(parcelExpectedMs).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-        const end = new Date(parcelExpectedEndMs).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        const localeHeure = lang === 'de' ? 'de-DE' : 'fr-FR';
+        const start = new Date(parcelExpectedMs).toLocaleTimeString(localeHeure, { hour: '2-digit', minute: '2-digit' });
+        const end = new Date(parcelExpectedEndMs).toLocaleTimeString(localeHeure, { hour: '2-digit', minute: '2-digit' });
         estimatedTimeLabel = `${start} - ${end}`;
       }
     } else if (order.status === 'cancelled' || order.status === 'refunded') {
@@ -1398,11 +1518,26 @@ async function getOrderTrackingPage(req, res, next) {
       const delivered = Array.isArray(order.statusHistory)
         ? order.statusHistory.find((h) => h && (h.status === 'delivered' || h.status === 'completed') && h.changedAt)
         : null;
-      estimatedDateLabel = delivered ? formatPrettyDateFR(delivered.changedAt) : 'Livrée';
+      estimatedDateLabel = delivered ? formatPrettyDateFR(delivered.changedAt, lang) : texteCommande(lang, 'Livrée');
     } else {
-      const eta = addDays(order.createdAt, 3);
-      estimatedDateLabel = eta ? formatPrettyDateFR(eta) : '—';
-      estimatedTimeLabel = 'Entre 08:00 et 18:00';
+      /* Le transporteur n'a pas (encore) donné de date : on n'en INVENTE plus.
+         C'était `createdAt + 3 jours CALENDAIRES` — une commande du jeudi
+         annonçait une livraison le dimanche, une commande ancienne une date
+         déjà passée, et rien ne tenait compte du pays. Le tunnel, lui, promet
+         « Zustellung 2–4 Werktage nach Versand » pour l'Allemagne : deux pages
+         du même compte se contredisaient. On affiche donc le délai réel de la
+         ZONE de livraison, avec les MÊMES clés que getShippingMethods et que
+         le bandeau « expédiée » de la page commande. */
+      if (order.shippingMethod === 'retrait') {
+        estimatedDateLabel = traduire(lang, 'shipping.pickupDesc');
+      } else {
+        estimatedDateLabel = traduire(lang, cleDelaiLivraison(order.shippingAddress || {}));
+        /* Tant que le colis n'est pas parti, le délai court à partir du départ :
+           on le dit, plutôt que de laisser croire à une date ferme. */
+        if (order.status !== 'shipped') {
+          estimatedTimeLabel = texteCommande(lang, 'Après expédition de votre commande');
+        }
+      }
     }
 
     // Dynamic progress width based on actual steps
@@ -1411,7 +1546,7 @@ async function getOrderTrackingPage(req, res, next) {
     const dynamicProgressWidth = isCloning ? `w-[${dynamicProgressPercent}%]` : ui.progressWidthClass;
 
     return res.render('account/order-tracking', {
-      title: `Suivi ${order.number} - ${brand.NAME}`,
+      title: `${traduire(lang, 'account.trackingTitle', { number: order.number })} - ${brand.NAME}`,
       dbConnected,
       order: {
         id: String(order._id),
@@ -1422,23 +1557,23 @@ async function getOrderTrackingPage(req, res, next) {
         orderType: order.orderType || 'standard',
         cloningStatus: order.cloningStatus || null,
         cloningDates: {
-          labelSentAt: order.cloningDates && order.cloningDates.labelSentAt ? formatDateTimeFR(order.cloningDates.labelSentAt) : null,
-          clientPieceReceivedAt: order.cloningDates && order.cloningDates.clientPieceReceivedAt ? formatDateTimeFR(order.cloningDates.clientPieceReceivedAt) : null,
-          cloningStartedAt: order.cloningDates && order.cloningDates.cloningStartedAt ? formatDateTimeFR(order.cloningDates.cloningStartedAt) : null,
-          cloningCompletedAt: order.cloningDates && order.cloningDates.cloningCompletedAt ? formatDateTimeFR(order.cloningDates.cloningCompletedAt) : null,
-          shippedToClientAt: order.cloningDates && order.cloningDates.shippedToClientAt ? formatDateTimeFR(order.cloningDates.shippedToClientAt) : null,
+          labelSentAt: order.cloningDates && order.cloningDates.labelSentAt ? formatDateHeure(order.cloningDates.labelSentAt) : null,
+          clientPieceReceivedAt: order.cloningDates && order.cloningDates.clientPieceReceivedAt ? formatDateHeure(order.cloningDates.clientPieceReceivedAt) : null,
+          cloningStartedAt: order.cloningDates && order.cloningDates.cloningStartedAt ? formatDateHeure(order.cloningDates.cloningStartedAt) : null,
+          cloningCompletedAt: order.cloningDates && order.cloningDates.cloningCompletedAt ? formatDateHeure(order.cloningDates.cloningCompletedAt) : null,
+          shippedToClientAt: order.cloningDates && order.cloningDates.shippedToClientAt ? formatDateHeure(order.cloningDates.shippedToClientAt) : null,
         },
         cloningTracking: order.cloningTracking || { carrier: '', trackingNumber: '', trackingUrl: '' },
         cloningFailureNote: order.cloningFailureNote || '',
         shippingAddress: order.shippingAddress,
         shippingMethod: order.shippingMethod || 'domicile',
-        shippingMethodLabel: formatShippingMethod(order.shippingMethod),
+        shippingMethodLabel: texteCommande(lang, formatShippingMethod(order.shippingMethod)),
         items: Array.isArray(order.items)
           ? order.items.map((it) => {
               const pid = it && it.productId ? String(it.productId) : '';
               const p = pid ? productMap.get(pid) : null;
               return {
-                name: it.name,
+                name: (lang === 'de' && p ? productI18n.localizeProduct(p, 'de').name : '') || it.name,
                 quantity: it.quantity,
                 unitPrice: formatEuro(it.unitPriceCents),
                 optionsSummary: it && typeof it.optionsSummary === 'string' ? it.optionsSummary : '',
@@ -1448,35 +1583,35 @@ async function getOrderTrackingPage(req, res, next) {
           : [],
       },
       tracking: {
-        statusLabel: ui.statusLabel,
+        statusLabel: texteCommande(lang, ui.statusLabel),
         statusBadgeClass: ui.statusBadgeClass,
         statusDotClass: ui.statusDotClass,
         statusDotPulse: ui.statusDotPulse,
-        parcelErrorMessage: trackingErrorMessage,
+        parcelErrorMessage: texteCommande(lang, trackingErrorMessage),
         carrierTrackingUrl,
         estimatedDateLabel,
         estimatedTimeLabel,
         progressWidthClass: dynamicProgressWidth,
-        steps,
-        lastUpdateLabel,
+        steps: steps.map((st) => ({ ...st, label: texteCommande(lang, st.label) })),
+        lastUpdateLabel: texteCommande(lang, lastUpdateLabel),
         carrierTimeline: carrierTimeline.map((t) => ({
-          title: t.title,
+          title: texteCommande(lang, t.title),
           description: t.description,
           timeLabel: t.timeLabel,
         })),
         orderTimeline: orderTimeline.map((t) => ({
-          title: t.title,
+          title: texteCommande(lang, t.title),
           description: t.description,
           timeLabel: t.timeLabel,
         })),
         timeline: carrierTimeline.map((t) => ({
-          title: t.title,
+          title: texteCommande(lang, t.title),
           description: t.description,
           timeLabel: t.timeLabel,
         })),
         trackingNumber: lastShipment && lastShipment.trackingNumber ? lastShipment.trackingNumber : '',
         trackingCarrier: lastShipment && lastShipment.carrier ? lastShipment.carrier : '',
-        shippingSubtitle: formatShippingMethod(order.shippingMethod),
+        shippingSubtitle: texteCommande(lang, formatShippingMethod(order.shippingMethod)),
       },
     });
   } catch (err) {
@@ -1629,17 +1764,19 @@ function capitalizeFirst(value) {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
-function formatOrderListDate(value) {
+function formatOrderListDate(value, locale = 'fr-FR') {
   if (!value) return { line1: '—', line2: '' };
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return { line1: '—', line2: '' };
 
-  const line1 = capitalizeFirst(
-    d.toLocaleDateString('fr-FR', {
-      day: '2-digit',
-      month: 'short',
-    }).replace('.', '')
-  );
+  const brut = d.toLocaleDateString(locale, {
+    day: '2-digit',
+    month: 'short',
+  });
+  /* En français, on retire le point d'abréviation du mois (« 17 sept »). En
+     allemand, le PREMIER point est celui du jour ordinal (« 17. Sept. ») : le
+     retirer donnait « 17 Sept. ». */
+  const line1 = capitalizeFirst(locale === 'de-DE' ? brut : brut.replace('.', ''));
 
   const line2 = String(d.getFullYear());
   return { line1, line2 };
@@ -1688,6 +1825,146 @@ function formatDateTimeFR(value) {
   return `${date} à ${time}`;
 }
 
+function formatDateDE(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+
+  return d.toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
+function formatDateTimeDE(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '—';
+
+  const date = d.toLocaleDateString('de-DE', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+
+  const time = d.toLocaleTimeString('de-DE', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  return `${date}, ${time} Uhr`;
+}
+
+/* Textes des pages commande pour un client allemand (confirmation après
+   paiement, liste des commandes). Les libellés restent produits en français
+   par les fonctions ci-dessous — utilisées aussi ailleurs — et sont traduits
+   ici, à la sortie. Un texte absent de la table reste en français. */
+const TEXTES_COMMANDE_DE = {
+  // Statuts courts (liste, badge)
+  'Paiement en attente': 'Zahlung ausstehend',
+  'Payée': 'Bezahlt',
+  'En préparation': 'In Bearbeitung',
+  'Expédiée': 'Versendet',
+  'Livrée': 'Zugestellt',
+  'Terminée': 'Abgeschlossen',
+  'Annulée': 'Storniert',
+  'Remboursée': 'Erstattet',
+  'En attente': 'Ausstehend',
+  // Mode de livraison
+  'Retrait magasin': 'Abholung',
+  'Livraison à domicile': 'Lieferung nach Hause',
+  // Bandeau de statut — commandes standard
+  "Votre commande est en cours d'expédition": 'Ihre Bestellung ist unterwegs',
+  // Repli seulement (sans adresse) : le bandeau suit sinon le pays de livraison.
+  'Livraison prévue sous 2-3 jours ouvrés.': 'Zustellung voraussichtlich in 2–3 Werktagen.',
+  'Votre commande est validée': 'Ihre Bestellung ist bestätigt',
+  'Nous préparons votre colis.': 'Wir bereiten Ihr Paket vor.',
+  'Votre commande a été livrée': 'Ihre Bestellung wurde zugestellt',
+  'Merci pour votre commande.': 'Vielen Dank für Ihre Bestellung.',
+  'Commande terminée': 'Bestellung abgeschlossen',
+  'Tout est en ordre. Merci pour votre confiance.': 'Alles erledigt. Vielen Dank für Ihr Vertrauen.',
+  'Votre commande a été annulée': 'Ihre Bestellung wurde storniert',
+  'Si besoin, contactez le support.': 'Bei Fragen wenden Sie sich an unseren Kundenservice.',
+  'Votre commande a été remboursée': 'Ihre Bestellung wurde erstattet',
+  'Le remboursement a été effectué.': 'Die Erstattung wurde durchgeführt.',
+  'En attente de paiement': 'Zahlung ausstehend',
+  "Votre paiement n'a pas encore été confirmé. Vous pouvez réessayer le paiement ou nous contacter si besoin.": 'Ihre Zahlung wurde noch nicht bestätigt. Sie können die Zahlung erneut versuchen oder uns bei Bedarf kontaktieren.',
+  // Bandeau de statut — clonage avec échange
+  "Étape 1 : Nous préparons votre étiquette d'envoi": 'Schritt 1: Wir bereiten Ihr Versandetikett vor',
+  'Vous recevrez par email une étiquette UPS pour nous envoyer votre ancienne pièce.': 'Sie erhalten per E-Mail ein UPS-Etikett, um uns Ihr Altteil zu senden.',
+  'Étape 2 : Envoyez-nous votre ancienne pièce': 'Schritt 2: Senden Sie uns Ihr Altteil',
+  'Votre étiquette UPS est prête. Imprimez-la et déposez votre colis en point relais UPS.': 'Ihr UPS-Etikett ist bereit. Drucken Sie es aus und geben Sie Ihr Paket in einem UPS Access Point ab.',
+  'Étape 3 : Votre pièce est en route vers nos ateliers': 'Schritt 3: Ihr Teil ist auf dem Weg zu uns',
+  'Nous vous notifierons dès réception.': 'Wir benachrichtigen Sie, sobald es bei uns eingetroffen ist.',
+  'Étape 4 : Pièce reçue, clonage imminent': 'Schritt 4: Teil eingetroffen, das Klonen beginnt in Kürze',
+  'Nos techniciens vont procéder à la lecture et au transfert des données.': 'Unsere Techniker lesen die Daten aus und übertragen sie.',
+  'Étape 5 : Clonage en cours': 'Schritt 5: Klonen läuft',
+  'Nos techniciens programment votre nouvelle pièce. Délai estimé : 2-5 jours ouvrés.': 'Unsere Techniker programmieren Ihr neues Teil. Voraussichtliche Dauer: 2–5 Werktage.',
+  'Votre pièce clonée a été expédiée !': 'Ihr geklontes Teil wurde versendet!',
+  'Suivez votre colis avec le numéro de suivi ci-dessous.': 'Verfolgen Sie Ihr Paket mit der Sendungsnummer unten.',
+  'Étape 6 : Clonage terminé, expédition imminente': 'Schritt 6: Klonen abgeschlossen, Versand in Kürze',
+  'Votre pièce programmée sera expédiée sous 24-48h.': 'Ihr programmiertes Teil wird innerhalb von 24–48 Std. versendet.',
+  'Un problème a été détecté sur votre pièce': 'An Ihrem Teil wurde ein Problem festgestellt',
+  'Notre équipe technique vous contactera dans les plus brefs délais pour trouver une solution.': 'Unser technisches Team meldet sich schnellstmöglich bei Ihnen, um eine Lösung zu finden.',
+  // Bandeau de statut — service de clonage seul
+  "Étape 1 : Nous préparons votre étiquette d'expédition aller": 'Schritt 1: Wir bereiten Ihr Etikett für den Hinversand vor',
+  'Vous recevrez par email votre étiquette aller pré-payée pour nous envoyer vos 2 mécatroniques. Étiquettes aller et retour incluses dans le service.': 'Sie erhalten per E-Mail Ihr vorfrankiertes Etikett, um uns Ihre 2 Mechatroniken zu senden. Hin- und Rückversandetiketten sind im Service enthalten.',
+  'Étape 2 : Envoyez-nous vos 2 mécatroniques': 'Schritt 2: Senden Sie uns Ihre 2 Mechatroniken',
+  "Votre étiquette aller est prête. Emballez l'ancienne et la nouvelle ensemble, collez l'étiquette et expédiez-nous le colis.": 'Ihr Etikett für den Hinversand ist bereit. Verpacken Sie die alte und die neue Mechatronik zusammen, kleben Sie das Etikett auf und senden Sie uns das Paket.',
+  'Étape 3 : Vos pièces sont en route vers notre atelier': 'Schritt 3: Ihre Teile sind auf dem Weg zu uns',
+  'Étape 4 : Pièces reçues, clonage imminent': 'Schritt 4: Teile eingetroffen, das Klonen beginnt in Kürze',
+  'Nos techniciens vont procéder au transfert logiciel TCU sous 24h ouvrées.': 'Unsere Techniker übertragen die TCU-Software innerhalb von 24 Stunden (Werktage).',
+  'Transfert TCU en cours sur banc. Délai 24h ouvrées maximum.': 'Die TCU-Übertragung läuft auf dem Prüfstand. Dauer: höchstens 24 Stunden (Werktage).',
+  'Vos 2 mécatroniques ont été réexpédiées !': 'Ihre 2 Mechatroniken wurden zurückgesendet!',
+  'Étape 6 : Clonage terminé, retour imminent': 'Schritt 6: Klonen abgeschlossen, Rückversand in Kürze',
+  'Vos 2 mécatroniques clonées vont être réexpédiées sous 24h.': 'Ihre 2 geklonten Mechatroniken werden innerhalb von 24 Std. zurückgesendet.',
+  'Un problème a été détecté lors du clonage': 'Beim Klonen wurde ein Problem festgestellt',
+  'Notre équipe technique vous contactera dans les plus brefs délais.': 'Unser technisches Team meldet sich schnellstmöglich bei Ihnen.',
+  // Suivi de commande — statut, frise et historique
+  "En cours d'acheminement": 'Unterwegs',
+  'En livraison': 'In Zustellung',
+  'Incident de livraison': 'Zustellproblem',
+  'Suivi introuvable': 'Sendung nicht gefunden',
+  'Validée': 'Bestätigt',
+  'Préparation': 'Vorbereitung',
+  'Étiquette envoyée': 'Etikett versendet',
+  'Pièce en transit': 'Teil unterwegs',
+  'Pièce reçue': 'Teil eingetroffen',
+  'Clonage': 'Klonen',
+  'Commande livrée': 'Bestellung zugestellt',
+  'Commande expédiée': 'Bestellung versendet',
+  'Paiement accepté': 'Zahlung bestätigt',
+  'Commande en préparation': 'Bestellung in Bearbeitung',
+  'Commande annulée': 'Bestellung storniert',
+  'Commande remboursée': 'Bestellung erstattet',
+  'Commande créée': 'Bestellung angelegt',
+  'Livré': 'Zugestellt',
+  'En cours de livraison': 'In Zustellung',
+  'Tentative de livraison': 'Zustellversuch',
+  'Pris en charge par le transporteur': 'Vom Versanddienstleister übernommen',
+  'En transit': 'Unterwegs',
+  'Informations d’expédition reçues': 'Versanddaten übermittelt',
+  'Étiquette de récupération envoyée': 'Abholetikett versendet',
+  'Votre pièce a été reçue par nos ateliers': 'Ihr Teil ist in unserer Werkstatt eingetroffen',
+  'Clonage/programmation démarré': 'Klonen/Programmierung gestartet',
+  'Problème détecté lors du clonage': 'Beim Klonen wurde ein Problem festgestellt',
+  'Clonage terminé avec succès': 'Klonen erfolgreich abgeschlossen',
+  'Pièce clonée expédiée': 'Geklontes Teil versendet',
+  'Entre 08:00 et 18:00': 'Zwischen 08:00 und 18:00 Uhr',
+  'Après expédition de votre commande': 'Nach dem Versand Ihrer Bestellung',
+  'Le suivi transporteur est temporairement indisponible.': 'Die Sendungsverfolgung ist vorübergehend nicht verfügbar.',
+  "Le suivi transporteur avancé n'est pas disponible en local.": 'Die erweiterte Sendungsverfolgung ist lokal nicht verfügbar.',
+  "Le transporteur n'a pas encore fourni d'informations de suivi. Réessayez un peu plus tard.": 'Der Versanddienstleister hat noch keine Sendungsdaten übermittelt. Bitte versuchen Sie es später erneut.',
+  'Impossible de récupérer le suivi transporteur.': 'Die Sendungsdaten konnten nicht abgerufen werden.',
+  'Aucun numéro de suivi n’est renseigné pour cette commande.': 'Für diese Bestellung ist noch keine Sendungsnummer hinterlegt.',
+};
+
+function texteCommande(lang, texteFr) {
+  if (lang !== 'de' || typeof texteFr !== 'string') return texteFr;
+  return Object.prototype.hasOwnProperty.call(TEXTES_COMMANDE_DE, texteFr) ? TEXTES_COMMANDE_DE[texteFr] : texteFr;
+}
+
 function formatShippingMethod(value) {
   switch (value) {
     case 'retrait':
@@ -1697,6 +1974,9 @@ function formatShippingMethod(value) {
       return 'Livraison à domicile';
   }
 }
+
+// Sous-titre du bandeau « expédiée » des commandes standard (voir getOrderDetailPage).
+const SOUS_TITRE_EXPEDIEE = 'Livraison prévue sous 2-3 jours ouvrés.';
 
 function getOrderStatusBanner(order) {
   const status = order && typeof order === 'object' && order.status ? order.status : (typeof order === 'string' ? order : 'pending_payment');
@@ -1752,7 +2032,7 @@ function getOrderStatusBanner(order) {
   // ─── Commandes standard / échange : messages existants ───
   switch (status) {
     case 'shipped':
-      return { title: "Votre commande est en cours d'expédition", subtitle: 'Livraison prévue sous 2-3 jours ouvrés.', icon: 'local_shipping', bgClass: 'bg-blue-600' };
+      return { title: "Votre commande est en cours d'expédition", subtitle: SOUS_TITRE_EXPEDIEE, icon: 'local_shipping', bgClass: 'bg-blue-600' };
     case 'label_created':
     case 'paid':
     case 'processing':
@@ -1797,6 +2077,9 @@ function formatOrderStatus(status) {
 
 async function getAccount(req, res, next) {
   try {
+    /* Page d'arrivée après « Anmelden » et lien « Übersicht » des pages commande
+       allemandes : elle restait en français entre deux pages allemandes. */
+    const lang = applyCheckoutLocale(req, res);
     const dbConnected = mongoose.connection.readyState === 1;
     const sessionUser = req.session.user;
 
@@ -1843,8 +2126,8 @@ async function getAccount(req, res, next) {
       recentOrders = orders.map((o) => ({
         id: String(o._id),
         number: o.number,
-        date: formatDateFR(o.createdAt),
-        status: formatOrderStatus(o.status),
+        date: lang === 'de' ? formatDateDE(o.createdAt) : formatDateFR(o.createdAt),
+        status: texteCommande(lang, formatOrderStatus(o.status)),
         total: formatEuro(getOrderTotalCents(o)),
       }));
     }
@@ -1865,7 +2148,7 @@ async function getAccount(req, res, next) {
     } catch (_) {}
 
     return res.render('account/index', {
-      title: `Mon compte - ${brand.NAME}`,
+      title: `${traduire(lang, 'account.dashboardTitle')} - ${brand.NAME}`,
       dbConnected,
       currentUser: req.session.user || null,
       accountType: req.session.accountType === 'pro' ? 'pro' : 'particulier',
@@ -1885,6 +2168,8 @@ async function getAccount(req, res, next) {
 
 async function getOrdersPage(req, res, next) {
   try {
+    // Lien « Bestellung verfolgen » des pages /de : même langue que le tunnel.
+    const lang = applyCheckoutLocale(req, res);
     const dbConnected = mongoose.connection.readyState === 1;
     const sessionUser = req.session.user;
 
@@ -1894,7 +2179,7 @@ async function getOrdersPage(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('account/orders', {
-        title: `Mes commandes - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.ordersTitle')} - ${brand.NAME}`,
         dbConnected,
         orders: [],
       });
@@ -1906,15 +2191,16 @@ async function getOrdersPage(req, res, next) {
       .lean();
 
     const viewOrders = orders.map((o) => {
-      const dateParts = formatOrderListDate(o.createdAt);
-      const statusBadge = getStatusBadge(o.status);
+      const dateParts = formatOrderListDate(o.createdAt, lang === 'de' ? 'de-DE' : 'fr-FR');
+      const badge = getStatusBadge(o.status);
+      const statusBadge = { ...badge, label: texteCommande(lang, badge.label) };
       const itemCount = Array.isArray(o.items)
         ? o.items.reduce((sum, it) => {
             if (!it || !Number.isFinite(it.quantity)) return sum;
             return sum + it.quantity;
           }, 0)
         : 0;
-      const consigne = computeConsigneSummaryForOrder(o);
+      const consigne = computeConsigneSummaryForOrder(o, lang);
 
       const isPaid = getTrimmedString(o && o.paymentStatus).toLowerCase() === 'paid';
       const invoiceUrl = isPaid ? `/compte/commandes/${encodeURIComponent(String(o._id))}/facture.pdf` : '';
@@ -1926,7 +2212,7 @@ async function getOrdersPage(req, res, next) {
         dateLine1: dateParts.line1,
         dateLine2: dateParts.line2,
         itemCount,
-        status: formatOrderStatus(o.status),
+        status: texteCommande(lang, formatOrderStatus(o.status)),
         statusKey: o.status,
         statusBadge,
         total: formatEuro(getOrderTotalCents(o)),
@@ -1936,7 +2222,7 @@ async function getOrdersPage(req, res, next) {
     });
 
     return res.render('account/orders', {
-      title: `Mes commandes - ${brand.NAME}`,
+      title: `${traduire(lang, 'account.ordersTitle')} - ${brand.NAME}`,
       dbConnected,
       orders: viewOrders,
     });
@@ -1975,6 +2261,8 @@ function setAccountType(req, res) {
 }
 
 function getLogin(req, res) {
+  // Ouverte depuis le panier : même langue que le tunnel (allemand si la visite venait de /de).
+  const lang = applyCheckoutLocale(req, res);
   const dbConnected = mongoose.connection.readyState === 1;
   const returnTo = getSafeReturnTo(req.query.returnTo) || '/compte';
 
@@ -1982,7 +2270,7 @@ function getLogin(req, res) {
   if (req.session) delete req.session.accountSuccess;
 
   res.render('account/login', {
-    title: `Connexion - ${brand.NAME}`,
+    title: `${traduire(lang, 'account.loginTitle')} - ${brand.NAME}`,
     dbConnected,
     errorMessage: null,
     successMessage,
@@ -1993,15 +2281,16 @@ function getLogin(req, res) {
 
 async function postLogin(req, res, next) {
   try {
+    const lang = applyCheckoutLocale(req, res);
     const dbConnected = mongoose.connection.readyState === 1;
 
     const ip = getClientIp(req);
     const honeypot = getTrimmedString(req.body && req.body.website);
     if (honeypot) {
       return res.status(401).render('account/login', {
-        title: `Connexion - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.loginTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Identifiants incorrects.',
+        errorMessage: traduire(lang, 'account.errInvalidCredentials'),
         email: normalizeEmail(req.body.email),
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2010,9 +2299,9 @@ async function postLogin(req, res, next) {
     const limit = consumeRateLimit(LOGIN_BUCKETS, ip, { limit: 25, windowMs: 10 * 60 * 1000 });
     if (limit.limited) {
       return res.status(429).render('account/login', {
-        title: `Connexion - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.loginTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Trop de tentatives. Merci de patienter quelques minutes puis de réessayer.',
+        errorMessage: traduire(lang, 'account.errTooManyAttempts'),
         email: normalizeEmail(req.body.email),
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2020,9 +2309,9 @@ async function postLogin(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('account/login', {
-        title: `Connexion - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.loginTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: "La base de données n'est pas disponible. Impossible de se connecter pour le moment.",
+        errorMessage: traduire(lang, 'account.errLoginDbUnavailable'),
         email: normalizeEmail(req.body.email),
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2033,9 +2322,9 @@ async function postLogin(req, res, next) {
 
     if (!email || !password) {
       return res.status(400).render('account/login', {
-        title: `Connexion - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.loginTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Merci de renseigner votre email et votre mot de passe.',
+        errorMessage: traduire(lang, 'account.errEmailPasswordRequired'),
         email,
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2045,9 +2334,9 @@ async function postLogin(req, res, next) {
 
     if (!user) {
       return res.status(401).render('account/login', {
-        title: `Connexion - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.loginTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Identifiants incorrects.',
+        errorMessage: traduire(lang, 'account.errInvalidCredentials'),
         email,
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2057,9 +2346,9 @@ async function postLogin(req, res, next) {
 
     if (computed !== user.passwordHash) {
       return res.status(401).render('account/login', {
-        title: `Connexion - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.loginTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Identifiants incorrects.',
+        errorMessage: traduire(lang, 'account.errInvalidCredentials'),
         email,
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2085,6 +2374,10 @@ async function postLogin(req, res, next) {
     const prevCart = req.session && req.session.cart ? req.session.cart : null;
     const prevCheckout = req.session && req.session.checkout ? req.session.checkout : null;
     const prevPromoCode = req.session && req.session.promoCode ? req.session.promoCode : null;
+    /* La langue du tunnel survit à la connexion : sans elle, un client allemand
+       repassait en français juste après « Anmelden » (paiement Mollie, e-mails
+       et Order.lang compris). Recopiée seulement si elle existait. */
+    const prevLang = req.session && req.session.preferredLang ? req.session.preferredLang : null;
 
     if (req.session && typeof req.session.regenerate === 'function') {
       return req.session.regenerate((err) => {
@@ -2092,6 +2385,7 @@ async function postLogin(req, res, next) {
         if (prevCart) req.session.cart = prevCart;
         if (prevCheckout) req.session.checkout = prevCheckout;
         if (prevPromoCode) req.session.promoCode = prevPromoCode;
+        if (prevLang) req.session.preferredLang = prevLang;
         req.session.user = nextSessionUser;
         req.session.accountType = user.accountType;
         /* Rattrape les ajouts panier faits en anonyme */
@@ -2209,6 +2503,11 @@ async function postSecurity(req, res, next) {
 async function getAddresses(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
+    /* Page restée en français, mais ouverte depuis le tunnel allemand (« Gérer
+       mes adresses ») : le pays proposé suit la session, comme au paiement. Avec
+       « France », une adresse à Berlin saisie sans toucher au pays partait au
+       tarif France. */
+    const paysParDefaut = (req.session && req.session.preferredLang === 'de') ? 'Allemagne' : 'France';
     const sessionUser = req.session.user;
 
     if (!sessionUser || !sessionUser._id) {
@@ -2229,7 +2528,7 @@ async function getAddresses(req, res, next) {
           line2: '',
           postalCode: '',
           city: '',
-          country: 'France',
+          country: paysParDefaut,
           isDefault: false,
         },
       });
@@ -2257,7 +2556,7 @@ async function getAddresses(req, res, next) {
         line2: '',
         postalCode: '',
         city: '',
-        country: 'France',
+        country: paysParDefaut,
         isDefault: addresses.length === 0,
       },
     });
@@ -2443,13 +2742,15 @@ async function postDeleteAddress(req, res, next) {
 }
 
 function getRegister(req, res) {
+  // Lien « Konto erstellen » de la connexion allemande : même langue que le tunnel.
+  const lang = applyCheckoutLocale(req, res);
   const dbConnected = mongoose.connection.readyState === 1;
   const returnTo = getSafeReturnTo(req.query.returnTo) || '/compte';
 
   const defaultType = req.session.accountType === 'pro' ? 'pro' : 'particulier';
 
   res.render('account/register', {
-    title: `Créer un compte - ${brand.NAME}`,
+    title: `${traduire(lang, 'account.registerTitle')} - ${brand.NAME}`,
     dbConnected,
     errorMessage: null,
     form: {
@@ -2466,15 +2767,16 @@ function getRegister(req, res) {
 
 async function postRegister(req, res, next) {
   try {
+    const lang = applyCheckoutLocale(req, res);
     const dbConnected = mongoose.connection.readyState === 1;
 
     const ip = getClientIp(req);
     const honeypot = getTrimmedString(req.body && req.body.website);
     if (honeypot) {
       return res.status(400).render('account/register', {
-        title: `Créer un compte - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.registerTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Merci de remplir tous les champs obligatoires.',
+        errorMessage: traduire(lang, 'account.errRequiredFields'),
         form: {
           accountType: req.body.accountType === 'pro' ? 'pro' : 'particulier',
           firstName: typeof req.body.firstName === 'string' ? req.body.firstName.trim() : '',
@@ -2490,9 +2792,9 @@ async function postRegister(req, res, next) {
     const limit = consumeRateLimit(REGISTER_BUCKETS, ip, { limit: 12, windowMs: 10 * 60 * 1000 });
     if (limit.limited) {
       return res.status(429).render('account/register', {
-        title: `Créer un compte - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.registerTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Trop de tentatives. Merci de patienter quelques minutes puis de réessayer.',
+        errorMessage: traduire(lang, 'account.errTooManyAttempts'),
         form: {
           accountType: req.body.accountType === 'pro' ? 'pro' : 'particulier',
           firstName: typeof req.body.firstName === 'string' ? req.body.firstName.trim() : '',
@@ -2524,9 +2826,9 @@ async function postRegister(req, res, next) {
 
     if (!dbConnected) {
       return res.status(503).render('account/register', {
-        title: `Créer un compte - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.registerTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: "La base de données n'est pas disponible. Impossible de créer un compte pour le moment.",
+        errorMessage: traduire(lang, 'account.errRegisterDbUnavailable'),
         form,
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2534,9 +2836,9 @@ async function postRegister(req, res, next) {
 
     if (!firstName || !lastName || !email || !password) {
       return res.status(400).render('account/register', {
-        title: `Créer un compte - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.registerTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Merci de remplir tous les champs obligatoires.',
+        errorMessage: traduire(lang, 'account.errRequiredFields'),
         form,
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2544,9 +2846,9 @@ async function postRegister(req, res, next) {
 
     if (!acceptTerms) {
       return res.status(400).render('account/register', {
-        title: `Créer un compte - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.registerTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Merci d’accepter les CGV et la politique de confidentialité.',
+        errorMessage: traduire(lang, 'account.errAcceptTerms'),
         form,
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2554,9 +2856,9 @@ async function postRegister(req, res, next) {
 
     if (password.length < 6) {
       return res.status(400).render('account/register', {
-        title: `Créer un compte - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.registerTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Le mot de passe doit faire au moins 6 caractères.',
+        errorMessage: traduire(lang, 'account.errPasswordTooShort'),
         form,
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2564,9 +2866,9 @@ async function postRegister(req, res, next) {
 
     if (accountType === 'pro' && (!companyName || !siret)) {
       return res.status(400).render('account/register', {
-        title: `Créer un compte - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.registerTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Pour un compte Pro, merci de renseigner la société et le SIRET.',
+        errorMessage: traduire(lang, 'account.errProCompanyRequired'),
         form,
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });
@@ -2575,8 +2877,27 @@ async function postRegister(req, res, next) {
     const salt = crypto.randomBytes(16).toString('hex');
     const passwordHash = hashPassword(password, salt);
 
+    /* Le formulaire allemand propose « Firmennummer (SIRET oder USt-IdNr.) »,
+       exemple DE123456789 ; le formulaire français demande un SIRET. Un n° de
+       TVA intracommunautaire reconnu est recopié dans `vatNumberEu` — c'est le
+       champ que lit l'autoliquidation.
+       Le test porte sur le format RÉEL du pays (viesValidator) : « 2 lettres +
+       2 à 12 caractères » prenait aussi les numéros de registre du commerce
+       allemands (« HRB 123456 » → préfixe HR, Croatie).
+       `siret` garde la saisie DANS TOUS LES CAS : la vider faisait disparaître
+       le numéro d'entreprise des factures (invoicePdf ne lit que `siret`) et
+       bloquait /compte/profil, qui l'exige pour un compte pro. C'est la facture
+       qui choisit l'intitulé — « N° TVA » plutôt que « SIRET » — pas le
+       stockage. */
+    const numeroEntreprise = accountType === 'pro' ? siret.replace(/[\s.\-]/g, '').toUpperCase() : '';
+    const estNumeroTvaUe = estFormatTvaUe(numeroEntreprise);
+
     const created = await User.create({
       accountType,
+      /* Langue des e-mails liés au compte (bienvenue, mot de passe oublié) :
+         celle du parcours d'inscription, comme le compte créé en invité au
+         paiement. Sans elle, le compte valait « fr » par défaut. */
+      lang: lang === 'de' ? 'de' : 'fr',
       firstName,
       lastName,
       email,
@@ -2584,6 +2905,7 @@ async function postRegister(req, res, next) {
       passwordHash,
       companyName: accountType === 'pro' ? companyName : '',
       siret: accountType === 'pro' ? siret : '',
+      vatNumberEu: estNumeroTvaUe ? numeroEntreprise : '',
     });
 
     try {
@@ -2612,6 +2934,10 @@ async function postRegister(req, res, next) {
     const prevCart = req.session && req.session.cart ? req.session.cart : null;
     const prevCheckout = req.session && req.session.checkout ? req.session.checkout : null;
     const prevPromoCode = req.session && req.session.promoCode ? req.session.promoCode : null;
+    /* La langue du tunnel survit à la connexion : sans elle, un client allemand
+       repassait en français juste après « Anmelden » (paiement Mollie, e-mails
+       et Order.lang compris). Recopiée seulement si elle existait. */
+    const prevLang = req.session && req.session.preferredLang ? req.session.preferredLang : null;
 
     if (req.session && typeof req.session.regenerate === 'function') {
       return req.session.regenerate((err) => {
@@ -2619,6 +2945,7 @@ async function postRegister(req, res, next) {
         if (prevCart) req.session.cart = prevCart;
         if (prevCheckout) req.session.checkout = prevCheckout;
         if (prevPromoCode) req.session.promoCode = prevPromoCode;
+        if (prevLang) req.session.preferredLang = prevLang;
         req.session.user = nextSessionUser;
         req.session.accountType = created.accountType;
         /* Rattrape les ajouts panier faits en anonyme */
@@ -2634,6 +2961,7 @@ async function postRegister(req, res, next) {
     return req.session.save(() => res.redirect(target));
   } catch (err) {
     if (err && err.code === 11000) {
+      const lang = applyCheckoutLocale(req, res);
       const dbConnected = mongoose.connection.readyState === 1;
       const form = {
         accountType: req.body.accountType === 'pro' ? 'pro' : 'particulier',
@@ -2645,9 +2973,9 @@ async function postRegister(req, res, next) {
       };
 
       return res.status(409).render('account/register', {
-        title: `Créer un compte - ${brand.NAME}`,
+        title: `${traduire(lang, 'account.registerTitle')} - ${brand.NAME}`,
         dbConnected,
-        errorMessage: 'Un compte existe déjà avec cet email.',
+        errorMessage: traduire(lang, 'account.errEmailExists'),
         form,
         returnTo: getSafeReturnTo(req.body.returnTo) || '/compte',
       });

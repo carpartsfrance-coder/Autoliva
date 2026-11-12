@@ -3,32 +3,36 @@ const mongoose = require('mongoose');
 const BlogPost = require('../models/BlogPost');
 const Product = require('../models/Product');
 const { buildProductPublicPath, getPublicBaseUrlFromReq } = require('../services/productPublic');
-const { markdownToHtml, escapeHtml } = require('../services/blogContent');
+const blogProductCta = require('../services/blogProductCta');
+const nettoyageArticle = require('../services/nettoyageArticle');
+const signatureArticle = require('../services/signatureArticle');
+const claimFilter = require('../services/claimFilter');
+const scalapay = require('../services/scalapay');
+const { markdownToHtml, escapeHtml, directivesProduitHtml, slugsEncadresProduit, remplirEncadresProduit } = require('../services/blogContent');
 const { buildHreflangSet } = require('../services/i18n');
-const { buildSeoMediaUrl } = require('../services/mediaStorage');
+const mediaStorage = require('../services/mediaStorage');
+const { buildSeoMediaUrl } = mediaStorage;
 const brand = require('../config/brand');
+const datesSeo = require('../services/datesSeo');
+/* Politique d'indexation (plan de reprise SEO du 14/09/2026, action A5.5) :
+   toute requête publique passe par publicBlogFilter — les articles en 410
+   n'apparaissent nulle part, ceux en noindex quittent les listes. */
+const { publicBlogFilter, retirerLiensDisparus, articlesAMailler } = require('../services/seoIndexPolicy');
+const titreSeo = require('../services/titreSeo');
+const pagesFamilles = require('../services/pagesFamilles');
 
 function getTrimmedString(value) {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-/* Garde-fou title SEO : 60 char max (limite SERP Google). Préserve le suffix
- * " | Brand" ou " - Brand" si présent, sinon tronque proprement. */
-const SEO_TITLE_MAX = 60;
+/* Title SEO : 60 caractères au plus, coupé entre deux mots, sans « … », les
+ * codes (DQ200, P17BF, références) jamais coupés — audit SEO du 11/11/2026,
+ * services/titreSeo.js. La marque « | Autoliva » est gardée tant que le texte
+ * coupé reste parlant (title ≠ h1, alertes Semrush). */
 function clampSeoTitle(t) {
   if (!t) return t;
-  const s = String(t).trim();
-  if (s.length <= SEO_TITLE_MAX) return s;
-  const suffixes = [` | ${brand.NAME}`, ` - ${brand.NAME}`];
-  for (const sx of suffixes) {
-    if (s.endsWith(sx)) {
-      const head = s.slice(0, s.length - sx.length).trim();
-      const maxHead = Math.max(20, SEO_TITLE_MAX - sx.length - 1);
-      const cut = head.length > maxHead ? `${head.slice(0, maxHead).trim()}…` : head;
-      return `${cut}${sx}`;
-    }
-  }
-  return `${s.slice(0, SEO_TITLE_MAX - 1).trim()}…`;
+  const { texte, suffixe } = titreSeo.separerSuffixe(String(t), brand.NAME);
+  return titreSeo.ajusterTitre(texte, { suffixe, modeSuffixe: 'prefere' });
 }
 
 function normalizeComparableText(value) {
@@ -243,10 +247,25 @@ function stripLeadingSommaireSectionFromMarkdown(markdown) {
 function getPostContentHtml(post) {
   if (!post) return '';
   if (typeof post.contentMarkdown === 'string' && post.contentMarkdown.trim()) {
-    return markdownToHtml(post.contentMarkdown);
+    return markdownToHtml(nettoyageArticle.nettoyerMarkdown(post.contentMarkdown));
   }
   if (typeof post.contentHtml === 'string' && post.contentHtml.trim()) return post.contentHtml;
   return '';
+}
+
+/* Markdown tel que la page l'affiche : restes de la chaîne retirés (en-tête
+   YAML, JSON-LD collé, marqueurs), titre répété en tête, lignes « Meta
+   title : … », sommaire et filets de tête. '' si l'article n'a pas de
+   Markdown. */
+function markdownAffiche(post) {
+  const cleanedMarkdown = (post && typeof post.contentMarkdown === 'string' && post.contentMarkdown.trim())
+    ? stripLeadingSommaireSectionFromMarkdown(
+        stripLeadingSeoNoiseFromMarkdown(
+          stripDuplicateLeadingTitleFromMarkdown(nettoyageArticle.nettoyerMarkdown(post.contentMarkdown), post.title)
+        )
+      )
+    : '';
+  return cleanedMarkdown ? stripLeadingHorizontalRulesFromMarkdown(cleanedMarkdown) : '';
 }
 
 function normalizeMetaText(value) {
@@ -329,12 +348,24 @@ function clampInt(value, { min, max, fallback } = {}) {
   return floored;
 }
 
+/* ~200 mots par minute, arrondi, 1 minute au moins. */
 function estimateReadingTimeMinutes(text) {
   const plain = stripHtml(text);
-  if (!plain) return 0;
-  const words = plain.split(/\s+/).filter(Boolean).length;
-  const minutes = Math.ceil(words / 220);
-  return clampInt(minutes, { min: 1, max: 60, fallback: 1 });
+  const words = plain ? plain.split(/\s+/).filter(Boolean).length : 0;
+  return clampInt(Math.round(words / 200), { min: 1, max: 60, fallback: 1 });
+}
+
+/**
+ * Temps de lecture d'un article : TOUJOURS recalculé, jamais lu en base.
+ * La valeur stockée (readingTimeMinutes) venait de la chaîne de génération :
+ * un article de 210 mots annonçait « 7 min » (audit du 25/09/2026). On compte
+ * le corps tel qu'il s'affiche, restes de la chaîne retirés ; même calcul sur
+ * la liste du blog et sur l'article, qui disent donc le même chiffre.
+ */
+function tempsDeLecture(post) {
+  const md = markdownAffiche(post);
+  const html = md ? markdownToHtml(md) : getPostContentHtml(post);
+  return estimateReadingTimeMinutes(nettoyageArticle.nettoyerHtml(html || '', { lang: 'fr' }));
 }
 
 function resolveAbsoluteUrl(baseUrl, rawUrl) {
@@ -423,7 +454,7 @@ function getBlogIndex(req, res) {
       });
     }
 
-    const featuredDoc = await BlogPost.findOne({ isPublished: true, isFeatured: true })
+    const featuredDoc = await BlogPost.findOne(publicBlogFilter({ isPublished: true, isFeatured: true }))
       .sort({ publishedAt: -1, createdAt: -1 })
       .lean();
 
@@ -438,10 +469,10 @@ function getBlogIndex(req, res) {
 
     const showFeatured = !q && !category && page <= 1;
 
-    const listingFilter = {
+    const listingFilter = publicBlogFilter({
       ...baseFilter,
       ...((showFeatured && featuredDoc && featuredDoc.slug) ? { slug: { $ne: featuredDoc.slug } } : {}),
-    };
+    });
 
     const perPage = 12;
     const total = await BlogPost.countDocuments(listingFilter);
@@ -454,7 +485,7 @@ function getBlogIndex(req, res) {
       .limit(perPage)
       .lean();
 
-    const allForCategories = await BlogPost.find({ isPublished: true })
+    const allForCategories = await BlogPost.find(publicBlogFilter({ isPublished: true }))
       .select('category')
       .lean();
 
@@ -464,15 +495,12 @@ function getBlogIndex(req, res) {
 
     const mappedAll = docs.map((d) => {
       const publishedAt = d && d.publishedAt ? d.publishedAt : d && d.createdAt ? d.createdAt : null;
-      const contentHtml = getPostContentHtml(d);
-      const minutes = Number.isFinite(d.readingTimeMinutes) && d.readingTimeMinutes > 0
-        ? d.readingTimeMinutes
-        : estimateReadingTimeMinutes(contentHtml || '');
+      const minutes = tempsDeLecture(d);
 
       return {
         slug: d.slug,
-        title: d.title,
-        excerpt: d.excerpt,
+        title: nettoyageArticle.nettoyerTexte(d.title),
+        excerpt: nettoyageArticle.nettoyerTexte(d.excerpt),
         imageUrl: buildSeoMediaUrl(coverFor(d), d.title),
         category: d.category && d.category.slug ? { slug: d.category.slug, label: d.category.label || d.category.slug } : null,
         dateLabel: formatDateFR(publishedAt),
@@ -491,12 +519,12 @@ function getBlogIndex(req, res) {
     const featured = showFeatured && featuredDoc
       ? {
           slug: featuredDoc.slug,
-          title: featuredDoc.title,
-          excerpt: featuredDoc.excerpt,
+          title: nettoyageArticle.nettoyerTexte(featuredDoc.title),
+          excerpt: nettoyageArticle.nettoyerTexte(featuredDoc.excerpt),
           imageUrl: buildSeoMediaUrl(coverFor(featuredDoc), featuredDoc.title),
           category: featuredDoc.category && featuredDoc.category.slug ? { slug: featuredDoc.category.slug, label: featuredDoc.category.label || featuredDoc.category.slug } : null,
           dateLabel: formatDateFR(featuredDoc.publishedAt || featuredDoc.createdAt),
-          readTimeLabel: `${Number.isFinite(featuredDoc.readingTimeMinutes) && featuredDoc.readingTimeMinutes > 0 ? featuredDoc.readingTimeMinutes : estimateReadingTimeMinutes(getPostContentHtml(featuredDoc) || '')} min`,
+          readTimeLabel: `${tempsDeLecture(featuredDoc)} min`,
           url: `/blog/${encodeURIComponent(featuredDoc.slug)}`,
         }
       : null;
@@ -515,7 +543,7 @@ function getBlogIndex(req, res) {
       ],
     });
 
-    const popularArticles = await BlogPost.find({ isPublished: true })
+    const popularArticles = await BlogPost.find(publicBlogFilter({ isPublished: true }))
       .sort({ publishedAt: -1, createdAt: -1 })
       .limit(5)
       .select('slug title category')
@@ -523,7 +551,7 @@ function getBlogIndex(req, res) {
 
     const popularView = (popularArticles || []).map((p, idx) => ({
       rank: String(idx + 1).padStart(2, '0'),
-      title: p.title,
+      title: nettoyageArticle.nettoyerTexte(p.title),
       meta: `${(p.category && p.category.label) ? p.category.label : 'Blog'} • récent`,
       url: `/blog/${encodeURIComponent(p.slug)}`,
     }));
@@ -578,7 +606,9 @@ async function getBlogPost(req, res) {
       return res.status(503).render('errors/500', { title: `Erreur - ${brand.NAME}` });
     }
 
-    const post = await BlogPost.findOne({ slug: slugParam, isPublished: true }).lean();
+    /* L'article lui-même reste servi quand il sort de Google (noindex) : seul
+       le 410 l'écarte — et le middleware de la politique a déjà répondu. */
+    const post = await BlogPost.findOne(publicBlogFilter({ slug: slugParam, isPublished: true }, { page: true })).lean();
     if (!post) {
       return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
     }
@@ -600,21 +630,16 @@ async function getBlogPost(req, res) {
       ];
     }
 
-    const cleanedMarkdown = (post && typeof post.contentMarkdown === 'string' && post.contentMarkdown.trim())
-      ? stripLeadingSommaireSectionFromMarkdown(
-          stripLeadingSeoNoiseFromMarkdown(
-            stripDuplicateLeadingTitleFromMarkdown(post.contentMarkdown, post.title)
-          )
-        )
-      : '';
+    const finalMarkdown = markdownAffiche(post);
 
-    const finalMarkdown = cleanedMarkdown
-      ? stripLeadingHorizontalRulesFromMarkdown(cleanedMarkdown)
-      : '';
-
-    let contentHtml = finalMarkdown
+    /* « :::product[slug] » resté en clair dans un corps HTML : même
+       emplacement que dans le Markdown, rempli plus bas. */
+    let contentHtml = directivesProduitHtml(finalMarkdown
       ? markdownToHtml(finalMarkdown)
-      : getPostContentHtml(post);
+      : getPostContentHtml(post));
+    /* Titre de l'article : ancien sigle « CPF » et ancien nom retirés, dans
+       le H1, le <title>, le JSON-LD et le fil d'Ariane. */
+    const titreArticle = nettoyageArticle.nettoyerTexte(post.title);
 
     const canonicalUrl = (() => {
       const customPath = post.seo && post.seo.canonicalPath ? post.seo.canonicalPath.trim() : '';
@@ -644,8 +669,15 @@ async function getBlogPost(req, res) {
       return buildBlogPostCanonical(baseUrl, post.slug);
     })();
 
-    const computedDesc = truncateText(stripHtml(post.excerpt || contentHtml || ''), 160);
-    const metaDescription = normalizeMetaText(post.seo && post.seo.metaDescription ? post.seo.metaDescription : computedDesc);
+    /* Résumé et description Google passent par le même filtre que le corps :
+       9 résumés et 13 descriptions promettaient encore le 3x, et le résumé
+       s'affiche juste au-dessus du texte filtré. Calculés sur le corps
+       NETTOYÉ, pas sur le brut (JSON-LD collé en tête d'article). Un texte
+       vidé par le filtre retombe sur le suivant. Plan SEO A11. */
+    const sansAllegation = (t) => (t ? nettoyageArticle.nettoyerTexte(claimFilter.filtrer(t, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }))) : '');
+    const excerptPropre = sansAllegation(post.excerpt);
+    const computedDesc = truncateText(stripHtml(excerptPropre || sansAllegation(nettoyageArticle.nettoyerHtml(contentHtml || '', { lang: 'fr' })) || ''), 160);
+    const metaDescription = normalizeMetaText((post.seo && post.seo.metaDescription && sansAllegation(post.seo.metaDescription)) || computedDesc);
     /* Title : on garantit toujours le suffix " | Autoliva" pour éviter que
      * <title> et <h1> soient identiques (cause des 14 alertes Semrush
      * "duplicate H1 and title tags" sur les articles blog). Si le DB
@@ -663,11 +695,11 @@ async function getBlogPost(req, res) {
       return `${trimmed} | ${brand.NAME}`;
     }
     const rawTitle = post.seo && post.seo.metaTitle
-      ? ensureBrandSuffixOnBlogTitle(post.seo.metaTitle)
-      : `${post.title} | ${brand.NAME}`;
+      ? ensureBrandSuffixOnBlogTitle(nettoyageArticle.nettoyerTexte(post.seo.metaTitle))
+      : `${titreArticle} | ${brand.NAME}`;
     const title = clampSeoTitle(normalizeMetaText(rawTitle));
 
-    const excerptForView = post.excerpt || computedDesc;
+    const excerptForView = excerptPropre || computedDesc;
 
     if (!post.excerpt && finalMarkdown) {
       const withoutLeadParagraph = stripLeadingParagraphFromMarkdown(finalMarkdown);
@@ -683,22 +715,38 @@ async function getBlogPost(req, res) {
     let related = [];
     if (Array.isArray(post.relatedProductIds) && post.relatedProductIds.length) {
       related = await Product.find({ _id: { $in: post.relatedProductIds } })
-        .select('_id name priceCents imageUrl slug')
+        .select('_id name priceCents imageUrl slug ' + blogProductCta.CHAMPS_FICHE)
         .lean();
     }
 
     // Couverture : image de l'article ; à défaut, image principale du 1er produit lié.
     const relatedMainImage = (related.find((p) => p && p.imageUrl) || {}).imageUrl || '';
-    const effectiveCoverImageUrl = post.coverImageUrl || relatedMainImage;
+    /* Une adresse qui pointe vers un fichier disparu est une chaîne bien
+       remplie : pour le code elle « existe », et le repli ci-dessous ne se
+       déclenchait donc jamais. Résultat, pendant des mois, 191 articles ont
+       affiché un carré gris — et l'ont envoyé en og:image à Google et aux
+       réseaux. On traite désormais une image morte comme une image absente,
+       ce qui rend au repli son rôle. En cache : les couvertures sont très
+       partagées, une seule lecture sert tout le monde. */
+    const absentsCouverture = await mediaStorage.idsAbsentsEnCache([
+      post.coverImageUrl,
+      post.seo && post.seo.ogImageUrl,
+      relatedMainImage,
+    ]);
+    const siVivante = (url) => (url && !mediaStorage.estMediaAbsent(url, absentsCouverture) ? url : '');
+    const effectiveCoverImageUrl = siVivante(post.coverImageUrl) || siVivante(relatedMainImage);
 
-    const ogImageRaw = (post.seo && post.seo.ogImageUrl) ? post.seo.ogImageUrl : effectiveCoverImageUrl;
+    const ogImageRaw = siVivante(post.seo && post.seo.ogImageUrl) || effectiveCoverImageUrl;
     const ogImage = ogImageRaw ? resolveAbsoluteUrl(baseUrl, ogImageRaw) : '';
 
     const publishedAt = post.publishedAt || post.createdAt || null;
-    const updatedAt = post.updatedAt || publishedAt || null;
-    const readingTimeMinutes = Number.isFinite(post.readingTimeMinutes) && post.readingTimeMinutes > 0
-      ? post.readingTimeMinutes
-      : estimateReadingTimeMinutes(contentHtml || '');
+    /* Dernière modification annoncée (JSON-LD dateModified, article:
+       modified_time) : la publication, jamais updatedAt — une écriture en
+       masse du 08/09 avait daté du jour 1 173 articles inchangés. Plan de
+       reprise SEO du 14/09/2026, action A4.5 ; la date de relecture humaine
+       (A12) viendra s'y substituer. */
+    const modifieLe = datesSeo.dateModificationArticle(post);
+    const readingTimeMinutes = tempsDeLecture(post);
 
     const relatedView = (related || []).map((p) => {
       const priceEuros = Number.isFinite(p.priceCents) ? (p.priceCents / 100).toFixed(2).replace('.', ',') : '';
@@ -711,48 +759,73 @@ async function getBlogPost(req, res) {
       };
     });
 
-    if (related.length && contentHtml) {
-      const p = related[0];
-      const cents = Number.isFinite(p.priceCents) ? p.priceCents : 0;
-      const priceEuros = (cents / 100).toFixed(2).replace('.', ',');
-      const troisFois = cents > 50000
-        ? `soit 3x ${(cents / 300).toFixed(2).replace('.', ',')} € sans frais`
-        : '';
-      const prodUrl = buildProductPublicPath(p);
-      const ctaHtml = `<div class="blog-product-cta" data-product-cta="1">`
-        + `<span class="cta-eyebrow">Pièce reconditionnée — Garantie 2 ans</span>`
-        + `<h3 class="cta-title">${escapeHtml(p.name || '')}</h3>`
-        + `<span class="cta-price">${priceEuros} € TTC</span>`
-        + (troisFois ? `<span class="cta-price-sub">${troisFois}</span>` : '')
-        + `<ul class="cta-features">`
-        + `<li>Testé et garanti 24 mois</li>`
-        + `<li>Livraison express 24/48h</li>`
-        + `<li>Support technique dédié</li>`
-        + `<li>Paiement sécurisé en 3x sans frais</li>`
-        + `</ul>`
-        + `<a class="cta-btn" href="${escapeHtml(prodUrl)}">Voir la fiche produit</a>`
-        + `<a class="cta-btn-outline" href="/contact">Contacter un technicien</a>`
-        + `</div>`;
-      contentHtml = contentHtml.replace(
-        /<div class="blog-product-cta" data-product-cta="1"><\/div>/g,
-        ctaHtml
-      );
-    }
+    /* Restes de la chaîne de production retirés À L'AFFICHAGE (JSON-LD collé
+       dans le texte, titres « cocon / satellite », ancien nom, liens vers la
+       préproduction coupée) — plan SEO A12. Avant l'encadré produit et avant
+       le retrait des liens vers les articles en 410, pour que les liens
+       réécrits y passent aussi. */
+    contentHtml = nettoyageArticle.nettoyerHtml(contentHtml, { lang: 'fr' });
+    /* Mêmes promesses non prouvées que les fiches (3x/4x tant que Scalapay
+       est coupé, ISO 9001, « nos ateliers »…) : 303 articles promettaient
+       encore le paiement en plusieurs fois. Plan SEO A11. */
+    contentHtml = claimFilter.filtrer(contentHtml, claimFilter.contexteArticle({ scalapayActif: scalapay.estActif() }));
+    const signe = signatureArticle.signature(post, { lang: 'fr', marque: brand.NAME, baseUrl });
 
-    const similarDocs = await BlogPost.find({
+    /* L'encadré ne promet plus que ce que dit la fiche (état, garantie,
+       délai, 3x seulement si Scalapay est actif) — plan SEO A11.
+       « :::product » : la 1re fiche liée à l'article. « :::product[slug] » :
+       la fiche de ce slug, si elle existe et est publiée. Sans fiche,
+       l'emplacement disparaît — ni directive en clair, ni cadre vide. */
+    const cta = (p) => blogProductCta.construireCta(p, {
+      lang: 'fr',
+      url: buildProductPublicPath(p),
+      nom: p.name || '',
+    });
+    const slugsNommes = slugsEncadresProduit(contentHtml);
+    const fichesNommees = slugsNommes.length
+      ? await Product.find({ slug: { $in: slugsNommes }, isPublished: { $in: [true, null] } })
+        .select('_id name priceCents imageUrl slug ' + blogProductCta.CHAMPS_FICHE)
+        .lean()
+      : [];
+    const ficheParSlug = new Map(fichesNommees.map((p) => [p.slug, p]));
+    contentHtml = remplirEncadresProduit(contentHtml, {
+      nomme: (slug) => (ficheParSlug.has(slug) ? cta(ficheParSlug.get(slug)) : ''),
+      lie: () => (related.length ? cta(related[0]) : ''),
+    });
+
+    /* Liens vers un article en 410 : le texte reste, la balise <a> part — dans
+       les trois écritures de l'adresse (plan SEO A5.5). */
+    contentHtml = retirerLiensDisparus(contentHtml);
+
+    let similarDocs = await BlogPost.find(publicBlogFilter({
       isPublished: true,
       slug: { $ne: post.slug },
       ...(post.category && post.category.slug ? { 'category.slug': post.category.slug } : {}),
-    })
+    }))
       .sort({ publishedAt: -1, createdAt: -1 })
       .limit(4)
       .select('slug title coverImageUrl relatedProductIds')
       .lean();
 
+    /* Articles gardés qui n'ont plus aucun lien depuis un autre article gardé
+       (kept-posts-need-inlinks.txt) : chacun est placé en tête du bloc
+       « articles similaires » d'un article gardé — rien tant que ni « blog »
+       ni « gone » n'est actif. */
+    const aMailler = (await articlesAMailler(post.slug)).filter((s) => s !== post.slug);
+    if (aMailler.length) {
+      const mailles = await BlogPost.find(publicBlogFilter({ isPublished: true, slug: { $in: aMailler } }))
+        .select('slug title coverImageUrl relatedProductIds')
+        .lean();
+      const parSlug = new Map(mailles.map((d) => [d.slug, d]));
+      const enTete = aMailler.map((s) => parSlug.get(s)).filter(Boolean);
+      const dejaLa = new Set(enTete.map((d) => d.slug));
+      similarDocs = enTete.concat((similarDocs || []).filter((d) => !dejaLa.has(d.slug))).slice(0, 4);
+    }
+
     const similarCoverMap = await resolveRelatedCoverMap(similarDocs || []);
     const similarPosts = (similarDocs || []).map((s) => ({
       slug: s.slug,
-      title: s.title,
+      title: nettoyageArticle.nettoyerTexte(s.title),
       imageUrl: buildSeoMediaUrl(s.coverImageUrl || similarCoverMap.get(String(s.slug || s._id || '')) || '', s.title),
       url: `/blog/${encodeURIComponent(s.slug)}`,
     }));
@@ -773,22 +846,21 @@ async function getBlogPost(req, res) {
       {
         '@type': 'ListItem',
         position: 3,
-        name: post.title,
+        name: titreArticle,
         item: canonicalUrl,
       },
     ];
 
     const jsonLdObj = {
       '@type': 'BlogPosting',
-      headline: post.title,
+      headline: titreArticle,
       description: computedDesc || undefined,
       image: ogImage ? [ogImage] : undefined,
       datePublished: publishedAt ? new Date(publishedAt).toISOString() : undefined,
-      dateModified: updatedAt ? new Date(updatedAt).toISOString() : undefined,
-      author: {
-        '@type': 'Person',
-        name: post.authorName || brand.NAME,
-      },
+      dateModified: datesSeo.isoPasse(modifieLe) || undefined,
+      /* Plus de « Person » fictive : l'équipe (Organization), ou la personne
+         qui a réellement relu l'article (plan SEO A12). */
+      author: signe.auteurJsonLd,
       publisher: {
         '@type': 'Organization',
         name: brand.NAME,
@@ -853,7 +925,7 @@ async function getBlogPost(req, res) {
     });
 
     const ogArticlePublishedTime = publishedAt ? new Date(publishedAt).toISOString() : '';
-    const ogArticleModifiedTime = updatedAt ? new Date(updatedAt).toISOString() : '';
+    const ogArticleModifiedTime = datesSeo.isoPasse(modifieLe);
 
     /* Maillage interne : on enrichit avec detectedVehicleLandings (links vers
        /pieces-auto/{make}/{model} si l'article mentionne une marque/modèle).
@@ -884,12 +956,14 @@ async function getBlogPost(req, res) {
       jsonLd,
       metaRobots: post.seo && post.seo.metaRobots ? post.seo.metaRobots : res.locals.metaRobots,
       post: {
-        title: post.title,
+        title: titreArticle,
         slug: post.slug,
         excerpt: excerptForView,
         coverImageUrl: buildSeoMediaUrl(effectiveCoverImageUrl, post.title),
         category: post.category && post.category.slug ? { slug: post.category.slug, label: post.category.label || post.category.slug } : null,
-        authorName: post.authorName || 'Expert CarParts',
+        authorName: signe.nom,
+        verification: signe.verification,
+        mentionIa: signe.mentionIa,
         dateLabel: formatDateFR(publishedAt),
         readingTimeLabel: `${readingTimeMinutes} min de lecture`,
         contentHtml: contentHtml || '',
@@ -897,6 +971,12 @@ async function getBlogPost(req, res) {
       relatedProducts: relatedView,
       similarPosts,
       blogLinking,
+      /* Lien de fin d'article vers la page catégorie de la famille (audit
+         SEO du 11/11/2026, problème 8). */
+      lienFamille: pagesFamilles.lienFamillePourArticle({
+        categorie: post.category && post.category.slug,
+        titre: titreArticle,
+      }, 'fr'),
     });
   })().catch((err) => {
     console.error(err);
@@ -907,4 +987,6 @@ async function getBlogPost(req, res) {
 module.exports = {
   getBlogIndex,
   getBlogPost,
+  /* Exposé pour les tests : le temps de lecture est recalculé, jamais lu. */
+  _pourTests: { tempsDeLecture, estimateReadingTimeMinutes },
 };

@@ -10,6 +10,7 @@ const SavProcedure = require('../../models/SavProcedure');
 const AuditLog = require('../../models/AuditLog');
 const audit = require('../../services/auditLogger');
 const savFileStorage = require('../../services/savFileStorage');
+const savMessageHtml = require('../../services/savMessageHtml');
 const brand = require('../../config/brand');
 
 const router = express.Router();
@@ -138,6 +139,28 @@ publicRouter.get('/verify-report/:numero', async (req, res) => {
   } catch (err) { return fail(res, err.message, 500); }
 });
 
+// GET /api/sav/dossier-fournisseur/:numero.pdf?h= — dossier en anglais pour le fournisseur.
+// Lien signé partagé sur WhatsApp : ouvrable sans compte, uniquement avec la bonne signature.
+publicRouter.get('/dossier-fournisseur/:numero.pdf', async (req, res) => {
+  try {
+    const dossier = require('../../services/savDossierFournisseur');
+    if (!dossier.verifySignature(req.params.numero, req.query.h)) return res.status(403).send('Lien invalide');
+    const ticket = await SavTicket.findOne({ numero: req.params.numero }).lean();
+    if (!ticket) return res.status(404).send('Dossier introuvable');
+    const order = ticket.numeroCommande
+      ? await Order.findOne({ number: ticket.numeroCommande }).select('number items.name items.sku createdAt').lean()
+      : null;
+    const pdf = await dossier.buildPdf(ticket, order, { baseUrl: `${req.protocol}://${req.get('host')}` });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${dossier.fileNaming(ticket, order).pdfFileName}"`);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Robots-Tag', 'noindex');
+    return res.end(pdf);
+  } catch (err) {
+    return res.status(500).send('Erreur de génération du dossier');
+  }
+});
+
 // GET /api/sav/satisfaction/:numero — page publique de notation post-clôture (NPS/CSAT)
 publicRouter.get('/satisfaction/:numero', async (req, res) => {
   try {
@@ -203,6 +226,10 @@ publicRouter.post('/tickets', async (req, res) => {
     const userAgent = (req.headers['user-agent'] || '').toString().slice(0, 500);
 
     const ticket = new SavTicket({
+      /* Langue reprise de la session de dépôt du dossier ; à défaut, le
+         français. Une reprise depuis la commande serait plus sûre encore —
+         c'est le prochain palier si des SAV allemands apparaissent. */
+      lang: (req.session && req.session.preferredLang === 'de') ? 'de' : 'fr',
       motifSav,
       pieceType: body.pieceType,
       referencePiece: body.referencePiece,
@@ -412,6 +439,28 @@ publicRouter.post('/tickets/:numero/messages', async (req, res) => {
 const adminRouter = express.Router();
 adminRouter.use(requireAdminToken);
 
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Allège une ligne de liste : on remplace le fil complet par le dernier message
+// du client (ce qu'il faut lire pour décider), le reste du fil n'est utile qu'en fiche.
+function toListItems(tickets) {
+  tickets.forEach((t) => {
+    const msgs = Array.isArray(t.messages) ? t.messages : [];
+    let last = null;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i] && msgs[i].auteur === 'client' && msgs[i].canal !== 'interne') { last = msgs[i]; break; }
+    }
+    if (last) {
+      const txt = String(last.contenu || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      t.lastClientMessage = { extrait: txt.length > 180 ? txt.slice(0, 177) + '…' : txt, date: last.date };
+    }
+    delete t.messages;
+  });
+  return tickets;
+}
+
 // GET /admin/api/sav/tickets — liste filtrable, paginée, triée
 adminRouter.get('/tickets', async (req, res) => {
   try {
@@ -430,6 +479,11 @@ adminRouter.get('/tickets', async (req, res) => {
     }
     if (req.query.assignedTeam) {
       q.assignedTeam = req.query.assignedTeam;
+    }
+    // Type de client : B2B (pro), B2C (particulier) ou inconnu (rapprochement échoué).
+    if (req.query.clientType) {
+      const arr = String(req.query.clientType).split(',').filter(Boolean);
+      q['client.type'] = arr.length > 1 ? { $in: arr } : arr[0];
     }
     if (req.query.assignedToUserId) {
       if (req.query.assignedToUserId === '__none__') {
@@ -483,16 +537,22 @@ adminRouter.get('/tickets', async (req, res) => {
     if (req.query.search) {
       const s = String(req.query.search).trim();
       if (s) {
+        // Échappé : « +33 6… » ou une parenthèse faisaient planter la recherche (regex invalide).
+        const re = new RegExp(escapeRegex(s), 'i');
         q.$or = [
-          { numero: new RegExp(s, 'i') },
-          { 'client.email': new RegExp(s, 'i') },
-          { 'client.nom': new RegExp(s, 'i') },
-          { 'vehicule.vin': new RegExp(s, 'i') },
-          { 'messages.contenu': new RegExp(s, 'i') },
-          { 'diagnostic.description': new RegExp(s, 'i') },
-          { 'vehicule.immatriculation': new RegExp(s, 'i') },
-          { numeroCommande: new RegExp(s, 'i') },
+          { numero: re },
+          { 'client.email': re },
+          { 'client.nom': re },
+          { 'client.telephone': re },
+          { 'vehicule.vin': re },
+          { 'messages.contenu': re },
+          { 'diagnostic.description': re },
+          { 'vehicule.immatriculation': re },
+          { numeroCommande: re },
         ];
+        // Le téléphone est saisi avec ou sans espaces : on cherche aussi la version compacte.
+        const digits = s.replace(/[\s.\-()]/g, '');
+        if (/^\+?\d{6,}$/.test(digits) && digits !== s) q.$or.push({ 'client.telephone': new RegExp(escapeRegex(digits), 'i') });
       }
     }
 
@@ -512,6 +572,7 @@ adminRouter.get('/tickets', async (req, res) => {
       sla: 'sla.dateLimite',
       createdAt: 'createdAt',
       assignedTo: 'assignedToName',
+      attente: 'lastClientMessageAt',
     };
 
     // Pagination
@@ -536,6 +597,7 @@ adminRouter.get('/tickets', async (req, res) => {
       // Enrichit chaque ticket avec l'explain score pour debug UI
       sorted.forEach((t) => { t._priorityExplain = priority.explainScore(t); });
       const sliced = sorted.slice(skip, skip + perPage);
+      if (req.query.lite === '1') toListItems(sliced);
       return ok(res, {
         count: sliced.length, total, page, perPage,
         totalPages: Math.ceil(total / perPage),
@@ -544,11 +606,41 @@ adminRouter.get('/tickets', async (req, res) => {
       });
     }
 
+    // Tri « réponses en haut » : d'abord les tickets où le client a écrit après notre
+    // dernière réponse (ouverts), le message le plus récent en premier ; ensuite le reste
+    // par activité client puis date d'ouverture.
+    if (sortField === 'reponse') {
+      const [tickets, total] = await Promise.all([
+        SavTicket.aggregate([
+          // aggregate ne convertit pas les types comme find (ex. assignedToUserId → ObjectId)
+          { $match: SavTicket.find(q).cast(SavTicket) },
+          { $addFields: {
+            _clientARepondu: { $cond: [{ $and: [
+              { $ne: [{ $ifNull: ['$lastClientMessageAt', null] }, null] },
+              { $or: [
+                { $eq: [{ $ifNull: ['$lastAdminMessageAt', null] }, null] },
+                { $gt: ['$lastClientMessageAt', '$lastAdminMessageAt'] },
+              ] },
+              { $not: { $in: ['$statut', TERMINAL_STATUTS] } },
+            ] }, 1, 0] },
+          } },
+          { $sort: { _clientARepondu: -1, lastClientMessageAt: -1, createdAt: -1, _id: -1 } },
+          { $skip: skip },
+          { $limit: perPage },
+          { $project: { _clientARepondu: 0 } },
+        ]),
+        SavTicket.countDocuments(q),
+      ]);
+      if (req.query.lite === '1') toListItems(tickets);
+      return ok(res, { count: tickets.length, total, page, perPage, totalPages: Math.ceil(total / perPage), tickets });
+    }
+
     const sort = { [sortMap[sortField] || 'createdAt']: sortDir };
     const [tickets, total] = await Promise.all([
       SavTicket.find(q).sort(sort).skip(skip).limit(perPage).lean(),
       SavTicket.countDocuments(q),
     ]);
+    if (req.query.lite === '1') toListItems(tickets);
     return ok(res, { count: tickets.length, total, page, perPage, totalPages: Math.ceil(total / perPage), tickets });
   } catch (err) {
     return fail(res, err.message, 500);
@@ -691,6 +783,77 @@ adminRouter.post('/tickets/:numero/assign', async (req, res) => {
   }
 });
 
+// Dossier fournisseur (anglais) : checklist, message WhatsApp, lien PDF signé, photos.
+async function dossierFournisseurPayload(req, ticket, phone) {
+  const dossier = require('../../services/savDossierFournisseur');
+  const wa = require('../../services/whatsappFournisseur');
+  const order = ticket.numeroCommande
+    ? await Order.findOne({ number: ticket.numeroCommande }).select('number items.name items.sku createdAt').lean()
+    : null;
+  const pdfUrl = `${req.protocol}://${req.get('host')}${dossier.pdfPath(ticket.numero)}`;
+  const text = dossier.buildMessageEn(ticket, order, pdfUrl);
+  const cleanPhone = String(phone || '').replace(/[^\d]/g, '');
+  const checklist = dossier.checklist(ticket);
+  const f = ticket.fournisseur || {};
+  const naming = dossier.fileNaming(ticket, order);
+  return {
+    text,
+    waUrl: cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}` : '',
+    phone: phone || '',
+    pdfUrl,
+    pdfFileName: naming.pdfFileName,
+    partCode: naming.partCode,
+    checklist,
+    complete: checklist.filter((i) => i.photo).every((i) => i.ok),
+    photos: dossier.filesWithRoles(ticket).map((p) => ({
+      url: p.url, kind: p.kind, role: p.role, isImage: p.isImage, name: p.originalName || '', mime: p.mime || '',
+      fileName: (naming.files[p.url] || {}).fileName || p.originalName || '',
+      label: (naming.files[p.url] || {}).label || '',
+    })),
+    clientRequest: dossier.clientRequestText(ticket),
+    descriptionTranslated: !!(f.descriptionEn),
+    hasDescription: !!(ticket.diagnostic && ticket.diagnostic.description),
+    dateEnvoi: f.dateEnvoi || null,
+    reponse: f.reponse || '',
+    clientScript: wa.buildClientScript(ticket),
+    configured: wa.isConfigured(),
+  };
+}
+
+// GET /admin/api/sav/tickets/:numero/dossier-fournisseur?phone=
+adminRouter.get('/tickets/:numero/dossier-fournisseur', async (req, res) => {
+  try {
+    const ticket = await SavTicket.findOne({ numero: req.params.numero });
+    if (!ticket) return fail(res, 'Ticket introuvable', 404);
+    const dossier = require('../../services/savDossierFournisseur');
+    // Traduction de la description client, mémorisée tant que le texte ne change pas.
+    if (await dossier.ensureTranslation(ticket)) await ticket.save();
+    const phone = (req.query.phone || (ticket.fournisseur && ticket.fournisseur.contact) || '').toString();
+    return ok(res, await dossierFournisseurPayload(req, ticket.toObject(), phone));
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
+// POST /admin/api/sav/tickets/:numero/dossier-fournisseur/photos — rôle de chaque fichier
+// body { roles: [{ url, role: obd|reglage|autre|exclu }] }
+adminRouter.post('/tickets/:numero/dossier-fournisseur/photos', async (req, res) => {
+  try {
+    const ticket = await SavTicket.findOne({ numero: req.params.numero });
+    if (!ticket) return fail(res, 'Ticket introuvable', 404);
+    const dossier = require('../../services/savDossierFournisseur');
+    const known = new Set(dossier.filesWithRoles(ticket.toObject()).map((f) => f.url));
+    const roles = Array.isArray(req.body && req.body.roles) ? req.body.roles : [];
+    const next = new Map(((ticket.fournisseur && ticket.fournisseur.photosDossier) || []).map((p) => [p.url, p.role]));
+    roles.forEach((r) => {
+      if (r && known.has(r.url) && dossier.ROLES.includes(r.role)) next.set(r.url, r.role);
+    });
+    ticket.fournisseur = ticket.fournisseur || {};
+    ticket.fournisseur.photosDossier = Array.from(next, ([url, role]) => ({ url, role }));
+    await ticket.save();
+    const phone = (ticket.fournisseur.contact || '').toString();
+    return ok(res, await dossierFournisseurPayload(req, ticket.toObject(), phone));
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
 // GET /admin/api/sav/tickets/:numero/whatsapp-fournisseur/preview
 // → renvoie le texte WhatsApp prêt + URL wa.me + script client final
 adminRouter.get('/tickets/:numero/whatsapp-fournisseur/preview', async (req, res) => {
@@ -711,20 +874,34 @@ adminRouter.post('/tickets/:numero/whatsapp-fournisseur/send', async (req, res) 
     if (!ticket) return fail(res, 'Ticket introuvable', 404);
     const wa = require('../../services/whatsappFournisseur');
     const phone = (req.body.phone || (ticket.fournisseur && ticket.fournisseur.contact) || '').toString();
+    const onlyReply = !!req.body.parsedReply && !req.body.markSent;
+    // `groupe` : dossier partagé à la main dans le groupe WhatsApp du fournisseur
+    // (aucune API ne permet d'écrire dans un groupe créé depuis l'application).
+    const toGroup = req.body.mode === 'groupe';
     let result = { sent: false };
-    if (wa.isConfigured()) {
-      result = await wa.sendReal(ticket, phone);
+    if (req.body.mode === 'wame' || toGroup || onlyReply) {
+      // Envoi fait à la main depuis WhatsApp : on enregistre seulement.
+      result = { sent: false, manual: true };
+    } else if (wa.isConfigured()) {
+      result = await wa.sendReal(ticket, phone, req.body.text);
     } else {
       // Mode dev : on ne peut pas envoyer, on retourne juste le wa.me
       result = wa.preview(ticket, phone);
     }
     ticket.fournisseur = ticket.fournisseur || {};
-    if (!ticket.fournisseur.dateEnvoi) ticket.fournisseur.dateEnvoi = new Date();
+    if (phone && !toGroup) ticket.fournisseur.contact = phone;
     if (req.body.parsedReply) {
       ticket.fournisseur.reponse = String(req.body.parsedReply).slice(0, 4000);
       ticket.fournisseur.dateRetour = new Date();
     }
-    ticket.addMessage('admin', 'interne', `Dossier WhatsApp envoyé au fournisseur (${phone || '—'})`);
+    if (onlyReply) {
+      ticket.addMessage('admin', 'interne', 'Réponse du fournisseur enregistrée');
+    } else {
+      if (!ticket.fournisseur.dateEnvoi) ticket.fournisseur.dateEnvoi = new Date();
+      ticket.addMessage('admin', 'interne', toGroup
+        ? 'Dossier fournisseur (anglais) partagé dans le groupe WhatsApp du fournisseur'
+        : `Dossier fournisseur (anglais) envoyé sur WhatsApp (${phone || '—'})`);
+    }
     await ticket.save();
     audit.log({ req, action: 'sav.whatsapp_fournisseur', entityType: 'sav_ticket', entityId: ticket.numero, after: { phone } });
     return ok(res, { result, fournisseur: ticket.fournisseur });
@@ -884,7 +1061,7 @@ adminRouter.post('/tickets/:numero/communication', upload.array('attachments', 5
           size: f.size,
           mime: f.mimetype,
         });
-        savedAttachments.push({ url, name: f.originalname });
+        savedAttachments.push({ url, name: f.originalname, originalName: f.originalname, size: f.size, mime: f.mimetype, kind });
       }
     }
 
@@ -921,11 +1098,13 @@ adminRouter.post('/tickets/:numero/communication', upload.array('attachments', 5
       }
     }
 
-    let logContenu = contenu;
-    if (savedAttachments.length) {
-      logContenu += '\n\n— Pièces jointes : ' + savedAttachments.map((a) => a.name).join(', ');
-    }
-    ticket.addMessage('admin', canal, logContenu);
+    // Les pièces jointes sont rattachées au message : le client les voit dans la bulle,
+    // pas seulement dans la liste des documents en bas de page.
+    /* Le message garde sa mise en page quand il a été rédigé ailleurs puis
+       collé : on retient la structure (paragraphes, listes, gras) et on jette
+       l'habillage du logiciel d'origine (services/savMessageHtml). */
+    const htmlPropre = savMessageHtml.nettoyer(html);
+    ticket.addMessage('admin', canal, contenu, savedAttachments, htmlPropre);
     await ticket.save();
     audit.log({ req, action: 'sav.comm.' + canal, entityType: 'sav_ticket', entityId: ticket.numero, after: { attachments: savedAttachments.length } });
     return ok(res, { numero: ticket.numero, attachments: savedAttachments });
@@ -1727,6 +1906,10 @@ adminRouter.patch('/tickets/:numero/messages/:messageId', express.json({ limit: 
     const before = { contenu: msg.contenu, editedAt: msg.editedAt || null };
     const editor = (req.headers['x-admin-user'] || 'admin').toString().slice(0, 80);
     msg.contenu = newContenu;
+    /* La correction est saisie en texte : elle devient la seule version. Sans
+       cela, le client continuerait de lire la mise en page d'AVANT la
+       correction, puisque c'est elle qui s'affiche quand elle existe. */
+    msg.html = '';
     msg.editedAt = new Date();
     msg.editedBy = editor;
     await ticket.save();
@@ -2328,17 +2511,134 @@ adminRouter.delete('/personal-templates/:key', async (req, res) => {
   } catch (err) { return fail(res, err.message, 500); }
 });
 
-// GET /admin/api/sav/message-templates — bibliothèque de modèles de réponse
-adminRouter.get('/message-templates', (_req, res) => {
-  const templates = [
-    { key: 'piece_recue', title: 'Pièce reçue atelier', icon: 'inventory_2', body: `Bonjour {client_prenom},\n\nNous avons bien reçu votre pièce à l'atelier. Notre équipe technique va procéder au diagnostic sur banc dans les prochains jours ouvrés.\n\nNous reviendrons vers vous dès que l'analyse sera terminée.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
-    { key: 'diag_positif', title: 'Diagnostic positif (garantie)', icon: 'verified', body: `Bonjour {client_prenom},\n\nL'analyse de votre {piece_type} est terminée. Nous avons effectivement constaté un défaut produit pris en charge au titre de notre garantie.\n\nNous procédons à un échange standard, expédition sous 48h ouvrées.\n\nVous recevrez un numéro de suivi dès expédition.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
-    { key: 'diag_negatif', title: 'Diagnostic négatif (non défectueux)', icon: 'cancel', body: `Bonjour {client_prenom},\n\nL'analyse de votre {piece_type} est terminée. Après tests complets sur banc dédié, votre pièce est conforme aux valeurs constructeur et ne présente pas de défaut.\n\nConformément à nos CGV SAV, le forfait d'analyse de 149 € TTC est dû. Un lien de paiement sécurisé vous sera envoyé séparément.\n\nVous trouverez en pièce jointe le rapport d'analyse complet.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
-    { key: 'mauvais_montage', title: 'Mauvais montage détecté', icon: 'build', body: `Bonjour {client_prenom},\n\nL'analyse de votre {piece_type} est terminée. Les tests ont révélé des traces de mauvais montage (absence de réglage base, serrages non conformes) qui excluent la prise en charge sous garantie.\n\nConformément à nos CGV SAV, le forfait d'analyse de 149 € TTC est dû. Un lien de paiement sécurisé vous sera envoyé séparément.\n\nLe rapport détaillé est joint à ce message.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
-    { key: 'relance_docs', title: 'Relance documents manquants', icon: 'campaign', body: `Bonjour {client_prenom},\n\nAfin de pouvoir traiter votre dossier SAV n° {numero}, nous vous invitons à nous transmettre les documents suivants :\n\n• Facture de montage du garage\n• Photos du compteur kilométrique\n• Confirmation du réglage de base effectué\n\nSans ces éléments, nous ne pourrons pas poursuivre la prise en charge.\n\nMerci pour votre retour rapide,\nL'équipe SAV ${brand.NAME}` },
-    { key: 'etiquette_retour', title: 'Étiquette de retour envoyée', icon: 'local_shipping', body: `Bonjour {client_prenom},\n\nVous trouverez ci-joint l'étiquette prépayée pour nous retourner votre {piece_type}.\n\nMerci de :\n• Emballer soigneusement la pièce (carton + calage)\n• Coller l'étiquette bien visible\n• Déposer le colis en point relais ou bureau de poste\n\nDès réception à l'atelier, nous démarrerons l'analyse.\n\nCordialement,\nL'équipe SAV ${brand.NAME}` },
-  ];
-  return ok(res, { templates });
+// ---------- Modèles de message partagés (texte + pièces jointes) ----------
+
+const SavMessageTemplate = require('../../models/SavMessageTemplate');
+
+// Copie unique des modèles livrés avec le site dans la collection (idempotent).
+async function ensureDefaultMessageTemplates() {
+  const settings = await SavSettings.getSingleton();
+  if (settings.messageTemplatesSeededAt) return;
+  const { defaultMessageTemplates } = require('../../config/savMessageTemplatesDefaults');
+  for (const t of defaultMessageTemplates()) {
+    await SavMessageTemplate.updateOne({ builtinKey: t.builtinKey }, { $setOnInsert: t }, { upsert: true });
+  }
+  settings.messageTemplatesSeededAt = new Date();
+  await settings.save();
+}
+
+function parseTemplateMotifs(raw) {
+  const allowed = SavTicket.MOTIFS_SAV || [];
+  return String(raw || '').split(',').map((m) => m.trim()).filter((m) => allowed.includes(m));
+}
+
+const TEMPLATE_FILE_RE = /^(image\/|application\/pdf$)/;
+
+async function storeTemplateFiles(files) {
+  const out = [];
+  for (const f of files) {
+    const stored = await savFileStorage.saveBuffer({
+      buffer: f.buffer,
+      filename: f.originalname,
+      mime: f.mimetype,
+      metadata: { ticketNumero: null, kind: 'modele_message', uploadedBy: 'admin' },
+    });
+    out.push({ url: stored.url, originalName: f.originalname, mime: f.mimetype, size: f.size });
+  }
+  return out;
+}
+
+// GET /admin/api/sav/shared-templates
+adminRouter.get('/shared-templates', async (_req, res) => {
+  try {
+    await ensureDefaultMessageTemplates();
+    const templates = await SavMessageTemplate.find({}).collation({ locale: 'fr' }).sort({ usageCount: -1, title: 1 }).lean();
+    return ok(res, { templates });
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
+// POST /admin/api/sav/shared-templates — multipart { title, body, attachments[] }
+adminRouter.post('/shared-templates', upload.array('attachments', 5), async (req, res) => {
+  try {
+    const title = String((req.body && req.body.title) || '').trim().slice(0, 80);
+    const body = String((req.body && req.body.body) || '').trim();
+    if (!title || !body) return fail(res, 'Titre et texte requis');
+    if (body.length > 5000) return fail(res, 'Texte trop long (5000 caractères max)');
+    const files = Array.isArray(req.files) ? req.files : [];
+    // Tout vérifier avant d'enregistrer : un refus ne doit pas laisser de fichiers orphelins.
+    const refused = files.find((f) => !TEMPLATE_FILE_RE.test(f.mimetype || ''));
+    if (refused) return fail(res, `Fichier refusé : ${refused.originalname} (images et PDF uniquement)`);
+    const attachments = await storeTemplateFiles(files);
+    const doc = await SavMessageTemplate.create({
+      title,
+      body,
+      attachments,
+      motifs: parseTemplateMotifs(req.body.motifs),
+      createdByEmail: (req.session && req.session.admin && req.session.admin.email) || '',
+    });
+    audit.log({ req, action: 'sav.template.create', entityType: 'sav_message_template', entityId: String(doc._id), after: { title, attachments: attachments.length } });
+    return ok(res, { template: doc });
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
+// PUT /admin/api/sav/shared-templates/:id — multipart { title, body, motifs, keepAttachments (JSON d'URLs), attachments[] }
+adminRouter.put('/shared-templates/:id', upload.array('attachments', 5), async (req, res) => {
+  try {
+    const doc = await SavMessageTemplate.findById(req.params.id);
+    if (!doc) return fail(res, 'Modèle introuvable', 404);
+    const title = String((req.body && req.body.title) || '').trim().slice(0, 80);
+    const body = String((req.body && req.body.body) || '').trim();
+    if (!title || !body) return fail(res, 'Titre et texte requis');
+    if (body.length > 5000) return fail(res, 'Texte trop long (5000 caractères max)');
+    const files = Array.isArray(req.files) ? req.files : [];
+    const refused = files.find((f) => !TEMPLATE_FILE_RE.test(f.mimetype || ''));
+    if (refused) return fail(res, `Fichier refusé : ${refused.originalname} (images et PDF uniquement)`);
+    let keepUrls = [];
+    try { keepUrls = JSON.parse(req.body.keepAttachments || '[]'); } catch (_) { keepUrls = []; }
+    const keep = new Set(Array.isArray(keepUrls) ? keepUrls : []);
+    const kept = (doc.attachments || []).filter((a) => keep.has(a.url));
+    const removed = (doc.attachments || []).filter((a) => !keep.has(a.url));
+    if (kept.length + files.length > 5) return fail(res, '5 pièces jointes maximum par modèle');
+    const before = { title: doc.title, attachments: (doc.attachments || []).length };
+    const added = await storeTemplateFiles(files);
+    doc.title = title;
+    doc.body = body;
+    doc.motifs = parseTemplateMotifs(req.body.motifs);
+    doc.attachments = kept.map((a) => (a.toObject ? a.toObject() : a)).concat(added);
+    doc.updatedByEmail = (req.session && req.session.admin && req.session.admin.email) || '';
+    await doc.save();
+    // Fichiers retirés du modèle : supprimés (les copies jointes aux tickets sont d'autres fichiers).
+    for (const a of removed) {
+      const fileId = savFileStorage.extractIdFromUrl(a.url);
+      if (fileId) { try { await savFileStorage.deleteFile(fileId); } catch (_) {} }
+    }
+    audit.log({ req, action: 'sav.template.update', entityType: 'sav_message_template', entityId: String(doc._id), before, after: { title, attachments: doc.attachments.length } });
+    return ok(res, { template: doc });
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
+// POST /admin/api/sav/shared-templates/:id/used — compteur d'usage (ordre des modèles)
+adminRouter.post('/shared-templates/:id/used', async (req, res) => {
+  try {
+    await SavMessageTemplate.updateOne({ _id: req.params.id }, { $inc: { usageCount: 1 } });
+    return ok(res, { id: req.params.id });
+  } catch (err) { return fail(res, err.message, 500); }
+});
+
+// DELETE /admin/api/sav/shared-templates/:id
+adminRouter.delete('/shared-templates/:id', async (req, res) => {
+  try {
+    const doc = await SavMessageTemplate.findById(req.params.id);
+    if (!doc) return fail(res, 'Modèle introuvable', 404);
+    // Les copies déjà jointes aux tickets sont des fichiers distincts : elles restent.
+    for (const a of doc.attachments || []) {
+      const fileId = savFileStorage.extractIdFromUrl(a.url);
+      if (fileId) { try { await savFileStorage.deleteFile(fileId); } catch (_) {} }
+    }
+    await doc.deleteOne();
+    audit.log({ req, action: 'sav.template.delete', entityType: 'sav_message_template', entityId: String(doc._id), before: { title: doc.title } });
+    return ok(res, { id: req.params.id });
+  } catch (err) { return fail(res, err.message, 500); }
 });
 
 // GET /admin/api/sav/report-templates — liste + summary de chaque template
@@ -2372,8 +2672,17 @@ adminRouter.get('/dashboard', async (req, res) => {
       'analyse_terminee',
       'en_attente_decision_client',
       'en_attente_fournisseur',
+      // Flux logistique / commercial : ils étaient absents, ~40 % des tickets ouverts
+      // n'apparaissaient donc dans aucun compteur.
+      'reserve_transporteur',
+      'enquete_transporteur',
+      'retractation_recue',
+      'remboursement_initie',
     ];
     const STATUTS_CLOS = ['clos', 'refuse', 'resolu_garantie', 'resolu_facture', 'clos_sans_reponse'];
+    // Les compteurs de la liste doivent tomber sur le même nombre que le filtre
+    // qu'ils appliquent au clic, or la liste masque les archivés.
+    const NON_ARCHIVE = { archivedAt: { $in: [null, undefined] } };
 
     const [
       ouverts,
@@ -2388,13 +2697,17 @@ adminRouter.get('/dashboard', async (req, res) => {
       tousResolus,
       awaitingClient,
       waitingForClient,
+      totalListe,
+      enAttenteClient,
+      enAttenteFournisseur,
     ] = await Promise.all([
-      SavTicket.countDocuments({ statut: { $in: STATUTS_ACTIFS } }),
+      SavTicket.countDocuments({ statut: { $in: STATUTS_ACTIFS }, ...NON_ARCHIVE }),
       SavTicket.countDocuments({ statut: { $in: ['en_attente_documents', 'relance_1', 'relance_2'] } }),
       SavTicket.countDocuments({ statut: 'en_analyse' }),
       SavTicket.countDocuments({
         statut: { $in: STATUTS_ACTIFS },
         'sla.dateLimite': { $lt: now },
+        ...NON_ARCHIVE,
       }),
       SavTicket.countDocuments({ 'analyse.conclusion': { $exists: true, $ne: null } }),
       SavTicket.countDocuments({ 'analyse.conclusion': 'defaut_produit' }),
@@ -2407,6 +2720,7 @@ adminRouter.get('/dashboard', async (req, res) => {
         .lean(),
       // État conversation — logique unifiée timeline messages (voir GET /tickets).
       SavTicket.countDocuments({
+        ...NON_ARCHIVE,
         $expr: {
           $and: [
             { $ne: ['$lastClientMessageAt', null] },
@@ -2419,6 +2733,7 @@ adminRouter.get('/dashboard', async (req, res) => {
         },
       }),
       SavTicket.countDocuments({
+        ...NON_ARCHIVE,
         $expr: {
           $and: [
             { $ne: ['$lastAdminMessageAt', null] },
@@ -2430,6 +2745,9 @@ adminRouter.get('/dashboard', async (req, res) => {
           ],
         },
       }),
+      SavTicket.countDocuments(NON_ARCHIVE),
+      SavTicket.countDocuments({ statut: { $in: ['en_attente_decision_client', 'en_attente_documents', 'relance_1', 'relance_2'] }, ...NON_ARCHIVE }),
+      SavTicket.countDocuments({ statut: 'en_attente_fournisseur', ...NON_ARCHIVE }),
     ]);
 
     // Temps moyen de résolution (jours) sur les tickets clos cette année
@@ -2492,7 +2810,7 @@ adminRouter.get('/dashboard', async (req, res) => {
 
     // Compteurs par équipe (tickets actifs)
     const byTeamAgg = await SavTicket.aggregate([
-      { $match: { statut: { $in: STATUTS_ACTIFS } } },
+      { $match: { statut: { $in: STATUTS_ACTIFS }, ...NON_ARCHIVE } },
       { $group: { _id: '$assignedTeam', count: { $sum: 1 } } },
     ]);
     const by_team = { atelier: 0, logistique: 0, commercial: 0, compta: 0, sav_general: 0 };
@@ -2520,6 +2838,10 @@ adminRouter.get('/dashboard', async (req, res) => {
       mes_tickets: mesTickets || 0,
       awaiting_client: awaitingClient || 0,
       waiting_for_client: waitingForClient || 0,
+      total_liste: totalListe || 0,
+      en_attente_client: enAttenteClient || 0,
+      en_attente_fournisseur: enAttenteFournisseur || 0,
+      statuts_actifs: STATUTS_ACTIFS,
       by_team,
       by_motif,
       chart: { labels, ouverts: ouvertsArr, clos: closArr },

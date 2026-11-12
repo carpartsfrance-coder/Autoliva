@@ -1,0 +1,81 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+
+<main class="flex-1 bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 transition-colors duration-300">
+  <div class="mx-auto max-w-[720px] px-4 md:px-10 py-14">
+    <div class="rounded-3xl bg-white/80 dark:bg-surface-dark/70 backdrop-blur border border-slate-100 dark:border-slate-800 p-6 sm:p-10 shadow-premium">
+
+      <% if (state === 'done') { %>
+        <div class="flex items-center gap-3">
+          <div class="h-12 w-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+            <span class="material-symbols-rounded text-emerald-600 text-3xl">mark_email_read</span>
+          </div>
+          <h1 class="text-2xl font-bold">Désinscription confirmée</h1>
+        </div>
+        <p class="mt-5 text-slate-600 dark:text-slate-300 leading-relaxed">
+          L'adresse <strong><%= email %></strong> ne recevra plus aucun email commercial de notre part
+          (relances de panier, nouveautés, demandes d'avis).
+        </p>
+        <p class="mt-3 text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+          Vous continuerez à recevoir uniquement les emails liés à vos commandes en cours :
+          confirmation, suivi de colis, consigne et facture. Ces messages sont nécessaires au
+          suivi de votre achat.
+        </p>
+        <div class="mt-8 flex flex-wrap gap-3">
+          <a href="/" class="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-white font-semibold hover:opacity-90 transition">
+            <span class="material-symbols-rounded text-xl">home</span> Retour à l'accueil
+          </a>
+          <a href="/contact" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 px-5 py-3 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition">
+            <span class="material-symbols-rounded text-xl">support_agent</span> Nous contacter
+          </a>
+        </div>
+
+      <% } else if (state === 'error') { %>
+        <div class="flex items-center gap-3">
+          <div class="h-12 w-12 rounded-2xl bg-red-500/10 flex items-center justify-center">
+            <span class="material-symbols-rounded text-red-600 text-3xl">error</span>
+          </div>
+          <h1 class="text-2xl font-bold">Une erreur est survenue</h1>
+        </div>
+        <p class="mt-5 text-slate-600 dark:text-slate-300"><%= message %></p>
+        <a href="/newsletter/desinscription" class="mt-8 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-white font-semibold hover:opacity-90 transition">
+          <span class="material-symbols-rounded text-xl">refresh</span> Réessayer
+        </a>
+
+      <% } else { %>
+        <div class="flex items-center gap-3">
+          <div class="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
+            <span class="material-symbols-rounded text-primary text-3xl">mail</span>
+          </div>
+          <h1 class="text-2xl font-bold">Se désinscrire</h1>
+        </div>
+        <p class="mt-5 text-slate-600 dark:text-slate-300 leading-relaxed">
+          Indiquez l'adresse email qui ne doit plus recevoir nos emails commerciaux.
+        </p>
+        <% if (message) { %>
+          <p class="mt-4 rounded-xl bg-amber-500/10 border border-amber-300/40 px-4 py-3 text-sm text-amber-800 dark:text-amber-200"><%= message %></p>
+        <% } %>
+        <form method="POST" action="/newsletter/desinscription" class="mt-6 flex flex-col sm:flex-row gap-3">
+          <input
+            type="email"
+            name="email"
+            required
+            value="<%= email %>"
+            placeholder="votre@email.fr"
+            class="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-surface-dark px-4 py-3 outline-none focus:ring-2 focus:ring-primary/40"
+          />
+          <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-white font-semibold hover:opacity-90 transition">
+            <span class="material-symbols-rounded text-xl">check</span> Me désinscrire
+          </button>
+        </form>
+        <p class="mt-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+          Les emails liés à vos commandes en cours (confirmation, suivi de colis, consigne, facture)
+          continueront d'être envoyés : ils sont nécessaires au suivi de votre achat.
+        </p>
+      <% } %>
+
+    </div>
+  </div>
+</main>
+
+<%- include('../partials/footer') %>

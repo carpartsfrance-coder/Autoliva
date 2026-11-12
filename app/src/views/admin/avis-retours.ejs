@@ -1,0 +1,147 @@
+<%- include('./partials/head') %>
+
+<%- include('./partials/sidebar', { active: 'avis-retours' }) %>
+
+<%
+  var ETIQUETTES = {
+    a_traiter: { texte: 'À traiter', classe: 'bg-red-50 text-red-700 border-red-200' },
+    resolu:    { texte: 'Résolu',    classe: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    publie:    { texte: 'Envoyé sur Google', classe: 'bg-slate-100 text-slate-600 border-slate-200' },
+    en_attente:{ texte: 'Sans réponse', classe: 'bg-slate-50 text-slate-400 border-slate-200' },
+  };
+  var ONGLETS = [
+    ['repondus', 'Réponses'],
+    ['a_traiter', 'À traiter'],
+    ['resolu', 'Résolus'],
+    ['publie', 'Envoyés sur Google'],
+    ['en_attente', 'Sans réponse'],
+    ['tous', 'Tous'],
+  ];
+  function dateFr(d) {
+    if (!d) return '';
+    return new Date(d).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+%>
+
+<main class="flex-1">
+  <div class="px-6 lg:px-10 py-8 max-w-5xl">
+
+    <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Retours clients'}] }) %>
+    <div class="text-2xl md:text-3xl font-semibold text-slate-900">Retours clients</div>
+    <div class="mt-1 text-sm text-slate-500">
+      Les notes données dans l'enquête de satisfaction.
+      <% if (reglages.active) { %>
+        En dessous de <strong><%= reglages.seuil %>/5</strong>, le client n'est pas renvoyé vers Google
+        <%= reglages.proposerGoogleAuxMecontents ? '(mais le lien lui reste proposé)' : '— son retour arrive ici' %>.
+      <% } else { %>
+        <span class="font-semibold text-amber-700">L'enquête est désactivée : les clients vont directement sur Google.</span>
+      <% } %>
+      <a href="/admin/parametres/avis" class="font-semibold text-slate-700 hover:text-slate-900">Régler →</a>
+    </div>
+
+    <% if (successMessage) { %>
+      <div class="mt-6 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 px-4 py-3 text-sm font-medium"><%= successMessage %></div>
+    <% } %>
+    <% if (!dbConnected) { %>
+      <div class="mt-6 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 text-sm font-medium">Base de données indisponible : la liste ne peut pas être chargée.</div>
+    <% } %>
+
+    <% if (stats) { %>
+      <div class="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <%
+          /* On n'affiche la moyenne que s'il y a des notes : « 0/5 » sur zéro
+             réponse ferait croire à une catastrophe. */
+          var cartes = [
+            ['Note moyenne', stats.moyenne == null ? '—' : stats.moyenne + '/5'],
+            ['Réponses', stats.repondues + ' / ' + stats.envoyees],
+            ['À traiter', stats.aTraiter],
+            ['Envoyés sur Google', stats.publies],
+          ];
+        %>
+        <% cartes.forEach(function (c) { %>
+          <div class="rounded-2xl border border-slate-200 bg-white p-4">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400"><%= c[0] %></div>
+            <div class="mt-1 text-xl font-bold text-slate-900"><%= c[1] %></div>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <div class="mt-6 flex flex-wrap gap-2">
+      <% ONGLETS.forEach(function (o) { %>
+        <a href="/admin/avis?filtre=<%= o[0] %>"
+           class="rounded-lg px-3 py-1.5 text-sm font-semibold <%= filtre === o[0] ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100' %>"><%= o[1] %></a>
+      <% }) %>
+    </div>
+
+    <% if (!retours.length) { %>
+      <div class="mt-6 rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+        Rien ici pour l'instant.
+      </div>
+    <% } %>
+
+    <div class="mt-4 space-y-4">
+      <% retours.forEach(function (r) {
+           var et = ETIQUETTES[r.statut] || ETIQUETTES.en_attente;
+      %>
+        <div class="rounded-2xl border border-slate-200 bg-white p-5">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <% if (r.rating) { %>
+                  <span class="text-base font-bold <%= r.rating >= reglages.seuil ? 'text-emerald-600' : 'text-red-600' %>"><%= r.rating %>/5</span>
+                  <span class="text-amber-400 text-sm"><%= '★'.repeat(r.rating) %><span class="text-slate-200"><%= '★'.repeat(5 - r.rating) %></span></span>
+                <% } else { %>
+                  <span class="text-sm font-semibold text-slate-400">Pas encore de note</span>
+                <% } %>
+                <span class="rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide <%= et.classe %>"><%= et.texte %></span>
+              </div>
+              <div class="mt-1 text-sm font-semibold text-slate-900">
+                <%= r.clientNom || 'Client' %>
+                <% if (r.orderNumber) { %>
+                  · <a href="/admin/commandes/<%= r.orderId %>" class="font-mono text-xs text-slate-500 hover:text-slate-900"><%= r.orderNumber %></a>
+                <% } %>
+              </div>
+              <div class="mt-0.5 text-xs text-slate-400">
+                <%= r.clientEmail || '' %><% if (r.rappelTelephone || r.clientTelephone) { %> · <%= r.rappelTelephone || r.clientTelephone %><% } %>
+                <% if (r.ratedAt) { %> · <%= dateFr(r.ratedAt) %><% } %>
+              </div>
+            </div>
+            <% if (r.rappelTelephone || r.clientTelephone) { %>
+              <a href="tel:<%= (r.rappelTelephone || r.clientTelephone).replace(/\s/g, '') %>"
+                 class="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Appeler</a>
+            <% } %>
+          </div>
+
+          <% if (r.message) { %>
+            <div class="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm leading-relaxed text-slate-700 whitespace-pre-line"><%= r.message %></div>
+          <% } else if (r.rating && r.rating < reglages.seuil) { %>
+            <div class="mt-3 text-xs italic text-slate-400">Note basse laissée sans message.</div>
+          <% } %>
+
+          <% if (r.traitement && r.traitement.at) { %>
+            <div class="mt-3 text-xs text-slate-500">
+              <span class="font-semibold">Traitement</span> — <%= dateFr(r.traitement.at) %><%= r.traitement.par ? ' par ' + r.traitement.par : '' %><% if (r.traitement.note) { %> : <%= r.traitement.note %><% } %>
+            </div>
+          <% } %>
+
+          <% if (r.rating && r.rating < reglages.seuil) { %>
+            <form method="POST" action="/admin/avis/<%= r._id %>/traiter" class="mt-4 flex flex-wrap items-center gap-2">
+              <input type="hidden" name="filtre" value="<%= filtre %>">
+              <input type="text" name="note" maxlength="2000" placeholder="Ce qui a été fait (rappel, remplacement, geste…)"
+                     value="<%= (r.traitement && r.traitement.note) || '' %>"
+                     class="flex-1 min-w-[16rem] rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500">
+              <% if (r.statut === 'resolu') { %>
+                <button type="submit" name="resolu" value="false" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Rouvrir</button>
+              <% } else { %>
+                <button type="submit" name="resolu" value="true" class="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Marquer résolu</button>
+              <% } %>
+            </form>
+          <% } %>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</main>
+
+<%- include('./partials/footer') %>

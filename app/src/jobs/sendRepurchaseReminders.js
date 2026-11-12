@@ -124,7 +124,7 @@ async function sendRepurchaseReminders() {
 
       const text = `Bonjour${firstName ? ' ' + firstName : ''},\n\nIl y a environ trois mois, vous avez commandé chez ${brand.NAME}. Nous espérons que ${productName ? 'votre ' + productName : 'la pièce commandée'} vous donne entière satisfaction.\n\nSi vous avez un nouveau besoin — entretien, pièce pour un autre véhicule, question technique — notre équipe est là pour vous conseiller.\n\nRépondez à cet email ou appelez-nous au ${brand.PHONE}.\n\n— L'équipe ${brand.NAME}`;
 
-      const result = await emailService.sendEmail({ toEmail: email, subject, html, text });
+      const result = await emailService.sendEmail({ toEmail: email, subject, html, text, lang: lead && lead.lang === 'de' ? 'de' : 'fr' });
 
       if (result && result.ok) {
         await AbandonedCart.updateOne(

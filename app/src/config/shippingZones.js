@@ -116,6 +116,73 @@ const COUNTRY_OPTIONS = [
   ] },
 ];
 
+/* Libellés allemands du menu « Pays ».
+ *
+ * La VALEUR reste le libellé français : c'est la clé de la zone de livraison,
+ * elle est stockée sur les commandes et lue par la tarification. Seul
+ * l'AFFICHAGE change — un acheteur allemand cherchait « Deutschland » et
+ * devait le trouver sous « Allemagne », après sept départements français. */
+const ETIQUETTES_DE = {
+  'France': 'Frankreich (Festland)', 'Corse': 'Korsika', 'Guadeloupe': 'Guadeloupe',
+  'Martinique': 'Martinique', 'Guyane': 'Französisch-Guayana', 'La Réunion': 'La Réunion',
+  'Mayotte': 'Mayotte', 'Espagne': 'Spanien', 'Belgique': 'Belgien', 'Allemagne': 'Deutschland',
+  'Italie': 'Italien', 'Portugal': 'Portugal', 'Pays-Bas': 'Niederlande',
+  'Luxembourg': 'Luxemburg', 'Suisse': 'Schweiz', 'Autriche': 'Österreich',
+  'Irlande': 'Irland', 'Autre': 'Anderes Land (international)',
+};
+const GROUPES_DE = {
+  'France & Outre-mer': 'Frankreich & Überseegebiete',
+  'Europe': 'Europa',
+  'International': 'International',
+};
+/* Un visiteur allemand livre chez lui neuf fois sur dix : son pays passe en
+   tête plutôt qu'au dixième rang derrière la Corse et Mayotte. */
+const TETE_DE_LISTE_DE = ['Allemagne', 'Autriche', 'Suisse'];
+
+/** Options « Pays » adaptées à la langue de navigation. */
+function countryOptionsFor(lang) {
+  if (lang !== 'de') return COUNTRY_OPTIONS;
+
+  const tete = [];
+  const groupes = COUNTRY_OPTIONS.map((g) => ({
+    group: GROUPES_DE[g.group] || g.group,
+    items: g.items
+      .filter((it) => {
+        if (!TETE_DE_LISTE_DE.includes(it.value)) return true;
+        tete.push({ value: it.value, label: ETIQUETTES_DE[it.value] || it.label });
+        return false;
+      })
+      .map((it) => ({ value: it.value, label: ETIQUETTES_DE[it.value] || it.label })),
+  })).filter((g) => g.items.length);
+
+  tete.sort((a, b) => TETE_DE_LISTE_DE.indexOf(a.value) - TETE_DE_LISTE_DE.indexOf(b.value));
+  return [{ group: 'Lieferung', items: tete }].concat(groupes);
+}
+
+/* Pays affiché dans une ADRESSE (paiement, pages commande) pour un client
+   allemand. La valeur stockée reste le libellé français (« Allemagne ») : c'est
+   la clé de zone. Sans cette table, la confirmation allemande affichait
+   « 10115 Berlin • Allemagne ». « (Festland) » ne sert qu'au menu. */
+const ADRESSE_DE = { ...ETIQUETTES_DE, 'France': 'Frankreich', 'Autre': 'Anderes Land' };
+const VALEUR_PAR_CODE = COUNTRY_OPTIONS
+  .reduce((acc, g) => acc.concat(g.items), [])
+  .reduce((acc, it) => {
+    const code = normalizeCountryCode(it.value);
+    if (code && !acc[code]) acc[code] = it.value;
+    return acc;
+  }, {});
+
+/** Libellé d'un pays d'adresse dans la langue demandée (le français est rendu tel quel). */
+function countryLabelFor(country, lang) {
+  const valeur = String(country == null ? '' : country).trim();
+  if (lang !== 'de' || !valeur) return valeur;
+  if (Object.prototype.hasOwnProperty.call(ADRESSE_DE, valeur)) return ADRESSE_DE[valeur];
+  /* Valeur libre ou code ISO (« DE », « allemagne ») : on retrouve l'option. */
+  const code = normalizeCountryCode(valeur);
+  const option = code ? VALEUR_PAR_CODE[code] : '';
+  return option && ADRESSE_DE[option] ? ADRESSE_DE[option] : valeur;
+}
+
 /** Normalise un pays (code ou libellé libre) → code ISO alpha-2. Défaut : FR. */
 function normalizeCountryCode(country) {
   const v = String(country == null ? '' : country).trim();
@@ -163,6 +230,8 @@ module.exports = {
   EU_VAT_COUNTRY_CODES,
   isEuVatCountry,
   COUNTRY_OPTIONS,
+  countryOptionsFor,
+  countryLabelFor,
   normalizeCountryCode,
   resolveZone,
 };
