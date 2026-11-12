@@ -71,7 +71,11 @@ async function resoudre(slug, { Category = require('../models/Category') } = {})
   if (cible === null) return null;
   if (cible === '') return '';
   const existe = await categorieActive(Category, cible);
-  return existe ? existe.slug : null;
+  if (existe) return existe.slug;
+  /* Cible renommée depuis dans l'admin : son ancien slug est gardé en alias,
+     on suit la catégorie jusqu'à son adresse actuelle. */
+  const renommee = await Category.findOne({ slugAliases: cible, isActive: { $ne: false } }).select('_id slug').lean();
+  return renommee && renommee.slug ? renommee.slug : null;
 }
 
 module.exports = {

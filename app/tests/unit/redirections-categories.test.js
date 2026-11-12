@@ -69,6 +69,12 @@ test('ancien slug gardé lors d’un renommage dans l’admin', async () => {
   assert.equal(await resoudre('mecatroniques-calculateurs', { Category: ACTIVES }), 'mecatroniques');
 });
 
+test('cible de la table renommée depuis dans l’admin : on suit sa nouvelle adresse', async () => {
+  const renommee = modele([{ slug: 'mecatroniques-dsg', slugAliases: ['mecatroniques'] }]);
+  assert.equal(await resoudre('transmission-mecatronique', { Category: renommee }), 'mecatroniques-dsg');
+  assert.equal(await resoudre('mecatroniques', { Category: renommee }), 'mecatroniques-dsg');
+});
+
 test('cible absente ou désactivée : pas de redirection', async () => {
   const vide = modele([{ slug: 'moteurs', isActive: false }]);
   assert.equal(await resoudre('moteur-vilebrequin', { Category: vide }), null);

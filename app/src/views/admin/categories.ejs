@@ -211,6 +211,14 @@
                                 <input class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" name="name" required type="text" value="<%= g.mainDoc.name %>" />
                               </div>
                               <div>
+                                <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Adresse de la page</label>
+                                <div class="mt-2 flex items-center rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold">
+                                  <span class="text-slate-400">/categorie/</span>
+                                  <input class="w-full border-0 p-0 text-sm font-semibold focus:ring-0" name="slug" type="text" pattern="[a-z0-9-]+" value="<%= g.mainDoc.slug || '' %>" />
+                                </div>
+                                <div class="mt-1 text-xs text-slate-500">Ne change qu'en renommant la catégorie, ou si tu la modifies ici. L'ancienne adresse redirige vers la nouvelle.</div>
+                              </div>
+                              <div>
                                 <label class="block text-xs font-semibold uppercase tracking-widest text-slate-500">Classe de livraison</label>
                                 <select class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold" name="shippingClassId">
                                   <option value="">Défaut / aucune</option>

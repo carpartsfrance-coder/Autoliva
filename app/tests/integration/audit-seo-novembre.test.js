@@ -216,6 +216,62 @@ test('audit SEO du 11/11/2026 : redirections, pages 2+, titres, 404', async (t) 
     assert.match(r.corps, /Sitemap: .*\/sitemap\.xml/);
   });
 
+  await t.test('admin : enregistrer une catégorie sans la renommer garde son adresse (cas du 11/11/2026)', async () => {
+    const admin = require('../../src/controllers/adminController');
+    const categories = db.collection('categories');
+    const meca = await categories.findOne({ slug: 'mecatroniques' });
+    const envoyer = async (corps) => {
+      const res = { code: 200, redirection: null, payload: null };
+      res.status = (c) => { res.code = c; return res; };
+      res.redirect = (a, b) => { res.redirection = b || a; return res; };
+      res.json = (p) => { res.payload = p; return res; };
+      const req = { params: { categoryId: String(meca._id) }, body: corps, session: {}, headers: {}, query: {} };
+      await admin.postAdminUpdateCategory(req, res, (e) => { throw e; });
+      return req.session;
+    };
+    const formulaire = { name: 'Mécatroniques & calculateurs', sortOrder: '3', showInMenu: 'true', menuIcon: 'memory', seoText: '' };
+
+    /* Le cas réel : seuls l'ordre et « menu » changent, le nom non. Avant, le
+       slug devenait « mecatroniques-calculateurs » (calculé depuis le nom). */
+    await envoyer(formulaire);
+    let apres = await categories.findOne({ _id: meca._id });
+    assert.equal(apres.slug, 'mecatroniques');
+    assert.equal(apres.sortOrder, 3);
+    assert.equal(apres.showInMenu, true);
+
+    /* Adresse saisie dans l'admin : elle change, l'ancienne redirige — avec ses paramètres. */
+    await envoyer({ ...formulaire, slug: 'mecatroniques-dsg' });
+    apres = await categories.findOne({ _id: meca._id });
+    assert.equal(apres.slug, 'mecatroniques-dsg');
+    assert.ok(apres.slugAliases.includes('mecatroniques'));
+    let r = await get('/categorie/mecatroniques?gclid=abc&utm_source=google');
+    assert.equal(r.status, 301);
+    assert.equal(r.location, '/categorie/mecatroniques-dsg?gclid=abc&utm_source=google');
+    /* La table des anciennes adresses suit le renommage. */
+    r = await get('/categorie/transmission-mecatronique');
+    assert.equal(r.location, '/categorie/mecatroniques-dsg');
+
+    /* Retour à l'adresse d'origine : elle ne se redirige pas vers elle-même. */
+    await envoyer({ ...formulaire, slug: 'mecatroniques' });
+    apres = await categories.findOne({ _id: meca._id });
+    assert.equal(apres.slug, 'mecatroniques');
+    assert.ok(!apres.slugAliases.includes('mecatroniques'));
+    assert.ok(apres.slugAliases.includes('mecatroniques-dsg'));
+    assert.equal((await get('/categorie/mecatroniques')).status, 200);
+    assert.equal((await get('/categorie/mecatroniques-dsg')).location, '/categorie/mecatroniques');
+
+    /* Adresse déjà prise par une autre catégorie : refusée, rien ne change. */
+    const session = await envoyer({ ...formulaire, slug: 'ponts-differentiels' });
+    assert.match(session.adminCategoryError || '', /déjà celle d'une autre catégorie/);
+    assert.equal((await categories.findOne({ _id: meca._id })).slug, 'mecatroniques');
+  });
+
+  await t.test('problème 2 : la redirection d’une ancienne catégorie garde les paramètres (gclid, utm)', async () => {
+    const r = await get('/categorie/transmission-pont-differentiel?gclid=xyz');
+    assert.equal(r.status, 301);
+    assert.equal(r.location, '/categorie/ponts-differentiels?gclid=xyz');
+  });
+
   await t.test('problème 13 : une fiche importée avec un slug aux accents cassés naît avec une adresse propre', async () => {
     const admin = require('../../src/controllers/adminController');
     const res = { code: 200, payload: null };

@@ -1197,6 +1197,15 @@ async function postAdminCreateCategory(req, res, next) {
   }
 }
 
+/* Anciens slugs d'une catégorie après un changement d'adresse : l'ancienne
+   adresse s'ajoute (elle redirigera), la nouvelle sort de la liste (une
+   catégorie revenue à une ancienne adresse ne se redirige pas vers elle-même). */
+function anciensSlugsApres(anciens, ancien, nouveau) {
+  const liste = new Set((Array.isArray(anciens) ? anciens : []).filter((a) => a && a !== nouveau));
+  if (ancien && ancien !== nouveau) liste.add(ancien);
+  return [...liste];
+}
+
 async function postAdminUpdateCategory(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
@@ -1212,7 +1221,7 @@ async function postAdminUpdateCategory(req, res, next) {
       return res.redirect('/admin/categories');
     }
 
-    const existing = await Category.findById(categoryId).select('_id name slug sortOrder shippingClassId isHomeFeatured seoText showInMenu menuIcon').lean();
+    const existing = await Category.findById(categoryId).select('_id name slug slugAliases sortOrder shippingClassId isHomeFeatured seoText showInMenu menuIcon').lean();
     if (!existing || typeof existing.name !== 'string' || !existing.name.trim()) {
       return res.redirect('/admin/categories');
     }
@@ -1251,6 +1260,22 @@ async function postAdminUpdateCategory(req, res, next) {
       return res.redirect('/admin/categories');
     }
 
+    /* Adresse de la page (/categorie/<slug>). Elle ne change que si le nom
+       change, ou si elle est saisie dans le formulaire. Avant le 11/11/2026,
+       chaque enregistrement la recalculait depuis le nom : une catégorie à
+       l'adresse choisie (« mecatroniques » pour « Mécatroniques &
+       calculateurs ») en changeait dès qu'on modifiait son ordre. */
+    const slugSaisi = typeof req.body.slug === 'string' ? slugify(req.body.slug) : '';
+    const slugActuel = getTrimmedString(existing.slug);
+    const slugVoulu = slugSaisi || (nextName !== oldName ? nextSlug : (slugActuel || nextSlug));
+    if (slugVoulu !== slugActuel) {
+      const prise = await Category.findOne({ slug: slugVoulu, _id: { $ne: existing._id } }).select('_id').lean();
+      if (prise) {
+        req.session.adminCategoryError = `L'adresse « /categorie/${slugVoulu} » est déjà celle d'une autre catégorie.`;
+        return res.redirect('/admin/categories');
+      }
+    }
+
     const nextParts = splitCategoryName(nextName);
     const nextIsMain = !!nextParts.main && !nextParts.sub;
     const nextIsSub = !!nextParts.main && !!nextParts.sub;
@@ -1271,7 +1296,7 @@ async function postAdminUpdateCategory(req, res, next) {
       const newMain = nextParts.main;
 
       const catRx = new RegExp(`^${escapeRegExp(oldMain)}(\\s*>|$)`);
-      const affectedCats = await Category.find({ name: { $regex: catRx } }).select('_id name slug sortOrder isHomeFeatured').lean();
+      const affectedCats = await Category.find({ name: { $regex: catRx } }).select('_id name slug slugAliases sortOrder isHomeFeatured').lean();
 
       for (const cat of affectedCats) {
         const current = typeof cat.name === 'string' ? cat.name.trim() : '';
@@ -1284,7 +1309,7 @@ async function postAdminUpdateCategory(req, res, next) {
           updatedName = current.replace(new RegExp(`^${escapeRegExp(oldMain)}\\s*>\\s*`), `${newMain} > `);
         }
 
-        const updatedSlug = slugify(updatedName);
+        const updatedSlug = String(cat._id) === String(existing._id) ? slugVoulu : slugify(updatedName);
         if (!updatedSlug) continue;
 
         const updatedSortOrder = String(cat._id) === String(existing._id)
@@ -1295,11 +1320,11 @@ async function postAdminUpdateCategory(req, res, next) {
           $set: {
             name: updatedName,
             slug: updatedSlug,
+            /* L'ancienne adresse redirige vers la nouvelle (audit SEO 11/11/2026). */
+            slugAliases: anciensSlugsApres(cat.slugAliases, cat.slug, updatedSlug),
             sortOrder: updatedSortOrder,
             ...(String(cat._id) === String(existing._id) ? { shippingClassId, isHomeFeatured, seoText, showInMenu, menuIcon } : {}),
           },
-          /* L'ancienne adresse redirige vers la nouvelle (audit SEO 11/11/2026). */
-          ...(cat.slug && cat.slug !== updatedSlug ? { $addToSet: { slugAliases: cat.slug } } : {}),
         });
       }
 
@@ -1323,6 +1348,7 @@ async function postAdminUpdateCategory(req, res, next) {
     } else {
       if (
         nextName !== oldName ||
+        slugVoulu !== slugActuel ||
         sortOrder !== (Number.isFinite(existing.sortOrder) ? existing.sortOrder : 0) ||
         String(existing.shippingClassId || '') !== String(shippingClassId || '') ||
         (existing.isHomeFeatured === true) !== isHomeFeatured ||
@@ -1333,9 +1359,13 @@ async function postAdminUpdateCategory(req, res, next) {
         String(existing.seoText || '') !== seoText
       ) {
         await Category.findByIdAndUpdate(categoryId, {
-          $set: { name: nextName, slug: nextSlug, sortOrder, shippingClassId, isHomeFeatured, seoText, showInMenu, menuIcon },
-          /* L'ancienne adresse redirige vers la nouvelle (audit SEO 11/11/2026). */
-          ...(existing.slug && existing.slug !== nextSlug ? { $addToSet: { slugAliases: existing.slug } } : {}),
+          $set: {
+            name: nextName,
+            slug: slugVoulu,
+            /* L'ancienne adresse redirige vers la nouvelle (audit SEO 11/11/2026). */
+            slugAliases: anciensSlugsApres(existing.slugAliases, slugActuel, slugVoulu),
+            sortOrder, shippingClassId, isHomeFeatured, seoText, showInMenu, menuIcon,
+          },
         });
       }
 

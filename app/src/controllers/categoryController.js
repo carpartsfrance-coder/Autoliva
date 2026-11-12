@@ -233,7 +233,10 @@ async function getCategory(req, res, next) {
         const cible = await redirectionsCategories.resoudre(slug);
         if (cible !== null) {
           const prefixe = req.lang === 'de' ? '/de' : '';
-          return res.redirect(301, cible ? `${prefixe}/categorie/${encodeURIComponent(cible)}` : `${prefixe}/categorie`);
+          /* Les paramètres suivent (gclid, utm…) : une annonce ou un lien
+             suivi qui vise l'ancienne adresse garde son attribution. */
+          const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+          return res.redirect(301, (cible ? `${prefixe}/categorie/${encodeURIComponent(cible)}` : `${prefixe}/categorie`) + qs);
         }
       }
       return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
