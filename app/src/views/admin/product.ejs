@@ -1179,7 +1179,12 @@
         // SOURCE DE VÉRITÉ UNIQUE. Construit mediaOrder (ordre complet : URLs existantes {u,t}
         // + uploads {i,t}) ; l'image principale = 1re IMAGE, le reste = galerie. Maintient aussi
         // imageUrl / galleryUrls / galleryTypes pour les lecteurs rétro-compatibles.
-        const serializeMedia = () => {
+        /* `relireChamps` : false au chargement de la page. Le panneau de relecture
+           des champs (refreshFieldReviewPanel) s'appuie sur FIELD_REVIEW_DEFS,
+           déclaré plus bas dans ce script : l'appeler à l'initialisation levait
+           « Cannot access 'FIELD_REVIEW_DEFS' before initialization » et
+           arrêtait tout le reste du script de la page. */
+        const serializeMedia = ({ relireChamps = true } = {}) => {
           reindexPreviews();
           const order = [];
           let mainImageUrl = '';
@@ -1207,7 +1212,7 @@
           galleryTypesField.value = galTypes.join('\n');
           if (removeMainField) removeMainField.value = order.length ? 'false' : 'true';
           updateMainBadges();
-          refreshFieldReviewPanel();
+          if (relireChamps) refreshFieldReviewPanel();
         };
 
         const moveTile = (tile, direction) => {
@@ -1430,7 +1435,7 @@
         }
 
         // Init : marque la principale (1re image) et sérialise l'état de départ dans mediaOrder.
-        if (canUseMedia) { updateMainBadges(); serializeMedia(); }
+        if (canUseMedia) { updateMainBadges(); serializeMedia({ relireChamps: false }); }
 
         const stepsGrid = document.getElementById('stepsGrid');
         const stepsField = document.getElementById('reconditioningSteps');

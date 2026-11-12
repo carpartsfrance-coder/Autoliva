@@ -823,6 +823,33 @@ async function postAdminHeroUploadImage(req, res) {
 
 function cleanupUploadedFiles() {}
 
+/* Efface du stockage les photos qu'aucune autre fiche n'utilise.
+   Plusieurs fiches peuvent partager le même fichier : « Dupliquer » copie
+   les adresses des photos, et l'import JSON réutilise une photo déjà
+   téléchargée depuis la même adresse (services/importImages.js). Effacer
+   sans regarder cassait la photo des autres fiches.
+   `fichesIgnorees` : la fiche modifiée, ou les fiches en cours de suppression. */
+async function effacerPhotosSansAutreFiche(urls, fichesIgnorees = []) {
+  const aEffacer = [...new Set((Array.isArray(urls) ? urls : []).filter((u) => typeof u === 'string' && u))];
+  if (!aEffacer.length) return;
+  const ignorees = (Array.isArray(fichesIgnorees) ? fichesIgnorees : [])
+    .map(String)
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+  const autres = await Product.find({
+    ...(ignorees.length ? { _id: { $nin: ignorees } } : {}),
+    $or: [{ imageUrl: { $in: aEffacer } }, { galleryUrls: { $in: aEffacer } }],
+  }).select('imageUrl galleryUrls').lean();
+  const encoreUtilisees = new Set();
+  for (const p of autres) {
+    if (p.imageUrl) encoreUtilisees.add(p.imageUrl);
+    for (const u of (Array.isArray(p.galleryUrls) ? p.galleryUrls : [])) encoreUtilisees.add(u);
+  }
+  for (const url of aEffacer) {
+    if (!encoreUtilisees.has(url)) await mediaStorage.deleteFromUrl(url);
+  }
+}
+
 function getAdminCredentials() {
   const email = normalizeEmail(normalizeEnvString(process.env.ADMIN_EMAIL));
   const password = normalizeEnvString(process.env.ADMIN_PASSWORD);
@@ -7686,17 +7713,10 @@ async function postAdminBulkDeleteProducts(req, res, next) {
       return res.redirect(safeReturnTo);
     }
 
-    for (const p of deletable) {
-      if (!p) continue;
-      if (p.imageUrl) {
-        await mediaStorage.deleteFromUrl(p.imageUrl);
-      }
-      const galleries = Array.isArray(p.galleryUrls) ? p.galleryUrls : [];
-      for (const url of galleries) {
-        if (!url) continue;
-        await mediaStorage.deleteFromUrl(url);
-      }
-    }
+    await effacerPhotosSansAutreFiche(
+      deletable.flatMap((p) => [p.imageUrl, ...(Array.isArray(p.galleryUrls) ? p.galleryUrls : [])]),
+      deletable.map((p) => p._id)
+    );
 
     const selectedIds = deletable.map((p) => p && p._id).filter(Boolean);
     const result = await Product.deleteMany({ _id: { $in: selectedIds } });
@@ -8938,6 +8958,9 @@ async function postAdminUpdateProduct(req, res, next) {
       badge4: getTrimmedString(req.body.badge4),
       galleryUrls: getTrimmedString(req.body.galleryUrls),
       galleryTypes: getTrimmedString(req.body.galleryTypes),
+      /* Ordre complet des photos et vidéos (JSON), envoyé par l'écran photos :
+         sans lui, une photo ajoutée ne pouvait pas devenir la principale. */
+      mediaOrder: typeof req.body.mediaOrder === 'string' ? req.body.mediaOrder : '',
       shortDescription: getTrimmedString(req.body.shortDescription),
       description: getTrimmedString(req.body.description),
       keyPoints: getTrimmedString(req.body.keyPoints),
@@ -9293,13 +9316,12 @@ async function postAdminUpdateProduct(req, res, next) {
     }
 
     // Suppression NON destructive : on ne retire du stockage QUE les médias
-    // qui ne sont plus référencés (ni comme principale, ni dans la galerie).
+    // qui ne sont plus référencés (ni comme principale, ni dans la galerie),
+    // ni par cette fiche ni par une autre.
     // Une image simplement promue/rétrogradée ou réordonnée est conservée.
     const keptUrlSet = new Set([nextImageUrl, ...galleryUrls].filter(Boolean));
     const previousUrls = [existing.imageUrl, ...(Array.isArray(existing.galleryUrls) ? existing.galleryUrls : [])].filter(Boolean);
-    for (const url of previousUrls) {
-      if (!keptUrlSet.has(url)) await mediaStorage.deleteFromUrl(url);
-    }
+    await effacerPhotosSansAutreFiche(previousUrls.filter((url) => !keptUrlSet.has(url)), [productId]);
 
     const resolvedInfoBlockIds = await resolveInfoBlockIds(req.body.infoBlockIds);
 
@@ -9437,14 +9459,8 @@ async function postAdminDeleteProduct(req, res, next) {
 
     const existing = await Product.findById(productId).select('_id imageUrl galleryUrls technicalDocs').lean();
     if (existing) {
-      if (existing.imageUrl) {
-        await mediaStorage.deleteFromUrl(existing.imageUrl);
-      }
       const galleries = Array.isArray(existing.galleryUrls) ? existing.galleryUrls : [];
-      for (const url of galleries) {
-        if (!url) continue;
-        await mediaStorage.deleteFromUrl(url);
-      }
+      await effacerPhotosSansAutreFiche([existing.imageUrl, ...galleries], [existing._id]);
       // Supprime aussi les documents techniques (bucket product_docs)
       for (const d of (Array.isArray(existing.technicalDocs) ? existing.technicalDocs : [])) {
         if (d && d.fileId) { try { await productDocStorage.deleteFile(d.fileId); } catch (_) {} }

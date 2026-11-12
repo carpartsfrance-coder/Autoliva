@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-11-12 — Admin : ajouter une photo à une fiche n'efface plus l'ancienne (PR #323)
+
+### Backend
+- **Correction** : dans la fiche produit de l'admin, ajouter une photo la mettait à la place de la photo principale et effaçait l'ancienne principale du stockage (perte définitive). Maintenant la photo ajoutée va en fin de galerie et la principale reste. Une photo n'est effacée du stockage que si la fiche ne l'utilise plus.
+- **Nouveau** : une étoile « définir comme principale » sur chaque photo, et l'ordre de toutes les photos, principale comprise (glisser-déposer ou flèches). L'écran envoie cet ordre dans un champ caché `mediaOrder`. Sans JavaScript, les champs `imageUrl` / `galleryUrls` servent comme avant.
+- Deux défauts de la PR corrigés avant la mise en ligne :
+  - le serveur ne recevait pas `mediaOrder`, donc l'ordre choisi était ignoré (une photo ajoutée puis mise en principale avant d'enregistrer ne le devenait pas) ;
+  - le script de la page plantait au chargement (`FIELD_REVIEW_DEFS` lu avant d'exister), ce qui coupait le panneau « champs à revoir » (0 au lieu du vrai nombre).
+- **Photos partagées entre fiches** : plusieurs fiches peuvent utiliser le même fichier (« Dupliquer » copie les adresses des photos ; l'import JSON réutilise une photo déjà téléchargée depuis la même adresse). Retirer une photo d'une fiche, supprimer une fiche ou supprimer plusieurs fiches d'un coup effaçait le fichier même si une autre fiche l'affichait encore. Un fichier n'est maintenant effacé que si aucune autre fiche ne l'utilise (`effacerPhotosSansAutreFiche`).
+
+### Tests
+- `tests/integration/photos-fiche-admin.test.js` passe par le vrai contrôleur. Il vérifie : ajout sans ordre (principale gardée, rien d'effacé), ordre envoyé (la photo ajoutée devient la principale), photo retirée (elle seule est effacée), photo partagée avec une autre fiche (gardée à la modification, à la suppression d'une fiche et à la suppression groupée). Il échoue sur l'ancien code et sur la PR non corrigée.
+- Parcours complet dans un navigateur (sur une copie locale, pas en ligne) : ajout, étoile, ordre, retrait, ajout puis étoile avant d'enregistrer. Aucune erreur JavaScript.
+
+## 2026-11-12 — Recherche : une référence écrite avec des espaces retrouve sa fiche (PR #392)
+
+- `0am 325 025 d 000`, écrite comme sur l'étiquette, ne trouvait pas la mécatronique DQ200 : la lettre de variante `d` était perdue au recollage. La référence est maintenant recollée à partir de tous les morceaux tapés, 10 au plus (`services/productListingService.filtreTexteRepli`).
+- Test : `tests/unit/recherche-references-catalogue.test.js`.
+
 ## 2026-11-11 — Admin : l'adresse d'une catégorie ne change plus quand on l'enregistre
 
 ### Backend
