@@ -1,0 +1,331 @@
+<%- include('../partials/head') %>
+<%- include('../partials/header') %>
+<%# Landing « Transformation 2 → 5 places » — voir controllers/transformation5PlacesController.js.
+    Choix de Killian : aucun téléphone sur cette page, contact par WhatsApp uniquement. %>
+<script type="application/ld+json"><%- faqJsonLd %></script>
+
+<style>
+  html { scroll-behavior: smooth; }
+  @media (max-width: 1023px) {
+    input:not([type="radio"]):not([type="checkbox"]), select, textarea { font-size: 16px !important; }
+  }
+  .t5p-faq summary::-webkit-details-marker { display: none; }
+  .t5p-faq details[open] .t5p-plus { transform: rotate(45deg); }
+</style>
+
+<% var fmt = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }; %>
+<% var waIcon = '<svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.47 14.38c-.3-.15-1.75-.86-2.02-.96-.27-.1-.47-.15-.66.15-.2.3-.76.96-.93 1.16-.17.2-.34.22-.64.07-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.76-1.64-2.06-.17-.3-.02-.46.13-.6.13-.14.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.6-.91-2.2-.24-.58-.49-.5-.66-.5h-.57c-.2 0-.52.07-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.21 3.08.15.2 2.1 3.2 5.08 4.49.71.31 1.26.49 1.7.63.71.23 1.36.2 1.87.12.57-.08 1.75-.72 2-1.41.25-.69.25-1.29.17-1.41-.07-.13-.27-.2-.57-.35zM12.05 21.8h-.01a9.8 9.8 0 0 1-5-1.37l-.36-.21-3.72.98 1-3.63-.24-.37a9.78 9.78 0 0 1-1.5-5.22c0-5.41 4.41-9.82 9.83-9.82a9.76 9.76 0 0 1 6.95 2.88 9.76 9.76 0 0 1 2.87 6.95c0 5.42-4.41 9.81-9.82 9.81zm8.36-18.17A11.75 11.75 0 0 0 12.05.17C5.5.17.16 5.5.16 12.05c0 2.1.55 4.14 1.59 5.94L.06 24l6.16-1.62a11.84 11.84 0 0 0 5.83 1.48h.01c6.55 0 11.89-5.33 11.89-11.89 0-3.18-1.24-6.17-3.48-8.41z"/></svg>'; %>
+
+<!-- HERO + FORMULAIRE -->
+<section class="bg-brand-dark text-white relative overflow-hidden">
+<div class="absolute inset-0 opacity-30 pointer-events-none" style="background: radial-gradient(60% 60% at 15% 20%, rgba(225,0,26,.35) 0%, rgba(10,17,32,0) 70%);"></div>
+<div class="max-w-[1400px] mx-auto px-6 py-10 lg:py-20 relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-y-10 lg:gap-x-12 lg:items-start">
+
+<div class="lg:col-span-7">
+<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-3">Transformation 2 → 5 places · Bouches-du-Rhône</p>
+<h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight mb-5">Votre voiture de société en 2 places,<br><span class="text-brand-red">repassée en 5 places.</span></h1>
+<p class="text-brand-textgray text-base lg:text-lg max-w-xl mb-8">Carte grise <strong class="text-white">dérivé VP</strong>, <strong class="text-white">VASP</strong> ou <strong class="text-white">CTTE</strong> ? On remet la banquette arrière et les ceintures, et on vous accompagne jusqu’à la carte grise en 5 places. Un seul interlocuteur, près de Rognac.</p>
+
+<div class="inline-flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 bg-brand-darker border border-gray-700 rounded-2xl p-5 mb-8">
+<div>
+<p class="text-xs uppercase tracking-wider text-brand-textgray mb-1">Forfait</p>
+<p class="text-4xl font-bold leading-none"><%= fmt(pricing.unitTtc) %> € <span class="text-base font-semibold text-brand-textgray">TTC</span></p>
+<p class="text-xs text-brand-textgray mt-1">soit <%= fmt(pricing.unitHt) %> € HT</p>
+</div>
+<ul class="text-sm text-gray-300 space-y-1 sm:border-l sm:border-gray-700 sm:pl-6">
+<li>✓ Pièces d’origine d’occasion</li>
+<li>✓ Montage compris</li>
+<li>✓ Dossier carte grise préparé</li>
+</ul>
+</div>
+
+<div class="flex flex-col sm:flex-row gap-3 mb-6">
+<a href="#devis" class="inline-flex items-center justify-center gap-2 bg-brand-red hover:bg-brand-redhover text-white font-bold px-6 py-4 rounded-xl transition-colors">Obtenir mon devis gratuit <span aria-hidden="true">→</span></a>
+<a href="<%= whatsappUrl %>" target="_blank" rel="noopener" data-wa-click="hero" class="inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5b] text-white font-bold px-6 py-4 rounded-xl transition-colors"><%- waIcon %> Écrire sur WhatsApp</a>
+</div>
+<p class="text-xs text-brand-textgray">Sans engagement · Sous réserve d’éligibilité du véhicule · Taxes de carte grise en plus</p>
+</div>
+
+<!-- Formulaire -->
+<div id="devis" class="lg:col-span-5 w-full scroll-mt-28">
+<div class="bg-white rounded-2xl p-6 sm:p-8 shadow-2xl text-gray-800">
+
+<% if (successMessage) { %>
+<h2 class="text-2xl font-bold mb-2">Demande envoyée ✓</h2>
+<div class="rounded-lg bg-emerald-50 border border-emerald-200 p-4 text-emerald-900 mt-4">
+<p class="text-sm"><%= successMessage %></p>
+</div>
+<p class="text-sm text-gray-600 mt-5">Pour aller plus vite, envoyez-nous une photo de votre carte grise (recto) : c’est elle qui permet de vérifier l’éligibilité.</p>
+<a href="<%= whatsappUrl %>" target="_blank" rel="noopener" data-wa-click="success" class="mt-4 w-full inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5b] text-white font-bold px-6 py-4 rounded-xl transition-colors"><%- waIcon %> Envoyer ma carte grise sur WhatsApp</a>
+<% } else { %>
+
+<h2 class="text-2xl font-bold mb-1">Votre voiture peut-elle passer en 5 places ?</h2>
+<p class="text-sm text-gray-500 mb-5">Devis gratuit, sans engagement. Réponse sous 24h ouvrées.</p>
+
+<% if (errorMessage) { %>
+<div class="rounded-lg bg-red-50 border border-red-200 p-3 mb-4 text-red-800 text-sm" role="alert"><%= errorMessage %></div>
+<% } %>
+
+<form action="<%= formAction %>" method="post" class="space-y-4" id="t5p-form">
+<input type="text" name="website" value="" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0" aria-hidden="true">
+
+<fieldset>
+<legend class="block text-xs font-semibold text-gray-500 mb-2">Vous êtes</legend>
+<div class="grid grid-cols-2 gap-2">
+<% Object.keys(profiles).forEach(function (key) { %>
+<label class="cursor-pointer">
+<input type="radio" name="profile" value="<%= key %>" class="peer sr-only" <%= form.profile === key ? 'checked' : '' %>>
+<span class="block text-center text-sm font-semibold border border-gray-300 rounded-lg py-2.5 peer-checked:border-brand-red peer-checked:bg-red-50 peer-checked:text-brand-red peer-focus-visible:ring-2 peer-focus-visible:ring-brand-red"><%= profiles[key] %></span>
+</label>
+<% }) %>
+</div>
+</fieldset>
+
+<div data-pro-only class="<%= form.profile === 'pro' ? '' : 'hidden' %>">
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-fleet">Nombre de véhicules (professionnels)</label>
+<select id="t5p-fleet" name="fleetSize" class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red">
+<option value="">Choisir</option>
+<% Object.keys(fleetSizes).forEach(function (key) { %><option value="<%= key %>" <%= form.fleetSize === key ? 'selected' : '' %>><%= fleetSizes[key] %></option><% }) %>
+</select>
+</div>
+
+<div class="grid grid-cols-2 gap-3">
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-make">Marque *</label>
+<select id="t5p-make" name="make" required class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red">
+<option value="">Choisir</option>
+<% makes.forEach(function (m) { %><option value="<%= m %>" <%= form.make === m ? 'selected' : '' %>><%= m %></option><% }) %>
+</select>
+</div>
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-model">Modèle *</label>
+<input id="t5p-model" type="text" name="model" required maxlength="60" value="<%= form.model %>" placeholder="ex. Clio 5" class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red">
+</div>
+</div>
+
+<div class="grid grid-cols-2 gap-3">
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-year">Année</label>
+<input id="t5p-year" type="text" inputmode="numeric" name="year" maxlength="4" value="<%= form.year %>" placeholder="ex. 2021" class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red">
+</div>
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-reg">Carte grise</label>
+<select id="t5p-reg" name="regType" class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red">
+<option value="">Choisir</option>
+<% Object.keys(regTypes).forEach(function (key) { %><option value="<%= key %>" <%= form.regType === key ? 'selected' : '' %>><%= regTypes[key] %></option><% }) %>
+</select>
+</div>
+</div>
+
+<div class="grid grid-cols-2 gap-3">
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-plate">Immatriculation</label>
+<input id="t5p-plate" type="text" name="plate" maxlength="17" value="<%= form.plate %>" placeholder="AB-123-CD" class="w-full border-gray-300 rounded-lg text-sm uppercase focus:ring-brand-red focus:border-brand-red">
+</div>
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-cp">Code postal</label>
+<input id="t5p-cp" type="text" inputmode="numeric" name="postcode" maxlength="5" value="<%= form.postcode %>" placeholder="13340" class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red">
+</div>
+</div>
+
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-timing">Quand souhaitez-vous le faire ?</label>
+<select id="t5p-timing" name="timing" class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red">
+<option value="">Choisir</option>
+<% Object.keys(timings).forEach(function (key) { %><option value="<%= key %>" <%= form.timing === key ? 'selected' : '' %>><%= timings[key] %></option><% }) %>
+</select>
+</div>
+
+<div class="border-t border-gray-100 pt-4 space-y-3">
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-name">Nom</label>
+<input id="t5p-name" type="text" name="fullName" maxlength="120" autocomplete="name" value="<%= form.fullName %>" class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red">
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-phone">Mobile *</label>
+<input id="t5p-phone" type="tel" name="phone" required maxlength="24" autocomplete="tel" value="<%= form.phone %>" placeholder="06 12 34 56 78" class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red">
+<p class="text-[11px] text-gray-400 mt-1">Pour vous répondre par WhatsApp ou SMS.</p>
+</div>
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-email">E-mail</label>
+<input id="t5p-email" type="email" name="email" maxlength="160" autocomplete="email" value="<%= form.email %>" placeholder="nom@exemple.fr" class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red">
+</div>
+</div>
+<div>
+<label class="block text-xs font-semibold text-gray-500 mb-1" for="t5p-msg">Précisions (facultatif)</label>
+<textarea id="t5p-msg" name="message" rows="2" maxlength="1500" class="w-full border-gray-300 rounded-lg text-sm focus:ring-brand-red focus:border-brand-red"><%= form.message %></textarea>
+</div>
+</div>
+
+<button type="submit" class="w-full bg-brand-red hover:bg-brand-redhover text-white font-bold py-4 rounded-xl transition-colors">Recevoir mon devis gratuit</button>
+<p class="text-[11px] text-gray-400 leading-snug">En envoyant ce formulaire, vous acceptez d’être recontacté au sujet de votre demande. Vos données ne servent qu’à traiter cette demande. <a class="underline" href="/legal/confidentialite">Politique de confidentialité</a>.</p>
+</form>
+<% } %>
+</div>
+</div>
+
+</div>
+</section>
+
+<!-- BÉNÉFICES -->
+<section class="bg-white border-b border-gray-100">
+<div class="max-w-[1400px] mx-auto px-6 py-10 grid grid-cols-2 lg:grid-cols-4 gap-6">
+<div><p class="font-bold text-gray-900">3 places en plus</p><p class="text-sm text-gray-500">La même voiture, utilisable en famille.</p></div>
+<div><p class="font-bold text-gray-900">Pièces d’origine</p><p class="text-sm text-gray-500">D’occasion, choisies pour votre modèle.</p></div>
+<div><p class="font-bold text-gray-900">Carte grise accompagnée</p><p class="text-sm text-gray-500">On prépare le dossier pour vous.</p></div>
+<div><p class="font-bold text-gray-900">Près de chez vous</p><p class="text-sm text-gray-500">Rognac, Vitrolles, Aix, Marseille.</p></div>
+</div>
+</section>
+
+<!-- LE FORFAIT -->
+<section class="bg-brand-gray">
+<div class="max-w-[1100px] mx-auto px-6 py-16">
+<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-2">Une transformation complète</p>
+<h2 class="text-3xl lg:text-4xl font-bold text-gray-900 mb-3">Tout ce qu’il faut, dans un seul forfait.</h2>
+<p class="text-gray-600 max-w-2xl mb-10">Votre voiture de société est immatriculée en 2 places ? On étudie son retour en 5 places, avec un prix clair dès le départ : <strong><%= fmt(pricing.unitTtc) %> € TTC</strong> (<%= fmt(pricing.unitHt) %> € HT).</p>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<div class="bg-white rounded-2xl p-6 border border-gray-100">
+<p class="text-brand-red font-bold text-sm mb-2">01</p>
+<h3 class="font-bold text-lg text-gray-900 mb-2">Le kit adapté à votre véhicule</h3>
+<p class="text-sm text-gray-600">Banquette, ceintures, fixations et pièces nécessaires selon votre version. Pièces d’origine d’occasion, provenance indiquée dans le dossier.</p>
+</div>
+<div class="bg-white rounded-2xl p-6 border border-gray-100">
+<p class="text-brand-red font-bold text-sm mb-2">02</p>
+<h3 class="font-bold text-lg text-gray-900 mb-2">Le montage, jusqu’aux finitions</h3>
+<p class="text-sm text-gray-600">Installation des équipements et contrôles prévus pour votre modèle. Le contenu exact de l’intervention est écrit sur votre devis.</p>
+</div>
+<div class="bg-white rounded-2xl p-6 border border-gray-100">
+<p class="text-brand-red font-bold text-sm mb-2">03</p>
+<h3 class="font-bold text-lg text-gray-900 mb-2">La conformité et la carte grise</h3>
+<p class="text-sm text-gray-600">Préparation des justificatifs et accompagnement jusqu’au changement du nombre de places sur la carte grise.</p>
+</div>
+</div>
+</div>
+</section>
+
+<!-- LE DOSSIER -->
+<section class="bg-white">
+<div class="max-w-[1100px] mx-auto px-6 py-16 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:items-center">
+<div>
+<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-2">On vous simplifie la suite</p>
+<h2 class="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">Les places en plus. La paperasse en moins.</h2>
+<p class="text-gray-600 mb-4">Remettre une banquette ne suffit pas : la carte grise doit indiquer 5 places, sinon la voiture reste en 2 places pour le contrôle technique et l’assurance. On constitue le dossier avec vous.</p>
+<p class="text-sm text-gray-500">La carte grise est délivrée par l’administration. Ses taxes et redevances ne sont pas comprises dans le forfait.</p>
+</div>
+<ol class="space-y-4">
+<li class="flex gap-4 bg-brand-gray rounded-2xl p-5"><span class="w-8 h-8 shrink-0 rounded-full bg-brand-dark text-white font-bold flex items-center justify-center">1</span><div><p class="font-bold text-gray-900">Vérification du véhicule</p><p class="text-sm text-gray-600">Modèle, version et carte grise (dérivé VP, VASP ou CTTE) : on confirme que la transformation est possible.</p></div></li>
+<li class="flex gap-4 bg-brand-gray rounded-2xl p-5"><span class="w-8 h-8 shrink-0 rounded-full bg-brand-dark text-white font-bold flex items-center justify-center">2</span><div><p class="font-bold text-gray-900">Transformation et documents de conformité</p><p class="text-sm text-gray-600">Montage, puis justificatifs fournis par l’aménageur partenaire qui atteste la transformation.</p></div></li>
+<li class="flex gap-4 bg-brand-gray rounded-2xl p-5"><span class="w-8 h-8 shrink-0 rounded-full bg-brand-dark text-white font-bold flex items-center justify-center">3</span><div><p class="font-bold text-gray-900">Carte grise en 5 places</p><p class="text-sm text-gray-600">Constitution et suivi du dossier jusqu’à la mise à jour de la carte grise.</p></div></li>
+</ol>
+</div>
+</section>
+
+<!-- PROFESSIONNELS -->
+<section class="bg-brand-dark text-white" id="pro">
+<div class="max-w-[1100px] mx-auto px-6 py-16">
+<p class="text-brand-red font-bold text-sm tracking-wider uppercase mb-2">Garages · Négociants · Gestionnaires de parc</p>
+<h2 class="text-3xl lg:text-4xl font-bold mb-3">Plus de véhicules, un meilleur tarif.</h2>
+<p class="text-brand-textgray max-w-2xl mb-10">Vous revendez des véhicules de société ou vous adaptez votre flotte ? Tarif par lot, avec un devis détaillé pour chaque configuration.</p>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+<% pricing.tiers.forEach(function (tier) { %>
+<div class="rounded-2xl p-6 border <%= tier.featured ? 'border-brand-red bg-brand-card' : 'border-gray-700 bg-brand-darker' %>">
+<p class="text-xs uppercase tracking-wider text-brand-textgray mb-1"><%= tier.label %></p>
+<p class="font-bold mb-4"><%= tier.range %></p>
+<p class="text-4xl font-bold leading-none"><%= fmt(tier.ht) %> € <span class="text-sm font-semibold text-brand-textgray">HT / véhicule</span></p>
+<p class="text-sm text-brand-textgray mt-1"><%= fmt(tier.ttc) %> € TTC par véhicule</p>
+<p class="text-sm text-emerald-400 mt-3 min-h-[1.25rem]"><%= tier.saving %></p>
+<a href="?profil=pro#devis" data-set-pro class="mt-5 inline-flex w-full items-center justify-center rounded-xl font-bold py-3 transition-colors <%= tier.featured ? 'bg-brand-red hover:bg-brand-redhover text-white' : 'bg-white/10 hover:bg-white/20 text-white' %>">Demander mon tarif pro</a>
+</div>
+<% }) %>
+</div>
+<p class="text-xs text-brand-textgray mt-6">Prix pour un lot commandé ensemble, sous réserve d’éligibilité, de configuration et de disponibilité des pièces. Taxes de carte grise en plus.</p>
+</div>
+</section>
+
+<!-- ZONE -->
+<section class="bg-white">
+<div class="max-w-[1100px] mx-auto px-6 py-14 text-center">
+<h2 class="text-2xl lg:text-3xl font-bold text-gray-900 mb-3">Votre transformation dans les Bouches-du-Rhône</h2>
+<p class="text-gray-600 max-w-2xl mx-auto">Rognac, Vitrolles, Marignane, Berre-l’Étang, Aix-en-Provence, Marseille, Salon-de-Provence, Martigues et alentours.</p>
+</div>
+</section>
+
+<!-- FAQ -->
+<section class="bg-brand-gray t5p-faq">
+<div class="max-w-[900px] mx-auto px-6 py-16">
+<h2 class="text-3xl font-bold text-gray-900 mb-8">Vos questions</h2>
+<div class="space-y-3">
+<% faq.forEach(function (item) { %>
+<details class="bg-white rounded-xl border border-gray-100 p-5">
+<summary class="flex items-center justify-between gap-4 cursor-pointer font-semibold text-gray-900 list-none"><span><%= item.q %></span><span class="t5p-plus text-brand-red text-2xl leading-none transition-transform">+</span></summary>
+<p class="text-sm text-gray-600 mt-3"><%= item.a %></p>
+</details>
+<% }) %>
+</div>
+</div>
+</section>
+
+<!-- CTA FINAL -->
+<section class="bg-brand-dark text-white">
+<div class="max-w-[1100px] mx-auto px-6 py-14 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+<div>
+<h2 class="text-2xl lg:text-3xl font-bold mb-2">Votre voiture a encore de beaux trajets devant elle.</h2>
+<p class="text-brand-textgray">Envoyez-nous votre modèle : réponse sous 24h ouvrées.</p>
+</div>
+<div class="flex flex-col sm:flex-row gap-3">
+<a href="#devis" class="inline-flex items-center justify-center whitespace-nowrap bg-brand-red hover:bg-brand-redhover text-white font-bold px-6 py-4 rounded-xl transition-colors">Obtenir mon devis</a>
+<a href="<%= whatsappUrl %>" target="_blank" rel="noopener" data-wa-click="footer-cta" class="inline-flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5b] text-white font-bold px-6 py-4 rounded-xl transition-colors"><%- waIcon %> WhatsApp</a>
+</div>
+</div>
+</section>
+
+<script>
+(function () {
+  // Affiche « Nombre de véhicules » seulement pour les professionnels.
+  var form = document.getElementById('t5p-form');
+  function syncPro() {
+    if (!form) return;
+    var pro = form.querySelector('input[name="profile"][value="pro"]');
+    var box = form.querySelector('[data-pro-only]');
+    if (box && pro) box.classList.toggle('hidden', !pro.checked);
+  }
+  if (form) {
+    form.addEventListener('change', function (e) { if (e.target && e.target.name === 'profile') syncPro(); });
+  }
+  // Boutons « tarif pro » : cochent « Professionnel » sans recharger la page.
+  document.querySelectorAll('[data-set-pro]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      if (!form) return;
+      var pro = form.querySelector('input[name="profile"][value="pro"]');
+      if (pro) { e.preventDefault(); pro.checked = true; syncPro(); document.getElementById('devis').scrollIntoView({ behavior: 'smooth' }); }
+    });
+  });
+  // Suivi des clics WhatsApp (dataLayer, événement dédié à ce test).
+  document.querySelectorAll('[data-wa-click]').forEach(function (a) {
+    a.addEventListener('click', function () {
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({ event: 'whatsapp_click_5places', placement: a.getAttribute('data-wa-click'), page_path: window.location.pathname });
+    });
+  });
+})();
+</script>
+
+<% if (successMessage && conversion && conversion.ref) { %>
+<script>
+(function () {
+  var c = <%- JSON.stringify(conversion).replace(/</g, '\\u003c') %>;
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'lead_transformation_5places', lead_ref: c.ref, lead_profile: c.profile || '', page_path: window.location.pathname });
+  var sendTo = <%- JSON.stringify(adsConversionSendTo || '') %>;
+  if (sendTo && typeof gtag === 'function') {
+    if (c.email || c.phone) {
+      gtag('set', 'user_data', { email: c.email || undefined, phone_number: c.phone || undefined });
+    }
+    gtag('event', 'conversion', { send_to: sendTo, value: 1.0, currency: 'EUR', transaction_id: c.ref });
+  }
+})();
+</script>
+<% } %>
+
+<%- include('../partials/footer') %>

@@ -9,6 +9,7 @@ const productController = require('../controllers/productController');
 const contactController = require('../controllers/contactController');
 const legacyRedirectController = require('../controllers/legacyRedirectController');
 const leadCaptureController = require('../controllers/leadCaptureController');
+const transformation5PlacesController = require('../controllers/transformation5PlacesController');
 const moteurOccasionController = require('../controllers/moteurOccasionController');
 const boiteOccasionController = require('../controllers/boiteOccasionController');
 const pontTransfertController = require('../controllers/pontTransfertController');
@@ -88,6 +89,11 @@ router.get('/ponts-differentiels', pontTransfertController.getLanding);
 router.post('/ponts-differentiels/devis', pontTransfertController.postDevis);
 router.get('/boites-de-transfert', pontTransfertController.getLanding);
 router.post('/boites-de-transfert/devis', pontTransfertController.postDevis);
+
+// Landing « Transformation 2 → 5 places » (test commercial nov. 2026) :
+// captureSource = 'landing_5places', contact WhatsApp uniquement (pas de téléphone).
+router.get('/transformation-5-places', transformation5PlacesController.getLanding);
+router.post('/transformation-5-places/devis', transformation5PlacesController.postDevis);
 
 // Entrée principale : sélection du motif SAV
 router.get('/sav', savController.getMotifSelect);

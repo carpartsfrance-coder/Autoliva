@@ -50,15 +50,18 @@
      pour couvrir les 49 gabarits d'un coup, tunnel de commande compris. */%>
 <%- include('./security-banner') %>
 
+<% const _hidePhone = (typeof hidePhone !== 'undefined' && hidePhone); %>
 <header class="sticky top-0 z-50 w-full border-b border-slate-200 bg-white">
 
 <%/* Barre utilitaire (desktop md+) : téléphone + langue. Sortis de la rangée
      principale pour laisser toute la largeur à la recherche. */%>
 <div class="hidden md:block bg-slate-50 border-b border-slate-100">
 <div class="mx-auto max-w-[1440px] px-4 md:px-10 flex items-center justify-end gap-5 h-9">
+<% if (!_hidePhone) { %>
 <a class="flex items-center gap-1.5 text-sm font-bold text-slate-700 hover:text-primary transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="<%= t('a11y.callBrandAt', { phone: brand.PHONE }) %>">
 <span class="material-symbols-outlined text-base text-primary">call</span><%= brand.PHONE %>
 </a>
+<% } %>
 <div class="flex items-center rounded-md border border-slate-200 overflow-hidden h-6" role="navigation" aria-label="Sprache / Langue">
 <a class="flex items-center justify-center px-2 h-full text-[11px] font-black uppercase tracking-wider transition-colors <%= _switchDe ? 'text-slate-400 hover:text-primary hover:bg-white' : 'bg-primary text-white' %>" href="<%= _frHref %>" hreflang="fr" <%- _switchDe ? '' : 'aria-current="true"' %>>FR</a>
 <a class="flex items-center justify-center px-2 h-full text-[11px] font-black uppercase tracking-wider transition-colors <%= _switchDe ? 'bg-primary text-white' : 'text-slate-400 hover:text-primary hover:bg-white' %>" href="<%= _deHref %>" hreflang="de" <%- _switchDe ? 'aria-current="true"' : '' %>>DE</a>
@@ -181,9 +184,11 @@
 
 <%/* Téléphone : sur md+ il est dans la barre utilitaire en haut. Sous md, icône
      d'appel ici (tap-to-call, tracké via le listener tel: du footer). */%>
+<% if (!_hidePhone) { %>
 <a class="flex md:hidden items-center justify-center rounded-lg h-9 w-9 text-primary hover:bg-slate-100 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="<%= t('a11y.callBrand') %>" title="<%= t('header.callUs') %>">
 <span class="material-symbols-outlined">call</span>
 </a>
+<% } %>
 
 <a class="relative flex items-center justify-center rounded-lg h-9 w-9 text-slate-700 hover:bg-slate-100 transition-colors" data-cart-link href="<%= _lp %>/panier">
 <span class="material-symbols-outlined" data-cart-icon>shopping_cart</span>
@@ -208,10 +213,12 @@
       </div>
 
       <div class="mt-4 grid gap-2">
+        <% if (!_hidePhone) { %>
         <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 transition-colors" href="tel:<%= brand.PHONE_INTL %>" aria-label="<%= t('a11y.callBrandAt', { phone: brand.PHONE }) %>">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">call</span><%= t('header.callUs') %> · <%= brand.PHONE %></span>
           <span class="material-symbols-outlined">call</span>
         </a>
+        <% } %>
         <a class="flex items-center justify-between rounded-2xl px-4 py-3 font-bold text-sm transition-colors <%= _navActive('/') ? 'bg-primary/10 text-primary' : 'hover:bg-slate-50 text-slate-800' %>" href="<%= _navLp %>/">
           <span class="flex items-center gap-3"><span class="material-symbols-outlined text-base">home</span><%= t('nav.home') %></span>
           <span class="material-symbols-outlined text-slate-300">chevron_right</span>
