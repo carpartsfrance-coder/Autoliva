@@ -90,7 +90,7 @@ const FAQ = [
   },
   {
     q: 'Qui atteste la transformation ?',
-    a: 'La transformation est réalisée et attestée avec un aménageur partenaire. Le nom de l’aménageur et les documents de conformité sont indiqués sur votre devis.',
+    a: 'Nous-mêmes : Autoliva est opérateur qualifié UTAC pour la transformation DERIV VP. Nous réalisons la transformation et établissons les documents de conformité pour la carte grise. La référence de notre qualification figure sur votre devis.',
   },
   {
     q: 'Comment fonctionnent les tarifs professionnels ?',
@@ -247,6 +247,8 @@ function renderPage(res, req, opts) {
     faqJsonLd: buildFaqJsonLd(),
     hidePhone: true,
     hideMobileNav: true,
+    hideContactWidget: true,
+    landingHeader: true,
     pricing: PRICING,
     profiles: PROFILES,
     fleetSizes: FLEET_SIZES,

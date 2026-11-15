@@ -116,7 +116,7 @@ window.CPF_CONSENT_I18N = {
   if (href === '/') return _pathOnly === '/';
   return _pathOnly === href || _pathOnly.startsWith(href + '/');
 }; %>
-<% const _showWhatsAppButton = !/^\/(admin|panier|commande|product)(\/|$)/.test(_pathOnly); %>
+<% const _showWhatsAppButton = !(typeof hideContactWidget !== 'undefined' && hideContactWidget) && !/^\/(admin|panier|commande|product)(\/|$)/.test(_pathOnly); %>
 <% const _whatsAppMessage = encodeURIComponent(t('whatsapp.message')); %>
 <%
   /* On passe par un endpoint interne /go/whatsapp qui 301 vers wa.me.
