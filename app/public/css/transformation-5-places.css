@@ -66,7 +66,7 @@ html{scroll-behavior:smooth;scroll-padding-top:105px}
 .t5p .hero-visual{min-width:0}
 .t5p .hero-photo{position:relative;height:396px;border-radius:22px;overflow:hidden;background:#19212b}
 .t5p .hero-photo>img{width:100%;height:100%;object-position:67% 50%}
-.t5p .hero-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#0c15283d 0%,transparent 35%,#080f1be6 100%)}
+.t5p .hero-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,#0c152870 0%,transparent 38%,#080f1be6 100%)}
 .t5p .photo-topline{position:absolute;z-index:2;left:24px;right:24px;top:23px;display:flex;justify-content:space-between;align-items:center;color:white}
 .t5p .photo-topline>span:first-child{font-size:12px;letter-spacing:1.5px;font-weight:500;background:#111e2d70;border:1px solid #ffffff25;border-radius:30px;padding:7px 10px;backdrop-filter:blur(6px)}
 .t5p .photo-topline>span:last-child{font-family:var(--display);font-size:27px;letter-spacing:3px}
@@ -99,7 +99,7 @@ html{scroll-behavior:smooth;scroll-padding-top:105px}
 .t5p .section-intro{max-width:380px;font-size:13px;line-height:1.85;color:var(--muted);padding-bottom:3px}
 .t5p .offer-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:70px;align-items:center}
 .t5p .workshop-photo{position:relative;min-height:490px;height:100%;background:var(--ink);border-radius:20px;overflow:hidden}
-.t5p .workshop-photo>img{position:absolute;width:100%;height:100%;object-position:center 75%}
+.t5p .workshop-photo>img{position:absolute;width:100%;height:100%;object-position:center 45%}
 .t5p .workshop-photo:after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,#101b27e8,transparent 55%)}
 .t5p .workshop-photo figcaption{position:absolute;bottom:16px;left:26px;right:16px;z-index:2;color:#b9c4ce;font-size:12px}
 .t5p .photo-label{position:absolute;bottom:48px;left:28px;z-index:2;color:white}
@@ -374,7 +374,7 @@ html{scroll-behavior:smooth;scroll-padding-top:105px}
 .t5p .section-intro{max-width:none;font-size:14px;margin-top:19px}
 .t5p .offer-grid{display:flex;flex-direction:column;gap:26px}
 .t5p .workshop-photo{width:100%;min-height:300px;height:300px;border-radius:17px}
-.t5p .workshop-photo>img{object-position:center 68%}
+.t5p .workshop-photo>img{object-position:center 45%}
 .t5p .photo-label{left:22px;bottom:41px}
 .t5p .photo-label strong{font-size:25px;margin-top:5px}
 .t5p .photo-label>span{font-size:11px}
@@ -478,5 +478,6 @@ html{scroll-behavior:smooth;scroll-padding-top:105px}
 .t5p .hero-intro{font-size:15px}}
 @media(max-width:900px){.t5p .photo-topline>span:last-child{font-size:22px;letter-spacing:2px}
 .t5p .photo-topline>span:first-child{font-size:11px;letter-spacing:1px}}
+.t5p .photo-topline>span:last-child{text-shadow:0 1px 10px #000a}
 
 
