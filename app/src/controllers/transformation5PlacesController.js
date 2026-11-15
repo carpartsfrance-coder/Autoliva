@@ -167,7 +167,7 @@ function pick(map, value) {
 function emptyForm() {
   return {
     profile: 'particulier', fleetSize: '', make: '', model: '', year: '', regType: '',
-    plate: '', postcode: '', timing: '', fullName: '', phone: '', email: '', message: '', website: '',
+    plate: '', postcode: '', timing: '', fullName: '', phone: '', email: '', contact: '', message: '', website: '',
   };
 }
 
@@ -180,6 +180,13 @@ function buildInitialForm(req) {
 
 function readForm(body) {
   const year = trim(body.year).replace(/[^0-9]/g, '').slice(0, 4);
+  // Champ unique « Téléphone ou e-mail » : on le range dans le bon champ.
+  const contact = trim(body.contact).slice(0, 160);
+  let phone = trim(body.phone).slice(0, 24);
+  let email = trim(body.email).slice(0, 160);
+  if (contact) {
+    if (contact.includes('@')) { if (!email) email = contact; } else if (!phone) phone = contact.slice(0, 24);
+  }
   return {
     profile: pick(PROFILES, body.profile) || 'particulier',
     fleetSize: pick(FLEET_SIZES, body.fleetSize),
@@ -191,8 +198,9 @@ function readForm(body) {
     postcode: trim(body.postcode).replace(/[^0-9]/g, '').slice(0, 5),
     timing: pick(TIMINGS, body.timing),
     fullName: trim(body.fullName).slice(0, 120),
-    phone: trim(body.phone).slice(0, 24),
-    email: trim(body.email).slice(0, 160),
+    phone,
+    email,
+    contact,
     message: trim(body.message).slice(0, 1500),
     website: trim(body.website), // honeypot
   };
@@ -322,21 +330,23 @@ async function postDevis(req, res, next) {
     const cleanEmail = normalizeEmail(form.email);
     const cleanPhone = normalizePhoneFR(form.phone) || normalizePhone(form.phone);
 
-    if (!form.make || !form.model) {
-      return renderPage(res, req, { form, statusCode: 400, errorMessage: 'Merci d’indiquer la marque et le modèle du véhicule.' });
-    }
-    if (!cleanPhone || cleanPhone.replace(/[^0-9]/g, '').length < 9) {
-      return renderPage(res, req, { form, statusCode: 400, errorMessage: 'Merci d’indiquer un numéro de mobile pour qu’on puisse vous répondre (WhatsApp ou SMS).' });
+    if (form.plate.length < 4) {
+      return renderPage(res, req, { form, statusCode: 400, errorMessage: 'Merci d’indiquer la plaque d’immatriculation du véhicule.' });
     }
     if (form.email && !cleanEmail) {
       return renderPage(res, req, { form, statusCode: 400, errorMessage: 'L’e-mail ne semble pas valide.' });
     }
+    const phoneOk = !!cleanPhone && cleanPhone.replace(/[^0-9]/g, '').length >= 9;
+    if (!phoneOk && !cleanEmail) {
+      return renderPage(res, req, { form, statusCode: 400, errorMessage: 'Merci d’indiquer un numéro de téléphone ou un e-mail pour qu’on puisse vous répondre.' });
+    }
+    const replyPhone = phoneOk ? cleanPhone : '';
 
     const nameParts = form.fullName.split(/\s+/).filter(Boolean);
     const firstNameRaw = nameParts.shift() || '';
     const lastName = nameParts.join(' ');
     const firstName = (firstNameRaw && lastName) ? firstNameRaw : '';
-    const displayName = form.fullName || cleanEmail || cleanPhone;
+    const displayName = form.fullName || cleanEmail || replyPhone;
 
     const quoteRef = generateQuoteRef();
     const vehicle = vehicleLabel(form);
@@ -361,13 +371,13 @@ async function postDevis(req, res, next) {
     ].filter(Boolean).join('\n');
 
     // 1) E-mail interne
-    const internalSubject = `[2→5 places] ${quoteRef} — ${displayName}${vehicle ? ` — ${vehicle}` : ''}`.slice(0, 180);
+    const internalSubject = `[2→5 places] ${quoteRef} — ${displayName}${form.plate ? ` — ${form.plate}` : ''}${vehicle ? ` — ${vehicle}` : ''}`.slice(0, 180);
     const internalHtml = `
       <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
         <h2 style="margin:0 0 8px 0;">Nouvelle demande — Transformation 2 → 5 places</h2>
         <p><strong>N° de dossier :</strong> <code>${escapeHtml(quoteRef)}</code> · Source : ${CAPTURE_SOURCE} (${LANDING_PATH})</p>
         <p><strong>Nom :</strong> ${escapeHtml(displayName)}<br>
-        <strong>Mobile :</strong> ${escapeHtml(cleanPhone)}${cleanEmail ? `<br><strong>E-mail :</strong> <a href="mailto:${escapeHtml(cleanEmail)}">${escapeHtml(cleanEmail)}</a>` : ''}</p>
+        ${replyPhone ? `<strong>Téléphone :</strong> ${escapeHtml(replyPhone)}` : ''}${cleanEmail ? `<br><strong>E-mail :</strong> <a href="mailto:${escapeHtml(cleanEmail)}">${escapeHtml(cleanEmail)}</a>` : ''}</p>
         <ul>${details.map(([k, v]) => `<li><strong>${escapeHtml(k)} :</strong> ${escapeHtml(v)}</li>`).join('')}</ul>
         ${form.message ? `<p><strong>Message :</strong><br>${escapeHtml(form.message).replace(/\r?\n/g, '<br>')}</p>` : ''}
         <p style="color:#6b7280;font-size:12px;">Rappel : ce client a choisi d’être recontacté par WhatsApp/SMS ou e-mail (pas d’appel sur cette page). Lead visible dans /admin/activite-panier (filtre « Landing 2 → 5 places »).</p>
@@ -376,7 +386,7 @@ async function postDevis(req, res, next) {
       'Nouvelle demande — Transformation 2 → 5 places',
       `N° de dossier : ${quoteRef}`,
       `Nom : ${displayName}`,
-      `Mobile : ${cleanPhone}`,
+      replyPhone ? `Téléphone : ${replyPhone}` : '',
       cleanEmail ? `E-mail : ${cleanEmail}` : '',
       ...details.map(([k, v]) => `${k} : ${v}`),
       form.message ? `\nMessage :\n${form.message}` : '',
@@ -423,7 +433,7 @@ async function postDevis(req, res, next) {
     if (cleanEmail) rememberEmail(req, cleanEmail);
     trackEvent(req, 'quote_request', {
       meta: { mode: 'devis', source: CAPTURE_SOURCE, profile: form.profile, regType: form.regType },
-      target: cleanEmail || cleanPhone,
+      target: cleanEmail || replyPhone,
     });
 
     captureContactLead({
@@ -432,7 +442,7 @@ async function postDevis(req, res, next) {
       email: cleanEmail,
       firstName,
       lastName,
-      phone: cleanPhone,
+      phone: replyPhone,
       message: composedMessage,
       productHints: {
         Immat: form.plate,
@@ -452,7 +462,7 @@ async function postDevis(req, res, next) {
     return renderPage(res, req, {
       form: emptyForm(),
       successMessage: `Merci${firstName ? ' ' + firstName : ''} ! Votre demande est bien reçue. Nous revenons vers vous sous 24h ouvrées, par e-mail ou WhatsApp.`,
-      conversion: { ref: quoteRef, email: cleanEmail || '', phone: cleanPhone || '', profile: form.profile },
+      conversion: { ref: quoteRef, email: cleanEmail || '', phone: replyPhone || '', profile: form.profile },
     });
   } catch (err) {
     return next(err);
