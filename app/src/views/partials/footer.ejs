@@ -49,7 +49,7 @@
 <li><span class="block"><%= t('footer.hours') %></span></li>
 <li><span class="block"><%= t('footer.address') %></span></li>
 <li><a class="hover:text-white transition-colors flex items-center gap-2" href="mailto:<%= brand.EMAIL_CONTACT %>"><span class="material-symbols-outlined text-sm">mail</span> <%= brand.EMAIL_CONTACT %></a></li>
-<li><a class="hover:text-white transition-colors flex items-center gap-2" href="tel:<%= brand.PHONE_INTL %>"><span class="material-symbols-outlined text-sm">call</span> <%= brand.PHONE %></a></li>
+<% if (!(typeof hidePhone !== 'undefined' && hidePhone)) { %><li><a class="hover:text-white transition-colors flex items-center gap-2" href="tel:<%= brand.PHONE_INTL %>"><span class="material-symbols-outlined text-sm">call</span> <%= brand.PHONE %></a></li><% } %>
 </ul>
 </div>
 <div>
@@ -136,6 +136,7 @@ window.CPF_CONSENT_I18N = {
           <p class="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider"><%= t('footer.needHelp') %></p>
         </div>
         <div class="py-1">
+          <% if (!(typeof hidePhone !== 'undefined' && hidePhone)) { %>
           <a class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="tel:<%= brand.PHONE_INTL %>">
             <span class="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-blue-600 shrink-0">
               <span class="material-symbols-outlined text-lg">call</span>
@@ -145,6 +146,7 @@ window.CPF_CONSENT_I18N = {
               <p class="text-[10px] text-slate-400"><%= brand.PHONE %></p>
             </div>
           </a>
+          <% } %>
           <a class="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors" href="<%= _whatsAppHref %>" rel="noopener noreferrer" target="_blank">
             <span class="flex h-9 w-9 items-center justify-center rounded-full shrink-0" style="background-color:#25D366">
               <svg aria-hidden="true" class="h-5 w-5 fill-white" viewBox="0 0 32 32">

@@ -102,6 +102,7 @@ async function buildPagesUrls(baseUrl, dbConnected) {
     { loc: resolveUrl('/boites-vitesse'), lastmod: '' },
     { loc: resolveUrl('/boites-vitesse-reconditionnees'), lastmod: '' },
     { loc: resolveUrl('/ponts-differentiels'), lastmod: '' },
+    { loc: resolveUrl('/transformation-5-places'), lastmod: '' },
     { loc: resolveUrl('/boites-de-transfert'), lastmod: '' },
   ];
 
