@@ -473,5 +473,10 @@ html{scroll-behavior:smooth;scroll-padding-top:105px}
 .t5p .mobile-cta .button{font-size:13px;min-height:44px;padding:12px 17px;gap:16px}
 .t5p .mobile-cta .icon{width:17px;height:17px}}
 @media(prefers-reduced-motion:reduce){.t5p *,.t5p *:before,.t5p *:after{transition:none!important}}
+.t5p .photo-topline>span{white-space:nowrap}
+@media(max-width:1150px){.t5p .hero-intro .desktop-break{display:none}
+.t5p .hero-intro{font-size:15px}}
+@media(max-width:900px){.t5p .photo-topline>span:last-child{font-size:22px;letter-spacing:2px}
+.t5p .photo-topline>span:first-child{font-size:11px;letter-spacing:1px}}
 
 
