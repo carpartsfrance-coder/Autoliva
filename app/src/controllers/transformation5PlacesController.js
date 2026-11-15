@@ -246,6 +246,7 @@ function renderPage(res, req, opts) {
     jsonLd: buildServiceJsonLd(baseUrl),
     faqJsonLd: buildFaqJsonLd(),
     hidePhone: true,
+    hideMobileNav: true,
     pricing: PRICING,
     profiles: PROFILES,
     fleetSizes: FLEET_SIZES,
