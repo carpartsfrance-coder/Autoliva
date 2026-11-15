@@ -125,7 +125,7 @@ window.CPF_CONSENT_I18N = {
 %>
 <% const _whatsAppHref = `/go/whatsapp?text=${_whatsAppMessage}`; %>
 
-<% const _showMobileNav = !/^\/(admin|commande)(\/|$)/.test(_cp); %>
+<% const _showMobileNav = !(typeof hideMobileNav !== 'undefined' && hideMobileNav) && !/^\/(admin|commande)(\/|$)/.test(_cp); %>
 
 <% if (_showWhatsAppButton) { %>
   <div class="fixed bottom-28 right-4 z-40 md:bottom-6" data-cpf-contact>
