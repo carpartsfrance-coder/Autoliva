@@ -4,7 +4,7 @@
     Design repris de la maquette validée par Killian (styles dans /css/transformation-5-places.css,
     tous limités à .t5p). Aucun téléphone : WhatsApp seulement.
     Qualification UTAC : confirmée par Killian le 15/11/2026 (« c'est nous qui sommes agréés UTAC »). %>
-<link rel="stylesheet" href="/css/transformation-5-places.css?v=3">
+<link rel="stylesheet" href="/css/transformation-5-places.css?v=4">
 <script type="application/ld+json"><%- faqJsonLd %></script>
 
 <% var fmt = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }; %>
@@ -31,7 +31,7 @@
 </div>
 
 <div class="hero-visual">
-<div class="hero-photo"><img src="/images/transformation-5-places/black-seats.webp" alt="Banquette arrière trois places, photo d’illustration" width="1920" height="1277" fetchpriority="high"><div class="photo-topline"><span>AUTOLIVA / CONVERSION</span><span>2 <b>→</b> 5</span></div><div class="photo-bottom"><div><p>UNE NOUVELLE VIE POUR VOTRE AUTO</p><strong>Faites de la place<br>à vos prochains trajets.</strong></div><span class="seat-stamp"><svg class="icon" aria-hidden="true"><use href="#t5p-seat"/></svg>+3 places</span></div><span class="photo-caption">Photo d’illustration</span></div>
+<div class="hero-photo"><img src="/images/transformation-5-places/banquette-arriere.webp" alt="Banquette arrière trois places d’une citadine, photo d’illustration" width="1920" height="1288" fetchpriority="high"><div class="photo-topline"><span>AUTOLIVA / CONVERSION</span><span>2 <b>→</b> 5</span></div><div class="photo-bottom"><div><p>UNE NOUVELLE VIE POUR VOTRE AUTO</p><strong>Faites de la place<br>à vos prochains trajets.</strong></div><span class="seat-stamp"><svg class="icon" aria-hidden="true"><use href="#t5p-seat"/></svg>+3 places</span></div><span class="photo-caption">Photo d’illustration</span></div>
 <div class="quick-card"><div class="quick-heading"><span class="quick-icon"><svg class="icon" aria-hidden="true"><use href="#t5p-check"/></svg></span><div><strong>Et votre véhicule ?</strong><p>Commençons par votre modèle.</p></div><span class="quick-free">DEVIS GRATUIT</span></div>
 <form id="quick-form" action="#formulaire"><div class="quick-fields"><label>Marque<select id="quick-brand" required><option value="">Choisir</option><% makes.forEach(function (m) { %><option value="<%= m %>"><%= m %></option><% }) %></select></label><label>Modèle<input id="quick-model" required maxlength="60" placeholder="Ex. Clio V"></label><button type="submit" class="button btn-dark" aria-label="Commencer mon devis"><%- arrow %></button></div></form></div>
 </div>
@@ -49,7 +49,7 @@
 <section class="section wrap" id="offre">
 <div class="section-heading"><div><p class="eyebrow">UN PROJET. UN INTERLOCUTEUR.</p><h2>De la banquette<br><span>à la carte grise.</span></h2></div><p class="section-intro">Vous avez une voiture de société en 2 places ? Nous étudions son retour en 5 places, avec une offre claire dès le départ.</p></div>
 <div class="offer-grid">
-<figure class="workshop-photo"><img src="/images/transformation-5-places/technician.webp" width="1000" height="1500" alt="Technicien intervenant dans un habitacle automobile, photo d’illustration" loading="lazy"><figcaption>Photo d’illustration</figcaption><div class="photo-label"><span>DU PROJET À LA ROUTE</span><strong>Un seul interlocuteur.</strong></div></figure>
+<figure class="workshop-photo"><img src="/images/transformation-5-places/technicien-banquette.webp" width="1000" height="1491" alt="Technicien installant une banquette arrière, photo d’illustration" loading="lazy"><figcaption>Photo d’illustration</figcaption><div class="photo-label"><span>DU PROJET À LA ROUTE</span><strong>Un seul interlocuteur.</strong></div></figure>
 <div>
 <article class="offer-row"><span>01</span><div><h3>Le kit adapté à votre véhicule</h3><p>Banquette, ceintures, fixations et éléments nécessaires selon la configuration. Pièces d’origine d’occasion : leur état, leur provenance et leur compatibilité sont indiqués dans le dossier.</p></div></article>
 <article class="offer-row"><span>02</span><div><h3>Le montage, jusqu’aux finitions</h3><p>Installation des équipements et contrôles prévus pour votre modèle. Le contenu exact de l’intervention est précisé sur votre devis.</p></div></article>
