@@ -50,3 +50,12 @@ test('aucun numéro de téléphone dans la page ni dans l’e-mail client', () =
   assert.ok(!/tel:/.test(html), 'pas de lien tel: dans l’accusé de réception');
   assert.ok(html.includes('/go/whatsapp'), 'lien WhatsApp présent');
 });
+
+test('formulaire : champ unique « téléphone ou e-mail » rangé au bon endroit', () => {
+  const a = readForm({ plate: 'AB-123-CD', contact: ' client@exemple.fr ' });
+  assert.strictEqual(a.email, 'client@exemple.fr');
+  assert.strictEqual(a.phone, '');
+  const b = readForm({ plate: 'AB-123-CD', contact: '06 12 34 56 78' });
+  assert.strictEqual(b.phone, '06 12 34 56 78');
+  assert.strictEqual(b.email, '');
+});
