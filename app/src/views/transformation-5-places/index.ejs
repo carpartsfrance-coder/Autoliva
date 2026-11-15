@@ -2,9 +2,9 @@
 <%- include('../partials/header') %>
 <%# Landing « Transformation 2 → 5 places » — voir controllers/transformation5PlacesController.js.
     Design repris de la maquette validée par Killian (styles dans /css/transformation-5-places.css,
-    tous limités à .t5p). Aucun téléphone : WhatsApp seulement. Pas de qualification UTAC revendiquée
-    pour Autoliva : c'est l'aménageur partenaire qui atteste, son nom figure sur le devis. %>
-<link rel="stylesheet" href="/css/transformation-5-places.css?v=1">
+    tous limités à .t5p). Aucun téléphone : WhatsApp seulement.
+    Qualification UTAC : confirmée par Killian le 15/11/2026 (« c'est nous qui sommes agréés UTAC »). %>
+<link rel="stylesheet" href="/css/transformation-5-places.css?v=2">
 <script type="application/ld+json"><%- faqJsonLd %></script>
 
 <% var fmt = function (n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }; %>
@@ -26,7 +26,7 @@
 <p class="hero-intro">Pour les particuliers et professionnels de Rognac<br class="desktop-break"> et des alentours. Pièces, montage et démarches<br class="desktop-break"> de carte grise : votre projet accompagné de A à Z.</p>
 <div class="hero-price"><div><span>FORFAIT</span><strong><%= fmt(pricing.unitTtc) %> € <small>TTC</small></strong></div><p>Pièces d’origine d’occasion<br> Montage + préparation du dossier</p></div>
 <div class="hero-actions"><a class="button orange large" href="#formulaire">Obtenir mon devis gratuit <%- arrow %></a><a class="hero-secondary" href="#offre">Voir ce qui est inclus <span>↓</span></a></div>
-<p class="hero-reassurance">Sans engagement · Sous réserve d’éligibilité</p>
+<p class="hero-reassurance">Sans engagement · Sous réserve d’éligibilité · Qualifiés UTAC</p>
 <p class="hero-location"><svg class="icon" aria-hidden="true"><use href="#t5p-pin"/></svg> <a href="#proximite"><strong>Rognac · 13340</strong> — Voir les villes alentour <span>↓</span></a></p>
 </div>
 
@@ -41,7 +41,7 @@
 <section class="benefits" aria-label="Les quatre points du forfait"><div class="wrap benefit-grid">
 <div><svg class="icon" aria-hidden="true"><use href="#t5p-seat"/></svg><p><strong>Pièces d’origine d’occasion</strong><span>Compatibilité étudiée</span></p></div>
 <div><svg class="icon" aria-hidden="true"><use href="#t5p-tool"/></svg><p><strong>Montage & contrôles</strong><span>Selon le dossier du véhicule</span></p></div>
-<div><svg class="icon" aria-hidden="true"><use href="#t5p-file"/></svg><p><strong>Démarches accompagnées</strong><span>Conformité et carte grise</span></p></div>
+<div><svg class="icon" aria-hidden="true"><use href="#t5p-shield"/></svg><p><strong>Qualifiés UTAC</strong><span>Conformité et carte grise</span></p></div>
 <div><svg class="icon" aria-hidden="true"><use href="#t5p-pin"/></svg><p><strong>À Rognac · 13340</strong><span>Pour toutes les communes alentour</span></p></div>
 </div></section>
 
@@ -68,7 +68,7 @@
 <div class="admin-step"><span>2</span><div><h3>Documents de conformité</h3><p>Justificatifs correspondant à l’intervention et à la procédure applicable.</p></div></div>
 <div class="admin-step"><span>3</span><div><h3>Mise à jour de l’immatriculation</h3><p>Constitution et suivi du dossier jusqu’à la nouvelle carte grise.</p></div></div>
 <p class="admin-note">L’émission de la carte grise relève de l’administration. Ses taxes et redevances restent distinctes du forfait.</p></div>
-<div class="qualification"><svg class="icon" aria-hidden="true"><use href="#t5p-shield"/></svg><div><strong>Qualification UTAC DERIV VP</strong><p>La transformation est attestée par un aménageur partenaire. Son nom, la référence et la validité de sa qualification sont indiqués sur votre devis : vous pouvez les vérifier dans le répertoire officiel de l’UTAC.</p></div><a href="https://www.utac.com/fr-fr/operateurs-qualifies" target="_blank" rel="noopener">Répertoire UTAC <%- arrow %></a></div>
+<div class="qualification"><svg class="icon" aria-hidden="true"><use href="#t5p-shield"/></svg><div><strong>Qualifiés UTAC · transformation DERIV VP</strong><p>Autoliva est opérateur qualifié UTAC : nous réalisons la transformation et établissons nous-mêmes les documents de conformité. La référence de notre qualification figure sur votre devis, et vous pouvez la vérifier dans le répertoire officiel de l’UTAC.</p></div><a href="https://www.utac.com/fr-fr/operateurs-qualifies" target="_blank" rel="noopener">Répertoire UTAC <%- arrow %></a></div>
 </div></section>
 
 <!-- Proximité -->
