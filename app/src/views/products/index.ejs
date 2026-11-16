@@ -491,10 +491,35 @@
         </div>
 
         <% if (!products || products.length === 0) { %>
+          <% const _qVide = (typeof searchQuery !== 'undefined' && searchQuery) ? String(searchQuery) : ''; %>
+          <% const _lpDevis = (typeof lang !== 'undefined' && lang === 'de') ? '/de/devis' : '/devis'; %>
+          <% if (typeof requetePlaque !== 'undefined' && requetePlaque) { %>
+            <%# Plaque : aucune recherche texte (elle sortait 11 221 fiches) ; on propose
+                l'identification de la pièce, plaque préremplie dans le formulaire de devis. %>
+            <div class="rounded-2xl bg-white border border-gray-200 p-6 sm:p-10" data-recherche-plaque>
+              <div class="font-bold text-lg"><%= t('listing.plateTitle') %></div>
+              <div class="mt-2 text-sm text-gray-600 max-w-xl"><%= t('listing.plateText') %></div>
+              <a class="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white hover:bg-red-700" href="<%= _lpDevis %>?plate=<%= encodeURIComponent(_qVide) %>"><%= t('listing.plateCta') %><span class="material-symbols-outlined text-base">arrow_forward</span></a>
+            </div>
+          <% } else if (_qVide) { %>
+            <%# Recherche sans résultat : c'était « Aucune pièce trouvée » et rien d'autre. Pour
+                une pièce à 1 000 €, c'est une demande perdue → lien vers le devis, référence
+                préremplie (audit du 16/11/2026). %>
+            <div class="rounded-2xl bg-white border border-gray-200 p-6 sm:p-10" data-recherche-vide>
+              <div class="font-bold text-lg"><%= t('listing.notFoundTitle') %></div>
+              <div class="mt-2 text-sm text-gray-600 max-w-xl"><%= t('listing.notFoundText', { q: _qVide }) %></div>
+              <a class="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white hover:bg-red-700" href="<%= _lpDevis %>?partRef=<%= encodeURIComponent(_qVide.slice(0, 60)) %>"><%= t('listing.notFoundCta') %><span class="material-symbols-outlined text-base">arrow_forward</span></a>
+              <div class="mt-4 text-sm text-gray-500">
+                <a class="font-semibold text-gray-700 hover:text-primary underline underline-offset-2" href="<%= (typeof lang !== 'undefined' && lang === 'de') ? '/de/rechercher' : '/rechercher' %>?q=<%= encodeURIComponent(_qVide.slice(0, 80)) %>"><%= t('listing.notFoundEdit') %></a>
+                · <a class="font-semibold text-gray-700 hover:text-primary underline underline-offset-2" href="<%= (typeof lang !== 'undefined' && lang === 'de') ? '/de/categorie' : '/categorie' %>"><%= t('listing.seeCategories') %></a>
+              </div>
+            </div>
+          <% } else { %>
           <div class="rounded-2xl bg-white border border-gray-200 p-10">
             <div class="font-bold text-lg"><%= t('listing.noResults') %></div>
             <div class="mt-2 text-sm text-gray-500"><%= t('listing.noResultsDesc') %></div>
           </div>
+          <% } %>
         <% } else { %>
           <%# Listing en LIGNES horizontales (1 produit par ligne, scannable). %>
           <div class="flex flex-col gap-4">

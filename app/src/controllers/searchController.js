@@ -32,6 +32,8 @@ async function getSearchPage(req, res, next) {
     const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}/rechercher` : `${langPrefix}/rechercher`;
 
     return res.render('search/index', {
+      /* « Modifier la recherche » (page sans résultat) revient ici avec la saisie. */
+      qInitiale: getTrimmedString(req.query && req.query.q).slice(0, 80),
       title,
       metaDescription,
       canonicalUrl,

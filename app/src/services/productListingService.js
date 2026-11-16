@@ -144,6 +144,8 @@ const REPLI_CHAMPS = ['name', 'sku', 'engineCode', 'brand', 'category', 'descrip
 /* Les champs où une référence a un sens. On n'y met pas `description` : le
    motif sans séparateurs y ferait des rapprochements hasardeux. */
 const REF_CHAMPS = ['name', 'sku', 'engineCode', 'compatibleReferences', 'searchSynonyms'];
+/* Plaque SIV : AB-123-CD, AB 123 CD ou AB123CD. */
+const PLAQUE_FR = /^[A-Za-z]{2}[\s-]?\d{3}[\s-]?[A-Za-z]{2}$/;
 
 const REPLI_CHAMPS_DE = ['localizations.de.name', 'localizations.de.shortDescription', 'localizations.de.description'];
 
@@ -823,8 +825,17 @@ async function prepareProductListingData(req, options = {}) {
   if (sort === 'price_desc') sortSpec = { priceCents: -1 };
   if (sort === 'newest') sortSpec = { createdAt: -1 };
 
+  /* Plaque d'immatriculation française (« AB-123-CD ») : le catalogue ne se
+     filtre pas par plaque. La recherche texte sortait 11 221 fiches, des
+     turbos Fiat « Ab » en tête (audit du 16/11/2026). On ne cherche pas : la
+     page propose de faire identifier la pièce à partir de la plaque. */
+  const requetePlaque = req.lang !== 'de' && PLAQUE_FR.test(String(searchQuery || '').trim());
+
   // 7) Récupération produits + pagination
-  if (dbConnected) {
+  if (requetePlaque) {
+    products = [];
+    totalCount = 0;
+  } else if (dbConnected) {
     if (searchQuery) {
       // 1) Atlas Search : page classée par pertinence, en ~dizaines de ms,
       //    quel que soit le volume du catalogue (voie normale).
@@ -1104,6 +1115,7 @@ async function prepareProductListingData(req, options = {}) {
     // Layout / data
     dbConnected,
     searchQuery,
+    requetePlaque,
     selectedVehicleMake,
     selectedVehicleModel,
     selectedVehicleEngine,
