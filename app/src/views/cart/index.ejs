@@ -218,7 +218,7 @@
             </div>
           <% } %>
         </div>
-        <%- include('../partials/consigne-conditionnelle', { lignes: (typeof consigneConditionnelle !== 'undefined' ? consigneConditionnelle : []), classes: 'mb-5' }) %>
+        <%- include('../partials/consigne-conditionnelle', { lignes: (typeof consigneConditionnelle !== 'undefined' ? consigneConditionnelle : []), plusieursArticles: Array.isArray(items) && items.length > 1, classes: 'mb-5' }) %>
 
         <!-- Promo code — collapsible -->
         <details class="mb-6 group">

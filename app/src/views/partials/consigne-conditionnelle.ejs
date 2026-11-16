@@ -6,12 +6,17 @@
     sur la fiche. Variables : lignes (pricing.listConditionalConsigneLines),
     classes (marges, optionnel). %>
 <% const _lignesCc = (typeof lignes !== 'undefined' && Array.isArray(lignes)) ? lignes : []; %>
+<%# Nom de la pièce : dès que la COMMANDE a plusieurs articles (plusieursArticles), pas seulement
+    plusieurs lignes de reprise. Dans un panier « DQ200 (consigne encaissée) + boîte de transfert
+    (sans consigne) », l'avertissement unique ne disait pas à quelle pièce il s'appliquait
+    (audit du 16/11/2026). %>
+<% const _nommer = _lignesCc.length > 1 || (typeof plusieursArticles !== 'undefined' && plusieursArticles === true); %>
 <% if (_lignesCc.length) { %>
   <div class="<%= (typeof classes !== 'undefined' && classes) ? classes : 'mt-2' %> flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-900" data-core-charge-conditional>
     <span class="material-symbols-outlined text-[16px] shrink-0">assignment_return</span>
     <div class="space-y-1">
       <% _lignesCc.forEach((l) => { %>
-        <div><% if (_lignesCc.length > 1) { %><strong><%= l.name %></strong> — <% } %><%= t('checkout.coreChargeConditional', { days: l.delayDays, amount: ((Number(l.amountCents) || 0) / 100).toFixed(2).replace('.', ',') }) %></div>
+        <div><% if (_nommer && l.name) { %><strong><%= l.name %></strong> — <% } %><%= t('checkout.coreChargeConditional', { days: l.delayDays, amount: ((Number(l.amountCents) || 0) / 100).toFixed(2).replace('.', ',') }) %></div>
       <% }) %>
     </div>
   </div>

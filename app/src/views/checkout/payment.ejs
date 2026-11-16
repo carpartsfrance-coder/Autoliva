@@ -298,7 +298,7 @@
                 </div>
                 <%# Consigne non encaissée : pas dans le total, mais un coût conditionnel à
                     rappeler juste au-dessus du bouton. %>
-                <%- include('../partials/consigne-conditionnelle', { lignes: (typeof consigneConditionnelle !== 'undefined' ? consigneConditionnelle : []), classes: 'mt-3' }) %>
+                <%- include('../partials/consigne-conditionnelle', { lignes: (typeof consigneConditionnelle !== 'undefined' ? consigneConditionnelle : []), plusieursArticles: Array.isArray(items) && items.length > 1, classes: 'mt-3' }) %>
               </div>
 
               <button class="w-full mt-3 inline-flex items-center justify-center rounded-xl bg-primary text-white px-6 py-3 font-black hover:bg-red-700 transition" type="submit">
@@ -409,7 +409,7 @@
               <span><%- t('checkout.consigneNotePayment', { amount: (consigneChargeCents / 100).toFixed(2).replace('.', ',') }) %></span>
             </div>
           <% } %>
-          <%- include('../partials/consigne-conditionnelle', { lignes: (typeof consigneConditionnelle !== 'undefined' ? consigneConditionnelle : []), classes: 'mt-2' }) %>
+          <%- include('../partials/consigne-conditionnelle', { lignes: (typeof consigneConditionnelle !== 'undefined' ? consigneConditionnelle : []), plusieursArticles: Array.isArray(items) && items.length > 1, classes: 'mt-2' }) %>
 
           <div class="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-5 space-y-2">
             <div class="flex items-center gap-2 text-xs font-black text-slate-700">

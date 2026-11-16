@@ -64,7 +64,7 @@ test('consigne conditionnelle : les lignes à rappeler avant la commande', async
     assert.equal(ligne.delayDays, 30);
   });
 
-  await t2.test('le partial affiche le texte traduit, le nom seulement s’il y a plusieurs lignes', async () => {
+  await t2.test('le partial affiche le texte traduit, le nom seulement s’il y a plusieurs lignes ou plusieurs articles', async () => {
     const fichier = path.join(__dirname, '../../src/views/partials/consigne-conditionnelle.ejs');
     const une = await ejs.renderFile(fichier, {
       lignes: [{ name: 'Mechatronik', quantity: 1, amountCents: 15000, delayDays: 15 }],
@@ -77,6 +77,14 @@ test('consigne conditionnelle : les lignes à rappeler avant la commande', async
       t: (cle, params) => t('fr', cle, params),
     });
     assert.match(deux, /<strong>B<\/strong> — Retour de l’ancienne pièce obligatoire sous 30 jours après réception – sinon 2,00 € vous seront facturés/);
+    /* Une seule ligne de reprise mais plusieurs articles (ex. DQ200 avec consigne encaissée +
+       boîte de transfert sans consigne) : le nom dit à quelle pièce s'applique l'avertissement. */
+    const mixte = await ejs.renderFile(fichier, {
+      lignes: [{ name: 'Boîte de transfert ATC400', quantity: 1, amountCents: 30000, delayDays: 30 }],
+      plusieursArticles: true,
+      t: (cle, params) => t('fr', cle, params),
+    });
+    assert.match(mixte, /<strong>Boîte de transfert ATC400<\/strong> — Retour de l’ancienne pièce obligatoire sous 30 jours/);
     assert.equal((await ejs.renderFile(fichier, { lignes: [], t })).trim(), '');
   });
 });
