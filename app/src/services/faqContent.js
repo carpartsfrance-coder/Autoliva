@@ -26,7 +26,13 @@ const FAQ_ITEMS = [
   },
   {
     question: "Comment fonctionne l'échange standard ?",
-    answer: "Vous recevez d'abord votre pièce reconditionnée. Vous disposez ensuite de 30 jours pour nous retourner l'ancienne pièce. Si vous ne renvoyez pas l'ancienne pièce dans le délai imparti, la consigne vous sera facturée.",
+    /* Les deux modes des CGV (articles 10 et 10 bis). L'ancienne réponse ne
+       décrivait que le second (« la consigne vous sera facturée » si pas de
+       retour) : sur une fiche où la consigne est ENCAISSÉE à la commande
+       (ex. DQ200, 99 €), le client lisait l'inverse dans la FAQ et découvrait
+       le montant au panier. */
+    answer: "Vous recevez d'abord votre pièce reconditionnée, puis vous nous renvoyez votre ancienne pièce sous 30 jours après la livraison. Selon la pièce, deux cas existent, toujours indiqués sur la fiche produit et rappelés dans le panier avant le paiement : <strong>consigne encaissée à la commande</strong>, remboursée intégralement après réception et contrôle de l'ancienne pièce ; ou <strong>aucune consigne à la commande</strong>, la valeur de reprise n'étant facturée que si l'ancienne pièce n'est pas renvoyée. L'ancienne pièce doit être complète, non cassée, non ouverte et vidangée. Contactez-nous pour organiser son retour (<a href=\"/legal/cgv\" class=\"text-primary font-bold hover:underline\">CGV</a>, articles 10 et 10 bis).",
+    answerPlain: "Vous recevez d'abord votre pièce reconditionnée, puis vous nous renvoyez votre ancienne pièce sous 30 jours après la livraison. Selon la pièce, deux cas existent, toujours indiqués sur la fiche produit et rappelés dans le panier avant le paiement : consigne encaissée à la commande, remboursée intégralement après réception et contrôle de l'ancienne pièce ; ou aucune consigne à la commande, la valeur de reprise n'étant facturée que si l'ancienne pièce n'est pas renvoyée. L'ancienne pièce doit être complète, non cassée, non ouverte et vidangée. Contactez-nous pour organiser son retour (CGV, articles 10 et 10 bis).",
   },
   {
     question: "Comment vérifier la compatibilité avec mon véhicule ?",

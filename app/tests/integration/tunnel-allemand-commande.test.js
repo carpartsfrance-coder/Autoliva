@@ -615,7 +615,7 @@ test('parcours allemand de bout en bout (application réelle)', async (t) => {
       $set: { status: 'shipped', 'shippingAddress.country': 'Autriche', 'shippingAddress.city': 'Wien', 'shippingAddress.postalCode': '1010', 'consigne.lines.0.dueAt': passe },
     });
     const expediee = await nav(paye.location);
-    assert.ok(expediee.lu.includes('Ihre Bestellung ist unterwegs Zustellung in 4-6 Werktagen.'), 'délai du bandeau selon la langue, pas le pays');
+    assert.ok(expediee.lu.includes('Ihre Bestellung ist unterwegs Zustellung 4–6 Werktage nach Versand.'), 'délai du bandeau selon la langue, pas le pays');
     assert.ok(expediee.lu.includes('Rückgabefrist überschritten'));
     assert.ok(!expediee.lu.includes('Fälliger Pfandbetrag'), 'montant dû affiché pour une consigne déjà encaissée');
     assert.ok(!expediee.lu.includes('Überfällig'), 'retard « dû » affiché pour une consigne déjà encaissée');
@@ -631,7 +631,7 @@ test('parcours allemand de bout en bout (application réelle)', async (t) => {
     /* Livraison estimée : le délai de la ZONE, pas une date inventée. Le repli
        était createdAt + 3 jours calendaires — un dimanche, ou une date déjà
        passée — alors que le paiement promettait le délai du pays. */
-    assert.ok(suivi.lu.includes('Voraussichtliche Zustellung Zustellung in 4-6 Werktagen'), `suivi : estimation « ${(suivi.lu.match(/Voraussichtliche Zustellung[^|]{0,60}/) || [])[0]} »`);
+    assert.ok(suivi.lu.includes('Voraussichtliche Zustellung Zustellung 4–6 Werktage nach Versand'), `suivi : estimation « ${(suivi.lu.match(/Voraussichtliche Zustellung[^|]{0,60}/) || [])[0]} »`);
     assert.ok(!/Zwischen 08:00 und 18:00/.test(suivi.lu), 'créneau horaire inventé sur le suivi');
     assert.ok(!/\b(Sonntag|Samstag)\b/.test(suivi.lu), 'date de livraison un week-end');
 
@@ -820,6 +820,6 @@ test('parcours allemand de bout en bout (application réelle)', async (t) => {
 
     /* Suivi français : le délai de la métropole, pas une date inventée. */
     const suiviFr = await nav(`${paye.location}/suivi`);
-    assert.ok(suiviFr.lu.includes('Livraison estimée Livré chez vous en 2-3 jours ouvrés'), `suivi FR : « ${(suiviFr.lu.match(/Livraison estimée[^|]{0,60}/) || [])[0]} »`);
+    assert.ok(suiviFr.lu.includes('Livraison estimée Livraison en 2 à 3 jours ouvrés après expédition'), `suivi FR : « ${(suiviFr.lu.match(/Livraison estimée[^|]{0,60}/) || [])[0]} »`);
   });
 });
