@@ -45,6 +45,11 @@ test('référence en plusieurs morceaux : détection étroite', () => {
   assert.equal(svc.referenceRecollee('mecatronique dq200'), '');
   /* Sans chiffre : pas une référence. */
   assert.equal(svc.referenceRecollee('vw golf'), '');
+  /* Recherches descriptives à petits chiffres : pas de passe stricte. */
+  assert.equal(svc.referenceRecollee('golf 7 1.6'), '');
+  assert.equal(svc.referenceRecollee('x3 2.0d'), '');
+  assert.equal(svc.referenceRecollee('7G-Tronic'), '');
+  assert.equal(svc.referenceRecollee('dq 200'), 'dq200');
 });
 
 test('passe « référence » : utilisée quand elle trouve, sinon recherche large', async (t) => {
@@ -65,7 +70,7 @@ test('passe « référence » : utilisée quand elle trouve, sinon recherche lar
   await t.test('rien en passe stricte → recherche large habituelle', async () => {
     const stub = remplacerAggregate([{ products: [], total: 0 }, { products: [{ _id: 'large' }], total: 7 }]);
     try {
-      const r = await svc.searchProductsViaAtlas({ baseFilter: {}, searchQuery: 'xy 12 34', sort: '', page: 1, perPage: 24 });
+      const r = await svc.searchProductsViaAtlas({ baseFilter: {}, searchQuery: 'xy 123 45', sort: '', page: 1, perPage: 24 });
       assert.deepEqual(r, { products: [{ _id: 'large' }], totalCount: 7 });
       assert.equal(stub.appels.length, 2);
       assert.ok(stub.appels[1][0].$search.compound.should.length >= 5, 'la seconde requête est la recherche large');

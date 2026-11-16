@@ -320,8 +320,8 @@ function reinitialiserDisjoncteur() {
  * BMW ATC450. Atlas cherche chaque morceau séparément.
  *
  * Volontairement étroit : 2 à 6 morceaux courts (≤ 6 caractères, pas de
- * vraie phrase comme « boîte de transfert bmw »), au moins un chiffre, 5 à
- * 20 caractères une fois recollée.
+ * vraie phrase comme « boîte de transfert bmw »), 5 à 20 caractères une fois
+ * recollée, et un bloc d'au moins 3 chiffres (ou « lettres + nombre »).
  */
 function referenceRecollee(searchQuery) {
   const fragments = String(searchQuery || '').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
@@ -329,7 +329,15 @@ function referenceRecollee(searchQuery) {
   if (fragments.some((f) => f.length > 6)) return '';
   const recollee = fragments.join('');
   if (recollee.length < 5 || recollee.length > 20) return '';
-  if (!/\d/.test(recollee)) return '';
+  /* Un vrai bloc de chiffres (« 325 », « 450 », « 927 ») dans un des morceaux,
+     ou le cas « lettres + nombre » (« atc 450 », « dq 200 »). Exclut les
+     recherches descriptives à petits chiffres (« golf 7 1.6 », « x3 2.0d »),
+     que la passe stricte aurait réduites à la seule phrase exacte. */
+  const blocChiffres = fragments.some((f) => /\d{3,}/.test(f));
+  const lettresNombre = fragments.length === 2
+    && fragments.some((f) => /^[A-Za-z]{1,4}$/.test(f))
+    && fragments.some((f) => /^\d{2,}$/.test(f));
+  if (!blocChiffres && !lettresNombre) return '';
   return recollee;
 }
 
