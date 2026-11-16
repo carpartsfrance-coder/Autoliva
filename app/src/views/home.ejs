@@ -8,6 +8,17 @@
   <% const productsForGrid = Array.isArray(featuredProducts) ? featuredProducts.slice(0, 4) : []; %>
 
   <div class="container mx-auto px-4 lg:px-8 py-6 sm:py-8">
+    <%# Mobile : recherche par référence AVANT le bandeau. Sur téléphone, le champ de recherche
+        n'existait que derrière la loupe ; or beaucoup de clients arrivent avec une référence
+        (0AM325025, ATC450) ou un code défaut (audit du 16/11/2026). Ordinateur : la barre de
+        l'en-tête suffit. %>
+    <form action="<%= (typeof langPrefix !== 'undefined' ? langPrefix : '') %>/produits" method="GET" class="md:hidden mb-5" role="search" data-recherche-accueil>
+      <label for="recherche-accueil" class="block text-sm font-bold text-slate-900 mb-2"><%= t('home.refSearchTitle') %></label>
+      <div class="flex gap-2">
+        <input id="recherche-accueil" name="q" type="search" autocomplete="off" enterkeyhint="search" class="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-base font-semibold text-slate-900 placeholder:text-slate-400 placeholder:font-medium focus:ring-primary focus:border-primary" placeholder="<%= t('home.refSearchPlaceholder') %>" />
+        <button type="submit" class="shrink-0 inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 text-sm font-bold text-white hover:bg-red-700"><span class="material-symbols-outlined text-[20px]">search</span><%= t('home.refSearchBtn') %></button>
+      </div>
+    </form>
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-10 sm:mb-12">
       <div class="lg:col-span-3 hidden lg:block">
         <div class="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 overflow-hidden">
