@@ -188,6 +188,13 @@
     }
   });
 
+  /* Fiche produit : ni minuterie ni « remonté en haut ». Sur une fiche, remonter
+     après avoir lu la description, c'est revenir vers le bouton d'achat — et la
+     minuterie ouvrait le popup pendant que le client lisait le prix (vu par
+     l'audit du 16/11/2026 : « CODE OFFERT » par-dessus le bloc d'achat). Les
+     vraies sorties (souris vers le haut, changement d'onglet) restent actives. */
+  var surFiche = /^\/(?:de\/)?(?:product|produits)\//.test(window.location.pathname);
+
   // ─── MOBILE 2 : scrollé profond puis revenu vers le haut ─────────────
   // Proxy fiable de "je vais cliquer sur back / fermer"
   var maxScrollY = 0;
@@ -196,7 +203,7 @@
     var y = window.scrollY || document.documentElement.scrollTop || 0;
     if (y > maxScrollY) maxScrollY = y;
     // A scrollé profond (>1000px) puis revient près du haut (<300px)
-    if (!scrollBackTriggered && maxScrollY > 1000 && y < 300) {
+    if (!surFiche && !scrollBackTriggered && maxScrollY > 1000 && y < 300) {
       scrollBackTriggered = true;
       show('mobile_scroll_back_to_top');
     }
@@ -204,7 +211,7 @@
 
   // ─── MOBILE 3 : fallback temps ───────────────────────────────────────
   // 30s sur mobile (au lieu de 60s) car l'attention y est plus courte
-  setTimeout(function () { show(isMobile ? 'time_30s' : 'time_60s'); }, isMobile ? 30000 : 60000);
+  if (!surFiche) setTimeout(function () { show(isMobile ? 'time_30s' : 'time_60s'); }, isMobile ? 30000 : 60000);
 
   closeBtn.addEventListener('click', dismiss);
   var declineBtn = document.getElementById('ei-decline');
