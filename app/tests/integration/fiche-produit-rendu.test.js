@@ -285,7 +285,7 @@ test('fiche produit rendue par l’application — description et allégations (
     /* ISO 9001 : Killian détient le certificat de l'usine qui refait ces
        pièces — la mention revient, accordée aux partenaires. */
     const lisible = texte(html);
-    assert.ok(lisible.includes('Qualité Premium : ISO 9001'), 'le badge ISO 9001 doit revenir sur la fiche Alibaba');
+    assert.ok(lisible.includes('Atelier partenaire certifié ISO 9001'), 'le badge ISO 9001 doit revenir sur la fiche Alibaba');
     assert.ok(lisible.includes('chez nos partenaires reconditionneurs certifiés ISO 9001'), 'la mention ISO du gabarit, accordée aux partenaires');
     assert.ok(!/reconditionneurs certifiées/.test(lisible), 'faute d’accord');
   });

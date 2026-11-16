@@ -373,7 +373,11 @@
           /* Titre resserré sur mobile (30px → 22px) */
           .ap-buypanel h1 { font-size: 22px !important; line-height: 1.25 !important; margin-bottom: 8px !important; }
           .ap-price-amount { font-size: 26px !important; }
-          .ap-pricebox { padding: 18px 16px !important; }
+          .ap-pricebox { padding: 18px 16px !important; display: flex; flex-direction: column; }
+          .ap-pricebox > .ap-buy-row { order: 1; }
+          .ap-pricebox > .ap-check-block { order: 2; }
+          /* Galerie mobile moins haute (359 → 293 px) et photo entière : le prix arrive plus tôt. */
+          [data-ap-gal-strip] img { aspect-ratio: 4 / 3 !important; object-fit: contain !important; background: #FFFFFF; }
           /* Utilitaire full-bleed (bord à bord viewport) */
           .ap-bleed { margin-left: calc(50% - 50vw) !important; margin-right: calc(50% - 50vw) !important; border-radius: 0 !important; }
           /* ── Barre sticky bas ── */
@@ -561,11 +565,13 @@
           <input type="hidden" name="qty" value="1" data-qty-input />
           <h1 style="font-size: 30px; font-weight: 800; line-height: 1.22; letter-spacing: -0.015em; margin: 0 0 10px 0; color: #0F1626; text-wrap: pretty;"><%= product.name %></h1>
 
+          <%# Les cinq carrés verts à étoile (le visuel de Trustpilot) suivis de « Qualité Premium :
+              ISO 9001 » se lisaient comme une note d'avis clients, qui n'existe pas, et ne disaient
+              pas QUI est certifié (audit du 16/11/2026). Une ligne factuelle à la place, avec la
+              formule imposée : « atelier partenaire certifié ISO 9001 » (ce n'est pas Autoliva). %>
           <% if (_isoOk) { %>
-          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
-            <div style="display: flex; gap: 2.5px;">
-              <% for (var _s = 0; _s < 5; _s++) { %><span style="width: 18px; height: 18px; background: #00B67A; display: flex; align-items: center; justify-content: center;"><span class="material-symbols-outlined ap-fill" style="font-size: 12.5px; color: #FFFFFF;">star</span></span><% } %>
-            </div>
+          <div style="display: flex; align-items: center; gap: 7px; margin-bottom: 12px;">
+            <span class="material-symbols-outlined ap-fill" style="font-size: 18px; color: #128A52;">verified</span>
             <span style="font-size: 12.5px; font-weight: 800; color: #0F1626;"><%= t('product.qualityPremiumIso') %></span>
           </div>
           <% } %>
@@ -577,7 +583,7 @@
             <% if (gearsVal) _specBits.push(gearsVal + ' ' + t('product.gearsWord')); %>
             <% if (_showIso) _specBits.push(t('product.exchangeStandardWord')); %>
             <% if (_garLabel) _specBits.push(_garLabel); %>
-            <%= _specBits.join(' · ') %><% if (_isoOk) { %> · <%= t('product.isoFactories') %><% } %>
+            <%# La mention ISO a sa propre ligne juste au-dessus : plus répétée ici. %><%= _specBits.join(' · ') %>
           </div>
 
           <%# ═══ Options produit (Mode de fourniture, programmation…) — hooks réels du script principal ═══ %>
@@ -635,15 +641,18 @@
           <div class="ap-pricebox" style="background: #F5F6F8; border-radius: 14px; padding: 22px;">
             <%# Ligne prix : montant à GAUCHE, disponibilité à DROITE (les chips
                 sont désormais SOUS cette ligne → le badge stock reste collé au prix) %>
+            <%# Mobile : avec un délai long à droite (« Expédition sous délai confirmé à la commande »),
+                le prix se cassait en « 890,00 » / « € » / « TTC ». Le prix ne se coupe plus ; c'est la
+                colonne de droite qui passe à la ligne. %>
             <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
-              <div style="min-width: 0;">
+              <div style="min-width: 0; flex: 0 0 auto; max-width: 62%;">
                 <div style="display: flex; align-items: flex-end; flex-wrap: wrap;">
-                  <span class="ap-price-amount" style="font-size: 32px; font-weight: 800; letter-spacing: -0.01em; color: #0F1626; line-height: 1;" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="4" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(basePriceCents) %> €</span>
+                  <span class="ap-price-amount" style="font-size: 32px; font-weight: 800; letter-spacing: -0.01em; color: #0F1626; line-height: 1; white-space: nowrap;" data-price-display data-base-price-cents="<%= basePriceCents %>" data-installment-count="4" data-installment-min-cents="<%= installmentMinPriceCents %>" data-installment-max-cents="<%= installmentMaxPriceCents %>"><%= formatMoney(basePriceCents) %> €</span>
                   <span style="font-size: 12px; font-weight: 700; color: #8A93A4; margin-left: 8px; padding-bottom: 2px;"><%= t('product.ttc') %><% if (lang === 'de' && !isService) { %>, <%= t('product.plusShipping') %><% } %></span>
 <% if (product.vatRecoverable) { %><span style="font-size: 12.5px; font-weight: 700; color: #99A1B0; margin-left: 12px; padding-bottom: 2px;"><span data-price-display-ht><%= formatMoney(priceHTcents) %></span> <%= t('product.ht') %></span><% } %>
                 </div>
               </div>
-              <div style="text-align: right; flex-shrink: 0;">
+              <div style="text-align: right; flex: 0 1 auto; min-width: 0;">
                 <% if (product.inStock) { %>
                   <span style="display: inline-flex; align-items: center; gap: 6px; background: #E4F5EC; color: #128A52; font-size: 12px; font-weight: 800; padding: 6px 11px; border-radius: 999px; white-space: nowrap;"><span style="width: 6px; height: 6px; border-radius: 50%; background: #128A52;"></span><%= t('product.inStockWord') %></span>
                   <%# Sans délai saisi, aucun délai promis : 6 329 fiches (dont les copies
@@ -680,6 +689,11 @@
                 <% } else if (hasConsigne) { %>
                   <div><%= t('product.coreChargeOnNoReturn', { amount: consigneAmountEuro, days: consigneDelayDays }) %></div>
                 <% } %>
+                <%# Le schéma en 4 étapes de l'échange standard est loin en bas de page (après la
+                    description et le comparatif) : un lien direct depuis le bloc d'achat. %>
+                <% if (hasConsigne && _showIso) { %>
+                  <a href="#echange-standard" data-lien-echange style="display: inline-block; margin-top: 4px; font-weight: 800; color: #0F1626; text-decoration: underline; text-underline-offset: 2px;"><%= t('product.exchangeHowTitle') %></a>
+                <% } %>
               </div>
             <% } %>
             <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;">
@@ -688,10 +702,13 @@
               <% } %>
               <span style="display: inline-flex; align-items: center; background: #E4F5EC; border-radius: 999px; padding: 5px 12px; font-size: 11.5px; font-weight: 800; color: #128A52;"><%= (compareAt && compareAt > basePriceCents) ? t('product.newVsSave', { newp: formatMoney(compareAt), save: formatMoney(compareAt - basePriceCents) }) : t('product.cheaperThanNew') %></span>
             </div>
+            <%# Mobile : ce bloc passe SOUS le bouton « Ajouter au panier » (CSS order) — il repoussait
+                l'achat d'environ 150 px (audit du 16/11/2026). Ordinateur : ordre inchangé. %>
+            <div class="ap-check-block">
             <div style="height: 1px; background: #E5E8EE; margin: 18px 0 16px 0;"></div>
 
             <%# ── Vérif compatibilité par un expert (POST /api/lead/product-quote) ── %>
-            <div style="font-size: 12px; font-weight: 800; color: #0F1626; margin-bottom: 8px;"><%= t('product.checkCompatExpert') %></div>
+            <div id="ap-check" style="font-size: 12px; font-weight: 800; color: #0F1626; margin-bottom: 8px; scroll-margin-top: 110px;"><%= t('product.checkCompatExpert') %></div>
             <div class="ap-check-row" style="display: flex; gap: 8px; flex-wrap: wrap;">
               <%/* La plaque n'existe qu'en français : l'API derrière est le SIV,
                    et le gabarit « AA-123-AA » ne veut rien dire en Allemagne.
@@ -713,8 +730,9 @@
             <div data-ap-check-ok style="display: none; align-items: center; gap: 9px; margin-top: 10px; background: #E4F5EC; border-radius: 10px; padding: 11px 13px;"><span class="material-symbols-outlined ap-fill" style="font-size: 17px; color: #128A52;">check_circle</span><span style="font-size: 12.5px; font-weight: 700; color: #128A52;"><%= t('product.requestSentExpert') %></span></div>
             <div data-ap-check-err style="display: none; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; font-weight: 600; color: #B42318;"><span class="material-symbols-outlined" style="font-size: 15px;">error</span><%= lang === 'de' ? t('product.errVin') : t('product.errPlate') %></div>
             <div data-ap-check-errcontact style="display: none; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; font-weight: 600; color: #B42318;"><span class="material-symbols-outlined" style="font-size: 15px;">error</span><%= t('product.errContact') %></div>
+            </div><%# /ap-check-block %>
 
-            <div style="display: flex; gap: 10px; margin-top: 18px;">
+            <div class="ap-buy-row" style="display: flex; gap: 10px; margin-top: 18px;">
               <button type="submit" data-add-to-cart-submit <%= product.inStock ? '' : 'disabled' %> style="flex: 1; height: 52px; border: none; border-radius: 10px; background: #ED1C24; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;<%= product.inStock ? '' : 'opacity:0.5;cursor:not-allowed;' %>" class="ap-cta">
                 <span class="material-symbols-outlined" style="font-size: 20px;" data-add-to-cart-icon>shopping_cart</span><span data-add-to-cart-label><%= t('product.addToCart') %></span>
               </button>
@@ -723,6 +741,21 @@
               </button>
             </div>
           </div>
+
+          <%# Garages : la remise pro (User.discountPercent, posée à la main dans l'admin) n'était
+              annoncée nulle part au moment où le garagiste lit le prix public (audit du 16/11/2026).
+              Masqué pour un compte déjà pro et pour les services. %>
+          <% const _estPro = !!(locals.currentUser && locals.currentUser.accountType === 'pro'); %>
+          <% if (!_estPro && !isService) { %>
+          <a href="/compte/inscription?type=pro" data-pro-block style="display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px 14px; border: 1px solid #E5E8EE; border-radius: 12px; background: #FFFFFF; text-decoration: none;">
+            <span class="material-symbols-outlined" style="font-size: 22px; color: #15213B; flex-shrink: 0;">garage</span>
+            <span style="min-width: 0; flex: 1;">
+              <span style="display: block; font-size: 12.5px; font-weight: 800; color: #0F1626;"><%= t('product.proBlockTitle') %></span>
+              <span style="display: block; font-size: 11.5px; font-weight: 600; color: #6B7482; line-height: 1.4; margin-top: 1px;"><%= t('product.proBlockText') %></span>
+              <span style="display: inline-block; font-size: 12px; font-weight: 800; color: #ED1C24; margin-top: 5px;"><%= t('product.proBlockCta') %> →</span>
+            </span>
+          </a>
+          <% } %>
 
           <div style="display: flex; flex-direction: column; gap: 9px; margin-top: 16px; padding: 0 2px;">
             <span style="display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: #5B6474;"><span class="material-symbols-outlined" style="font-size: 16px; color: #128A52;">local_shipping</span><%= t('product.trustDelivery') %></span>
@@ -793,6 +826,14 @@
                 <% }) %>
               </div>
             </div>
+            <%# Liste réduite à des modèles (ni motorisation ni années) : le client pourrait lire « mon
+                modèle y est, donc ça monte ». On le dit, avec le lien vers la vérification gratuite. %>
+            <% if (!_cHasEngine && !_cHasYears && !isService) { %>
+              <div data-compat-a-confirmer style="margin-top: 12px; display: flex; gap: 9px; align-items: flex-start; background: #FFF8E6; border: 1px solid #F3E2B3; border-radius: 10px; padding: 10px 12px; font-size: 12px; font-weight: 600; color: #6B5310; line-height: 1.45;">
+                <span class="material-symbols-outlined" style="font-size: 17px; color: #B7791F; flex-shrink: 0;">info</span>
+                <span><%= t('product.compatToConfirm') %> <a href="#ap-check" data-compat-check-link style="color: #0F1626; font-weight: 800; text-decoration: underline;"><%= t('product.compatCheckLink') %></a></span>
+              </div>
+            <% } %>
             <% if (_compatMore > 0) { %>
               <button type="button" data-ap-compat-toggle style="margin-top: 12px; display: inline-flex; align-items: center; gap: 6px; background: #F5F6F8; border: 1px solid #E5E8EE; border-radius: 10px; padding: 9px 15px; font-family: inherit; font-size: 12.5px; font-weight: 800; color: #15213B; cursor: pointer; transition: background .15s;" onmouseover="this.style.background='#EEF0F4'" onmouseout="this.style.background='#F5F6F8'">
                 <span data-ap-compat-label data-more="<%= t('product.showMoreModels', { count: _compatMore }) %>" data-less="<%= t('product.showLessModels') %>"><%= t('product.showMoreModels', { count: _compatMore }) %></span>
@@ -886,11 +927,9 @@
       <% if (_showIso) { %>
       <div class="ap-recond-grid" style="background: #15213B; border-radius: 20px; padding: 40px 44px; margin-top: 72px; color: #FFFFFF; display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 44px; align-items: center;">
         <div>
-          <%# Les cinq étoiles vertes n'accompagnent QUE la mention ISO : seules,
-              elles passeraient pour une note d'avis qui n'existe pas. %>
           <% if (_isoOk) { %>
-          <div style="display: flex; align-items: center; gap: 11px; margin-bottom: 16px;">
-            <div style="display: flex; gap: 3px;"><% for (var _s2 = 0; _s2 < 5; _s2++) { %><span style="width: 20px; height: 20px; background: #00B67A; display: flex; align-items: center; justify-content: center;"><span class="material-symbols-outlined ap-fill" style="font-size: 14px; color: #FFFFFF;">star</span></span><% } %></div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+            <span class="material-symbols-outlined ap-fill" style="font-size: 20px; color: #4ADE80;">verified</span>
             <span style="font-size: 12.5px; font-weight: 800; letter-spacing: 0.02em; color: #FFFFFF;"><%= t('product.qualityPremiumIso') %></span>
           </div>
           <% } %>
@@ -1005,7 +1044,7 @@
 
       <%# ═══ L'échange standard, comment ça marche ═══ %>
       <% if (_showIso) { %>
-      <div id="echange-standard" style="margin-top: 72px; background: #F7F8FA; border-radius: 20px; padding: 36px 44px;">
+      <div id="echange-standard" style="scroll-margin-top: 90px; margin-top: 72px; background: #F7F8FA; border-radius: 20px; padding: 36px 44px;">
         <div style="margin-bottom: 24px;">
           <div style="font-size: 11px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #ED1C24; margin-bottom: 8px;"><%= consigneUpfront ? t('product.consigneRefundable') : t('product.noDepositWord') %></div>
           <div style="font-size: 19px; font-weight: 800; color: #0F1626;"><%= t('product.exchangeHowTitle') %></div>
