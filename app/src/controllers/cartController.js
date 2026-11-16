@@ -217,7 +217,7 @@ async function showCart(req, res, next) {
          dès qu'il cliquait sur le panier. */
       const emptyLang = applyCheckoutLocale(req, res);
       let suggestedProducts = dbConnected
-        ? (await Product.find({})
+        ? (await Product.find({ isPublished: { $ne: false }, inStock: { $ne: false } })
             .sort({ createdAt: -1 })
             .limit(4)
             .lean())
@@ -346,10 +346,27 @@ async function showCart(req, res, next) {
 
     let suggestedProducts = [];
     if (dbConnected) {
-      suggestedProducts = (await Product.find({ _id: { $nin: Array.from(cartProductIds) } })
-        .sort({ createdAt: -1 })
-        .limit(4)
-        .lean()).map(normalizeProduct);
+      /* « Complétez votre commande » : uniquement les accessoires liés aux
+         pièces du panier (champ « accessoires » de la fiche), publiés et en
+         stock. Avant : les 4 derniers produits créés, quels qu'ils soient —
+         un moteur Nissan à 6 672 € sous une mécatronique DQ200, des boîtes
+         Mercedes sous une boîte de transfert BMW (audit du 16/11/2026).
+         Sans accessoire lié, la section n'est pas affichée. */
+      const accIds = [];
+      for (const it of viewItems) {
+        const acc = it.product && Array.isArray(it.product.accessories) ? it.product.accessories : [];
+        for (const a of acc) {
+          const id = String(a);
+          if (mongoose.Types.ObjectId.isValid(id) && !cartProductIds.has(id) && !accIds.includes(id)) accIds.push(id);
+        }
+      }
+      if (accIds.length) {
+        const docs = await Product.find({ _id: { $in: accIds }, isPublished: { $ne: false }, inStock: { $ne: false } })
+          .limit(8)
+          .lean();
+        const byId = new Map(docs.map((d) => [String(d._id), d]));
+        suggestedProducts = accIds.map((id) => byId.get(id)).filter(Boolean).slice(0, 4).map(normalizeProduct);
+      }
     } else {
       suggestedProducts = demoProducts
         .filter((p) => !cartProductIds.has(String(p._id)))

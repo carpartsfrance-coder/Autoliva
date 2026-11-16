@@ -110,6 +110,7 @@
           <% }) %>
         </div>
 
+        <% if (suggestedProducts && suggestedProducts.length) { %>
         <div class="mt-10 sm:mt-16">
           <h2 class="text-lg sm:text-xl font-display font-bold mb-4 sm:mb-6"><%= t('cart.complete') %></h2>
           <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -145,6 +146,7 @@
             <% }) %>
           </div>
         </div>
+        <% } %>
       <% } %>
     </div>
 
