@@ -308,6 +308,29 @@ function reinitialiserDisjoncteur() {
   disjoncteur.ouvertJusqua = 0;
 }
 
+/**
+ * Référence tapée en plusieurs morceaux (« 0AM 325 025 », « atc 450 »,
+ * « 02E-927-770-AJ ») : renvoie la version recollée, sinon ''.
+ *
+ * Audit du 16/11/2026 (ChatGPT, vérifié en production) : « 0AM325025 »
+ * trouvait 1 fiche, « 0AM 325 025 » en trouvait 758 avec des moteurs BMW 325
+ * en tête ; « atc 450 » sortait un moteur Renault R9M 450 avant les boîtes
+ * BMW ATC450. Atlas cherche chaque morceau séparément.
+ *
+ * Volontairement étroit : 2 à 6 morceaux courts (≤ 6 caractères, pas de
+ * vraie phrase comme « boîte de transfert bmw »), au moins un chiffre, 5 à
+ * 20 caractères une fois recollée.
+ */
+function referenceRecollee(searchQuery) {
+  const fragments = String(searchQuery || '').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+  if (fragments.length < 2 || fragments.length > 6) return '';
+  if (fragments.some((f) => f.length > 6)) return '';
+  const recollee = fragments.join('');
+  if (recollee.length < 5 || recollee.length > 20) return '';
+  if (!/\d/.test(recollee)) return '';
+  return recollee;
+}
+
 async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, perPage }) {
   const q = String(searchQuery || '').trim();
   if (!q) return null;
@@ -335,28 +358,68 @@ async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, per
     },
   };
 
-  const pipeline = [searchStage];
-  if (baseFilter && Object.keys(baseFilter).length) pipeline.push({ $match: baseFilter });
+  const construire = (etape) => {
+    const pipeline = [etape];
+    if (baseFilter && Object.keys(baseFilter).length) pipeline.push({ $match: baseFilter });
 
-  // Tri explicite (prix / nouveauté) ; sinon on garde l'ordre de pertinence Atlas.
-  if (sort === 'price_asc') pipeline.push({ $sort: { priceCents: 1 } });
-  else if (sort === 'price_desc') pipeline.push({ $sort: { priceCents: -1 } });
-  else if (sort === 'newest') pipeline.push({ $sort: { createdAt: -1 } });
+    // Tri explicite (prix / nouveauté) ; sinon on garde l'ordre de pertinence Atlas.
+    if (sort === 'price_asc') pipeline.push({ $sort: { priceCents: 1 } });
+    else if (sort === 'price_desc') pipeline.push({ $sort: { priceCents: -1 } });
+    else if (sort === 'newest') pipeline.push({ $sort: { createdAt: -1 } });
 
-  pipeline.push({
-    $facet: {
-      results: [{ $skip: Math.max(0, (page - 1) * perPage) }, { $limit: perPage }],
-      total: [{ $count: 'n' }],
-    },
-  });
+    pipeline.push({
+      $facet: {
+        results: [{ $skip: Math.max(0, (page - 1) * perPage) }, { $limit: perPage }],
+        total: [{ $count: 'n' }],
+      },
+    });
+    return pipeline;
+  };
+  const lire = (out) => {
+    const facet = (out && out[0]) || {};
+    return {
+      products: Array.isArray(facet.results) ? facet.results : [],
+      totalCount: (facet.total && facet.total[0] && facet.total[0].n) || 0,
+    };
+  };
+
+  /* Passe « référence » : seulement les fiches qui portent la suite exacte
+     (« 0AM 325 025 ») ou la référence recollée (« ATC450 », « 02E927770AJ »).
+     Si elle trouve quelque chose, c'est la réponse ; sinon, recherche large
+     habituelle. Une erreur ici n'est PAS comptée comme une panne Atlas (pas
+     de disjoncteur) : on retombe simplement sur la recherche d'avant. */
+  const recollee = referenceRecollee(q);
+  if (recollee) {
+    const etapeReference = {
+      $search: {
+        index: ATLAS_SEARCH_INDEX,
+        compound: {
+          should: [
+            { phrase: { query: q, path: REF_CHAMPS } },
+            { text: { query: recollee, path: REF_CHAMPS } },
+          ],
+          minimumShouldMatch: 1,
+        },
+      },
+    };
+    try {
+      const strict = lire(await Product.aggregate(construire(etapeReference)).option({ maxTimeMS: ATLAS_TIMEOUT_MS }));
+      if (strict.totalCount > 0) {
+        signalerSuccesAtlas();
+        return strict;
+      }
+    } catch (err) {
+      console.warn('[search] passe « référence » ignorée :', err && err.message);
+    }
+  }
+
+  const pipeline = construire(searchStage);
 
   try {
     /* `maxTimeMS` : sans lui, une requête qui n'obtient pas `mongot` attend
        vingt secondes en retenant une connexion du pool. */
     const out = await Product.aggregate(pipeline).option({ maxTimeMS: ATLAS_TIMEOUT_MS });
-    const facet = (out && out[0]) || {};
-    const products = Array.isArray(facet.results) ? facet.results : [];
-    const totalCount = (facet.total && facet.total[0] && facet.total[0].n) || 0;
+    const { products, totalCount } = lire(out);
     signalerSuccesAtlas();
     return { products, totalCount };
   } catch (err) {
@@ -1162,6 +1225,7 @@ module.exports = {
   prepareProductListingData,
   getVehicleTree,
   searchProductsViaAtlas,
+  referenceRecollee,
   filtreTexteRepli,
   motifSansAccent,
   motifReference,
