@@ -801,6 +801,7 @@
   "breadcrumb.categoriesLd": "Kategorien",
   "shipping.homeDescEurope": "Zustellung 4–6 Werktage nach Versand",
   "cart.loginToCheckout": "Mit Kundenkonto anmelden",
+  "cart.proHint": "Werkstatt? <a href=\"/compte/inscription?type=pro\" class=\"font-semibold text-primary hover:underline\">Händlerkonto eröffnen</a>: −10 % auf den Katalog, sobald Ihr Konto freigeschaltet ist.",
   "checkout.placeOrder": "Zahlungspflichtig bestellen",
   "shipping.homeDescGermany": "Zustellung 2–4 Werktage nach Versand",
   "product.expertCheckPending": "Prüfung durch einen Experten läuft",

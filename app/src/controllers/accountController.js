@@ -2747,7 +2747,8 @@ function getRegister(req, res) {
   const dbConnected = mongoose.connection.readyState === 1;
   const returnTo = getSafeReturnTo(req.query.returnTo) || '/compte';
 
-  const defaultType = req.session.accountType === 'pro' ? 'pro' : 'particulier';
+  /* ?type=pro : lien « Ouvrez un compte pro » du panier et des fiches. */
+  const defaultType = (req.session.accountType === 'pro' || req.query.type === 'pro') ? 'pro' : 'particulier';
 
   res.render('account/register', {
     title: `${traduire(lang, 'account.registerTitle')} - ${brand.NAME}`,

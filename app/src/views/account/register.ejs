@@ -267,8 +267,8 @@
             <div class="pt-6 border-t border-border-light dark:border-border-dark flex justify-center gap-6 opacity-60">
               <span class="text-[10px] font-bold">VISA</span>
               <span class="text-[10px] font-bold">MASTERCARD</span>
-              <span class="text-[10px] font-bold">PAYPAL</span>
-              <span class="text-[10px] font-bold">STRIPE</span>
+              <%# PayPal et Stripe étaient affichés alors qu'aucun des deux n'est proposé (paiement Mollie : carte, virement). %>
+              <span class="text-[10px] font-bold"><%= _de ? "ÜBERWEISUNG" : "VIREMENT" %></span>
             </div>
           </div>
         </div>
