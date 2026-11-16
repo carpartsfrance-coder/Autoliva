@@ -377,9 +377,18 @@
           /* Utilitaire full-bleed (bord à bord viewport) */
           .ap-bleed { margin-left: calc(50% - 50vw) !important; margin-right: calc(50% - 50vw) !important; border-radius: 0 !important; }
           /* ── Barre sticky bas ── */
-          .ap-sticky-inner { padding: 0 14px !important; gap: 10px !important; height: 62px !important; }
+          .ap-sticky-inner { padding: 0 12px !important; gap: 10px !important; height: auto !important; min-height: 62px; }
           .ap-sticky-thumb, .ap-sticky-info { display: none !important; }
-          .ap-sticky-price { margin-left: 0 !important; margin-right: auto !important; text-align: left !important; }
+          .ap-sticky-price { margin-left: 0 !important; margin-right: auto !important; text-align: left !important; flex: 1 1 auto !important; min-width: 0 !important; padding: 8px 0; }
+          /* La consigne (« + 99,00 € de consigne encaissée à la commande ») tenait sur une
+             ligne : le bouton « Ajouter au panier » sortait de l'écran à droite. */
+          .ap-sticky-price > div { white-space: normal !important; line-height: 1.25; }
+          [data-ap-sticky-add] { padding: 0 14px !important; font-size: 13px !important; }
+          /* Carte posée AU-DESSUS de la barre de navigation du bas (comme la barre du panier) ;
+             avant, elle la recouvrait à moitié et le haut de la barre dépassait derrière. */
+          [data-ap-sticky] { left: 12px !important; right: 12px !important; bottom: calc(76px + env(safe-area-inset-bottom)) !important; border: 1px solid #E9ECF1 !important; border-radius: 16px !important; }
+          /* Bouton d'assistance rond : remonté pendant que la barre est affichée (il tombait sur « Ajouter »). */
+          body.ap-sticky-on [data-cpf-contact] { bottom: calc(7rem + 78px) !important; }
           /* ── Form vérif compat : plaque + contact sur 1 ligne, bouton en dessous
              (compact ; inputs 16px = anti-zoom iOS) ── */
           .ap-check-row { flex-wrap: wrap !important; gap: 8px !important; }
@@ -419,7 +428,12 @@
 
       <div class="ap-page">
 
-      <%# ═══ Barre sticky d'achat (apparaît après 780px de scroll — JS) ═══ %>
+      <%# ═══ Barre sticky d'achat ═══
+          Affichée dès que le bouton principal « Ajouter au panier » n'est plus à l'écran
+          (au-dessus OU en dessous) — sur mobile, la photo et le titre remplissaient le
+          premier écran et le prix n'apparaissait qu'après défilement (audit 16/11/2026).
+          Pièce hors stock : pas de barre (le bouton principal est désactivé). %>
+      <% if (product.inStock) { %>
       <div data-ap-sticky style="position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: #FFFFFF; border-top: 1px solid #E9ECF1; box-shadow: 0 -6px 24px rgba(15,22,38,0.08); display: none;">
         <div class="ap-sticky-inner" style="max-width: 1264px; margin: 0 auto; padding: 0 32px; height: 66px; display: flex; align-items: center; gap: 14px;">
           <% if (mainImage) { %><img class="ap-sticky-thumb" src="<%= mainImage %>" alt="" style="width: 42px; height: 42px; border-radius: 8px; object-fit: cover; flex-shrink: 0;" /><% } %>
@@ -445,6 +459,7 @@
           </button>
         </div>
       </div>
+      <% } %>
 
       <%# ═══ Toast confirmation (JS) ═══ %>
       <div data-ap-toast style="position: fixed; left: 50%; bottom: 30px; transform: translateX(-50%); z-index: 130; background: #10151F; color: #FFFFFF; border-radius: 999px; padding: 13px 22px; display: none; align-items: center; gap: 10px; box-shadow: 0 12px 32px rgba(15,22,38,0.3); font-size: 13px; font-weight: 700; white-space: nowrap;">
@@ -1659,11 +1674,22 @@
           var stickyAdd = document.querySelector('[data-ap-sticky-add]');
           var mainSubmit = document.querySelector('[data-add-to-cart-submit]');
           if (sticky) {
-            var onScroll = function () {
-              sticky.style.display = (window.scrollY > 780) ? 'block' : 'none';
+            var setSticky = function (on) {
+              sticky.style.display = on ? 'block' : 'none';
+              document.body.classList.toggle('ap-sticky-on', on);
             };
-            window.addEventListener('scroll', onScroll, { passive: true });
-            onScroll();
+            if (mainSubmit && 'IntersectionObserver' in window) {
+              /* Visible tant que le bouton principal est hors de l'écran. Ordinateur : il est
+                 visible au chargement (colonne de droite), la barre n'arrive qu'en défilant.
+                 Mobile : la barre est là dès l'arrivée, sous la photo et le titre. */
+              new IntersectionObserver(function (entries) {
+                setSticky(!entries[0].isIntersecting);
+              }, { rootMargin: '0px 0px -40px 0px' }).observe(mainSubmit);
+            } else {
+              var onScroll = function () { setSticky(window.scrollY > 780); };
+              window.addEventListener('scroll', onScroll, { passive: true });
+              onScroll();
+            }
           }
           if (stickyAdd && mainSubmit) {
             stickyAdd.addEventListener('click', function () { mainSubmit.click(); });
