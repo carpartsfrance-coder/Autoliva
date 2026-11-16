@@ -373,12 +373,12 @@
         </div>
         <% if (!currentUser) { %>
           <a class="shrink-0 bg-primary hover:bg-red-700 text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-primary/20 transition-all" href="/commande/livraison?guest=1">
-            <%= t('common.validate') %>
+            <%= t('cart.checkoutShort') %>
             <span class="material-symbols-outlined text-lg">arrow_forward</span>
           </a>
         <% } else { %>
           <a class="shrink-0 bg-primary hover:bg-red-700 text-white px-5 py-3 rounded-xl font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-primary/20 transition-all" href="/commande/livraison">
-            <%= t('common.validate') %>
+            <%= t('cart.checkoutShort') %>
             <span class="material-symbols-outlined text-lg">arrow_forward</span>
           </a>
         <% } %>

@@ -541,7 +541,7 @@
                       <% [[t('product.specRef'), _ref, ''], [t('product.specState'), _etat, ''], [t('product.specType'), _type, 'hidden sm:block']].forEach((row) => { if (!row[1]) return; %>
                         <div class="min-w-0 max-w-full <%= row[2] %>">
                           <p class="text-[10px] text-gray-400 uppercase tracking-wider leading-none mb-1"><%= row[0] %></p>
-                          <p class="text-xs sm:text-sm font-semibold text-gray-800 truncate sm:whitespace-normal sm:[overflow-wrap:anywhere]" title="<%= row[1] %>"><%= row[1] %></p>
+                          <p class="text-xs sm:text-sm font-semibold text-gray-800 line-clamp-2 sm:line-clamp-none [overflow-wrap:anywhere]"><%= row[1] %></p>
                         </div>
                       <% }) %>
                     </div>
@@ -568,7 +568,7 @@
                   </div>
 
                   <%# 5 · PRIX + STOCK + PANIER + FAVORI %>
-                  <div class="basis-full sm:basis-auto px-4 lg:px-5 py-3 sm:py-4 border-t sm:border-t-0 sm:border-l border-gray-100 shrink-0 flex flex-row sm:flex-col items-center sm:items-end justify-between gap-3 sm:w-72">
+                  <div class="basis-full sm:basis-auto px-4 lg:px-5 py-3 sm:py-4 border-t sm:border-t-0 sm:border-l border-gray-100 shrink-0 grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 sm:flex sm:flex-col sm:items-end sm:justify-between sm:gap-3 sm:w-72">
                     <div class="sm:text-right">
                       <p class="text-[10px] text-gray-400 uppercase tracking-wider"><%= t('product.priceTTC') %></p>
                       <p class="text-xl lg:text-2xl font-extrabold text-gray-900 whitespace-nowrap"><%= formatMoney(p.priceCents) %> €</p>
@@ -576,16 +576,20 @@
                           port et le Pfand encaissé doivent être annoncés AVANT ce clic,
                           pas seulement sur la fiche (le panier affichait ensuite 198 €
                           de plus que le prix lu ici). %>
+                      <% const _pfandCarte = (p.consigne && p.consigne.enabled === true && p.consigne.chargeUpfront === true && Number(p.consigne.amountCents) > 0) ? Number(p.consigne.amountCents) : 0; %>
                       <% if (lang === 'de') { %>
-                        <% const _pfandCarte = (p.consigne && p.consigne.enabled === true && p.consigne.chargeUpfront === true && Number(p.consigne.amountCents) > 0) ? Number(p.consigne.amountCents) : 0; %>
                         <p class="text-[11px] text-gray-500 leading-snug" data-price-info><%= p.serviceType === 'standalone_cloning' ? t('product.ttc') : t('product.priceInfoDe') %></p>
-                        <% if (_pfandCarte > 0) { %><p class="text-[11px] text-gray-500 leading-snug" data-price-deposit><%= t('product.plusDepositShort', { amount: formatMoney(_pfandCarte) }) %></p><% } %>
                       <% } %>
                       <p class="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold <%= p.inStock ? 'text-emerald-600' : 'text-amber-600' %>">
                         <span class="w-1.5 h-1.5 rounded-full <%= p.inStock ? 'bg-emerald-500' : 'bg-amber-500' %>"></span><%= p.inStock ? t('product.stockIn') : t('product.stockOrder') %>
                       </p>
                     </div>
-                    <div class="flex items-center gap-2 w-auto sm:w-full">
+                    <%# Consigne encaissée : annoncée près du prix dans toutes les langues (le bouton ajoute
+                        directement au panier ; en français, les 99 € n'apparaissaient qu'au panier).
+                        Mobile : sur toute la largeur, sous le prix et le bouton (dans la colonne du prix,
+                        elle tenait sur 4 lignes). %>
+                    <% if (_pfandCarte > 0) { %><p class="col-span-2 order-last sm:order-none text-[11px] text-gray-500 leading-snug sm:text-right" data-price-deposit><%= t('product.plusDepositShort', { amount: formatMoney(_pfandCarte) }) %></p><% } %>
+                    <div class="flex items-center gap-2 w-auto sm:w-full justify-self-end">
                       <form action="/panier/ajouter/<%= p._id %>" method="POST" class="flex-1"
                         data-product-id="<%= p._id %>"
                         data-product-sku="<%= p.sku || p._id %>"

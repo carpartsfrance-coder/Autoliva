@@ -114,8 +114,8 @@ test('panier — suggestions = accessoires liés, commande sans compte en premie
     const nav = navigateur(base);
     await nav(`/panier/ajouter/${seule._id}`, { method: 'POST', form: { quantity: '1' } });
     const { html } = await nav('/panier');
-    const bouton = html.match(/<a class="w-full bg-primary[^"]*" href="([^"]+)">\s*Valider ma commande/);
-    assert.ok(bouton, 'bouton « Valider ma commande » introuvable');
+    const bouton = html.match(/<a class="w-full bg-primary[^"]*" href="([^"]+)">\s*Continuer ma commande/);
+    assert.ok(bouton, 'bouton « Continuer ma commande » introuvable');
     assert.equal(bouton[1], '/commande/livraison?guest=1');
     assert.ok(html.includes('Déjà un compte ? Se connecter'));
   });

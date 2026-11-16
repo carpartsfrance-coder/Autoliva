@@ -389,6 +389,9 @@
           [data-ap-sticky] { left: 12px !important; right: 12px !important; bottom: calc(76px + env(safe-area-inset-bottom)) !important; border: 1px solid #E9ECF1 !important; border-radius: 16px !important; }
           /* Bouton d'assistance rond : remonté pendant que la barre est affichée (il tombait sur « Ajouter »). */
           body.ap-sticky-on [data-cpf-contact] { bottom: calc(7rem + 78px) !important; }
+          /* La barre ne cache pas le bas de la page ; le toast « ajouté au panier » passe au-dessus des deux barres. */
+          body.ap-sticky-on { padding-bottom: 72px; }
+          [data-ap-toast] { bottom: calc(160px + env(safe-area-inset-bottom)) !important; }
           /* ── Form vérif compat : plaque + contact sur 1 ligne, bouton en dessous
              (compact ; inputs 16px = anti-zoom iOS) ── */
           .ap-check-row { flex-wrap: wrap !important; gap: 8px !important; }
