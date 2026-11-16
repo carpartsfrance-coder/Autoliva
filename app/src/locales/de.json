@@ -310,6 +310,8 @@
   "listing.notFoundCta": "Teil suchen lassen",
   "listing.notFoundEdit": "Suche ändern",
   "listing.seeCategories": "Kategorien ansehen",
+  "listing.faultCodeNote": "Teile zum Fehlercode %code%. Ein Fehlercode allein bestimmt nicht das defekte Teil: Lassen Sie die Diagnose vor der Bestellung bestätigen.",
+  "listing.faultCodeArticles": "Unsere Artikel zum Code %code% lesen",
   "listing.vehicleBanner": "Mit Ihrem Fahrzeug kompatible Teile",
   "listing.clearVehicle": "Fahrzeug entfernen",
   "listing.partsByBrand": "Autoteile nach Marke",

@@ -490,6 +490,16 @@
           <% } %>
         </div>
 
+        <%# Code défaut moteur/boîte « P » (P17BF, P0841…) — pas B/C/U : « B4204 » est un moteur Volvo : les fiches sortent bien, mais un code n'est pas un
+            diagnostic. On le dit, et on renvoie vers les articles du blog sur ce code (un article
+            par code et par boîte). Jamais de « compatible » sur la seule foi d'un code. %>
+        <% const _codeDefaut = (typeof searchQuery !== 'undefined' && /^P[0-9A-F]{4}([0-9A-F]{2})?$/i.test(String(searchQuery || '').trim())) ? String(searchQuery).trim().toUpperCase() : ''; %>
+        <% if (_codeDefaut && products && products.length) { %>
+          <div class="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" data-recherche-code-defaut>
+            <span class="material-symbols-outlined text-[18px] text-amber-600 shrink-0">info</span>
+            <div><%= t('listing.faultCodeNote', { code: _codeDefaut }) %><% if (typeof lang === 'undefined' || lang !== 'de') { %> <a class="font-bold underline underline-offset-2" href="/blog?q=<%= encodeURIComponent(_codeDefaut) %>"><%= t('listing.faultCodeArticles', { code: _codeDefaut }) %></a><% } %></div>
+          </div>
+        <% } %>
         <% if (!products || products.length === 0) { %>
           <% const _qVide = (typeof searchQuery !== 'undefined' && searchQuery) ? String(searchQuery) : ''; %>
           <% const _lpDevis = (typeof lang !== 'undefined' && lang === 'de') ? '/de/devis' : '/devis'; %>

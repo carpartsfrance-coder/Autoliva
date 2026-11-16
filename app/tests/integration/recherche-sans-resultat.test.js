@@ -30,7 +30,7 @@ test('recherche — plaque et référence introuvable', async (t) => {
   await mongoose.connect(serveur.getUri());
   await mongoose.connection.db.collection('products').insertMany([
     { name: 'Turbo reconditionné Fiat Grande Punto Ab Multiair', sku: 'T-AB-1', category: 'Turbos', priceCents: 50000, inStock: true, isPublished: true, createdAt: new Date() },
-    { name: 'Mécatronique DSG7 DQ200 reconditionnée', sku: '0AM 325 025', category: 'Mécatroniques & calculateurs', priceCents: 129000, inStock: true, isPublished: true, createdAt: new Date() },
+    { name: 'Mécatronique DSG7 DQ200 reconditionnée (code P17BF)', sku: '0AM 325 025', category: 'Mécatroniques & calculateurs', priceCents: 129000, inStock: true, isPublished: true, createdAt: new Date() },
   ]);
 
   const app = require('../../src/app');
@@ -64,6 +64,13 @@ test('recherche — plaque et référence introuvable', async (t) => {
   await t.test('une saisie est échappée dans le message', async () => {
     const html = await get(`/produits?q=${encodeURIComponent('<b>x9z</b>')}`);
     assert.ok(!html.includes('<b>x9z</b>'), 'saisie non échappée');
+  });
+
+  await t.test('code défaut : fiches + avertissement « diagnostic à confirmer » + articles du blog', async () => {
+    const html = await get('/produits?q=p17bf');
+    assert.ok(html.includes('Mécatronique DSG7 DQ200'), 'la fiche doit sortir');
+    assert.ok(html.includes('data-recherche-code-defaut'));
+    assert.ok(html.includes('/blog?q=P17BF'));
   });
 
   await t.test('une vraie référence trouve toujours sa fiche', async () => {

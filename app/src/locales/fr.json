@@ -310,6 +310,8 @@
   "listing.notFoundCta": "Faire rechercher cette pièce",
   "listing.notFoundEdit": "Modifier la recherche",
   "listing.seeCategories": "Voir les catégories",
+  "listing.faultCodeNote": "Pièces associées au code défaut %code%. Un code défaut ne suffit pas à désigner la pièce en panne : faites confirmer le diagnostic avant de commander.",
+  "listing.faultCodeArticles": "Lire nos articles sur le code %code%",
   "listing.vehicleBanner": "Pièces compatibles avec votre véhicule",
   "listing.clearVehicle": "Effacer le véhicule",
   "listing.partsByBrand": "Pièces auto par marque",
