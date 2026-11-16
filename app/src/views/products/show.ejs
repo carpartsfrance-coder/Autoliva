@@ -761,17 +761,23 @@
                   véhicule : les références de la pièce sont listées une seule
                   fois, dans « Caractéristiques ». %>
               <%# Desktop / tablette : tableau 3 colonnes %>
+              <%# Colonnes vides masquées : sur la DQ200 (27 véhicules, aucune motorisation ni année
+                  saisie), le tableau alignait 27 lignes « — | — » et donnait l'impression d'une
+                  compatibilité mal renseignée (audit du 16/11/2026). %>
+              <% var _cHasEngine = compatVehicles.some(function (v) { return !!v.engine; }); %>
+              <% var _cHasYears = compatVehicles.some(function (v) { return !!v.years; }); %>
+              <% var _cCols = '1fr' + (_cHasEngine ? ' 1.1fr' : '') + (_cHasYears ? ' 0.8fr' : ''); %>
               <div class="ap-compat-table">
-                <div style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr; padding: 8px 0;">
+                <div style="display: grid; grid-template-columns: <%= _cCols %>; padding: 8px 0;">
                   <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.model') %></span>
-                  <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.engine') %></span>
-                  <span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.years') %></span>
+                  <% if (_cHasEngine) { %><span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.engine') %></span><% } %>
+                  <% if (_cHasYears) { %><span style="font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: #7A8394;"><%= t('product.years') %></span><% } %>
                 </div>
                 <% compatVehicles.forEach(function (v, i) { %>
-                  <div class="<%= i >= _compatLimit ? 'ap-compat-extra' : '' %>" style="display: grid; grid-template-columns: 1fr 1.1fr 0.8fr; align-items: center; padding: 13px 0; border-top: 1px solid #F0F2F6;">
+                  <div class="<%= i >= _compatLimit ? 'ap-compat-extra' : '' %>" style="display: grid; grid-template-columns: <%= _cCols %>; align-items: center; padding: 13px 0; border-top: 1px solid #F0F2F6;">
                     <span style="font-size: 13px; font-weight: 800; color: #0F1626;"><%= [v.make, v.model].filter(Boolean).join(' ') || '—' %></span>
-                    <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.engine || '—' %></span>
-                    <span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.years || '—' %></span>
+                    <% if (_cHasEngine) { %><span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.engine || '—' %></span><% } %>
+                    <% if (_cHasYears) { %><span style="font-size: 13px; font-weight: 600; color: #3E4657;"><%= v.years || '—' %></span><% } %>
                   </div>
                 <% }) %>
               </div>
