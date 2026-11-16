@@ -95,14 +95,17 @@ test('problème 8 : chaque article d’une famille prioritaire reçoit le lien d
   assert.equal(L('moteur-diesel', 'Moteur 2.0 TDI : casse de bielle'), null);
 });
 
-test('raccourcis par boîte : libellé court et recherche simple (lien ?q=)', () => {
+test('raccourcis par boîte ou par marque : libellé court, recherche simple ou marque', () => {
   const { familles } = require('../../src/data/seo/pages-familles.json');
   for (const [slug, f] of Object.entries(familles)) {
     if (!f.raccourcis) continue;
     assert.ok(Array.isArray(f.raccourcis) && f.raccourcis.length >= 2, slug);
     for (const r of f.raccourcis) {
       assert.ok(r.texte && r.texte.length <= 24, `${slug} : libellé « ${r.texte} »`);
-      assert.match(r.q, /^[A-Za-z0-9.]{2,12}$/, `${slug} : recherche « ${r.q} »`);
+      /* Soit une recherche simple (q), soit une marque du filtre véhicule (marque), pas les deux. */
+      assert.ok(!!r.q !== !!r.marque, `${slug} : « ${r.texte} » doit avoir q OU marque`);
+      if (r.q) assert.match(r.q, /^[A-Za-z0-9.]{2,12}$/, `${slug} : recherche « ${r.q} »`);
+      if (r.marque) assert.match(r.marque, /^[A-Za-z][A-Za-z -]{1,20}$/, `${slug} : marque « ${r.marque} »`);
     }
   }
 });

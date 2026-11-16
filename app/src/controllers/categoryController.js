@@ -442,7 +442,11 @@ async function getCategory(req, res, next) {
            catégorie (pages filtrées en noindex, voir metaRobots). Sur toutes les
            pages : c'est de la navigation, pas du texte (audit du 16/11/2026). */
         raccourcis: famille && Array.isArray(famille.raccourcis) ? famille.raccourcis : [],
+        titreRaccourcis: (famille && famille.titreRaccourcis) || '',
         rechercheActive: data.searchQuery || '',
+        /* La marque de l'URL seulement : un véhicule mémorisé en session ne doit pas
+           allumer une puce que le client n'a pas cliquée. */
+        marqueActive: typeof req.query.vehicleMake === 'string' ? req.query.vehicleMake.trim() : '',
         famille: (famille && !(data.page > 1)) ? {
           introHtml: famille.introHtml || '',
           liens: Array.isArray(famille.liens) ? famille.liens : [],

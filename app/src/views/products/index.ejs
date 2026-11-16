@@ -318,13 +318,18 @@
                 <%/* Accès directs par boîte : un client qui cherche une DQ200 ne doit pas
                      parcourir 33 fiches triées par nouveauté (audit du 16/11/2026). */%>
                 <% const _rqActive = String(_categoryContext.rechercheActive || '').trim().toLowerCase(); %>
+                <% const _rmActive = String(_categoryContext.marqueActive || '').trim().toLowerCase(); %>
                 <% const _rqBase = _categoryContext.publicPath || ('/categorie/' + _categoryContext.slug); %>
+                <% const _rqToutes = !_rqActive && !_rmActive; %>
                 <div class="mt-4">
-                  <p class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Choisissez votre boîte</p>
+                  <p class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2"><%= _categoryContext.titreRaccourcis || 'Choisissez votre boîte' %></p>
                   <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 sm:flex-wrap sm:overflow-visible" data-raccourcis-famille>
-                    <a class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-bold transition-colors <%= !_rqActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary' %>" href="<%= _rqBase %>"<%- !_rqActive ? ' aria-current="page"' : '' %>>Toutes</a>
-                    <% _categoryContext.raccourcis.forEach(function (r) { const _on = _rqActive === String(r.q).toLowerCase(); %>
-                      <a class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-bold transition-colors <%= _on ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary' %>" href="<%= _rqBase %>?q=<%= encodeURIComponent(r.q) %>"<%- _on ? ' aria-current="page"' : '' %>><%= r.texte %></a>
+                    <a class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-bold transition-colors <%= _rqToutes ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary' %>" href="<%= _rqBase %>"<%- _rqToutes ? ' aria-current="page"' : '' %>>Toutes</a>
+                    <% _categoryContext.raccourcis.forEach(function (r) {
+                         /* Puce « recherche » (q : DQ200…) ou puce « marque » (filtre véhicule, exact). */
+                         const _href = r.marque ? (_rqBase + '?vehicleMake=' + encodeURIComponent(r.marque)) : (_rqBase + '?q=' + encodeURIComponent(r.q));
+                         const _on = r.marque ? (_rmActive === String(r.marque).toLowerCase() && !_rqActive) : (_rqActive === String(r.q).toLowerCase()); %>
+                      <a class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-bold transition-colors <%= _on ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary' %>" href="<%= _href %>"<%- _on ? ' aria-current="page"' : '' %>><%= r.texte %></a>
                     <% }); %>
                   </div>
                 </div>

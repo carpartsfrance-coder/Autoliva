@@ -15,6 +15,8 @@
     { "href": "/ponts-differentiels", "texte": "Demander un devis échange standard" },
     { "href": "/categorie/boites-de-transfert", "texte": "Voir les boîtes de transfert" }
    ],
+   "titreRaccourcis": "Choisissez la marque",
+   "raccourcis": [{"texte": "BMW", "marque": "BMW"}, {"texte": "Mercedes", "marque": "Mercedes"}, {"texte": "Toyota", "marque": "Toyota"}, {"texte": "Land Rover", "marque": "Land Rover"}, {"texte": "Audi", "marque": "Audi"}, {"texte": "Porsche", "marque": "Porsche"}, {"texte": "Jeep", "marque": "Jeep"}, {"texte": "Nissan", "marque": "Nissan"}, {"texte": "Hyundai", "marque": "Hyundai"}, {"texte": "Kia", "marque": "Kia"}, {"texte": "Volkswagen", "marque": "Volkswagen"}],
    "faq": [
     {
      "question": "Qu’est-ce que l’échange standard ?",
@@ -47,6 +49,8 @@
     { "href": "/boites-de-transfert", "texte": "Demander un devis échange standard" },
     { "href": "/categorie/ponts-differentiels", "texte": "Voir les ponts et différentiels" }
    ],
+   "titreRaccourcis": "Choisissez la marque",
+   "raccourcis": [{"texte": "BMW xDrive", "marque": "BMW"}, {"texte": "Mercedes 4MATIC", "marque": "Mercedes"}, {"texte": "Porsche", "marque": "Porsche"}, {"texte": "Land Rover", "marque": "Land Rover"}, {"texte": "Toyota", "marque": "Toyota"}, {"texte": "Audi", "marque": "Audi"}, {"texte": "Jeep", "marque": "Jeep"}, {"texte": "Volkswagen", "marque": "Volkswagen"}, {"texte": "Nissan", "marque": "Nissan"}, {"texte": "Hyundai", "marque": "Hyundai"}, {"texte": "Kia", "marque": "Kia"}],
    "faq": [
     {
      "question": "Qu’est-ce que l’échange standard ?",
