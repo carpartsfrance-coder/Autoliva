@@ -314,7 +314,7 @@ Envoyer ma demande
 <% for (var _dup = 0; _dup < 2; _dup++) { %>
 <% _brands.forEach(function(b){ %>
 <div class="h-14 w-32 md:h-16 md:w-36 flex items-center justify-center shrink-0 grayscale hover:grayscale-0 opacity-70 hover:opacity-100 transition duration-300">
-<img alt="<%= b[0] %>" class="max-h-full max-w-full object-contain" src="<%= b[1] %>" loading="lazy" <%= _dup === 1 ? 'aria-hidden="true"' : '' %>>
+<img alt="<%= b[0] %>" class="max-h-full max-w-full object-contain" src="<%= b[1] %>" loading="lazy" <%- _dup === 1 ? 'aria-hidden="true"' : '' %>>
 </div>
 <% }); %>
 <% } %>
