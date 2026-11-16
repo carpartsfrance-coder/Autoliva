@@ -116,7 +116,9 @@ window.CPF_CONSENT_I18N = {
   if (href === '/') return _pathOnly === '/';
   return _pathOnly === href || _pathOnly.startsWith(href + '/');
 }; %>
-<% const _showWhatsAppButton = !(typeof hideContactWidget !== 'undefined' && hideContactWidget) && !/^\/(admin|panier|commande|product)(\/|$)/.test(_pathOnly); %>
+<%# Fiches allemandes (/de/produits/<fiche>, vue ici sans le /de) et anciennes adresses /produits/<id> exclues comme /product/… : le bouton rond
+    y recouvrait le formulaire « FIN prüfen » et l'encadré de compatibilité (16/11/2026). %>
+<% const _showWhatsAppButton = !(typeof hideContactWidget !== 'undefined' && hideContactWidget) && !/^\/(admin|panier|commande|product)(\/|$)/.test(_pathOnly) && !/^\/(de\/)?produits\/[^/]+/.test(_pathOnly); %>
 <% const _whatsAppMessage = encodeURIComponent(t('whatsapp.message')); %>
 <%
   /* On passe par un endpoint interne /go/whatsapp qui 301 vers wa.me.
