@@ -314,15 +314,32 @@
               </nav>
               <h1 class="text-2xl sm:text-3xl font-black tracking-tight"><%= _categoryContext.h1 || _categoryContext.name %></h1>
               <p class="mt-1 text-sm text-gray-500"><%= t(_nbListe === 1 ? 'listing.inCategoryOne' : 'listing.inCategory', { count: _nbListeFormate }) %></p>
+              <% if (Array.isArray(_categoryContext.raccourcis) && _categoryContext.raccourcis.length) { %>
+                <%/* Accès directs par boîte : un client qui cherche une DQ200 ne doit pas
+                     parcourir 33 fiches triées par nouveauté (audit du 16/11/2026). */%>
+                <% const _rqActive = String(_categoryContext.rechercheActive || '').trim().toLowerCase(); %>
+                <% const _rqBase = _categoryContext.publicPath || ('/categorie/' + _categoryContext.slug); %>
+                <div class="mt-4">
+                  <p class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">Choisissez votre boîte</p>
+                  <div class="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 sm:flex-wrap sm:overflow-visible" data-raccourcis-famille>
+                    <a class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-bold transition-colors <%= !_rqActive ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary' %>" href="<%= _rqBase %>"<%- !_rqActive ? ' aria-current="page"' : '' %>>Toutes</a>
+                    <% _categoryContext.raccourcis.forEach(function (r) { const _on = _rqActive === String(r.q).toLowerCase(); %>
+                      <a class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-bold transition-colors <%= _on ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary' %>" href="<%= _rqBase %>?q=<%= encodeURIComponent(r.q) %>"<%- _on ? ' aria-current="page"' : '' %>><%= r.texte %></a>
+                    <% }); %>
+                  </div>
+                </div>
+              <% } %>
               <% if (_categoryContext.famille && _categoryContext.famille.introHtml) { %>
                 <%/* Introduction de famille (audit SEO du 11/11/2026, problème 4) :
                      page 1 seulement, texte relu et versionné. Sur mobile, le
                      premier paragraphe seul, la suite derrière « Lire la
                      suite » (sans JavaScript) : les produits restent proches
                      du haut de l'écran. */%>
-                <% var _introPlus = (String(_categoryContext.famille.introHtml).match(/<p[\s>]/g) || []).length > 1; %>
+                <%/* Mobile : le 1er paragraphe faisait encore 8 lignes avant les produits ;
+                     coupé à 3 lignes, « Lire la suite » déroule le reste (16/11/2026). */%>
+                <% var _introPlus = (String(_categoryContext.famille.introHtml).match(/<p[\s>]/g) || []).length > 1 || String(_categoryContext.famille.introHtml).replace(/<[^>]+>/g, '').length > 180; %>
                 <% if (_introPlus) { %><input type="checkbox" id="famille-intro-suite" class="peer sr-only"><% } %>
-                <div class="famille-intro mt-4 max-w-3xl space-y-3 text-sm leading-relaxed text-slate-600 [&>p+p]:hidden sm:[&>p+p]:block peer-checked:[&>p+p]:block">
+                <div class="famille-intro mt-4 max-w-3xl space-y-3 text-sm leading-relaxed text-slate-600 [&>p+p]:hidden sm:[&>p+p]:block peer-checked:[&>p+p]:block [&>p:first-child]:line-clamp-3 sm:[&>p:first-child]:line-clamp-none peer-checked:[&>p:first-child]:line-clamp-none">
                   <%- _categoryContext.famille.introHtml %>
                 </div>
                 <% if (_introPlus) { %>

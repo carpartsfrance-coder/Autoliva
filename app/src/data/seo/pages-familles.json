@@ -79,6 +79,7 @@
     { "href": "/devis", "texte": "Demander un devis avec votre VIN" },
     { "href": "/categorie/boites-de-vitesses", "texte": "Voir les boîtes de vitesses" }
    ],
+   "raccourcis": [{"texte": "DSG7 DQ200", "q": "DQ200"}, {"texte": "DSG6 DQ250", "q": "DQ250"}, {"texte": "DSG7 DQ381", "q": "DQ381"}, {"texte": "DSG7 DQ500", "q": "DQ500"}, {"texte": "S tronic DL382", "q": "DL382"}, {"texte": "S tronic DL501", "q": "DL501"}, {"texte": "Multitronic 0AW", "q": "0AW"}, {"texte": "Mercedes 722.9", "q": "722.9"}],
    "faq": [
     {
      "question": "Quels sont les signes d’une mécatronique DSG en panne ?",

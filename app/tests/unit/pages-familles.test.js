@@ -94,3 +94,15 @@ test('problème 8 : chaque article d’une famille prioritaire reçoit le lien d
   assert.equal(L('', 'Différentiel arrière Toyota Hilux : bruit et remplacement'), '/categorie/ponts-differentiels');
   assert.equal(L('moteur-diesel', 'Moteur 2.0 TDI : casse de bielle'), null);
 });
+
+test('raccourcis par boîte : libellé court et recherche simple (lien ?q=)', () => {
+  const { familles } = require('../../src/data/seo/pages-familles.json');
+  for (const [slug, f] of Object.entries(familles)) {
+    if (!f.raccourcis) continue;
+    assert.ok(Array.isArray(f.raccourcis) && f.raccourcis.length >= 2, slug);
+    for (const r of f.raccourcis) {
+      assert.ok(r.texte && r.texte.length <= 24, `${slug} : libellé « ${r.texte} »`);
+      assert.match(r.q, /^[A-Za-z0-9.]{2,12}$/, `${slug} : recherche « ${r.q} »`);
+    }
+  }
+});

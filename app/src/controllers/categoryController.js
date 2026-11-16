@@ -438,6 +438,11 @@ async function getCategory(req, res, next) {
            d'introduction, les liens et la FAQ sur la page 1 seulement (les
            pages 2+ indexables ne doivent pas répéter le même texte). */
         h1: famille && famille.h1 ? famille.h1 : '',
+        /* Accès directs par boîte (DQ200, DQ250…) : liens ?q= vers la même
+           catégorie (pages filtrées en noindex, voir metaRobots). Sur toutes les
+           pages : c'est de la navigation, pas du texte (audit du 16/11/2026). */
+        raccourcis: famille && Array.isArray(famille.raccourcis) ? famille.raccourcis : [],
+        rechercheActive: data.searchQuery || '',
         famille: (famille && !(data.page > 1)) ? {
           introHtml: famille.introHtml || '',
           liens: Array.isArray(famille.liens) ? famille.liens : [],
