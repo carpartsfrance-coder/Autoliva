@@ -897,6 +897,10 @@ function dt(v) {
 
 // ─── Auto-save : tout form avec data-autosave envoie en AJAX au change/blur ───
 (function () {
+  /* Registre partagé : le bouton « Envoyer le devis » attend la fin des
+     enregistrements (avant : un clic juste après une saisie pouvait envoyer
+     l'ancien prix / l'ancienne description). */
+  const registre = window.__devisSauvegardes = window.__devisSauvegardes || { enCours: new Set(), vidages: [] };
   const forms = document.querySelectorAll('form[data-autosave]');
   forms.forEach(form => {
     const indicator = form.querySelector('[data-save-indicator]');
@@ -932,9 +936,13 @@ function dt(v) {
       const params = new URLSearchParams();
       for (const [k, v] of fd.entries()) params.append(k, v);
       const payloadStr = params.toString();
-      if (payloadStr === lastPayload) return; // pas de changement réel
+      if (payloadStr === lastPayload) return true; // pas de changement réel
+      const precedent = lastPayload;
       lastPayload = payloadStr;
       showStatus('saving');
+      let fin;
+      const promesse = new Promise((r) => { fin = r; });
+      registre.enCours.add(promesse);
       try {
         const res = await fetch(form.action, {
           method: 'POST',
@@ -948,11 +956,20 @@ function dt(v) {
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         showStatus('saved');
+        fin(true);
+        return true;
       } catch (err) {
         console.error('Autosave failed:', err);
         showStatus('error');
+        // Permettre de réessayer la même valeur (avant : bloquée par lastPayload).
+        lastPayload = precedent;
+        fin(false);
+        return false;
+      } finally {
+        registre.enCours.delete(promesse);
       }
     }
+    registre.vidages.push(() => { clearTimeout(timer); return save(); });
 
     // Debounced save (300ms après changement)
     function scheduleSave() {
@@ -968,6 +985,26 @@ function dt(v) {
     form.addEventListener('blur', save, true);            // blur immédiat (capture phase)
     form.addEventListener('submit', e => { e.preventDefault(); save(); });
   });
+
+  const btnEnvoi = document.querySelector('[data-send-btn]');
+  const formEnvoi = btnEnvoi && btnEnvoi.form;
+  if (formEnvoi) {
+    formEnvoi.addEventListener('submit', (e) => {
+      if (formEnvoi.dataset.sauvegardeOk === '1') return;
+      e.preventDefault();
+      const declencheur = e.submitter || null;
+      const enAttente = Array.from(registre.enCours);
+      Promise.all(registre.vidages.map((f) => f()).concat(enAttente)).then((resultats) => {
+        if (resultats.some((r) => r === false)) {
+          alert('Une modification n’a pas pu être enregistrée (voir « ⚠ Erreur enregistrement »). Vérifie avant d’envoyer.');
+          return;
+        }
+        formEnvoi.dataset.sauvegardeOk = '1';
+        if (formEnvoi.requestSubmit) formEnvoi.requestSubmit(declencheur || undefined); else formEnvoi.submit();
+        setTimeout(() => { formEnvoi.dataset.sauvegardeOk = ''; }, 0);
+      });
+    });
+  }
 })();
 
 // ─── Live update du bloc "Envoyer le devis" selon les autres formulaires ───
