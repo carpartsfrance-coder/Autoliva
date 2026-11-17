@@ -229,7 +229,12 @@ router.get('/visiteurs/:sessionId/events', requireAdminAuth, adminController.get
 router.get('/preparation', requireAdminAuth, adminController.getAdminPreparation);
 router.get('/consignes', requireAdminAuth, adminController.getAdminConsignes);
 router.get('/commandes', requireAdminAuth, adminController.getAdminOrdersPage);
-router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteOrders);
+/* Suppression DÉFINITIVE groupée (sans corbeille, factures comprises). Plus
+   aucun bouton ne l'appelle (la liste utilise corbeille-multi, restaurable),
+   mais la route restait ouverte à tout admin, employés compris. Réservée
+   au propriétaire (rôle « * ») : 'orders.deleteDefinitive' n'est donné à
+   aucun autre rôle. */
+router.post('/commandes/supprimer-multi', requireAdminAuth, requireAbility('orders.deleteDefinitive'), adminController.postAdminBulkDeleteOrders);
 // Liste « files » : corbeille groupée (restaurable) et étiquettes réunies en un PDF.
 router.post('/commandes/corbeille-multi', requireAdminAuth, adminController.postAdminBulkTrashOrders);
 router.get('/commandes/etiquettes.pdf', requireAdminAuth, adminController.getAdminOrdersLabelsPdf);

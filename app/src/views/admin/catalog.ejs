@@ -461,6 +461,13 @@
               if (selectedCount) selectedCount.textContent = count + ' sélectionné' + (count > 1 ? 's' : '');
               if (bulkBtn) bulkBtn.disabled = count === 0;
               if (bulkGenerateBtn) bulkGenerateBtn.disabled = count === 0;
+              /* Le nombre dans la confirmation : « Supprimer 37 produits » se relit
+                 mieux que « les produits sélectionnés » quand « tout cocher » a pris
+                 toute la page. */
+              if (bulkBtn) bulkBtn.setAttribute('data-confirm', count > 1
+                ? 'Supprimer ces ' + count + ' produits ?\n\nLeurs fiches et leurs photos seront effacées. Impossible d’annuler.'
+                : 'Supprimer ce produit ?\n\nSa fiche et ses photos seront effacées. Impossible d’annuler.');
+              if (bulkGenerateBtn) bulkGenerateBtn.setAttribute('data-confirm', 'Lancer la génération IA pour ' + count + ' produit' + (count > 1 ? 's' : '') + ' ?');
               if (bulkEditBar) bulkEditBar.style.display = count > 0 ? 'flex' : 'none';
               if (selectAll) {
                 selectAll.checked = count > 0 && count === checkboxes.length;
