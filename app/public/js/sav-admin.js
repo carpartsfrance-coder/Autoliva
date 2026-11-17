@@ -6281,20 +6281,31 @@
     var autoList = document.getElementById('sav-auto-list');
     var current = null;
 
+    /* Noms et explications en français simple. Les descriptions techniques
+       enregistrées restent en info-bulle. Ce que fait chaque règle vient de
+       services/savAutomations.js (la fermeture n'envoie PAS d'e-mail). */
+    var REGLES = {
+      relance_1: { titre: '1re relance du client', aide: 'Le client n’a pas envoyé ses documents : après ce nombre de jours sans nouvelles, il reçoit un e-mail de relance.' },
+      relance_2: { titre: '2e relance (la dernière)', aide: 'Toujours rien après la 1re relance : nouvel e-mail de relance.' },
+      clos_sans_reponse: { titre: 'Fermeture sans réponse', aide: 'Toujours rien après la 2e relance : le dossier est fermé (aucun e-mail n’est envoyé).' },
+      echange_auto: { titre: 'Échange automatique (pas encore branché)', aide: 'Note seulement « échange à créer » dans le dossier quand l’analyse confirme un défaut. Ne crée aucune commande.' },
+    };
+    function regleLib(r) { return REGLES[r.key] || { titre: r.key, aide: r.description || '' }; }
+
     api('/settings').then(function (res) {
       if (!res.ok) return;
       current = res.j.data;
       slaGrid.innerHTML = (current.slaPerPiece || []).map(function (p, i) {
-        return '<div class="rounded-xl border border-slate-200 p-3"><div class="text-xs font-semibold mb-1">' + escapeHtml(p.pieceType) + '</div>' +
+        return '<div class="rounded-xl border border-slate-200 p-3"><div class="text-xs font-semibold mb-1" title="' + escapeHtml(p.pieceType) + '">' + escapeHtml(labelPiece(p.pieceType)) + '</div>' +
           '<div class="flex items-center gap-2"><input type="number" min="1" max="60" value="' + p.days + '" data-sla-idx="' + i + '" class="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm"><span class="text-xs text-slate-500">jours</span></div></div>';
       }).join('');
       autoList.innerHTML = (current.automationRules || []).map(function (r, i) {
         return '<div class="rounded-xl border border-slate-200 p-4">' +
           '<div class="flex items-start justify-between gap-3">' +
-            '<div><div class="font-semibold text-sm">' + escapeHtml(r.key) + '</div><div class="text-xs text-slate-500 mt-1">' + escapeHtml(r.description || '') + '</div></div>' +
+            '<div><div class="font-semibold text-sm">' + escapeHtml(regleLib(r).titre) + '</div><div class="text-xs text-slate-500 mt-1" title="' + escapeHtml(r.description || '') + '">' + escapeHtml(regleLib(r).aide) + '</div></div>' +
             '<label class="inline-flex items-center cursor-pointer"><input type="checkbox" data-auto-enabled="' + i + '" ' + (r.enabled ? 'checked' : '') + ' class="rounded text-primary"><span class="ml-2 text-xs">Activé</span></label>' +
           '</div>' +
-          '<div class="mt-2 flex items-center gap-2"><label class="text-xs text-slate-600">Seuil :</label>' +
+          '<div class="mt-2 flex items-center gap-2"><label class="text-xs text-slate-600">Après</label>' +
           '<input type="number" min="0" max="90" value="' + r.daysThreshold + '" data-auto-days="' + i + '" class="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm">' +
           '<span class="text-xs text-slate-500">jours</span></div>' +
         '</div>';
@@ -6321,10 +6332,23 @@
         });
     });
 
-    document.getElementById('sav-auto-run-now').addEventListener('click', function () {
-      api('/automations/run', { method: 'POST' }).then(function (res) {
-        if (res.ok) toast('Automations exécutées : ' + JSON.stringify(res.j.data));
-        else toast('Erreur', 'error');
+    /* « Exécuter maintenant » envoie de VRAIS e-mails de relance aux clients
+       concernés : confirmation d'abord, résultat lisible ensuite. */
+    var btnRun = document.getElementById('sav-auto-run-now');
+    btnRun.addEventListener('click', function () {
+      var msg = 'Lancer les règles maintenant ?\n\nLes clients concernés reçoivent tout de suite leur e-mail de relance, et les dossiers sans réponse peuvent être fermés.';
+      var demande = typeof window.adminConfirm === 'function' ? Promise.resolve(window.adminConfirm(msg)) : Promise.resolve(window.confirm(msg));
+      demande.then(function (oui) {
+        if (!oui) return;
+        btnRun.disabled = true;
+        api('/automations/run', { method: 'POST' }).then(function (res) {
+          btnRun.disabled = false;
+          if (!res.ok) { toast((res.j && res.j.error) || 'Erreur', 'error'); return; }
+          var d = (res.j && res.j.data) || {};
+          var total = (d.relance_1 || 0) + (d.relance_2 || 0) + (d.clos_sans_reponse || 0) + (d.echange_auto || 0);
+          toast(total === 0 ? 'Rien à faire : aucun dossier concerné.'
+            : '1res relances : ' + (d.relance_1 || 0) + ' · 2es relances : ' + (d.relance_2 || 0) + ' · dossiers fermés : ' + (d.clos_sans_reponse || 0) + (d.echange_auto ? ' · échanges notés : ' + d.echange_auto : ''));
+        }).catch(function () { btnRun.disabled = false; toast('Erreur réseau', 'error'); });
       });
     });
   }
