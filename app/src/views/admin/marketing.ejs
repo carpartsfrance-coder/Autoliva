@@ -47,7 +47,7 @@
 
     <%/* ── Filtres ───────────────────────────────────────────────────── */%>
     <form action="/admin/marketing" class="mt-6 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm" method="GET">
-      <div class="flex flex-col md:flex-row md:items-end gap-4">
+      <div class="flex flex-col md:flex-row md:flex-wrap md:items-end gap-4">
         <div>
           <label class="block text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1">Période</label>
           <select id="mkt-period" class="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900" name="period">
@@ -83,7 +83,9 @@
 
         <button class="btn btn-secondary" type="submit">Appliquer</button>
 
-        <div class="ml-auto text-xs text-slate-500 max-w-md">
+        <%# L'astuce passe sur sa propre ligne : à côté des filtres, elle était
+            écrasée en une colonne d'un mot par ligne. %>
+        <div class="md:basis-full text-xs text-slate-500">
           <strong class="text-slate-700">Astuce :</strong> le modèle « dernier clic » crédite la pub qui a directement déclenché l'achat ; « premier clic » crédite celle qui a fait découvrir Autoliva. Le total des deux ne se compare donc pas.
         </div>
       </div>
