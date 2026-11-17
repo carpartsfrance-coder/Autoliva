@@ -41,9 +41,13 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+/* Séparateur de milliers (« 41 248,50 € » au lieu de « 41248,50 € ») : affichage
+   seulement — aucune de ces valeurs ne repart dans un champ de saisie. */
+const FORMAT_EURO = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function formatEuro(totalCents) {
   if (!Number.isFinite(totalCents)) return '—';
-  return `${(totalCents / 100).toFixed(2).replace('.', ',')} €`;
+  // Espace insécable normale : l'espace fine d'Intl (U+202F) disparaît presque après un « 1 ».
+  return `${FORMAT_EURO.format(totalCents / 100).replace(/\u202f/g, '\u00a0')} €`;
 }
 
 function formatDateTimeFR(value) {

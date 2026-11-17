@@ -59,6 +59,7 @@
             <option value="">Tous les stocks</option>
             <option value="in" <%= filters && filters.stock === 'in' ? 'selected' : '' %>>En stock</option>
             <option value="out" <%= filters && filters.stock === 'out' ? 'selected' : '' %>>Stock limité</option>
+            <option value="bas" <%= filters && filters.stock === 'bas' ? 'selected' : '' %>>Stock bas (1 ou 2 pièces)</option>
           </select>
 
           <% const currentSort = filters && filters.sort ? filters.sort : 'updated_desc'; %>

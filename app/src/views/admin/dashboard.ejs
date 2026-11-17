@@ -45,33 +45,34 @@
     <!-- KPI Cards Row 1 -->
     <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 <%= showFinancials ? 'xl:grid-cols-4' : 'xl:grid-cols-2' %> gap-6">
 
+      <%# Les badges « +12 % », « +5.2 % » et les petites courbes étaient écrits en dur
+          (toujours les mêmes, quelles que soient les ventes). Remplacés par de vraies
+          comparaisons ; seule la carte du jour garde une courbe : les 7 derniers jours. %>
       <% if (showFinancials) { %>
+        <% const _sem = (typeof weeklyChart !== 'undefined' && weeklyChart && Array.isArray(weeklyChart.values)) ? weeklyChart.values : [];
+           const _semMax = Math.max(1, ..._sem);
+           const _semPts = _sem.map((v, k) => ((_sem.length > 1 ? (k * 100 / (_sem.length - 1)) : 0).toFixed(1)) + ',' + (32 - (v / _semMax) * 28).toFixed(1)).join(' L');
+           const _tendance = kpis && typeof kpis.revenueMonthTrendPct === 'number' ? kpis.revenueMonthTrendPct : null; %>
         <!-- Chiffre d'affaires (jour) -->
         <a class="kpi-card" href="/admin/commandes">
           <div class="kpi-card__header">
             <div class="kpi-card__icon bg-green-50 text-green-600">
               <span class="material-symbols-outlined">payments</span>
             </div>
-            <span class="badge badge-success">+12%</span>
           </div>
           <div class="kpi-card__label">Chiffre d'affaires (jour)</div>
           <div class="kpi-card__value"><%= kpis && kpis.revenueToday ? kpis.revenueToday : '—' %></div>
           <div class="kpi-card__compare">
-            <span class="kpi-trend-up">↑ +12%</span> vs jour précédent
+            Hier : <strong class="text-slate-700"><%= kpis && kpis.revenueYesterday ? kpis.revenueYesterday : '—' %></strong>
           </div>
-          <div class="kpi-card__sparkline">
-            <svg viewBox="0 0 100 36" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="spark1-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#059669" stop-opacity="0.15"/>
-                  <stop offset="100%" stop-color="#059669" stop-opacity="0"/>
-                </linearGradient>
-              </defs>
-              <path d="M0,30 L16.7,24 L33.3,27 L50,19 L66.7,14 L83.3,9 L100,4" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M0,30 L16.7,24 L33.3,27 L50,19 L66.7,14 L83.3,9 L100,4 L100,36 L0,36 Z" fill="url(#spark1-fill)"/>
-              <circle cx="100" cy="4" r="3" fill="#059669"/>
+          <% if (_sem.length > 1 && _sem.some((v) => v > 0)) { %>
+          <div class="kpi-card__sparkline" title="Ventes des 7 derniers jours">
+            <svg viewBox="0 0 100 36" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M<%= _semPts %>" stroke="#059669" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+              <path d="M<%= _semPts %> L100,36 L0,36 Z" fill="#059669" fill-opacity="0.08"/>
             </svg>
           </div>
+          <% } %>
         </a>
 
         <!-- C.A. (mois en cours) -->
@@ -80,25 +81,14 @@
             <div class="kpi-card__icon bg-blue-50 text-blue-600">
               <span class="material-symbols-outlined">monitoring</span>
             </div>
-            <span class="badge badge-admin">+5.2%</span>
+            <% if (_tendance !== null) { %>
+              <span class="badge <%= _tendance >= 0 ? 'badge-success' : 'badge-danger' %>"><%= _tendance >= 0 ? '+' : '' %><%= _tendance %> %</span>
+            <% } %>
           </div>
           <div class="kpi-card__label">C.A. (mois en cours)</div>
           <div class="kpi-card__value"><%= kpis && kpis.revenueMonth ? kpis.revenueMonth : '—' %></div>
           <div class="kpi-card__compare">
-            <span class="kpi-trend-up">↑ +5.2%</span> vs mois précédent
-          </div>
-          <div class="kpi-card__sparkline">
-            <svg viewBox="0 0 100 36" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="spark2-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#2563EB" stop-opacity="0.12"/>
-                  <stop offset="100%" stop-color="#2563EB" stop-opacity="0"/>
-                </linearGradient>
-              </defs>
-              <path d="M0,32 L16.7,28 L33.3,25 L50,21 L66.7,23 L83.3,15 L100,8" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M0,32 L16.7,28 L33.3,25 L50,21 L66.7,23 L83.3,15 L100,8 L100,36 L0,36 Z" fill="url(#spark2-fill)"/>
-              <circle cx="100" cy="8" r="3" fill="#2563EB"/>
-            </svg>
+            Mois dernier à la même date : <strong class="text-slate-700"><%= kpis && kpis.revenuePrevMonthToDate ? kpis.revenuePrevMonthToDate : '—' %></strong>
           </div>
         </a>
 
@@ -109,52 +99,28 @@
               <span class="material-symbols-outlined">shopping_basket</span>
             </div>
           </div>
-          <div class="kpi-card__label">Panier moyen</div>
+          <div class="kpi-card__label">Panier moyen (ce mois)</div>
           <div class="kpi-card__value"><%= kpis && kpis.averageBasket ? kpis.averageBasket : '—' %></div>
           <div class="kpi-card__compare">
-            <%= kpis && kpis.ordersThisMonth ? kpis.ordersThisMonth : 0 %> commandes ce mois
-          </div>
-          <div class="kpi-card__sparkline">
-            <svg viewBox="0 0 100 36" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="spark3-fill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#7C3AED" stop-opacity="0.12"/>
-                  <stop offset="100%" stop-color="#7C3AED" stop-opacity="0"/>
-                </linearGradient>
-              </defs>
-              <path d="M0,22 L16.7,26 L33.3,20 L50,23 L66.7,17 L83.3,20 L100,12" stroke="#7C3AED" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M0,22 L16.7,26 L33.3,20 L50,23 L66.7,17 L83.3,20 L100,12 L100,36 L0,36 Z" fill="url(#spark3-fill)"/>
-              <circle cx="100" cy="12" r="3" fill="#7C3AED"/>
-            </svg>
+            <% const _nbMois = kpis && kpis.ordersThisMonth ? kpis.ordersThisMonth : 0; %><%= _nbMois %> commande<%= _nbMois > 1 ? 's' : '' %> payée<%= _nbMois > 1 ? 's' : '' %> ce mois
           </div>
         </a>
       <% } %>
 
-      <!-- Commandes en attente (visible par tous) -->
+      <%# Ce compteur ne compte que les commandes NON PAYÉES (statut « en attente de paiement » :
+          virement pas encore reçu, paiement interrompu) — pas les commandes à préparer. %>
+      <% const _nbAttente = kpis && typeof kpis.pendingOrdersCount !== 'undefined' ? kpis.pendingOrdersCount : 0; %>
       <a class="kpi-card" href="/admin/commandes?status=pending_payment">
         <div class="kpi-card__header">
           <div class="kpi-card__icon bg-orange-50 text-orange-600">
-            <span class="material-symbols-outlined">inventory</span>
+            <span class="material-symbols-outlined">hourglass_top</span>
           </div>
-          <div class="w-2 h-2 rounded-full bg-orange-500 mt-1"></div>
+          <% if (_nbAttente > 0) { %><div class="w-2 h-2 rounded-full bg-orange-500 mt-1"></div><% } %>
         </div>
-        <div class="kpi-card__label">Commandes en attente</div>
-        <div class="kpi-card__value"><%= kpis && typeof kpis.pendingOrdersCount !== 'undefined' ? kpis.pendingOrdersCount : 0 %></div>
+        <div class="kpi-card__label">En attente de paiement</div>
+        <div class="kpi-card__value"><%= _nbAttente %></div>
         <div class="kpi-card__compare">
-          À traiter dès que possible
-        </div>
-        <div class="kpi-card__sparkline">
-          <svg viewBox="0 0 100 36" preserveAspectRatio="none" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="spark4-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#EA580C" stop-opacity="0.12"/>
-                <stop offset="100%" stop-color="#EA580C" stop-opacity="0"/>
-              </linearGradient>
-            </defs>
-            <path d="M0,18 L16.7,24 L33.3,16 L50,28 L66.7,20 L83.3,24 L100,14" stroke="#EA580C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M0,18 L16.7,24 L33.3,16 L50,28 L66.7,20 L83.3,24 L100,14 L100,36 L0,36 Z" fill="url(#spark4-fill)"/>
-            <circle cx="100" cy="14" r="3" fill="#EA580C"/>
-          </svg>
+          Virements à recevoir, paiements pas finis
         </div>
       </a>
 
@@ -162,16 +128,19 @@
 
     <!-- KPI Cards Row 2 -->
     <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 <%= showFinancials ? 'xl:grid-cols-4' : 'xl:grid-cols-1' %> gap-6">
-      <div class="bg-white rounded-2xl border border-slate-200 p-5">
+      <a class="block bg-white rounded-2xl border border-slate-200 p-5 hover:border-slate-300" href="/admin/catalogue?stock=bas">
         <div class="flex items-center justify-between">
           <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
             <span class="material-symbols-outlined">warning</span>
           </div>
-          <div class="w-2 h-2 rounded-full bg-amber-500"></div>
+          <% const _nbStockBas = kpis && typeof kpis.stockAlertsCount !== 'undefined' ? kpis.stockAlertsCount : 0; %>
+          <% if (_nbStockBas > 0) { %><div class="w-2 h-2 rounded-full bg-amber-500"></div><% } %>
         </div>
-        <div class="mt-4 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Alertes stock</div>
-        <div class="mt-2 text-2xl font-semibold text-primary"><%= kpis && typeof kpis.stockAlertsCount !== 'undefined' ? kpis.stockAlertsCount : 0 %> articles</div>
-      </div>
+        <%# Comptait toutes les fiches à stock ≤ 2, ruptures comprises (3 513 « alertes » : la plupart des
+            pièces sont commandées à la demande). Seulement les fiches publiées à 1 ou 2 pièces. %>
+        <div class="mt-4 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Stock bas (1 ou 2 pièces)</div>
+        <div class="mt-2 text-2xl font-semibold <%= _nbStockBas > 0 ? 'text-primary' : 'text-slate-900' %>"><%= _nbStockBas %> article<%= _nbStockBas > 1 ? 's' : '' %></div>
+      </a>
 
       <% if (showFinancials) { %>
         <!-- Top 3 Products -->
@@ -219,7 +188,7 @@
               <span>Fiches : <strong class="text-slate-700"><%= (_sd.fiches.publiees - _sd.fiches.enAttente).toLocaleString('fr-FR') %></strong> / <%= _sd.fiches.publiees.toLocaleString('fr-FR') %></span>
               <span>Articles : <strong class="text-slate-700"><%= _sd.articles.publies - _sd.articles.enAttente %></strong> / <%= _sd.articles.publies %></span>
               <% if (_sd.quarantaine) { %><span class="text-red-600">Mises de côté : <strong><%= _sd.quarantaine %></strong></span><% } %>
-              <% if (_sd.derniereTraductionH !== null) { %><span>Dernière traduction : il y a <%= _sd.derniereTraductionH %> h</span><% } %>
+              <% if (_sd.derniereTraductionH !== null) { %><% const _dtH = Number(_sd.derniereTraductionH) || 0; %><span>Dernière traduction : il y a <%= _dtH >= 48 ? Math.round(_dtH / 24) + ' jours' : Math.round(_dtH) + ' h' %></span><% } %>
               <% if (_sd.balayageEnCours) { %><span class="text-blue-600">Balayage en cours</span><% } %>
             </div>
           </div>
@@ -296,7 +265,8 @@
 
     <% if (showFinancials) { %>
       <!-- Charts -->
-      <div class="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <%# items-start : le graphique gardait la hauteur de la colonne « Activités » (grand vide blanc). %>
+      <div class="mt-8 grid grid-cols-1 xl:grid-cols-3 gap-6 xl:items-start">
         <!-- Weekly Bar Chart -->
         <div class="xl:col-span-2 bg-white rounded-2xl border border-slate-200 p-6">
           <div class="flex items-center justify-between mb-4">
@@ -319,14 +289,15 @@
 
           <div class="mt-6 space-y-4">
             <% (activities || []).forEach((a) => { %>
-              <div class="flex items-start gap-3">
-                <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+              <%# Ligne cliquable : ouvre la commande (avant : simple texte, il fallait la rechercher). %>
+              <a class="flex items-start gap-3 -mx-2 px-2 py-1 rounded-xl hover:bg-slate-50" href="<%= a.id ? '/admin/commandes/' + a.id : '/admin/commandes' %>">
+                <div class="w-10 h-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center">
                   <span class="material-symbols-outlined text-slate-500">shopping_bag</span>
                 </div>
-                <div class="flex-1">
-                  <div class="flex items-center justify-between gap-3">
-                    <div class="font-semibold text-slate-900"><%= a.number %></div>
-                    <div class="flex items-center gap-2">
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="font-semibold text-slate-900 whitespace-nowrap"><%= a.number %></div>
+                    <div class="flex flex-wrap items-center justify-end gap-1">
                       <% if (a.statusBadge) { %><span class="<%= a.statusBadge.className %>"><%= a.statusBadge.label %></span><% } %>
                       <span class="badge <%= a.accountType === 'pro' ? 'badge-pro' : 'badge-particulier' %>"><%= a.accountType === 'pro' ? 'PRO' : 'PARTICULIER' %></span>
                     </div>
@@ -334,7 +305,7 @@
                   <div class="mt-1 text-sm text-slate-500"><%= a.customer %><% if (a.total) { %> · <%= a.total %><% } %></div>
                   <div class="mt-1 text-xs text-slate-400"><%= a.when %></div>
                 </div>
-              </div>
+              </a>
             <% }) %>
 
             <% if (!activities || activities.length === 0) { %>
@@ -383,14 +354,14 @@
 
         <div class="mt-6 space-y-4">
           <% (activities || []).forEach((a) => { %>
-            <div class="flex items-start gap-3">
-              <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+            <a class="flex items-start gap-3 -mx-2 px-2 py-1 rounded-xl hover:bg-slate-50" href="<%= a.id ? '/admin/commandes/' + a.id : '/admin/commandes' %>">
+              <div class="w-10 h-10 shrink-0 rounded-full bg-slate-100 flex items-center justify-center">
                 <span class="material-symbols-outlined text-slate-500">shopping_bag</span>
               </div>
-              <div class="flex-1">
-                <div class="flex items-center justify-between gap-3">
-                  <div class="font-semibold text-slate-900"><%= a.number %></div>
-                  <div class="flex items-center gap-2">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="font-semibold text-slate-900 whitespace-nowrap"><%= a.number %></div>
+                  <div class="flex flex-wrap items-center justify-end gap-1">
                     <% if (a.statusBadge) { %><span class="<%= a.statusBadge.className %>"><%= a.statusBadge.label %></span><% } %>
                     <span class="badge <%= a.accountType === 'pro' ? 'badge-pro' : 'badge-particulier' %>"><%= a.accountType === 'pro' ? 'PRO' : 'PARTICULIER' %></span>
                   </div>
@@ -398,7 +369,7 @@
                 <div class="mt-1 text-sm text-slate-500"><%= a.customer %></div>
                 <div class="mt-1 text-xs text-slate-400"><%= a.when %></div>
               </div>
-            </div>
+            </a>
           <% }) %>
 
           <% if (!activities || activities.length === 0) { %>
@@ -412,20 +383,8 @@
       </div>
     <% } %>
 
-    <div class="mt-8 rounded-2xl border border-slate-200 bg-rose-50 p-6 flex items-start justify-between gap-6">
-      <div class="flex items-start gap-4">
-        <div class="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center">
-          <span class="material-symbols-outlined">campaign</span>
-        </div>
-        <div>
-          <div class="font-semibold text-slate-900">Maintenance Serveur</div>
-          <div class="mt-1 text-sm text-slate-500">Une maintenance est prévue ce dimanche entre 02:00 et 04:00 du matin.</div>
-        </div>
-      </div>
-      <button class="btn btn-primary" type="button">
-        En savoir plus
-      </button>
-    </div>
+    <%# Bandeau « Maintenance Serveur — dimanche 02:00-04:00 » retiré : texte de modèle jamais
+        relié à rien (son bouton « En savoir plus » ne faisait rien), affiché en permanence. %>
   </div>
 </main>
 

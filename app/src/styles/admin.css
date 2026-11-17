@@ -293,6 +293,7 @@ aside nav a {
 }
 .badge-success { background: #ECFDF5; color: #059669; }
 .badge-warning { background: #FFFBEB; color: #D97706; }
+.badge-danger { background: #FEF2F2; color: #DC2626; }
 .badge-admin { background: #EFF6FF; color: #2563EB; }
 .badge-neutral { background: #F1F5F9; color: #64748B; }
 .badge-pro { background: #F0FDF4; color: #15803D; }
@@ -386,6 +387,9 @@ aside nav a {
   width: 100%;
   height: 100%;
 }
+/* La courbe est posée en bas de la carte : on lui réserve sa place pour
+   qu'elle ne passe plus par-dessus la ligne de comparaison. */
+.kpi-card:has(.kpi-card__sparkline) { padding-bottom: 3.25rem; }
 
 /* ===== Filtres compacts (commandes, listings) ===== */
 .orders-filter {
