@@ -79,7 +79,7 @@
               </thead>
               <tbody>
                 <% sec.rows.forEach(function (r) { %>
-                  <tr class="border-b border-slate-50 hover:bg-slate-50/60">
+                  <tr class="border-b border-slate-50 hover:bg-slate-50/60" data-row-id="consigne-<%= r.id %>">
                     <td class="px-3 py-2.5 font-semibold text-slate-900 whitespace-nowrap"><%= r.number %></td>
                     <td class="px-3 py-2.5 text-slate-700"><%= r.customerName || '—' %></td>
                     <td class="px-3 py-2.5">
@@ -107,6 +107,15 @@
                       <% } %>
                     </td>
                     <td class="px-3 py-2.5 text-right whitespace-nowrap">
+                      <%# « Reçue » directement depuis la liste : avant, il fallait ouvrir chaque commande
+                          (et ça ne la retirait même pas de la liste). %>
+                      <form action="/admin/commandes/<%= r.id %>/consigne/recu" method="POST" class="inline" data-ajax="true"
+                            data-row-id="consigne-<%= r.id %>"
+                            data-confirm="<%= r.number %> : l’ancienne pièce est bien revenue ?<%= r.hasDeposit ? ' Le client reçoit un e-mail de confirmation.' : '' %>">
+                        <button type="submit" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-emerald-200 bg-emerald-50 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition">
+                          <span class="material-symbols-outlined text-sm" aria-hidden="true">check</span>Reçue
+                        </button>
+                      </form>
                       <a href="/admin/commandes/<%= r.id %>" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-700 hover:bg-slate-50 transition">
                         Ouvrir
                       </a>
@@ -130,3 +139,6 @@
 
   </div>
 </main>
+
+<%# Pied de page admin : bouton menu mobile, repli du menu, notifications (manquait sur cette page). %>
+<%- include('./partials/footer') %>
