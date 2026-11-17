@@ -360,6 +360,11 @@ const abandonedCartSchema = new mongoose.Schema(
     manualEmailsSent: { type: Number, default: 0 },
     manualSmsSent: { type: Number, default: 0 },
     lastManualContactAt: { type: Date, default: null },
+    /* Verrou court pendant un envoi manuel (e-mail, SMS, relance) : deux
+       onglets ou deux collègues qui cliquent en même temps n'envoient pas
+       deux fois le même message au client. Posé puis retiré par
+       abandonedCartAdminController (avecVerrouEnvoi). Pas de valeur par défaut. */
+    envoiEnCoursAt: { type: Date },
 
     /**
      * Archivage manuel admin : sort le lead de la liste active de
