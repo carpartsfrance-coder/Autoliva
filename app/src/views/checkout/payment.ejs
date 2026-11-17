@@ -3,21 +3,29 @@
 
 <main class="flex-1">
   <div class="mx-auto max-w-[1440px] px-4 md:px-10 py-8">
-    <div class="flex items-center justify-center gap-4 text-xs font-black uppercase tracking-widest text-slate-400">
-      <div class="flex items-center gap-3">
-        <div class="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center">1</div>
-        <div class="text-slate-500"><%= t('checkout.stepCart') %></div>
+    <%# Même étapes que la page livraison : étapes faites cochées et cliquables, libellés masqués
+        sur mobile sauf l'étape en cours. Avant, la ligne débordait à gauche sur un écran de
+        390 px (le « 1 » était coupé). %>
+    <nav class="flex items-center justify-center gap-2 sm:gap-4 text-[10px] sm:text-xs font-black uppercase tracking-widest text-slate-400" aria-label="<%= t('a11y.checkoutSteps') %>">
+      <a href="/panier" class="flex items-center gap-2 sm:gap-3 hover:text-slate-600 transition">
+        <span class="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs">
+          <span class="material-symbols-outlined text-[16px]">check</span>
+        </span>
+        <span class="hidden sm:inline text-slate-500"><%= t('checkout.stepCart') %></span>
+      </a>
+      <div class="h-px w-6 sm:w-10 bg-slate-300"></div>
+      <a href="/commande/livraison" class="flex items-center gap-2 sm:gap-3 hover:text-slate-600 transition">
+        <span class="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center text-xs">
+          <span class="material-symbols-outlined text-[16px]">check</span>
+        </span>
+        <span class="hidden sm:inline text-slate-500"><%= t('checkout.stepShipping') %></span>
+      </a>
+      <div class="h-px w-6 sm:w-10 bg-slate-300"></div>
+      <div class="flex items-center gap-2 sm:gap-3" aria-current="step">
+        <span class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center text-xs">3</span>
+        <span class="text-primary"><%= t('checkout.stepPayment') %></span>
       </div>
-      <div class="h-px w-10 bg-slate-200"></div>
-      <div class="flex items-center gap-3">
-        <div class="w-7 h-7 rounded-full bg-slate-900 text-white flex items-center justify-center">2</div>
-        <div class="text-slate-500"><%= t('checkout.stepShipping') %></div>
-      </div>
-      <div class="h-px w-10 bg-slate-200"></div>
-      <div class="flex items-center gap-3">
-        <div class="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center">3</div>
-        <div class="text-primary"><%= t('checkout.stepPayment') %></div>
-      </div>
+    </nav>
     </div>
 
     <% if (errorMessage) { %>
@@ -76,7 +84,10 @@
           </div>
 
           <% if (guestCheckout) { %>
-            <div class="mt-6 rounded-2xl border border-primary/20 bg-primary/5 p-5 text-sm text-slate-700">
+            <%# Information, pas une erreur : l'encadré rouge pâle se lisait comme un problème juste
+                avant de payer. %>
+            <div class="mt-6 flex items-start gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-700">
+              <span class="material-symbols-outlined text-[18px] text-slate-500 shrink-0">info</span>
               <%= t('checkout.guestAccountNote') %>
             </div>
           <% } %>
@@ -373,7 +384,7 @@
             <% if (typeof consigneChargeCents !== 'undefined' && consigneChargeCents > 0) { %>
               <div class="flex items-start justify-between gap-3">
                 <div class="text-slate-600"><%= t('cart.consigne') %> <span class="text-slate-400 font-normal"><%= t('cart.consigneTax') %></span> <span class="block text-[11px] text-emerald-600 font-medium"><%= t('cart.consigneRefund') %></span></div>
-                <div class="font-black text-slate-900"><%= (consigneChargeCents / 100).toFixed(2).replace('.', ',') %> €</div>
+                <div class="shrink-0 whitespace-nowrap font-black text-slate-900"><%= (consigneChargeCents / 100).toFixed(2).replace('.', ',') %> €</div>
               </div>
             <% } %>
             <% if (typeof vatRC !== 'undefined' && vatRC && vatRC.active) { %>
