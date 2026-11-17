@@ -68,7 +68,13 @@ test('Jumingo : un seul achat pour deux demandes simultanées', async (t) => {
   const [a, b] = await Promise.all([acheter('T1'), acheter('T2')]);
   assert.equal(achats, 1, 'une seule étiquette achetée');
   assert.deepEqual([a.status, b.status].sort(), [200, 409]);
-  const o = await Order.findById(commande._id).lean();
+  // Le verrou est retiré juste APRÈS la réponse (bloc finally) : on lui laisse un instant.
+  let o;
+  for (let i = 0; i < 20; i += 1) {
+    o = await Order.findById(commande._id).lean();
+    if (!o.jumingoAchatEnCoursAt) break;
+    await new Promise((r) => setTimeout(r, 50));
+  }
   assert.ok(o.pendingJumingoLabel && o.pendingJumingoLabel.orderNumber === 'JMG-1');
   assert.ok(!o.jumingoAchatEnCoursAt, 'verrou relâché');
 });

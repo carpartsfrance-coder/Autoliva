@@ -67,7 +67,13 @@ test('lead : un seul e-mail pour deux envois simultanés', async (t) => {
   const statuts = await Promise.all([envoyer(), envoyer()]);
   assert.equal(envois, 1, 'un seul e-mail parti');
   assert.deepEqual(statuts.sort(), [200, 409]);
-  assert.ok(!(await AbandonedCart.findById(lead._id).lean()).envoiEnCoursAt, 'verrou retiré');
+  // Le verrou est retiré juste APRÈS la réponse (bloc finally) : on lui laisse un instant.
+  let verrou = true;
+  for (let i = 0; i < 20 && verrou; i += 1) {
+    verrou = !!(await AbandonedCart.findById(lead._id).lean()).envoiEnCoursAt;
+    if (verrou) await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.ok(!verrou, 'verrou retiré');
 
   assert.equal(await envoyer(), 200, 'un nouvel envoi reste possible ensuite');
   assert.equal(envois, 2);
