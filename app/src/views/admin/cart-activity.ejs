@@ -38,11 +38,11 @@
 
     <!-- Onglets : file de travail vs historique complet -->
     <div class="mt-6 flex items-center gap-2">
-      <a href="<%= tabs.todoUrl %>" class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border <%= view === 'todo' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' %>">
+      <a href="<%= tabs.todoUrl %>" class="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border <%= view === 'todo' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' %>">
         À traiter
         <span class="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold <%= view === 'todo' ? 'bg-white/20 text-white' : 'bg-red-50 text-red-700' %>"><%= tabs.todoCount %></span>
       </a>
-      <a href="<%= tabs.allUrl %>" class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border <%= view === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' %>">
+      <a href="<%= tabs.allUrl %>" class="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border <%= view === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' %>">
         Tous
         <span class="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold <%= view === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600' %>"><%= tabs.allCount %></span>
       </a>
@@ -66,7 +66,7 @@
           title="Email, nom, prénom, téléphone (toutes graphies), numéro de commande ou de facture, pièce du panier, plaque, VIN, référence"
           class="col-span-2 lg:col-span-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
 
-        <select name="manual" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+        <select name="manual" class="rounded-xl border border-slate-200 pl-3 pr-8 py-2.5 text-sm bg-white">
           <option value="">Statut manuel: tous</option>
           <option value="none" <%= filters.manualStatus === 'none' ? 'selected' : '' %>>Non contacté</option>
           <option value="contacted" <%= filters.manualStatus === 'contacted' ? 'selected' : '' %>>Contacté</option>

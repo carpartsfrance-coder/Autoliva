@@ -134,7 +134,11 @@ router.post('/reinitialiser', adminController.postAdminResetPassword);
 
 /* Sidebar global data — badge counts injected into every authenticated page */
 router.use(async (req, res, next) => {
-  if (req.session && req.session.admin) {
+  /* Seulement pour les PAGES affichées : avant, ces 5 comptages tournaient aussi à
+     chaque appel en arrière-plan (boutons AJAX, recherches, téléchargements). Une
+     page rendue après un POST garde le menu, sans les pastilles (la vue gère l'absence). */
+  const page = req.method === 'GET' && !req.xhr && !String(req.headers.accept || '').includes('application/json');
+  if (page && req.session && req.session.admin) {
     try {
       const [pendingOrders, pendingReturns, savActionNeeded, prepOrders, overdueConsignes] = await Promise.all([
         Order.countDocuments({ status: 'pending_payment' }),
