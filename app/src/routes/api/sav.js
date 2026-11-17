@@ -557,8 +557,9 @@ adminRouter.get('/tickets', async (req, res) => {
     }
 
     // Raccourci "mine" : tickets assignés au user courant
-    if (req.query.mine === 'true' && req.session && req.session.user) {
-      q.assignedToUserId = String(req.session.user._id || req.session.user.id || '');
+    // (session.admin = la personne du back-office ; session.user est un compte client du site)
+    if (req.query.mine === 'true' && req.session && req.session.admin && req.session.admin.adminUserId) {
+      q.assignedToUserId = String(req.session.admin.adminUserId);
     }
 
     // Tri
@@ -1501,7 +1502,10 @@ adminRouter.post('/tickets/bulk-delete', async (req, res) => {
 // ──────────────────────────────────────────────────────────
 
 function currentAdminLabel(req) {
-  const u = (req.session && req.session.user) || (req.session && req.session.admin) || {};
+  /* session.admin = la personne connectée au back-office. session.user est
+     un compte CLIENT du site (ouvert dans le même navigateur) : il ne doit
+     pas signer une action du back-office. */
+  const u = (req.session && req.session.admin) || {};
   return u.email || u.username || u.name || 'admin';
 }
 
@@ -1647,7 +1651,7 @@ adminRouter.post('/tickets/:numero/close', async (req, res) => {
     ticket.closure.docsArchived = !!docsArchived;
     ticket.closure.rootCause = rootCause;
     ticket.closure.rootCauseDetail = rootCauseDetail || '';
-    ticket.closure.closedBy = (req.session && req.session.user && req.session.user.email) || 'admin';
+    ticket.closure.closedBy = currentAdminLabel(req);
     ticket.closure.closedAt = new Date();
 
     try {

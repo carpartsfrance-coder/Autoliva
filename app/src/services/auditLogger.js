@@ -31,15 +31,19 @@ function pickUa(req) {
 
 function pickUser(req) {
   if (!req) return { id: null, email: '' };
-  // Bearer token (API admin) → on n'a pas d'utilisateur, juste 'system'
-  if (req.headers && (req.headers.authorization || '').startsWith('Bearer ')) {
-    return { id: null, email: 'api-bearer' };
-  }
+  /* La session admin d'abord : les pages SAV du back-office appellent l'API
+     AVEC le jeton Bearer ET la session de la personne connectée. Tester le
+     jeton en premier inscrivait « api-bearer » pour TOUTES les actions SAV
+     faites dans le back-office : le journal ne disait plus qui avait fait
+     quoi. Sans session (outil externe avec le jeton), on garde « api-bearer ». */
   if (req.session && req.session.admin) {
     return {
       id: req.session.admin.adminUserId || null,
       email: req.session.admin.email || '',
     };
+  }
+  if (req.headers && (req.headers.authorization || '').startsWith('Bearer ')) {
+    return { id: null, email: 'api-bearer' };
   }
   return { id: null, email: '' };
 }
