@@ -1537,8 +1537,14 @@
         if (o._id) ticket.orderId = o._id;
         var html = '';
         // Header : numéro + statut sur une ligne
+        // Libellé français (avant : la clé brute « PROCESSING », « LABEL_CREATED »…).
+        var LIBELLES_STATUT_COMMANDE = {
+          draft: 'Brouillon', pending_payment: 'En attente de paiement', paid: 'Payée', processing: 'En préparation',
+          label_created: 'Étiquette créée', shipped: 'Expédiée', delivered: 'Livrée', completed: 'Terminée',
+          cancelled: 'Annulée', refunded: 'Remboursée', partially_refunded: 'Remboursée en partie',
+        };
         var statusHtml = o.status
-          ? '<span class="sav-order-status">' + escapeHtml(o.status) + '</span>'
+          ? '<span class="sav-order-status">' + escapeHtml(LIBELLES_STATUT_COMMANDE[o.status] || o.status) + '</span>'
           : '';
         /* La fiche commande vit sur /admin/commandes/<ObjectId>. Le lien
            pointait sur /admin/orders/<numéro> : route inexistante ET mauvais
