@@ -7805,13 +7805,17 @@ async function postAdminBulkDeleteProducts(req, res, next) {
       return res.redirect(safeReturnTo);
     }
 
-    await effacerPhotosSansAutreFiche(
-      deletable.flatMap((p) => [p.imageUrl, ...(Array.isArray(p.galleryUrls) ? p.galleryUrls : [])]),
-      deletable.map((p) => p._id)
-    );
-
     const selectedIds = deletable.map((p) => p && p._id).filter(Boolean);
+    // D'abord la base, PUIS les photos (voir suppression d'une seule fiche).
     const result = await Product.deleteMany({ _id: { $in: selectedIds } });
+    try {
+      await effacerPhotosSansAutreFiche(
+        deletable.flatMap((p) => [p.imageUrl, ...(Array.isArray(p.galleryUrls) ? p.galleryUrls : [])]),
+        deletable.map((p) => p._id)
+      );
+    } catch (errPhotos) {
+      console.error('[catalogue] Nettoyage des photos impossible :', errPhotos && errPhotos.message ? errPhotos.message : errPhotos);
+    }
     const deletedCount = Number.isFinite(result && result.deletedCount) ? result.deletedCount : 0;
 
     if (!deletedCount) {
@@ -9413,7 +9417,9 @@ async function postAdminUpdateProduct(req, res, next) {
     // Une image simplement promue/rétrogradée ou réordonnée est conservée.
     const keptUrlSet = new Set([nextImageUrl, ...galleryUrls].filter(Boolean));
     const previousUrls = [existing.imageUrl, ...(Array.isArray(existing.galleryUrls) ? existing.galleryUrls : [])].filter(Boolean);
-    await effacerPhotosSansAutreFiche(previousUrls.filter((url) => !keptUrlSet.has(url)), [productId]);
+    // Effacées APRÈS l'enregistrement réussi (plus bas) : si l'enregistrement échoue,
+    // la fiche garde des photos qui existent encore.
+    const photosRetirees = previousUrls.filter((url) => !keptUrlSet.has(url));
 
     const resolvedInfoBlockIds = await resolveInfoBlockIds(req.body.infoBlockIds);
 
@@ -9487,6 +9493,12 @@ async function postAdminUpdateProduct(req, res, next) {
       });
     }
 
+    try {
+      await effacerPhotosSansAutreFiche(photosRetirees, [productId]);
+    } catch (errPhotos) {
+      console.error('[produit] Nettoyage des photos retirées impossible :', errPhotos && errPhotos.message ? errPhotos.message : errPhotos);
+    }
+
     const setPatch = {};
     if (hasKeyPoints) setPatch.keyPoints = keyPoints;
     if (hasSpecs) setPatch.specs = specs;
@@ -9550,16 +9562,19 @@ async function postAdminDeleteProduct(req, res, next) {
     }
 
     const existing = await Product.findById(productId).select('_id imageUrl galleryUrls technicalDocs').lean();
+
+    // D'abord la base, PUIS les fichiers : si la suppression échouait, la fiche
+    // restait en ligne avec des photos déjà effacées.
+    await Product.findByIdAndDelete(productId);
+
     if (existing) {
       const galleries = Array.isArray(existing.galleryUrls) ? existing.galleryUrls : [];
-      await effacerPhotosSansAutreFiche([existing.imageUrl, ...galleries], [existing._id]);
+      try { await effacerPhotosSansAutreFiche([existing.imageUrl, ...galleries], [existing._id]); } catch (_) {}
       // Supprime aussi les documents techniques (bucket product_docs)
       for (const d of (Array.isArray(existing.technicalDocs) ? existing.technicalDocs : [])) {
         if (d && d.fileId) { try { await productDocStorage.deleteFile(d.fileId); } catch (_) {} }
       }
     }
-
-    await Product.findByIdAndDelete(productId);
     req.session.adminCatalogSuccess = 'Produit supprimé.';
     if (wantsJsonResponse(req)) return res.json({ ok: true, message: 'Produit supprimé.', data: { deletedIds: [productId] } });
     return res.redirect(safeReturnTo);
