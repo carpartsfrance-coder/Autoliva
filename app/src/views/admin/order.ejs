@@ -1461,6 +1461,25 @@
                     <option value="Récupération clonage">Récupération clonage</option>
                     <option value="Autre">Autre</option>
                   </select>
+                  <%# Dit AVANT d'ajouter le suivi si le client va recevoir un message
+                      (règle de postAdminAddOrderShipment : tout sauf « Retour » et
+                      « Récupération clonage », une seule fois par numéro). %>
+                  <p id="shipmentLabelInfo" class="mt-2 text-xs text-slate-500" aria-live="polite"></p>
+                  <script>
+                    (function () {
+                      var sel = document.getElementById('shipmentLabel');
+                      var info = document.getElementById('shipmentLabelInfo');
+                      if (!sel || !info) return;
+                      function maj() {
+                        var v = sel.value;
+                        info.textContent = (v === 'Retour' || v === 'Récupération clonage')
+                          ? 'Aucun e-mail de suivi n’est envoyé au client.'
+                          : 'Le client reçoit un e-mail avec ce numéro de suivi (et un SMS s’il a accepté les SMS).';
+                      }
+                      sel.addEventListener('change', maj);
+                      maj();
+                    })();
+                  </script>
                 </div>
 
                 <div>
