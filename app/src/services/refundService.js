@@ -72,7 +72,50 @@ async function nextCreditNoteNumber(now = new Date()) {
  *
  * @returns {Promise<{ ok, refund?, creditNote?, providerResponse?, error?, errorCode? }>}
  */
-async function processOrderRefund({
+/* ── Verrou par commande ─────────────────────────────────────────────
+ * Deux requêtes simultanées (double clic, deux onglets, deux personnes)
+ * passaient toutes les deux le contrôle « reste remboursable » puis
+ * appelaient Mollie : double remboursement. On réserve la commande de façon
+ * atomique AVANT de la relire et d'appeler le prestataire. */
+const DUREE_VERROU_REMBOURSEMENT_MS = 2 * 60 * 1000;
+
+async function prendreVerrouRemboursement(orderId) {
+  if (!orderId || !mongoose.Types.ObjectId.isValid(String(orderId))) return 'sans';
+  const r = await Order.updateOne(
+    {
+      _id: orderId,
+      $or: [{ refundLockAt: null }, { refundLockAt: { $lt: new Date(Date.now() - DUREE_VERROU_REMBOURSEMENT_MS) } }],
+    },
+    { $set: { refundLockAt: new Date() } }
+  );
+  if (r.modifiedCount === 1) return 'pris';
+  // Commande inexistante : la fonction appelée répondra « introuvable ».
+  return (await Order.exists({ _id: orderId })) ? 'occupe' : 'sans';
+}
+
+async function avecVerrouRemboursement(orderId, traitement) {
+  const verrou = await prendreVerrouRemboursement(orderId);
+  if (verrou === 'occupe') {
+    return {
+      ok: false,
+      errorCode: 'refund_in_progress',
+      error: 'Un remboursement ou un avoir est déjà en cours sur cette commande. Recharge la page dans quelques secondes avant de recommencer.',
+    };
+  }
+  try {
+    return await traitement();
+  } finally {
+    if (verrou === 'pris') {
+      await Order.updateOne({ _id: orderId }, { $set: { refundLockAt: null } }).catch(() => {});
+    }
+  }
+}
+
+async function processOrderRefund(args = {}) {
+  return avecVerrouRemboursement(args && args.orderId, () => processOrderRefundSansVerrou(args));
+}
+
+async function processOrderRefundSansVerrou({
   orderId,
   amountCents,
   method,
@@ -226,7 +269,11 @@ async function processOrderRefund({
   await order.save();
 
   /* ── 5. Email client (best effort) ───────────────────────────── */
-  if (sendEmail && order.userId) {
+  /* Scalapay n'a PAS remboursé (API absente ou refus) : l'argent n'est pas parti.
+     On n'envoie pas au client « remboursement émis » ; l'admin doit le faire dans
+     le portail Scalapay (signalé dans le message de retour). */
+  const actionManuelle = providerStatus === 'manual_required';
+  if (sendEmail && order.userId && !actionManuelle) {
     try {
       const user = await User.findById(order.userId).lean();
       if (user && user.email) {
@@ -254,6 +301,7 @@ async function processOrderRefund({
     refund: refundEntry,
     creditNote: creditNoteEntry,
     providerResponse: providerRawResponse,
+    actionManuelle,
   };
 }
 
@@ -279,7 +327,11 @@ async function processOrderRefund({
  * @param {{orderId:string, amountCents:number, reason?:string, notes?:string,
  *          lines?:Array, adminEmail?:string}} args
  */
-async function createStandaloneCreditNote({
+async function createStandaloneCreditNote(args = {}) {
+  return avecVerrouRemboursement(args && args.orderId, () => createStandaloneCreditNoteSansVerrou(args));
+}
+
+async function createStandaloneCreditNoteSansVerrou({
   orderId,
   amountCents,
   reason = '',

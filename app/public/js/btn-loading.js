@@ -56,10 +56,18 @@
     document.querySelectorAll('form:not([data-ajax])').forEach(function (form) {
       if (form._loadingBound) return;
       form._loadingBound = true;
-      form.addEventListener('submit', function () {
-        var btn = form.querySelector('button[type="submit"]:not([disabled])');
-        if (!btn) return;
-        window.btnSetLoading(btn);
+      form.addEventListener('submit', function (e) {
+        /* Attendre que les autres écouteurs aient parlé : si une confirmation a été
+           refusée (« Annuler »), l'envoi est annulé et le bouton ne doit PAS rester
+           bloqué sur « Chargement… ». */
+        setTimeout(function () {
+          if (e.defaultPrevented) return;
+          var btn = (e.submitter && e.submitter.type === 'submit' && !e.submitter.disabled)
+            ? e.submitter
+            : form.querySelector('button[type="submit"]:not([disabled])');
+          if (!btn) return;
+          window.btnSetLoading(btn);
+        }, 0);
       });
     });
   }

@@ -4945,7 +4945,11 @@ async function postAdminAddOrderShipment(req, res, next) {
 
     // Skip shipment tracking email for "Récupération clonage" — a dedicated cloning label email is sent instead
     const _isRecupClonageLabel = label.toLowerCase().includes('cupération clonage') || label.toLowerCase().includes('recuperation clonage') || label.toLowerCase() === 'récupération clonage';
-    if (!_isRecupClonageLabel) {
+    /* « Retour » = colis qui REVIENT du client : l'e-mail « votre commande est expédiée »
+       (+ facture) et le SMS de suivi n'ont pas de sens. */
+    const _isRetourLabel = label === 'Retour';
+    let clientNotifieSuivi = false;
+    if (!_isRecupClonageLabel && !_isRetourLabel) {
       try {
         const alreadySent = existing
           && existing.notifications
@@ -4962,6 +4966,7 @@ async function postAdminAddOrderShipment(req, res, next) {
             });
             emailService.logEmailSent({ orderId: existing._id, emailType: 'shipment_tracking', recipientEmail: user.email, result: sent });
             smsService.sendShipmentTrackingSms({ order: existing, user, shipment: { label, carrier, trackingNumber } }).catch(() => {});
+            clientNotifieSuivi = !!(sent && sent.ok);
 
             if (sent && sent.ok) {
               await Order.updateOne(
@@ -5068,7 +5073,8 @@ async function postAdminAddOrderShipment(req, res, next) {
             && orderForShip.status !== 'refunded') {
           const isClonage = orderForShip.orderType === 'exchange_cloning';
           const clonageReady = isClonage && orderForShip.cloningStatus === 'cloning_done' && isEnvoiLabel;
-          const standardReady = !isClonage && (orderForShip.status === 'paid' || orderForShip.status === 'processing');
+          // Seulement un ENVOI : un suivi « Retour » ne fait pas passer une commande payée en « étiquette créée ».
+          const standardReady = !isClonage && isEnvoiLabel && (orderForShip.status === 'paid' || orderForShip.status === 'processing');
 
           if (clonageReady || standardReady) {
             if (standardReady) {
@@ -5098,7 +5104,10 @@ async function postAdminAddOrderShipment(req, res, next) {
     const successMsg = cloningEmailSent
       ? 'Suivi ajouté. Étiquette envoyée au client par email. Statut clonage mis à jour.'
       : labelCreatedOnly
-        ? 'Étiquette créée ✓ — la commande passera en « Expédiée » quand tu cliqueras sur « Marquer expédié » (transporteur passé). Le client n\'est PAS encore notifié.'
+        ? (clientNotifieSuivi
+          // Le message disait « Le client n'est PAS encore notifié » alors que l'e-mail de suivi venait de partir.
+          ? 'Étiquette créée ✓ — le client a reçu le numéro de suivi par e-mail. La commande passera en « Expédiée » quand tu cliqueras sur « Marquer expédié » (transporteur passé).'
+          : 'Étiquette créée ✓ — la commande passera en « Expédiée » quand tu cliqueras sur « Marquer expédié » (transporteur passé). Le client n\'est PAS encore notifié.')
         : autoShipped
         ? 'Suivi ajouté. Commande marquée comme expédiée automatiquement.'
         : isRecupClonage
@@ -5217,8 +5226,10 @@ async function postAdminRefundOrder(req, res, next) {
     }
 
     const cnPart = result.creditNote && result.creditNote.number ? ` Avoir ${result.creditNote.number} généré.` : '';
-    const emailPart = sendEmail ? ' Email client envoyé.' : '';
-    req.session.adminOrderSuccess = `Remboursement de ${(amountCents / 100).toFixed(2)} € émis via ${result.refund.method}.${cnPart}${emailPart}`;
+    const emailPart = sendEmail && !result.actionManuelle ? ' Email client envoyé.' : '';
+    req.session.adminOrderSuccess = result.actionManuelle
+      ? `Remboursement de ${(amountCents / 100).toFixed(2)} € ENREGISTRÉ mais PAS effectué chez ${result.refund.method} : à faire dans son portail. Aucun e-mail envoyé au client.${cnPart}`
+      : `Remboursement de ${(amountCents / 100).toFixed(2)} € émis via ${result.refund.method}.${cnPart}${emailPart}`;
     if (wantsJsonResponse(req)) {
       return res.json({
         ok: true,
@@ -13643,24 +13654,37 @@ async function postAdminBuyJumingoLabel(req, res) {
       || (order.pendingJumingoLabel && order.pendingJumingoLabel.shipmentId === shipmentId);
     if (dup) return res.status(409).json({ ok: false, error: 'Une étiquette est déjà en cours / achetée pour cet envoi.' });
 
-    const attach = await jumingo.attachRate(shipmentId, { tariffId, shippingType, pickupDate });
-    if (!attach.ok) return res.status(502).json({ ok: false, error: 'Jumingo (sélection tarif) : ' + attach.error });
-
-    const method = String(process.env.JUMINGO_PAYMENT_METHOD || 'rechnung').trim();
-    const buy = await jumingo.purchaseLabel({ shipmentIds: [shipmentId], method });
-    if (!buy.ok) return res.status(502).json({ ok: false, error: 'Jumingo (commande) : ' + buy.error });
-
-    // Mémorise la commande Jumingo (pour récupérer l'étiquette / réessayer).
-    order.pendingJumingoLabel = { orderNumber: buy.orderNumber, shipmentId, direction, carrier, createdAt: new Date() };
-    await order.save();
-
-    // PayPal/CB (returnUrl) : paiement externe à faire avant de récupérer.
-    if (buy.returnUrl) {
-      return res.json({ ok: true, needsPayment: true, returnUrl: buy.returnUrl, orderNumber: buy.orderNumber });
+    /* Verrou atomique AVANT d'appeler Jumingo : deux requêtes simultanées passaient
+       toutes deux le contrôle ci-dessus et achetaient deux étiquettes. */
+    const verrou = await Order.updateOne(
+      { _id: order._id, $or: [{ jumingoAchatEnCoursAt: null }, { jumingoAchatEnCoursAt: { $lt: new Date(Date.now() - 2 * 60 * 1000) } }] },
+      { $set: { jumingoAchatEnCoursAt: new Date() } }
+    );
+    if (verrou.modifiedCount !== 1) {
+      return res.status(409).json({ ok: false, error: 'Un achat d’étiquette est déjà en cours sur cette commande. Patiente quelques secondes puis recharge la page.' });
     }
-    // rechnung/lastschrift : commande déjà passée → on récupère l'étiquette
-    // (génération parfois asynchrone → finalize peut renvoyer needsRetry).
-    return finalizeJumingoShipment(req, res, order, { orderNumber: buy.orderNumber, shipmentId, direction, carrier });
+    try {
+      const attach = await jumingo.attachRate(shipmentId, { tariffId, shippingType, pickupDate });
+      if (!attach.ok) return res.status(502).json({ ok: false, error: 'Jumingo (sélection tarif) : ' + attach.error });
+
+      const method = String(process.env.JUMINGO_PAYMENT_METHOD || 'rechnung').trim();
+      const buy = await jumingo.purchaseLabel({ shipmentIds: [shipmentId], method });
+      if (!buy.ok) return res.status(502).json({ ok: false, error: 'Jumingo (commande) : ' + buy.error });
+
+      // Mémorise la commande Jumingo (pour récupérer l'étiquette / réessayer).
+      order.pendingJumingoLabel = { orderNumber: buy.orderNumber, shipmentId, direction, carrier, createdAt: new Date() };
+      await order.save();
+
+      // PayPal/CB (returnUrl) : paiement externe à faire avant de récupérer.
+      if (buy.returnUrl) {
+        return res.json({ ok: true, needsPayment: true, returnUrl: buy.returnUrl, orderNumber: buy.orderNumber });
+      }
+      // rechnung/lastschrift : commande déjà passée → on récupère l'étiquette
+      // (génération parfois asynchrone → finalize peut renvoyer needsRetry).
+      return await finalizeJumingoShipment(req, res, order, { orderNumber: buy.orderNumber, shipmentId, direction, carrier });
+    } finally {
+      await Order.updateOne({ _id: order._id }, { $set: { jumingoAchatEnCoursAt: null } }).catch(() => {});
+    }
   } catch (err) {
     console.error('[admin] buyJumingoLabel:', err && err.message);
     return res.status(500).json({ ok: false, error: "Erreur serveur pendant la commande de l'étiquette." });

@@ -1413,7 +1413,12 @@
                       var buy=document.createElement('button'); buy.type='button'; buy.className='shrink-0 rounded-lg bg-emerald-600 text-white px-3 py-2 text-xs font-bold hover:bg-emerald-700'; buy.textContent='Acheter '+money(rt.priceTotal);
                       buy.addEventListener('click', function(){
                         if(!confirm('Commander cette étiquette '+(rt.carrier||'')+' pour '+money(rt.priceTotal)+' ?\n\n⚠️ Jumingo te facturera ce montant.')) return;
-                        buy.disabled=true; buy.textContent='Commande…'; showErr('');
+                        /* Tous les tarifs bloqués pendant la commande : deux clics sur deux tarifs
+                           pouvaient acheter deux étiquettes. */
+                        var tousLesTarifs = Array.prototype.slice.call(list.querySelectorAll('button'));
+                        tousLesTarifs.forEach(function(x){ x.disabled = true; });
+                        var relacher = function(){ tousLesTarifs.forEach(function(x){ x.disabled = false; }); };
+                        buy.textContent='Commande…'; showErr('');
                         fetch('/admin/commandes/'+orderId+'/jumingo/acheter', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({shipmentId:state.shipmentId, tariffId:rt.tariffId, shippingType:rt.shippingType, carrier:rt.carrier, pickupDate:state.pickupDate, direction:state.direction})})
                           .then(function(r){return r.json();}).then(function(d2){
                             var msg=root.querySelector('[data-jumingo-paymsg]'); var link=root.querySelector('[data-jumingo-payurl]');
@@ -1429,8 +1434,8 @@
                               stepRates.classList.add('hidden'); stepPay.classList.remove('hidden'); return;
                             }
                             if(d2.ok){ location.reload(); return; }
-                            buy.disabled=false; buy.textContent='Réessayer'; showErr(d2.error||'Erreur');
-                          }).catch(function(){ buy.disabled=false; buy.textContent='Réessayer'; showErr('Erreur réseau'); });
+                            relacher(); buy.textContent='Réessayer'; showErr(d2.error||'Erreur');
+                          }).catch(function(){ relacher(); buy.textContent='Réessayer'; showErr('Erreur réseau — vérifie dans Jumingo qu\'aucune étiquette n\'a été commandée avant de réessayer.'); });
                       });
                       div.appendChild(buy); list.appendChild(div);
                     });
@@ -1925,7 +1930,7 @@
                       </div>
                     <% } %>
                     <% if (typeof hasAbility === 'function' && hasAbility('orders.refund')) { %>
-                      <form action="/admin/commandes/<%= order.id %>/consigne/rembourser" method="POST" class="mt-3" onsubmit="return confirm('Confirmer le remboursement de la consigne (<%= order.consigne.refundable %>) au client ?');">
+                      <form action="/admin/commandes/<%= order.id %>/consigne/rembourser" method="POST" class="mt-3" onsubmit="return confirm('Rembourser la consigne (<%= order.consigne.refundable %>) au client <%= order.consigne.refundMethod === 'mollie' ? 'via Mollie — immédiat, ne peut pas être annulé' : 'en remboursement manuel (virement à faire de ton côté)' %> ? Le client reçoit un e-mail de confirmation.');">
                         <button type="submit" class="btn btn-primary inline-flex items-center gap-1">
                           <span class="material-symbols-outlined" style="font-size:14px">currency_exchange</span>
                           Rembourser la consigne (<%= order.consigne.refundable %>)
@@ -2275,6 +2280,27 @@ document.addEventListener('DOMContentLoaded', function() {
       e.stopPropagation();
       manualSection.classList.toggle('hidden');
     });
+  }
+
+  /* Changement manuel de statut : il pouvait envoyer e-mail/SMS au client (Payée,
+     En préparation, Livrée…) sans le dire. Confirmation qui annonce l'effet. */
+  if (manualSection) {
+    var formStatut = manualSection.querySelector('form[action$="/statut"]');
+    var choixStatut = formStatut && formStatut.querySelector('select[name="status"]');
+    var majConfirmation = function () {
+      if (!formStatut || !choixStatut) return;
+      var opt = choixStatut.options[choixStatut.selectedIndex];
+      var libelle = opt ? opt.textContent.trim() : choixStatut.value;
+      var effets = {
+        paid: ' Le client reçoit un e-mail et un SMS « commande validée ».',
+        processing: ' Le client reçoit un e-mail et un SMS « commande validée ».',
+        delivered: ' Le client reçoit la confirmation de livraison (et le suivi de consigne s’il y en a une).',
+        shipped: ' Le délai de retour de 30 jours peut démarrer et le client être prévenu de l’expédition.',
+        cancelled: ' Aucun remboursement n’est fait automatiquement.',
+      };
+      formStatut.setAttribute('data-confirm', 'Passer la commande en « ' + libelle + ' » ?' + (effets[choixStatut.value] || ''));
+    };
+    if (choixStatut) { choixStatut.addEventListener('change', majConfirmation); majConfirmation(); }
   }
 
   var container = document.getElementById('timeline-container');

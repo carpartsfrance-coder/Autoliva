@@ -435,6 +435,12 @@ const orderSchema = new mongoose.Schema(
       updatedBy: { type: String, default: '', trim: true },
     },
     refunds: { type: [refundSchema], default: [] },
+    /* Verrou anti-double-remboursement / double avoir sur la COMMANDE (même idée que
+     * consigne.refundInProgressAt) : posé avant l'appel Mollie/Scalapay, relâché à la
+     * fin, périmé après 2 min. Sans valeur par défaut : absent = libre. */
+    refundLockAt: { type: Date },
+    /* Verrou anti-double achat d'étiquette Jumingo (deux clics / deux onglets). */
+    jumingoAchatEnCoursAt: { type: Date },
     creditNotes: { type: [creditNoteSchema], default: [] },
     totalCents: { type: Number, required: true, min: 0 },
     // Autoliquidation TVA (reverse charge B2B UE). Rempli seulement si applicable ;

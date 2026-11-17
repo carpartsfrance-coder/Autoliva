@@ -2057,7 +2057,8 @@ adminRouter.post('/tickets/:numero/refund', async (req, res) => {
     /* Mise à jour SAV : paiements.remboursement + closure.refundDone */
     ticket.paiements = ticket.paiements || {};
     ticket.paiements.remboursement = {
-      status: 'effectue',
+      // Scalapay en échec : enregistré mais pas payé → « échoué » (valeur prévue par le modèle), pas « effectué ».
+      status: result.actionManuelle ? 'echoue' : 'effectue',
       method: result.refund.method,
       mollieRefundId: result.refund.method === 'mollie' ? (result.refund.providerRefundId || '') : '',
       providerRefundId: result.refund.providerRefundId || '',
@@ -2067,14 +2068,16 @@ adminRouter.post('/tickets/:numero/refund', async (req, res) => {
       reason,
     };
     ticket.closure = ticket.closure || {};
-    ticket.closure.refundDone = true;
+    ticket.closure.refundDone = !result.actionManuelle;
 
     const cnPart = result.creditNote && result.creditNote.number ? ` Avoir ${result.creditNote.number}` : '';
     const refIdPart = result.refund.providerRefundId ? ` (${result.refund.method} ${result.refund.providerRefundId})` : '';
     ticket.addMessage(
       'admin',
       'interne',
-      `Remboursement ${(amountCents / 100).toFixed(2)}€ via ${result.refund.method}${refIdPart} effectué.${cnPart}`
+      result.actionManuelle
+        ? `Remboursement ${(amountCents / 100).toFixed(2)}€ ENREGISTRÉ mais PAS effectué chez ${result.refund.method} : à faire dans son portail.${cnPart}`
+        : `Remboursement ${(amountCents / 100).toFixed(2)}€ via ${result.refund.method}${refIdPart} effectué.${cnPart}`
     );
     await ticket.save();
 

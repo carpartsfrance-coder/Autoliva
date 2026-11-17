@@ -609,6 +609,11 @@
         : (window.adminConfirm ? window.adminConfirm(question) : Promise.resolve(window.confirm(question)));
       Promise.resolve(confirmer).then(function (oui) {
       if (!oui) return;
+      // Un seul changement à la fois pour ce lead (deux clics rapides pouvaient se croiser).
+      var boutonsLead = document.querySelectorAll('.lead-status-btn[data-lead-id="' + leadId + '"]');
+      if (btn.disabled) return;
+      Array.prototype.forEach.call(boutonsLead, function (b) { b.disabled = true; });
+      var relacherLead = function () { Array.prototype.forEach.call(boutonsLead, function (b) { b.disabled = false; }); };
       fetch('/admin/api/leads/' + leadId + '/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -617,9 +622,9 @@
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data && data.ok) refresh();
-          else alert('Erreur: ' + (data && data.error ? data.error : 'inconnue'));
+          else { relacherLead(); alert('Erreur: ' + (data && data.error ? data.error : 'inconnue')); }
         })
-        .catch(function () { alert('Erreur réseau'); });
+        .catch(function () { relacherLead(); alert('Erreur réseau'); });
       });
     });
   });
