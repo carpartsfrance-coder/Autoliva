@@ -30,6 +30,7 @@ const { getMergedTemplates } = require('../services/leadTemplateSettings');
 const { journaliser, historique, resume } = require('../services/leadCommunications');
 const { demandesFournisseur } = require('../services/supplierRequest');
 const { buildLeadSearchConditions } = require('../services/leadSearch');
+const { avecVerrouEnvoi } = require('../services/verrouEnvoiLead');
 const brand = require('../config/brand');
 
 function escapeHtml(value) {
@@ -1152,58 +1153,6 @@ async function postLeadAddNote(req, res, next) {
 async function getAdminLeadTemplates(req, res) {
   const merged = await getMergedTemplates();
   return res.json({ ok: true, email: merged.email, sms: merged.sms });
-}
-
-/* ── Verrou d'envoi par lead ─────────────────────────────────────────────
-   Le bouton est déjà bloqué pendant l'envoi dans la page, mais deux onglets
-   (ou deux collègues) restent possibles : chacun lirait le même lead et le
-   client recevrait deux fois le même e-mail / SMS (ou la relance n° 1 puis
-   la n° 2 dans la même seconde). Le verrou est posé de façon atomique en
-   base ; il expire seul au bout d'une minute si le serveur s'arrête en
-   plein envoi, et chaque requête ne retire que SON verrou. */
-const DUREE_VERROU_ENVOI_MS = 60 * 1000;
-
-async function prendreVerrouEnvoi(id) {
-  const marque = new Date();
-  const limite = new Date(marque.getTime() - DUREE_VERROU_ENVOI_MS);
-  const r = await AbandonedCart.updateOne(
-    { _id: id, $or: [{ envoiEnCoursAt: null }, { envoiEnCoursAt: { $lt: limite } }] },
-    { $set: { envoiEnCoursAt: marque } },
-  );
-  return r && r.modifiedCount === 1 ? marque : null;
-}
-
-async function relacherVerrouEnvoi(id, marque) {
-  try {
-    await AbandonedCart.updateOne({ _id: id, envoiEnCoursAt: marque }, { $unset: { envoiEnCoursAt: 1 } });
-  } catch (_) { /* le verrou expirera seul */ }
-}
-
-function avecVerrouEnvoi(handler) {
-  return async function envoiVerrouille(req, res, next) {
-    const id = req.params.cartId || req.params.id;
-    if (mongoose.connection.readyState !== 1 || !id || !mongoose.Types.ObjectId.isValid(id)) {
-      return handler(req, res, next); // le handler renvoie lui-même l'erreur adaptée
-    }
-    let marque;
-    try {
-      marque = await prendreVerrouEnvoi(id);
-      if (!marque && !(await AbandonedCart.exists({ _id: id }))) return handler(req, res, next); // → 404
-    } catch (err) {
-      return next(err);
-    }
-    if (!marque) {
-      return res.status(409).json({
-        ok: false,
-        error: 'Un envoi est déjà en cours pour ce lead (autre onglet ou collègue). Attends quelques secondes et regarde l’historique avant de renvoyer.',
-      });
-    }
-    try {
-      return await handler(req, res, next);
-    } finally {
-      await relacherVerrouEnvoi(id, marque);
-    }
-  };
 }
 
 module.exports = {

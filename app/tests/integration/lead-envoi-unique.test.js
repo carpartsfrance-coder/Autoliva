@@ -73,4 +73,19 @@ test('lead : un seul e-mail pour deux envois simultanés', async (t) => {
   assert.equal(envois, 2);
   const apres = await AbandonedCart.findById(lead._id).lean();
   assert.equal(apres.manualEmailsSent, 2);
+
+  // Même verrou pour l'envoi d'un devis moteur (formulaire classique → réponse texte).
+  const { avecVerrouEnvoi } = require('../../src/services/verrouEnvoiLead');
+  let devisEnvoyes = 0;
+  const envoiDevis = avecVerrouEnvoi(async (req, res) => {
+    devisEnvoyes += 1; await new Promise((r) => setTimeout(r, 150)); res.status(302).send('ok');
+  }, { texte: true, dureeMs: 3 * 60 * 1000 });
+  const faux = () => new Promise((resolve) => {
+    const res = { code: 0, status(c) { this.code = c; return this; }, send(b) { resolve({ code: this.code, b }); return this; }, json(b) { resolve({ code: this.code, b, json: true }); return this; } };
+    envoiDevis({ params: { id: String(lead._id) } }, res, (err) => resolve({ err }));
+  });
+  const [r1, r2] = await Promise.all([faux(), faux()]);
+  assert.equal(devisEnvoyes, 1, 'un seul devis');
+  const bloque = [r1, r2].find((r) => r.code === 409);
+  assert.ok(bloque && typeof bloque.b === 'string' && !bloque.json, 'réponse texte 409');
 });
