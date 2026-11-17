@@ -380,7 +380,7 @@ async function postAdminMarkOrderConsigneReceived(req, res, next) {
     if (!mongoose.Types.ObjectId.isValid(orderId)) return res.redirect('/admin/commandes');
 
     const existing = await Order.findById(orderId)
-      .select('_id number userId consigne status notifications')
+      .select('_id number userId consigne status notifications orderType returnStatus')
       .lean();
     if (!existing) {
       req.session.adminOrderError = 'Commande introuvable.';
@@ -391,8 +391,34 @@ async function postAdminMarkOrderConsigneReceived(req, res, next) {
       ? existing.consigne.lines
       : [];
 
+    /* Aligne le statut de retour (liste « Consignes en attente », pastille du menu,
+       frise, filtres « en retard ») : avant, seul consigne.lines était coché et la
+       commande restait « en retard » partout. Voir services/retourConsigne.js. */
+    const { RETOUR_PAS_REVENU } = require('../services/retourConsigne');
+    const marquerRetourRecu = async (date) => {
+      if (!RETOUR_PAS_REVENU.includes(existing.returnStatus)) return false;
+      if (existing.orderType !== 'exchange' && existing.orderType !== 'exchange_cloning') return false;
+      const par = req.session && req.session.admin && req.session.admin.email ? String(req.session.admin.email) : 'admin';
+      await Order.updateOne(
+        { _id: orderId, returnStatus: { $in: RETOUR_PAS_REVENU } },
+        {
+          $set: { returnStatus: 'received', 'returnDates.returnReceivedAt': date },
+          $push: { statusHistory: { status: existing.status, returnStatus: 'received', changedAt: date, changedBy: par, note: 'Ancienne pièce reçue' } },
+        }
+      );
+      return true;
+    };
+
     if (!lines.length) {
+      /* Anciennes commandes en échange sans ligne de consigne (« non encaissée ») :
+         elles ne pouvaient JAMAIS sortir de la liste des consignes en attente. */
+      if (await marquerRetourRecu(new Date())) {
+        req.session.adminOrderSuccess = 'Ancienne pièce marquée comme reçue.';
+        if (wantsJsonResponse(req)) return res.json({ ok: true, message: 'Ancienne pièce marquée comme reçue.', data: { orderId } });
+        return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+      }
       req.session.adminOrderError = 'Aucune consigne à marquer comme reçue.';
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: 'Aucune consigne à marquer comme reçue.' });
       return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
     }
 
@@ -424,6 +450,7 @@ async function postAdminMarkOrderConsigneReceived(req, res, next) {
     /* $set ciblé sur consigne.lines uniquement : ne PAS écraser le reste de
      * l'objet consigne (chargedTotalCents, refundedTotalCents, refundedAt…). */
     await Order.updateOne({ _id: orderId }, { $set: { 'consigne.lines': updatedLines } });
+    await marquerRetourRecu(now);
 
     try {
       const refreshed = await Order.findById(orderId)
@@ -2319,6 +2346,13 @@ async function getAdminDashboard(req, res, next) {
       ],
     };
 
+    /* CA = total payé MOINS la caution de consigne encaissée (remboursable, hors TVA),
+       comme l'export comptable (services/accountingService.js). Avant, les cautions
+       gonflaient le CA, le panier moyen et les graphiques du tableau de bord. */
+    const CA_HORS_CAUTION = {
+      $max: [0, { $subtract: [{ $ifNull: ['$totalCents', 0] }, { $ifNull: ['$consigne.chargedTotalCents', 0] }] }],
+    };
+
     /* ── KPIs financiers (owner uniquement) ── */
     let revenueTodayCents = 0;
     let revenueMonthCents = 0;
@@ -2340,11 +2374,11 @@ async function getAdminDashboard(req, res, next) {
       // CA encaissé strict : statuts payés uniquement (exclut pending_payment)
       const revenueTodayAgg = await Order.aggregate([
         { $match: { createdAt: { $gte: startToday }, ...paidOnly } },
-        { $group: { _id: null, total: { $sum: '$totalCents' } } },
+        { $group: { _id: null, total: { $sum: CA_HORS_CAUTION } } },
       ]);
       const revenueMonthAgg = await Order.aggregate([
         { $match: { createdAt: { $gte: startMonth }, ...paidOnly } },
-        { $group: { _id: null, total: { $sum: '$totalCents' } } },
+        { $group: { _id: null, total: { $sum: CA_HORS_CAUTION } } },
       ]);
 
       revenueTodayCents = revenueTodayAgg && revenueTodayAgg[0] ? Number(revenueTodayAgg[0].total) : 0;
@@ -2359,7 +2393,7 @@ async function getAdminDashboard(req, res, next) {
       if (memeMomentMoisPrecedent >= startMonth) memeMomentMoisPrecedent.setTime(startMonth.getTime() - 1); // 31 → mois de 30 j
       const revenuePrevMonthAgg = await Order.aggregate([
         { $match: { createdAt: { $gte: debutMoisPrecedent, $lte: memeMomentMoisPrecedent }, ...paidOnly } },
-        { $group: { _id: null, total: { $sum: '$totalCents' } } },
+        { $group: { _id: null, total: { $sum: CA_HORS_CAUTION } } },
       ]);
       revenuePrevMonthToDateCents = revenuePrevMonthAgg && revenuePrevMonthAgg[0] ? Number(revenuePrevMonthAgg[0].total) : 0;
 
@@ -2375,7 +2409,7 @@ async function getAdminDashboard(req, res, next) {
         {
           $group: {
             _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Europe/Paris' } },
-            total: { $sum: '$totalCents' },
+            total: { $sum: CA_HORS_CAUTION },
           },
         },
       ]);
@@ -2415,7 +2449,7 @@ async function getAdminDashboard(req, res, next) {
         {
           $group: {
             _id: { $dateToString: { format: _revFmt, date: '$createdAt', timezone: 'Europe/Paris' } },
-            total: { $sum: '$totalCents' },
+            total: { $sum: CA_HORS_CAUTION },
             count: { $sum: 1 },
           },
         },
@@ -2452,7 +2486,7 @@ async function getAdminDashboard(req, res, next) {
       /* ── KPIs sur la période sélectionnée ── */
       const periodAgg = await Order.aggregate([
         { $match: { createdAt: { $gte: rangeStart, $lte: rangeEnd }, ...paidOnly } },
-        { $group: { _id: null, total: { $sum: '$totalCents' }, count: { $sum: 1 } } },
+        { $group: { _id: null, total: { $sum: CA_HORS_CAUTION }, count: { $sum: 1 } } },
       ]);
       periodRevenueCents = periodAgg && periodAgg[0] ? Number(periodAgg[0].total) : 0;
       periodOrders = periodAgg && periodAgg[0] ? Number(periodAgg[0].count) : 0;
@@ -2813,7 +2847,7 @@ async function chargerFilesCommandes(maintenant = new Date()) {
   const base = { archived: { $ne: true }, deletedAt: null };
   const [enCours, toutesActives] = await Promise.all([
     Order.find({ ...base, status: { $in: [...commandesFiles.AVANT_EXPEDITION, 'shipped', 'delivered'] } })
-      .select('_id status orderType sourcing statusHistory.status statusHistory.changedAt shipments.label shipments.trackingNumber shipments.createdAt returnStatus cloningStatus purchase.supplier createdAt')
+      .select('_id status orderType sourcing statusHistory.status statusHistory.changedAt shipments.label shipments.trackingNumber shipments.createdAt returnStatus cloningStatus purchase.supplier createdAt consigne.lines.receivedAt')
       .lean(),
     Order.countDocuments({ ...base, status: { $ne: 'draft' } }),
   ]);
@@ -3096,6 +3130,9 @@ async function getAdminOrdersPage(req, res, next) {
     } else if (returnFilter === 'overdue') {
       query.returnStatus = 'overdue';
     }
+    if (returnFilter === 'pending' || returnFilter === 'overdue') {
+      Object.assign(query, require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE);
+    }
 
     /* ── Filtre approvisionnement pièce ── */
     // Le sourcing ne concerne que l'avant-expédition → on restreint aux statuts
@@ -3364,7 +3401,7 @@ async function postAdminAvancerCommande(req, res) {
 
     const maintenant = new Date();
     const order = await Order.findById(orderId)
-      .select('_id number status orderType sourcing shipments.label shipments.trackingNumber returnStatus cloningStatus deletedAt archived')
+      .select('_id number status orderType sourcing shipments.label shipments.trackingNumber returnStatus cloningStatus deletedAt archived consigne.lines.receivedAt')
       .lean();
     if (!order || order.deletedAt) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
 
@@ -9743,7 +9780,7 @@ async function getAdminClientsPage(req, res, next) {
     if (clientUserOids.length) {
       try {
         const overdueAgg = await Order.aggregate([
-          { $match: { userId: { $in: clientUserOids }, orderType: 'exchange', returnStatus: 'overdue', status: { $nin: ['cancelled', 'refunded', 'draft'] }, archived: { $ne: true }, deletedAt: null } },
+          { $match: { userId: { $in: clientUserOids }, orderType: 'exchange', returnStatus: 'overdue', status: { $nin: ['cancelled', 'refunded', 'draft'] }, archived: { $ne: true }, deletedAt: null, ...require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE } },
           { $group: { _id: '$userId', count: { $sum: 1 }, oldestDue: { $min: '$returnDates.returnDueDate' } } },
         ]);
         for (const r of overdueAgg) {
@@ -11439,7 +11476,7 @@ async function computeOrderAlerts() {
 
   const [overdueReturns, failedClonings, pieceWaiting, cloningLong, readyToShip, sourcingToVerify, sourcingToOrder, sourcingOrdered, sourcingOverdue] = await Promise.all([
     // Retours en retard (exchange uniquement, PAS exchange_cloning)
-    Order.countDocuments({ orderType: 'exchange', returnStatus: 'overdue', ...activeFilter }),
+    Order.countDocuments({ orderType: 'exchange', returnStatus: 'overdue', ...activeFilter, ...require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE }),
     // Clonages échoués non traités (> 2 jours)
     Order.countDocuments({ orderType: 'exchange_cloning', cloningStatus: 'cloning_failed', 'cloningDates.cloningCompletedAt': { $lt: twoDaysAgo }, ...activeFilter }),
     // Pièce client en attente > 10 jours
@@ -11583,7 +11620,7 @@ function buildTimelineSteps(order) {
     let returnState = 'future';
     let returnLabel = 'Retour ancien organe — J+30';
     let returnDate = null;
-    if (rs === 'received' || rs === 'inspected_ok' || rs === 'inspected_nok') { returnState = 'done'; returnDate = rd.returnReceivedAt ? formatDateTimeFR(rd.returnReceivedAt) : null; }
+    if (rs === 'received' || rs === 'inspected_ok' || rs === 'inspected_nok' || require('../services/retourConsigne').consigneToutRecue(order)) { returnState = 'done'; returnDate = rd.returnReceivedAt ? formatDateTimeFR(rd.returnReceivedAt) : null; }
     else if (rs === 'overdue') { returnState = 'error'; returnLabel = 'Retour en retard !'; }
     else if (rs === 'pending' || rs === 'label_sent' || rs === 'in_transit') {
       returnState = deliveredOrBeyond.has(st) ? 'current' : 'future';
@@ -13736,8 +13773,10 @@ async function getAdminConsignes(req, res, next) {
       archived: { $ne: true },
       deletedAt: null,
       status: { $nin: ['cancelled', 'failed', 'pending_payment', 'draft'] },
+      // Consigne déjà cochée « reçue » (avant le correctif du statut) → plus en attente.
+      ...require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE,
     })
-      .select('number createdAt status returnStatus returnDates consigne.chargedTotalCents shippingAddress userId email items.name')
+      .select('number createdAt status returnStatus returnDates consigne.chargedTotalCents consigne.lines.receivedAt shippingAddress userId email items.name')
       .sort({ createdAt: 1 })
       .limit(500)
       .lean();

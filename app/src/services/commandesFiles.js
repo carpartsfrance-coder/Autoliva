@@ -84,7 +84,8 @@ function aSuiviEnvoi(order) {
 
 /** L'ancienne pièce (échange standard) est attendue en retour. */
 function retourAttendu(order) {
-  return !!order && order.orderType === 'exchange' && ['pending', 'overdue'].includes(order.returnStatus);
+  return !!order && order.orderType === 'exchange' && ['pending', 'overdue'].includes(order.returnStatus)
+    && !require('./retourConsigne').consigneToutRecue(order);
 }
 
 /* Une fois l'étiquette faite, la pièce est forcément là. */

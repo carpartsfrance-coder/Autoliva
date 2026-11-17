@@ -661,6 +661,11 @@ adminRouter.get('/tickets.csv', async (req, res) => {
     }
     if (req.query.assignedToUserId) q.assignedToUserId = req.query.assignedToUserId;
     if (req.query.sla_depasse === 'true') q['sla.dateLimite'] = { $lt: new Date() };
+    // Export de la sélection (cases cochées dans la liste) : seulement ces tickets.
+    if (req.query.numeros) {
+      const numeros = String(req.query.numeros).split(',').map((n) => n.trim()).filter(Boolean).slice(0, 1000);
+      if (numeros.length) q.numero = { $in: numeros };
+    }
     const tickets = await SavTicket.find(q).sort({ createdAt: -1 }).limit(5000).lean();
     const head = ['numero','createdAt','statut','pieceType','client_email','client_nom','vin','immatriculation','vehicule','assigne','sla_limite'];
     const rows = tickets.map((t) => [

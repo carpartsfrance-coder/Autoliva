@@ -897,12 +897,10 @@
   function actionMenu(el, type) {
     var d = donnees(el);
     if (type === 'avis') {
-      confirmer('Envoyer une demande d’avis au client de ' + d.number + ' ?').then(function (ok) {
-        if (!ok) return;
-        envoyer('/admin/commandes/' + encodeURIComponent(d.id) + '/demande-avis', { body: {} }).then(function (j) {
-          notifier(j && j.ok ? 'Demande d’avis envoyée pour ' + d.number : 'Échec : ' + ((j && (j.error || j.message)) || 'erreur inconnue'), { erreur: !(j && j.ok) });
-        });
-      });
+      /* L'ancienne route /demande-avis n'existe plus (404 → « Échec »). La demande
+         d'avis se fait maintenant depuis la fiche (composeur e-mail / SMS / WhatsApp) :
+         on l'ouvre directement. */
+      window.location.href = '/admin/commandes/' + encodeURIComponent(d.id) + '#demander-avis';
       return;
     }
     var url = type === 'archiver' ? '/archiver' : '/supprimer';

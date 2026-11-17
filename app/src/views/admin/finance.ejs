@@ -72,8 +72,8 @@
           <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">CA TTC</div>
           <span class="material-symbols-outlined text-slate-400">attach_money</span>
         </div>
-        <div class="text-3xl font-bold text-slate-900"><%= (summary.revenue.ttc / 100).toFixed(2) %> €</div>
-        <div class="text-sm text-slate-500 mt-1">HT : <%= (summary.revenue.ht / 100).toFixed(2) %> €</div>
+        <div class="text-3xl font-bold text-slate-900"><%= euroCents(summary.revenue.ttc) %></div>
+        <div class="text-sm text-slate-500 mt-1">HT : <%= euroCents(summary.revenue.ht) %></div>
         <div class="text-xs mt-2 flex items-center gap-1">
           <% if (dCA) { %>
             <span class="<%= dCA.class %> font-semibold tabular-nums"><%= dCA.sign %><%= dCA.pct.toFixed(1) %> %</span>
@@ -92,7 +92,7 @@
         </div>
         <% if (summary.margin.itemsCountWithCost > 0 || summary.expenses.total > 0) { %>
           <div class="text-3xl font-bold <%= summary.profit.netCents >= 0 ? 'text-emerald-300' : 'text-rose-300' %>">
-            <%= summary.profit.netCents >= 0 ? '+' : '' %><%= (summary.profit.netCents / 100).toFixed(2) %> €
+            <%= summary.profit.netCents >= 0 ? '+' : '' %><%= euroCents(summary.profit.netCents) %>
           </div>
           <div class="text-sm text-white/70 mt-1">
             <% if (summary.net.ttc > 0) { %>
@@ -125,7 +125,7 @@
           <span class="material-symbols-outlined text-slate-400">trending_up</span>
         </div>
         <% if (summary.margin.itemsCountWithCost > 0) { %>
-          <div class="text-3xl font-bold text-emerald-700"><%= (summary.margin.gross / 100).toFixed(2) %> €</div>
+          <div class="text-3xl font-bold text-emerald-700"><%= euroCents(summary.margin.gross) %></div>
           <div class="text-sm text-slate-500 mt-1">
             <%= (summary.margin.pct * 100).toFixed(1) %> % · COGS <%= (summary.margin.cogsKnown / 100).toFixed(0) %> €
           </div>
@@ -149,7 +149,7 @@
           <div class="text-xs uppercase tracking-wider text-slate-500 font-semibold">Ticket moyen</div>
           <span class="material-symbols-outlined text-slate-400">shopping_cart</span>
         </div>
-        <div class="text-3xl font-bold text-slate-900"><%= (summary.avgBasket / 100).toFixed(2) %> €</div>
+        <div class="text-3xl font-bold text-slate-900"><%= euroCents(summary.avgBasket) %></div>
         <div class="text-sm text-slate-500 mt-1"><%= summary.ordersWithSoldItems %> commandes</div>
         <div class="text-xs mt-2 flex items-center gap-1">
           <% if (dAvg) { %>
@@ -180,15 +180,15 @@
       <div class="p-6 space-y-2 text-sm">
         <div class="flex items-center justify-between py-1">
           <div class="text-slate-700">CA TTC brut</div>
-          <div class="font-semibold text-slate-900 tabular-nums"><%= (summary.revenue.ttc / 100).toFixed(2) %> €</div>
+          <div class="font-semibold text-slate-900 tabular-nums"><%= euroCents(summary.revenue.ttc) %></div>
         </div>
         <div class="flex items-center justify-between py-1">
           <div class="text-slate-700">− Remboursements</div>
-          <div class="font-semibold text-rose-600 tabular-nums">-<%= (summary.refunds.total / 100).toFixed(2) %> €</div>
+          <div class="font-semibold text-rose-600 tabular-nums">-<%= euroCents(summary.refunds.total) %></div>
         </div>
         <div class="flex items-center justify-between py-1 border-t border-slate-100 pt-2">
           <div class="font-semibold text-slate-900">CA Net</div>
-          <div class="font-bold text-slate-900 tabular-nums"><%= (summary.net.ttc / 100).toFixed(2) %> €</div>
+          <div class="font-bold text-slate-900 tabular-nums"><%= euroCents(summary.net.ttc) %></div>
         </div>
         <% if (summary.margin.itemsCountWithCost > 0) { %>
           <div class="flex items-center justify-between py-1 mt-3">
@@ -198,11 +198,11 @@
                 <span class="text-xs text-amber-600 ml-1">⚠ sur <%= Math.round(summary.margin.coveragePct * 100) %> % du CA</span>
               <% } %>
             </div>
-            <div class="font-semibold text-rose-600 tabular-nums">-<%= (summary.margin.cogsKnown / 100).toFixed(2) %> €</div>
+            <div class="font-semibold text-rose-600 tabular-nums">-<%= euroCents(summary.margin.cogsKnown) %></div>
           </div>
           <div class="flex items-center justify-between py-1 border-t border-slate-100 pt-2">
             <div class="font-semibold text-slate-900">= Marge brute</div>
-            <div class="font-bold text-emerald-700 tabular-nums"><%= (summary.margin.gross / 100).toFixed(2) %> € (<%= (summary.margin.pct * 100).toFixed(1) %> %)</div>
+            <div class="font-bold text-emerald-700 tabular-nums"><%= euroCents(summary.margin.gross) %> (<%= (summary.margin.pct * 100).toFixed(1) %> %)</div>
           </div>
         <% } else { %>
           <div class="flex items-center justify-between py-1 mt-3 italic">
@@ -217,13 +217,13 @@
                 − Frais paiement Mollie
                 <span class="text-xs text-emerald-600 ml-1">(auto)</span>
               </div>
-              <div class="font-semibold text-rose-600 tabular-nums">-<%= (summary.expenses.paymentFeesAuto / 100).toFixed(2) %> €</div>
+              <div class="font-semibold text-rose-600 tabular-nums">-<%= euroCents(summary.expenses.paymentFeesAuto) %></div>
             </div>
           <% } %>
           <% Object.keys(summary.expenses.byCategory).sort(function (a, b) { return summary.expenses.byCategory[b] - summary.expenses.byCategory[a]; }).forEach(function (cat) { %>
             <div class="flex items-center justify-between py-1">
               <div class="text-slate-700">− <%= expensesCategoryLabels[cat] || cat %></div>
-              <div class="font-semibold text-rose-600 tabular-nums">-<%= (summary.expenses.byCategory[cat] / 100).toFixed(2) %> €</div>
+              <div class="font-semibold text-rose-600 tabular-nums">-<%= euroCents(summary.expenses.byCategory[cat]) %></div>
             </div>
           <% }) %>
           <% if (summary.expenses.total === 0 && summary.expenses.paymentFeesAuto === 0) { %>
@@ -236,7 +236,7 @@
         <div class="flex items-center justify-between py-3 border-t-2 border-slate-900 mt-3">
           <div class="text-lg font-bold text-slate-900">= Bénéfice net</div>
           <div class="text-xl font-bold tabular-nums <%= summary.profit.netCents >= 0 ? 'text-emerald-700' : 'text-rose-700' %>">
-            <%= summary.profit.netCents >= 0 ? '+' : '' %><%= (summary.profit.netCents / 100).toFixed(2) %> €
+            <%= summary.profit.netCents >= 0 ? '+' : '' %><%= euroCents(summary.profit.netCents) %>
             <% if (summary.net.ttc > 0) { %>
               <span class="text-sm font-normal text-slate-500">(<%= (summary.profit.netPct * 100).toFixed(1) %> %)</span>
             <% } %>
@@ -303,9 +303,9 @@
                   <div class="text-xs text-slate-500"><%= p.qtySold %> vendu(s) · SKU <%= p.sku || '—' %></div>
                 </div>
                 <div class="text-right">
-                  <div class="font-semibold text-slate-900 tabular-nums"><%= (p.revenueTtc / 100).toFixed(2) %> €</div>
+                  <div class="font-semibold text-slate-900 tabular-nums"><%= euroCents(p.revenueTtc) %></div>
                   <% if (p.costKnown) { %>
-                    <div class="text-xs text-emerald-600">+<%= (p.margin / 100).toFixed(2) %> € (<%= p.marginPct.toFixed(1) %> %)</div>
+                    <div class="text-xs text-emerald-600">+<%= euroCents(p.margin) %> (<%= p.marginPct.toFixed(1) %> %)</div>
                   <% } else { %>
                     <div class="text-xs text-slate-300">marge ?</div>
                   <% } %>
@@ -337,7 +337,7 @@
                   <div class="text-xs text-slate-500"><%= p.qtySold %> vendu(s) · SKU <%= p.sku || '—' %></div>
                 </div>
                 <div class="text-right">
-                  <div class="font-semibold text-emerald-700 tabular-nums">+<%= (p.margin / 100).toFixed(2) %> €</div>
+                  <div class="font-semibold text-emerald-700 tabular-nums">+<%= euroCents(p.margin) %></div>
                   <div class="text-xs text-slate-500"><%= p.marginPct.toFixed(1) %> % · CA <%= (p.revenueTtc / 100).toFixed(0) %> €</div>
                 </div>
               </li>
@@ -398,8 +398,8 @@
                   <td class="px-4 py-3 text-slate-900 max-w-md truncate" title="<%= p.name %>"><%= p.name %></td>
                   <td class="px-4 py-3 font-mono text-xs text-slate-500"><%= p.sku || '—' %></td>
                   <td class="px-4 py-3 text-right tabular-nums text-slate-700"><%= p.qtySold %></td>
-                  <td class="px-4 py-3 text-right tabular-nums font-semibold text-slate-900"><%= (p.revenueTtc / 100).toFixed(2) %> €</td>
-                  <td class="px-4 py-3 text-right tabular-nums text-slate-500"><%= (p.revenueHt / 100).toFixed(2) %> €</td>
+                  <td class="px-4 py-3 text-right tabular-nums font-semibold text-slate-900"><%= euroCents(p.revenueTtc) %></td>
+                  <td class="px-4 py-3 text-right tabular-nums text-slate-500"><%= euroCents(p.revenueHt) %></td>
                   <td class="px-4 py-3 text-right tabular-nums">
                     <div class="inline-flex items-center justify-end gap-1">
                       <input type="text"
@@ -416,7 +416,7 @@
                   <td class="px-4 py-3 text-right tabular-nums" data-margin-cell>
                     <% if (p.costKnown) { %>
                       <span class="<%= p.margin >= 0 ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold' %>">
-                        <%= p.margin >= 0 ? '+' : '' %><%= (p.margin / 100).toFixed(2) %> €
+                        <%= p.margin >= 0 ? '+' : '' %><%= euroCents(p.margin) %>
                       </span>
                     <% } else { %>
                       <span class="text-slate-300" title="Renseigne le prix d'achat sur cette ligne pour calculer la marge">—</span>
@@ -441,14 +441,14 @@
                   <%= summary.allProductsSold.reduce(function (s, p) { return s + p.qtySold; }, 0) %>
                 </td>
                 <td class="px-4 py-3 text-right tabular-nums" id="all-products-revenuettc-total">
-                  <%= (summary.allProductsSold.reduce(function (s, p) { return s + p.revenueTtc; }, 0) / 100).toFixed(2) %> €
+                  <%= euroCents(summary.allProductsSold.reduce(function (s, p) { return s + p.revenueTtc; }, 0)) %>
                 </td>
                 <td class="px-4 py-3 text-right tabular-nums text-slate-500" id="all-products-revenueht-total">
-                  <%= (summary.allProductsSold.reduce(function (s, p) { return s + p.revenueHt; }, 0) / 100).toFixed(2) %> €
+                  <%= euroCents(summary.allProductsSold.reduce(function (s, p) { return s + p.revenueHt; }, 0)) %>
                 </td>
                 <td class="px-4 py-3"></td>
                 <td class="px-4 py-3 text-right tabular-nums text-emerald-700" id="all-products-margin-total">
-                  +<%= (summary.allProductsSold.filter(function (p) { return p.costKnown; }).reduce(function (s, p) { return s + p.margin; }, 0) / 100).toFixed(2) %> €
+                  +<%= euroCents(summary.allProductsSold.filter(function (p) { return p.costKnown; }).reduce(function (s, p) { return s + p.margin; }, 0)) %>
                 </td>
                 <td class="px-4 py-3 text-right text-xs text-slate-500" colspan="1">
                   <span id="all-products-cost-count"><%= summary.allProductsSold.filter(function (p) { return p.costKnown; }).length %></span>/<%= summary.allProductsSold.length %> avec cost
@@ -484,9 +484,9 @@
             }
           });
           document.getElementById('all-products-qty-total').textContent = qty;
-          document.getElementById('all-products-revenuettc-total').textContent = (ttc / 100).toFixed(2) + ' €';
-          document.getElementById('all-products-revenueht-total').textContent = (ht / 100).toFixed(2) + ' €';
-          document.getElementById('all-products-margin-total').textContent = '+' + (margin / 100).toFixed(2) + ' €';
+          document.getElementById('all-products-revenuettc-total').textContent = (ttc / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+          document.getElementById('all-products-revenueht-total').textContent = (ht / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+          document.getElementById('all-products-margin-total').textContent = '+' + (margin / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
           if (costCountEl) costCountEl.textContent = withCost;
         }
 
@@ -533,7 +533,7 @@
 
           if (marginCell) {
             var marginCls = margin >= 0 ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold';
-            marginCell.innerHTML = '<span class="' + marginCls + '">' + (margin >= 0 ? '+' : '') + (margin / 100).toFixed(2) + ' €</span>';
+            marginCell.innerHTML = '<span class="' + marginCls + '">' + (margin >= 0 ? '+' : '') + (margin / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €</span>';
           }
           if (marginPctCell) {
             if (marginPct == null) {

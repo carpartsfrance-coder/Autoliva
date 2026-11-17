@@ -141,7 +141,7 @@ router.use(async (req, res, next) => {
         ReturnRequest.countDocuments({ status: 'en_attente' }),
         SavTicket.countDocuments({ statut: { $nin: ['clos', 'refuse', 'resolu_garantie', 'resolu_facture', 'clos_sans_reponse'] } }),
         Order.countDocuments({ status: { $in: ['paid', 'processing'] }, orderType: { $in: ['standard', 'exchange'] }, archived: { $ne: true }, deletedAt: null }),
-        Order.countDocuments({ orderType: { $in: ['exchange', 'exchange_cloning'] }, returnStatus: 'overdue', archived: { $ne: true }, deletedAt: null }),
+        Order.countDocuments({ orderType: { $in: ['exchange', 'exchange_cloning'] }, returnStatus: 'overdue', archived: { $ne: true }, deletedAt: null, ...require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE }),
       ]);
       res.locals.sidebarPendingCount = pendingOrders;
       res.locals.sidebarReturnsCount = pendingReturns;

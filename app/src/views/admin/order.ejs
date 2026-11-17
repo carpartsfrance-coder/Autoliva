@@ -4,19 +4,21 @@
 
 <main class="flex-1">
   <div class="px-6 lg:px-10 py-8">
-    <div class="flex items-start justify-between gap-6">
-      <div class="flex items-start gap-4">
-        <a class="w-10 h-10 rounded-xl border border-slate-200 hover:bg-slate-50 transition flex items-center justify-center bg-white" href="/admin/commandes">
+    <%# flex-wrap : sur un écran de portable, les 5 boutons poussaient le n° de commande sur
+        2 lignes (« CP2026- / 000901 ») et « Mettre à la corbeille » sortait de l'écran. %>
+    <div class="flex flex-wrap items-start justify-between gap-x-6 gap-y-4">
+      <div class="flex items-start gap-4 shrink-0">
+        <a class="shrink-0 w-10 h-10 rounded-xl border border-slate-200 hover:bg-slate-50 transition flex items-center justify-center bg-white" href="/admin/commandes">
           <span class="material-symbols-outlined text-slate-500">arrow_back</span>
         </a>
         <div>
           <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Commandes', url: '/admin/commandes'}, {label: order ? order.number : 'Commande'}] }) %>
-          <div class="text-2xl md:text-3xl font-semibold text-slate-900"><%= order ? order.number : 'Commande' %></div>
+          <div class="text-2xl md:text-3xl font-semibold text-slate-900 whitespace-nowrap"><%= order ? order.number : 'Commande' %></div>
           <div class="mt-1 text-sm text-slate-500"><%= order ? (order.dateTime || '') : '' %></div>
         </div>
       </div>
 
-      <div class="flex items-center gap-3">
+      <div class="flex flex-wrap items-center gap-2">
         <% if (order && order.allDocuments && order.allDocuments.length > 0) { %>
           <%
             var printableDocs = order.allDocuments.filter(function(d) {
@@ -1189,10 +1191,10 @@
                   <%/* Le gain affiché AVANT de valider : c'est ce qui rend la
                        saisie du prix d'achat rentable à l'œil nu. */%>
                   <div class="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-600" data-tva-apercu>
-                    <div>TVA au taux normal : <strong><%= ((tva.tvaNormaleCents || 0) / 100).toFixed(2) %> €</strong></div>
+                    <div>TVA au taux normal : <strong><%= euroCents((tva.tvaNormaleCents || 0)) %></strong></div>
                     <% if (tva.tvaMargeCents != null) { %>
-                      <div class="mt-1">TVA sur marge : <strong><%= (tva.tvaMargeCents / 100).toFixed(2) %> €</strong>
-                        — économie <strong class="text-emerald-600"><%= (tva.economieCents / 100).toFixed(2) %> €</strong></div>
+                      <div class="mt-1">TVA sur marge : <strong><%= euroCents(tva.tvaMargeCents) %></strong>
+                        — économie <strong class="text-emerald-600"><%= euroCents(tva.economieCents) %></strong></div>
                     <% } else { %>
                       <div class="mt-1 text-slate-400">Renseigne le prix d'achat pour voir l'économie possible.</div>
                     <% } %>
@@ -1230,7 +1232,7 @@
               if (!achat || !zone) return;
               var baseCents = <%= Number(tva.baseCents) || 0 %>;
               var normaleCents = <%= Number(tva.tvaNormaleCents) || 0 %>;
-              var euro = function (c) { return (c / 100).toFixed(2) + ' €'; };
+              var euro = function (c) { return (c / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; };
               achat.addEventListener('input', function () {
                 var n = parseFloat(String(achat.value).replace(/\s/g, '').replace(',', '.'));
                 var html = '<div>TVA au taux normal : <strong>' + euro(normaleCents) + '</strong></div>';
@@ -1847,7 +1849,9 @@
               <div class="flex items-center justify-between gap-4">
                 <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Consigne (ancienne pièce)</div>
                 <% if (order.consigne.hasPending) { %>
-                  <form action="/admin/commandes/<%= order.id %>/consigne/recu" method="POST" data-ajax="true">
+                  <% const _nbAttendues = (order.consigne.lines || []).filter((l) => l && l.isPending).length; %>
+                  <form action="/admin/commandes/<%= order.id %>/consigne/recu" method="POST" data-ajax="true"
+                        data-confirm="Confirmer la réception de <%= _nbAttendues > 1 ? 'TOUTES les ' + _nbAttendues + ' anciennes pièces' : 'l’ancienne pièce' %> ? Le client reçoit un e-mail de confirmation.">
                     <button class="btn btn-primary" type="submit">
                       Marquer reçu
                     </button>
@@ -1934,6 +1938,21 @@
                   <% } %>
                 </div>
               <% } %>
+            </div>
+          <% } else if (order && (order.orderType === 'exchange' || order.orderType === 'exchange_cloning') && ['pending', 'label_sent', 'in_transit', 'overdue'].includes(order.returnStatus)) { %>
+            <%# Échange SANS ligne de consigne (anciennes commandes, « non encaissée ») : il n'y avait
+                aucun bouton, la commande restait pour toujours dans « Consignes en attente ». %>
+            <div class="bg-white rounded-2xl border border-slate-200 p-6">
+              <div class="flex items-center justify-between gap-4">
+                <div>
+                  <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Ancienne pièce (échange)</div>
+                  <div class="mt-1 text-sm text-slate-600"><%= order.returnStatus === 'overdue' ? 'Attendue — délai dépassé.' : 'Attendue en retour.' %></div>
+                </div>
+                <form action="/admin/commandes/<%= order.id %>/consigne/recu" method="POST" data-ajax="true"
+                      data-confirm="Confirmer que l’ancienne pièce est bien revenue ? La commande sortira de « Consignes en attente ».">
+                  <button class="btn btn-primary" type="submit">Marquer reçue</button>
+                </form>
+              </div>
             </div>
           <% } %>
 
@@ -2754,6 +2773,13 @@ document.addEventListener('DOMContentLoaded', function() {
           .then(function () { b.disabled = false; b.textContent = libelle; });
       });
     });
+
+    /* Lien direct depuis la liste des commandes (menu « … » → Demander un avis) :
+       /admin/commandes/<id>#demander-avis ouvre directement le composeur. */
+    if (window.location.hash === '#demander-avis') {
+      try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (_) {}
+      btn.click();
+    }
   })();
 </script>
 

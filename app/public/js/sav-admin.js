@@ -24,6 +24,28 @@
     });
   }
 
+  /* Export CSV : l'API SAV exige le jeton Bearer. Un simple window.open() ne
+     l'envoie pas → la page affichait « Non autorisé » au lieu du fichier. On
+     télécharge donc le CSV avec le jeton puis on le propose à l'enregistrement. */
+  function telechargerCsv(qs) {
+    return fetch('/admin/api/sav/tickets.csv?' + qs, { headers: { Authorization: 'Bearer ' + TOKEN } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.blob();
+      })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'sav-tickets-' + new Date().toISOString().slice(0, 10) + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      })
+      .catch(function () { toast('Export CSV impossible', 'error'); });
+  }
+
   function toast(msg, type) {
     var rootEl = document.getElementById('sav-toast-root');
     if (!rootEl) {
@@ -855,13 +877,26 @@
       var uid = document.getElementById('sav-bulk-assign').value;
       if (!uid || !selected.size) return;
       var arr = Array.from(selected);
+      /* Avant : « Assignations OK » même si des requêtes échouaient. On compte
+         réellement, et on garde cochés les tickets refusés. */
       Promise.all(arr.map(function (n) {
-        return api('/tickets/' + encodeURIComponent(n) + '/assign', { method: 'POST', body: JSON.stringify({ userId: uid }) });
-      })).then(function () { toast('Assignations OK', 'success'); selected.clear(); updateBulkBar(); load(); });
+        return api('/tickets/' + encodeURIComponent(n) + '/assign', { method: 'POST', body: JSON.stringify({ userId: uid }) })
+          .then(function (res) { return { n: n, ok: !!(res && res.ok && res.j && res.j.success !== false), err: res && res.j && res.j.error }; })
+          .catch(function () { return { n: n, ok: false, err: 'réseau' }; });
+      })).then(function (resultats) {
+        var echecs = resultats.filter(function (r) { return !r.ok; });
+        var faits = resultats.length - echecs.length;
+        if (faits) toast(faits + ' ticket(s) assigné(s)', 'success');
+        if (echecs.length) toast(echecs.length + ' refusé(s) : ' + echecs.slice(0, 3).map(function (r) { return r.n + ' (' + (r.err || 'erreur') + ')'; }).join(', '), 'error');
+        selected = new Set(echecs.map(function (r) { return r.n; }));
+        updateBulkBar(); load();
+      });
     });
     document.getElementById('sav-bulk-export').addEventListener('click', function () {
-      // Export = juste un CSV des sélectionnés (en pratique on filtre côté csv)
-      window.open('/admin/api/sav/tickets.csv?' + buildQs().toString(), '_blank');
+      // CSV des SEULS tickets cochés (avant : tous ceux du filtre, et refusé faute de jeton).
+      var qs = buildQs();
+      qs.set('numeros', Array.from(selected).join(','));
+      telechargerCsv(qs.toString());
     });
     // Bulk archive / unarchive — bascule selon que la vue affiche les archivés ou non
     var bulkArchiveBtn = document.getElementById('sav-bulk-archive');
@@ -964,7 +999,7 @@
     var csvBtn = document.getElementById('sav-export-csv');
     if (csvBtn) csvBtn.addEventListener('click', function (e) {
       e.preventDefault();
-      window.open('/admin/api/sav/tickets.csv?' + buildQs().toString(), '_blank');
+      telechargerCsv(buildQs().toString());
     });
 
     // Charge équipe pour bulk assign + filtre assigné

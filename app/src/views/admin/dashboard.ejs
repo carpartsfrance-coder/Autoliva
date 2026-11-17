@@ -85,7 +85,7 @@
               <span class="badge <%= _tendance >= 0 ? 'badge-success' : 'badge-danger' %>"><%= _tendance >= 0 ? '+' : '' %><%= _tendance %> %</span>
             <% } %>
           </div>
-          <div class="kpi-card__label">C.A. (mois en cours)</div>
+          <div class="kpi-card__label" title="Commandes payées, hors cautions de consigne (remboursables)">C.A. (mois en cours)</div>
           <div class="kpi-card__value"><%= kpis && kpis.revenueMonth ? kpis.revenueMonth : '—' %></div>
           <div class="kpi-card__compare">
             Mois dernier à la même date : <strong class="text-slate-700"><%= kpis && kpis.revenuePrevMonthToDate ? kpis.revenuePrevMonthToDate : '—' %></strong>

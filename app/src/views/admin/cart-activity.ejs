@@ -547,6 +547,23 @@
     });
   }
 
+  /* Anti double envoi : un 2e clic (ou Entrée) pendant l'envoi faisait partir
+     un 2e e-mail / SMS au client. Bouton bloqué jusqu'à la réponse ; réactivé
+     seulement en cas d'échec. */
+  function verrouEnvoi(form) {
+    if (form.dataset.envoiEnCours === '1') return null;
+    form.dataset.envoiEnCours = '1';
+    var btn = form.querySelector('button[type="submit"]');
+    var libelle = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.classList.add('opacity-60', 'cursor-not-allowed'); }
+    return {
+      echec: function () {
+        form.dataset.envoiEnCours = '';
+        if (btn) { btn.disabled = false; btn.classList.remove('opacity-60', 'cursor-not-allowed'); btn.innerHTML = libelle; }
+      },
+    };
+  }
+
   function escapeHtml(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -1353,6 +1370,8 @@
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      var verrou = verrouEnvoi(form);
+      if (!verrou) return;
       var resultEl = document.getElementById('lead-email-result');
       resultEl.textContent = 'Envoi…';
       fetch('/admin/api/leads/' + leadId + '/email', {
@@ -1368,9 +1387,9 @@
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (d && d.ok) { resultEl.innerHTML = '<span class="text-green-700 font-semibold">✓ Email envoyé à ' + escapeHtml(d.sentTo) + '</span>'; setTimeout(refresh, 1000); }
-          else resultEl.innerHTML = '<span class="text-red-700">Erreur : ' + escapeHtml(d && d.error ? d.error : '?') + '</span>';
+          else { verrou.echec(); resultEl.innerHTML = '<span class="text-red-700">Erreur : ' + escapeHtml(d && d.error ? d.error : '?') + '</span>'; }
         })
-        .catch(function () { resultEl.innerHTML = '<span class="text-red-700">Erreur réseau</span>'; });
+        .catch(function () { verrou.echec(); resultEl.innerHTML = '<span class="text-red-700">Erreur réseau</span>'; });
     });
   }
 
@@ -1448,6 +1467,8 @@
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      var verrou = verrouEnvoi(form);
+      if (!verrou) return;
       var resultEl = document.getElementById('lead-sms-result');
       resultEl.textContent = 'Envoi…';
       fetch('/admin/api/leads/' + leadId + '/sms', {
@@ -1465,9 +1486,9 @@
             var thenBtn = document.getElementById('sms-then-email');
             if (thenBtn) thenBtn.addEventListener('click', function () { clearTimeout(reloadTimer); openEmailModal(leadId, c); });
           }
-          else resultEl.innerHTML = '<span class="text-red-700">Erreur : ' + escapeHtml(d && d.error ? d.error : '?') + '</span>';
+          else { verrou.echec(); resultEl.innerHTML = '<span class="text-red-700">Erreur : ' + escapeHtml(d && d.error ? d.error : '?') + '</span>'; }
         })
-        .catch(function () { resultEl.innerHTML = '<span class="text-red-700">Erreur réseau</span>'; });
+        .catch(function () { verrou.echec(); resultEl.innerHTML = '<span class="text-red-700">Erreur réseau</span>'; });
     });
   }
 

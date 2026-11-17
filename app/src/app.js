@@ -636,6 +636,13 @@ app.use((req, res, next) => {
   // services/videoEmbed.js. Permet d'afficher un lecteur intégré dans la galerie
   // produit sans stocker la vidéo en base.
   res.locals.parseVideoEmbed = require('./services/videoEmbed').parseVideoEmbed;
+  // Montant en centimes → « 1 234,56 € » (vues du back-office : finance, charges, commande).
+  res.locals.euroCents = (cents) => {
+    const n = Number(cents);
+    if (!Number.isFinite(n)) return '—';
+    return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      .format(n / 100).replace(/\u202f/g, '\u00a0') + '\u00a0€';
+  };
   /* Le tunnel vit sur des URLs FRANÇAISES (/panier, /commande) : `req.lang`
      y vaut toujours 'fr'. On lit donc la langue mémorisée, comme le reste du
      tunnel — sinon un acheteur allemand cherchait « Deutschland » dans une
