@@ -27,8 +27,8 @@
   /* Export CSV : l'API SAV exige le jeton Bearer. Un simple window.open() ne
      l'envoie pas → la page affichait « Non autorisé » au lieu du fichier. On
      télécharge donc le CSV avec le jeton puis on le propose à l'enregistrement. */
-  function telechargerCsv(qs) {
-    return fetch('/admin/api/sav/tickets.csv?' + qs, { headers: { Authorization: 'Bearer ' + TOKEN } })
+  function telechargerCsv(qs, chemin, prefixe) {
+    return fetch('/admin/api/sav/' + (chemin || 'tickets.csv') + '?' + (qs || ''), { headers: { Authorization: 'Bearer ' + TOKEN } })
       .then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.blob();
@@ -37,7 +37,7 @@
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
-        a.download = 'sav-tickets-' + new Date().toISOString().slice(0, 10) + '.csv';
+        a.download = (prefixe || 'sav-tickets') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
         document.body.appendChild(a);
         a.click();
         a.remove();
@@ -6210,7 +6210,8 @@
     var exp = document.getElementById('sav-analytics-export');
     if (exp) exp.addEventListener('click', function (e) {
       e.preventDefault();
-      window.open('/admin/api/sav/analytics.csv', '_blank');
+      // Même raison que l'export des tickets : window.open() n'envoie pas le jeton → « Non autorisé ».
+      telechargerCsv('', 'analytics.csv', 'sav-analytics');
     });
   }
 
