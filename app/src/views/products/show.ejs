@@ -883,7 +883,20 @@
           <% if (refsAlternatives.length) { %>
             <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid #F0F2F6;">
               <span style="font-size: 13px; font-weight: 600; color: #6B7482; white-space: nowrap;"><%= t('product.altRefs') %></span>
+              <%# Au-delà de 4 références (DQ200 : 19), la liste remplissait la colonne : les 4
+                  premières visibles, les autres derrière « + N autres références » (<details>, sans
+                  JavaScript ; le texte reste dans la page pour la recherche). %>
+              <% if (refsAlternatives.length > 4) { %>
+              <span style="font-size: 12.5px; font-weight: 800; color: #0F1626; text-align: right; line-height: 1.55;">
+                <%= refsAlternatives.slice(0, 4).join(', ') %>
+                <details style="margin-top: 4px;">
+                  <summary style="cursor: pointer; color: #ED1C24; font-weight: 800; list-style: none;"><%= t('product.altRefsMore', { count: refsAlternatives.length - 4 }) %></summary>
+                  <span style="display: block; margin-top: 4px;"><%= refsAlternatives.slice(4).join(', ') %></span>
+                </details>
+              </span>
+              <% } else { %>
               <span style="font-size: 12.5px; font-weight: 800; color: #0F1626; text-align: right; line-height: 1.55;"><%= refsAlternatives.join(', ') %></span>
+              <% } %>
             </div>
           <% } %>
         </div>

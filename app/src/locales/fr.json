@@ -572,6 +572,7 @@
   "product.gearsCount": "Nombre de rapports",
   "product.partsLabor": "sur la pièce",
   "product.altRefs": "Réf. alternatives",
+  "product.altRefsMore": "+ %count% autres références",
   "product.howWeRecond": "Comment vos pièces sont reconditionnées",
   "product.playVideo": "Lire la vidéo",
   "product.recondIntro": "Chaque pièce est démontée, nettoyée, contrôlée puis remontée dans nos usines certifiées ISO 9001, avec des pièces d’origine ou équivalentes — pour des performances identiques à l’origine.",

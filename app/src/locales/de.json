@@ -572,6 +572,7 @@
   "product.gearsCount": "Anzahl der Gänge",
   "product.partsLabor": "auf das Teil",
   "product.altRefs": "Alternative Referenzen",
+  "product.altRefsMore": "+ %count% weitere Nummern",
   "product.howWeRecond": "Wie Ihre Teile generalüberholt werden",
   "product.playVideo": "Video abspielen",
   "product.recondIntro": "Jedes Teil wird zerlegt, gereinigt, geprüft und dann in unseren ISO 9001-zertifizierten Werken mit Original- oder gleichwertigen Teilen wieder montiert — für die gleichen Leistungen wie ursprünglich.",
