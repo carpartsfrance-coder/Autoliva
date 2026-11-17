@@ -1327,8 +1327,7 @@
 
     function renderRefundPanel() {
       var st = document.getElementById('sav-refund-status');
-      var btn = document.getElementById('sav-refund-btn');
-      if (!st || !btn) return;
+      if (!st) return; // (le bouton n'existe pas pour un employé : on affiche quand même l'état)
       var r = ticket.paiements && ticket.paiements.remboursement;
       if (r && r.status === 'effectue') {
         var amount = (r.amountCents/100).toFixed(2);
