@@ -1397,7 +1397,7 @@
                   }).catch(function(){ fb.disabled=false; fb.textContent='✅ J\'ai payé — récupérer l\'étiquette'; showErr('Erreur réseau'); });
               });
               function val(k){ var el = root.querySelector('[data-j="'+k+'"]'); return el ? el.value : ''; }
-              var money = function(p){ return (p!=null) ? (Number(p).toFixed(2)+' €') : ''; };
+              var money = function(p){ return (p!=null) ? (Number(p).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\u202f/g, '\u00a0') + '\u00a0€') : ''; };
               root.querySelector('[data-jumingo-open]').addEventListener('click', function(){ panel.classList.toggle('hidden'); });
               root.querySelector('[data-jumingo-back]').addEventListener('click', function(){ stepRates.classList.add('hidden'); stepForm.classList.remove('hidden'); });
               root.querySelector('[data-jumingo-rates]').addEventListener('click', function(){

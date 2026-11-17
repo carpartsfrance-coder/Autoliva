@@ -64,6 +64,14 @@
     setTimeout(function () { el.classList.remove('sav-toast--visible'); setTimeout(function () { el.remove(); }, 250); }, 4000);
   }
 
+  /* Montants au format français (« 49,90 € ») : toFixed(2) affichait « 49.90 € ». */
+  function euroFr(n) {
+    var v = Number(n);
+    if (!isFinite(v)) v = 0;
+    try { return v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\u202f/g, '\u00a0') + '\u00a0€'; }
+    catch (e) { return v.toFixed(2).replace('.', ',') + '\u00a0€'; }
+  }
+
   function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -1330,9 +1338,9 @@
       if (!st) return; // (le bouton n'existe pas pour un employé : on affiche quand même l'état)
       var r = ticket.paiements && ticket.paiements.remboursement;
       if (r && r.status === 'effectue') {
-        var amount = (r.amountCents/100).toFixed(2);
+        var amount = euroFr((r.amountCents || 0) / 100);
         var refId = r.mollieRefundId || '';
-        var html = '<span class="text-emerald-700 font-semibold">' + amount + ' € remboursés</span>';
+        var html = '<span class="text-emerald-700 font-semibold">' + amount + ' remboursés</span>';
         if (refId) html += ' · <span class="font-mono">' + refId + '</span>';
         /* Lien vers l'avoir PDF si on a un numéro de commande et qu'un avoir a été généré */
         if (ticket.numeroCommande && r.creditNoteNumber) {
@@ -1360,7 +1368,7 @@
       var methodLabel = method
         ? method.charAt(0).toUpperCase() + method.slice(1).replace('_', ' ')
         : 'le provider auto-détecté';
-      if (!window.confirm('Rembourser ' + euros.toFixed(2) + ' € via ' + methodLabel + ' sur la commande ' + (ticket.numeroCommande || '?') + ' ?')) return;
+      if (!window.confirm('Rembourser ' + euroFr(euros) + ' via ' + methodLabel + ' sur la commande ' + (ticket.numeroCommande || '?') + ' ?')) return;
       var btn = document.getElementById('sav-refund-btn');
       btn.disabled = true; btn.classList.add('opacity-60');
       api('/tickets/' + encodeURIComponent(numero) + '/refund', {
@@ -1402,7 +1410,7 @@
       if (!links.length) { box.textContent = 'Aucun lien de paiement.'; return; }
       var html = '';
       links.slice().sort(function (a, b) { return (new Date(b.createdAt || 0)) - (new Date(a.createdAt || 0)); }).forEach(function (l) {
-        var amt = ((l.amountCents || 0) / 100).toFixed(2);
+        var amt = euroFr((l.amountCents || 0) / 100);
         var label = escapeHtml(l.label || '—');
         var st = escapeHtml(l.status || 'pending');
         var badge = statusBadgeClasses(l.status);
@@ -1420,7 +1428,7 @@
         html += '<div class="rounded-lg border border-slate-200 px-2 py-1.5 bg-white">'
           + '<div class="flex items-center justify-between gap-2">'
             + '<div class="min-w-0">'
-              + '<div class="font-bold text-slate-900">' + amt + ' € · <span class="font-normal text-slate-600">' + label + '</span></div>'
+              + '<div class="font-bold text-slate-900">' + amt + ' · <span class="font-normal text-slate-600">' + label + '</span></div>'
               + paidLine + sentLine
             + '</div>'
             + '<span class="text-[9px] uppercase tracking-wider font-semibold border rounded-full px-1.5 py-0.5 ' + badge + '">' + st + '</span>'
@@ -1454,7 +1462,7 @@
         var cents = Math.round(euros * 100);
         var label = (labelInput && labelInput.value || '').trim();
         var description = (descInput && descInput.value || '').trim();
-        if (!window.confirm('Créer un lien Mollie de ' + euros.toFixed(2) + ' € pour le ticket ' + numero + ' ?')) return;
+        if (!window.confirm('Créer un lien Mollie de ' + euroFr(euros) + ' pour le ticket ' + numero + ' ?')) return;
         createBtn.disabled = true; createBtn.classList.add('opacity-60');
         if (btnLabel) btnLabel.textContent = 'Création en cours…';
         if (btnIcon) btnIcon.textContent = 'progress_activity';
@@ -1463,7 +1471,7 @@
           body: JSON.stringify({ amountCents: cents, label: label, description: description }),
         }).then(function (res) {
           if (res.ok && res.j.success) {
-            toast('Lien créé : ' + euros.toFixed(2) + ' €', 'success');
+            toast('Lien créé : ' + euroFr(euros), 'success');
             if (amtInput) amtInput.value = '';
             if (labelInput) labelInput.value = '';
             if (descInput) descInput.value = '';
@@ -2923,7 +2931,7 @@
       var pieceBody = [
         p.reference ? '<div class="font-mono text-slate-900">' + escapeHtml(p.reference) + '</div>' : (t.pieceType ? '<div class="font-medium text-slate-900">' + escapeHtml(labelPiece(t.pieceType)) + '</div>' : ''),
         p.designation ? '<div>' + escapeHtml(p.designation) + '</div>' : '',
-        (p.prixHT != null) ? '<div><span class="text-slate-500">Prix HT&nbsp;:</span> ' + Number(p.prixHT).toFixed(2) + ' €</div>' : '',
+        (p.prixHT != null) ? '<div><span class="text-slate-500">Prix HT&nbsp;:</span> ' + euroFr(p.prixHT) + '</div>' : '',
         p.url ? '<div class="pt-2"><a href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 text-xs hover:border-primary hover:text-primary">Fiche produit</a></div>' : '',
       ].filter(Boolean).join('') || '<span class="text-slate-400">Non renseigné</span>';
 
@@ -2936,7 +2944,7 @@
         ? [
             '<div><a href="/admin/commandes/' + encodeURIComponent(cmdNum) + '" class="text-primary font-mono hover:underline">' + escapeHtml(cmdNum) + '</a></div>',
             cmdDate ? '<div><span class="text-slate-500">Date&nbsp;:</span> ' + new Date(cmdDate).toLocaleDateString('fr-FR') + '</div>' : '',
-            (cmdTotal != null) ? '<div><span class="text-slate-500">Total&nbsp;:</span> ' + Number(cmdTotal).toFixed(2) + ' €</div>' : '',
+            (cmdTotal != null) ? '<div><span class="text-slate-500">Total&nbsp;:</span> ' + euroFr(cmdTotal) + '</div>' : '',
             cmdPaiement ? '<div><span class="text-slate-500">Paiement&nbsp;:</span> <span class="px-1.5 py-0.5 rounded text-xs ' +
               (cmdPaiement === 'paye' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800') + '">' + escapeHtml(cmdPaiement) + '</span></div>' : '',
           ].filter(Boolean).join('')
@@ -3805,7 +3813,7 @@
         box.innerHTML =
           '<div class="space-y-2">' +
             '<div><span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">En attente paiement</span></div>' +
-            '<div class="text-sm font-semibold text-slate-900">' + Number(amount).toFixed(2) + ' €</div>' +
+            '<div class="text-sm font-semibold text-slate-900">' + euroFr(amount) + '</div>' +
             (url ? '<div class="flex items-center gap-1"><a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" class="text-xs text-primary underline truncate flex-1">' + escapeHtml(url) + '</a>' +
               '<button type="button" class="sav-copy-mini text-slate-400 hover:text-primary" data-copy="' + escapeHtml(url) + '" title="Copier"><span class="material-symbols-outlined" style="font-size:14px;">content_copy</span></button></div>' : '') +
             (p.dateGeneration ? '<div class="text-[10px] text-slate-400">Généré : ' + new Date(p.dateGeneration).toLocaleString('fr-FR') + '</div>' : '') +
@@ -3817,7 +3825,7 @@
         box.innerHTML =
           '<div class="space-y-2">' +
             '<div class="flex items-center gap-2 text-emerald-700"><span class="material-symbols-outlined">check_circle</span><span class="font-semibold">Payé</span></div>' +
-            '<div class="text-sm font-semibold text-slate-900">' + Number(amount).toFixed(2) + ' €</div>' +
+            '<div class="text-sm font-semibold text-slate-900">' + euroFr(amount) + '</div>' +
             (p.datePaiement ? '<div class="text-xs text-slate-500">Le ' + new Date(p.datePaiement).toLocaleString('fr-FR') + '</div>' : '') +
             (p.mollieId ? '<div class="text-xs"><a href="https://my.mollie.com/dashboard/payments/' + escapeHtml(p.mollieId) + '" target="_blank" rel="noopener" class="text-primary underline">Voir transaction Mollie ↗</a></div>' : '') +
             (p.qontoInvoiceUrl ? '<div class="text-xs"><a href="' + escapeHtml(p.qontoInvoiceUrl) + '" target="_blank" rel="noopener" class="text-primary underline">Facture Qonto ↗</a></div>' : '') +
