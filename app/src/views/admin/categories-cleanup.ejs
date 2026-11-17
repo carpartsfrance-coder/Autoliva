@@ -30,7 +30,7 @@
     <% } else if (!rows.length) { %>
       <div class="mt-8 rounded-xl border border-slate-200 bg-white p-6 text-slate-500">Aucun produit catégorisé pour le moment.</div>
     <% } else { %>
-    <form action="/admin/categories/nettoyage/fusion" method="POST" class="mt-6">
+    <form action="/admin/categories/nettoyage/fusion" method="POST" class="mt-6" id="form-fusion-categories">
       <div class="rounded-2xl border border-slate-200 bg-white overflow-hidden">
         <div class="grid grid-cols-[auto_1fr_auto_auto] items-center gap-3 px-5 py-3 bg-slate-50 border-b border-slate-200 text-[11px] font-bold uppercase tracking-widest text-slate-400">
           <span></span><span>Catégorie (valeur des produits)</span><span class="text-right">Produits</span><span class="text-right pr-1">Statut</span>
@@ -79,4 +79,30 @@
 </main>
 
 <%# Pied de page admin : bouton menu mobile, repli du menu, notifications (manquait sur cette page). %>
+<script>
+  /* La fusion est définitive (catégories supprimées, produits déplacés) :
+     on dit exactement ce qui va se passer avant d'envoyer. */
+  (function () {
+    var form = document.getElementById('form-fusion-categories');
+    if (!form) return;
+    var ok = false;
+    form.addEventListener('submit', function (e) {
+      if (ok) return;
+      e.preventDefault();
+      var sources = Array.prototype.slice.call(form.querySelectorAll('input[name="sources"]:checked')).map(function (c) { return c.value; });
+      var cible = (form.querySelector('input[name="targetNew"]').value || '').trim() || form.querySelector('select[name="target"]').value;
+      if (!sources.length) { alert('Coche au moins une catégorie à fusionner.'); return; }
+      if (!cible) { alert('Choisis la catégorie cible (ou écris un nouveau nom).'); return; }
+      var autres = sources.filter(function (s) { return s !== cible; });
+      var msg = 'Fusionner ' + autres.length + ' catégorie' + (autres.length > 1 ? 's' : '') + ' dans « ' + cible + ' » ?\n\n'
+        + autres.join(', ') + '\n\nLeurs produits passent dans « ' + cible + ' » et ces catégories sont supprimées. Impossible d’annuler.';
+      var demande = typeof window.adminConfirm === 'function' ? Promise.resolve(window.adminConfirm(msg)) : Promise.resolve(window.confirm(msg));
+      demande.then(function (oui) {
+        if (!oui) return;
+        ok = true;
+        if (form.requestSubmit) form.requestSubmit(); else form.submit();
+      });
+    });
+  })();
+</script>
 <%- include('./partials/footer') %>

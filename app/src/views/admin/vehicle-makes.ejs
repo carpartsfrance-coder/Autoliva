@@ -125,7 +125,7 @@
                     </button>
                   </form>
 
-                  <form action="/admin/vehicules/<%= selectedMake.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette marque et tous ses mod\u00e8les ?">
+                  <form action="/admin/vehicules/<%= selectedMake.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette marque et tous ses modèles ?">
                     <input type="hidden" name="returnTo" value="/admin/vehicules" />
                     <button class="btn btn-danger" type="submit" <%= dbConnected ? '' : 'disabled' %>>
                       <span class="material-symbols-outlined mr-2 text-base">delete</span>
@@ -170,7 +170,7 @@
                                 </button>
                               </form>
 
-                              <form action="/admin/vehicules/<%= selectedMake.id %>/modeles/<%= mod.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer ce mod\u00e8le ?">
+                              <form action="/admin/vehicules/<%= selectedMake.id %>/modeles/<%= mod.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer ce modèle ?">
                                 <input type="hidden" name="returnTo" value="<%= selectedReturnTo %>" />
                                 <button class="btn btn-danger" type="submit" <%= dbConnected ? '' : 'disabled' %>>
                                   <span class="material-symbols-outlined text-base">close</span>
