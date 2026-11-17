@@ -24,6 +24,8 @@ async function checkOrderAlerts() {
         returnStatus: 'pending',
         'returnDates.returnDueDate': { $lt: now },
         status: { $nin: ['cancelled', 'refunded', 'draft'] },
+        // Consigne déjà cochée « reçue » (données d'avant le correctif) : pas « en retard ».
+        ...require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE,
       },
       { $set: { returnStatus: 'overdue' } }
     );

@@ -87,7 +87,14 @@ test('consigne reçue : la commande sort des retours en attente', async (t) => {
     // Données passées : consigne cochée reçue AVANT le correctif, returnStatus resté « overdue ».
     dejaRecue: await commande({ returnStatus: 'overdue', returnDates: echeancePassee, consigne: { lines: [ligne(new Date(Date.now() - 5 * JOUR))] } }),
     toujoursAttendue: await commande({ returnStatus: 'overdue', returnDates: echeancePassee }),
+    // 2 lignes dont UNE seule reçue : toujours attendue.
+    moitieRecue: await commande({ returnStatus: 'overdue', returnDates: echeancePassee, consigne: { lines: [ligne(new Date()), ligne()] } }),
+    // Échéance passée, encore « pending », consigne déjà reçue : le robot horaire ne doit pas la passer en retard.
+    pendingAttendue: await commande({ returnStatus: 'pending', returnDates: echeancePassee }),
+    pendingDejaRecue: await commande({ returnStatus: 'pending', returnDates: echeancePassee, consigne: { lines: [ligne(new Date(Date.now() - 2 * JOUR))] } }),
   };
+  // Ligne enregistrée SANS champ receivedAt (anciennes données) = pas reçue.
+  await Order.collection.updateOne({ _id: new mongoose.Types.ObjectId(ids.moitieRecue) }, { $unset: { 'consigne.lines.1.receivedAt': '' } });
   const numeros = {};
   for (const [cle, id] of Object.entries(ids)) numeros[cle] = (await Order.findById(id).select('number').lean()).number;
 
@@ -113,6 +120,18 @@ test('consigne reçue : la commande sort des retours en attente', async (t) => {
     const html = await page('/admin/consignes');
     assert.ok(!html.includes(numeros.dejaRecue), 'consigne déjà reçue : hors liste');
     assert.ok(html.includes(numeros.avecLigne) && html.includes(numeros.sansLigne) && html.includes(numeros.toujoursAttendue));
+  });
+
+  await t.test('lignes partiellement reçues (champ absent compris) : toujours listée', async () => {
+    const html = await page('/admin/consignes');
+    assert.ok(html.includes(numeros.moitieRecue));
+  });
+
+  await t.test('robot horaire : une consigne déjà reçue ne passe pas « en retard »', async () => {
+    const checkOrderAlerts = require('../../src/jobs/checkOrderAlerts');
+    await (checkOrderAlerts.checkOrderAlerts || checkOrderAlerts)();
+    assert.equal((await Order.findById(ids.pendingDejaRecue).lean()).returnStatus, 'pending');
+    assert.equal((await Order.findById(ids.pendingAttendue).lean()).returnStatus, 'overdue', 'témoin : le robot a bien tourné');
   });
 
   await t.test('la fiche d’un ancien échange sans ligne de consigne propose « Marquer reçue »', async () => {

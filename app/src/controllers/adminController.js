@@ -395,24 +395,25 @@ async function postAdminMarkOrderConsigneReceived(req, res, next) {
        frise, filtres « en retard ») : avant, seul consigne.lines était coché et la
        commande restait « en retard » partout. Voir services/retourConsigne.js. */
     const { RETOUR_PAS_REVENU } = require('../services/retourConsigne');
-    const marquerRetourRecu = async (date) => {
-      if (!RETOUR_PAS_REVENU.includes(existing.returnStatus)) return false;
-      if (existing.orderType !== 'exchange' && existing.orderType !== 'exchange_cloning') return false;
-      const par = req.session && req.session.admin && req.session.admin.email ? String(req.session.admin.email) : 'admin';
-      await Order.updateOne(
-        { _id: orderId, returnStatus: { $in: RETOUR_PAS_REVENU } },
-        {
-          $set: { returnStatus: 'received', 'returnDates.returnReceivedAt': date },
-          $push: { statusHistory: { status: existing.status, returnStatus: 'received', changedAt: date, changedBy: par, note: 'Ancienne pièce reçue' } },
-        }
-      );
-      return true;
-    };
+    const TYPES_ECHANGE = ['exchange', 'exchange_cloning'];
+    const retourEligible = RETOUR_PAS_REVENU.includes(existing.returnStatus) && TYPES_ECHANGE.includes(existing.orderType);
+    const par = req.session && req.session.admin && req.session.admin.email ? String(req.session.admin.email) : 'admin';
+    const majRetourRecu = (date) => ({
+      set: { returnStatus: 'received', 'returnDates.returnReceivedAt': date },
+      push: { statusHistory: { status: existing.status, returnStatus: 'received', changedAt: date, changedBy: par, note: 'Ancienne pièce reçue' } },
+    });
 
     if (!lines.length) {
       /* Anciennes commandes en échange sans ligne de consigne (« non encaissée ») :
          elles ne pouvaient JAMAIS sortir de la liste des consignes en attente. */
-      if (await marquerRetourRecu(new Date())) {
+      const maj = majRetourRecu(new Date());
+      const resultat = retourEligible
+        ? await Order.updateOne(
+          { _id: orderId, orderType: { $in: TYPES_ECHANGE }, returnStatus: { $in: RETOUR_PAS_REVENU } },
+          { $set: maj.set, $push: maj.push }
+        )
+        : null;
+      if (resultat && resultat.modifiedCount === 1) {
         req.session.adminOrderSuccess = 'Ancienne pièce marquée comme reçue.';
         if (wantsJsonResponse(req)) return res.json({ ok: true, message: 'Ancienne pièce marquée comme reçue.', data: { orderId } });
         return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
@@ -448,9 +449,15 @@ async function postAdminMarkOrderConsigneReceived(req, res, next) {
     });
 
     /* $set ciblé sur consigne.lines uniquement : ne PAS écraser le reste de
-     * l'objet consigne (chargedTotalCents, refundedTotalCents, refundedAt…). */
-    await Order.updateOne({ _id: orderId }, { $set: { 'consigne.lines': updatedLines } });
-    await marquerRetourRecu(now);
+     * l'objet consigne (chargedTotalCents, refundedTotalCents, refundedAt…).
+     * Lignes ET statut de retour dans la MÊME écriture (pas d'état à moitié fait). */
+    const majRetour = retourEligible ? majRetourRecu(now) : null;
+    await Order.updateOne(
+      { _id: orderId },
+      majRetour
+        ? { $set: { 'consigne.lines': updatedLines, ...majRetour.set }, $push: majRetour.push }
+        : { $set: { 'consigne.lines': updatedLines } }
+    );
 
     try {
       const refreshed = await Order.findById(orderId)

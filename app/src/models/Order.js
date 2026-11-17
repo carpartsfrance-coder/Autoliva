@@ -696,7 +696,10 @@ orderSchema.pre('save', function (next) {
           dueDate.setDate(dueDate.getDate() + 30);
           order.returnDates.returnDueDate = dueDate;
         }
-        order.returnStatus = 'pending';
+        // Ne pas « dé-recevoir » une ancienne pièce déjà revenue (ex. passage livré après réception).
+        if (!['received', 'inspected_ok', 'inspected_nok'].includes(order.returnStatus)) {
+          order.returnStatus = 'pending';
+        }
       }
       // Si tous les articles sont exchange_cloning → returnStatus reste 'not_applicable'
     }
