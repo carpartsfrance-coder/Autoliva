@@ -47,7 +47,7 @@ const FORMAT_EURO = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, m
 function formatEuro(totalCents) {
   if (!Number.isFinite(totalCents)) return '—';
   // Espace insécable normale : l'espace fine d'Intl (U+202F) disparaît presque après un « 1 ».
-  return `${FORMAT_EURO.format(totalCents / 100).replace(/\u202f/g, '\u00a0')} €`;
+  return `${FORMAT_EURO.format(totalCents / 100).replace(/\u202f/g, '\u00a0')}\u00a0€`; // « € » jamais seul à la ligne
 }
 
 function formatDateTimeFR(value) {

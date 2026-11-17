@@ -3745,7 +3745,11 @@ async function getAdminOrderDetailPage(req, res, next) {
       ? orderDoc.items.reduce((sum, it) => sum + (Number(it && it.lineTotalCents) || 0), 0)
       : 0;
 
+    /* Le modèle met 0 par défaut : une commande qui n'a pas ce champ (synchronisée,
+       ancienne…) affichait « Sous-total articles 0,00 € ». 0 + des lignes payantes
+       = champ absent → on recalcule depuis les lignes. */
     const itemsSubtotalCents = Number.isFinite(orderDoc.itemsSubtotalCents)
+      && (orderDoc.itemsSubtotalCents > 0 || fallbackItemsSubtotalCents === 0)
       ? orderDoc.itemsSubtotalCents
       : fallbackItemsSubtotalCents;
 
@@ -3764,6 +3768,7 @@ async function getAdminOrderDetailPage(req, res, next) {
       : 0;
 
     const itemsTotalAfterDiscountCents = Number.isFinite(orderDoc.itemsTotalAfterDiscountCents)
+      && (orderDoc.itemsTotalAfterDiscountCents > 0 || itemsSubtotalCents === 0)
       ? orderDoc.itemsTotalAfterDiscountCents
       : Math.max(0, itemsSubtotalCents - clientDiscountCents - promoDiscountCents);
 
@@ -5998,7 +6003,7 @@ const FORMAT_EURO = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, m
 function formatEuro(totalCents) {
   if (!Number.isFinite(totalCents)) return '—';
   // Espace insécable normale : l'espace fine d'Intl (U+202F) disparaît presque après un « 1 ».
-  return `${FORMAT_EURO.format(totalCents / 100).replace(/\u202f/g, '\u00a0')} €`;
+  return `${FORMAT_EURO.format(totalCents / 100).replace(/\u202f/g, '\u00a0')}\u00a0€`; // « € » jamais seul à la ligne
 }
 
 function formatDateTimeFR(value) {
