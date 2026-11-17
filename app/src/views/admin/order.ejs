@@ -578,7 +578,7 @@
                         <div class="mt-1 text-xs text-amber-800">Clique ci-dessous <strong>quand le transporteur a récupéré le colis</strong> : passage en « Expédiée », notification client + démarrage du délai de retour 30 j.</div>
                       </div>
                     </div>
-                    <form action="/admin/commandes/<%= order.id %>/statut" method="POST" data-ajax="true">
+                    <form action="/admin/commandes/<%= order.id %>/statut" method="POST" data-ajax="true" data-recharger>
                       <input type="hidden" name="status" value="shipped" />
                       <button class="w-full rounded-xl bg-emerald-600 text-white px-4 py-3 text-sm font-bold uppercase tracking-wider hover:bg-emerald-700 transition flex items-center justify-center gap-2" type="submit">
                         <span class="material-symbols-outlined" style="font-size:18px">local_shipping</span>
@@ -595,7 +595,7 @@
                     Changement manuel de statut (avancé)
                   </button>
                   <div id="manual-status-section" class="hidden mt-3 p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-3">
-                    <form action="/admin/commandes/<%= order.id %>/statut" class="flex flex-col sm:flex-row gap-3" method="POST" data-ajax="true">
+                    <form action="/admin/commandes/<%= order.id %>/statut" class="flex flex-col sm:flex-row gap-3" method="POST" data-ajax="true" data-recharger>
                       <select class="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-900" name="status">
                         <% (statusOptions || []).forEach((s) => { %>
                           <option value="<%= s.key %>" <%= s.key === order.statusKey ? 'selected' : '' %>><%= s.label %></option>
