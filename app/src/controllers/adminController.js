@@ -13740,11 +13740,16 @@ async function getAdminPreparation(req, res, next) {
     const blocked = enriched.filter((o) => o.prepState === 'blocked');
 
     // Picking agrégé : ce qu'il faut sortir de l'atelier (todo + ready), groupé par pièce.
+    // `parts` = quantité par commande, rupture comprise : la page recalcule la liste
+    // dès qu'on change l'état d'une carte (avant : liste fausse jusqu'au rechargement).
     const pick = {};
-    enriched.filter((o) => o.prepState !== 'blocked').forEach((o) => {
+    enriched.forEach((o) => {
+      const bloquee = o.prepState === 'blocked';
       o.items.forEach((it) => {
         const key = (it.ref || it.name).toLowerCase().trim();
-        if (!pick[key]) pick[key] = { label: it.name, ref: it.ref, image: it.image, qty: 0, orders: [] };
+        if (!pick[key]) pick[key] = { label: it.name, ref: it.ref, image: it.image, qty: 0, orders: [], parts: {} };
+        pick[key].parts[o.id] = (pick[key].parts[o.id] || 0) + it.quantity;
+        if (bloquee) return;
         pick[key].qty += it.quantity;
         if (pick[key].orders.indexOf(o.number) === -1) pick[key].orders.push(o.number);
       });

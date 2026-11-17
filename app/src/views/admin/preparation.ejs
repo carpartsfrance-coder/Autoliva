@@ -40,15 +40,15 @@
     <% } else { %>
 
       <% if (picking.length) { %>
-        <details class="mt-4 rounded-2xl border border-slate-200 bg-white overflow-hidden" open>
+        <details class="mt-4 rounded-2xl border border-slate-200 bg-white overflow-hidden" open data-picking <%= picking.some(function(p){ return p.qty > 0; }) ? '' : 'hidden' %>>
           <summary class="cursor-pointer select-none px-4 py-3 font-bold text-slate-900 flex items-center gap-2">
             <span class="material-symbols-outlined text-primary">checklist</span>
             Liste de picking — à sortir de l'atelier
-            <span class="ml-auto text-xs font-bold text-slate-400"><%= picking.length %> pièce(s)</span>
+            <span class="ml-auto text-xs font-bold text-slate-400"><span data-picking-total><%= picking.filter(function(p){ return p.qty > 0; }).length %></span> pièce(s)</span>
           </summary>
           <div class="px-4 pb-4 space-y-2">
             <% picking.forEach(function(p){ %>
-              <div class="flex items-center gap-3 border-t border-slate-100 pt-2">
+              <div class="flex items-center gap-3 border-t border-slate-100 pt-2" data-pick-parts="<%= JSON.stringify(p.parts || {}) %>" <%= p.qty > 0 ? '' : 'hidden' %>>
                 <% if (p.image) { %>
                   <img src="<%= p.image %>" alt="" loading="lazy" class="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0" />
                 <% } else { %>
@@ -56,9 +56,9 @@
                 <% } %>
                 <div class="min-w-0 flex-1">
                   <div class="text-sm font-semibold text-slate-900 truncate"><%= p.label %></div>
-                  <div class="text-xs text-slate-500"><% if (p.ref) { %>Réf. <span class="font-mono"><%= p.ref %></span> · <% } %><%= p.orders.length %> commande(s)</div>
+                  <div class="text-xs text-slate-500"><% if (p.ref) { %>Réf. <span class="font-mono"><%= p.ref %></span> · <% } %><span data-pick-orders><%= p.orders.length %></span> commande(s)</div>
                 </div>
-                <span class="shrink-0 text-base font-bold text-slate-900">×<%= p.qty %></span>
+                <span class="shrink-0 text-base font-bold text-slate-900">×<span data-pick-qty><%= p.qty %></span></span>
               </div>
             <% }) %>
           </div>
@@ -116,11 +116,37 @@
       var sc = sec.querySelector('[data-section-count]'); if(sc) sc.textContent = n;
       var empty = sec.querySelector('[data-empty]'); if(empty) empty.style.display = n ? 'none' : '';
     });
+    recalculerPicking();
+  }
+  /* Liste de picking : on enlève les commandes « en rupture », on remet celles qui
+     en sortent — sans recharger la page. */
+  function recalculerPicking(){
+    var bloc = document.querySelector('[data-picking]'); if(!bloc) return;
+    var etat = {};
+    document.querySelectorAll('.prep-card[data-order]').forEach(function(c){ etat[c.getAttribute('data-order')] = c.getAttribute('data-state'); });
+    var lignes = 0;
+    bloc.querySelectorAll('[data-pick-parts]').forEach(function(row){
+      var parts = {}; try { parts = JSON.parse(row.getAttribute('data-pick-parts') || '{}'); } catch(_) {}
+      var qte = 0, cmds = 0;
+      Object.keys(parts).forEach(function(id){ if(etat[id] && etat[id] !== 'blocked'){ qte += parts[id]; cmds += 1; } });
+      var q = row.querySelector('[data-pick-qty]'); if(q) q.textContent = qte;
+      var o = row.querySelector('[data-pick-orders]'); if(o) o.textContent = cmds;
+      row.hidden = qte === 0;
+      if(qte > 0) lignes += 1;
+    });
+    var t = bloc.querySelector('[data-picking-total]'); if(t) t.textContent = lignes;
+    bloc.hidden = lignes === 0;
   }
   window.prepSetState = function(orderId, state){
+    /* Un seul enregistrement à la fois par carte (deux clics rapides = deux états croisés). */
+    var enCours = document.querySelector('.prep-card[data-order="'+orderId+'"]');
+    if(enCours && enCours.getAttribute('data-busy') === '1') return;
+    if(enCours){ enCours.setAttribute('data-busy', '1'); enCours.style.opacity = '0.6'; }
+    var liberer = function(){ if(enCours){ enCours.removeAttribute('data-busy'); enCours.style.opacity = ''; } };
     fetch('/admin/commandes/'+orderId+'/preparation', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ state: state })})
       .then(function(r){ return r.json(); })
       .then(function(d){
+        liberer();
         if(!d || !d.ok){ window.prepToast((d && d.error) || 'Erreur', false); return; }
         var card = document.querySelector('.prep-card[data-order="'+orderId+'"]');
         if(!card) return;
@@ -131,7 +157,7 @@
         recount();
         window.prepToast(state === 'ready' ? 'Prête ✓' : (state === 'blocked' ? 'Marquée en rupture' : 'Remise à préparer'), true);
       })
-      .catch(function(){ window.prepToast('Erreur réseau', false); });
+      .catch(function(){ liberer(); window.prepToast('Erreur réseau', false); });
   };
 })();
 </script>
