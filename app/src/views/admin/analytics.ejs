@@ -110,7 +110,7 @@
           </div>
         </div>
         <div class="kpi-card__label">Chiffre d'affaires</div>
-        <div class="kpi-card__value"><%= commercialKpis.revenue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %> &euro;</div>
+        <div class="kpi-card__value"><%= commercialKpis.revenue.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\u202f/g, '\u00a0') %>&nbsp;&euro;</div>
         <%- renderTrend(trends.revenue) %>
       </div>
 
@@ -132,7 +132,7 @@
           </div>
         </div>
         <div class="kpi-card__label">Panier moyen</div>
-        <div class="kpi-card__value"><%= commercialKpis.avgBasket.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %> &euro;</div>
+        <div class="kpi-card__value"><%= commercialKpis.avgBasket.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\u202f/g, '\u00a0') %>&nbsp;&euro;</div>
         <%- renderTrend(trends.avgBasket) %>
       </div>
 
@@ -143,7 +143,7 @@
           </div>
         </div>
         <div class="kpi-card__label">Taux de conversion</div>
-        <div class="kpi-card__value"><%= commercialKpis.conversionRate.toFixed(1) %>%</div>
+        <div class="kpi-card__value"><%= commercialKpis.conversionRate.toFixed(1).replace('.', ',') %>&nbsp;%</div>
         <%- renderTrend(trends.conversionRate) %>
       </div>
     </div>

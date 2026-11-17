@@ -30,6 +30,7 @@ const { getMergedTemplates } = require('../services/leadTemplateSettings');
 const { journaliser, historique, resume } = require('../services/leadCommunications');
 const { demandesFournisseur } = require('../services/supplierRequest');
 const { buildLeadSearchConditions } = require('../services/leadSearch');
+const { avecVerrouEnvoi } = require('../services/verrouEnvoiLead');
 const brand = require('../config/brand');
 
 function escapeHtml(value) {
@@ -41,9 +42,13 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+/* Séparateur de milliers (« 41 248,50 € » au lieu de « 41248,50 € ») : affichage
+   seulement — aucune de ces valeurs ne repart dans un champ de saisie. */
+const FORMAT_EURO = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function formatEuro(totalCents) {
   if (!Number.isFinite(totalCents)) return '—';
-  return `${(totalCents / 100).toFixed(2).replace('.', ',')} €`;
+  // Espace insécable normale : l'espace fine d'Intl (U+202F) disparaît presque après un « 1 ».
+  return `${FORMAT_EURO.format(totalCents / 100).replace(/\u202f/g, '\u00a0')}\u00a0€`; // « € » jamais seul à la ligne
 }
 
 function formatDateTimeFR(value) {
@@ -1069,7 +1074,7 @@ async function postLeadSetStatus(req, res, next) {
     const id = req.params.id;
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ ok: false, error: 'ID invalide.' });
 
-    const cart = await AbandonedCart.findById(id).select('_id email').lean();
+    const cart = await AbandonedCart.findById(id).select('_id email manualStatus recoveredAt recoveredOrder').lean();
     if (!cart) return res.status(404).json({ ok: false, error: 'Lead non trouvé.' });
 
     const raw = (req.body && req.body.status);
@@ -1102,6 +1107,11 @@ async function postLeadSetStatus(req, res, next) {
     };
 
     if (status === 'converted') update.$set.recoveredAt = now;
+    /* « Gagné » annulé (clic par erreur) : la date de conversion posée à la main
+       restait et déclenchait plus tard les relances de réachat (J+90) chez quelqu'un
+       qui n'a rien acheté. On l'enlève — sauf si une vraie commande y est liée. */
+    const commandeLiee = cart.recoveredOrder && (cart.recoveredOrder.orderId || cart.recoveredOrder.number);
+    if (cart.manualStatus === 'converted' && status !== 'converted' && !commandeLiee) update.$set.recoveredAt = null;
 
     await AbandonedCart.updateOne({ _id: cart._id }, update);
     return res.json({ ok: true, manualStatus: status });
@@ -1150,10 +1160,10 @@ module.exports = {
   getAdminLeadsPage,
   getAdminLeadDetail,
   // actions
-  postAdminManualReminder,
-  postLeadSendEmail,
+  postAdminManualReminder: avecVerrouEnvoi(postAdminManualReminder),
+  postLeadSendEmail: avecVerrouEnvoi(postLeadSendEmail),
   postLeadEmailPreview,
-  postLeadSendSms,
+  postLeadSendSms: avecVerrouEnvoi(postLeadSendSms),
   postLeadWhatsApp,
   postLeadSetStatus,
   postLeadAddNote,

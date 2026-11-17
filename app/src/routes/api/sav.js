@@ -557,8 +557,9 @@ adminRouter.get('/tickets', async (req, res) => {
     }
 
     // Raccourci "mine" : tickets assignés au user courant
-    if (req.query.mine === 'true' && req.session && req.session.user) {
-      q.assignedToUserId = String(req.session.user._id || req.session.user.id || '');
+    // (session.admin = la personne du back-office ; session.user est un compte client du site)
+    if (req.query.mine === 'true' && req.session && req.session.admin && req.session.admin.adminUserId) {
+      q.assignedToUserId = String(req.session.admin.adminUserId);
     }
 
     // Tri
@@ -661,6 +662,11 @@ adminRouter.get('/tickets.csv', async (req, res) => {
     }
     if (req.query.assignedToUserId) q.assignedToUserId = req.query.assignedToUserId;
     if (req.query.sla_depasse === 'true') q['sla.dateLimite'] = { $lt: new Date() };
+    // Export de la sélection (cases cochées dans la liste) : seulement ces tickets.
+    if (req.query.numeros) {
+      const numeros = String(req.query.numeros).split(',').map((n) => n.trim()).filter(Boolean).slice(0, 1000);
+      if (numeros.length) q.numero = { $in: numeros };
+    }
     const tickets = await SavTicket.find(q).sort({ createdAt: -1 }).limit(5000).lean();
     const head = ['numero','createdAt','statut','pieceType','client_email','client_nom','vin','immatriculation','vehicule','assigne','sla_limite'];
     const rows = tickets.map((t) => [
@@ -677,8 +683,8 @@ adminRouter.get('/tickets.csv', async (req, res) => {
       (t.sla && t.sla.dateLimite) ? new Date(t.sla.dateLimite).toISOString() : '',
     ]);
     function csvCell(v) {
-      const s = String(v == null ? '' : v).replace(/"/g, '""');
-      return /[",\n;]/.test(s) ? '"' + s + '"' : s;
+      const s = require('../../services/accountingService').csvCell(v == null ? '' : v);
+      return s;
     }
     const csv = [head.join(';'), ...rows.map((r) => r.map(csvCell).join(';'))].join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -1389,8 +1395,8 @@ adminRouter.get('/analytics.csv', async (req, res) => {
       ];
     });
     function csvCell(v) {
-      const s = String(v == null ? '' : v).replace(/"/g, '""');
-      return /[",\n;]/.test(s) ? '"' + s + '"' : s;
+      const s = require('../../services/accountingService').csvCell(v == null ? '' : v);
+      return s;
     }
     const csv = [head.join(';'), ...rows.map((r) => r.map(csvCell).join(';'))].join('\n');
     res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');
@@ -1496,7 +1502,10 @@ adminRouter.post('/tickets/bulk-delete', async (req, res) => {
 // ──────────────────────────────────────────────────────────
 
 function currentAdminLabel(req) {
-  const u = (req.session && req.session.user) || (req.session && req.session.admin) || {};
+  /* session.admin = la personne connectée au back-office. session.user est
+     un compte CLIENT du site (ouvert dans le même navigateur) : il ne doit
+     pas signer une action du back-office. */
+  const u = (req.session && req.session.admin) || {};
   return u.email || u.username || u.name || 'admin';
 }
 
@@ -1642,7 +1651,7 @@ adminRouter.post('/tickets/:numero/close', async (req, res) => {
     ticket.closure.docsArchived = !!docsArchived;
     ticket.closure.rootCause = rootCause;
     ticket.closure.rootCauseDetail = rootCauseDetail || '';
-    ticket.closure.closedBy = (req.session && req.session.user && req.session.user.email) || 'admin';
+    ticket.closure.closedBy = currentAdminLabel(req);
     ticket.closure.closedAt = new Date();
 
     try {
@@ -2005,6 +2014,14 @@ adminRouter.post('/tickets/:numero/facturer-149', async (req, res) => {
 // envoie l'email client, met à jour Order.refunds[] ET SavTicket.paiements.remboursement)
 adminRouter.post('/tickets/:numero/refund', async (req, res) => {
   try {
+    /* Le jeton SAV est remis à TOUT admin connecté qui ouvre le SAV (employés
+       compris) : sans ce contrôle, un employé pouvait rembourser via le SAV alors
+       que la fiche commande le lui interdit (droit « orders.refund »). Un appel
+       sans session (outil serveur avec le jeton) reste accepté comme avant. */
+    const roleSession = req.session && req.session.admin && req.session.admin.role;
+    if (roleSession && !require('../../permissions').hasAbility(roleSession, 'orders.refund')) {
+      return fail(res, 'Remboursement réservé au propriétaire du compte.', 403);
+    }
     const ticket = await SavTicket.findOne({ numero: req.params.numero });
     if (!ticket) return fail(res, 'Ticket introuvable', 404);
     if (!ticket.numeroCommande) return fail(res, 'Aucune commande liée au ticket', 400);
@@ -2044,7 +2061,8 @@ adminRouter.post('/tickets/:numero/refund', async (req, res) => {
     /* Mise à jour SAV : paiements.remboursement + closure.refundDone */
     ticket.paiements = ticket.paiements || {};
     ticket.paiements.remboursement = {
-      status: 'effectue',
+      // Scalapay en échec : enregistré mais pas payé → « échoué » (valeur prévue par le modèle), pas « effectué ».
+      status: result.actionManuelle ? 'echoue' : 'effectue',
       method: result.refund.method,
       mollieRefundId: result.refund.method === 'mollie' ? (result.refund.providerRefundId || '') : '',
       providerRefundId: result.refund.providerRefundId || '',
@@ -2054,14 +2072,16 @@ adminRouter.post('/tickets/:numero/refund', async (req, res) => {
       reason,
     };
     ticket.closure = ticket.closure || {};
-    ticket.closure.refundDone = true;
+    ticket.closure.refundDone = !result.actionManuelle;
 
     const cnPart = result.creditNote && result.creditNote.number ? ` Avoir ${result.creditNote.number}` : '';
     const refIdPart = result.refund.providerRefundId ? ` (${result.refund.method} ${result.refund.providerRefundId})` : '';
     ticket.addMessage(
       'admin',
       'interne',
-      `Remboursement ${(amountCents / 100).toFixed(2)}€ via ${result.refund.method}${refIdPart} effectué.${cnPart}`
+      result.actionManuelle
+        ? `Remboursement ${(amountCents / 100).toFixed(2)}€ ENREGISTRÉ mais PAS effectué chez ${result.refund.method} : à faire dans son portail.${cnPart}`
+        : `Remboursement ${(amountCents / 100).toFixed(2)}€ via ${result.refund.method}${refIdPart} effectué.${cnPart}`
     );
     await ticket.save();
 

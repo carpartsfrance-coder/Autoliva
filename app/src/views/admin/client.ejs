@@ -15,7 +15,7 @@
 
         <div class="flex items-center gap-3">
           <% if (customer) { %>
-            <a class="hidden sm:inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wider text-white border border-slate-200 hover:bg-red-700 transition" href="#remise">
+            <a class="hidden sm:inline-flex items-center justify-center rounded-xl bg-white px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-700 border border-slate-200 hover:bg-slate-50 transition" href="#remise">
               <span class="material-symbols-outlined mr-2 text-base">edit</span>
               Modifier le profil
             </a>
@@ -57,7 +57,7 @@
       </div>
     <% } else { %>
       <div class="mt-8 grid grid-cols-1 xl:grid-cols-12 gap-6">
-        <section class="xl:col-span-5 space-y-6">
+        <section class="xl:col-span-4 space-y-6">
           <div class="bg-white rounded-2xl border border-slate-200 p-6">
             <div class="flex flex-col items-center text-center">
               <div class="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center">
@@ -126,17 +126,17 @@
           <div class="bg-white rounded-2xl border border-slate-200 p-6" data-notes-widget data-entity-type="client" data-entity-id="<%= customer ? customer.id : '' %>"></div>
         </section>
 
-        <section class="xl:col-span-7">
+        <section class="xl:col-span-8">
           <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             <div class="px-6 py-4 bg-slate-50 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               <div class="font-semibold text-slate-900">Historique des commandes</div>
-              <form class="flex flex-col sm:flex-row sm:items-center gap-3" method="GET">
+              <form class="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3" method="GET">
                 <div class="relative">
                   <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
                   <input class="w-64 max-w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 py-2 text-sm font-semibold text-slate-900 placeholder:text-slate-400" name="q" placeholder="Commande, pièce, SKU..." type="text" value="<%= typeof orderFilters !== 'undefined' && orderFilters && orderFilters.q ? orderFilters.q : '' %>" />
                 </div>
 
-                <select class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900" name="status">
+                <select class="rounded-xl border border-slate-200 bg-white pl-3 pr-8 py-2 text-sm font-bold text-slate-900" name="status">
                   <option value="">Tous statuts</option>
                   <option value="pending_payment" <%= typeof orderFilters !== 'undefined' && orderFilters && orderFilters.status === 'pending_payment' ? 'selected' : '' %>>En attente paiement</option>
                   <option value="paid" <%= typeof orderFilters !== 'undefined' && orderFilters && orderFilters.status === 'paid' ? 'selected' : '' %>>Payée</option>
@@ -148,7 +148,7 @@
                   <option value="refunded" <%= typeof orderFilters !== 'undefined' && orderFilters && orderFilters.status === 'refunded' ? 'selected' : '' %>>Remboursée</option>
                 </select>
 
-                <select class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900" name="period">
+                <select class="rounded-xl border border-slate-200 bg-white pl-3 pr-8 py-2 text-sm font-bold text-slate-900" name="period">
                   <option value="">Toutes périodes</option>
                   <option value="7d" <%= typeof orderFilters !== 'undefined' && orderFilters && orderFilters.period === '7d' ? 'selected' : '' %>>7 jours</option>
                   <option value="30d" <%= typeof orderFilters !== 'undefined' && orderFilters && orderFilters.period === '30d' ? 'selected' : '' %>>30 jours</option>
@@ -178,8 +178,8 @@
                   <tbody class="divide-y divide-slate-100">
                     <% orders.forEach((o) => { %>
                       <tr data-order-row data-order-number="<%= String(o.number || '').toLowerCase() %>">
-                        <td class="px-6 py-4 font-semibold text-primary"><%= o.numberDisplay %></td>
-                        <td class="px-6 py-4">
+                        <td class="px-4 py-4 font-semibold text-primary whitespace-nowrap"><%= o.numberDisplay %></td>
+                        <td class="px-4 py-4 whitespace-nowrap">
                           <div class="text-sm font-semibold text-slate-900"><%= o.date %></div>
                           <div class="text-xs text-slate-400"><%= o.time %></div>
                         </td>
@@ -187,9 +187,9 @@
                           <div class="text-sm font-semibold text-slate-900"><%= o.itemCount %></div>
                           <div class="text-xs text-slate-400"><%= o.itemCount > 1 ? 'articles' : 'article' %></div>
                         </td>
-                        <td class="px-6 py-4 font-semibold text-slate-900"><%= o.total %></td>
-                        <td class="px-6 py-4">
-                          <span class="inline-flex items-center rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-widest <%= o.statusBadge.className %>">
+                        <td class="px-4 py-4 font-semibold text-slate-900 whitespace-nowrap"><%= o.total %></td>
+                        <td class="px-4 py-4">
+                          <span class="inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-widest <%= o.statusBadge.className %>">
                             <%= o.statusBadge.label %>
                           </span>
                         </td>
@@ -288,6 +288,25 @@
           range.addEventListener('input', syncFromRange);
           number.addEventListener('input', syncFromNumber);
           syncFromNumber();
+
+          /* Remise PERMANENTE (appliquée à toutes les futures commandes du client) :
+             on confirme avant d'enregistrer un changement (un glissement du curseur
+             pouvait mettre 100 % sans s'en rendre compte). */
+          const formRemise = number.form;
+          const avant = clamp(number.value);
+          let confirme = false;
+          if (formRemise) formRemise.addEventListener('submit', function (e) {
+            const apres = clamp(number.value);
+            if (confirme || apres === avant) return;
+            e.preventDefault();
+            const msg = 'Remise permanente de ' + apres + ' % sur toutes les prochaines commandes de ce client (avant : ' + avant + ' %).'
+              + (apres >= 50 ? ' Attention : c\'est une très grosse remise.' : '') + ' Confirmer ?';
+            Promise.resolve(window.adminConfirm ? window.adminConfirm(msg) : window.confirm(msg)).then(function (oui) {
+              if (!oui) return;
+              confirme = true;
+              formRemise.submit();
+            });
+          });
         }
 
       })();

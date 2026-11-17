@@ -294,7 +294,7 @@
 
 <script>
 (function() {
-  var sessionId = <%- JSON.stringify(data.sessionId) %>;
+  var sessionId = <%- JSON.stringify(data.sessionId).replace(/</g, '\\u003c') %>; // « < » neutralisé : l'identifiant vient de l'URL
   var lastCount = <%= data.events.length %>; // raw count (avant dédup) — fiable
 
   function poll() {

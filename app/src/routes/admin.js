@@ -134,14 +134,18 @@ router.post('/reinitialiser', adminController.postAdminResetPassword);
 
 /* Sidebar global data — badge counts injected into every authenticated page */
 router.use(async (req, res, next) => {
-  if (req.session && req.session.admin) {
+  /* Seulement pour les PAGES affichées : avant, ces 5 comptages tournaient aussi à
+     chaque appel en arrière-plan (boutons AJAX, recherches, téléchargements). Une
+     page rendue après un POST garde le menu, sans les pastilles (la vue gère l'absence). */
+  const page = req.method === 'GET' && !req.xhr && !String(req.headers.accept || '').includes('application/json');
+  if (page && req.session && req.session.admin) {
     try {
       const [pendingOrders, pendingReturns, savActionNeeded, prepOrders, overdueConsignes] = await Promise.all([
         Order.countDocuments({ status: 'pending_payment' }),
         ReturnRequest.countDocuments({ status: 'en_attente' }),
         SavTicket.countDocuments({ statut: { $nin: ['clos', 'refuse', 'resolu_garantie', 'resolu_facture', 'clos_sans_reponse'] } }),
         Order.countDocuments({ status: { $in: ['paid', 'processing'] }, orderType: { $in: ['standard', 'exchange'] }, archived: { $ne: true }, deletedAt: null }),
-        Order.countDocuments({ orderType: { $in: ['exchange', 'exchange_cloning'] }, returnStatus: 'overdue', archived: { $ne: true }, deletedAt: null }),
+        Order.countDocuments({ orderType: { $in: ['exchange', 'exchange_cloning'] }, returnStatus: 'overdue', archived: { $ne: true }, deletedAt: null, ...require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE }),
       ]);
       res.locals.sidebarPendingCount = pendingOrders;
       res.locals.sidebarReturnsCount = pendingReturns;
@@ -225,7 +229,12 @@ router.get('/visiteurs/:sessionId/events', requireAdminAuth, adminController.get
 router.get('/preparation', requireAdminAuth, adminController.getAdminPreparation);
 router.get('/consignes', requireAdminAuth, adminController.getAdminConsignes);
 router.get('/commandes', requireAdminAuth, adminController.getAdminOrdersPage);
-router.post('/commandes/supprimer-multi', requireAdminAuth, adminController.postAdminBulkDeleteOrders);
+/* Suppression DÉFINITIVE groupée (sans corbeille, factures comprises). Plus
+   aucun bouton ne l'appelle (la liste utilise corbeille-multi, restaurable),
+   mais la route restait ouverte à tout admin, employés compris. Réservée
+   au propriétaire (rôle « * ») : 'orders.deleteDefinitive' n'est donné à
+   aucun autre rôle. */
+router.post('/commandes/supprimer-multi', requireAdminAuth, requireAbility('orders.deleteDefinitive'), adminController.postAdminBulkDeleteOrders);
 // Liste « files » : corbeille groupée (restaurable) et étiquettes réunies en un PDF.
 router.post('/commandes/corbeille-multi', requireAdminAuth, adminController.postAdminBulkTrashOrders);
 router.get('/commandes/etiquettes.pdf', requireAdminAuth, adminController.getAdminOrdersLabelsPdf);

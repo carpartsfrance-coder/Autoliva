@@ -37,7 +37,8 @@
 
     <form action="/admin/catalogue" class="sticky top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET">
       <div class="flex flex-col xl:flex-row xl:items-center gap-4">
-        <div class="flex-1">
+        <%# min-w : la recherche était écrasée par les 4 listes (« Rechercher: no »). %>
+        <div class="flex-1 xl:min-w-[18rem]">
           <div class="relative">
             <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
             <input class="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400" name="q" placeholder="Rechercher: nom, SKU, marque, catégorie..." type="text" value="<%= filters && filters.q ? filters.q : '' %>" />
@@ -59,6 +60,7 @@
             <option value="">Tous les stocks</option>
             <option value="in" <%= filters && filters.stock === 'in' ? 'selected' : '' %>>En stock</option>
             <option value="out" <%= filters && filters.stock === 'out' ? 'selected' : '' %>>Stock limité</option>
+            <option value="bas" <%= filters && filters.stock === 'bas' ? 'selected' : '' %>>Stock bas (1 ou 2 pièces)</option>
           </select>
 
           <% const currentSort = filters && filters.sort ? filters.sort : 'updated_desc'; %>
@@ -459,6 +461,13 @@
               if (selectedCount) selectedCount.textContent = count + ' sélectionné' + (count > 1 ? 's' : '');
               if (bulkBtn) bulkBtn.disabled = count === 0;
               if (bulkGenerateBtn) bulkGenerateBtn.disabled = count === 0;
+              /* Le nombre dans la confirmation : « Supprimer 37 produits » se relit
+                 mieux que « les produits sélectionnés » quand « tout cocher » a pris
+                 toute la page. */
+              if (bulkBtn) bulkBtn.setAttribute('data-confirm', count > 1
+                ? 'Supprimer ces ' + count + ' produits ?\n\nLeurs fiches et leurs photos seront effacées. Impossible d’annuler.'
+                : 'Supprimer ce produit ?\n\nSa fiche et ses photos seront effacées. Impossible d’annuler.');
+              if (bulkGenerateBtn) bulkGenerateBtn.setAttribute('data-confirm', 'Lancer la génération IA pour ' + count + ' produit' + (count > 1 ? 's' : '') + ' ?');
               if (bulkEditBar) bulkEditBar.style.display = count > 0 ? 'flex' : 'none';
               if (selectAll) {
                 selectAll.checked = count > 0 && count === checkboxes.length;
@@ -506,7 +515,19 @@
                 if (!ids.length) return;
                 var field = bulkField.value;
                 var v = currentBulkValue();
-                if (!window.confirm('Modifier ' + ids.length + ' produit(s) — ' + (FIELD_LABELS[field] || field) + ' ?')) return;
+                /* La confirmation dit maintenant QUOI exactement (avant : « Modifier 12 produit(s) — Prix ? »
+                   sans le montant ni le sens : une baisse de 30 % passait en un clic). */
+                var libelleValeur = function () {
+                  if (field === 'price') {
+                    var modes = { set: 'mettre à', inc_pct: 'augmenter de', dec_pct: 'baisser de', inc_eur: 'augmenter de', dec_eur: 'baisser de' };
+                    var unite = (v.mode === 'inc_pct' || v.mode === 'dec_pct') ? ' %' : ' €';
+                    return (modes[v.mode] || v.mode) + ' ' + (v.value || '?') + unite;
+                  }
+                  var champ = document.getElementById({ status: 'bvStatus', stock: 'bvStock', quantity: 'bvQuantity', vat: 'bvVat', category: 'bvCategory' }[field]);
+                  if (champ && champ.tagName === 'SELECT' && champ.selectedIndex >= 0) return '→ « ' + champ.options[champ.selectedIndex].textContent.trim() + ' »';
+                  return '→ ' + (v.value === '' ? '(vide)' : v.value);
+                };
+                if (!window.confirm('Modifier ' + ids.length + ' produit(s) : ' + (FIELD_LABELS[field] || field) + ' ' + libelleValeur() + ' ?')) return;
                 bulkApplyBtn.disabled = true;
                 if (bulkEditMsg) { bulkEditMsg.textContent = 'Application…'; bulkEditMsg.className = 'self-center text-xs font-semibold text-slate-500'; }
                 fetch('/admin/catalogue/modifier-multi', {

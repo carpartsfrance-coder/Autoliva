@@ -679,7 +679,20 @@
     });
   }
 
+  /* Changer de client vidait rien : l'adresse du client précédent restait dans
+     l'étape « Livraison » (risque d'expédier chez la mauvaise personne). */
+  function viderAdresses() {
+    formData.shippingAddress = {};
+    formData.billingAddress = {};
+    document.querySelectorAll('input[id^="ship-"], input[id^="bill-"], textarea[id^="ship-"], textarea[id^="bill-"]').forEach(function (el) { el.value = ''; });
+    document.querySelectorAll('select[id="ship-country"], select[id="bill-country"]').forEach(function (el) { el.value = 'France'; });
+    if (typeof shippingExistingSelect !== 'undefined' && shippingExistingSelect) shippingExistingSelect.value = '';
+  }
+
   function selectClient(client) {
+    var ancienId = formData.client ? String(formData.client._id || formData.client.id || '') : '';
+    var nouvelId = client ? String(client._id || client.id || '') : '';
+    if (ancienId && ancienId !== nouvelId) viderAdresses();
     selectedClient = client;
     searchDropdown.classList.add('hidden');
     searchInput.value = '';
@@ -803,7 +816,7 @@
   function renderProductDropdown(products) {
     var html = '';
     products.forEach(function (p, i) {
-      var price = p.priceCents != null ? formatEur(p.priceCents) : '—';
+      var price = p.priceCents != null ? formatEur(p.priceCents) + ' TTC' : '—';
       var stockLabel = p.inStock ? (p.stockQty != null ? '<span class="text-green-600">' + p.stockQty + ' en stock</span>' : '<span class="text-green-600">En stock</span>') : '<span class="text-orange-500">Rupture</span>';
       html += '<div class="px-4 py-3 hover:bg-red-50 cursor-pointer border-b border-slate-100 last:border-0 transition-colors" data-product-idx="' + i + '" data-product=\'' + JSON.stringify(p).replace(/'/g, '&#39;') + '\'>'
         + '<div class="flex items-center justify-between gap-3">'
@@ -824,7 +837,9 @@
           name: p.name || '',
           sku: p.sku || '',
           brand: p.brand || '',
-          unitPriceCents: p.priceCents || 0,
+          /* Le prix du catalogue est TTC (TVA 20 % comprise) ; la colonne est HT et la
+             TVA est ajoutée ensuite : avant, 1 200 € TTC devenaient 1 440 € TTC. */
+          unitPriceCents: p.priceCents ? Math.round(p.priceCents / 1.2) : 0,
           quantity: 1,
           discountType: 'eur',
           discountValue: 0,
@@ -1031,6 +1046,7 @@
     saveFormData();
   });
 
+  var adressesClientCourant = [];
   /* Populate existing addresses dropdown from client */
   function populateExistingAddresses() {
     var client = formData.client;
@@ -1048,10 +1064,15 @@
     });
     shippingExistingWrapper.classList.remove('hidden');
 
+    /* Un seul écouteur (avant : un de plus à chaque passage à l'étape 3, chacun
+       gardant les adresses du client de ce moment-là). */
+    adressesClientCourant = addresses;
+    if (shippingExistingSelect._ecoute) return;
+    shippingExistingSelect._ecoute = true;
     shippingExistingSelect.addEventListener('change', function () {
       var idx = parseInt(this.value, 10);
       if (isNaN(idx)) return;
-      var addr = addresses[idx];
+      var addr = adressesClientCourant[idx];
       if (!addr) return;
       setShipField('fullName', addr.fullName || '');
       setShipField('line1', addr.line1 || '');
@@ -1236,7 +1257,7 @@
       tbody.appendChild(tr);
     });
 
-    var tvaRate = formData.tvaRate || 20;
+    var tvaRate = formData.tvaRate != null && formData.tvaRate !== '' ? Number(formData.tvaRate) : 20; // 0 % (export) était lu comme 20 %
     var tvaCents = Math.round(subtotalCents * tvaRate / 100);
     var shippingCents = getShippingCents();
     var totalTtcCents = subtotalCents + tvaCents + shippingCents;
@@ -1288,7 +1309,7 @@
       shippingAddress: formData.shippingAddress,
       billingAddress: formData.billingSameAsShipping ? formData.shippingAddress : formData.billingAddress,
       shippingCostCents: shippingCents,
-      tvaRate: formData.tvaRate || 20,
+      tvaRate: formData.tvaRate != null && formData.tvaRate !== '' ? Number(formData.tvaRate) : 20,
       source: formData.source,
       initialStatus: document.getElementById('initial-status').value,
       orderType: formData.orderType || 'standard',

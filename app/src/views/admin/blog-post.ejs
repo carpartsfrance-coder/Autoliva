@@ -110,7 +110,7 @@
                   <input id="blogMediaFile" class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-900" type="file" accept="image/*" />
                 </div>
                 <div class="flex gap-2">
-                  <button id="blogMediaUploadBtn" type="button" class="flex-1 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800 transition">Uploader & insérer</button>
+                  <button id="blogMediaUploadBtn" type="button" class="flex-1 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-white hover:bg-slate-800 transition">Ajouter et insérer</button>
                   <button id="blogMediaCopyBtn" type="button" class="btn btn-secondary" disabled>Copier</button>
                 </div>
               </div>
@@ -794,7 +794,7 @@
 
       function setLoading(loading) {
         uploadBtn.disabled = !!loading;
-        uploadBtn.textContent = loading ? 'Upload…' : 'Uploader & insérer';
+        uploadBtn.textContent = loading ? 'Envoi…' : 'Ajouter et insérer';
       }
 
       uploadBtn.addEventListener('click', function () {
@@ -1306,3 +1306,6 @@
     update();
   })();
 </script>
+
+<%# Pied de page admin : bouton menu mobile, repli du menu, notifications (manquait sur cette page). %>
+<%- include('./partials/footer') %>

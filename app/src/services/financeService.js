@@ -50,9 +50,22 @@ function splitVat(ttcCents) {
   return { ht, vat, ttc };
 }
 
+/* Les remboursements de CAUTION de consigne (kind 'consigne') ne sont pas
+   comptés : la caution n'entre pas dans le CA (voir cautionCents), son retour
+   au client n'est donc pas un remboursement de vente. */
 function sumRefunds(order) {
   if (!order || !Array.isArray(order.refunds)) return 0;
-  return order.refunds.reduce((s, r) => s + (Number(r && r.amountCents) || 0), 0);
+  return order.refunds
+    .filter((r) => r && r.kind !== 'consigne')
+    .reduce((s, r) => s + (Number(r && r.amountCents) || 0), 0);
+}
+
+/* Caution de consigne encaissée avec la commande : remboursable et hors TVA,
+   ce n'est pas du chiffre d'affaires (même règle que l'export comptable,
+   services/accountingService.js). */
+function cautionCents(order) {
+  const c = order && order.consigne && Number(order.consigne.chargedTotalCents);
+  return Number.isFinite(c) && c > 0 ? c : 0;
 }
 
 /**
@@ -79,7 +92,7 @@ async function getMonthlySummary(year, month) {
     archived: { $ne: true },
     deletedAt: null,
   })
-    .select('_id number totalCents items refunds status createdAt accountType molliePaymentFeeCents')
+    .select('_id number totalCents consigne.chargedTotalCents items refunds status createdAt accountType molliePaymentFeeCents')
     .lean();
 
   /* Collecte tous les productId pour fetcher les costCents en batch */
@@ -118,7 +131,7 @@ async function getMonthlySummary(year, month) {
   const productAggs = new Map(); // key: productId
 
   for (const o of orders) {
-    revenueTtc += Number(o.totalCents) || 0;
+    revenueTtc += Math.max(0, (Number(o.totalCents) || 0) - cautionCents(o));
     refundsTotal += sumRefunds(o);
     if (Array.isArray(o.items) && o.items.length > 0) ordersWithSoldItems++;
     if (Number.isFinite(o.molliePaymentFeeCents) && o.molliePaymentFeeCents > 0) {

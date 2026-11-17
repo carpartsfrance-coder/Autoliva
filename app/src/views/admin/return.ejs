@@ -10,7 +10,7 @@
           <span class="material-symbols-outlined text-slate-500">arrow_back</span>
         </a>
         <div>
-          <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Consignes &amp; retours', url: '/admin/retours'}, {label: returnRequest ? returnRequest.number : 'Retour'}] }) %>
+          <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Consignes & retours', url: '/admin/retours'}, {label: returnRequest ? returnRequest.number : 'Retour'}] }) %>
           <div class="text-2xl md:text-3xl font-semibold text-slate-900"><%= returnRequest ? returnRequest.number : 'Retour' %></div>
           <div class="mt-1 text-sm text-slate-500"><%= returnRequest ? (returnRequest.createdAt || '') : '' %></div>
         </div>

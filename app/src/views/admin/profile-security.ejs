@@ -6,7 +6,7 @@
 
     <div class="mb-6">
       <div class="text-2xl md:text-3xl font-semibold text-slate-900">Sécurité de mon compte</div>
-      <div class="mt-1 text-sm text-slate-500">Authentification à deux facteurs (TOTP)</div>
+      <div class="mt-1 text-sm text-slate-500">Mot de passe et authentification à deux facteurs (TOTP)</div>
     </div>
 
     <% if (typeof flashMessage !== 'undefined' && flashMessage) { %>
@@ -15,7 +15,30 @@
       </div>
     <% } %>
 
+    <%# Changer son propre mot de passe : la page Paramètres est réservée au
+        propriétaire, un employé n'avait aucun endroit pour le faire. %>
+    <section class="rounded-2xl border border-slate-200 bg-white p-5 mb-6">
+      <div class="text-base font-semibold text-slate-900">Changer mon mot de passe</div>
+      <form action="/admin/parametres/mot-de-passe" method="POST" class="mt-4 space-y-4">
+        <input type="hidden" name="returnTo" value="/admin/profil/securite" />
+        <div>
+          <label class="block text-sm font-medium text-slate-500" for="currentPassword">Mot de passe actuel</label>
+          <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold" id="currentPassword" name="currentPassword" type="password" autocomplete="current-password" required />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-500" for="nextPassword">Nouveau mot de passe</label>
+          <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold" id="nextPassword" name="nextPassword" placeholder="Minimum 8 caractères" type="password" minlength="8" autocomplete="new-password" required />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-500" for="nextPasswordConfirm">Confirmer le nouveau mot de passe</label>
+          <input class="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold" id="nextPasswordConfirm" name="nextPasswordConfirm" placeholder="Retape le nouveau mot de passe" type="password" minlength="8" autocomplete="new-password" required />
+        </div>
+        <button type="submit" class="btn btn-primary">Mettre à jour mon mot de passe</button>
+      </form>
+    </section>
+
     <section class="rounded-2xl border border-slate-200 bg-white p-5">
+      <div class="text-base font-semibold text-slate-900 mb-3">Double authentification (2FA)</div>
       <% if (twoFactorEnabled) { %>
         <div class="flex items-center gap-3 mb-4">
           <span class="material-symbols-outlined text-emerald-600 text-3xl">verified_user</span>

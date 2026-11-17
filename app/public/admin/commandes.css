@@ -86,9 +86,11 @@
 }
 .cmd-entete-actions {
   display: flex;
+  flex-wrap: wrap; /* sur téléphone, « Nouvelle commande » sortait de l'écran */
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  max-width: 100%;
 }
 .cmd-entete-actions form { margin: 0; }
 

@@ -1,12 +1,15 @@
+<%# Libellés ÉCHAPPÉS (balise égal, pas tiret) : certains viennent de saisies clients (nom du
+    client, nom sur un devis moteur). Non échappés, un nom contenant du HTML s'exécutait
+    dans le back-office. %>
 <% if (typeof breadcrumbs !== 'undefined' && Array.isArray(breadcrumbs) && breadcrumbs.length > 0) { %>
 <nav class="breadcrumb">
   <a class="breadcrumb__link" href="/admin">Accueil</a>
   <% breadcrumbs.forEach(function(item, idx) { %>
     <span class="breadcrumb__sep material-symbols-outlined">chevron_right</span>
     <% if (idx === breadcrumbs.length - 1) { %>
-      <span class="breadcrumb__current"><%- item.label %></span>
+      <span class="breadcrumb__current"><%= item.label %></span>
     <% } else { %>
-      <a class="breadcrumb__link" href="<%= item.url %>"><%- item.label %></a>
+      <a class="breadcrumb__link" href="<%= item.url %>"><%= item.label %></a>
     <% } %>
   <% }) %>
 </nav>

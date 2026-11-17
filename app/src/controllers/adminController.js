@@ -380,7 +380,7 @@ async function postAdminMarkOrderConsigneReceived(req, res, next) {
     if (!mongoose.Types.ObjectId.isValid(orderId)) return res.redirect('/admin/commandes');
 
     const existing = await Order.findById(orderId)
-      .select('_id number userId consigne status notifications')
+      .select('_id number userId consigne status notifications orderType returnStatus')
       .lean();
     if (!existing) {
       req.session.adminOrderError = 'Commande introuvable.';
@@ -391,8 +391,35 @@ async function postAdminMarkOrderConsigneReceived(req, res, next) {
       ? existing.consigne.lines
       : [];
 
+    /* Aligne le statut de retour (liste « Consignes en attente », pastille du menu,
+       frise, filtres « en retard ») : avant, seul consigne.lines était coché et la
+       commande restait « en retard » partout. Voir services/retourConsigne.js. */
+    const { RETOUR_PAS_REVENU } = require('../services/retourConsigne');
+    const TYPES_ECHANGE = ['exchange', 'exchange_cloning'];
+    const retourEligible = RETOUR_PAS_REVENU.includes(existing.returnStatus) && TYPES_ECHANGE.includes(existing.orderType);
+    const par = req.session && req.session.admin && req.session.admin.email ? String(req.session.admin.email) : 'admin';
+    const majRetourRecu = (date) => ({
+      set: { returnStatus: 'received', 'returnDates.returnReceivedAt': date },
+      push: { statusHistory: { status: existing.status, returnStatus: 'received', changedAt: date, changedBy: par, note: 'Ancienne pièce reçue' } },
+    });
+
     if (!lines.length) {
+      /* Anciennes commandes en échange sans ligne de consigne (« non encaissée ») :
+         elles ne pouvaient JAMAIS sortir de la liste des consignes en attente. */
+      const maj = majRetourRecu(new Date());
+      const resultat = retourEligible
+        ? await Order.updateOne(
+          { _id: orderId, orderType: { $in: TYPES_ECHANGE }, returnStatus: { $in: RETOUR_PAS_REVENU } },
+          { $set: maj.set, $push: maj.push }
+        )
+        : null;
+      if (resultat && resultat.modifiedCount === 1) {
+        req.session.adminOrderSuccess = 'Ancienne pièce marquée comme reçue.';
+        if (wantsJsonResponse(req)) return res.json({ ok: true, message: 'Ancienne pièce marquée comme reçue.', data: { orderId } });
+        return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
+      }
       req.session.adminOrderError = 'Aucune consigne à marquer comme reçue.';
+      if (wantsJsonResponse(req)) return res.status(400).json({ ok: false, error: 'Aucune consigne à marquer comme reçue.' });
       return res.redirect(`/admin/commandes/${encodeURIComponent(orderId)}`);
     }
 
@@ -422,8 +449,15 @@ async function postAdminMarkOrderConsigneReceived(req, res, next) {
     });
 
     /* $set ciblé sur consigne.lines uniquement : ne PAS écraser le reste de
-     * l'objet consigne (chargedTotalCents, refundedTotalCents, refundedAt…). */
-    await Order.updateOne({ _id: orderId }, { $set: { 'consigne.lines': updatedLines } });
+     * l'objet consigne (chargedTotalCents, refundedTotalCents, refundedAt…).
+     * Lignes ET statut de retour dans la MÊME écriture (pas d'état à moitié fait). */
+    const majRetour = retourEligible ? majRetourRecu(now) : null;
+    await Order.updateOne(
+      { _id: orderId },
+      majRetour
+        ? { $set: { 'consigne.lines': updatedLines, ...majRetour.set }, $push: majRetour.push }
+        : { $set: { 'consigne.lines': updatedLines } }
+    );
 
     try {
       const refreshed = await Order.findById(orderId)
@@ -2252,11 +2286,11 @@ async function getAdminDashboard(req, res, next) {
     }
 
     const now = new Date();
-    const startToday = new Date(now);
-    startToday.setHours(0, 0, 0, 0);
-    const startMonth = new Date(now);
-    startMonth.setDate(1);
-    startMonth.setHours(0, 0, 0, 0);
+    /* « Aujourd'hui » et « ce mois » au calendrier de PARIS, quel que soit le fuseau
+       du serveur (voir services/heureParis.js). */
+    const heureParis = require('../services/heureParis');
+    const startToday = heureParis.minuitParis(now);
+    const startMonth = heureParis.debutMoisParis(now);
 
     /* ── Sélecteur de période (presets ou dates exactes ?from=&to=) ── */
     const PERIOD_KEYS = ['7d', '30d', '90d', '6m', '12m', 'year'];
@@ -2319,9 +2353,18 @@ async function getAdminDashboard(req, res, next) {
       ],
     };
 
+    /* CA = total payé MOINS la caution de consigne encaissée (remboursable, hors TVA),
+       comme l'export comptable (services/accountingService.js). Avant, les cautions
+       gonflaient le CA, le panier moyen et les graphiques du tableau de bord. */
+    const CA_HORS_CAUTION = {
+      $max: [0, { $subtract: [{ $ifNull: ['$totalCents', 0] }, { $ifNull: ['$consigne.chargedTotalCents', 0] }] }],
+    };
+
     /* ── KPIs financiers (owner uniquement) ── */
     let revenueTodayCents = 0;
     let revenueMonthCents = 0;
+    let revenueYesterdayCents = 0;
+    let revenuePrevMonthToDateCents = 0;
     let averageBasketCents = 0;
     let ordersThisMonth = 0;
     let topProducts = [];
@@ -2338,29 +2381,40 @@ async function getAdminDashboard(req, res, next) {
       // CA encaissé strict : statuts payés uniquement (exclut pending_payment)
       const revenueTodayAgg = await Order.aggregate([
         { $match: { createdAt: { $gte: startToday }, ...paidOnly } },
-        { $group: { _id: null, total: { $sum: '$totalCents' } } },
+        { $group: { _id: null, total: { $sum: CA_HORS_CAUTION } } },
       ]);
       const revenueMonthAgg = await Order.aggregate([
         { $match: { createdAt: { $gte: startMonth }, ...paidOnly } },
-        { $group: { _id: null, total: { $sum: '$totalCents' } } },
+        { $group: { _id: null, total: { $sum: CA_HORS_CAUTION } } },
       ]);
 
       revenueTodayCents = revenueTodayAgg && revenueTodayAgg[0] ? Number(revenueTodayAgg[0].total) : 0;
       revenueMonthCents = revenueMonthAgg && revenueMonthAgg[0] ? Number(revenueMonthAgg[0].total) : 0;
 
+      /* Comparaison RÉELLE avec le mois dernier, à date égale (du 1er au même jour/heure).
+         Remplace les « +5.2 % » et « +12 % » écrits en dur dans la vue. */
+      const debutMoisPrecedent = heureParis.debutMoisParis(now, -1);
+      // Même durée écoulée depuis le 1er ; plafonnée à la fin du mois précédent (31 → mois de 30 j).
+      const memeMomentMoisPrecedent = new Date(Math.min(
+        debutMoisPrecedent.getTime() + (now.getTime() - startMonth.getTime()),
+        startMonth.getTime() - 1
+      ));
+      const revenuePrevMonthAgg = await Order.aggregate([
+        { $match: { createdAt: { $gte: debutMoisPrecedent, $lte: memeMomentMoisPrecedent }, ...paidOnly } },
+        { $group: { _id: null, total: { $sum: CA_HORS_CAUTION } } },
+      ]);
+      revenuePrevMonthToDateCents = revenuePrevMonthAgg && revenuePrevMonthAgg[0] ? Number(revenuePrevMonthAgg[0].total) : 0;
+
       /* ── Weekly bar chart data (last 7 days + previous 7 days) ── */
-      const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() - 6);
-      weekStart.setHours(0, 0, 0, 0);
-      const prevWeekStart = new Date(weekStart);
-      prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+      const weekStart = heureParis.minuitParis(now, -6);
+      const prevWeekStart = heureParis.minuitParis(now, -13);
 
       const dailyRevenueAgg = await Order.aggregate([
         { $match: { createdAt: { $gte: prevWeekStart }, ...paidOnly } },
         {
           $group: {
             _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'Europe/Paris' } },
-            total: { $sum: '$totalCents' },
+            total: { $sum: CA_HORS_CAUTION },
           },
         },
       ]);
@@ -2370,18 +2424,20 @@ async function getAdminDashboard(req, res, next) {
       weekValues = [];
       prevWeekValues = [];
       const dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+      /* Jours au calendrier de Paris, comme le $dateToString ci-dessus. Avant :
+         toISOString() (UTC) — sur un serveur réglé à l'heure de Paris, minuit local
+         = 23 h UTC la veille, donc chaque barre affichait les ventes de la VEILLE. */
+      const MIDI = 12 * 3600 * 1000;
       for (let i = 0; i < 7; i++) {
-        const d = new Date(weekStart);
-        d.setDate(d.getDate() + i);
-        const key = d.toISOString().slice(0, 10);
-        weekLabels.push(dayNames[d.getDay()] + ' ' + d.getDate());
-        weekValues.push(Math.round((dailyMap.get(key) || 0) / 100));
+        const d = new Date(heureParis.minuitParis(now, i - 6).getTime() + MIDI);
+        const jp = heureParis.partiesParis(d);
+        weekLabels.push(dayNames[jp.jourSemaine] + ' ' + jp.jour);
+        weekValues.push(Math.round((dailyMap.get(heureParis.cleJourParis(d)) || 0) / 100));
 
-        const pd = new Date(prevWeekStart);
-        pd.setDate(pd.getDate() + i);
-        const pkey = pd.toISOString().slice(0, 10);
-        prevWeekValues.push(Math.round((dailyMap.get(pkey) || 0) / 100));
+        const pd = new Date(heureParis.minuitParis(now, i - 13).getTime() + MIDI);
+        prevWeekValues.push(Math.round((dailyMap.get(heureParis.cleJourParis(pd)) || 0) / 100));
       }
+      revenueYesterdayCents = Number(dailyMap.get(heureParis.cleJourParis(new Date(startToday.getTime() - MIDI))) || 0);
 
       /* ── Série C.A. sur la PÉRIODE sélectionnée (granularité jour ou mois) ── */
       const _revFmt = periodGranularity === 'day' ? '%Y-%m-%d' : '%Y-%m';
@@ -2390,7 +2446,7 @@ async function getAdminDashboard(req, res, next) {
         {
           $group: {
             _id: { $dateToString: { format: _revFmt, date: '$createdAt', timezone: 'Europe/Paris' } },
-            total: { $sum: '$totalCents' },
+            total: { $sum: CA_HORS_CAUTION },
             count: { $sum: 1 },
           },
         },
@@ -2427,7 +2483,7 @@ async function getAdminDashboard(req, res, next) {
       /* ── KPIs sur la période sélectionnée ── */
       const periodAgg = await Order.aggregate([
         { $match: { createdAt: { $gte: rangeStart, $lte: rangeEnd }, ...paidOnly } },
-        { $group: { _id: null, total: { $sum: '$totalCents' }, count: { $sum: 1 } } },
+        { $group: { _id: null, total: { $sum: CA_HORS_CAUTION }, count: { $sum: 1 } } },
       ]);
       periodRevenueCents = periodAgg && periodAgg[0] ? Number(periodAgg[0].total) : 0;
       periodOrders = periodAgg && periodAgg[0] ? Number(periodAgg[0].count) : 0;
@@ -2459,7 +2515,7 @@ async function getAdminDashboard(req, res, next) {
 
     /* ── KPIs opérationnels (tous les admins) ── */
     const pendingOrdersCount = await Order.countDocuments({ status: 'pending_payment', archived: { $ne: true }, deletedAt: null });
-    const stockAlertsCount = await Product.countDocuments({ stockQty: { $ne: null, $lte: 2 } });
+    const stockAlertsCount = await Product.countDocuments({ stockQty: { $gte: 1, $lte: 2 }, isPublished: { $ne: false } });
 
     const latestOrders = await Order.find({ archived: { $ne: true }, deletedAt: null })
       .sort({ createdAt: -1 })
@@ -2486,6 +2542,7 @@ async function getAdminDashboard(req, res, next) {
         : 'Client';
 
       return {
+        id: String(o._id),
         number: o.number,
         accountType: o.accountType,
         customer,
@@ -2525,6 +2582,12 @@ async function getAdminDashboard(req, res, next) {
       kpis: {
         revenueToday: showFinancials ? formatEuro(revenueTodayCents) : null,
         revenueMonth: showFinancials ? formatEuro(revenueMonthCents) : null,
+        revenueYesterday: showFinancials ? formatEuro(revenueYesterdayCents) : null,
+        revenuePrevMonthToDate: showFinancials ? formatEuro(revenuePrevMonthToDateCents) : null,
+        // Évolution en % vs même période du mois dernier ; null si rien à comparer.
+        revenueMonthTrendPct: showFinancials && revenuePrevMonthToDateCents > 0
+          ? Math.round(((revenueMonthCents - revenuePrevMonthToDateCents) / revenuePrevMonthToDateCents) * 100)
+          : null,
         pendingOrdersCount,
         stockAlertsCount,
         averageBasket: showFinancials ? formatEuro(averageBasketCents) : null,
@@ -2781,7 +2844,7 @@ async function chargerFilesCommandes(maintenant = new Date()) {
   const base = { archived: { $ne: true }, deletedAt: null };
   const [enCours, toutesActives] = await Promise.all([
     Order.find({ ...base, status: { $in: [...commandesFiles.AVANT_EXPEDITION, 'shipped', 'delivered'] } })
-      .select('_id status orderType sourcing statusHistory.status statusHistory.changedAt shipments.label shipments.trackingNumber shipments.createdAt returnStatus cloningStatus purchase.supplier createdAt')
+      .select('_id status orderType sourcing statusHistory.status statusHistory.changedAt shipments.label shipments.trackingNumber shipments.createdAt returnStatus cloningStatus purchase.supplier createdAt consigne.lines.receivedAt')
       .lean(),
     Order.countDocuments({ ...base, status: { $ne: 'draft' } }),
   ]);
@@ -3064,6 +3127,9 @@ async function getAdminOrdersPage(req, res, next) {
     } else if (returnFilter === 'overdue') {
       query.returnStatus = 'overdue';
     }
+    if (returnFilter === 'pending' || returnFilter === 'overdue') {
+      Object.assign(query, require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE);
+    }
 
     /* ── Filtre approvisionnement pièce ── */
     // Le sourcing ne concerne que l'avant-expédition → on restreint aux statuts
@@ -3332,7 +3398,7 @@ async function postAdminAvancerCommande(req, res) {
 
     const maintenant = new Date();
     const order = await Order.findById(orderId)
-      .select('_id number status orderType sourcing shipments.label shipments.trackingNumber returnStatus cloningStatus deletedAt archived')
+      .select('_id number status orderType sourcing shipments.label shipments.trackingNumber returnStatus cloningStatus deletedAt archived consigne.lines.receivedAt')
       .lean();
     if (!order || order.deletedAt) return res.status(404).json({ ok: false, error: 'Commande introuvable.' });
 
@@ -3679,7 +3745,11 @@ async function getAdminOrderDetailPage(req, res, next) {
       ? orderDoc.items.reduce((sum, it) => sum + (Number(it && it.lineTotalCents) || 0), 0)
       : 0;
 
+    /* Le modèle met 0 par défaut : une commande qui n'a pas ce champ (synchronisée,
+       ancienne…) affichait « Sous-total articles 0,00 € ». 0 + des lignes payantes
+       = champ absent → on recalcule depuis les lignes. */
     const itemsSubtotalCents = Number.isFinite(orderDoc.itemsSubtotalCents)
+      && (orderDoc.itemsSubtotalCents > 0 || fallbackItemsSubtotalCents === 0)
       ? orderDoc.itemsSubtotalCents
       : fallbackItemsSubtotalCents;
 
@@ -3698,6 +3768,7 @@ async function getAdminOrderDetailPage(req, res, next) {
       : 0;
 
     const itemsTotalAfterDiscountCents = Number.isFinite(orderDoc.itemsTotalAfterDiscountCents)
+      && (orderDoc.itemsTotalAfterDiscountCents > 0 || itemsSubtotalCents === 0)
       ? orderDoc.itemsTotalAfterDiscountCents
       : Math.max(0, itemsSubtotalCents - clientDiscountCents - promoDiscountCents);
 
@@ -4028,6 +4099,10 @@ async function getAdminOrderDetailPage(req, res, next) {
         deletedAtRaw: orderDoc.deletedAt || null,
         deletedBy: orderDoc.deletedBy || '',
         deleteReason: orderDoc.deleteReason || '',
+        /* Le numéro de suivi a-t-il déjà été envoyé au client ? (encadré « Étiquette créée »
+           qui affirmait toujours « Le client n'a pas été notifié »). */
+        suiviDejaEnvoye: !!(orderDoc.notifications && Array.isArray(orderDoc.notifications.shipmentTrackingNumbersSent)
+          && orderDoc.notifications.shipmentTrackingNumbersSent.length),
         statusKey: orderDoc.status,
         statusBadge: getOrderStatusBadge(orderDoc.status),
         orderType: orderDoc.orderType || 'standard',
@@ -4874,7 +4949,11 @@ async function postAdminAddOrderShipment(req, res, next) {
 
     // Skip shipment tracking email for "Récupération clonage" — a dedicated cloning label email is sent instead
     const _isRecupClonageLabel = label.toLowerCase().includes('cupération clonage') || label.toLowerCase().includes('recuperation clonage') || label.toLowerCase() === 'récupération clonage';
-    if (!_isRecupClonageLabel) {
+    /* « Retour » = colis qui REVIENT du client : l'e-mail « votre commande est expédiée »
+       (+ facture) et le SMS de suivi n'ont pas de sens. */
+    const _isRetourLabel = label === 'Retour';
+    let clientNotifieSuivi = false;
+    if (!_isRecupClonageLabel && !_isRetourLabel) {
       try {
         const alreadySent = existing
           && existing.notifications
@@ -4891,6 +4970,7 @@ async function postAdminAddOrderShipment(req, res, next) {
             });
             emailService.logEmailSent({ orderId: existing._id, emailType: 'shipment_tracking', recipientEmail: user.email, result: sent });
             smsService.sendShipmentTrackingSms({ order: existing, user, shipment: { label, carrier, trackingNumber } }).catch(() => {});
+            clientNotifieSuivi = !!(sent && sent.ok);
 
             if (sent && sent.ok) {
               await Order.updateOne(
@@ -4997,7 +5077,8 @@ async function postAdminAddOrderShipment(req, res, next) {
             && orderForShip.status !== 'refunded') {
           const isClonage = orderForShip.orderType === 'exchange_cloning';
           const clonageReady = isClonage && orderForShip.cloningStatus === 'cloning_done' && isEnvoiLabel;
-          const standardReady = !isClonage && (orderForShip.status === 'paid' || orderForShip.status === 'processing');
+          // Seulement un ENVOI : un suivi « Retour » ne fait pas passer une commande payée en « étiquette créée ».
+          const standardReady = !isClonage && isEnvoiLabel && (orderForShip.status === 'paid' || orderForShip.status === 'processing');
 
           if (clonageReady || standardReady) {
             if (standardReady) {
@@ -5027,7 +5108,10 @@ async function postAdminAddOrderShipment(req, res, next) {
     const successMsg = cloningEmailSent
       ? 'Suivi ajouté. Étiquette envoyée au client par email. Statut clonage mis à jour.'
       : labelCreatedOnly
-        ? 'Étiquette créée ✓ — la commande passera en « Expédiée » quand tu cliqueras sur « Marquer expédié » (transporteur passé). Le client n\'est PAS encore notifié.'
+        ? (clientNotifieSuivi
+          // Le message disait « Le client n'est PAS encore notifié » alors que l'e-mail de suivi venait de partir.
+          ? 'Étiquette créée ✓ — le client a reçu le numéro de suivi par e-mail. La commande passera en « Expédiée » quand tu cliqueras sur « Marquer expédié » (transporteur passé).'
+          : 'Étiquette créée ✓ — la commande passera en « Expédiée » quand tu cliqueras sur « Marquer expédié » (transporteur passé). Le client n\'est PAS encore notifié.')
         : autoShipped
         ? 'Suivi ajouté. Commande marquée comme expédiée automatiquement.'
         : isRecupClonage
@@ -5146,8 +5230,10 @@ async function postAdminRefundOrder(req, res, next) {
     }
 
     const cnPart = result.creditNote && result.creditNote.number ? ` Avoir ${result.creditNote.number} généré.` : '';
-    const emailPart = sendEmail ? ' Email client envoyé.' : '';
-    req.session.adminOrderSuccess = `Remboursement de ${(amountCents / 100).toFixed(2)} € émis via ${result.refund.method}.${cnPart}${emailPart}`;
+    const emailPart = sendEmail && !result.actionManuelle ? ' Email client envoyé.' : '';
+    req.session.adminOrderSuccess = result.actionManuelle
+      ? `Remboursement de ${(amountCents / 100).toFixed(2)} € ENREGISTRÉ mais PAS effectué chez ${result.refund.method} : à faire dans son portail. Aucun e-mail envoyé au client.${cnPart}`
+      : `Remboursement de ${(amountCents / 100).toFixed(2)} € émis via ${result.refund.method}.${cnPart}${emailPart}`;
     if (wantsJsonResponse(req)) {
       return res.json({
         ok: true,
@@ -5926,9 +6012,13 @@ async function postAdminDeleteOrderShipment(req, res, next) {
   }
 }
 
+/* Séparateur de milliers (« 41 248,50 € » au lieu de « 41248,50 € ») : affichage
+   seulement — aucune de ces valeurs ne repart dans un champ de saisie. */
+const FORMAT_EURO = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 function formatEuro(totalCents) {
   if (!Number.isFinite(totalCents)) return '—';
-  return `${(totalCents / 100).toFixed(2).replace('.', ',')} €`;
+  // Espace insécable normale : l'espace fine d'Intl (U+202F) disparaît presque après un « 1 ».
+  return `${FORMAT_EURO.format(totalCents / 100).replace(/\u202f/g, '\u00a0')}\u00a0€`; // « € » jamais seul à la ligne
 }
 
 function formatDateTimeFR(value) {
@@ -5958,6 +6048,8 @@ function buildStockQuery(stockKey) {
   const key = typeof stockKey === 'string' ? stockKey.trim() : '';
   if (key === 'in') return { inStock: true };
   if (key === 'out') return { inStock: false };
+  // Même règle que la carte « Stock bas » du tableau de bord (lien direct depuis la carte).
+  if (key === 'bas') return { stockQty: { $gte: 1, $lte: 2 }, isPublished: { $ne: false } };
   return {};
 }
 
@@ -7713,13 +7805,17 @@ async function postAdminBulkDeleteProducts(req, res, next) {
       return res.redirect(safeReturnTo);
     }
 
-    await effacerPhotosSansAutreFiche(
-      deletable.flatMap((p) => [p.imageUrl, ...(Array.isArray(p.galleryUrls) ? p.galleryUrls : [])]),
-      deletable.map((p) => p._id)
-    );
-
     const selectedIds = deletable.map((p) => p && p._id).filter(Boolean);
+    // D'abord la base, PUIS les photos (voir suppression d'une seule fiche).
     const result = await Product.deleteMany({ _id: { $in: selectedIds } });
+    try {
+      await effacerPhotosSansAutreFiche(
+        deletable.flatMap((p) => [p.imageUrl, ...(Array.isArray(p.galleryUrls) ? p.galleryUrls : [])]),
+        deletable.map((p) => p._id)
+      );
+    } catch (errPhotos) {
+      console.error('[catalogue] Nettoyage des photos impossible :', errPhotos && errPhotos.message ? errPhotos.message : errPhotos);
+    }
     const deletedCount = Number.isFinite(result && result.deletedCount) ? result.deletedCount : 0;
 
     if (!deletedCount) {
@@ -9321,7 +9417,9 @@ async function postAdminUpdateProduct(req, res, next) {
     // Une image simplement promue/rétrogradée ou réordonnée est conservée.
     const keptUrlSet = new Set([nextImageUrl, ...galleryUrls].filter(Boolean));
     const previousUrls = [existing.imageUrl, ...(Array.isArray(existing.galleryUrls) ? existing.galleryUrls : [])].filter(Boolean);
-    await effacerPhotosSansAutreFiche(previousUrls.filter((url) => !keptUrlSet.has(url)), [productId]);
+    // Effacées APRÈS l'enregistrement réussi (plus bas) : si l'enregistrement échoue,
+    // la fiche garde des photos qui existent encore.
+    const photosRetirees = previousUrls.filter((url) => !keptUrlSet.has(url));
 
     const resolvedInfoBlockIds = await resolveInfoBlockIds(req.body.infoBlockIds);
 
@@ -9395,6 +9493,12 @@ async function postAdminUpdateProduct(req, res, next) {
       });
     }
 
+    try {
+      await effacerPhotosSansAutreFiche(photosRetirees, [productId]);
+    } catch (errPhotos) {
+      console.error('[produit] Nettoyage des photos retirées impossible :', errPhotos && errPhotos.message ? errPhotos.message : errPhotos);
+    }
+
     const setPatch = {};
     if (hasKeyPoints) setPatch.keyPoints = keyPoints;
     if (hasSpecs) setPatch.specs = specs;
@@ -9458,16 +9562,19 @@ async function postAdminDeleteProduct(req, res, next) {
     }
 
     const existing = await Product.findById(productId).select('_id imageUrl galleryUrls technicalDocs').lean();
+
+    // D'abord la base, PUIS les fichiers : si la suppression échouait, la fiche
+    // restait en ligne avec des photos déjà effacées.
+    await Product.findByIdAndDelete(productId);
+
     if (existing) {
       const galleries = Array.isArray(existing.galleryUrls) ? existing.galleryUrls : [];
-      await effacerPhotosSansAutreFiche([existing.imageUrl, ...galleries], [existing._id]);
+      try { await effacerPhotosSansAutreFiche([existing.imageUrl, ...galleries], [existing._id]); } catch (_) {}
       // Supprime aussi les documents techniques (bucket product_docs)
       for (const d of (Array.isArray(existing.technicalDocs) ? existing.technicalDocs : [])) {
         if (d && d.fileId) { try { await productDocStorage.deleteFile(d.fileId); } catch (_) {} }
       }
     }
-
-    await Product.findByIdAndDelete(productId);
     req.session.adminCatalogSuccess = 'Produit supprimé.';
     if (wantsJsonResponse(req)) return res.json({ ok: true, message: 'Produit supprimé.', data: { deletedIds: [productId] } });
     return res.redirect(safeReturnTo);
@@ -9705,7 +9812,7 @@ async function getAdminClientsPage(req, res, next) {
     if (clientUserOids.length) {
       try {
         const overdueAgg = await Order.aggregate([
-          { $match: { userId: { $in: clientUserOids }, orderType: 'exchange', returnStatus: 'overdue', status: { $nin: ['cancelled', 'refunded', 'draft'] }, archived: { $ne: true }, deletedAt: null } },
+          { $match: { userId: { $in: clientUserOids }, orderType: 'exchange', returnStatus: 'overdue', status: { $nin: ['cancelled', 'refunded', 'draft'] }, archived: { $ne: true }, deletedAt: null, ...require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE } },
           { $group: { _id: '$userId', count: { $sum: 1 }, oldestDue: { $min: '$returnDates.returnDueDate' } } },
         ]);
         for (const r of overdueAgg) {
@@ -10765,16 +10872,28 @@ async function postAdminResetBackofficeUserPassword(req, res, next) {
 
 async function postAdminChangeOwnPassword(req, res, next) {
   try {
+    /* Formulaire aussi présent sur « Mon compte » (/admin/profil/securite),
+       seule page qu'un employé peut ouvrir : /admin/parametres lui est
+       interdite, il ne pouvait donc pas changer son propre mot de passe.
+       On revient sur la page d'où vient le formulaire. */
+    const depuisProfil = req.body && req.body.returnTo === '/admin/profil/securite';
+    const fin = (type, message) => {
+      if (depuisProfil) {
+        req.session.profileSecurityFlash = { type: type === 'erreur' ? 'error' : 'success', message };
+        return res.redirect('/admin/profil/securite');
+      }
+      if (type === 'erreur') req.session.adminPasswordError = message;
+      else req.session.adminPasswordSuccess = message;
+      return res.redirect('/admin/parametres');
+    };
     const dbConnected = mongoose.connection.readyState === 1;
     if (!dbConnected) {
-      req.session.adminPasswordError = "La base de données n'est pas disponible.";
-      return res.redirect('/admin/parametres');
+      return fin('erreur', "La base de données n'est pas disponible.");
     }
 
     const currentAdmin = getCurrentAdminSession(req);
     if (!currentAdmin || !currentAdmin.adminUserId) {
-      req.session.adminPasswordError = 'Session admin invalide. Merci de te reconnecter.';
-      return res.redirect('/admin/parametres');
+      return fin('erreur', 'Session admin invalide. Merci de te reconnecter.');
     }
 
     const currentPassword = normalizeEnvString(req.body && req.body.currentPassword);
@@ -10782,18 +10901,15 @@ async function postAdminChangeOwnPassword(req, res, next) {
     const nextPasswordConfirm = normalizeEnvString(req.body && req.body.nextPasswordConfirm);
 
     if (!currentPassword || !nextPassword || !nextPasswordConfirm) {
-      req.session.adminPasswordError = 'Merci de renseigner tous les champs du mot de passe.';
-      return res.redirect('/admin/parametres');
+      return fin('erreur', 'Merci de renseigner tous les champs du mot de passe.');
     }
 
     if (nextPassword.length < 8) {
-      req.session.adminPasswordError = 'Le nouveau mot de passe doit faire au moins 8 caractères.';
-      return res.redirect('/admin/parametres');
+      return fin('erreur', 'Le nouveau mot de passe doit faire au moins 8 caractères.');
     }
 
     if (nextPassword !== nextPasswordConfirm) {
-      req.session.adminPasswordError = 'Les deux nouveaux mots de passe ne correspondent pas.';
-      return res.redirect('/admin/parametres');
+      return fin('erreur', 'Les deux nouveaux mots de passe ne correspondent pas.');
     }
 
     const updated = await adminUsers.updateOwnPassword({
@@ -10803,15 +10919,16 @@ async function postAdminChangeOwnPassword(req, res, next) {
     });
 
     if (!updated || !updated.ok) {
-      req.session.adminPasswordError = updated && updated.reason === 'invalid_current_password'
+      return fin('erreur', updated && updated.reason === 'invalid_current_password'
         ? 'Le mot de passe actuel est incorrect.'
-        : 'Impossible de mettre à jour le mot de passe pour le moment.';
-      return res.redirect('/admin/parametres');
+        : 'Impossible de mettre à jour le mot de passe pour le moment.');
     }
 
-    req.session.adminPasswordSuccess = 'Mot de passe mis à jour.';
-    if (wantsJsonResponse(req)) return res.json({ ok: true, message: 'Mot de passe mis à jour.' });
-    return res.redirect('/admin/parametres');
+    if (wantsJsonResponse(req)) {
+      req.session.adminPasswordSuccess = 'Mot de passe mis à jour.';
+      return res.json({ ok: true, message: 'Mot de passe mis à jour.' });
+    }
+    return fin('ok', 'Mot de passe mis à jour.');
   } catch (err) {
     return next(err);
   }
@@ -11205,7 +11322,9 @@ async function postAdminCreateManualOrder(req, res) {
 
     /* ── Shipping & totals ── */
     const shippingCostCents = Math.max(0, Math.round(Number(body.shippingCostCents) || 0));
-    const tvaRate = Math.max(0, Math.min(100, parseFloat(body.tvaRate) || 20));
+    // « 0 % (export) » donnait 20 % (0 || 20). Seule une valeur absente vaut 20 %.
+    const tvaSaisie = parseFloat(body.tvaRate);
+    const tvaRate = Number.isFinite(tvaSaisie) ? Math.max(0, Math.min(100, tvaSaisie)) : 20;
     const tvaCents = Math.round(itemsSubtotalCents * tvaRate / 100);
     const totalCents = itemsSubtotalCents + tvaCents + shippingCostCents;
 
@@ -11401,7 +11520,7 @@ async function computeOrderAlerts() {
 
   const [overdueReturns, failedClonings, pieceWaiting, cloningLong, readyToShip, sourcingToVerify, sourcingToOrder, sourcingOrdered, sourcingOverdue] = await Promise.all([
     // Retours en retard (exchange uniquement, PAS exchange_cloning)
-    Order.countDocuments({ orderType: 'exchange', returnStatus: 'overdue', ...activeFilter }),
+    Order.countDocuments({ orderType: 'exchange', returnStatus: 'overdue', ...activeFilter, ...require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE }),
     // Clonages échoués non traités (> 2 jours)
     Order.countDocuments({ orderType: 'exchange_cloning', cloningStatus: 'cloning_failed', 'cloningDates.cloningCompletedAt': { $lt: twoDaysAgo }, ...activeFilter }),
     // Pièce client en attente > 10 jours
@@ -11545,7 +11664,7 @@ function buildTimelineSteps(order) {
     let returnState = 'future';
     let returnLabel = 'Retour ancien organe — J+30';
     let returnDate = null;
-    if (rs === 'received' || rs === 'inspected_ok' || rs === 'inspected_nok') { returnState = 'done'; returnDate = rd.returnReceivedAt ? formatDateTimeFR(rd.returnReceivedAt) : null; }
+    if (rs === 'received' || rs === 'inspected_ok' || rs === 'inspected_nok' || require('../services/retourConsigne').consigneToutRecue(order)) { returnState = 'done'; returnDate = rd.returnReceivedAt ? formatDateTimeFR(rd.returnReceivedAt) : null; }
     else if (rs === 'overdue') { returnState = 'error'; returnLabel = 'Retour en retard !'; }
     else if (rs === 'pending' || rs === 'label_sent' || rs === 'in_transit') {
       returnState = deliveredOrBeyond.has(st) ? 'current' : 'future';
@@ -13564,24 +13683,44 @@ async function postAdminBuyJumingoLabel(req, res) {
       || (order.pendingJumingoLabel && order.pendingJumingoLabel.shipmentId === shipmentId);
     if (dup) return res.status(409).json({ ok: false, error: 'Une étiquette est déjà en cours / achetée pour cet envoi.' });
 
-    const attach = await jumingo.attachRate(shipmentId, { tariffId, shippingType, pickupDate });
-    if (!attach.ok) return res.status(502).json({ ok: false, error: 'Jumingo (sélection tarif) : ' + attach.error });
-
-    const method = String(process.env.JUMINGO_PAYMENT_METHOD || 'rechnung').trim();
-    const buy = await jumingo.purchaseLabel({ shipmentIds: [shipmentId], method });
-    if (!buy.ok) return res.status(502).json({ ok: false, error: 'Jumingo (commande) : ' + buy.error });
-
-    // Mémorise la commande Jumingo (pour récupérer l'étiquette / réessayer).
-    order.pendingJumingoLabel = { orderNumber: buy.orderNumber, shipmentId, direction, carrier, createdAt: new Date() };
-    await order.save();
-
-    // PayPal/CB (returnUrl) : paiement externe à faire avant de récupérer.
-    if (buy.returnUrl) {
-      return res.json({ ok: true, needsPayment: true, returnUrl: buy.returnUrl, orderNumber: buy.orderNumber });
+    /* Verrou atomique AVANT d'appeler Jumingo : deux requêtes simultanées passaient
+       toutes deux le contrôle ci-dessus et achetaient deux étiquettes. */
+    const marqueVerrou = new Date();
+    const verrou = await Order.updateOne(
+      { _id: order._id, $or: [{ jumingoAchatEnCoursAt: null }, { jumingoAchatEnCoursAt: { $lt: new Date(Date.now() - 2 * 60 * 1000) } }] },
+      { $set: { jumingoAchatEnCoursAt: marqueVerrou } }
+    );
+    if (verrou.modifiedCount !== 1) {
+      return res.status(409).json({ ok: false, error: 'Un achat d’étiquette est déjà en cours sur cette commande. Patiente quelques secondes puis recharge la page.' });
     }
-    // rechnung/lastschrift : commande déjà passée → on récupère l'étiquette
-    // (génération parfois asynchrone → finalize peut renvoyer needsRetry).
-    return finalizeJumingoShipment(req, res, order, { orderNumber: buy.orderNumber, shipmentId, direction, carrier });
+    try {
+      // Revérifie APRÈS le verrou, sur la commande relue (une autre requête a pu acheter entre-temps).
+      const relue = await Order.findById(order._id).select('shipments.jumingoShipmentId pendingJumingoLabel').lean();
+      const dejaAchete = relue && ((relue.shipments || []).some((s) => s && s.jumingoShipmentId === shipmentId)
+        || (relue.pendingJumingoLabel && relue.pendingJumingoLabel.shipmentId === shipmentId));
+      if (dejaAchete) return res.status(409).json({ ok: false, error: 'Une étiquette est déjà en cours / achetée pour cet envoi.' });
+
+      const attach = await jumingo.attachRate(shipmentId, { tariffId, shippingType, pickupDate });
+      if (!attach.ok) return res.status(502).json({ ok: false, error: 'Jumingo (sélection tarif) : ' + attach.error });
+
+      const method = String(process.env.JUMINGO_PAYMENT_METHOD || 'rechnung').trim();
+      const buy = await jumingo.purchaseLabel({ shipmentIds: [shipmentId], method });
+      if (!buy.ok) return res.status(502).json({ ok: false, error: 'Jumingo (commande) : ' + buy.error });
+
+      // Mémorise la commande Jumingo (pour récupérer l'étiquette / réessayer).
+      order.pendingJumingoLabel = { orderNumber: buy.orderNumber, shipmentId, direction, carrier, createdAt: new Date() };
+      await order.save();
+
+      // PayPal/CB (returnUrl) : paiement externe à faire avant de récupérer.
+      if (buy.returnUrl) {
+        return res.json({ ok: true, needsPayment: true, returnUrl: buy.returnUrl, orderNumber: buy.orderNumber });
+      }
+      // rechnung/lastschrift : commande déjà passée → on récupère l'étiquette
+      // (génération parfois asynchrone → finalize peut renvoyer needsRetry).
+      return await finalizeJumingoShipment(req, res, order, { orderNumber: buy.orderNumber, shipmentId, direction, carrier });
+    } finally {
+      await Order.updateOne({ _id: order._id, jumingoAchatEnCoursAt: marqueVerrou }, { $set: { jumingoAchatEnCoursAt: null } }).catch(() => {});
+    }
   } catch (err) {
     console.error('[admin] buyJumingoLabel:', err && err.message);
     return res.status(500).json({ ok: false, error: "Erreur serveur pendant la commande de l'étiquette." });
@@ -13665,11 +13804,16 @@ async function getAdminPreparation(req, res, next) {
     const blocked = enriched.filter((o) => o.prepState === 'blocked');
 
     // Picking agrégé : ce qu'il faut sortir de l'atelier (todo + ready), groupé par pièce.
+    // `parts` = quantité par commande, rupture comprise : la page recalcule la liste
+    // dès qu'on change l'état d'une carte (avant : liste fausse jusqu'au rechargement).
     const pick = {};
-    enriched.filter((o) => o.prepState !== 'blocked').forEach((o) => {
+    enriched.forEach((o) => {
+      const bloquee = o.prepState === 'blocked';
       o.items.forEach((it) => {
         const key = (it.ref || it.name).toLowerCase().trim();
-        if (!pick[key]) pick[key] = { label: it.name, ref: it.ref, image: it.image, qty: 0, orders: [] };
+        if (!pick[key]) pick[key] = { label: it.name, ref: it.ref, image: it.image, qty: 0, orders: [], parts: {} };
+        pick[key].parts[o.id] = (pick[key].parts[o.id] || 0) + it.quantity;
+        if (bloquee) return;
         pick[key].qty += it.quantity;
         if (pick[key].orders.indexOf(o.number) === -1) pick[key].orders.push(o.number);
       });
@@ -13698,8 +13842,10 @@ async function getAdminConsignes(req, res, next) {
       archived: { $ne: true },
       deletedAt: null,
       status: { $nin: ['cancelled', 'failed', 'pending_payment', 'draft'] },
+      // Consigne déjà cochée « reçue » (avant le correctif du statut) → plus en attente.
+      ...require('../services/retourConsigne').SAUF_CONSIGNE_TOUTE_RECUE,
     })
-      .select('number createdAt status returnStatus returnDates consigne.chargedTotalCents shippingAddress userId email items.name')
+      .select('number createdAt status returnStatus returnDates consigne.chargedTotalCents consigne.lines.receivedAt shippingAddress userId email items.name')
       .sort({ createdAt: 1 })
       .limit(500)
       .lean();

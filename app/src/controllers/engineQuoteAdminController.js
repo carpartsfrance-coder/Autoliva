@@ -16,6 +16,7 @@
 const crypto = require('crypto');
 const mongoose = require('mongoose');
 const AbandonedCart = require('../models/AbandonedCart');
+const { avecVerrouEnvoi } = require('../services/verrouEnvoiLead');
 const storage = require('../services/savFileStorage');
 const emailService = require('../services/emailService');
 const { buildQuotePdf } = require('../services/engineQuotePdf');
@@ -1591,6 +1592,9 @@ async function postSendQuote(req, res, next) {
     if (!sendResult || sendResult.ok === false) {
       console.error('[engine-quote] Email envoi devis échoué:', sendResult);
     }
+    const devisEmailResult = (!sendResult || sendResult.ok === false)
+      ? { status: 'failed', reason: (sendResult && (sendResult.reason || sendResult.code)) || 'email_error', message: (sendResult && (sendResult.error || sendResult.message)) || 'E-mail non envoyé', at: new Date(), phone: '' }
+      : { status: 'sent', reason: '', message: '', at: new Date(), phone: '' };
 
     // Lien court de marque pour le SMS (autoliva.com/d/<code>) : bien plus
     // lisible et rassurant que la longue URL /api/devis-moteurs/track-pdf/…
@@ -1654,6 +1658,7 @@ async function postSendQuote(req, res, next) {
             customMessage,
             sentByName: admin.name,
             sms: devisSmsResult,
+            email: devisEmailResult,
             attachedPhotos: photoSnapshot,
           },
         },
@@ -2029,7 +2034,8 @@ module.exports = {
   postSetArchive,
   postDelete,
   postShipment,
-  postSendQuote,
+  // Verrou : deux onglets n'envoient pas deux devis (2 e-mails, 2 liens Mollie).
+  postSendQuote: avecVerrouEnvoi(postSendQuote, { dureeMs: 3 * 60 * 1000, texte: true }),
   postPreviewPdf,
   postPreviewEmail,
   getPreviewMail,

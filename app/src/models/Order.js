@@ -435,6 +435,12 @@ const orderSchema = new mongoose.Schema(
       updatedBy: { type: String, default: '', trim: true },
     },
     refunds: { type: [refundSchema], default: [] },
+    /* Verrou anti-double-remboursement / double avoir sur la COMMANDE (même idée que
+     * consigne.refundInProgressAt) : posé avant l'appel Mollie/Scalapay, relâché à la
+     * fin, périmé après 2 min. Sans valeur par défaut : absent = libre. */
+    refundLockAt: { type: Date },
+    /* Verrou anti-double achat d'étiquette Jumingo (deux clics / deux onglets). */
+    jumingoAchatEnCoursAt: { type: Date },
     creditNotes: { type: [creditNoteSchema], default: [] },
     totalCents: { type: Number, required: true, min: 0 },
     // Autoliquidation TVA (reverse charge B2B UE). Rempli seulement si applicable ;
@@ -696,7 +702,10 @@ orderSchema.pre('save', function (next) {
           dueDate.setDate(dueDate.getDate() + 30);
           order.returnDates.returnDueDate = dueDate;
         }
-        order.returnStatus = 'pending';
+        // Ne pas « dé-recevoir » une ancienne pièce déjà revenue (ex. passage livré après réception).
+        if (!['received', 'inspected_ok', 'inspected_nok'].includes(order.returnStatus)) {
+          order.returnStatus = 'pending';
+        }
       }
       // Si tous les articles sont exchange_cloning → returnStatus reste 'not_applicable'
     }

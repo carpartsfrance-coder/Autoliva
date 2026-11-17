@@ -72,7 +72,7 @@
     modalEl.innerHTML =
       '<div id="ajax-confirm-overlay" class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>' +
       '<div class="relative bg-white rounded-2xl shadow-2xl p-6 max-w-sm mx-4 w-full animate-[fadeInUp_0.2s_ease-out]">' +
-        '<p id="ajax-confirm-msg" class="text-gray-800 font-semibold text-base mb-6"></p>' +
+        '<p id="ajax-confirm-msg" class="text-gray-800 font-semibold text-base mb-6" style="white-space:pre-line"></p>' +
         '<div class="flex gap-3 justify-end">' +
           '<button id="ajax-confirm-cancel" class="px-4 py-2 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">Annuler</button>' +
           '<button id="ajax-confirm-ok" class="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition-colors">Confirmer</button>' +
@@ -212,6 +212,12 @@
 
             /* Dispatch custom event for page-specific handling */
             form.dispatchEvent(new CustomEvent('ajax:success', { detail: result, bubbles: true }));
+
+            /* data-recharger : la page se met à jour après l'action (ex. « Marquer reçu »
+               sur la fiche commande : le bouton restait affiché, recliquer donnait une erreur). */
+            if (form.hasAttribute('data-recharger')) {
+              setTimeout(function () { window.location.reload(); }, 700);
+            }
           }
         } catch (_err) {
           /* Error already handled by adminFetch */

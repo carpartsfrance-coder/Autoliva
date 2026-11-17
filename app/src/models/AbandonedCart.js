@@ -93,6 +93,9 @@ const engineQuoteSentSchema = new mongoose.Schema(
     sentAt: { type: Date, default: Date.now },
     version: { type: Number, default: 1 }, // n° de révision (1, 2, 3…)
     sms: { type: smsResultSchema, default: null }, // résultat SMS du devis envoyé
+    /* Résultat de l'E-MAIL du devis (avant : non enregistré → un e-mail refusé
+       laissait croire que le devis était parti). Même forme que `sms`. */
+    email: { type: smsResultSchema, default: null },
     pdfId: { type: String, default: '' },
     pdfUrl: { type: String, default: '' },
     sellPriceHt: { type: Number, default: 0 },
@@ -357,6 +360,11 @@ const abandonedCartSchema = new mongoose.Schema(
     manualEmailsSent: { type: Number, default: 0 },
     manualSmsSent: { type: Number, default: 0 },
     lastManualContactAt: { type: Date, default: null },
+    /* Verrou court pendant un envoi manuel (e-mail, SMS, relance) : deux
+       onglets ou deux collègues qui cliquent en même temps n'envoient pas
+       deux fois le même message au client. Posé puis retiré par
+       abandonedCartAdminController (avecVerrouEnvoi). Pas de valeur par défaut. */
+    envoiEnCoursAt: { type: Date },
 
     /**
      * Archivage manuel admin : sort le lead de la liste active de

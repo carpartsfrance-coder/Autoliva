@@ -463,7 +463,8 @@ async function getCommercialKpis(since, until) {
     {
       $group: {
         _id: null,
-        totalCents: { $sum: '$totalCents' },
+        // Hors caution de consigne (remboursable) : même règle que le tableau de bord et Finance.
+        totalCents: { $sum: { $max: [0, { $subtract: [{ $ifNull: ['$totalCents', 0] }, { $ifNull: ['$consigne.chargedTotalCents', 0] }] }] } },
         count: { $sum: 1 },
       },
     },

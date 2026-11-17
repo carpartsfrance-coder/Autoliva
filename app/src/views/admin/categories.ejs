@@ -148,7 +148,7 @@
             </form>
 
             <div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <form action="/admin/categories/supprimer-multi" id="bulkDeleteForm" method="POST" data-ajax="true" data-confirm="Supprimer toutes les cat\u00e9gories s\u00e9lectionn\u00e9es ?">
+              <form action="/admin/categories/supprimer-multi" id="bulkDeleteForm" method="POST" data-ajax="true" data-confirm="Supprimer toutes les catégories sélectionnées ?">
                 <button class="btn btn-ghost" disabled id="bulkDeleteBtn" type="submit">
                   <span class="material-symbols-outlined mr-2 text-base">delete</span>
                   Supprimer la sélection
@@ -271,7 +271,7 @@
                         </div>
                       </details>
 
-                      <form action="/admin/categories/<%= g.mainDoc && g.mainDoc.id ? g.mainDoc.id : '' %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette cat\u00e9gorie principale ?">
+                      <form action="/admin/categories/<%= g.mainDoc && g.mainDoc.id ? g.mainDoc.id : '' %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette catégorie principale ?">
                         <button class="btn btn-danger" <%= (!dbConnected || !canDeleteMain) ? 'disabled' : '' %> type="submit">
                           <span class="material-symbols-outlined mr-2 text-base">delete</span>
                           Supprimer
@@ -354,7 +354,7 @@
                                   </div>
                                 </details>
 
-                                <form action="/admin/categories/<%= s.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette sous-cat\u00e9gorie ?">
+                                <form action="/admin/categories/<%= s.id %>/supprimer" method="POST" data-ajax="true" data-confirm="Supprimer cette sous-catégorie ?">
                                   <button class="btn btn-danger" <%= (!dbConnected || !s.canDelete) ? 'disabled' : '' %> type="submit">
                                     <span class="material-symbols-outlined mr-2 text-base">delete</span>
                                     Supprimer

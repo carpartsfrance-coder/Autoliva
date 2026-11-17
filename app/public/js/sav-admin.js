@@ -24,6 +24,28 @@
     });
   }
 
+  /* Export CSV : l'API SAV exige le jeton Bearer. Un simple window.open() ne
+     l'envoie pas → la page affichait « Non autorisé » au lieu du fichier. On
+     télécharge donc le CSV avec le jeton puis on le propose à l'enregistrement. */
+  function telechargerCsv(qs, chemin, prefixe) {
+    return fetch('/admin/api/sav/' + (chemin || 'tickets.csv') + '?' + (qs || ''), { headers: { Authorization: 'Bearer ' + TOKEN } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.blob();
+      })
+      .then(function (blob) {
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = (prefixe || 'sav-tickets') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      })
+      .catch(function () { toast('Export CSV impossible', 'error'); });
+  }
+
   function toast(msg, type) {
     var rootEl = document.getElementById('sav-toast-root');
     if (!rootEl) {
@@ -40,6 +62,14 @@
     rootEl.appendChild(el);
     requestAnimationFrame(function () { el.classList.add('sav-toast--visible'); });
     setTimeout(function () { el.classList.remove('sav-toast--visible'); setTimeout(function () { el.remove(); }, 250); }, 4000);
+  }
+
+  /* Montants au format français (« 49,90 € ») : toFixed(2) affichait « 49.90 € ». */
+  function euroFr(n) {
+    var v = Number(n);
+    if (!isFinite(v)) v = 0;
+    try { return v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).replace(/\u202f/g, '\u00a0') + '\u00a0€'; }
+    catch (e) { return v.toFixed(2).replace('.', ',') + '\u00a0€'; }
   }
 
   function escapeHtml(s) {
@@ -833,7 +863,7 @@
     document.getElementById('sav-bulk-statut-apply').addEventListener('click', function () {
       var st = document.getElementById('sav-bulk-statut').value;
       if (!st || !selected.size) return;
-      if (!confirm('Passer ' + selected.size + ' ticket(s) au statut "' + st + '" ?')) return;
+      if (!confirm('Passer ' + selected.size + ' ticket(s) au statut « ' + labelStatut(st) + ' » ?')) return;
       var arr = Array.from(selected);
       Promise.all(arr.map(function (n) {
         return api('/tickets/' + encodeURIComponent(n) + '/statut', { method: 'PATCH', body: JSON.stringify({ statut: st, auteur: 'admin' }) })
@@ -855,13 +885,26 @@
       var uid = document.getElementById('sav-bulk-assign').value;
       if (!uid || !selected.size) return;
       var arr = Array.from(selected);
+      /* Avant : « Assignations OK » même si des requêtes échouaient. On compte
+         réellement, et on garde cochés les tickets refusés. */
       Promise.all(arr.map(function (n) {
-        return api('/tickets/' + encodeURIComponent(n) + '/assign', { method: 'POST', body: JSON.stringify({ userId: uid }) });
-      })).then(function () { toast('Assignations OK', 'success'); selected.clear(); updateBulkBar(); load(); });
+        return api('/tickets/' + encodeURIComponent(n) + '/assign', { method: 'POST', body: JSON.stringify({ userId: uid }) })
+          .then(function (res) { return { n: n, ok: !!(res && res.ok && res.j && res.j.success !== false), err: res && res.j && res.j.error }; })
+          .catch(function () { return { n: n, ok: false, err: 'réseau' }; });
+      })).then(function (resultats) {
+        var echecs = resultats.filter(function (r) { return !r.ok; });
+        var faits = resultats.length - echecs.length;
+        if (faits) toast(faits + ' ticket(s) assigné(s)', 'success');
+        if (echecs.length) toast(echecs.length + ' refusé(s) : ' + echecs.slice(0, 3).map(function (r) { return r.n + ' (' + (r.err || 'erreur') + ')'; }).join(', '), 'error');
+        selected = new Set(echecs.map(function (r) { return r.n; }));
+        updateBulkBar(); load();
+      });
     });
     document.getElementById('sav-bulk-export').addEventListener('click', function () {
-      // Export = juste un CSV des sélectionnés (en pratique on filtre côté csv)
-      window.open('/admin/api/sav/tickets.csv?' + buildQs().toString(), '_blank');
+      // CSV des SEULS tickets cochés (avant : tous ceux du filtre, et refusé faute de jeton).
+      var qs = buildQs();
+      qs.set('numeros', Array.from(selected).join(','));
+      telechargerCsv(qs.toString());
     });
     // Bulk archive / unarchive — bascule selon que la vue affiche les archivés ou non
     var bulkArchiveBtn = document.getElementById('sav-bulk-archive');
@@ -964,7 +1007,7 @@
     var csvBtn = document.getElementById('sav-export-csv');
     if (csvBtn) csvBtn.addEventListener('click', function (e) {
       e.preventDefault();
-      window.open('/admin/api/sav/tickets.csv?' + buildQs().toString(), '_blank');
+      telechargerCsv(buildQs().toString());
     });
 
     // Charge équipe pour bulk assign + filtre assigné
@@ -1292,13 +1335,12 @@
 
     function renderRefundPanel() {
       var st = document.getElementById('sav-refund-status');
-      var btn = document.getElementById('sav-refund-btn');
-      if (!st || !btn) return;
+      if (!st) return; // (le bouton n'existe pas pour un employé : on affiche quand même l'état)
       var r = ticket.paiements && ticket.paiements.remboursement;
       if (r && r.status === 'effectue') {
-        var amount = (r.amountCents/100).toFixed(2);
+        var amount = euroFr((r.amountCents || 0) / 100);
         var refId = r.mollieRefundId || '';
-        var html = '<span class="text-emerald-700 font-semibold">' + amount + ' € remboursés</span>';
+        var html = '<span class="text-emerald-700 font-semibold">' + amount + ' remboursés</span>';
         if (refId) html += ' · <span class="font-mono">' + refId + '</span>';
         /* Lien vers l'avoir PDF si on a un numéro de commande et qu'un avoir a été généré */
         if (ticket.numeroCommande && r.creditNoteNumber) {
@@ -1326,7 +1368,7 @@
       var methodLabel = method
         ? method.charAt(0).toUpperCase() + method.slice(1).replace('_', ' ')
         : 'le provider auto-détecté';
-      if (!window.confirm('Rembourser ' + euros.toFixed(2) + ' € via ' + methodLabel + ' sur la commande ' + (ticket.numeroCommande || '?') + ' ?')) return;
+      if (!window.confirm('Rembourser ' + euroFr(euros) + ' via ' + methodLabel + ' sur la commande ' + (ticket.numeroCommande || '?') + ' ?')) return;
       var btn = document.getElementById('sav-refund-btn');
       btn.disabled = true; btn.classList.add('opacity-60');
       api('/tickets/' + encodeURIComponent(numero) + '/refund', {
@@ -1368,7 +1410,7 @@
       if (!links.length) { box.textContent = 'Aucun lien de paiement.'; return; }
       var html = '';
       links.slice().sort(function (a, b) { return (new Date(b.createdAt || 0)) - (new Date(a.createdAt || 0)); }).forEach(function (l) {
-        var amt = ((l.amountCents || 0) / 100).toFixed(2);
+        var amt = euroFr((l.amountCents || 0) / 100);
         var label = escapeHtml(l.label || '—');
         var st = escapeHtml(l.status || 'pending');
         var badge = statusBadgeClasses(l.status);
@@ -1386,7 +1428,7 @@
         html += '<div class="rounded-lg border border-slate-200 px-2 py-1.5 bg-white">'
           + '<div class="flex items-center justify-between gap-2">'
             + '<div class="min-w-0">'
-              + '<div class="font-bold text-slate-900">' + amt + ' € · <span class="font-normal text-slate-600">' + label + '</span></div>'
+              + '<div class="font-bold text-slate-900">' + amt + ' · <span class="font-normal text-slate-600">' + label + '</span></div>'
               + paidLine + sentLine
             + '</div>'
             + '<span class="text-[9px] uppercase tracking-wider font-semibold border rounded-full px-1.5 py-0.5 ' + badge + '">' + st + '</span>'
@@ -1420,7 +1462,7 @@
         var cents = Math.round(euros * 100);
         var label = (labelInput && labelInput.value || '').trim();
         var description = (descInput && descInput.value || '').trim();
-        if (!window.confirm('Créer un lien Mollie de ' + euros.toFixed(2) + ' € pour le ticket ' + numero + ' ?')) return;
+        if (!window.confirm('Créer un lien Mollie de ' + euroFr(euros) + ' pour le ticket ' + numero + ' ?')) return;
         createBtn.disabled = true; createBtn.classList.add('opacity-60');
         if (btnLabel) btnLabel.textContent = 'Création en cours…';
         if (btnIcon) btnIcon.textContent = 'progress_activity';
@@ -1429,7 +1471,7 @@
           body: JSON.stringify({ amountCents: cents, label: label, description: description }),
         }).then(function (res) {
           if (res.ok && res.j.success) {
-            toast('Lien créé : ' + euros.toFixed(2) + ' €', 'success');
+            toast('Lien créé : ' + euroFr(euros), 'success');
             if (amtInput) amtInput.value = '';
             if (labelInput) labelInput.value = '';
             if (descInput) descInput.value = '';
@@ -1502,8 +1544,14 @@
         if (o._id) ticket.orderId = o._id;
         var html = '';
         // Header : numéro + statut sur une ligne
+        // Libellé français (avant : la clé brute « PROCESSING », « LABEL_CREATED »…).
+        var LIBELLES_STATUT_COMMANDE = {
+          draft: 'Brouillon', pending_payment: 'En attente de paiement', paid: 'Payée', processing: 'En préparation',
+          label_created: 'Étiquette créée', shipped: 'Expédiée', delivered: 'Livrée', completed: 'Terminée',
+          cancelled: 'Annulée', refunded: 'Remboursée', partially_refunded: 'Remboursée en partie',
+        };
         var statusHtml = o.status
-          ? '<span class="sav-order-status">' + escapeHtml(o.status) + '</span>'
+          ? '<span class="sav-order-status">' + escapeHtml(LIBELLES_STATUT_COMMANDE[o.status] || o.status) + '</span>'
           : '';
         /* La fiche commande vit sur /admin/commandes/<ObjectId>. Le lien
            pointait sur /admin/orders/<numéro> : route inexistante ET mauvais
@@ -2883,7 +2931,7 @@
       var pieceBody = [
         p.reference ? '<div class="font-mono text-slate-900">' + escapeHtml(p.reference) + '</div>' : (t.pieceType ? '<div class="font-medium text-slate-900">' + escapeHtml(labelPiece(t.pieceType)) + '</div>' : ''),
         p.designation ? '<div>' + escapeHtml(p.designation) + '</div>' : '',
-        (p.prixHT != null) ? '<div><span class="text-slate-500">Prix HT&nbsp;:</span> ' + Number(p.prixHT).toFixed(2) + ' €</div>' : '',
+        (p.prixHT != null) ? '<div><span class="text-slate-500">Prix HT&nbsp;:</span> ' + euroFr(p.prixHT) + '</div>' : '',
         p.url ? '<div class="pt-2"><a href="' + escapeHtml(p.url) + '" target="_blank" rel="noopener" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-300 text-xs hover:border-primary hover:text-primary">Fiche produit</a></div>' : '',
       ].filter(Boolean).join('') || '<span class="text-slate-400">Non renseigné</span>';
 
@@ -2896,7 +2944,7 @@
         ? [
             '<div><a href="/admin/commandes/' + encodeURIComponent(cmdNum) + '" class="text-primary font-mono hover:underline">' + escapeHtml(cmdNum) + '</a></div>',
             cmdDate ? '<div><span class="text-slate-500">Date&nbsp;:</span> ' + new Date(cmdDate).toLocaleDateString('fr-FR') + '</div>' : '',
-            (cmdTotal != null) ? '<div><span class="text-slate-500">Total&nbsp;:</span> ' + Number(cmdTotal).toFixed(2) + ' €</div>' : '',
+            (cmdTotal != null) ? '<div><span class="text-slate-500">Total&nbsp;:</span> ' + euroFr(cmdTotal) + '</div>' : '',
             cmdPaiement ? '<div><span class="text-slate-500">Paiement&nbsp;:</span> <span class="px-1.5 py-0.5 rounded text-xs ' +
               (cmdPaiement === 'paye' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800') + '">' + escapeHtml(cmdPaiement) + '</span></div>' : '',
           ].filter(Boolean).join('')
@@ -3765,7 +3813,7 @@
         box.innerHTML =
           '<div class="space-y-2">' +
             '<div><span class="inline-block px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">En attente paiement</span></div>' +
-            '<div class="text-sm font-semibold text-slate-900">' + Number(amount).toFixed(2) + ' €</div>' +
+            '<div class="text-sm font-semibold text-slate-900">' + euroFr(amount) + '</div>' +
             (url ? '<div class="flex items-center gap-1"><a href="' + escapeHtml(url) + '" target="_blank" rel="noopener" class="text-xs text-primary underline truncate flex-1">' + escapeHtml(url) + '</a>' +
               '<button type="button" class="sav-copy-mini text-slate-400 hover:text-primary" data-copy="' + escapeHtml(url) + '" title="Copier"><span class="material-symbols-outlined" style="font-size:14px;">content_copy</span></button></div>' : '') +
             (p.dateGeneration ? '<div class="text-[10px] text-slate-400">Généré : ' + new Date(p.dateGeneration).toLocaleString('fr-FR') + '</div>' : '') +
@@ -3777,7 +3825,7 @@
         box.innerHTML =
           '<div class="space-y-2">' +
             '<div class="flex items-center gap-2 text-emerald-700"><span class="material-symbols-outlined">check_circle</span><span class="font-semibold">Payé</span></div>' +
-            '<div class="text-sm font-semibold text-slate-900">' + Number(amount).toFixed(2) + ' €</div>' +
+            '<div class="text-sm font-semibold text-slate-900">' + euroFr(amount) + '</div>' +
             (p.datePaiement ? '<div class="text-xs text-slate-500">Le ' + new Date(p.datePaiement).toLocaleString('fr-FR') + '</div>' : '') +
             (p.mollieId ? '<div class="text-xs"><a href="https://my.mollie.com/dashboard/payments/' + escapeHtml(p.mollieId) + '" target="_blank" rel="noopener" class="text-primary underline">Voir transaction Mollie ↗</a></div>' : '') +
             (p.qontoInvoiceUrl ? '<div class="text-xs"><a href="' + escapeHtml(p.qontoInvoiceUrl) + '" target="_blank" rel="noopener" class="text-primary underline">Facture Qonto ↗</a></div>' : '') +
@@ -4631,7 +4679,18 @@
       });
     }
 
+    /* Un seul envoi à la fois : un double-clic ou Cmd+Entrée répété envoyait le
+       message (et l'e-mail / SMS au client) deux fois. */
+    var envoiEnCours = false;
     function doSend(action, nextStatut) {
+      if (envoiEnCours) return false;
+      envoiEnCours = true;
+      var boutonsEnvoi = msgForm ? msgForm.querySelectorAll('button[type="submit"], [data-send-action]') : [];
+      Array.prototype.forEach.call(boutonsEnvoi, function (b) { b.disabled = true; });
+      var liberer = function () {
+        envoiEnCours = false;
+        Array.prototype.forEach.call(boutonsEnvoi, function (b) { b.disabled = false; });
+      };
       var canal = (canalInput && canalInput.value) || 'inapp';
       var sujet = (document.querySelector('[name="sujet"]') || {}).value || '';
       var contenu = interpolate(document.getElementById('sav-msg-contenu').value || '');
@@ -4690,7 +4749,9 @@
         }
         loadTicket();
         return true;
-      });
+      })
+        .catch(function () { toast('Erreur réseau : message peut-être non envoyé, vérifie l\'historique avant de renvoyer', 'error'); return false; })
+        .then(function (r) { liberer(); return r; }, function (err) { liberer(); throw err; });
     }
     if (msgForm) msgForm.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -5233,11 +5294,25 @@
         });
       });
     });
+    /* Résolution : un clic passait le ticket en « résolu » sans confirmation, et
+       « remboursement » laissait croire que l'argent était rendu. Confirmation +
+       un seul envoi à la fois. */
     document.querySelectorAll('[data-action-resolution]').forEach(function (btn) {
       btn.addEventListener('click', function () {
+        if (btn.disabled) return;
         var type = btn.getAttribute('data-action-resolution');
-        api('/tickets/' + encodeURIComponent(numero) + '/resolution', { method: 'POST', body: JSON.stringify({ type: type }) })
-          .then(function (res) { if (res.ok && res.j.success) { toast('Résolution : ' + type); loadTicket(); } else toast(res.j.error || 'Erreur', 'error'); });
+        withConfirm(btn, function () {
+          btn.disabled = true;
+          api('/tickets/' + encodeURIComponent(numero) + '/resolution', { method: 'POST', body: JSON.stringify({ type: type }) })
+            .then(function (res) {
+              if (res.ok && res.j.success) {
+                toast(type === 'remboursement' ? 'Décision enregistrée — remboursement à faire dans le bloc Remboursement' : 'Résolution : ' + type);
+                loadTicket();
+              } else toast(res.j.error || 'Erreur', 'error');
+            })
+            .catch(function () { toast('Erreur réseau', 'error'); })
+            .then(function () { btn.disabled = false; });
+        });
       });
     });
     var fact = document.querySelector('[data-action-facturer]');
@@ -6143,7 +6218,8 @@
     var exp = document.getElementById('sav-analytics-export');
     if (exp) exp.addEventListener('click', function (e) {
       e.preventDefault();
-      window.open('/admin/api/sav/analytics.csv', '_blank');
+      // Même raison que l'export des tickets : window.open() n'envoie pas le jeton → « Non autorisé ».
+      telechargerCsv('', 'analytics.csv', 'sav-analytics');
     });
   }
 
@@ -6213,20 +6289,31 @@
     var autoList = document.getElementById('sav-auto-list');
     var current = null;
 
+    /* Noms et explications en français simple. Les descriptions techniques
+       enregistrées restent en info-bulle. Ce que fait chaque règle vient de
+       services/savAutomations.js (la fermeture n'envoie PAS d'e-mail). */
+    var REGLES = {
+      relance_1: { titre: '1re relance du client', aide: 'Le client n’a pas envoyé ses documents : après ce nombre de jours sans nouvelles, il reçoit un e-mail de relance.' },
+      relance_2: { titre: '2e relance (la dernière)', aide: 'Toujours rien après la 1re relance : nouvel e-mail de relance.' },
+      clos_sans_reponse: { titre: 'Fermeture sans réponse', aide: 'Toujours rien après la 2e relance : le dossier est fermé (aucun e-mail n’est envoyé).' },
+      echange_auto: { titre: 'Échange automatique (pas encore branché)', aide: 'Note seulement « échange à créer » dans le dossier quand l’analyse confirme un défaut. Ne crée aucune commande.' },
+    };
+    function regleLib(r) { return REGLES[r.key] || { titre: r.key, aide: r.description || '' }; }
+
     api('/settings').then(function (res) {
       if (!res.ok) return;
       current = res.j.data;
       slaGrid.innerHTML = (current.slaPerPiece || []).map(function (p, i) {
-        return '<div class="rounded-xl border border-slate-200 p-3"><div class="text-xs font-semibold mb-1">' + escapeHtml(p.pieceType) + '</div>' +
+        return '<div class="rounded-xl border border-slate-200 p-3"><div class="text-xs font-semibold mb-1" title="' + escapeHtml(p.pieceType) + '">' + escapeHtml(labelPiece(p.pieceType)) + '</div>' +
           '<div class="flex items-center gap-2"><input type="number" min="1" max="60" value="' + p.days + '" data-sla-idx="' + i + '" class="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm"><span class="text-xs text-slate-500">jours</span></div></div>';
       }).join('');
       autoList.innerHTML = (current.automationRules || []).map(function (r, i) {
         return '<div class="rounded-xl border border-slate-200 p-4">' +
           '<div class="flex items-start justify-between gap-3">' +
-            '<div><div class="font-semibold text-sm">' + escapeHtml(r.key) + '</div><div class="text-xs text-slate-500 mt-1">' + escapeHtml(r.description || '') + '</div></div>' +
+            '<div><div class="font-semibold text-sm">' + escapeHtml(regleLib(r).titre) + '</div><div class="text-xs text-slate-500 mt-1" title="' + escapeHtml(r.description || '') + '">' + escapeHtml(regleLib(r).aide) + '</div></div>' +
             '<label class="inline-flex items-center cursor-pointer"><input type="checkbox" data-auto-enabled="' + i + '" ' + (r.enabled ? 'checked' : '') + ' class="rounded text-primary"><span class="ml-2 text-xs">Activé</span></label>' +
           '</div>' +
-          '<div class="mt-2 flex items-center gap-2"><label class="text-xs text-slate-600">Seuil :</label>' +
+          '<div class="mt-2 flex items-center gap-2"><label class="text-xs text-slate-600">Après</label>' +
           '<input type="number" min="0" max="90" value="' + r.daysThreshold + '" data-auto-days="' + i + '" class="w-20 rounded-lg border border-slate-300 px-2 py-1 text-sm">' +
           '<span class="text-xs text-slate-500">jours</span></div>' +
         '</div>';
@@ -6253,10 +6340,23 @@
         });
     });
 
-    document.getElementById('sav-auto-run-now').addEventListener('click', function () {
-      api('/automations/run', { method: 'POST' }).then(function (res) {
-        if (res.ok) toast('Automations exécutées : ' + JSON.stringify(res.j.data));
-        else toast('Erreur', 'error');
+    /* « Exécuter maintenant » envoie de VRAIS e-mails de relance aux clients
+       concernés : confirmation d'abord, résultat lisible ensuite. */
+    var btnRun = document.getElementById('sav-auto-run-now');
+    btnRun.addEventListener('click', function () {
+      var msg = 'Lancer les règles maintenant ?\n\nLes clients concernés reçoivent tout de suite leur e-mail de relance, et les dossiers sans réponse peuvent être fermés.';
+      var demande = typeof window.adminConfirm === 'function' ? Promise.resolve(window.adminConfirm(msg)) : Promise.resolve(window.confirm(msg));
+      demande.then(function (oui) {
+        if (!oui) return;
+        btnRun.disabled = true;
+        api('/automations/run', { method: 'POST' }).then(function (res) {
+          btnRun.disabled = false;
+          if (!res.ok) { toast((res.j && res.j.error) || 'Erreur', 'error'); return; }
+          var d = (res.j && res.j.data) || {};
+          var total = (d.relance_1 || 0) + (d.relance_2 || 0) + (d.clos_sans_reponse || 0) + (d.echange_auto || 0);
+          toast(total === 0 ? 'Rien à faire : aucun dossier concerné.'
+            : '1res relances : ' + (d.relance_1 || 0) + ' · 2es relances : ' + (d.relance_2 || 0) + ' · dossiers fermés : ' + (d.clos_sans_reponse || 0) + (d.echange_auto ? ' · échanges notés : ' + d.echange_auto : ''));
+        }).catch(function () { btnRun.disabled = false; toast('Erreur réseau', 'error'); });
       });
     });
   }

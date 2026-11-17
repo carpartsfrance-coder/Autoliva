@@ -208,7 +208,9 @@
           <div class="cmd-selection" id="cmdSelection" hidden>
             <button type="button" class="cmd-act" data-groupe="avancer"><span class="ms" aria-hidden="true">done_all</span>Avancer d’une étape</button>
             <button type="button" class="cmd-bouton is-petit" data-groupe="etiquettes"><span class="ms" aria-hidden="true">print</span>Imprimer les étiquettes</button>
-            <button type="button" class="cmd-bouton is-petit is-avis" data-groupe="avis"><span class="ms" aria-hidden="true">reviews</span>Demander un avis</button>
+            <%# « Demander un avis » groupé retiré : il appelait /admin/commandes/demande-avis-multi,
+                route qui n'existe plus (toujours « Échec »). La demande d'avis se fait commande
+                par commande depuis la fiche (menu « … » de chaque ligne). %>
             <button type="button" class="cmd-bouton is-petit is-danger" data-groupe="corbeille" title="Met à la corbeille, restaurable 30 jours"><span class="ms" aria-hidden="true">delete</span>Supprimer</button>
             <span class="cmd-selection-n" data-selection-n>0 sélectionnée</span>
           </div>

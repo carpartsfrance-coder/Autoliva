@@ -10,7 +10,7 @@
         <div class="text-2xl md:text-3xl font-semibold text-slate-900">Paramètres SAV</div>
         <div class="mt-1 text-sm text-slate-500">Délais SLA par type de pièce et règles d'automatisation</div>
       </div>
-      <a href="/admin/sav" class="btn btn-secondary">← Dashboard</a>
+      <a href="/admin/sav" class="btn btn-secondary">← Retour au SAV</a>
     </div>
 
     <!-- SLA -->
@@ -46,5 +46,6 @@
 </main>
 
 <div class="sav-toast-root" id="sav-toast-root" aria-live="polite"></div>
+<script src="/js/sav-labels.js?v=5" defer></script>
 <script src="/js/sav-admin.js?v=<%= (typeof assetVersions !== 'undefined' && assetVersions.savAdminJs) || '' %>" defer></script>
 <%- include('./partials/footer') %>

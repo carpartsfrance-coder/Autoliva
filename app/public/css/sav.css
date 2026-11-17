@@ -2099,6 +2099,10 @@
 }
 .sav-tpl-chip--shared:hover { border-color: #3b82f6; }
 .sav-tpl-chip--shared .sav-tpl-del { color: #1e40af; }
+/* Petites puces : leur « padding … !important » écrasait la place réservée à droite
+   pour le crayon, qui recouvrait la fin du nom (« #Diagnostic négatif (non défectueu✎ »). */
+.sav-tpl-chip--sm.sav-tpl-chip--shared,
+.sav-tpl-chip--sm.sav-tpl-chip--perso { padding-right: 22px !important; }
 .sav-tpl-chip--shared .sav-tpl-del:hover { background: #3b82f6; color: #fff; }
 
 /* ====================================================================== */
@@ -2871,15 +2875,17 @@ main.sav-module {
 .sav-sidebar-accordion__head::-webkit-details-marker { display: none; }
 .sav-sidebar-accordion__head::marker { content: ''; display: none; }
 
-/* Chevron icon rotation */
-.sav-sidebar-accordion__head .material-symbols-outlined:last-child {
+/* Chevron icon rotation — « :not(:first-child) » : quand l'icône du titre est la
+   seule icône (« Dossier client », « Documents »…), elle était prise pour le chevron
+   et poussée à droite avec le titre (titres alignés à droite, en gris). */
+.sav-sidebar-accordion__head .material-symbols-outlined:last-child:not(:first-child) {
   margin-left: auto;
   font-size: 18px;
   color: #94a3b8;
   transition: transform 0.2s ease;
   flex-shrink: 0;
 }
-.sav-sidebar-accordion[open] > .sav-sidebar-accordion__head .material-symbols-outlined:last-child {
+.sav-sidebar-accordion[open] > .sav-sidebar-accordion__head .material-symbols-outlined:last-child:not(:first-child) {
   transform: rotate(180deg);
 }
 
@@ -3062,3 +3068,6 @@ main.sav-module {
 /* `.btn` impose un display qui écrasait `.hidden` : des boutons censés être masqués
    (envoi via l'API WhatsApp non configurée, partage indisponible…) restaient visibles. */
 .btn.hidden { display: none !important; }
+
+/* Compteur des notes épinglées : vide = pas de pastille grise orpheline. */
+#sav-pinned-count:empty { display: none; }
