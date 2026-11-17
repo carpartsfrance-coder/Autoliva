@@ -332,6 +332,15 @@
                       <a class="shrink-0 rounded-full border px-3.5 py-1.5 text-sm font-bold transition-colors <%= _on ? 'border-primary bg-primary text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-primary hover:text-primary' %>" href="<%= _href %>"<%- _on ? ' aria-current="page"' : '' %>><%= r.texte %></a>
                     <% }); %>
                   </div>
+                  <%# Mobile : la rangée défile à l'horizontale ; une puce active en fin de liste
+                      (« Kia ») était hors de l'écran. On la ramène en vue, sans bouger la page. %>
+                  <script>
+                    (function () {
+                      var rang = document.querySelector('[data-raccourcis-famille]');
+                      var actif = rang && rang.querySelector('[aria-current="page"]');
+                      if (actif && rang.scrollWidth > rang.clientWidth) rang.scrollLeft = Math.max(0, actif.offsetLeft - rang.offsetLeft - 16);
+                    })();
+                  </script>
                 </div>
               <% } %>
               <% if (_categoryContext.famille && _categoryContext.famille.introHtml) { %>
