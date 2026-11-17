@@ -1,5 +1,5 @@
 <%- include('./partials/head', { title }) %>
-<%- include('./partials/sidebar', { active: 'expenses', currentAdmin: typeof currentAdminSession !== 'undefined' ? currentAdminSession : null }) %>
+<%- include('./partials/sidebar', { active: 'expenses', currentAdmin: (typeof currentAdminSession !== 'undefined' && currentAdminSession) ? currentAdminSession : (typeof currentAdmin !== 'undefined' ? currentAdmin : null) }) %>
 
 <main class="p-4 sm:p-6 lg:p-10 max-w-7xl mx-auto">
 
