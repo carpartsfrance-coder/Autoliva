@@ -212,6 +212,12 @@
 
             /* Dispatch custom event for page-specific handling */
             form.dispatchEvent(new CustomEvent('ajax:success', { detail: result, bubbles: true }));
+
+            /* data-recharger : la page se met à jour après l'action (ex. « Marquer reçu »
+               sur la fiche commande : le bouton restait affiché, recliquer donnait une erreur). */
+            if (form.hasAttribute('data-recharger')) {
+              setTimeout(function () { window.location.reload(); }, 700);
+            }
           }
         } catch (_err) {
           /* Error already handled by adminFetch */

@@ -1856,7 +1856,7 @@
                 <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Consigne (ancienne pièce)</div>
                 <% if (order.consigne.hasPending) { %>
                   <% const _nbAttendues = (order.consigne.lines || []).filter((l) => l && l.isPending).length; %>
-                  <form action="/admin/commandes/<%= order.id %>/consigne/recu" method="POST" data-ajax="true"
+                  <form action="/admin/commandes/<%= order.id %>/consigne/recu" method="POST" data-ajax="true" data-recharger
                         data-confirm="Confirmer la réception de <%= _nbAttendues > 1 ? 'TOUTES les ' + _nbAttendues + ' anciennes pièces' : 'l’ancienne pièce' %> ? Le client reçoit un e-mail de confirmation.">
                     <button class="btn btn-primary" type="submit">
                       Marquer reçu
@@ -1954,7 +1954,7 @@
                   <div class="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Ancienne pièce (échange)</div>
                   <div class="mt-1 text-sm text-slate-600"><%= order.returnStatus === 'overdue' ? 'Attendue — délai dépassé.' : 'Attendue en retour.' %></div>
                 </div>
-                <form action="/admin/commandes/<%= order.id %>/consigne/recu" method="POST" data-ajax="true"
+                <form action="/admin/commandes/<%= order.id %>/consigne/recu" method="POST" data-ajax="true" data-recharger
                       data-confirm="Confirmer que l’ancienne pièce est bien revenue ? La commande sortira de « Consignes en attente ».">
                   <button class="btn btn-primary" type="submit">Marquer reçue</button>
                 </form>
