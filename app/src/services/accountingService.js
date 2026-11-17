@@ -692,9 +692,17 @@ async function listRefunds({ from, to, page = 1, limit = 50, search = '' } = {})
  * Export CSV mensuel
  * ════════════════════════════════════════════════════════════════ */
 
+/* Une cellule qui commence par = + - @ est lue comme une FORMULE par Excel.
+   Les noms, adresses et messages viennent des clients : « =HYPERLINK(...) »
+   saisi dans un formulaire deviendrait un lien piégé dans l'export. On
+   neutralise avec une apostrophe, sauf pour les vrais nombres (-12,50). */
+function neutraliserFormule(s) {
+  return /^[=+\-@\t\r]/.test(s) && !/^[-+]?\d[\d\s.,]*$/.test(s) ? "'" + s : s;
+}
+
 function csvCell(value) {
   if (value === null || value === undefined) return '';
-  const s = String(value);
+  const s = neutraliserFormule(String(value));
   if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes(';')) {
     return '"' + s.replace(/"/g, '""') + '"';
   }
@@ -1146,6 +1154,7 @@ async function getCreditNotePdfBufferFor(orderId, creditNoteNumber) {
 }
 
 module.exports = {
+  csvCell,
   TVA_RATE,
   eur,
   splitVatCommande,

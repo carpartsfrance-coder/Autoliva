@@ -683,8 +683,8 @@ adminRouter.get('/tickets.csv', async (req, res) => {
       (t.sla && t.sla.dateLimite) ? new Date(t.sla.dateLimite).toISOString() : '',
     ]);
     function csvCell(v) {
-      const s = String(v == null ? '' : v).replace(/"/g, '""');
-      return /[",\n;]/.test(s) ? '"' + s + '"' : s;
+      const s = require('../../services/accountingService').csvCell(v == null ? '' : v);
+      return s;
     }
     const csv = [head.join(';'), ...rows.map((r) => r.map(csvCell).join(';'))].join('\n');
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -1395,8 +1395,8 @@ adminRouter.get('/analytics.csv', async (req, res) => {
       ];
     });
     function csvCell(v) {
-      const s = String(v == null ? '' : v).replace(/"/g, '""');
-      return /[",\n;]/.test(s) ? '"' + s + '"' : s;
+      const s = require('../../services/accountingService').csvCell(v == null ? '' : v);
+      return s;
     }
     const csv = [head.join(';'), ...rows.map((r) => r.map(csvCell).join(';'))].join('\n');
     res.setHeader('Content-Type', 'application/vnd.ms-excel; charset=utf-8');

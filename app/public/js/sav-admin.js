@@ -855,7 +855,7 @@
     document.getElementById('sav-bulk-statut-apply').addEventListener('click', function () {
       var st = document.getElementById('sav-bulk-statut').value;
       if (!st || !selected.size) return;
-      if (!confirm('Passer ' + selected.size + ' ticket(s) au statut "' + st + '" ?')) return;
+      if (!confirm('Passer ' + selected.size + ' ticket(s) au statut « ' + labelStatut(st) + ' » ?')) return;
       var arr = Array.from(selected);
       Promise.all(arr.map(function (n) {
         return api('/tickets/' + encodeURIComponent(n) + '/statut', { method: 'PATCH', body: JSON.stringify({ statut: st, auteur: 'admin' }) })
