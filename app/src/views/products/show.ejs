@@ -363,6 +363,16 @@
         [data-ap-compat-toggle].is-open [data-ap-compat-caret] { transform: rotate(180deg); }
         /* Blocs réservés au design mobile (maquette Autoparts Mobile) */
         .ap-m-only { display: none; }
+        /* Barre d'achat posée au-dessus du menu du bas : même seuil que ce menu (md:hidden,
+           < 768 px). À 761-767 px, elle passait devant le menu. */
+        @media (max-width: 767px) {
+          [data-ap-sticky] { left: 12px !important; right: 12px !important; bottom: calc(76px + env(safe-area-inset-bottom)) !important; border: 1px solid #E9ECF1 !important; border-radius: 16px !important; }
+          /* Bouton d'assistance rond : remonté pendant que la barre est affichée (il tombait sur « Ajouter »). */
+          body.ap-sticky-on [data-cpf-contact] { bottom: calc(7rem + 78px) !important; }
+          /* La barre ne cache pas le bas de la page ; le toast « ajouté au panier » passe au-dessus des deux barres. */
+          body.ap-sticky-on { padding-bottom: 72px; }
+          [data-ap-toast] { bottom: calc(160px + env(safe-area-inset-bottom)) !important; }
+        }
         @media (max-width: 760px) {
           /* ── Hero : galerie full-bleed empilée au-dessus du panneau ── */
           .ap-hero-grid { display: block !important; }
@@ -390,12 +400,7 @@
           [data-ap-sticky-add] { padding: 0 14px !important; font-size: 13px !important; }
           /* Carte posée AU-DESSUS de la barre de navigation du bas (comme la barre du panier) ;
              avant, elle la recouvrait à moitié et le haut de la barre dépassait derrière. */
-          [data-ap-sticky] { left: 12px !important; right: 12px !important; bottom: calc(76px + env(safe-area-inset-bottom)) !important; border: 1px solid #E9ECF1 !important; border-radius: 16px !important; }
-          /* Bouton d'assistance rond : remonté pendant que la barre est affichée (il tombait sur « Ajouter »). */
-          body.ap-sticky-on [data-cpf-contact] { bottom: calc(7rem + 78px) !important; }
-          /* La barre ne cache pas le bas de la page ; le toast « ajouté au panier » passe au-dessus des deux barres. */
-          body.ap-sticky-on { padding-bottom: 72px; }
-          [data-ap-toast] { bottom: calc(160px + env(safe-area-inset-bottom)) !important; }
+
           /* ── Form vérif compat : plaque + contact sur 1 ligne, bouton en dessous
              (compact ; inputs 16px = anti-zoom iOS) ── */
           .ap-check-row { flex-wrap: wrap !important; gap: 8px !important; }
@@ -450,7 +455,7 @@
           </div>
           <span data-ap-sticky-checkok style="display: none; align-items: center; gap: 6px; background: #E4F5EC; color: #128A52; font-size: 11.5px; font-weight: 800; padding: 5px 10px; border-radius: 999px; white-space: nowrap; flex-shrink: 0;"><span class="material-symbols-outlined ap-fill" style="font-size: 14px;">check_circle</span><%= t('product.expertCheckPending') %></span>
           <div class="ap-sticky-price" style="margin-left: auto; text-align: right; flex-shrink: 0;">
-            <div style="font-size: 17px; font-weight: 800; color: #0F1626;"><%= formatMoney(basePriceCents) %> €</div>
+            <div style="font-size: 17px; font-weight: 800; color: #0F1626;" data-ap-sticky-price><%= formatMoney(basePriceCents) %> €</div>
             <%# PAngV : la barre collante a son propre bouton « In den Warenkorb ».
                 L'acheteur allemand doit y voir, près du prix, que le port s'ajoute
                 et le Pfand encaissé à la commande — pas seulement dans le bloc prix
@@ -745,9 +750,12 @@
           <%# Garages : la remise pro (User.discountPercent, posée à la main dans l'admin) n'était
               annoncée nulle part au moment où le garagiste lit le prix public (audit du 16/11/2026).
               Masqué pour un compte déjà pro et pour les services. %>
-          <% const _estPro = !!(locals.currentUser && locals.currentUser.accountType === 'pro'); %>
-          <% if (!_estPro && !isService) { %>
-          <a href="/compte/inscription?type=pro" data-pro-block style="display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px 14px; border: 1px solid #E5E8EE; border-radius: 12px; background: #FFFFFF; text-decoration: none;">
+          <%# Visiteurs NON connectés seulement : un particulier connecté était envoyé vers une
+              nouvelle inscription, et un pro n'en a pas besoin. Après l'inscription, retour sur
+              la fiche (returnTo). %>
+          <% const _connecte = !!locals.currentUser; %>
+          <% if (!_connecte && !isService) { %>
+          <a href="/compte/inscription?type=pro&amp;returnTo=<%= encodeURIComponent(String(locals.currentPath || '').split('#')[0]) %>" data-pro-block style="display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px 14px; border: 1px solid #E5E8EE; border-radius: 12px; background: #FFFFFF; text-decoration: none;">
             <span class="material-symbols-outlined" style="font-size: 22px; color: #15213B; flex-shrink: 0;">garage</span>
             <span style="min-width: 0; flex: 1;">
               <span style="display: block; font-size: 12.5px; font-weight: 800; color: #0F1626;"><%= t('product.proBlockTitle') %></span>
@@ -1309,6 +1317,10 @@
             var pricing = computeOptionPricing();
             var next = (pricing.absolute !== null ? pricing.absolute : base) + pricing.delta;
             priceEl.textContent = formatMoney(next) + ' €';
+            /* La barre fixe affichait toujours le prix de base : avec l'option clonage
+               (+100 €), 1 390 € en bas pour 1 490 € dans le bloc prix. */
+            var stickyPriceEl = document.querySelector('[data-ap-sticky-price]');
+            if (stickyPriceEl) stickyPriceEl.textContent = formatMoney(next) + ' €';
             if (priceHtEl) priceHtEl.textContent = formatMoney(Math.round(next / 1.2)); // HT = TTC / 1,20
             syncInstallmentDisplay(next);
           }

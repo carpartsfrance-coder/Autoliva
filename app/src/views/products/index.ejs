@@ -511,12 +511,24 @@
               <div class="mt-2 text-sm text-gray-600 max-w-xl"><%= t('listing.plateText') %></div>
               <a class="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white hover:bg-red-700" href="<%= _lpDevis %>?plate=<%= encodeURIComponent(_qVide) %>"><%= t('listing.plateCta') %><span class="material-symbols-outlined text-base">arrow_forward</span></a>
             </div>
+          <% } else if (_qVide && (activeFilterCount > 1 || _categoryContext || _vehicleContext)) { %>
+            <%# Recherche + autres filtres (catégorie, véhicule, état, prix) : la pièce existe peut-être
+                hors de ces filtres. Ne pas dire « introuvable dans notre catalogue » (relecture du
+                16/11/2026) ; proposer la même recherche dans tout le catalogue. %>
+            <div class="rounded-2xl bg-white border border-gray-200 p-6 sm:p-10" data-recherche-filtree-vide>
+              <div class="font-bold text-lg"><%= t('listing.filteredTitle') %></div>
+              <div class="mt-2 text-sm text-gray-600 max-w-xl"><%= t('listing.filteredText', { q: _qVide }) %></div>
+              <a class="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white hover:bg-red-700" href="<%= (typeof lang !== 'undefined' && lang === 'de') ? '/de/produits' : '/produits' %>?q=<%= encodeURIComponent(_qVide.slice(0, 80)) %>"><%= t('listing.searchEverywhere', { q: _qVide.slice(0, 40) }) %><span class="material-symbols-outlined text-base">arrow_forward</span></a>
+              <div class="mt-4 text-sm text-gray-500">
+                <a class="font-semibold text-gray-700 hover:text-primary underline underline-offset-2" href="<%= _lpDevis %>?partRef=<%= encodeURIComponent(_qVide.slice(0, 60)) %>"><%= t('listing.notFoundCta') %></a>
+              </div>
+            </div>
           <% } else if (_qVide) { %>
             <%# Recherche sans résultat : c'était « Aucune pièce trouvée » et rien d'autre. Pour
                 une pièce à 1 000 €, c'est une demande perdue → lien vers le devis, référence
                 préremplie (audit du 16/11/2026). %>
             <div class="rounded-2xl bg-white border border-gray-200 p-6 sm:p-10" data-recherche-vide>
-              <div class="font-bold text-lg"><%= t('listing.notFoundTitle') %></div>
+              <div class="font-bold text-lg"><%= (typeof rechercheReference !== 'undefined' && rechercheReference) ? t('listing.notFoundTitle') : t('listing.notFoundTitleWords') %></div>
               <div class="mt-2 text-sm text-gray-600 max-w-xl"><%= t('listing.notFoundText', { q: _qVide }) %></div>
               <a class="mt-5 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white hover:bg-red-700" href="<%= _lpDevis %>?partRef=<%= encodeURIComponent(_qVide.slice(0, 60)) %>"><%= t('listing.notFoundCta') %><span class="material-symbols-outlined text-base">arrow_forward</span></a>
               <div class="mt-4 text-sm text-gray-500">

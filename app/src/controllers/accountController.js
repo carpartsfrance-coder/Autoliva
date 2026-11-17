@@ -349,6 +349,9 @@ function getSafeReturnTo(value) {
   if (typeof value !== 'string') return null;
   if (!value.startsWith('/')) return null;
   if (value.startsWith('//')) return null;
+  /* « /\exemple.com » : certains navigateurs lisent la barre oblique inverse comme
+     « / » et sortent du site. */
+  if (value.startsWith('/\\')) return null;
   return value;
 }
 

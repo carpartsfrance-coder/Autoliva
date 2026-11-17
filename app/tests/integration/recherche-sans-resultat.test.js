@@ -30,7 +30,7 @@ test('recherche — plaque et référence introuvable', async (t) => {
   await mongoose.connect(serveur.getUri());
   await mongoose.connection.db.collection('products').insertMany([
     { name: 'Turbo reconditionné Fiat Grande Punto Ab Multiair', sku: 'T-AB-1', category: 'Turbos', priceCents: 50000, inStock: true, isPublished: true, createdAt: new Date() },
-    { name: 'Mécatronique DSG7 DQ200 reconditionnée (code P17BF)', sku: '0AM 325 025', category: 'Mécatroniques & calculateurs', priceCents: 129000, inStock: true, isPublished: true, createdAt: new Date() },
+    { name: 'Mécatronique DSG7 DQ200 reconditionnée (code P17BF)', sku: '0AM 325 025', category: 'Mécatroniques & calculateurs', priceCents: 129000, inStock: true, isPublished: true, createdAt: new Date(), compatibility: [{ make: 'Volkswagen', model: 'Golf' }] },
   ]);
 
   const app = require('../../src/app');
@@ -61,6 +61,18 @@ test('recherche — plaque et référence introuvable', async (t) => {
     assert.ok(html.includes('/rechercher?q=ZZZNONREF2026'));
   });
 
+  await t.test('référence + filtre (ex. « Neuf ») sans résultat : pas « introuvable », recherche dans tout le catalogue', async () => {
+    const html = await get('/produits?q=0AM325025&condition=neuf');
+    assert.ok(html.includes('data-recherche-filtree-vide'), 'bloc « filtres » attendu');
+    assert.ok(!html.includes('data-recherche-vide'), 'ne doit pas dire « introuvable dans notre catalogue »');
+    assert.ok(html.includes('/produits?q=0AM325025'));
+  });
+
+  await t.test('recherche par mots sans résultat : titre « Aucune pièce ne correspond »', async () => {
+    const html = await get('/produits?q=' + encodeURIComponent('volant cuir rouge'));
+    assert.ok(html.includes('Aucune pièce ne correspond à votre recherche'));
+  });
+
   await t.test('une saisie est échappée dans le message', async () => {
     const html = await get(`/produits?q=${encodeURIComponent('<b>x9z</b>')}`);
     assert.ok(!html.includes('<b>x9z</b>'), 'saisie non échappée');
@@ -71,6 +83,21 @@ test('recherche — plaque et référence introuvable', async (t) => {
     assert.ok(html.includes('Mécatronique DSG7 DQ200'), 'la fiche doit sortir');
     assert.ok(html.includes('data-recherche-code-defaut'));
     assert.ok(html.includes('/blog?q=P17BF'));
+  });
+
+  await t.test('véhicule mémorisé (Renault) puis référence VW : la fiche sort quand même', async () => {
+    let cookie = '';
+    const nav = async (chemin) => {
+      const r = await fetch(base + chemin, { headers: { accept: 'text/html', ...(cookie ? { cookie } : {}) }, redirect: 'manual' });
+      for (const c of r.headers.getSetCookie()) if (c.startsWith('carpartsfrance.sid=')) cookie = c.split(';')[0];
+      return r.text();
+    };
+    await nav('/produits?vehicleMake=Renault');
+    assert.ok(cookie, 'la session doit mémoriser le véhicule');
+    const parMots = await nav('/produits?q=mecatronique');
+    assert.ok(!parMots.includes('Mécatronique DSG7 DQ200'), 'une recherche par mots reste filtrée par le véhicule');
+    const parRef = await nav('/produits?q=0AM325025');
+    assert.ok(parRef.includes('Mécatronique DSG7 DQ200'), 'la référence doit ignorer le véhicule mémorisé');
   });
 
   await t.test('une vraie référence trouve toujours sa fiche', async () => {

@@ -98,3 +98,12 @@ test('passe « référence » : utilisée quand elle trouve, sinon recherche lar
     } finally { stub.restaurer(); }
   });
 });
+
+test('recherche par référence : le véhicule mémorisé ne s’applique pas', () => {
+  for (const q of ['0AM325025', '0AM 325 025', 'ATC450', 'atc 450', '02E927770AJ', '722.9', 'P17BF', 'A0034460310']) {
+    assert.equal(svc.rechercheParReference(q), true, q);
+  }
+  for (const q of ['', 'plaquettes', 'boite de transfert bmw', 'golf 7', 'BMW X5', 'clio']) {
+    assert.equal(svc.rechercheParReference(q), false, q);
+  }
+});

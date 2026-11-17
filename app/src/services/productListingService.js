@@ -341,6 +341,16 @@ function referenceRecollee(searchQuery) {
   return recollee;
 }
 
+/** Saisie qui désigne une pièce précise (référence, code boîte, code défaut). */
+function rechercheParReference(searchQuery) {
+  const q = String(searchQuery || '').trim();
+  if (!q) return false;
+  if (referenceRecollee(q)) return true;
+  if (/\s/.test(q) || q.length < 4 || q.length > 20) return false;
+  if (!/^[A-Za-z0-9./-]+$/.test(q)) return false;
+  return (/[A-Za-z]/.test(q) && /\d/.test(q)) || /\d{3,}/.test(q);
+}
+
 async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, perPage }) {
   const q = String(searchQuery || '').trim();
   if (!q) return null;
@@ -495,7 +505,11 @@ async function prepareProductListingData(req, options = {}) {
   // Véhicule mémorisé en session (sélecteur persistant) : s'applique en dernier
   // recours, quand rien n'est fourni par l'URL ni par un preset de page.
   const _sessionVehicle = (req.session && req.session.vehicle && typeof req.session.vehicle === 'object') ? req.session.vehicle : null;
-  if (!selectedVehicleMake && _sessionVehicle && _sessionVehicle.make) {
+  /* Recherche d'une RÉFÉRENCE (0AM325025, « atc 450 », 722.9, P17BF) : le véhicule
+     mémorisé ne s'applique pas. Un client qui a choisi une Clio puis tape une
+     référence de mécatronique VW obtenait « introuvable » (relecture ChatGPT du
+     16/11/2026). Une recherche par mots (« plaquettes ») reste filtrée. */
+  if (!selectedVehicleMake && _sessionVehicle && _sessionVehicle.make && !rechercheParReference(searchQuery)) {
     selectedVehicleMake = String(_sessionVehicle.make).trim();
     if (!selectedVehicleModel && _sessionVehicle.model) selectedVehicleModel = String(_sessionVehicle.model).trim();
     if (!selectedVehicleEngine && _sessionVehicle.engine) selectedVehicleEngine = String(_sessionVehicle.engine).trim();
@@ -1124,6 +1138,7 @@ async function prepareProductListingData(req, options = {}) {
     dbConnected,
     searchQuery,
     requetePlaque,
+    rechercheReference: rechercheParReference(searchQuery),
     selectedVehicleMake,
     selectedVehicleModel,
     selectedVehicleEngine,
@@ -1246,6 +1261,7 @@ module.exports = {
   getVehicleTree,
   searchProductsViaAtlas,
   referenceRecollee,
+  rechercheParReference,
   filtreTexteRepli,
   motifSansAccent,
   motifReference,
