@@ -10872,16 +10872,28 @@ async function postAdminResetBackofficeUserPassword(req, res, next) {
 
 async function postAdminChangeOwnPassword(req, res, next) {
   try {
+    /* Formulaire aussi présent sur « Mon compte » (/admin/profil/securite),
+       seule page qu'un employé peut ouvrir : /admin/parametres lui est
+       interdite, il ne pouvait donc pas changer son propre mot de passe.
+       On revient sur la page d'où vient le formulaire. */
+    const depuisProfil = req.body && req.body.returnTo === '/admin/profil/securite';
+    const fin = (type, message) => {
+      if (depuisProfil) {
+        req.session.profileSecurityFlash = { type: type === 'erreur' ? 'error' : 'success', message };
+        return res.redirect('/admin/profil/securite');
+      }
+      if (type === 'erreur') req.session.adminPasswordError = message;
+      else req.session.adminPasswordSuccess = message;
+      return res.redirect('/admin/parametres');
+    };
     const dbConnected = mongoose.connection.readyState === 1;
     if (!dbConnected) {
-      req.session.adminPasswordError = "La base de données n'est pas disponible.";
-      return res.redirect('/admin/parametres');
+      return fin('erreur', "La base de données n'est pas disponible.");
     }
 
     const currentAdmin = getCurrentAdminSession(req);
     if (!currentAdmin || !currentAdmin.adminUserId) {
-      req.session.adminPasswordError = 'Session admin invalide. Merci de te reconnecter.';
-      return res.redirect('/admin/parametres');
+      return fin('erreur', 'Session admin invalide. Merci de te reconnecter.');
     }
 
     const currentPassword = normalizeEnvString(req.body && req.body.currentPassword);
@@ -10889,18 +10901,15 @@ async function postAdminChangeOwnPassword(req, res, next) {
     const nextPasswordConfirm = normalizeEnvString(req.body && req.body.nextPasswordConfirm);
 
     if (!currentPassword || !nextPassword || !nextPasswordConfirm) {
-      req.session.adminPasswordError = 'Merci de renseigner tous les champs du mot de passe.';
-      return res.redirect('/admin/parametres');
+      return fin('erreur', 'Merci de renseigner tous les champs du mot de passe.');
     }
 
     if (nextPassword.length < 8) {
-      req.session.adminPasswordError = 'Le nouveau mot de passe doit faire au moins 8 caractères.';
-      return res.redirect('/admin/parametres');
+      return fin('erreur', 'Le nouveau mot de passe doit faire au moins 8 caractères.');
     }
 
     if (nextPassword !== nextPasswordConfirm) {
-      req.session.adminPasswordError = 'Les deux nouveaux mots de passe ne correspondent pas.';
-      return res.redirect('/admin/parametres');
+      return fin('erreur', 'Les deux nouveaux mots de passe ne correspondent pas.');
     }
 
     const updated = await adminUsers.updateOwnPassword({
@@ -10910,15 +10919,16 @@ async function postAdminChangeOwnPassword(req, res, next) {
     });
 
     if (!updated || !updated.ok) {
-      req.session.adminPasswordError = updated && updated.reason === 'invalid_current_password'
+      return fin('erreur', updated && updated.reason === 'invalid_current_password'
         ? 'Le mot de passe actuel est incorrect.'
-        : 'Impossible de mettre à jour le mot de passe pour le moment.';
-      return res.redirect('/admin/parametres');
+        : 'Impossible de mettre à jour le mot de passe pour le moment.');
     }
 
-    req.session.adminPasswordSuccess = 'Mot de passe mis à jour.';
-    if (wantsJsonResponse(req)) return res.json({ ok: true, message: 'Mot de passe mis à jour.' });
-    return res.redirect('/admin/parametres');
+    if (wantsJsonResponse(req)) {
+      req.session.adminPasswordSuccess = 'Mot de passe mis à jour.';
+      return res.json({ ok: true, message: 'Mot de passe mis à jour.' });
+    }
+    return fin('ok', 'Mot de passe mis à jour.');
   } catch (err) {
     return next(err);
   }
