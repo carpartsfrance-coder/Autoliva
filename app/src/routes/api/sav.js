@@ -2010,6 +2010,14 @@ adminRouter.post('/tickets/:numero/facturer-149', async (req, res) => {
 // envoie l'email client, met à jour Order.refunds[] ET SavTicket.paiements.remboursement)
 adminRouter.post('/tickets/:numero/refund', async (req, res) => {
   try {
+    /* Le jeton SAV est remis à TOUT admin connecté qui ouvre le SAV (employés
+       compris) : sans ce contrôle, un employé pouvait rembourser via le SAV alors
+       que la fiche commande le lui interdit (droit « orders.refund »). Un appel
+       sans session (outil serveur avec le jeton) reste accepté comme avant. */
+    const roleSession = req.session && req.session.admin && req.session.admin.role;
+    if (roleSession && !require('../../permissions').hasAbility(roleSession, 'orders.refund')) {
+      return fail(res, 'Remboursement réservé au propriétaire du compte.', 403);
+    }
     const ticket = await SavTicket.findOne({ numero: req.params.numero });
     if (!ticket) return fail(res, 'Ticket introuvable', 404);
     if (!ticket.numeroCommande) return fail(res, 'Aucune commande liée au ticket', 400);

@@ -37,7 +37,8 @@
 
     <form action="/admin/catalogue" class="sticky top-0 z-30 mt-6 bg-white/98 backdrop-blur rounded-2xl border border-slate-200 p-4 shadow-lg shadow-slate-200/70" method="GET">
       <div class="flex flex-col xl:flex-row xl:items-center gap-4">
-        <div class="flex-1">
+        <%# min-w : la recherche était écrasée par les 4 listes (« Rechercher: no »). %>
+        <div class="flex-1 xl:min-w-[18rem]">
           <div class="relative">
             <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
             <input class="w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 py-3 text-sm font-semibold text-slate-900 placeholder:text-slate-400" name="q" placeholder="Rechercher: nom, SKU, marque, catégorie..." type="text" value="<%= filters && filters.q ? filters.q : '' %>" />
