@@ -288,6 +288,25 @@
           range.addEventListener('input', syncFromRange);
           number.addEventListener('input', syncFromNumber);
           syncFromNumber();
+
+          /* Remise PERMANENTE (appliquée à toutes les futures commandes du client) :
+             on confirme avant d'enregistrer un changement (un glissement du curseur
+             pouvait mettre 100 % sans s'en rendre compte). */
+          const formRemise = number.form;
+          const avant = clamp(number.value);
+          let confirme = false;
+          if (formRemise) formRemise.addEventListener('submit', function (e) {
+            const apres = clamp(number.value);
+            if (confirme || apres === avant) return;
+            e.preventDefault();
+            const msg = 'Remise permanente de ' + apres + ' % sur toutes les prochaines commandes de ce client (avant : ' + avant + ' %).'
+              + (apres >= 50 ? ' Attention : c\'est une très grosse remise.' : '') + ' Confirmer ?';
+            Promise.resolve(window.adminConfirm ? window.adminConfirm(msg) : window.confirm(msg)).then(function (oui) {
+              if (!oui) return;
+              confirme = true;
+              formRemise.submit();
+            });
+          });
         }
 
       })();

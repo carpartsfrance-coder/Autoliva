@@ -1073,7 +1073,7 @@ async function postLeadSetStatus(req, res, next) {
     const id = req.params.id;
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return res.status(400).json({ ok: false, error: 'ID invalide.' });
 
-    const cart = await AbandonedCart.findById(id).select('_id email').lean();
+    const cart = await AbandonedCart.findById(id).select('_id email manualStatus recoveredAt recoveredOrder').lean();
     if (!cart) return res.status(404).json({ ok: false, error: 'Lead non trouvé.' });
 
     const raw = (req.body && req.body.status);
@@ -1106,6 +1106,11 @@ async function postLeadSetStatus(req, res, next) {
     };
 
     if (status === 'converted') update.$set.recoveredAt = now;
+    /* « Gagné » annulé (clic par erreur) : la date de conversion posée à la main
+       restait et déclenchait plus tard les relances de réachat (J+90) chez quelqu'un
+       qui n'a rien acheté. On l'enlève — sauf si une vraie commande y est liée. */
+    const commandeLiee = cart.recoveredOrder && (cart.recoveredOrder.orderId || cart.recoveredOrder.number);
+    if (cart.manualStatus === 'converted' && status !== 'converted' && !commandeLiee) update.$set.recoveredAt = null;
 
     await AbandonedCart.updateOne({ _id: cart._id }, update);
     return res.json({ ok: true, manualStatus: status });

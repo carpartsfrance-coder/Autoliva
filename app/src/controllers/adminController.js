@@ -11282,7 +11282,9 @@ async function postAdminCreateManualOrder(req, res) {
 
     /* ── Shipping & totals ── */
     const shippingCostCents = Math.max(0, Math.round(Number(body.shippingCostCents) || 0));
-    const tvaRate = Math.max(0, Math.min(100, parseFloat(body.tvaRate) || 20));
+    // « 0 % (export) » donnait 20 % (0 || 20). Seule une valeur absente vaut 20 %.
+    const tvaSaisie = parseFloat(body.tvaRate);
+    const tvaRate = Number.isFinite(tvaSaisie) ? Math.max(0, Math.min(100, tvaSaisie)) : 20;
     const tvaCents = Math.round(itemsSubtotalCents * tvaRate / 100);
     const totalCents = itemsSubtotalCents + tvaCents + shippingCostCents;
 

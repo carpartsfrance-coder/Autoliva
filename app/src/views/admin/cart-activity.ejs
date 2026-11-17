@@ -600,6 +600,15 @@
       var status = btn.dataset.status;
       var alreadyActive = btn.classList.contains('font-semibold');
       var newStatus = alreadyActive ? null : status;
+      /* « Gagné » / « Perdu » sortent le lead de « À traiter » et coupent les relances :
+         on confirme (un clic à côté suffisait). « Contacté » et les annulations restent directs. */
+      var question = newStatus === 'converted'
+        ? 'Marquer ce lead « Gagné » ? Il sort de « À traiter » et les relances automatiques s’arrêtent.'
+        : (newStatus === 'lost' ? 'Marquer ce lead « Perdu » ? Il sort de « À traiter » et les relances automatiques s’arrêtent.' : '');
+      var confirmer = !question ? Promise.resolve(true)
+        : (window.adminConfirm ? window.adminConfirm(question) : Promise.resolve(window.confirm(question)));
+      Promise.resolve(confirmer).then(function (oui) {
+      if (!oui) return;
       fetch('/admin/api/leads/' + leadId + '/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -611,6 +620,7 @@
           else alert('Erreur: ' + (data && data.error ? data.error : 'inconnue'));
         })
         .catch(function () { alert('Erreur réseau'); });
+      });
     });
   });
 

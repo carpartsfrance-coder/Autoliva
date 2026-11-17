@@ -4666,7 +4666,18 @@
       });
     }
 
+    /* Un seul envoi à la fois : un double-clic ou Cmd+Entrée répété envoyait le
+       message (et l'e-mail / SMS au client) deux fois. */
+    var envoiEnCours = false;
     function doSend(action, nextStatut) {
+      if (envoiEnCours) return false;
+      envoiEnCours = true;
+      var boutonsEnvoi = msgForm ? msgForm.querySelectorAll('button[type="submit"], [data-send-action]') : [];
+      Array.prototype.forEach.call(boutonsEnvoi, function (b) { b.disabled = true; });
+      var liberer = function () {
+        envoiEnCours = false;
+        Array.prototype.forEach.call(boutonsEnvoi, function (b) { b.disabled = false; });
+      };
       var canal = (canalInput && canalInput.value) || 'inapp';
       var sujet = (document.querySelector('[name="sujet"]') || {}).value || '';
       var contenu = interpolate(document.getElementById('sav-msg-contenu').value || '');
@@ -4725,7 +4736,9 @@
         }
         loadTicket();
         return true;
-      });
+      })
+        .catch(function () { toast('Erreur réseau : message peut-être non envoyé, vérifie l\'historique avant de renvoyer', 'error'); return false; })
+        .then(function (r) { liberer(); return r; }, function (err) { liberer(); throw err; });
     }
     if (msgForm) msgForm.addEventListener('submit', function (e) {
       e.preventDefault();
@@ -5268,11 +5281,25 @@
         });
       });
     });
+    /* Résolution : un clic passait le ticket en « résolu » sans confirmation, et
+       « remboursement » laissait croire que l'argent était rendu. Confirmation +
+       un seul envoi à la fois. */
     document.querySelectorAll('[data-action-resolution]').forEach(function (btn) {
       btn.addEventListener('click', function () {
+        if (btn.disabled) return;
         var type = btn.getAttribute('data-action-resolution');
-        api('/tickets/' + encodeURIComponent(numero) + '/resolution', { method: 'POST', body: JSON.stringify({ type: type }) })
-          .then(function (res) { if (res.ok && res.j.success) { toast('Résolution : ' + type); loadTicket(); } else toast(res.j.error || 'Erreur', 'error'); });
+        withConfirm(btn, function () {
+          btn.disabled = true;
+          api('/tickets/' + encodeURIComponent(numero) + '/resolution', { method: 'POST', body: JSON.stringify({ type: type }) })
+            .then(function (res) {
+              if (res.ok && res.j.success) {
+                toast(type === 'remboursement' ? 'Décision enregistrée — remboursement à faire dans le bloc Remboursement' : 'Résolution : ' + type);
+                loadTicket();
+              } else toast(res.j.error || 'Erreur', 'error');
+            })
+            .catch(function () { toast('Erreur réseau', 'error'); })
+            .then(function () { btn.disabled = false; });
+        });
       });
     });
     var fact = document.querySelector('[data-action-facturer]');
