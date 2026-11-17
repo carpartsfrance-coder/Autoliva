@@ -2286,11 +2286,11 @@ async function getAdminDashboard(req, res, next) {
     }
 
     const now = new Date();
-    const startToday = new Date(now);
-    startToday.setHours(0, 0, 0, 0);
-    const startMonth = new Date(now);
-    startMonth.setDate(1);
-    startMonth.setHours(0, 0, 0, 0);
+    /* « Aujourd'hui » et « ce mois » au calendrier de PARIS, quel que soit le fuseau
+       du serveur (voir services/heureParis.js). */
+    const heureParis = require('../services/heureParis');
+    const startToday = heureParis.minuitParis(now);
+    const startMonth = heureParis.debutMoisParis(now);
 
     /* ── Sélecteur de période (presets ou dates exactes ?from=&to=) ── */
     const PERIOD_KEYS = ['7d', '30d', '90d', '6m', '12m', 'year'];
@@ -2393,11 +2393,12 @@ async function getAdminDashboard(req, res, next) {
 
       /* Comparaison RÉELLE avec le mois dernier, à date égale (du 1er au même jour/heure).
          Remplace les « +5.2 % » et « +12 % » écrits en dur dans la vue. */
-      const debutMoisPrecedent = new Date(startMonth);
-      debutMoisPrecedent.setMonth(debutMoisPrecedent.getMonth() - 1);
-      const memeMomentMoisPrecedent = new Date(now);
-      memeMomentMoisPrecedent.setMonth(memeMomentMoisPrecedent.getMonth() - 1);
-      if (memeMomentMoisPrecedent >= startMonth) memeMomentMoisPrecedent.setTime(startMonth.getTime() - 1); // 31 → mois de 30 j
+      const debutMoisPrecedent = heureParis.debutMoisParis(now, -1);
+      // Même durée écoulée depuis le 1er ; plafonnée à la fin du mois précédent (31 → mois de 30 j).
+      const memeMomentMoisPrecedent = new Date(Math.min(
+        debutMoisPrecedent.getTime() + (now.getTime() - startMonth.getTime()),
+        startMonth.getTime() - 1
+      ));
       const revenuePrevMonthAgg = await Order.aggregate([
         { $match: { createdAt: { $gte: debutMoisPrecedent, $lte: memeMomentMoisPrecedent }, ...paidOnly } },
         { $group: { _id: null, total: { $sum: CA_HORS_CAUTION } } },
@@ -2405,11 +2406,8 @@ async function getAdminDashboard(req, res, next) {
       revenuePrevMonthToDateCents = revenuePrevMonthAgg && revenuePrevMonthAgg[0] ? Number(revenuePrevMonthAgg[0].total) : 0;
 
       /* ── Weekly bar chart data (last 7 days + previous 7 days) ── */
-      const weekStart = new Date(now);
-      weekStart.setDate(weekStart.getDate() - 6);
-      weekStart.setHours(0, 0, 0, 0);
-      const prevWeekStart = new Date(weekStart);
-      prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+      const weekStart = heureParis.minuitParis(now, -6);
+      const prevWeekStart = heureParis.minuitParis(now, -13);
 
       const dailyRevenueAgg = await Order.aggregate([
         { $match: { createdAt: { $gte: prevWeekStart }, ...paidOnly } },
@@ -2426,28 +2424,20 @@ async function getAdminDashboard(req, res, next) {
       weekValues = [];
       prevWeekValues = [];
       const dayNames = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-      /* Clé du jour à l'heure de Paris, comme le $dateToString ci-dessus. Avant :
+      /* Jours au calendrier de Paris, comme le $dateToString ci-dessus. Avant :
          toISOString() (UTC) — sur un serveur réglé à l'heure de Paris, minuit local
          = 23 h UTC la veille, donc chaque barre affichait les ventes de la VEILLE. */
-      const cleJourParis = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' });
+      const MIDI = 12 * 3600 * 1000;
       for (let i = 0; i < 7; i++) {
-        const d = new Date(weekStart);
-        d.setDate(d.getDate() + i);
-        d.setHours(12, 0, 0, 0);
-        const key = cleJourParis.format(d);
-        weekLabels.push(dayNames[d.getDay()] + ' ' + d.getDate());
-        weekValues.push(Math.round((dailyMap.get(key) || 0) / 100));
+        const d = new Date(heureParis.minuitParis(now, i - 6).getTime() + MIDI);
+        const jp = heureParis.partiesParis(d);
+        weekLabels.push(dayNames[jp.jourSemaine] + ' ' + jp.jour);
+        weekValues.push(Math.round((dailyMap.get(heureParis.cleJourParis(d)) || 0) / 100));
 
-        const pd = new Date(prevWeekStart);
-        pd.setDate(pd.getDate() + i);
-        pd.setHours(12, 0, 0, 0);
-        const pkey = cleJourParis.format(pd);
-        prevWeekValues.push(Math.round((dailyMap.get(pkey) || 0) / 100));
+        const pd = new Date(heureParis.minuitParis(now, i - 13).getTime() + MIDI);
+        prevWeekValues.push(Math.round((dailyMap.get(heureParis.cleJourParis(pd)) || 0) / 100));
       }
-      const hier = new Date(now);
-      hier.setDate(hier.getDate() - 1);
-      hier.setHours(12, 0, 0, 0);
-      revenueYesterdayCents = Number(dailyMap.get(cleJourParis.format(hier)) || 0);
+      revenueYesterdayCents = Number(dailyMap.get(heureParis.cleJourParis(new Date(startToday.getTime() - MIDI))) || 0);
 
       /* ── Série C.A. sur la PÉRIODE sélectionnée (granularité jour ou mois) ── */
       const _revFmt = periodGranularity === 'day' ? '%Y-%m-%d' : '%Y-%m';
