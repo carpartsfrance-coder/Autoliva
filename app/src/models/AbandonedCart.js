@@ -93,6 +93,9 @@ const engineQuoteSentSchema = new mongoose.Schema(
     sentAt: { type: Date, default: Date.now },
     version: { type: Number, default: 1 }, // n° de révision (1, 2, 3…)
     sms: { type: smsResultSchema, default: null }, // résultat SMS du devis envoyé
+    /* Résultat de l'E-MAIL du devis (avant : non enregistré → un e-mail refusé
+       laissait croire que le devis était parti). Même forme que `sms`. */
+    email: { type: smsResultSchema, default: null },
     pdfId: { type: String, default: '' },
     pdfUrl: { type: String, default: '' },
     sellPriceHt: { type: Number, default: 0 },

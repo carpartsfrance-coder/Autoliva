@@ -668,6 +668,12 @@ function dt(v) {
                         <span class="inline-flex items-center text-xs font-semibold text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full">Version actuelle</span>
                       <% } %>
                       <span class="text-xs text-slate-400">par <%= sq.sentByName || 'Admin' %></span>
+                      <% if (sq.email && sq.email.status === 'failed') { %>
+                        <%# Avant, un e-mail refusé n'apparaissait nulle part : le devis semblait parti. %>
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-50 px-2 py-0.5 rounded-full" title="<%= sq.email.message || sq.email.reason || '' %>">
+                          <span class="material-symbols-outlined" style="font-size:13px">mail</span> E-mail NON envoyé<%= sq.email.message ? ' — ' + sq.email.message : '' %>
+                        </span>
+                      <% } %>
                       <% if (sq.sms && sq.sms.status === 'sent') { %>
                         <span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full" title="SMS du devis envoyé au <%= sq.sms.phone || '' %>">
                           <span class="material-symbols-outlined" style="font-size:13px">sms</span> SMS envoyé

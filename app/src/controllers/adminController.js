@@ -4099,6 +4099,10 @@ async function getAdminOrderDetailPage(req, res, next) {
         deletedAtRaw: orderDoc.deletedAt || null,
         deletedBy: orderDoc.deletedBy || '',
         deleteReason: orderDoc.deleteReason || '',
+        /* Le numéro de suivi a-t-il déjà été envoyé au client ? (encadré « Étiquette créée »
+           qui affirmait toujours « Le client n'a pas été notifié »). */
+        suiviDejaEnvoye: !!(orderDoc.notifications && Array.isArray(orderDoc.notifications.shipmentTrackingNumbersSent)
+          && orderDoc.notifications.shipmentTrackingNumbersSent.length),
         statusKey: orderDoc.status,
         statusBadge: getOrderStatusBadge(orderDoc.status),
         orderType: orderDoc.orderType || 'standard',
@@ -13656,14 +13660,21 @@ async function postAdminBuyJumingoLabel(req, res) {
 
     /* Verrou atomique AVANT d'appeler Jumingo : deux requêtes simultanées passaient
        toutes deux le contrôle ci-dessus et achetaient deux étiquettes. */
+    const marqueVerrou = new Date();
     const verrou = await Order.updateOne(
       { _id: order._id, $or: [{ jumingoAchatEnCoursAt: null }, { jumingoAchatEnCoursAt: { $lt: new Date(Date.now() - 2 * 60 * 1000) } }] },
-      { $set: { jumingoAchatEnCoursAt: new Date() } }
+      { $set: { jumingoAchatEnCoursAt: marqueVerrou } }
     );
     if (verrou.modifiedCount !== 1) {
       return res.status(409).json({ ok: false, error: 'Un achat d’étiquette est déjà en cours sur cette commande. Patiente quelques secondes puis recharge la page.' });
     }
     try {
+      // Revérifie APRÈS le verrou, sur la commande relue (une autre requête a pu acheter entre-temps).
+      const relue = await Order.findById(order._id).select('shipments.jumingoShipmentId pendingJumingoLabel').lean();
+      const dejaAchete = relue && ((relue.shipments || []).some((s) => s && s.jumingoShipmentId === shipmentId)
+        || (relue.pendingJumingoLabel && relue.pendingJumingoLabel.shipmentId === shipmentId));
+      if (dejaAchete) return res.status(409).json({ ok: false, error: 'Une étiquette est déjà en cours / achetée pour cet envoi.' });
+
       const attach = await jumingo.attachRate(shipmentId, { tariffId, shippingType, pickupDate });
       if (!attach.ok) return res.status(502).json({ ok: false, error: 'Jumingo (sélection tarif) : ' + attach.error });
 
@@ -13683,7 +13694,7 @@ async function postAdminBuyJumingoLabel(req, res) {
       // (génération parfois asynchrone → finalize peut renvoyer needsRetry).
       return await finalizeJumingoShipment(req, res, order, { orderNumber: buy.orderNumber, shipmentId, direction, carrier });
     } finally {
-      await Order.updateOne({ _id: order._id }, { $set: { jumingoAchatEnCoursAt: null } }).catch(() => {});
+      await Order.updateOne({ _id: order._id, jumingoAchatEnCoursAt: marqueVerrou }, { $set: { jumingoAchatEnCoursAt: null } }).catch(() => {});
     }
   } catch (err) {
     console.error('[admin] buyJumingoLabel:', err && err.message);

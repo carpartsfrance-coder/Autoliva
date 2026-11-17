@@ -2986,10 +2986,18 @@
           const draft = data && data.draft ? data.draft : null;
           if (!draft) throw new Error('Brouillon IA introuvable.');
 
-          setInputValue('name', draft.name);
-          setInputValue('slug', draft.slug);
-          setInputValue('brand', draft.brand);
-          setInputValue('category', draft.category);
+          /* Identité de la fiche (nom, adresse /produits/<slug>, marque, catégorie) : l'IA
+             ne la remplit que si elle est VIDE. Avant, elle la remplaçait sans le dire ;
+             un slug changé casse les liens et le référencement de la fiche. */
+          const remplirSiVide = (id, valeur) => {
+            const champ = document.getElementById(id);
+            if (champ && String(champ.value || '').trim()) return;
+            setInputValue(id, valeur);
+          };
+          remplirSiVide('name', draft.name);
+          remplirSiVide('slug', draft.slug);
+          remplirSiVide('brand', draft.brand);
+          remplirSiVide('category', draft.category);
           setInputValue('shippingDelayText', draft.shippingDelayText);
           setInputValue('specType', draft.specType);
           setInputValue('specProgrammation', draft.specProgrammation);

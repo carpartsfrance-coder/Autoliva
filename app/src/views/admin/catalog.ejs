@@ -508,7 +508,19 @@
                 if (!ids.length) return;
                 var field = bulkField.value;
                 var v = currentBulkValue();
-                if (!window.confirm('Modifier ' + ids.length + ' produit(s) — ' + (FIELD_LABELS[field] || field) + ' ?')) return;
+                /* La confirmation dit maintenant QUOI exactement (avant : « Modifier 12 produit(s) — Prix ? »
+                   sans le montant ni le sens : une baisse de 30 % passait en un clic). */
+                var libelleValeur = function () {
+                  if (field === 'price') {
+                    var modes = { set: 'mettre à', inc_pct: 'augmenter de', dec_pct: 'baisser de', inc_eur: 'augmenter de', dec_eur: 'baisser de' };
+                    var unite = (v.mode === 'inc_pct' || v.mode === 'dec_pct') ? ' %' : ' €';
+                    return (modes[v.mode] || v.mode) + ' ' + (v.value || '?') + unite;
+                  }
+                  var champ = document.getElementById({ status: 'bvStatus', stock: 'bvStock', quantity: 'bvQuantity', vat: 'bvVat', category: 'bvCategory' }[field]);
+                  if (champ && champ.tagName === 'SELECT' && champ.selectedIndex >= 0) return '→ « ' + champ.options[champ.selectedIndex].textContent.trim() + ' »';
+                  return '→ ' + (v.value === '' ? '(vide)' : v.value);
+                };
+                if (!window.confirm('Modifier ' + ids.length + ' produit(s) : ' + (FIELD_LABELS[field] || field) + ' ' + libelleValeur() + ' ?')) return;
                 bulkApplyBtn.disabled = true;
                 if (bulkEditMsg) { bulkEditMsg.textContent = 'Application…'; bulkEditMsg.className = 'self-center text-xs font-semibold text-slate-500'; }
                 fetch('/admin/catalogue/modifier-multi', {

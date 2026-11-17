@@ -1591,6 +1591,9 @@ async function postSendQuote(req, res, next) {
     if (!sendResult || sendResult.ok === false) {
       console.error('[engine-quote] Email envoi devis échoué:', sendResult);
     }
+    const devisEmailResult = (!sendResult || sendResult.ok === false)
+      ? { status: 'failed', reason: (sendResult && (sendResult.reason || sendResult.code)) || 'email_error', message: (sendResult && (sendResult.error || sendResult.message)) || 'E-mail non envoyé', at: new Date(), phone: '' }
+      : { status: 'sent', reason: '', message: '', at: new Date(), phone: '' };
 
     // Lien court de marque pour le SMS (autoliva.com/d/<code>) : bien plus
     // lisible et rassurant que la longue URL /api/devis-moteurs/track-pdf/…
@@ -1654,6 +1657,7 @@ async function postSendQuote(req, res, next) {
             customMessage,
             sentByName: admin.name,
             sms: devisSmsResult,
+            email: devisEmailResult,
             attachedPhotos: photoSnapshot,
           },
         },

@@ -574,7 +574,7 @@
                     <div class="flex items-start gap-2 mb-3">
                       <span class="material-symbols-outlined text-amber-600" style="font-size:20px">label</span>
                       <div class="text-sm text-amber-900 leading-snug">
-                        <strong>Étiquette créée</strong> — le bordereau est imprimé mais le colis n'est <strong>pas encore parti</strong>. Le client n'a pas été notifié.
+                        <strong>Étiquette créée</strong> — le bordereau est imprimé mais le colis n'est <strong>pas encore parti</strong>. <%= order.suiviDejaEnvoye ? 'Le client a déjà reçu le numéro de suivi par e-mail.' : 'Le client n’a pas été notifié.' %>
                         <div class="mt-1 text-xs text-amber-800">Clique ci-dessous <strong>quand le transporteur a récupéré le colis</strong> : passage en « Expédiée », notification client + démarrage du délai de retour 30 j.</div>
                       </div>
                     </div>

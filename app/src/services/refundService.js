@@ -80,22 +80,25 @@ async function nextCreditNoteNumber(now = new Date()) {
 const DUREE_VERROU_REMBOURSEMENT_MS = 2 * 60 * 1000;
 
 async function prendreVerrouRemboursement(orderId) {
-  if (!orderId || !mongoose.Types.ObjectId.isValid(String(orderId))) return 'sans';
+  if (!orderId || !mongoose.Types.ObjectId.isValid(String(orderId))) return { etat: 'sans' };
+  /* La date posée sert aussi de « signature » : on ne relâche QUE ce verrou-ci
+     (si une opération dépassait 2 min, son finally effaçait le verrou suivant). */
+  const marque = new Date();
   const r = await Order.updateOne(
     {
       _id: orderId,
       $or: [{ refundLockAt: null }, { refundLockAt: { $lt: new Date(Date.now() - DUREE_VERROU_REMBOURSEMENT_MS) } }],
     },
-    { $set: { refundLockAt: new Date() } }
+    { $set: { refundLockAt: marque } }
   );
-  if (r.modifiedCount === 1) return 'pris';
+  if (r.modifiedCount === 1) return { etat: 'pris', marque };
   // Commande inexistante : la fonction appelée répondra « introuvable ».
-  return (await Order.exists({ _id: orderId })) ? 'occupe' : 'sans';
+  return { etat: (await Order.exists({ _id: orderId })) ? 'occupe' : 'sans' };
 }
 
 async function avecVerrouRemboursement(orderId, traitement) {
-  const verrou = await prendreVerrouRemboursement(orderId);
-  if (verrou === 'occupe') {
+  const { etat, marque } = await prendreVerrouRemboursement(orderId);
+  if (etat === 'occupe') {
     return {
       ok: false,
       errorCode: 'refund_in_progress',
@@ -105,8 +108,8 @@ async function avecVerrouRemboursement(orderId, traitement) {
   try {
     return await traitement();
   } finally {
-    if (verrou === 'pris') {
-      await Order.updateOne({ _id: orderId }, { $set: { refundLockAt: null } }).catch(() => {});
+    if (etat === 'pris') {
+      await Order.updateOne({ _id: orderId, refundLockAt: marque }, { $set: { refundLockAt: null } }).catch(() => {});
     }
   }
 }
