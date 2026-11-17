@@ -798,16 +798,10 @@ async function prepareProductListingData(req, options = {}) {
       }
     }
 
-    vehicleMakes = Array.from(map.keys()).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-    vehicleModelsByMake = {};
-    for (const mk of vehicleMakes) {
-      const set = map.get(mk);
-      vehicleModelsByMake[mk] = set ? Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })) : [];
-    }
-    vehicleEnginesByMakeModel = {};
-    for (const [k, set] of engMap.entries()) {
-      vehicleEnginesByMakeModel[k] = Array.from(set).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
-    }
+    const fusion = fusionnerMarques(map, engMap);
+    vehicleMakes = fusion.makes;
+    vehicleModelsByMake = fusion.modelsByMake;
+    vehicleEnginesByMakeModel = fusion.enginesByMakeModel;
   } else {
     const map = new Map();
     for (const p of Array.isArray(demoProducts) ? demoProducts : []) {
@@ -1201,6 +1195,72 @@ function countActiveFilters(s) {
  * compatibilité des produits. Utilisé par l'endpoint /api/vehicules pour
  * alimenter le sélecteur de véhicule où qu'il soit (home, header, listing).
  */
+/* ── Liste des marques du sélecteur véhicule ───────────────────────────────
+ * Les marques viennent telles quelles des fiches importées : « SEAT » et
+ * « Seat », « MINI » et « Mini » apparaissaient en double, et des valeurs qui
+ * ne sont pas des marques (« Distrimotor » — un concurrent —, « Ct »,
+ * « Serie ») s'affichaient dans la liste (audit ChatGPT du 16/11/2026).
+ *
+ * Fusion SANS changer le filtre : la recherche par marque est déjà
+ * insensible à la casse (regex « i »), choisir « SEAT » trouve aussi les
+ * fiches « Seat ». Idem « Mercedes-Benz » rangée sous « Mercedes ».
+ * « VW » / « Volkswagen » ou « Citroen » / « Citroën » ne sont PAS
+ * fusionnées : le filtre ne les relierait pas.
+ */
+const MARQUES_ECARTEES = new Set(['distrimotor', 'ct', 'serie']);
+
+function libelleMarquePrefere(a, b) {
+  const note = (m) => (/^[A-Z0-9]{2,4}$/.test(m) ? 3 : (/^[A-ZÀ-Ý][a-zà-ÿ]/.test(m) ? 2 : 1));
+  const na = note(a);
+  const nb = note(b);
+  if (na !== nb) return na > nb ? a : b;
+  return a.localeCompare(b, 'fr') <= 0 ? a : b;
+}
+
+/**
+ * @param {Map<string, Set<string>>} parMarque  marque brute → modèles
+ * @param {Map<string, Set<string>>} parMoteur  « marque|||modèle » → motorisations
+ */
+function fusionnerMarques(parMarque, parMoteur) {
+  const cmp = (a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' });
+  const libelles = new Map(); // clé minuscule → libellé retenu
+  for (const mk of parMarque.keys()) {
+    const cle = mk.toLowerCase();
+    if (MARQUES_ECARTEES.has(cle)) continue;
+    libelles.set(cle, libelles.has(cle) ? libelleMarquePrefere(libelles.get(cle), mk) : mk);
+  }
+  /* « Mercedes-Benz » sous « Mercedes », « Alfa Romeo » sous « Alfa » : le filtre
+     cherche la marque comme un MORCEAU du texte, donc « Mercedes » trouve déjà
+     les fiches « Mercedes-Benz » (l'inverse est faux). On garde la forme courte. */
+  const cles = Array.from(libelles.keys()).sort((x, y) => x.length - y.length);
+  for (const longue of cles) {
+    const courte = cles.find((c) => c.length < longue.length && (longue.startsWith(c + ' ') || longue.startsWith(c + '-')));
+    if (courte && libelles.has(courte)) libelles.set(longue, libelles.get(courte));
+  }
+  const modeles = new Map();
+  for (const [mk, set] of parMarque.entries()) {
+    const libelle = libelles.get(mk.toLowerCase());
+    if (!libelle) continue;
+    if (!modeles.has(libelle)) modeles.set(libelle, new Set());
+    for (const md of set) modeles.get(libelle).add(md);
+  }
+  const moteurs = new Map();
+  for (const [k, set] of (parMoteur || new Map()).entries()) {
+    const [mk, md] = k.split('|||');
+    const libelle = libelles.get(String(mk || '').toLowerCase());
+    if (!libelle) continue;
+    const cle = libelle + '|||' + md;
+    if (!moteurs.has(cle)) moteurs.set(cle, new Set());
+    for (const en of set) moteurs.get(cle).add(en);
+  }
+  const makes = Array.from(modeles.keys()).sort(cmp);
+  const modelsByMake = {};
+  for (const mk of makes) modelsByMake[mk] = Array.from(modeles.get(mk)).sort(cmp);
+  const enginesByMakeModel = {};
+  for (const [k, set] of moteurs.entries()) enginesByMakeModel[k] = Array.from(set).sort(cmp);
+  return { makes, modelsByMake, enginesByMakeModel };
+}
+
 async function getVehicleTree(dbConnected) {
   const makesSet = new Map(); // make -> Set(models)
   const engMap = new Map(); // "make|||model" -> Set(engines)
@@ -1245,20 +1305,14 @@ async function getVehicleTree(dbConnected) {
     }
   }
 
-  const cmp = (a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' });
-  const makes = Array.from(makesSet.keys()).sort(cmp);
-  const modelsByMake = {};
-  for (const mk of makes) modelsByMake[mk] = Array.from(makesSet.get(mk)).sort(cmp);
-  const enginesByMakeModel = {};
-  for (const [k, set] of engMap.entries()) enginesByMakeModel[k] = Array.from(set).sort(cmp);
-
-  return { makes, modelsByMake, enginesByMakeModel };
+  return fusionnerMarques(makesSet, engMap);
 }
 
 module.exports = {
   _memo: { cleMemo, memoriser, viderMemo, MEMO_MS, MEMO_MAX },
   prepareProductListingData,
   getVehicleTree,
+  fusionnerMarques,
   searchProductsViaAtlas,
   referenceRecollee,
   rechercheParReference,
