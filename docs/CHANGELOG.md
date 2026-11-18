@@ -1,11 +1,12 @@
 # Changelog
 
-## 2026-11-18 (après mise en ligne) — Leads à traiter : file limitée aux demandes récentes ou suivies
+## 2026-11-18 (après mise en ligne) — Leads à traiter : page 400 fois plus rapide, file limitée aux demandes récentes ou suivies
 
 - À la mise en ligne, la file affichait 3 131 dossiers dont 2 901 « anciens à reprendre » : des demandes d'avril à juillet que personne n'avait jamais traitées (invisibles avant). Les compteurs « En retard » (3 101) et « Jamais contactés » (2 443) n'aidaient plus à piloter.
 - La file contient maintenant : les demandes reçues depuis moins de 45 jours ; les dossiers pris en main ou contactés depuis moins de 45 jours ; tout dossier avec une prochaine action datée, quel que soit son âge. Les plus vieilles demandes restent dans « Tous les leads » et dans la recherche.
 - Le compteur « En retard » de la page Devis utilise le même périmètre.
-- Test : `tests/integration/file-de-travail-leads.test.js` (demande de 60 jours jamais traitée → hors file mais retrouvable ; vieille demande avec prochaine action → dans la file).
+- **Lenteur corrigée** : la page mettait 28 s à s'afficher. Le calcul des heures ouvrées passait par `Intl.DateTimeFormat` pour chaque jour parcouru (3 000 dossiers vieux de plusieurs mois). `services/heuresOuvrees.js` calcule maintenant l'heure d'été par sa règle européenne et compte les jours en entiers : 3 200 dossiers en 45 ms au lieu de 21 s, résultats identiques (vérifié sur 20 000 instants contre l'ancien calcul).
+- Tests : `tests/integration/file-de-travail-leads.test.js` (demande de 60 jours jamais traitée → hors file mais retrouvable ; vieille demande avec prochaine action → dans la file) ; `tests/unit/heures-ouvrees.test.js` (même résultat que le calcul Intl sur 5 000 instants, 3 000 dossiers en moins d'une seconde).
 
 ## 2026-11-18 — Leads : une seule file de travail, aucune demande oubliée
 

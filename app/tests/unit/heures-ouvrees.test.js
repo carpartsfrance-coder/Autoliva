@@ -46,3 +46,31 @@ test('jours ouvrés et minutes ouvrées écoulées', () => {
   assert.equal(h.minutesOuvreesEntre(new Date('2026-11-20T16:00:00Z'), new Date('2026-11-23T09:30:00Z')), 150);
   assert.equal(h.minutesOuvreesEntre(new Date('2026-11-23T09:30:00Z'), new Date('2026-11-20T16:00:00Z')), 0);
 });
+
+test('calcul direct = calcul de référence (Intl), heure d’été comprise', () => {
+  /* La version Intl prenait 28 s pour la file réelle ; le calcul direct doit
+     donner exactement les mêmes résultats. 5 000 instants sur 3 ans. */
+  const { partiesParis } = require('../../src/services/heureParis');
+  let graine = 42;
+  const hasard = () => { graine = (graine * 1103515245 + 12345) % 2147483648; return graine / 2147483648; };
+  for (let k = 0; k < 5000; k += 1) {
+    const t = new Date(Date.UTC(2025, 0, 1) + Math.floor(hasard() * 3 * 365 * 86400000));
+    const p = partiesParis(t);
+    const local = p.heure * 60 + p.minute;
+    const cle = `${p.annee}-${String(p.mois).padStart(2, '0')}-${String(p.jour).padStart(2, '0')}`;
+    const attendu = p.jourSemaine >= 1 && p.jourSemaine <= 5 && !h.feriesAnnee(p.annee).has(cle)
+      && ((local >= 540 && local < 720) || (local >= 840 && local < 1080));
+    assert.equal(h.estOuvert(t), attendu, t.toISOString());
+  }
+});
+
+test('rapide : 3 000 dossiers vieux de plusieurs mois en moins d’une seconde', () => {
+  const { computeWork } = require('../../src/services/leadWork');
+  const now = new Date('2026-11-18T09:30:00Z');
+  const debut = Date.now();
+  for (let i = 0; i < 3000; i += 1) {
+    const recu = new Date(now.getTime() - ((i % 200) + 1) * 86400000);
+    computeWork({ captureSource: 'devis', phone: '0611', abandonedAt: recu, manualStatus: i % 5 ? null : 'contacted', manualStatusAt: recu }, now);
+  }
+  assert.ok(Date.now() - debut < 1000, `trop lent : ${Date.now() - debut} ms`);
+});
