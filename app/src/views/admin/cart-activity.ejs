@@ -20,6 +20,12 @@
     .file-split .groupe-entete { position: sticky; top: 0; }
   }
   .lead-ligne[aria-selected="true"] { background: #fef2f2; }
+  /* Mode « Sélectionner » : la case prend la place du trait de couleur. */
+  .lead-case { position: absolute; left: .5rem; top: .55rem; display: none; color: #cbd5e1; }
+  .file-split[data-selection="1"] .lead-ligne { padding-left: 2.25rem; }
+  .file-split[data-selection="1"] .lead-case { display: block; }
+  .lead-ligne[aria-checked="true"] { background: #eff6ff; }
+  .lead-ligne[aria-checked="true"] .lead-case { color: #2563eb; }
   .lead-ligne[aria-selected="true"] .lead-ligne-nom { color: #b91c1c; }
   .fiche-onglet[aria-selected="true"] { border-color: #D32F2F; color: #0f172a; }
   .lead-groupe > summary::-webkit-details-marker, .lead-menu > summary::-webkit-details-marker, .equipe-menu > summary::-webkit-details-marker { display: none; }
@@ -39,6 +45,14 @@
         <a href="<%= tabs.allUrl %>" class="rounded-lg px-3 py-1.5 <%= view === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50' %>" title="Tout l'historique : paniers, newsletter, gagnés, perdus, avec la recherche">Tous les leads</a>
       </div>
       <div class="ml-auto flex gap-2">
+        <% if (view === 'todo') { %>
+          <button type="button" id="leads-lot-btn" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50" title="Traiter plusieurs dossiers d'un coup : prendre en charge, ou clôturer en perdu">
+            <span class="material-symbols-outlined text-base text-primary">checklist</span><span class="hidden sm:inline">Sélectionner</span>
+          </button>
+          <button type="button" id="leads-son-btn" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50" title="Être prévenu par un bip quand une demande arrive">
+            <span class="material-symbols-outlined text-base" id="leads-son-icone">notifications_off</span>
+          </button>
+        <% } %>
         <button type="button" id="leads-help-btn" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
           <span class="material-symbols-outlined text-base text-primary">school</span><span class="hidden sm:inline">Comment ça marche</span>
         </button>
@@ -171,6 +185,16 @@
       var tons = { green: 'bg-green-100 text-green-800', blue: 'bg-blue-100 text-blue-800', red: 'bg-red-100 text-red-700', amber: 'bg-amber-100 text-amber-800', orange: 'bg-orange-100 text-orange-800', slate: 'bg-slate-200 text-slate-700' };
       var affiches = view === 'todo' ? [].concat.apply([], groupes.map(function (g) { return g.items; })) : (leads || []);
     %>
+    <%/* Ce qui arrive pendant qu'on travaille. La file est rendue par le
+          serveur : sans ce bandeau, un lead reçu à 10 h 02 restait invisible
+          jusqu'au prochain F5, et la promesse « rappelé dans l'heure » se
+          jouait à la chance. */%>
+    <a id="leads-nouveautes" href="#" class="masque-en-fiche mt-3 hidden items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-900 hover:bg-emerald-100">
+      <span class="material-symbols-outlined text-[18px]">arrow_downward</span>
+      <span id="leads-nouveautes-texte"></span>
+      <span class="ml-auto underline">Actualiser</span>
+    </a>
+
     <div class="file-cols mt-3">
       <!-- Liste des clients -->
       <aside id="file-liste" class="file-liste-col rounded-2xl border border-slate-200 bg-white" aria-label="Liste des clients">
@@ -222,6 +246,18 @@
             </div>
           <% } %>
         <% } %>
+      <%/* Barre d'actions du mode « Sélectionner », collée en bas de la liste. */%>
+      <div id="leads-lot-barre" class="sticky bottom-0 z-20 hidden border-t border-slate-200 bg-white/95 px-3 py-2 backdrop-blur">
+        <div class="flex flex-wrap items-center gap-2 text-sm">
+          <span id="leads-lot-compte" class="font-semibold text-slate-800">0 sélectionné</span>
+          <button type="button" id="leads-lot-tout" class="rounded-lg px-2 py-1 text-xs font-semibold text-primary hover:bg-slate-100">Tout cocher</button>
+          <div class="ml-auto flex gap-1.5">
+            <button type="button" id="leads-lot-prendre" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Je m’en occupe</button>
+            <button type="button" id="leads-lot-perdu" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Perdu…</button>
+            <button type="button" id="leads-lot-annuler" class="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-100">Annuler</button>
+          </div>
+        </div>
+      </div>
       </aside>
 
       <!-- Client sélectionné -->
@@ -291,7 +327,21 @@
 
       <div class="mb-4 rounded-xl border border-slate-200 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Raccourcis clavier</div>
-        <div class="text-sm text-slate-700"><kbd class="rounded border border-slate-300 bg-slate-50 px-1.5 font-mono text-xs">J</kbd> client suivant · <kbd class="rounded border border-slate-300 bg-slate-50 px-1.5 font-mono text-xs">K</kbd> client précédent</div>
+        <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-700">
+          <% [['J', 'client suivant'], ['K', 'client précédent'], ['A', 'appeler'], ['E', 'écrire un email'], ['S', 'envoyer un SMS'], ['R', 'noter l’appel'], ['P', 'planifier la suite'], ['N', 'écrire une note'], ['G', 'gagné'], ['L', 'perdu'], ['/', 'chercher'], ['?', 'cette aide']].forEach(function (k) { %>
+            <div><kbd class="rounded border border-slate-300 bg-slate-50 px-1.5 font-mono text-xs"><%= k[0] %></kbd> <%= k[1] %></div>
+          <% }) %>
+        </div>
+        <div class="mt-2 text-xs text-slate-500">Ils agissent sur le client affiché à droite, sauf quand on écrit dans un champ.</div>
+      </div>
+
+      <div class="mb-4 rounded-xl border border-slate-200 p-4">
+        <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Gagner du temps</div>
+        <div class="space-y-1.5 text-sm text-slate-700">
+          <div><strong>« +2 h » et « Demain »</strong>, à côté de « Planifier » : repoussent le dossier et passent au client suivant, en un clic.</div>
+          <div><strong>« Sélectionner »</strong>, en haut : coche plusieurs clients d’un coup pour les prendre en charge ou les clôturer en perdu avec un motif commun. C’est fait pour vider « Anciens dossiers ». Rien n’est supprimé : un dossier clôturé par erreur se rouvre depuis sa fiche.</div>
+          <div><strong>Quand une demande arrive</strong> pendant que la page est ouverte, un bandeau vert le dit en haut de la liste et le titre de l’onglet compte. La cloche, en haut, ajoute un bip.</div>
+        </div>
       </div>
 
       <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -1404,7 +1454,10 @@
 
   if (listeCol) listeCol.addEventListener('click', function (e) {
     var l = e.target.closest ? e.target.closest('.lead-ligne') : null;
-    if (l) selectionner(l.dataset.leadId, { defiler: false });
+    if (!l) return;
+    /* Mode « Sélectionner » : le clic coche la ligne au lieu d'ouvrir la fiche. */
+    if (split && split.dataset.selection === '1') { lotBasculer(l); return; }
+    selectionner(l.dataset.leadId, { defiler: false });
   });
 
   document.addEventListener('click', function (e) {
@@ -1430,15 +1483,61 @@
     selectionner(id);
   }
 
-  /* J / K (ou flèches bas / haut) : client suivant / précédent. */
+  /* Un geste = une touche. Tout ce qu'on fait vingt fois par jour sur la
+     fiche affichée : appeler, écrire, noter l'appel, planifier, clôturer.
+     Les libellés sont dans le guide « Comment ça marche ». */
+  function agirSurFiche(selecteur, sinon) {
+    var fiche = document.getElementById('fiche-' + courant);
+    var el = fiche ? fiche.querySelector(selecteur) : null;
+    if (el) { el.click(); return; }
+    toast(sinon, 'info');
+  }
+
+  /* « N » : ouvrir le suivi et écrire une note tout de suite. L'onglet se
+     remplit en différé, on attend que le champ existe (2 s au plus). */
+  function ecrireUneNote() {
+    var fiche = document.getElementById('fiche-' + courant);
+    if (!fiche) return;
+    afficherOnglet(fiche, 'suivi', { defiler: true });
+    var essais = 0;
+    var t = setInterval(function () {
+      var champ = fiche.querySelector('[data-role="note-form"] textarea');
+      if (champ) { clearInterval(t); champ.focus(); return; }
+      if (++essais > 20) clearInterval(t);
+    }, 100);
+  }
+
   document.addEventListener('keydown', function (e) {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     var tag = (document.activeElement && document.activeElement.tagName) || '';
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (document.activeElement && document.activeElement.isContentEditable)) return;
     if (modal && !modal.classList.contains('hidden')) return;
+
+    /* Ces deux-là marchent même sans client sélectionné. */
+    if (e.key === '/') {
+      var recherche = document.querySelector('input[name="q"]');
+      if (!recherche) return;
+      e.preventDefault();
+      /* Sur petit écran, la recherche est cachée tant qu'on lit une fiche :
+         on revient à la liste, sinon la touche ne ferait rien du tout. */
+      if (!estSplit() && split.dataset.mode === 'fiche') split.dataset.mode = 'liste';
+      recherche.focus();
+      recherche.select();
+      return;
+    }
+    if (e.key === '?' && helpModal) { e.preventDefault(); helpModal.classList.remove('hidden'); return; }
     if (!courant) return;
+
     if (e.key === 'j' || e.key === 'J' || (e.key === 'ArrowDown' && estSplit())) { e.preventDefault(); passer(1); }
     else if (e.key === 'k' || e.key === 'K' || (e.key === 'ArrowUp' && estSplit())) { e.preventDefault(); passer(-1); }
+    else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); agirSurFiche('.js-appeler', 'Pas d’appel possible sur ce client.'); }
+    else if (e.key === 'e' || e.key === 'E') { e.preventDefault(); agirSurFiche('.lead-action[data-action="email"]', 'Ce client n’a pas d’adresse email.'); }
+    else if (e.key === 's' || e.key === 'S') { e.preventDefault(); agirSurFiche('.lead-action[data-action="sms"]', 'Pas de SMS possible sur ce numéro.'); }
+    else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); agirSurFiche('.js-resultat', 'Rien à noter : aucun appel n’est possible ici.'); }
+    else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); agirSurFiche('.js-planifier', 'Ce dossier est clos : rouvre-le d’abord.'); }
+    else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); ecrireUneNote(); }
+    else if (e.key === 'g' || e.key === 'G') { e.preventDefault(); agirSurFiche('.js-cloturer[data-issue="gagne"]', 'Ce dossier est déjà clos.'); }
+    else if (e.key === 'l' || e.key === 'L') { e.preventDefault(); agirSurFiche('.js-cloturer[data-issue="perdu"]', 'Ce dossier est déjà clos.'); }
     else if (e.key === 'Escape' && !estSplit() && split.dataset.mode === 'fiche') { split.dataset.mode = 'liste'; }
   });
 
@@ -1705,6 +1804,214 @@
         });
     });
   });
+
+  /* ══ Report en un clic : « +2 h » / « Demain » ══
+     Repousser une échéance demandait d'ouvrir « Planifier », choisir la suite,
+     choisir quand, valider. Quatre clics pour dire « pas maintenant » : au
+     bout du compte personne ne le faisait, et la file affichait des retards
+     qui n'en étaient pas. */
+  Array.prototype.forEach.call(document.querySelectorAll('.js-reporter'), function (b) {
+    b.addEventListener('click', function () {
+      if (b.dataset.enCours === '1') return;
+      b.dataset.enCours = '1';
+      b.classList.add('opacity-60');
+      var id = b.getAttribute('data-lead-id');
+      function rendreLeBouton() { b.dataset.enCours = ''; b.classList.remove('opacity-60'); }
+      postJson('/admin/api/leads/' + id + '/prochaine-action', {
+        type: b.getAttribute('data-type') || 'callback',
+        quand: b.getAttribute('data-quand') || '2h',
+      }).then(function (d) {
+        if (d && d.ok) { toast(d.message || 'Reporté'); allerA(idSuivant(id, 1) || id); return; }
+        rendreLeBouton();
+        toast((d && d.error) || 'Erreur, réessaie.', 'error');
+      }).catch(function () { rendreLeBouton(); toast('Erreur réseau', 'error'); });
+    });
+  });
+
+  /* ══ Ce qui arrive pendant qu'on travaille ══
+     La file est rendue par le serveur : un lead reçu à 10 h 02 restait
+     invisible jusqu'au prochain F5, et la promesse « rappelé dans l'heure »
+     se jouait à la chance. On compte, on le dit, on propose d'actualiser —
+     on ne recharge jamais tout seul : un message à moitié écrit serait perdu. */
+  (function nouveautes() {
+    var zone = document.getElementById('leads-nouveautes');
+    var texte = document.getElementById('leads-nouveautes-texte');
+    var sonBtn = document.getElementById('leads-son-btn');
+    var sonIcone = document.getElementById('leads-son-icone');
+    if (!zone || !texte || !HORLOGE || !HORLOGE.nowIso) return;
+    var titreOrigine = document.title;
+    var dernierTotal = 0;
+    var avecSon = false;
+    try { avecSon = localStorage.getItem('leads-son') === '1'; } catch (_) {}
+
+    function majBoutonSon() {
+      if (!sonBtn || !sonIcone) return;
+      sonIcone.textContent = avecSon ? 'notifications_active' : 'notifications_off';
+      sonBtn.classList.toggle('text-primary', avecSon);
+      sonBtn.classList.toggle('border-primary/40', avecSon);
+      sonBtn.title = avecSon ? 'Bip à chaque arrivée — cliquer pour couper' : 'Être prévenu par un bip quand une demande arrive';
+    }
+    /* Bip court fabriqué à la volée : pas de fichier son à charger, et le
+       navigateur n'autorise le son qu'après un clic — celui du bouton. */
+    function bip() {
+      if (!avecSon) return;
+      try {
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        var ctx = new Ctx();
+        var o = ctx.createOscillator();
+        var g = ctx.createGain();
+        o.frequency.value = 880;
+        o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.3);
+        o.start();
+        o.stop(ctx.currentTime + 0.32);
+        setTimeout(function () { try { ctx.close(); } catch (_) {} }, 600);
+      } catch (_) {}
+    }
+    if (sonBtn) {
+      majBoutonSon();
+      sonBtn.addEventListener('click', function () {
+        avecSon = !avecSon;
+        try { localStorage.setItem('leads-son', avecSon ? '1' : '0'); } catch (_) {}
+        majBoutonSon();
+        bip();
+        toast(avecSon ? 'Bip activé quand une demande arrive' : 'Bip coupé', 'info');
+      });
+    }
+
+    function verifier() {
+      if (document.visibilityState === 'hidden') return;
+      fetch('/admin/api/leads/file/nouveautes?depuis=' + encodeURIComponent(HORLOGE.nowIso),
+        { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d || !d.ok) return;
+          var total = (d.nouvelles || 0) + (d.reponses || 0);
+          if (!total) return;
+          var bouts = [];
+          if (d.nouvelles) bouts.push(d.nouvelles + ' nouvelle' + (d.nouvelles > 1 ? 's' : '') + ' demande' + (d.nouvelles > 1 ? 's' : ''));
+          if (d.reponses) bouts.push(d.reponses + (d.reponses > 1 ? ' clients ont répondu' : ' client a répondu'));
+          texte.textContent = bouts.join(' · ');
+          zone.classList.remove('hidden');
+          zone.classList.add('flex');
+          document.title = '(' + total + ') ' + titreOrigine;
+          if (total > dernierTotal) bip();
+          dernierTotal = total;
+        })
+        .catch(function () {});
+    }
+    zone.addEventListener('click', function (e) { e.preventDefault(); window.location.reload(); });
+    setInterval(verifier, 60000);
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') verifier(); });
+    setTimeout(verifier, 15000);
+  })();
+
+  /* ══ Traiter plusieurs dossiers d'un coup ══
+     « Anciens dossiers » compte des centaines de demandes mortes qu'il fallait
+     clôturer une par une : personne ne le faisait, et le groupe ne désemplissait
+     jamais. Rien n'est supprimé — un dossier clôturé par erreur se rouvre
+     depuis sa fiche. */
+  var lotSelection = {};
+
+  function lotIds() { return Object.keys(lotSelection); }
+
+  function lotMajCase(l) {
+    var i = l.querySelector('.lead-case .material-symbols-outlined');
+    if (i) i.textContent = l.getAttribute('aria-checked') === 'true' ? 'check_box' : 'check_box_outline_blank';
+  }
+
+  function lotMajCompte() {
+    var el = document.getElementById('leads-lot-compte');
+    if (!el) return;
+    var n = lotIds().length;
+    el.textContent = n + ' sélectionné' + (n > 1 ? 's' : '');
+    ['leads-lot-prendre', 'leads-lot-perdu'].forEach(function (id) {
+      var b = document.getElementById(id);
+      if (b) { b.disabled = !n; b.classList.toggle('opacity-40', !n); b.classList.toggle('cursor-not-allowed', !n); }
+    });
+  }
+
+  function lotBasculer(l) {
+    var id = l.dataset.leadId;
+    var coche = l.getAttribute('aria-checked') !== 'true';
+    l.setAttribute('aria-checked', coche ? 'true' : 'false');
+    if (coche) lotSelection[id] = true; else delete lotSelection[id];
+    lotMajCase(l);
+    lotMajCompte();
+  }
+
+  (function modeLot() {
+    var btn = document.getElementById('leads-lot-btn');
+    var barre = document.getElementById('leads-lot-barre');
+    if (!btn || !barre || !split) return;
+
+    function activer(on) {
+      split.dataset.selection = on ? '1' : '';
+      barre.classList.toggle('hidden', !on);
+      btn.classList.toggle('bg-slate-900', on);
+      btn.classList.toggle('text-white', on);
+      if (!on) {
+        lotSelection = {};
+        lignes().forEach(function (l) { l.setAttribute('aria-checked', 'false'); lotMajCase(l); });
+      }
+      lotMajCompte();
+    }
+    btn.addEventListener('click', function () { activer(split.dataset.selection !== '1'); });
+    document.getElementById('leads-lot-annuler').addEventListener('click', function () { activer(false); });
+    document.getElementById('leads-lot-tout').addEventListener('click', function () {
+      var toutes = lignes();
+      var aCocher = toutes.some(function (l) { return l.getAttribute('aria-checked') !== 'true'; });
+      toutes.forEach(function (l) {
+        l.setAttribute('aria-checked', aCocher ? 'true' : 'false');
+        if (aCocher) lotSelection[l.dataset.leadId] = true; else delete lotSelection[l.dataset.leadId];
+        lotMajCase(l);
+      });
+      lotMajCompte();
+    });
+
+    function envoyer(corps, apres) {
+      return postJson('/admin/api/leads/lot', corps).then(function (d) {
+        if (d && d.ok) { toast(d.message || 'Fait'); setTimeout(function () { window.location.reload(); }, 600); return true; }
+        toast((d && d.error) || 'Erreur, réessaie.', 'error');
+        if (apres) apres();
+        return false;
+      }).catch(function () { toast('Erreur réseau', 'error'); if (apres) apres(); return false; });
+    }
+
+    document.getElementById('leads-lot-prendre').addEventListener('click', function () {
+      var ids = lotIds();
+      if (!ids.length) return;
+      envoyer({ action: 'prendre', ids: ids });
+    });
+
+    document.getElementById('leads-lot-perdu').addEventListener('click', function () {
+      var ids = lotIds();
+      if (!ids.length) return;
+      openModal('Clôturer ' + ids.length + ' dossier' + (ids.length > 1 ? 's' : '') + ' en perdu');
+      content.innerHTML = '<form id="form-lot-perdu" class="space-y-4">'
+        + '<p class="text-sm text-slate-600"><strong>' + ids.length + ' dossier' + (ids.length > 1 ? 's' : '') + '</strong> vont passer en perdu avec le même motif. '
+        + 'Les dossiers déjà gagnés sont ignorés, et un dossier clôturé par erreur se rouvre depuis sa fiche.</p>'
+        + selectMotif()
+        + '<textarea name="note" rows="2" maxlength="500" placeholder="Précision (facultatif) — la même pour tous" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></textarea>'
+        + '<div class="flex flex-wrap items-center gap-2"><button type="submit" class="btn btn-primary">Clôturer les ' + ids.length + '</button>'
+        + '<button type="button" data-role="annuler" class="btn btn-ghost text-sm">Annuler</button><span class="js-res w-full text-sm"></span></div></form>';
+      var form = document.getElementById('form-lot-perdu');
+      form.querySelector('[data-role="annuler"]').addEventListener('click', closeModal);
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!form.motif.value) { form.querySelector('.js-res').innerHTML = '<span class="font-semibold text-red-700">Choisis le motif de perte.</span>'; return; }
+        var verrou = verrouEnvoi(form);
+        if (!verrou) return;
+        envoyer({ action: 'perdu', ids: ids, motif: form.motif.value, note: form.note.value }, verrou.echec)
+          .then(function (ok) { if (ok) closeModal(); });
+      });
+    });
+
+    lotMajCompte();
+  })();
 
   /* ══ Horloge : les durées restent justes sans recharger la page ══
      « Retard 2 h » et « attend 2 h 10 » sont écrits par le serveur au moment

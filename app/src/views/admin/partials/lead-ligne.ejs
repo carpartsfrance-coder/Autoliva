@@ -54,6 +54,12 @@
           data-lead-id="<%= c.id %>" aria-selected="false"
           data-due="<%= c.dueIso || '' %>" data-retard="<%= c.retardMin || 0 %>" data-attente="<%= c.attenteMin >= 0 ? c.attenteMin : -1 %>">
     <span class="absolute left-0 top-2 bottom-2 w-1 rounded-r <%= barre %>" data-role="barre" aria-hidden="true"></span>
+    <%/* Case de sélection : visible seulement en mode « Sélectionner ». */%>
+    <%/* Placement dans la feuille de style de la page, pas en classes
+          utilitaires : celles qui ne servent qu'ici disparaissent au build. */%>
+    <span class="lead-case" aria-hidden="true">
+      <span class="material-symbols-outlined text-[20px]">check_box_outline_blank</span>
+    </span>
     <span class="flex items-baseline justify-between gap-2">
       <span class="lead-ligne-nom truncate text-sm font-semibold text-slate-900"><%= nom %></span>
       <% if (c.urgenceCourte && !ferme && !faible) { %>

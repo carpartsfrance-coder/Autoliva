@@ -1,6 +1,6 @@
 {
-  "version": "4cc6d2cbf8",
-  "genereLe": "2026-10-01T07:16:54.464Z",
+  "version": "72f50496b5",
+  "genereLe": "2026-11-18T13:00:46.058Z",
   "icones": [
     "ac_unit",
     "account_balance",
@@ -56,6 +56,8 @@
     "chat_bubble",
     "chat_bubble_outline",
     "check",
+    "check_box",
+    "check_box_outline_blank",
     "check_circle",
     "checklist",
     "chevron_left",
@@ -85,6 +87,7 @@
     "delete_sweep",
     "density_small",
     "description",
+    "details",
     "devices",
     "directions_car",
     "do_not_disturb_on_total_silence",
@@ -194,6 +197,8 @@
     "note",
     "notes",
     "notifications",
+    "notifications_active",
+    "notifications_off",
     "oil_barrel",
     "open_in_new",
     "orders",
@@ -218,7 +223,6 @@
     "play_arrow",
     "play_circle",
     "precision_manufacturing",
-    "preview",
     "print",
     "priority",
     "priority_high",
@@ -269,6 +273,7 @@
     "shopping_cart",
     "shopping_cart_checkout",
     "show_chart",
+    "signature",
     "smart_display",
     "smart_toy",
     "smartphone",
@@ -315,6 +320,7 @@
     "unarchive",
     "undo",
     "unfold_more",
+    "upcoming",
     "update",
     "upload",
     "upload_file",
@@ -340,7 +346,7 @@
       "poids": "400 800",
       "style": "normal",
       "display": "swap",
-      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF",
+      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF",
       "icones": false,
       "preload": false,
       "octets": 85272
@@ -362,7 +368,7 @@
       "poids": "500 700",
       "style": "normal",
       "display": "swap",
-      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF",
+      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF",
       "icones": false,
       "preload": false,
       "octets": 14760
@@ -384,7 +390,7 @@
       "poids": "400 800",
       "style": "normal",
       "display": "swap",
-      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF",
+      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF",
       "icones": false,
       "preload": false,
       "octets": 21688
@@ -406,7 +412,7 @@
       "poids": "700 800",
       "style": "italic",
       "display": "swap",
-      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF",
+      "unicodeRange": "U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF",
       "icones": false,
       "preload": false,
       "octets": 23140
@@ -431,7 +437,7 @@
       "unicodeRange": null,
       "icones": true,
       "preload": true,
-      "octets": 95664
+      "octets": 97232
     },
     {
       "famille": "Material Symbols Rounded",
@@ -442,7 +448,7 @@
       "unicodeRange": null,
       "icones": true,
       "preload": false,
-      "octets": 121292
+      "octets": 123788
     }
   ]
 }
