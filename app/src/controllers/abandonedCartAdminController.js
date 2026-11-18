@@ -32,6 +32,8 @@ const { demandesFournisseur } = require('../services/supplierRequest');
 const { buildLeadSearchConditions } = require('../services/leadSearch');
 const { avecVerrouEnvoi } = require('../services/verrouEnvoiLead');
 const brand = require('../config/brand');
+const { computeWork, libelleUrgence, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
+const { chargerFile } = require('../services/leadWorkQueue');
 
 function escapeHtml(value) {
   return String(value || '')
@@ -253,6 +255,184 @@ function getReminderRecipients(cart) {
   return { email: cart.email || '', phone: cart.phone || '', name: display };
 }
 
+/* Nombre de relances AUTO déjà parties, déduit du statut du cycle */
+const REMINDERS_SENT_BY_STATUS = { abandoned: 0, reminded_1: 1, reminded_2: 2, reminded_3: 3, expired: 3, recovered: 0 };
+
+/**
+ * Données d'affichage d'une carte lead (file « À traiter » et onglet « Tous »).
+ * `work` = calcul de la file de travail (services/leadWork.js) : étape,
+ * échéance, bouton principal.
+ */
+function toCardModel(c, now = new Date()) {
+  const items = Array.isArray(c.items) ? c.items : [];
+  const phoneFR = normalizePhoneFR(c.phone || '');
+  const fullName = ((c.firstName || '') + ' ' + (c.lastName || '')).trim();
+  const requested = c.requested || {};
+  /* Demande explicite = formulaires devis/contact ET tunnels moteur/boîte
+     (leur `requested` est l'info primaire ; sans ça un lead moteur sans
+     panier affichait « 0,00 € » au lieu de sa demande) */
+  const isExplicitRequest = ['devis', 'contact', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_5places', 'blog_cta', 'manual'].includes(c.captureSource || '');
+  const hasRequested = !!(requested.vehicle || requested.vin || requested.plate || requested.ref || requested.message);
+
+  /* ── Données « suivi commercial » (timeline de la carte) ── */
+  const notesArr = Array.isArray(c.notes) ? c.notes : [];
+  const lastNoteRaw = notesArr.length ? notesArr[notesArr.length - 1] : null;
+  const autoApplicable = !NON_CART_SOURCES.includes(c.captureSource || '') && items.length > 0;
+  const neverTouched = !c.manualStatus && !(c.manualEmailsSent > 0) && !(c.manualSmsSent > 0) && !c.lastManualContactAt;
+  /* Priorité visuelle : à appeler (rouge) > en cours (bleu) > gagné (vert) > perdu (gris) > relances auto seules (ambre).
+     Leads moteur/boîte : dérivée du pipeline devis (un « Acompte reçu » est gagné, pas « à appeler »). */
+  const engStatus = (ENGINE_PIPELINE_SOURCES.includes(c.captureSource || '') && c.engineQuote && c.engineQuote.status) ? c.engineQuote.status : '';
+  let priority;
+  if (engStatus) {
+    priority = (engStatus === 'won' || engStatus === 'acompte_recu') ? 'won' : (engStatus === 'lost') ? 'lost' : 'inprogress';
+  } else if (c.manualStatus === 'converted' || c.status === 'recovered') priority = 'won';
+  else if (c.manualStatus === 'lost') priority = 'lost';
+  else if (c.manualStatus === 'contacted' || !neverTouched) priority = 'inprogress';
+  else if (REMINDERS_SENT_BY_STATUS[c.status] > 0) priority = 'auto';
+  else priority = 'call';
+
+  /* Construction d'un résumé "demande explicite" pour les leads devis/contact */
+  const requestSummary = (() => {
+    const parts = [];
+    if (requested.ref) parts.push(requested.ref);
+    if (requested.vehicle) parts.push(requested.vehicle);
+    if (requested.vin) parts.push(`VIN ${requested.vin}`);
+    else if (requested.plate) parts.push(requested.plate);
+    return parts.join(' · ');
+  })();
+
+  const work = computeWork(c, now);
+  return {
+    work,
+    urgence: libelleUrgence(work, now),
+    takenByName: c.takenByName || '',
+    takenAtRel: c.takenAt ? formatRelative(c.takenAt) : '',
+    nextActionNote: (c.nextAction && c.nextAction.note) || '',
+    lastCallOutcome: c.lastCallOutcome && c.lastCallOutcome.outcome ? {
+      label: RESULTATS_APPEL[c.lastCallOutcome.outcome] || c.lastCallOutcome.outcome,
+      by: c.lastCallOutcome.byName || '',
+      atRel: c.lastCallOutcome.at ? formatRelative(c.lastCallOutcome.at) : '',
+    } : null,
+    lostReasonLabel: c.lostReason ? (MOTIFS_PERTE[c.lostReason] || c.lostReason) : '',
+    pieceRef: (c.requested && c.requested.ref) || '',
+    engineRef: (ENGINE_PIPELINE_SOURCES.includes(c.captureSource || '') && c.requested && c.requested.ref) || '',
+    id: String(c._id),
+    sessionId: c.sessionId || '',
+    email: c.email || '',
+    phone: c.phone || '',
+    phoneCallable: !!phoneFR,
+    firstName: c.firstName || '',
+    lastName: c.lastName || '',
+    fullName: fullName || '',
+
+    /* Demande explicite (formulaire devis/contact) */
+    requested: {
+      vehicle: requested.vehicle || '',
+      vin: requested.vin || '',
+      plate: requested.plate || '',
+      ref: requested.ref || '',
+      message: requested.message || '',
+    },
+    hasRequested,
+    requestSummary,
+    showRequestAsPrimary: isExplicitRequest && hasRequested,
+
+    items,
+    itemCount: items.length,
+    itemsSummary: items.length
+      ? items.slice(0, 2).map((it) => it.name || 'Article').join(', ') + (items.length > 2 ? ` +${items.length - 2}` : '')
+      : '—',
+    firstItemImage: items[0] && items[0].image ? items[0].image : '',
+    totalAmount: formatEuro(c.totalAmountCents),
+    totalAmountCents: c.totalAmountCents || 0,
+    captureSource: c.captureSource || '',
+    captureBadge: getCaptureSourceLabel(c.captureSource),
+    status: c.status,
+    manualStatus: c.manualStatus || null,
+    /* Leads devis moteur/boîte : le badge reflète le pipeline devis
+       (Devis envoyé, Acompte reçu…) au lieu du cycle panier abandonné. */
+    statusBadge: (ENGINE_PIPELINE_SOURCES.includes(c.captureSource || '') && c.engineQuote && c.engineQuote.status && getEngineQuoteBadge(c.engineQuote.status))
+      || getStatusBadge(c.status, c.manualStatus),
+    engineQuoteUrl: (ENGINE_PIPELINE_SOURCES.includes(c.captureSource || '') && c.engineQuote) ? ('/admin/devis-moteurs/' + String(c._id)) : '',
+    lastActivityRel: formatRelative(c.lastActivityAt || c.abandonedAt),
+    lastActivityAbsolute: formatDateTimeFR(c.lastActivityAt || c.abandonedAt),
+    lastRemindedAt: formatDateTimeFR(c.lastRemindedAt),
+    lastManualContactAt: formatDateTimeFR(c.lastManualContactAt),
+    manualEmailsSent: c.manualEmailsSent || 0,
+    manualSmsSent: c.manualSmsSent || 0,
+    contextMessage: c.contextMessage || '',
+    attribution: c.attribution || {},
+    notes: notesArr,
+    canRemind: ['abandoned', 'reminded_1', 'reminded_2'].includes(c.status) && !c.manualStatus
+      && !NON_CART_SOURCES.includes(c.captureSource || '') && items.length > 0,
+    recoveryToken: c.recoveryToken || '',
+
+    /* ── Suivi commercial (timeline de la carte) ── */
+    priority,                                     // 'call' | 'inprogress' | 'won' | 'lost' | 'auto'
+    neverTouched,
+    receivedRel: formatRelative(c.abandonedAt || c.createdAt),
+    autoReminders: {
+      applicable: autoApplicable,
+      sent: REMINDERS_SENT_BY_STATUS[c.status] || 0,
+      lastRel: c.lastRemindedAt ? formatRelative(c.lastRemindedAt) : '',
+      cycleDone: c.status === 'expired',
+    },
+    lastManualContactRel: c.lastManualContactAt ? formatRelative(c.lastManualContactAt) : '',
+    manualStatusByName: c.manualStatusByName || '',
+    manualStatusAtRel: c.manualStatusAt ? formatRelative(c.manualStatusAt) : '',
+    notesCount: notesArr.length,
+    lastNote: lastNoteRaw ? {
+      text: String(lastNoteRaw.text || '').slice(0, 110),
+      by: lastNoteRaw.addedByName || 'Admin',
+      atRel: lastNoteRaw.addedAt ? formatRelative(lastNoteRaw.addedAt) : '',
+    } : null,
+    nextReminderNumber: { abandoned: 1, reminded_1: 2, reminded_2: 3 }[c.status] || 0,
+    /* Commande rapprochée automatiquement (badge « A commandé ») */
+    recoveredOrderBadge: (c.recoveredOrder && c.recoveredOrder.orderId) ? {
+      number: c.recoveredOrder.number || '',
+      totalEuro: c.recoveredOrder.totalCents > 0 ? formatEuro(c.recoveredOrder.totalCents) : '',
+      atRel: c.recoveredOrder.at ? formatRelative(c.recoveredOrder.at) : '',
+      url: '/admin/commandes/' + String(c.recoveredOrder.orderId),
+    } : null,
+    repurchaseSentRel: (c.repurchaseReminder && c.repurchaseReminder.sentAt) ? formatRelative(c.repurchaseReminder.sentAt) : '',
+  };
+}
+
+/**
+ * « 360° client » des cartes affichées : commandes passées et tickets SAV du
+ * même client (email OU téléphone), en requêtes groupées pour toute la page.
+ */
+async function enrichirHistorique(leads) {
+  if (!leads || !leads.length) return;
+  const historyMap = await buildClientHistoryMaps(leads.map((l) => ({ id: l.id, email: l.email, phone: l.phone })));
+  leads.forEach((l) => {
+    const h = historyMap.get(l.id);
+    if (!h) return;
+    if (h.orders.length) {
+      const last = h.orders[0];
+      l.clientHistory = {
+        count: h.orders.length,
+        lastRel: formatRelative(last.createdAt),
+        lastUrl: '/admin/commandes/' + String(last._id),
+        title: h.orders.slice(0, 4).map((o) => 'n°' + (o.number || '?') + ' · ' + formatDateTimeFR(o.createdAt) + ' · ' + formatEuro(o.totalCents)).join('\n')
+          + (h.orders.length > 4 ? '\n… +' + (h.orders.length - 4) + ' autre(s)' : '')
+          + '\n(cliquer = ouvrir la dernière commande · le détail complet est dans « Détail & notes »)',
+      };
+    }
+    if (h.tickets.length) {
+      const open = h.tickets.filter((t) => isSavTicketOpen(t.statut));
+      const last = h.tickets[0];
+      l.savHistory = {
+        count: h.tickets.length,
+        openCount: open.length,
+        lastStatut: (last.statut || '').replace(/_/g, ' '),
+        url: '/admin/sav/tickets/' + encodeURIComponent(last.numero || ''),
+        title: h.tickets.slice(0, 4).map((t) => (t.numero || '?') + ' · ' + String(t.statut || '').replace(/_/g, ' ')).join('\n'),
+      };
+    }
+  });
+}
+
 /**
  * GET /admin/activite-panier — page liste des leads à relancer.
  *
@@ -284,7 +464,6 @@ async function getAdminLeadsPage(req, res, next) {
     if (q) view = 'all';
     if (manualStatusFilter && manualStatusFilter !== 'none') view = 'all';
     if (status && ['recovered', 'expired'].includes(status)) view = 'all';
-    if (captureSource && ENGINE_PIPELINE_SOURCES.includes(captureSource)) view = 'all';
 
     const perPage = 30;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -305,7 +484,6 @@ async function getAdminLeadsPage(req, res, next) {
     const todoParams = Object.assign({}, qsParams);
     delete todoParams.manual;
     if (todoParams.status && ['recovered', 'expired'].includes(todoParams.status)) delete todoParams.status;
-    if (todoParams.source && ENGINE_PIPELINE_SOURCES.includes(todoParams.source)) delete todoParams.source;
     const todoQS = new URLSearchParams(todoParams).toString();
     const allQS = new URLSearchParams(Object.assign({}, qsParams, { view: 'all' })).toString();
 
@@ -313,7 +491,7 @@ async function getAdminLeadsPage(req, res, next) {
     const mergedTemplates = await getMergedTemplates();
 
     const baseRender = (overrides = {}) => res.render('admin/cart-activity', Object.assign({
-      title: 'Admin - Leads à relancer',
+      title: 'Admin - Leads à traiter',
       dbConnected,
       leads: [],
       kpis: { total: 0, uncontacted: 0, contacted: 0, converted: 0, pendingValueCents: 0, recoveryRate: '0' },
@@ -324,6 +502,12 @@ async function getAdminLeadsPage(req, res, next) {
       pagination: { page: 1, perPage, totalItems: 0, totalPages: 1, from: 0, to: 0, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1 },
       emailTemplates: mergedTemplates.email,
       smsTemplates: mergedTemplates.sms,
+      groupes: [],
+      bandeau: null,
+      todoFilters: { qui: '', piece: '', voir: '', source: captureSource },
+      typesAction: TYPES_ACTION,
+      motifsPerte: MOTIFS_PERTE,
+      resultatsAppel: RESULTATS_APPEL,
     }, overrides));
 
     if (!dbConnected) return baseRender();
@@ -370,15 +554,12 @@ async function getAdminLeadsPage(req, res, next) {
       if (searchConditions && searchConditions.length) query.$or = searchConditions;
     }
 
-    /* Filtres utilisateur seuls (pour compter les onglets), puis contraintes
-       de la vue « À traiter » appliquées par-dessus. */
+    /* Filtres utilisateur seuls (compteur de l'onglet « Tous »). La file
+       « À traiter » est calculée à part (services/leadWorkQueue.js) : elle
+       contient TOUTES les vraies demandes ouvertes, y compris les dossiers
+       devis moteurs/boîtes/ponts — les exclure avait laissé ~200 demandes
+       Google Ads sans réponse (18/11/2026). */
     const commonQuery = Object.assign({}, query);
-    const todoOverlay = {
-      manualStatus: null,
-      status: commonQuery.status || { $nin: ['recovered', 'expired'] },
-      captureSource: commonQuery.captureSource || { $nin: ENGINE_PIPELINE_SOURCES },
-    };
-    if (view === 'todo') Object.assign(query, todoOverlay);
 
     /* Tri */
     let sortSpec;
@@ -393,7 +574,7 @@ async function getAdminLeadsPage(req, res, next) {
     kpiSince.setDate(kpiSince.getDate() - 30);
     const kpiBase = { lastActivityAt: { $gte: kpiSince }, captureSource: { $nin: ENGINE_PIPELINE_SOURCES }, archived: { $ne: true } };
 
-    const [totalAll, uncontactedAll, contactedAll, convertedAll, pendingAggregate, todoCount, allCount] = await Promise.all([
+    const [totalAll, uncontactedAll, contactedAll, convertedAll, pendingAggregate, allCount] = await Promise.all([
       AbandonedCart.countDocuments(Object.assign({}, kpiBase)),
       AbandonedCart.countDocuments(Object.assign({}, kpiBase, { manualStatus: null, status: { $nin: ['recovered', 'expired'] } })),
       AbandonedCart.countDocuments(Object.assign({}, kpiBase, { manualStatus: 'contacted' })),
@@ -402,13 +583,52 @@ async function getAdminLeadsPage(req, res, next) {
         { $match: Object.assign({}, kpiBase, { manualStatus: { $ne: 'converted' }, status: { $nin: ['recovered', 'expired'] } }) },
         { $group: { _id: null, total: { $sum: '$totalAmountCents' } } },
       ]),
-      /* Compteurs des onglets (respectent les filtres actifs) */
-      AbandonedCart.countDocuments(Object.assign({}, commonQuery, todoOverlay)),
+      /* Compteur de l'onglet « Tous » (respecte les filtres actifs) */
       AbandonedCart.countDocuments(commonQuery),
     ]);
 
     const pendingValueCents = pendingAggregate[0] && pendingAggregate[0].total ? pendingAggregate[0].total : 0;
     const recoveryRate = totalAll > 0 ? ((convertedAll / totalAll) * 100).toFixed(1) : '0';
+
+    const kpisView = {
+      total: totalAll,
+      uncontacted: uncontactedAll,
+      contacted: contactedAll,
+      converted: convertedAll,
+      pendingValueCents,
+      pendingValue: formatEuro(pendingValueCents),
+      recoveryRate,
+    };
+
+    /* ── File de travail « À traiter » ──────────────────────────────────── */
+    const admin = getAdminFromReq(req);
+    const qui = ['moi', 'libre'].includes(req.query.qui) ? req.query.qui : '';
+    const piece = ['pont', 'boite', 'moteur', 'autre'].includes(req.query.piece) ? req.query.piece : '';
+    const voir = typeof req.query.voir === 'string' ? req.query.voir.trim().slice(0, 20) : '';
+    const file = await chargerFile({
+      now: new Date(), qui, moi: admin.firstName || admin.name, piece,
+      source: view === 'todo' && allowedSources.has(captureSource) ? captureSource : '', voir,
+    });
+    const todoFilters = { qui, piece, voir, source: captureSource };
+
+    if (view === 'todo') {
+      const nowTodo = new Date();
+      const groupes = file.groupes.map((g) => Object.assign({}, g, { items: g.items.map((x) => toCardModel(x.lead, nowTodo)) }));
+      await enrichirHistorique([].concat(...groupes.map((g) => g.items)));
+      return baseRender({
+        leads: [],
+        groupes,
+        bandeau: file.bandeau,
+        todoFilters,
+        kpis: kpisView,
+        tabs: {
+          todoCount: file.totalSansFiltre,
+          allCount,
+          todoUrl: '/admin/activite-panier' + (todoQS ? '?' + todoQS : ''),
+          allUrl: '/admin/activite-panier?' + allQS,
+        },
+      });
+    }
 
     /* Comptage paginé */
     const totalItems = await AbandonedCart.countDocuments(query);
@@ -422,159 +642,10 @@ async function getAdminLeadsPage(req, res, next) {
       .limit(perPage)
       .lean();
 
-    /* Nombre de relances AUTO déjà parties, déduit du statut du cycle */
-    const REMINDERS_SENT_BY_STATUS = { abandoned: 0, reminded_1: 1, reminded_2: 2, reminded_3: 3, expired: 3, recovered: 0 };
+    const now = new Date();
+    const leads = rawLeads.map((c) => toCardModel(c, now));
 
-    const leads = rawLeads.map((c) => {
-      const items = Array.isArray(c.items) ? c.items : [];
-      const phoneFR = normalizePhoneFR(c.phone || '');
-      const fullName = ((c.firstName || '') + ' ' + (c.lastName || '')).trim();
-      const requested = c.requested || {};
-      /* Demande explicite = formulaires devis/contact ET tunnels moteur/boîte
-         (leur `requested` est l'info primaire ; sans ça un lead moteur sans
-         panier affichait « 0,00 € » au lieu de sa demande) */
-      const isExplicitRequest = ['devis', 'contact', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_5places'].includes(c.captureSource || '');
-      const hasRequested = !!(requested.vehicle || requested.vin || requested.plate || requested.ref || requested.message);
-
-      /* ── Données « suivi commercial » (timeline de la carte) ── */
-      const notesArr = Array.isArray(c.notes) ? c.notes : [];
-      const lastNoteRaw = notesArr.length ? notesArr[notesArr.length - 1] : null;
-      const autoApplicable = !NON_CART_SOURCES.includes(c.captureSource || '') && items.length > 0;
-      const neverTouched = !c.manualStatus && !(c.manualEmailsSent > 0) && !(c.manualSmsSent > 0) && !c.lastManualContactAt;
-      /* Priorité visuelle : à appeler (rouge) > en cours (bleu) > gagné (vert) > perdu (gris) > relances auto seules (ambre).
-         Leads moteur/boîte : dérivée du pipeline devis (un « Acompte reçu » est gagné, pas « à appeler »). */
-      const engStatus = (ENGINE_PIPELINE_SOURCES.includes(c.captureSource || '') && c.engineQuote && c.engineQuote.status) ? c.engineQuote.status : '';
-      let priority;
-      if (engStatus) {
-        priority = (engStatus === 'won' || engStatus === 'acompte_recu') ? 'won' : (engStatus === 'lost') ? 'lost' : 'inprogress';
-      } else if (c.manualStatus === 'converted' || c.status === 'recovered') priority = 'won';
-      else if (c.manualStatus === 'lost') priority = 'lost';
-      else if (c.manualStatus === 'contacted' || !neverTouched) priority = 'inprogress';
-      else if (REMINDERS_SENT_BY_STATUS[c.status] > 0) priority = 'auto';
-      else priority = 'call';
-
-      /* Construction d'un résumé "demande explicite" pour les leads devis/contact */
-      const requestSummary = (() => {
-        const parts = [];
-        if (requested.ref) parts.push(requested.ref);
-        if (requested.vehicle) parts.push(requested.vehicle);
-        if (requested.vin) parts.push(`VIN ${requested.vin}`);
-        else if (requested.plate) parts.push(requested.plate);
-        return parts.join(' · ');
-      })();
-
-      return {
-        id: String(c._id),
-        sessionId: c.sessionId || '',
-        email: c.email || '',
-        phone: c.phone || '',
-        phoneCallable: !!phoneFR,
-        firstName: c.firstName || '',
-        lastName: c.lastName || '',
-        fullName: fullName || '',
-
-        /* Demande explicite (formulaire devis/contact) */
-        requested: {
-          vehicle: requested.vehicle || '',
-          vin: requested.vin || '',
-          plate: requested.plate || '',
-          ref: requested.ref || '',
-          message: requested.message || '',
-        },
-        hasRequested,
-        requestSummary,
-        showRequestAsPrimary: isExplicitRequest && hasRequested,
-
-        items,
-        itemCount: items.length,
-        itemsSummary: items.length
-          ? items.slice(0, 2).map((it) => it.name || 'Article').join(', ') + (items.length > 2 ? ` +${items.length - 2}` : '')
-          : '—',
-        firstItemImage: items[0] && items[0].image ? items[0].image : '',
-        totalAmount: formatEuro(c.totalAmountCents),
-        totalAmountCents: c.totalAmountCents || 0,
-        captureSource: c.captureSource || '',
-        captureBadge: getCaptureSourceLabel(c.captureSource),
-        status: c.status,
-        manualStatus: c.manualStatus || null,
-        /* Leads devis moteur/boîte : le badge reflète le pipeline devis
-           (Devis envoyé, Acompte reçu…) au lieu du cycle panier abandonné. */
-        statusBadge: (ENGINE_PIPELINE_SOURCES.includes(c.captureSource || '') && c.engineQuote && c.engineQuote.status && getEngineQuoteBadge(c.engineQuote.status))
-          || getStatusBadge(c.status, c.manualStatus),
-        engineQuoteUrl: (ENGINE_PIPELINE_SOURCES.includes(c.captureSource || '') && c.engineQuote) ? ('/admin/devis-moteurs/' + String(c._id)) : '',
-        lastActivityRel: formatRelative(c.lastActivityAt || c.abandonedAt),
-        lastActivityAbsolute: formatDateTimeFR(c.lastActivityAt || c.abandonedAt),
-        lastRemindedAt: formatDateTimeFR(c.lastRemindedAt),
-        lastManualContactAt: formatDateTimeFR(c.lastManualContactAt),
-        manualEmailsSent: c.manualEmailsSent || 0,
-        manualSmsSent: c.manualSmsSent || 0,
-        contextMessage: c.contextMessage || '',
-        attribution: c.attribution || {},
-        notes: notesArr,
-        canRemind: ['abandoned', 'reminded_1', 'reminded_2'].includes(c.status) && !c.manualStatus
-          && !NON_CART_SOURCES.includes(c.captureSource || '') && items.length > 0,
-        recoveryToken: c.recoveryToken || '',
-
-        /* ── Suivi commercial (timeline de la carte) ── */
-        priority,                                     // 'call' | 'inprogress' | 'won' | 'lost' | 'auto'
-        neverTouched,
-        receivedRel: formatRelative(c.abandonedAt || c.createdAt),
-        autoReminders: {
-          applicable: autoApplicable,
-          sent: REMINDERS_SENT_BY_STATUS[c.status] || 0,
-          lastRel: c.lastRemindedAt ? formatRelative(c.lastRemindedAt) : '',
-          cycleDone: c.status === 'expired',
-        },
-        lastManualContactRel: c.lastManualContactAt ? formatRelative(c.lastManualContactAt) : '',
-        manualStatusByName: c.manualStatusByName || '',
-        manualStatusAtRel: c.manualStatusAt ? formatRelative(c.manualStatusAt) : '',
-        notesCount: notesArr.length,
-        lastNote: lastNoteRaw ? {
-          text: String(lastNoteRaw.text || '').slice(0, 110),
-          by: lastNoteRaw.addedByName || 'Admin',
-          atRel: lastNoteRaw.addedAt ? formatRelative(lastNoteRaw.addedAt) : '',
-        } : null,
-        nextReminderNumber: { abandoned: 1, reminded_1: 2, reminded_2: 3 }[c.status] || 0,
-        /* Commande rapprochée automatiquement (badge « A commandé ») */
-        recoveredOrderBadge: (c.recoveredOrder && c.recoveredOrder.orderId) ? {
-          number: c.recoveredOrder.number || '',
-          totalEuro: c.recoveredOrder.totalCents > 0 ? formatEuro(c.recoveredOrder.totalCents) : '',
-          atRel: c.recoveredOrder.at ? formatRelative(c.recoveredOrder.at) : '',
-          url: '/admin/commandes/' + String(c.recoveredOrder.orderId),
-        } : null,
-        repurchaseSentRel: (c.repurchaseReminder && c.repurchaseReminder.sentAt) ? formatRelative(c.repurchaseReminder.sentAt) : '',
-      };
-    });
-
-    /* ── 360° client : commandes passées + tickets SAV du même client
-       (email OU téléphone), en requêtes groupées pour toute la page ── */
-    const historyMap = await buildClientHistoryMaps(leads.map((l) => ({ id: l.id, email: l.email, phone: l.phone })));
-    leads.forEach((l) => {
-      const h = historyMap.get(l.id);
-      if (!h) return;
-      if (h.orders.length) {
-        const last = h.orders[0];
-        l.clientHistory = {
-          count: h.orders.length,
-          lastRel: formatRelative(last.createdAt),
-          lastUrl: '/admin/commandes/' + String(last._id),
-          title: h.orders.slice(0, 4).map((o) => 'n°' + (o.number || '?') + ' · ' + formatDateTimeFR(o.createdAt) + ' · ' + formatEuro(o.totalCents)).join('\n')
-            + (h.orders.length > 4 ? '\n… +' + (h.orders.length - 4) + ' autre(s)' : '')
-            + '\n(cliquer = ouvrir la dernière commande · le détail complet est dans « Détail & notes »)',
-        };
-      }
-      if (h.tickets.length) {
-        const open = h.tickets.filter((t) => isSavTicketOpen(t.statut));
-        const last = h.tickets[0];
-        l.savHistory = {
-          count: h.tickets.length,
-          openCount: open.length,
-          lastStatut: (last.statut || '').replace(/_/g, ' '),
-          url: '/admin/sav/tickets/' + encodeURIComponent(last.numero || ''),
-          title: h.tickets.slice(0, 4).map((t) => (t.numero || '?') + ' · ' + String(t.statut || '').replace(/_/g, ' ')).join('\n'),
-        };
-      }
-    });
+    await enrichirHistorique(leads);
 
     const pagination = {
       page: currentPage,
@@ -591,17 +662,9 @@ async function getAdminLeadsPage(req, res, next) {
 
     return baseRender({
       leads,
-      kpis: {
-        total: totalAll,
-        uncontacted: uncontactedAll,
-        contacted: contactedAll,
-        converted: convertedAll,
-        pendingValueCents,
-        pendingValue: formatEuro(pendingValueCents),
-        recoveryRate,
-      },
+      kpis: kpisView,
       tabs: {
-        todoCount,
+        todoCount: file.totalSansFiltre,
         allCount,
         todoUrl: '/admin/activite-panier' + (todoQS ? '?' + todoQS : ''),
         allUrl: '/admin/activite-panier?' + allQS,

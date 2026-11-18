@@ -23,7 +23,11 @@
     </div>
 
     <!-- KPIs -->
-    <div class="mt-8 grid grid-cols-2 lg:grid-cols-8 gap-4">
+    <div class="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <a href="/admin/activite-panier" title="Dossiers ouverts dont l'échéance est passée — à traiter depuis « Leads à traiter »" class="rounded-2xl border <%= stats.overdue ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white' %> p-4 block hover:shadow-sm transition">
+        <div class="text-xs uppercase tracking-widest font-semibold <%= stats.overdue ? 'text-red-600' : 'text-slate-400' %>">En retard</div>
+        <div class="mt-1 text-2xl font-bold <%= stats.overdue ? 'text-red-700' : 'text-slate-900' %>"><%= stats.overdue %></div>
+      </a>
       <div class="rounded-2xl border border-slate-200 bg-white p-4">
         <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Total</div>
         <div class="mt-1 text-2xl font-bold text-slate-900"><%= stats.total %></div>
@@ -58,6 +62,11 @@
       </div>
     </div>
 
+    <div class="mt-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm text-blue-900 flex flex-wrap items-center gap-2">
+      <span class="material-symbols-outlined text-[18px]">info</span>
+      Ces demandes apparaissent aussi dans <a href="/admin/activite-panier" class="font-semibold underline">Leads à traiter</a> : on rappelle le client depuis là-bas, on construit le devis ici.
+    </div>
+
     <!-- Toggle Actifs / Archivés -->
     <div class="mt-6 inline-flex rounded-xl border border-slate-200 bg-white p-1">
       <a href="/admin/devis-moteurs<%= filters.status ? ('?status=' + filters.status) : '' %>"
@@ -88,8 +97,12 @@
         <option value="reconditionne" <%= filters.condition === 'reconditionne' ? 'selected' : '' %>>Reconditionné</option>
         <option value="occasion" <%= filters.condition === 'occasion' ? 'selected' : '' %>>Occasion</option>
       </select>
+      <select name="tri" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+        <option value="" <%= filters.tri !== 'recent' ? 'selected' : '' %>>Tri : le plus urgent</option>
+        <option value="recent" <%= filters.tri === 'recent' ? 'selected' : '' %>>Tri : les plus récents</option>
+      </select>
       <button type="submit" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-5 py-2.5 rounded-xl text-sm">Filtrer</button>
-      <% if (filters.q || filters.status || filters.condition) { %>
+      <% if (filters.q || filters.status || filters.condition || filters.tri) { %>
         <a href="/admin/devis-moteurs<%= view === 'archived' ? '?view=archived' : '' %>" class="px-5 py-2.5 text-sm text-slate-600 hover:text-slate-900">Réinitialiser</a>
       <% } %>
     </form>
@@ -105,21 +118,19 @@
           <table class="w-full text-sm">
             <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <tr>
-                <th class="text-left px-4 py-3 font-semibold">Dossier</th>
-                <th class="text-left px-4 py-3 font-semibold">Client</th>
-                <th class="text-left px-4 py-3 font-semibold">Véhicule / Pièce</th>
-                <th class="text-left px-4 py-3 font-semibold">Statut</th>
-                <th class="text-left px-4 py-3 font-semibold">Stock</th>
-                <th class="text-right px-4 py-3 font-semibold">Vente HT</th>
-                <th class="text-right px-4 py-3 font-semibold">Marge</th>
-                <th class="text-center px-4 py-3 font-semibold">Photos</th>
-                <th class="text-right px-4 py-3 font-semibold"></th>
+                <th class="text-left px-3 py-3 font-semibold">Dossier</th>
+                <th class="text-left px-3 py-3 font-semibold">Client</th>
+                <th class="text-left px-3 py-3 font-semibold">Véhicule / Pièce</th>
+                <th class="text-left px-3 py-3 font-semibold">Étape</th>
+                <th class="text-right px-3 py-3 font-semibold">Vente HT · marge</th>
+                <th class="text-left px-3 py-3 font-semibold">Prochaine action</th>
+                <th class="text-right px-3 py-3 font-semibold"></th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
               <% items.forEach(function(it) { %>
                 <tr class="hover:bg-slate-50 transition">
-                  <td class="px-4 py-3 align-top">
+                  <td class="px-3 py-3 align-top">
                     <div class="flex items-center gap-2">
                       <div class="font-mono text-xs font-semibold text-slate-900"><%= it.ref || '—' %></div>
                       <% if (it.priority === 'hot') { %>
@@ -144,15 +155,15 @@
                       </div>
                     <% } %>
                   </td>
-                  <td class="px-4 py-3 align-top">
-                    <div class="font-medium text-slate-900"><%= it.displayName %></div>
+                  <td class="px-3 py-3 align-top">
+                    <div class="font-medium text-slate-900 truncate max-w-[180px]" title="<%= it.displayName %>"><%= it.displayName %></div>
                     <div class="text-xs text-slate-500 mt-0.5"><%= it.phone %></div>
-                    <% if (it.email) { %><div class="text-xs text-slate-400"><%= it.email %></div><% } %>
+                    <% if (it.email) { %><div class="text-xs text-slate-400 truncate max-w-[180px]" title="<%= it.email %>"><%= it.email %></div><% } %>
                     <% if (it.source) { %>
                       <span class="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold <%= it.source.isAds ? 'bg-green-100 text-green-700' : (it.source.kind === 'seo' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-500') %>"<% if (it.source.campaign) { %> title="Campagne : <%= it.source.campaign %>"<% } %>><%= it.source.label %></span>
                     <% } %>
                   </td>
-                  <td class="px-4 py-3 align-top">
+                  <td class="px-3 py-3 align-top">
                     <div class="font-mono text-xs text-slate-700"><%= it.plate || '—' %></div>
                     <% if (it.isBoite) { %>
                       <span class="inline-flex items-center mt-1 mr-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">⚙️ Boîte</span>
@@ -171,41 +182,39 @@
                       <div class="text-xs text-amber-600 mt-0.5">À identifier</div>
                     <% } %>
                   </td>
-                  <td class="px-4 py-3 align-top">
+                  <td class="px-3 py-3 align-top">
                     <div class="flex flex-col items-start gap-1">
-                      <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold <%= it.statusBadge.className %>"><%= it.statusBadge.label %></span>
+                      <% var wkS = it.work || {}; %>
+                      <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap <%= wkS.stageClass || it.statusBadge.className %>"><%= wkS.stageLabel || it.statusBadge.label %></span>
                       <% if (it.needsSourcing) { %>
                         <span title="État demandé indisponible au catalogue — à sourcer / rappeler" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">À sourcer<%= it.sourcingRequested ? ' · ' + (it.sourcingRequested === 'reconditionne' ? 'reconditionné' : it.sourcingRequested) : '' %></span>
                       <% } %>
+                      <% if (it.stockLabel) { %>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium <%= it.stockClass %>"><%= it.stockLabel %></span>
+                      <% } %>
                     </div>
                   </td>
-                  <td class="px-4 py-3 align-top">
-                    <% if (it.stockLabel) { %>
-                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium <%= it.stockClass %>"><%= it.stockLabel %></span>
-                    <% } else { %>
-                      <span class="text-xs text-slate-300">—</span>
+                  <td class="px-3 py-3 align-top text-right font-mono text-sm whitespace-nowrap">
+                    <% if (it.sellPrice > 0) { %><div><%= fmt(it.sellPrice) %> €</div><% } else { %><span class="text-slate-300">—</span><% } %>
+                    <% if (it.marginEur !== 0) { %>
+                      <div class="text-xs font-bold <%= it.marginColor %>"><%= fmt(it.marginEur) %> € · <%= it.marginPct.toFixed(1) %>%</div>
                     <% } %>
                   </td>
-                  <td class="px-4 py-3 align-top text-right font-mono text-sm">
-                    <% if (it.sellPrice > 0) { %><%= fmt(it.sellPrice) %> €<% } else { %><span class="text-slate-300">—</span><% } %>
-                  </td>
-                  <td class="px-4 py-3 align-top text-right font-mono text-sm">
-                    <% if (it.marginEur !== 0) { %>
-                      <div class="font-bold <%= it.marginColor %>"><%= fmt(it.marginEur) %> €</div>
-                      <div class="text-xs <%= it.marginColor %>"><%= it.marginPct.toFixed(1) %>%</div>
-                    <% } else { %><span class="text-slate-300">—</span><% } %>
-                  </td>
-                  <td class="px-4 py-3 align-top text-center">
+                  <td class="px-3 py-3 align-top min-w-[170px]">
+                    <% var wk = it.work || {}; var fermeB = wk.stage === 'gagne' || wk.stage === 'perdu'; %>
+                    <% if (!fermeB && it.urgence) { %>
+                      <span class="inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold <%= wk.overdue ? 'bg-red-600 text-white' : (wk.stage === 'nouveau' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700') %>"><%= it.urgence %></span>
+                    <% } %>
+                    <% if (!fermeB && wk.nextActionLabel) { %><div class="text-xs font-semibold text-slate-700 mt-1"><%= wk.nextActionLabel %></div><% } %>
+                    <% if (it.nextActionNote) { %><div class="text-[11px] text-slate-500 line-clamp-2"><%= it.nextActionNote %></div><% } %>
+                    <div class="text-[11px] text-slate-400 mt-0.5"><%= it.takenByName ? 'Pris par ' + it.takenByName : (fermeB ? '' : 'Non pris') %></div>
                     <% if (it.photoCount > 0) { %>
-                      <span class="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
-                        <span class="material-symbols-outlined text-sm" style="font-size:14px">photo_camera</span>
-                        <%= it.photoCount %>
-                      </span>
-                    <% } else { %><span class="text-slate-300 text-xs">—</span><% } %>
+                      <div class="mt-1 inline-flex items-center gap-1 text-[11px] text-slate-500"><span class="material-symbols-outlined" style="font-size:13px">photo_camera</span><%= it.photoCount %> photo<%= it.photoCount > 1 ? 's' : '' %></div>
+                    <% } %>
                   </td>
-                  <td class="px-4 py-3 align-top text-right">
+                  <td class="px-3 py-3 align-top text-right">
                     <div class="flex items-center justify-end gap-1.5">
-                      <a href="/admin/devis-moteurs/<%= it.id %>" class="text-red-600 hover:text-red-700 font-semibold text-sm whitespace-nowrap">Ouvrir →</a>
+                      <a href="/admin/devis-moteurs/<%= it.id %>" class="inline-flex items-center rounded-lg bg-slate-900 hover:bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-white whitespace-nowrap">Ouvrir</a>
                       <% if (view === 'archived') { %>
                         <form action="/admin/devis-moteurs/<%= it.id %>/archive" method="POST" class="inline">
                           <input type="hidden" name="archived" value="0">
@@ -223,11 +232,6 @@
                           </button>
                         </form>
                       <% } %>
-                      <form action="/admin/devis-moteurs/<%= it.id %>/delete" method="POST" class="inline" onsubmit="return confirm('Supprimer définitivement ce dossier ?\n\nIrréversible : le lead, ses photos et PDF seront effacés.');">
-                        <button type="submit" title="Supprimer définitivement" class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition">
-                          <span class="material-symbols-outlined" style="font-size:18px">delete</span>
-                        </button>
-                      </form>
                     </div>
                   </td>
                 </tr>
@@ -244,12 +248,13 @@
               if (filters.condition) p.set('condition', filters.condition);
               if (filters.sourcing) p.set('sourcing', '1');
               if (filters.q) p.set('q', filters.q);
+              if (filters.tri === 'recent') p.set('tri', 'recent');
               if (n > 1) p.set('page', String(n));
               const s = p.toString();
               return '/admin/devis-moteurs' + (s ? '?' + s : '');
             };
           %>
-          <div class="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 text-sm">
+          <div class="flex items-center justify-between gap-3 px-3 py-3 border-t border-slate-100 text-sm">
             <div class="text-slate-500"><%= pagination.from %>–<%= pagination.to %> sur <%= pagination.totalItems %> dossiers</div>
             <div class="flex items-center gap-2">
               <% if (pagination.hasPrev) { %><a href="<%= pageQS(pagination.page - 1) %>" class="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">← Précédent</a><% } %>

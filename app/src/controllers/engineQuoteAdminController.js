@@ -44,6 +44,7 @@ async function brochureAttachment() {
 }
 const { buildQuoteEmailHtml, buildBundleQuoteEmailHtml, buildShipmentEmailHtml } = require('../services/engineQuoteEmail');
 const { partLexicon, leadCategoryFromSource, LEAD_SOURCES: LEXICON_LEAD_SOURCES } = require('../services/partLexicon');
+const { computeWork, libelleUrgence, comparer: compareWork } = require('../services/leadWork');
 const { sendSms, normalizePhoneFR } = require('../services/smsService');
 const { resolveSms } = require('../services/smsSettings');
 const { journaliser } = require('../services/leadCommunications');
@@ -337,18 +338,54 @@ async function getEngineQuotesList(req, res, next) {
 
     /* Pagination. Avant : .limit(200) sans page suivante — au-delà de 200
        dossiers, les plus anciens disparaissaient sans prévenir et le compteur
-       « Total » restait bloqué à 200 (constaté le 18/11/2026). */
+       « Total » restait bloqué à 200 (constaté le 18/11/2026).
+       Tri par défaut = URGENCE (échéance calculée par services/leadWork.js,
+       comme la file « Leads à traiter ») : il faut donc calculer l'échéance de
+       TOUS les dossiers filtrés avant de découper en pages. « Plus récents »
+       reste disponible et trie directement en base. */
     const perPage = 50;
-    const totalItems = await AbandonedCart.countDocuments(query);
-    const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
-    const currentPage = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
-    const skip = (currentPage - 1) * perPage;
-
-    const carts = await AbandonedCart.find(query)
-      .sort({ lastActivityAt: -1 })
-      .skip(skip)
-      .limit(perPage)
-      .lean();
+    const tri = req.query.tri === 'recent' ? 'recent' : 'urgence';
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const nowDate = new Date();
+    let totalItems;
+    let carts;
+    let skip;
+    let currentPage;
+    let totalPages;
+    if (tri === 'recent') {
+      totalItems = await AbandonedCart.countDocuments(query);
+      totalPages = Math.max(1, Math.ceil(totalItems / perPage));
+      currentPage = Math.min(page, totalPages);
+      skip = (currentPage - 1) * perPage;
+      carts = await AbandonedCart.find(query)
+        .select('-notes -items -communications.corps -communications.objet -communications.meta')
+        .sort({ lastActivityAt: -1 })
+        .skip(skip)
+        .limit(perPage)
+        .lean();
+    } else {
+      const tous = await AbandonedCart.find(query)
+        .select('-notes -items -communications.corps -communications.objet -communications.meta')
+        .limit(5000)
+        .lean();
+      /* Même ordre que la file « Leads à traiter » : nouvelles demandes, retards
+         récents, travail du jour, planifiés, vieux retards, puis les dossiers
+         clos (les plus récents d'abord). */
+      const RANG_GROUPE = { nouveaux: 0, retard: 1, rappels: 2, devis: 2, plus_tard: 3, anciens: 4 };
+      const rang = (w) => (w.group in RANG_GROUPE ? RANG_GROUPE[w.group] : 5);
+      tous.forEach((c) => { c.__work = computeWork(c, nowDate); });
+      tous.sort((a, b) => {
+        const r = rang(a.__work) - rang(b.__work);
+        if (r) return r;
+        if (rang(a.__work) === 5) return new Date(b.lastActivityAt || 0) - new Date(a.lastActivityAt || 0);
+        return compareWork({ id: String(a._id), work: a.__work }, { id: String(b._id), work: b.__work });
+      });
+      totalItems = tous.length;
+      totalPages = Math.max(1, Math.ceil(totalItems / perPage));
+      currentPage = Math.min(page, totalPages);
+      skip = (currentPage - 1) * perPage;
+      carts = tous.slice(skip, skip + perPage);
+    }
 
     const now = Date.now();
     const MS_DAY = 24 * 60 * 60 * 1000;
@@ -373,8 +410,13 @@ async function getEngineQuotesList(req, res, next) {
         priority = 'cold';
       }
 
+      const work = c.__work || computeWork(c, nowDate);
       return {
         id: String(c._id),
+        work,
+        urgence: libelleUrgence(work, nowDate),
+        takenByName: c.takenByName || '',
+        nextActionNote: (c.nextAction && c.nextAction.note) || '',
         source: classifyLeadSource(c.attribution),
         category: leadCategoryLabel(c.captureSource),
         isBoite: c.captureSource === 'landing_boites',
@@ -415,8 +457,8 @@ async function getEngineQuotesList(req, res, next) {
       };
     });
 
-    // Tri : hot en premier, puis par date desc
-    items.sort((a, b) => {
+    // Tri « plus récents » : hot en premier, puis par date desc
+    if (tri === 'recent') items.sort((a, b) => {
       if (a.priority === 'hot' && b.priority !== 'hot') return -1;
       if (b.priority === 'hot' && a.priority !== 'hot') return 1;
       return new Date(b.receivedAt) - new Date(a.receivedAt);
@@ -452,7 +494,14 @@ async function getEngineQuotesList(req, res, next) {
       marginExpected += calcMargin(eq.pricing, leadIsReconditionne(eq, c)).marginEur || 0;
     });
 
+    /* « En retard » : échéance passée sur les dossiers ouverts (même calcul que la file). */
+    const actifsPourRetard = await AbandonedCart.find(Object.assign({}, kpiBase, { 'engineQuote.status': { $nin: ['won', 'lost', 'acompte_recu'] }, manualStatus: { $nin: ['converted', 'lost'] } }))
+      .select('captureSource status manualStatus manualStatusAt lastManualContactAt engineQuote.status engineQuote.sentQuotes.sentAt nextAction lastCallOutcome communications.sens communications.auto communications.statut communications.at recoveredOrder archived abandonedAt createdAt lastActivityAt takenByName')
+      .limit(5000).lean();
+    const kOverdue = actifsPourRetard.filter((c) => computeWork(c, nowDate).overdue).length;
+
     const stats = {
+      overdue: kOverdue,
       total: kTotal,
       newCount: kNew,
       analyzing: kAnalyzing,
@@ -486,7 +535,7 @@ async function getEngineQuotesList(req, res, next) {
       activeKey: 'engine-quotes',
       items,
       stats,
-      filters: { status: statusFilter, q, condition: conditionFilter, sourcing: sourcingFilter },
+      filters: { status: statusFilter, q, condition: conditionFilter, sourcing: sourcingFilter, tri },
       view,
       archivedCount,
       pagination,

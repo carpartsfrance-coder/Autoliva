@@ -2,61 +2,140 @@
 
 <%- include('./partials/sidebar', { active: 'cart-activity' }) %>
 
-<main class="flex-1">
-  <div class="px-6 lg:px-10 py-8">
-    <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+<main class="flex-1 min-w-0">
+  <div class="px-4 sm:px-6 lg:px-10 py-6 lg:py-8 max-w-[1400px]">
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
       <div>
-        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Leads à relancer'}] }) %>
-        <div class="text-2xl md:text-3xl font-semibold text-slate-900">Leads à relancer</div>
-        <div class="mt-1 text-sm text-slate-500">Visiteurs avec activité panier ou demande de devis, prêts à être recontactés.</div>
+        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Leads à traiter'}] }) %>
+        <h1 class="text-2xl md:text-3xl font-semibold text-slate-900">Leads à traiter</h1>
+        <p class="mt-1 text-sm text-slate-500">Toutes les demandes clients au même endroit. Traite de haut en bas : la page te dit quoi faire et quand.</p>
+      </div>
+      <div class="flex flex-wrap gap-2 shrink-0">
+        <button type="button" id="leads-help-btn" class="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50">
+          <span class="material-symbols-outlined text-base text-primary">school</span>Comment ça marche
+        </button>
+        <a href="/admin/parametres/modeles-messages" class="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" title="Personnaliser les textes des SMS et emails">
+          <span class="material-symbols-outlined text-base text-primary">edit_note</span>Modèles de messages
+        </a>
       </div>
     </div>
 
-    <!-- KPIs (30 derniers jours) -->
-    <div class="mt-8 grid grid-cols-2 lg:grid-cols-5 gap-4">
-      <div class="rounded-2xl border border-slate-200 bg-white p-4">
-        <div class="text-xs uppercase tracking-widest text-slate-400 font-semibold">Leads (30j)</div>
-        <div class="mt-1 text-2xl font-bold text-slate-900"><%= kpis.total %></div>
+    <% if (view === 'todo' && bandeau) { %>
+      <!-- Bandeau : l'état de la file en 4 chiffres (vue patron) -->
+      <div class="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="rounded-2xl border <%= bandeau.enRetard ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white' %> p-4" title="Dossiers dont l'échéance est passée (y compris les anciens)">
+          <div class="text-[11px] uppercase tracking-widest font-semibold <%= bandeau.enRetard ? 'text-red-600' : 'text-slate-400' %>">En retard</div>
+          <div class="mt-1 text-2xl font-bold <%= bandeau.enRetard ? 'text-red-700' : 'text-slate-900' %>"><%= bandeau.enRetard %></div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4" title="Demandes ouvertes sur lesquelles personne n'a encore appelé ni écrit (les messages automatiques ne comptent pas)">
+          <div class="text-[11px] uppercase tracking-widest font-semibold text-slate-400">Jamais contactés</div>
+          <div class="mt-1 text-2xl font-bold text-slate-900"><%= bandeau.jamaisPris %></div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4" title="Nouvelles demandes, rappels et devis prévus aujourd'hui (hors retards)">
+          <div class="text-[11px] uppercase tracking-widest font-semibold text-slate-400">À faire aujourd'hui</div>
+          <div class="mt-1 text-2xl font-bold text-slate-900"><%= bandeau.duJour %></div>
+        </div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4" title="Temps entre la demande du client et le premier appel ou message d'un commercial, en heures d'ouverture, sur les 30 derniers jours">
+          <div class="text-[11px] uppercase tracking-widest font-semibold text-slate-400">1re réponse (30 j)</div>
+          <% var dl = bandeau.delai || {}; var med = dl.mediane; %>
+          <div class="mt-1 text-2xl font-bold text-slate-900">
+            <% if (med === null || med === undefined) { %>—<% } else if (med < 60) { %><%= med %> min<% } else { %><%= Math.floor(med / 60) %> h <%= String(med % 60).padStart(2, '0') %><% } %>
+          </div>
+          <% if (dl.pctDansLHeure !== null && dl.pctDansLHeure !== undefined) { %><div class="text-xs text-slate-500"><%= dl.pctDansLHeure %> % rappelés dans l'heure</div><% } %>
+        </div>
       </div>
-      <div class="rounded-2xl border border-red-100 bg-red-50/40 p-4">
-        <div class="text-xs uppercase tracking-widest text-red-500 font-semibold">À contacter</div>
-        <div class="mt-1 text-2xl font-bold text-red-700"><%= kpis.uncontacted %></div>
+      <% if (bandeau.parPersonne && bandeau.parPersonne.length) { %>
+        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+          <span>Retards par personne :</span>
+          <% bandeau.parPersonne.forEach(function (p) { %>
+            <span class="inline-flex items-center rounded-full bg-white border border-slate-200 px-2 py-0.5"><strong class="text-slate-700 mr-1"><%= p.nom %></strong><%= p.n %></span>
+          <% }) %>
+        </div>
+      <% } %>
+    <% } else { %>
+      <!-- Chiffres des 30 derniers jours (hors dossiers devis et robots) -->
+      <div class="mt-5 grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="rounded-2xl border border-slate-200 bg-white p-4"><div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">Leads (30 j)</div><div class="mt-1 text-2xl font-bold text-slate-900"><%= kpis.total %></div></div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4"><div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">Jamais contactés</div><div class="mt-1 text-2xl font-bold text-slate-900"><%= kpis.uncontacted %></div></div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4"><div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">Contactés</div><div class="mt-1 text-2xl font-bold text-slate-900"><%= kpis.contacted %></div></div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4"><div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">Convertis</div><div class="mt-1 text-2xl font-bold text-green-700"><%= kpis.converted %> <span class="text-sm font-medium">(<%= kpis.recoveryRate %> %)</span></div></div>
+        <div class="rounded-2xl border border-slate-200 bg-white p-4" title="Somme des paniers non convertis — indicatif"><div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">Paniers en attente</div><div class="mt-1 text-2xl font-bold text-slate-900"><%= kpis.pendingValue || '0,00 €' %></div></div>
       </div>
-      <div class="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
-        <div class="text-xs uppercase tracking-widest text-blue-500 font-semibold">Contactés</div>
-        <div class="mt-1 text-2xl font-bold text-blue-700"><%= kpis.contacted %></div>
-      </div>
-      <div class="rounded-2xl border border-green-100 bg-green-50/40 p-4">
-        <div class="text-xs uppercase tracking-widest text-green-500 font-semibold">Convertis</div>
-        <div class="mt-1 text-2xl font-bold text-green-700"><%= kpis.converted %> <span class="text-sm font-medium text-green-600">(<%= kpis.recoveryRate %>%)</span></div>
-      </div>
-      <div class="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
-        <div class="text-xs uppercase tracking-widest text-amber-600 font-semibold">€ en attente</div>
-        <div class="mt-1 text-2xl font-bold text-amber-700"><%= kpis.pendingValue || '0,00 €' %></div>
-      </div>
-    </div>
+    <% } %>
 
-    <!-- Onglets : file de travail vs historique complet -->
-    <div class="mt-6 flex flex-wrap items-center gap-2">
-      <a href="<%= tabs.todoUrl %>" class="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border <%= view === 'todo' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' %>">
+    <!-- Onglets -->
+    <div class="mt-5 flex flex-wrap items-center gap-2">
+      <a href="<%= tabs.todoUrl %>" class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border <%= view === 'todo' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' %>">
         À traiter
         <span class="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold <%= view === 'todo' ? 'bg-white/20 text-white' : 'bg-red-50 text-red-700' %>"><%= tabs.todoCount %></span>
       </a>
-      <a href="<%= tabs.allUrl %>" class="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border <%= view === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' %>">
-        Tous
+      <a href="<%= tabs.allUrl %>" class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border <%= view === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' %>">
+        Tous les leads
         <span class="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold <%= view === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600' %>"><%= tabs.allCount %></span>
       </a>
-      <div class="ml-2 text-xs text-slate-400 hidden md:block">
-        <% if (view === 'todo') { %>Jamais contactés, cycle en cours — hors devis moteur/boîte (gérés dans « Devis moteurs &amp; boîtes »).<% } else { %>Historique complet, y compris contactés, convertis, perdus et leads devis.<% } %>
-      </div>
-      <a href="/admin/parametres/modeles-messages" class="ml-auto inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex-shrink-0" title="Personnaliser les textes des SMS et emails envoyés depuis cette page">
-        <span class="material-symbols-outlined text-base text-primary">edit_note</span>Modifier les modèles
-      </a>
-      <button type="button" id="leads-help-btn" class="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 flex-shrink-0">
-        <span class="material-symbols-outlined text-base text-primary">school</span>Comprendre cette page
-      </button>
+      <span class="text-xs text-slate-400 hidden md:inline">
+        <% if (view === 'todo') { %>Les vraies demandes ouvertes, y compris les devis moteurs, boîtes et ponts. Les simples paniers et la newsletter sont dans « Tous les leads ».<% } else { %>Tout l'historique : paniers, newsletter, gagnés, perdus.<% } %>
+      </span>
     </div>
 
+    <% if (view === 'todo') { %>
+      <!-- Filtres rapides de la file -->
+      <form action="/admin/activite-panier" method="GET" class="mt-3 flex flex-col md:flex-row md:items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+        <input type="text" name="q" value="" placeholder="Chercher un client : nom, tél, email, plaque, n° de commande…" class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        <div class="inline-flex shrink-0 rounded-xl border border-slate-200 p-0.5 text-xs font-semibold">
+          <% [['', 'Tous'], ['moi', 'Mes dossiers'], ['libre', 'Non pris']].forEach(function (o) { %>
+            <% var qs = new URLSearchParams(Object.assign({}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, o[0] ? { qui: o[0] } : {})).toString(); %>
+            <a href="/admin/activite-panier<%= qs ? '?' + qs : '' %>" class="whitespace-nowrap rounded-lg px-3 py-1.5 <%= todoFilters.qui === o[0] ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50' %>"><%= o[1] %></a>
+          <% }) %>
+        </div>
+        <% if (todoFilters.qui) { %><input type="hidden" name="qui" value="<%= todoFilters.qui %>"><% } %>
+        <select name="piece" class="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white" onchange="this.form.q.value===''&&this.form.submit()">
+          <option value="">Toutes les pièces</option>
+          <option value="pont" <%= todoFilters.piece === 'pont' ? 'selected' : '' %>>Ponts / transferts</option>
+          <option value="boite" <%= todoFilters.piece === 'boite' ? 'selected' : '' %>>Boîtes / mécatroniques</option>
+          <option value="moteur" <%= todoFilters.piece === 'moteur' ? 'selected' : '' %>>Moteurs</option>
+          <option value="autre" <%= todoFilters.piece === 'autre' ? 'selected' : '' %>>Autres</option>
+        </select>
+        <select name="source" class="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white" onchange="this.form.q.value===''&&this.form.submit()">
+          <option value="">Toutes les sources</option>
+          <% [['landing_ponts', 'Landing ponts / transferts'], ['landing_boites', 'Landing boîtes'], ['landing_moteurs', 'Landing moteurs'], ['devis', 'Demande de devis (fiche produit)'], ['contact', 'Formulaire contact'], ['appel_manque', 'Appel manqué'], ['blog_cta', 'Article de blog'], ['landing_5places', 'Transformation 2 → 5 places'], ['manual', 'Ajouté à la main']].forEach(function (o) { %>
+            <option value="<%= o[0] %>" <%= todoFilters.source === o[0] ? 'selected' : '' %>><%= o[1] %></option>
+          <% }) %>
+        </select>
+        <button type="submit" class="btn btn-primary text-sm">OK</button>
+        <% if (todoFilters.qui || todoFilters.piece || todoFilters.source) { %><a href="/admin/activite-panier" class="text-xs font-semibold text-slate-500 hover:text-slate-800 px-2">Effacer</a><% } %>
+      </form>
+
+      <!-- La file : groupes dans l'ordre où il faut les traiter -->
+      <% var totalFile = groupes.reduce(function (n, g) { return n + g.count; }, 0); %>
+      <% if (!totalFile) { %>
+        <div class="mt-6 rounded-2xl border border-slate-200 bg-white p-10 text-center">
+          <span class="material-symbols-outlined text-emerald-500" style="font-size:44px">task_alt</span>
+          <p class="mt-2 font-semibold text-slate-800">Rien à traiter pour l'instant.</p>
+          <p class="text-sm text-slate-500">Les nouvelles demandes apparaîtront ici automatiquement.</p>
+        </div>
+      <% } %>
+      <% var tons = { blue: 'text-blue-700 bg-blue-50 border-blue-200', red: 'text-red-700 bg-red-50 border-red-200', amber: 'text-amber-800 bg-amber-50 border-amber-200', orange: 'text-orange-800 bg-orange-50 border-orange-200', slate: 'text-slate-700 bg-slate-100 border-slate-200' }; %>
+      <% groupes.forEach(function (g) { if (!g.count) return; %>
+        <details class="lead-groupe mt-6" <%= g.collapsed ? '' : 'open' %> id="groupe-<%= g.key %>">
+          <summary class="list-none cursor-pointer flex flex-wrap items-center gap-2 select-none">
+            <span class="material-symbols-outlined text-slate-400 transition lead-groupe-chevron">expand_more</span>
+            <h2 class="text-base font-bold text-slate-900"><%= g.label %></h2>
+            <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-bold <%= tons[g.tone] || tons.slate %>"><%= g.count %></span>
+            <span class="text-xs text-slate-500"><%= g.hint %></span>
+          </summary>
+          <ul class="mt-3 space-y-3">
+            <% g.items.forEach(function (c) { %>
+              <%- include('./partials/lead-card', { c: c }) %>
+            <% }) %>
+          </ul>
+          <% if (g.reste > 0) { %>
+            <% var qsv = new URLSearchParams(Object.assign({}, todoFilters.qui ? { qui: todoFilters.qui } : {}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, { voir: g.key })).toString(); %>
+            <a href="/admin/activite-panier?<%= qsv %>#groupe-<%= g.key %>" class="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Afficher les <%= g.reste %> suivants <span class="material-symbols-outlined text-base">expand_more</span></a>
+          <% } %>
+        </details>
+      <% }) %>
+    <% } else { %>
     <!-- Filtres -->
     <form action="/admin/activite-panier" class="mt-4 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm" method="GET">
       <input type="hidden" name="view" value="<%= view %>" />
@@ -111,280 +190,47 @@
       </div>
       <div class="mt-3 flex items-center gap-2">
         <button class="btn btn-primary text-sm" type="submit">Appliquer</button>
-        <a href="/admin/activite-panier" class="btn btn-ghost text-sm">Réinitialiser</a>
+        <a href="/admin/activite-panier?view=all" class="btn btn-ghost text-sm">Réinitialiser</a>
       </div>
 
       <% if (filters.q) { %>
         <div class="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
           <span class="material-symbols-outlined text-sm">search</span>
           <span>Recherche « <strong><%= filters.q %></strong> » sur <strong>tout l'historique</strong>, tous statuts confondus — la période et la file « À traiter » ne s'appliquent pas.</span>
-          <a href="/admin/activite-panier" class="ml-auto font-semibold underline">Effacer</a>
+          <a href="/admin/activite-panier?view=all" class="ml-auto font-semibold underline">Effacer</a>
         </div>
       <% } %>
     </form>
 
-    <!-- Liste de leads -->
-    <div class="mt-6 bg-white rounded-2xl border border-slate-200 overflow-hidden">
-      <div class="px-5 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-        <div class="font-semibold text-slate-900 text-sm"><%= pagination.totalItems %> lead<%= pagination.totalItems > 1 ? 's' : '' %></div>
-        <% if (pagination.totalItems > 0) { %>
-          <div class="text-xs text-slate-500"><%= pagination.from %>–<%= pagination.to %></div>
-        <% } %>
+
+      <!-- Tous les leads -->
+      <div class="mt-5 flex items-center justify-between text-sm">
+        <div class="font-semibold text-slate-900"><%= pagination.totalItems %> lead<%= pagination.totalItems > 1 ? 's' : '' %></div>
+        <% if (pagination.totalItems > 0) { %><div class="text-xs text-slate-500"><%= pagination.from %>–<%= pagination.to %></div><% } %>
       </div>
-
       <% if (leads && leads.length) { %>
-        <ul class="divide-y divide-slate-100">
-          <% leads.forEach((c) => { %>
-            <%# Bordure gauche = priorité : rouge à appeler, bleu en cours, vert gagné, gris perdu, ambre relances auto seules %>
-            <% var _prioBorder = { call: 'border-l-red-500', inprogress: 'border-l-blue-400', won: 'border-l-green-500', lost: 'border-l-slate-300', auto: 'border-l-amber-400' }[c.priority] || 'border-l-slate-200'; %>
-            <li class="lead-row p-5 hover:bg-slate-50/60 transition border-l-4 <%= _prioBorder %>" data-lead-id="<%= c.id %>">
-              <div class="flex flex-col lg:flex-row lg:items-start gap-4">
-
-                <!-- Avatar / icône selon source -->
-                <div class="flex-shrink-0">
-                  <% if (c.showRequestAsPrimary) { %>
-                    <div class="w-14 h-14 rounded-xl bg-teal-50 border border-teal-200 flex items-center justify-center" title="Demande explicite (devis/contact)">
-                      <span class="material-symbols-outlined text-teal-600">request_quote</span>
-                    </div>
-                  <% } else if (c.firstItemImage) { %>
-                    <img src="<%= c.firstItemImage %>" alt="" class="w-14 h-14 rounded-xl object-cover border border-slate-200" />
-                  <% } else { %>
-                    <div class="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center">
-                      <span class="material-symbols-outlined text-slate-400">person</span>
-                    </div>
-                  <% } %>
-                </div>
-
-                <!-- Infos client -->
-                <div class="flex-1 min-w-0">
-                  <div class="flex flex-wrap items-center gap-2">
-                    <div class="text-[15px] font-bold text-slate-900">
-                      <%= c.fullName || c.email || c.phone || 'Anonyme' %>
-                    </div>
-                    <% if (c.priority === 'call') { %>
-                      <span class="inline-flex items-center gap-1 rounded-full bg-red-600 text-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">À appeler</span>
-                    <% } %>
-                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider <%= c.statusBadge.className %>">
-                      <%= c.statusBadge.label %>
-                    </span>
-                    <% if (c.captureSource) { %>
-                      <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium <%= c.captureBadge.className %>">
-                        <%= c.captureBadge.label %>
-                      </span>
-                    <% } %>
-                    <% if (c.engineQuoteUrl) { %>
-                      <a href="<%= c.engineQuoteUrl %>" class="inline-flex items-center gap-0.5 text-[11px] font-semibold text-primary hover:underline">Dossier devis <span class="material-symbols-outlined text-xs">arrow_forward</span></a>
-                    <% } %>
-                    <% if (c.totalAmountCents > 0) { %>
-                      <span class="ml-auto text-base font-extrabold text-slate-900 whitespace-nowrap"><%= c.totalAmount %></span>
-                    <% } %>
-                  </div>
-
-                  <div class="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                    <% if (c.phone) { %>
-                      <button type="button" data-copy-phone="<%= c.phone %>" class="font-bold text-slate-900 hover:text-primary inline-flex items-center gap-1.5 cursor-pointer" title="Cliquer pour copier le numéro (à coller dans votre logiciel d'appel)">
-                        <span class="material-symbols-outlined text-base text-emerald-600">call</span><%= c.phone %>
-                        <% if (!c.phoneCallable) { %>
-                          <span class="text-xs font-normal text-amber-600">(format ?)</span>
-                        <% } %>
-                        <span class="material-symbols-outlined text-[13px] text-slate-300">content_copy</span>
-                      </button>
-                    <% } %>
-                    <% if (c.email) { %>
-                      <a href="mailto:<%= c.email %>" class="text-slate-600 hover:text-primary inline-flex items-center gap-1">
-                        <span class="material-symbols-outlined text-base text-slate-400">mail</span><%= c.email %>
-                      </a>
-                    <% } %>
-                    <span class="text-slate-400 text-xs cursor-help border-b border-dotted border-slate-300" title="« Reçu » = quand le client a laissé sa demande / abandonné son panier. « Dernier signe » = sa dernière action sur le site (nouveau passage, formulaire) — <%= c.lastActivityAbsolute %>. Plus c'est récent, plus il est chaud !">Reçu <%= c.receivedRel %><% if (c.lastActivityRel !== c.receivedRel) { %> · dernier signe du client <%= c.lastActivityRel %><% } %></span>
-                  </div>
-
-                  <% if (c.showRequestAsPrimary) { %>
-                    <!-- Demande explicite (devis/contact) en bandeau principal -->
-                    <div class="mt-2 rounded-lg bg-teal-50/60 border border-teal-100 px-3 py-2">
-                      <div class="text-[10px] uppercase tracking-wider text-teal-700 font-semibold">Demande</div>
-                      <div class="mt-0.5 text-sm font-medium text-slate-900">
-                        <% if (c.requestSummary) { %>
-                          <%= c.requestSummary %>
-                        <% } else { %>
-                          <span class="text-slate-500 italic">Demande sans détails produit</span>
-                        <% } %>
-                      </div>
-                      <% if (c.requested.message) { %>
-                        <div class="mt-1 text-xs text-slate-600 italic line-clamp-2">"<%= c.requested.message.slice(0, 180) %><%= c.requested.message.length > 180 ? '…' : '' %>"</div>
-                      <% } %>
-                    </div>
-                    <% if (c.itemCount > 0) { %>
-                      <div class="mt-1.5 text-xs text-slate-400">
-                        🛒 Avait aussi en panier : <%= c.itemsSummary %> · <%= c.totalAmount %>
-                        <span class="text-amber-600 font-medium ml-1">(panier ≠ demande)</span>
-                      </div>
-                    <% } %>
-                  <% } else { %>
-                    <!-- Lead "panier" classique -->
-                    <% if (c.itemCount > 0) { %>
-                    <div class="mt-2 text-sm text-slate-600 truncate" title="<%= c.itemsSummary %>">
-                      <span class="font-medium text-slate-900"><%= c.totalAmount %></span>
-                      <span class="text-slate-400">·</span>
-                      <%= c.itemsSummary %>
-                      <span class="text-slate-400 text-xs">(<%= c.itemCount %> art.)</span>
-                    </div>
-                    <% } %>
-                  <% } %>
-
-                  <!-- ═ Suivi : relances AUTO + actions du commercial + dernière note ═ -->
-                  <div class="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11.5px] leading-none">
-
-                    <%# Relances automatiques (cycle email panier) : R1 R2 R3 %>
-                    <% if (c.autoReminders.applicable) { %>
-                      <span class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-[5px] font-medium text-slate-600" title="Emails de relance AUTOMATIQUES du cycle panier abandonné (1h / +24h / +72h)<%= c.autoReminders.lastRel ? ' — dernier envoyé ' + c.autoReminders.lastRel : ' — aucun parti pour l\'instant' %>">
-                        <span class="material-symbols-outlined text-[13px] text-slate-400">schedule_send</span>
-                        Auto
-                        <% for (var _r = 1; _r <= 3; _r++) { %>
-                          <span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold <%= _r <= c.autoReminders.sent ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500' %>" title="Email de relance n°<%= _r %><%= _r <= c.autoReminders.sent ? ' : ENVOYÉ' : ' : pas encore parti' %>">R<%= _r %></span>
-                        <% } %>
-                        <% if (c.autoReminders.sent > 0 && c.autoReminders.lastRel) { %><span class="text-slate-400 font-normal">dern. <%= c.autoReminders.lastRel %></span><% } %>
-                        <% if (c.autoReminders.cycleDone) { %><span class="text-slate-400 font-normal">· cycle terminé</span><% } %>
-                      </span>
-                    <% } %>
-
-                    <%# Suivi commercial : jamais contacté (alerte) OU récap emails/SMS/statut.
-                        L'alerte rouge n'a pas de sens sur un lead gagné/perdu. %>
-                    <% if (c.neverTouched && c.priority !== 'won' && c.priority !== 'lost') { %>
-                      <span class="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-[5px] font-bold text-red-700">
-                        <span class="material-symbols-outlined text-[13px]">priority_high</span>Jamais contacté par le commercial
-                      </span>
-                    <% } else { %>
-                      <span class="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2 py-[5px] font-medium text-blue-800" title="Actions manuelles du commercial sur ce lead">
-                        <span class="material-symbols-outlined text-[13px]">support_agent</span>
-                        <% if (c.manualEmailsSent) { %><%= c.manualEmailsSent %> email<%= c.manualEmailsSent > 1 ? 's' : '' %><% } %>
-                        <% if (c.manualEmailsSent && c.manualSmsSent) { %>·<% } %>
-                        <% if (c.manualSmsSent) { %><%= c.manualSmsSent %> SMS<% } %>
-                        <% if (!c.manualEmailsSent && !c.manualSmsSent) { %>Suivi<% } %>
-                        <% if (c.lastManualContactRel) { %><span class="font-normal text-blue-600">· dern. <%= c.lastManualContactRel %></span><% } %>
-                      </span>
-                      <% if (c.manualStatus) { %>
-                        <% var _msLabel = { contacted: 'Contacté', converted: 'Converti', lost: 'Perdu' }[c.manualStatus] || c.manualStatus; %>
-                        <span class="text-slate-500">→ <strong><%= _msLabel %></strong><%= c.manualStatusByName ? ' par ' + c.manualStatusByName : '' %><%= c.manualStatusAtRel ? ' · ' + c.manualStatusAtRel : '' %></span>
-                      <% } %>
-                    <% } %>
-
-                    <%# Commande rapprochée : ce lead est devenu un CLIENT %>
-                    <% if (c.recoveredOrderBadge) { %>
-                      <a href="<%= c.recoveredOrderBadge.url %>" class="inline-flex items-center gap-1 rounded-lg border border-green-300 bg-green-50 px-2 py-[5px] font-bold text-green-800 hover:bg-green-100 transition" title="Ce client a passé commande — cliquer pour ouvrir la commande. On ne le relance plus, mais on le garde : c'est un client pour le réachat.">
-                        <span class="material-symbols-outlined text-[13px]">shopping_bag</span>
-                        A commandé<%= c.recoveredOrderBadge.number ? ' — n°' + c.recoveredOrderBadge.number : '' %><%= c.recoveredOrderBadge.totalEuro ? ' · ' + c.recoveredOrderBadge.totalEuro : '' %><%= c.recoveredOrderBadge.atRel ? ' · ' + c.recoveredOrderBadge.atRel : '' %>
-                      </a>
-                    <% } %>
-                    <% if (c.repurchaseSentRel) { %>
-                      <span class="inline-flex items-center gap-1 text-slate-500" title="Email automatique « besoin d'autre chose ? » envoyé ~3 mois après son achat">
-                        <span class="material-symbols-outlined text-[13px] text-slate-400">autorenew</span>Relance réachat envoyée <%= c.repurchaseSentRel %>
-                      </span>
-                    <% } %>
-
-                    <%# 360° client : a-t-il DÉJÀ commandé chez nous ? A-t-il un SAV ? %>
-                    <% if (c.clientHistory) { %>
-                      <a href="<%= c.clientHistory.lastUrl %>" class="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2 py-[5px] font-bold text-indigo-800 hover:bg-indigo-100 transition" title="<%= c.clientHistory.title %>">
-                        <span class="material-symbols-outlined text-[13px]">loyalty</span>
-                        Déjà client · <%= c.clientHistory.count %> commande<%= c.clientHistory.count > 1 ? 's' : '' %> · dern. <%= c.clientHistory.lastRel %>
-                      </a>
-                    <% } %>
-                    <% if (c.savHistory) { %>
-                      <a href="<%= c.savHistory.url %>" class="inline-flex items-center gap-1 rounded-lg border px-2 py-[5px] font-bold transition <%= c.savHistory.openCount ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100' : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100' %>" title="<%= c.savHistory.title %>">
-                        <span class="material-symbols-outlined text-[13px]">build_circle</span>
-                        <% if (c.savHistory.openCount) { %>SAV en cours (<%= c.savHistory.openCount %>) · <%= c.savHistory.lastStatut %><% } else { %>SAV : <%= c.savHistory.count %> clos<% } %>
-                      </a>
-                    <% } %>
-
-                    <%# Dernière note interne (l'historique complet est dans Détail) %>
-                    <% if (c.lastNote) { %>
-                      <span class="inline-flex items-center gap-1 text-slate-500 min-w-0">
-                        <span class="material-symbols-outlined text-[13px] text-slate-400 flex-shrink-0">sticky_note_2</span>
-                        <span class="truncate max-w-[360px]">« <%= c.lastNote.text %> » — <%= c.lastNote.by %><%= c.lastNote.atRel ? ', ' + c.lastNote.atRel : '' %></span>
-                      </span>
-                    <% } %>
-                  </div>
-                </div>
-
-                <!-- Actions commerciales -->
-                <div class="flex flex-wrap items-center gap-1.5 lg:flex-col lg:items-stretch lg:w-[230px] lg:flex-shrink-0 lg:border-l lg:border-slate-100 lg:pl-4">
-                  <% if (c.phone && c.phoneCallable) { %>
-                    <button type="button" data-copy-phone="<%= c.phone %>" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 transition" title="Copie le numéro pour le coller dans votre logiciel d'appel">
-                      <span class="material-symbols-outlined text-sm">content_copy</span>Copier le n°
-                    </button>
-                  <% } %>
-                  <div class="flex gap-1.5 w-full lg:w-auto">
-                    <% if (c.email) { %>
-                      <button type="button" class="btn btn-secondary text-xs flex-1 justify-center lead-action" data-action="email" data-lead-id="<%= c.id %>" data-lead-email="<%= c.email %>" data-lead-name="<%= c.fullName %>">
-                        <span class="material-symbols-outlined text-sm mr-1">mail</span>Email
-                      </button>
-                    <% } %>
-                    <% if (c.phone && c.phoneCallable) { %>
-                      <button type="button" class="btn btn-secondary text-xs flex-1 justify-center lead-action" data-action="sms" data-lead-id="<%= c.id %>" data-lead-phone="<%= c.phone %>" data-lead-name="<%= c.fullName %>">
-                        <span class="material-symbols-outlined text-sm mr-1">sms</span>SMS
-                      </button>
-                      <button type="button" class="lead-action flex-1 justify-center inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold px-2 py-2 transition" data-action="whatsapp" data-lead-id="<%= c.id %>" data-lead-phone="<%= c.phone %>" data-lead-name="<%= c.fullName %>" title="Ouvrir WhatsApp avec un message pré-rempli (envoi depuis ton WhatsApp)">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51l-.57-.01c-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>WhatsApp
-                      </button>
-                    <% } %>
-                  </div>
-                  <% if (c.phone && c.phoneCallable) { %>
-                    <%# SMS 1 clic : ouvre la fenêtre SMS avec le bon modèle pré-rempli (à relire avant envoi). %>
-                    <div class="flex gap-1 w-full lg:w-auto">
-                      <button type="button" class="lead-action flex-1 justify-center inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-[10.5px] font-semibold px-1.5 py-1 transition" data-action="sms" data-sms-template="sms_compat_ok" data-lead-id="<%= c.id %>" data-lead-phone="<%= c.phone %>" data-lead-name="<%= c.fullName %>" title="SMS « Compatibilité vérifiée » pré-rempli — à relire avant d'envoyer"><span class="material-symbols-outlined text-[13px] mr-0.5">check_circle</span>Compat</button>
-                      <button type="button" class="lead-action flex-1 justify-center inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-[10.5px] font-semibold px-1.5 py-1 transition" data-action="sms" data-sms-template="sms_tried_to_call" data-lead-id="<%= c.id %>" data-lead-phone="<%= c.phone %>" data-lead-name="<%= c.fullName %>" title="SMS « J'ai essayé de vous joindre » pré-rempli"><span class="material-symbols-outlined text-[13px] mr-0.5">call</span>Rappel</button>
-                    </div>
-                  <% } %>
-                  <% if (c.canRemind) { %>
-                    <button type="button" class="lead-remind-btn inline-flex items-center justify-center gap-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-1.5 transition" data-lead-id="<%= c.id %>" data-next="<%= c.nextReminderNumber %>" title="Envoie tout de suite l'email de relance automatique n°<%= c.nextReminderNumber %> (au lieu d'attendre le cron)">
-                      <span class="material-symbols-outlined text-sm">forward_to_inbox</span>Relance auto n°<%= c.nextReminderNumber %>
-                    </button>
-                  <% } %>
-
-                  <!-- Statut : le commercial marque où il en est -->
-                  <div class="inline-flex items-stretch rounded-lg overflow-hidden border border-slate-200 w-full lg:w-auto">
-                    <button type="button" class="lead-status-btn flex-1 px-1 py-1.5 text-[10.5px] <%= c.manualStatus === 'contacted' ? 'bg-blue-100 text-blue-800 font-semibold' : 'bg-white hover:bg-slate-50 text-slate-600' %>" data-lead-id="<%= c.id %>" data-status="contacted" title="Marquer contacté (re-cliquer pour annuler)">📞 Contacté</button>
-                    <button type="button" class="lead-status-btn flex-1 px-1 py-1.5 text-[10.5px] border-l border-slate-200 <%= c.manualStatus === 'converted' ? 'bg-green-100 text-green-800 font-semibold' : 'bg-white hover:bg-slate-50 text-slate-600' %>" data-lead-id="<%= c.id %>" data-status="converted" title="Marquer gagné (re-cliquer pour annuler)">✅ Gagné</button>
-                    <button type="button" class="lead-status-btn flex-1 px-1 py-1.5 text-[10.5px] border-l border-slate-200 <%= c.manualStatus === 'lost' ? 'bg-slate-200 text-slate-600 font-semibold' : 'bg-white hover:bg-slate-50 text-slate-600' %>" data-lead-id="<%= c.id %>" data-status="lost" title="Marquer perdu (re-cliquer pour annuler)">✖ Perdu</button>
-                  </div>
-
-                  <div class="flex items-center gap-1 w-full lg:w-auto">
-                    <button type="button" class="btn btn-ghost text-xs flex-1 justify-center lead-detail-btn" data-lead-id="<%= c.id %>">
-                      <span class="material-symbols-outlined text-sm mr-1">visibility</span>Détail &amp; notes<% if (c.notesCount) { %> (<%= c.notesCount %>)<% } %>
-                    </button>
-                    <% if (c.sessionId) { %>
-                      <a href="/admin/visiteurs/<%= c.sessionId %>" class="btn btn-ghost text-xs px-2" title="Voir le parcours de navigation du client">
-                        <span class="material-symbols-outlined text-sm">play_circle</span>
-                      </a>
-                    <% } %>
-                  </div>
-                </div>
-              </div>
-            </li>
+        <ul class="mt-3 space-y-3">
+          <% leads.forEach(function (c) { %>
+            <%- include('./partials/lead-card', { c: c }) %>
           <% }) %>
         </ul>
       <% } else { %>
-        <div class="p-12 text-center">
+        <div class="mt-3 rounded-2xl border border-slate-200 bg-white p-12 text-center">
           <span class="material-symbols-outlined text-slate-300" style="font-size:48px">inbox</span>
-          <p class="mt-3 text-slate-500">Aucun lead correspondant aux filtres.</p>
-          <a href="/admin/activite-panier" class="mt-2 inline-block text-sm text-primary hover:underline">Réinitialiser les filtres</a>
+          <p class="mt-3 text-slate-500">Aucun lead ne correspond aux filtres.</p>
+          <a href="/admin/activite-panier?view=all" class="mt-2 inline-block text-sm text-primary hover:underline">Réinitialiser les filtres</a>
         </div>
       <% } %>
-
-      <!-- Pagination -->
       <% if (pagination.totalPages > 1) { %>
-        <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between bg-slate-50">
+        <div class="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
           <div class="text-xs text-slate-500">Page <%= pagination.page %> / <%= pagination.totalPages %></div>
           <div class="flex items-center gap-2">
-            <% if (pagination.hasPrev) { %>
-              <a href="?<%= filtersQS ? filtersQS + '&' : '' %>page=<%= pagination.prevPage %>" class="btn btn-ghost text-xs">← Précédent</a>
-            <% } %>
-            <% if (pagination.hasNext) { %>
-              <a href="?<%= filtersQS ? filtersQS + '&' : '' %>page=<%= pagination.nextPage %>" class="btn btn-ghost text-xs">Suivant →</a>
-            <% } %>
+            <% if (pagination.hasPrev) { %><a href="?<%= filtersQS ? filtersQS + '&' : '' %>page=<%= pagination.prevPage %>" class="btn btn-ghost text-xs">← Précédent</a><% } %>
+            <% if (pagination.hasNext) { %><a href="?<%= filtersQS ? filtersQS + '&' : '' %>page=<%= pagination.nextPage %>" class="btn btn-ghost text-xs">Suivant →</a><% } %>
           </div>
         </div>
       <% } %>
-    </div>
+    <% } %>
 
     <% if (!dbConnected) { %>
       <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
@@ -401,104 +247,54 @@
   <div class="absolute right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl overflow-y-auto">
     <div class="p-6">
       <div class="flex items-center justify-between mb-1">
-        <div class="text-lg font-bold text-slate-900">📖 Comprendre cette page</div>
+        <div class="text-lg font-bold text-slate-900">📖 Comment ça marche</div>
         <button type="button" id="leads-help-close" class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <p class="text-sm text-slate-500 mb-6">Chaque carte = un client à convertir. Voici comment tout lire, en 2 minutes.</p>
+      <p class="text-sm text-slate-500 mb-5">La page te dit quoi faire et quand. Tu traites de haut en bas, tu ne te poses pas de question.</p>
 
-      <!-- 1. Les dates -->
-      <div class="rounded-xl border border-slate-200 p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">🕐 Les deux dates</div>
-        <div class="text-sm text-slate-700 space-y-2">
-          <div><span class="text-slate-400 text-xs border-b border-dotted border-slate-300">Reçu il y a 5 j</span> — quand le client a laissé sa demande ou abandonné son panier (l'âge du lead).</div>
-          <div><span class="text-slate-400 text-xs border-b border-dotted border-slate-300">dernier signe du client il y a 25 min</span> — sa dernière action sur le site (nouveau passage, formulaire re-rempli, panier modifié).</div>
-          <div class="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-emerald-800 font-medium">💡 « Reçu il y a 5 j · dernier signe il y a 25 min » = il hésite depuis 5 jours et il est REVENU il y a 25 minutes. Il est chaud : appelle-le maintenant.</div>
-        </div>
-      </div>
-
-      <!-- 2. Couleur du bord -->
-      <div class="rounded-xl border border-slate-200 p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">🎨 La couleur du bord gauche = ta priorité</div>
-        <div class="text-sm text-slate-700 space-y-2">
-          <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded-sm bg-red-500 flex-shrink-0"></span><div><strong>Rouge — à appeler.</strong> Personne ne l'a encore contacté. C'est par LÀ qu'on commence.</div></div>
-          <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded-sm bg-amber-400 flex-shrink-0"></span><div><strong>Ambre — relances auto en cours.</strong> Les emails automatiques travaillent, mais aucun humain ne l'a appelé.</div></div>
-          <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded-sm bg-blue-400 flex-shrink-0"></span><div><strong>Bleu — en cours.</strong> Un commercial s'en occupe déjà (contacté / suivi).</div></div>
-          <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded-sm bg-green-500 flex-shrink-0"></span><div><strong>Vert — gagné.</strong> Il a commandé ou payé son acompte.</div></div>
-          <div class="flex items-center gap-2.5"><span class="w-3.5 h-3.5 rounded-sm bg-slate-300 flex-shrink-0"></span><div><strong>Gris — perdu.</strong> Marqué perdu (a acheté ailleurs, ne répond plus…).</div></div>
-        </div>
-      </div>
-
-      <!-- 3. Relances AUTO -->
-      <div class="rounded-xl border border-slate-200 p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">🤖 Les emails automatiques (pastilles R1 R2 R3)</div>
-        <div class="flex items-center gap-1.5 mb-3">
-          <span class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2 py-[5px] text-[11.5px] font-medium text-slate-600"><span class="material-symbols-outlined text-[13px] text-slate-400">schedule_send</span>Auto
-            <span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold bg-emerald-500 text-white">R1</span>
-            <span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold bg-emerald-500 text-white">R2</span>
-            <span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-500">R3</span>
-            <span class="text-slate-400 font-normal">dern. il y a 20 h</span>
-          </span>
-        </div>
-        <div class="text-sm text-slate-700 space-y-1.5">
-          <div>Le site relance <strong>tout seul</strong> les paniers abandonnés par email : <strong>R1</strong> ≈ 1 h après l'abandon, <strong>R2</strong> 24 h plus tard, <strong>R3</strong> 72 h plus tard (avec code promo).</div>
-          <div><span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold bg-emerald-500 text-white align-middle">R1</span> <strong>vert = déjà parti</strong> · <span class="inline-flex items-center justify-center min-w-[19px] h-[17px] px-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-500 align-middle">R3</span> gris = pas encore. « cycle terminé » = les 3 sont partis.</div>
-          <div>Sur l'exemple : le client a reçu 2 emails auto, le dernier il y a 20 h — inutile de lui renvoyer la même chose, <strong>appelle-le</strong> ou utilise un autre angle.</div>
-          <div class="text-slate-500 text-xs">Ces emails ne partent QUE pour les paniers (jamais pour les demandes de devis moteur/boîte, qui ont leurs propres relances).</div>
-        </div>
-      </div>
-
-      <!-- 4. Suivi commercial -->
-      <div class="rounded-xl border border-slate-200 p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">👤 Ce que TOI tu as déjà fait (suivi commercial)</div>
-        <div class="flex flex-wrap items-center gap-1.5 mb-3">
-          <span class="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2 py-[5px] text-[11.5px] font-bold text-red-700"><span class="material-symbols-outlined text-[13px]">priority_high</span>Jamais contacté par le commercial</span>
-          <span class="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2 py-[5px] text-[11.5px] font-medium text-blue-800"><span class="material-symbols-outlined text-[13px]">support_agent</span>2 emails · 1 SMS <span class="font-normal text-blue-600">· dern. il y a 4 h</span></span>
-        </div>
-        <div class="text-sm text-slate-700 space-y-1.5">
-          <div><strong>Rouge</strong> = aucun humain ne l'a appelé/écrit → c'est ta priorité.</div>
-          <div><strong>Bleu</strong> = le compte de TES emails et SMS envoyés depuis cette page, avec la date du dernier.</div>
-          <div>« <strong>→ Contacté par Kevin · il y a 4 h</strong> » = qui a posé le statut, et quand. Comme ça, à deux commerciaux, vous ne rappelez jamais deux fois le même client.</div>
-          <div>📝 La <strong>dernière note</strong> s'affiche sur la carte (ex. « À rappeler jeudi matin ») — l'historique complet est dans « Détail &amp; notes ».</div>
-        </div>
-      </div>
-
-      <!-- 5. Les boutons -->
-      <div class="rounded-xl border border-slate-200 p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">⚡ Les boutons d'action</div>
-        <div class="text-sm text-slate-700 space-y-2">
-          <div class="flex items-start gap-2"><span class="inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 text-white text-xs font-bold px-2.5 py-1.5 flex-shrink-0"><span class="material-symbols-outlined text-sm">content_copy</span>Copier le n°</span><div><strong>Copie le numéro</strong> dans le presse-papier — colle-le (Ctrl+V) dans ton logiciel d'appel. Cliquer sur le numéro affiché le copie aussi. <strong>L'appel convertit 10× mieux que l'email.</strong></div></div>
-          <div class="flex items-start gap-2"><span class="btn btn-secondary text-xs flex-shrink-0"><span class="material-symbols-outlined text-sm mr-1">mail</span>Email</span><span class="btn btn-secondary text-xs flex-shrink-0"><span class="material-symbols-outlined text-sm mr-1">sms</span>SMS</span><div>Messages avec modèles préremplis (les variables {prenom}, {lien_panier}… se remplissent toutes seules). Chaque envoi est compté et daté sur la carte.</div></div>
-          <div class="flex items-start gap-2"><span class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 text-amber-800 text-[11px] font-bold px-2 py-1.5 flex-shrink-0"><span class="material-symbols-outlined text-sm">forward_to_inbox</span>Relance auto n°3</span><div>Force l'envoi immédiat du prochain email automatique du cycle, sans attendre.</div></div>
-          <div class="flex items-start gap-2"><span class="inline-flex items-stretch rounded-lg overflow-hidden border border-slate-200 flex-shrink-0 text-[10.5px]"><span class="px-1.5 py-1.5 bg-white text-slate-600">📞 Contacté</span><span class="px-1.5 py-1.5 border-l border-slate-200 bg-white text-slate-600">✅ Gagné</span><span class="px-1.5 py-1.5 border-l border-slate-200 bg-white text-slate-600">✖ Perdu</span></span><div>Marque où tu en es. <strong>Gagné/Perdu sortent le lead de « À traiter »</strong> et coupent les relances auto. Re-clique pour annuler.</div></div>
-          <div class="flex items-start gap-2"><span class="btn btn-ghost text-xs flex-shrink-0"><span class="material-symbols-outlined text-sm mr-1">visibility</span>Détail &amp; notes</span><div>Fiche complète : demande, articles, historique de tous les contacts, et <strong>ajout de note</strong> (fais-le après CHAQUE appel — tes collègues te remercieront).</div></div>
-          <div class="flex items-start gap-2"><span class="btn btn-ghost text-xs px-2 flex-shrink-0"><span class="material-symbols-outlined text-sm">play_circle</span></span><div>Rejoue la navigation du client sur le site (les pages qu'il a regardées = ses vrais besoins).</div></div>
-          <div class="flex items-start gap-2"><span class="inline-flex items-center gap-0.5 text-[11px] font-semibold text-primary flex-shrink-0">Dossier devis <span class="material-symbols-outlined text-xs">arrow_forward</span></span><div>Sur les leads moteur/boîte : ouvre le dossier complet dans « Devis moteurs &amp; boîtes » (c'est LÀ qu'on gère leurs devis et relances).</div></div>
-        </div>
-      </div>
-
-      <!-- 6. Onglets & badges -->
-      <div class="rounded-xl border border-slate-200 p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">🗂 Les onglets et les badges</div>
-        <div class="text-sm text-slate-700 space-y-1.5">
-          <div><strong>« À traiter »</strong> = ta file de travail : jamais contactés, cycle en cours, sans les leads moteur/boîte. Objectif : la vider chaque jour.</div>
-          <div><strong>« Tous »</strong> = l'historique complet (contactés, gagnés, perdus, devis…).</div>
-          <div class="pt-1"><strong>Badges :</strong> <em>Abandonné</em> = panier laissé · <em>Relance 1/2/3</em> = position dans le cycle auto · <em>Récupéré</em> = a commandé · <em>Expiré</em> = cycle fini sans achat · <em>Devis envoyé / Acompte reçu</em> = pipeline devis moteur/boîte.</div>
-          <div><strong>🛍 Déjà client · N commandes</strong> = ce contact (même email ou téléphone) a déjà acheté chez nous — survole pour voir les numéros/montants, clique pour ouvrir la dernière commande, et « Détail &amp; notes » liste tout (produits, dates). <strong>🛠 SAV en cours</strong> = il a un ticket SAV ouvert : à savoir AVANT de l'appeler.</div>
-          <div><strong>🛍 « A commandé — n°X · montant »</strong> (chip verte) = sa commande retrouvée automatiquement (paiement en ligne, virement encaissé, commande créée à la main…) — clique pour l'ouvrir. On ne le relance plus, mais on le GARDE : c'est un client, le meilleur prospect pour la vente suivante. « 🔁 Relance réachat » = email automatique « besoin d'autre chose ? » envoyé ~3 mois après l'achat (option, désactivée par défaut).</div>
-          <div><strong>Sources :</strong> <em>Devis / Contact</em> = a rempli un formulaire (demande explicite en vert) · <em>Panier / Guest checkout / Compte</em> = panier abandonné · <em>Moteur / Boîte occasion</em> = tunnels de devis.</div>
-        </div>
-      </div>
-
-      <!-- 7. La méthode -->
-      <div class="rounded-xl border-2 border-primary/30 bg-red-50/40 p-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3">🎯 La méthode qui convertit</div>
-        <ol class="text-sm text-slate-800 space-y-1.5 list-decimal list-inside font-medium">
-          <li>Ouvre <strong>« À traiter »</strong>, commence par les <strong>bords rouges</strong> au plus gros montant.</li>
-          <li><strong>Appelle d'abord.</strong> Pas de réponse → SMS tout de suite (« Je viens d'essayer de vous joindre… ») → Email ensuite.</li>
-          <li>Regarde la chip <strong>Auto</strong> avant d'écrire : s'il a déjà reçu 2 emails auto, change d'angle (appel, question technique), ne répète pas la même relance.</li>
-          <li>Après CHAQUE contact : <strong>note</strong> le résultat + statut <strong>Contacté</strong>.</li>
-          <li>Un « dernier signe du client » récent (minutes/heures) = <strong>client chaud, à appeler en premier</strong>.</li>
+      <div class="rounded-xl border-2 border-primary/30 bg-red-50/40 p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-primary mb-2">🎯 La méthode en 4 gestes</div>
+        <ol class="text-sm text-slate-800 space-y-2 list-decimal list-inside">
+          <li><strong>Commence en haut</strong> : « Nouvelles demandes », puis « En retard », puis « Rappels du jour » et « Devis à préparer ».</li>
+          <li><strong>Clique sur le gros bouton vert « Appeler »</strong> : le numéro est copié et l'appel se lance. Une fenêtre s'ouvre pour noter le résultat.</li>
+          <li><strong>Note toujours le résultat</strong> (joint, pas de réponse, messagerie, mauvais numéro) <strong>et la suite</strong> (devis, rappel le…, perdu). Sans suite, le client serait oublié : la page t'oblige à la choisir.</li>
+          <li><strong>Gagné</strong> seulement quand le client a payé. <strong>Perdu</strong> toujours avec le motif. Les deux sont dans « Autres ».</li>
         </ol>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">🗂 Les groupes</div>
+        <div class="text-sm text-slate-700 space-y-1.5">
+          <div><strong>Nouvelles demandes</strong> — à rappeler dans l'heure (heures d'ouverture : 9 h–12 h, 14 h–18 h, du lundi au vendredi).</div>
+          <div><strong>En retard</strong> — l'heure prévue est passée. À faire juste après les nouvelles demandes.</div>
+          <div><strong>Rappels et relances du jour</strong> — les appels promis, les devis à relancer.</div>
+          <div><strong>Devis à préparer</strong> — identifier la pièce, trouver le prix, envoyer le devis (bouton orange → dossier devis).</div>
+          <div><strong>Planifiés</strong> — prévus un autre jour : rien à faire maintenant.</div>
+          <div><strong>Anciens dossiers à reprendre</strong> — en retard depuis plus de 7 jours ouvrés. On les reprend quand le reste est fait : relire, rappeler ou clôturer.</div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">🏷 Les étiquettes</div>
+        <div class="text-sm text-slate-700 space-y-1.5">
+          <div><span class="rounded-full bg-red-600 text-white px-2 py-0.5 text-xs font-bold">En retard de 2 h</span> l'urgence · <span class="rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs font-semibold">Nouveau</span> l'étape où en est le client.</div>
+          <div><strong>Étapes</strong> : Nouveau → En cours → Devis à préparer → Devis envoyé → Gagné ou Perdu.</div>
+          <div><strong>Pris par Faniry</strong> : qui s'occupe du client. « Non pris — je m'en occupe » pour le prendre.</div>
+          <div><strong>Google Ads</strong> : la demande vient d'une annonce payée. <strong>Déjà client</strong> / <strong>SAV en cours</strong> : à savoir avant d'appeler.</div>
+        </div>
+      </div>
+
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-amber-700 mb-2">⚖️ Appeler un particulier</div>
+        <div class="text-sm text-amber-900">Depuis le 11 août 2026, on n'appelle un particulier que pour <strong>répondre à sa demande</strong> (devis, formulaire, appel manqué). C'est pour ça que le bouton « Appeler » n'apparaît pas sur un simple panier abandonné ou une inscription newsletter : ces contacts sont dans « Tous les leads ».</div>
+      </div>
+
+      <div class="rounded-xl border border-slate-200 p-4">
+        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">❓ Et les autres onglets ?</div>
+        <div class="text-sm text-slate-700 space-y-1.5">
+          <div><strong>Tous les leads</strong> : l'historique complet (paniers, newsletter, gagnés, perdus) avec la recherche et les filtres.</div>
+          <div><strong>Devis moteurs &amp; boîtes</strong> : l'atelier pour construire un devis (identification, prix, marge, PDF). Les demandes y arrivent ET apparaissent ici : rien ne peut être oublié.</div>
+        </div>
       </div>
 
     </div>
@@ -1580,6 +1376,226 @@
         .catch(function () { if (waTab) waTab.close(); resultEl.innerHTML = '<span class="text-red-700">Erreur réseau</span>'; });
     });
   }
+
+  /* ══ File de travail : appeler, noter le résultat, planifier, clôturer ══
+     Chaque geste enregistre la SUITE (prochaine action datée) : c'est ce qui
+     garantit qu'aucun client ouvert ne soit oublié. */
+  var RESULTATS = <%- JSON.stringify(resultatsAppel || {}) %>;
+  var TYPES = <%- JSON.stringify(typesAction || {}) %>;
+  var MOTIFS = <%- JSON.stringify(motifsPerte || {}) %>;
+  var QUAND = [['1h', 'Dans 1 h'], ['2h', 'Dans 2 h'], ['aprem', 'Cet après-midi'], ['demain', 'Demain matin'], ['2j', 'Dans 2 jours'], ['5j', 'Dans 1 semaine']];
+
+  function toast(msg, type) { if (window.showToast) window.showToast(msg, type || 'success'); }
+
+  function postJson(url, body) {
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().then(function (d) { d.__status = r.status; return d; }); });
+  }
+
+  function chips(name, options, selected) {
+    return '<div class="flex flex-wrap gap-1.5">' + options.map(function (o) {
+      var on = o[0] === selected;
+      return '<label class="cursor-pointer"><input type="radio" class="peer sr-only" name="' + name + '" value="' + escapeHtml(o[0]) + '"' + (on ? ' checked' : '') + '>'
+        + '<span class="inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium border-slate-200 text-slate-700 hover:bg-slate-50 peer-checked:bg-slate-900 peer-checked:text-white peer-checked:border-slate-900">' + escapeHtml(o[1]) + '</span></label>';
+    }).join('') + '</div>';
+  }
+
+  function blocQuand(defaut) {
+    return '<div class="space-y-2"><div class="text-xs font-semibold text-slate-500">Quand ?</div>'
+      + chips('quand', QUAND.concat([['autre', 'Choisir…']]), defaut || '')
+      + '<input type="datetime-local" name="quandLibre" class="hidden w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></div>';
+  }
+
+  function brancherQuand(form) {
+    var libre = form.querySelector('[name=quandLibre]');
+    form.querySelectorAll('[name=quand]').forEach(function (r) {
+      r.addEventListener('change', function () { if (libre) libre.classList.toggle('hidden', r.value !== 'autre' || !r.checked); });
+    });
+  }
+
+  function lireQuand(form) {
+    var r = form.querySelector('[name=quand]:checked');
+    if (!r) return '';
+    if (r.value !== 'autre') return r.value;
+    var v = (form.querySelector('[name=quandLibre]') || {}).value || '';
+    return v ? new Date(v).toISOString() : '';
+  }
+
+  function selectMotif() {
+    return '<select name="motif" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white"><option value="">Choisis le motif…</option>'
+      + Object.keys(MOTIFS).map(function (k) { return '<option value="' + k + '">' + escapeHtml(MOTIFS[k]) + '</option>'; }).join('') + '</select>';
+  }
+
+  function finir(form, data, ok) {
+    var res = form.querySelector('.js-res');
+    if (data && data.ok) {
+      toast(data.message || 'Enregistré');
+      closeModal();
+      setTimeout(refresh, 400);
+    } else {
+      if (res) res.innerHTML = '<span class="text-red-700 font-semibold">' + escapeHtml((data && data.error) || 'Erreur, réessaie.') + '</span>';
+      if (ok) ok.echec();
+    }
+  }
+
+  /* ─ Résultat d'un appel ─ */
+  function ouvrirResultat(leadId, nom) {
+    openModal('Résultat de l’appel' + (nom ? ' — ' + nom : ''));
+    content.innerHTML = '<form id="form-appel" class="space-y-4">'
+      + '<div class="space-y-2"><div class="text-xs font-semibold text-slate-500">Comment s’est passé l’appel ?</div>'
+      + chips('resultat', Object.keys(RESULTATS).map(function (k) { return [k, RESULTATS[k]]; }), '') + '</div>'
+      + '<div id="appel-joint" class="hidden space-y-2"><div class="text-xs font-semibold text-slate-500">Et maintenant ?</div>'
+      + chips('suite', [['quote', 'Préparer le devis'], ['callback', 'Le rappeler'], ['wait_client', 'Il doit me renvoyer des infos'], ['payment', 'Il va payer'], ['perdu', 'Perdu']], '')
+      + '</div>'
+      + '<div id="appel-motif" class="hidden">' + selectMotif() + '</div>'
+      + '<div id="appel-quand" class="hidden">' + blocQuand('') + '</div>'
+      + '<div id="appel-sms" class="hidden"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="sms" checked> Ensuite, envoyer le SMS « J’ai essayé de vous joindre »</label></div>'
+      + '<textarea name="note" rows="2" maxlength="1000" placeholder="Note (facultatif) : ce qu’il a dit, la pièce, le prix évoqué…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></textarea>'
+      + '<div class="flex items-center gap-3"><button type="submit" class="btn btn-primary">Enregistrer</button><span class="js-res text-sm"></span></div>'
+      + '<p class="text-xs text-slate-500">Pas de réponse : le rappel est prévu tout seul (dans 2 h, puis le lendemain). Tu peux changer la date.</p>'
+      + '</form>';
+    var form = document.getElementById('form-appel');
+    brancherQuand(form);
+    function maj() {
+      var r = (form.querySelector('[name=resultat]:checked') || {}).value || '';
+      var s = (form.querySelector('[name=suite]:checked') || {}).value || '';
+      document.getElementById('appel-joint').classList.toggle('hidden', r !== 'joint');
+      document.getElementById('appel-motif').classList.toggle('hidden', !(r === 'joint' && s === 'perdu'));
+      document.getElementById('appel-quand').classList.toggle('hidden', !r || (r === 'joint' && (!s || s === 'perdu')));
+      document.getElementById('appel-sms').classList.toggle('hidden', !(r === 'pas_reponse' || r === 'repondeur'));
+    }
+    form.addEventListener('change', maj);
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var verrou = verrouEnvoi(form);
+      if (!verrou) return;
+      var resultat = (form.querySelector('[name=resultat]:checked') || {}).value || '';
+      var suite = (form.querySelector('[name=suite]:checked') || {}).value || '';
+      var sms = form.querySelector('[name=sms]');
+      var envoyerSms = sms && sms.checked && (resultat === 'pas_reponse' || resultat === 'repondeur');
+      postJson('/admin/api/leads/' + leadId + '/appel', {
+        resultat: resultat,
+        suite: suite,
+        quand: lireQuand(form),
+        motif: (form.querySelector('[name=motif]') || {}).value || '',
+        note: form.note.value,
+      }).then(function (data) {
+        if (data && data.ok && envoyerSms) {
+          toast(data.message || 'Appel enregistré');
+          var b = document.querySelector('.lead-action[data-action="sms"][data-sms-template="sms_tried_to_call"][data-lead-id="' + leadId + '"]');
+          if (b) { b.click(); return; }
+        }
+        finir(form, data, verrou);
+      }).catch(function () { finir(form, null, verrou); });
+    });
+  }
+
+  /* « Appeler » : copie le numéro, lance l'appel (tel:) et ouvre la fenêtre du résultat. */
+  document.querySelectorAll('.js-appeler').forEach(function (a) {
+    a.addEventListener('click', function () {
+      var num = a.getAttribute('data-phone') || '';
+      if (num && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(num).catch(function () {});
+      else if (num) fallbackCopyText(num);
+      toast('Numéro copié. Après l’appel, note le résultat.', 'info');
+      var id = a.getAttribute('data-lead-id');
+      var nom = a.getAttribute('data-name') || '';
+      setTimeout(function () { ouvrirResultat(id, nom); }, 700);
+    });
+  });
+  document.querySelectorAll('.js-resultat').forEach(function (b) {
+    b.addEventListener('click', function () { ouvrirResultat(b.getAttribute('data-lead-id'), b.getAttribute('data-name') || ''); });
+  });
+
+  /* ─ Planifier la prochaine action ─ */
+  document.querySelectorAll('.js-planifier').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var leadId = b.getAttribute('data-lead-id');
+      openModal('Planifier la suite');
+      content.innerHTML = '<form id="form-plan" class="space-y-4">'
+        + '<div class="space-y-2"><div class="text-xs font-semibold text-slate-500">Que faut-il faire ?</div>'
+        + chips('type', Object.keys(TYPES).map(function (k) { return [k, TYPES[k]]; }), 'callback') + '</div>'
+        + blocQuand('demain')
+        + '<textarea name="note" rows="2" maxlength="1000" placeholder="Note (facultatif)" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></textarea>'
+        + '<div class="flex items-center gap-3"><button type="submit" class="btn btn-primary">Enregistrer</button><span class="js-res text-sm"></span></div>'
+        + '</form>';
+      var form = document.getElementById('form-plan');
+      brancherQuand(form);
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var verrou = verrouEnvoi(form);
+        if (!verrou) return;
+        postJson('/admin/api/leads/' + leadId + '/prochaine-action', {
+          type: (form.querySelector('[name=type]:checked') || {}).value || '',
+          quand: lireQuand(form),
+          note: form.note.value,
+        }).then(function (d) { finir(form, d, verrou); }).catch(function () { finir(form, null, verrou); });
+      });
+    });
+  });
+
+  /* ─ Prendre le dossier ─ */
+  document.querySelectorAll('.js-prendre').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var leadId = b.getAttribute('data-lead-id');
+      b.disabled = true;
+      postJson('/admin/api/leads/' + leadId + '/prendre', {}).then(function (d) {
+        if (d && d.ok) { toast('Dossier pris'); setTimeout(refresh, 300); return; }
+        if (d && d.__status === 409) {
+          var question = (d.error || 'Déjà pris.') + ' Le reprendre quand même ?';
+          var conf = window.adminConfirm ? window.adminConfirm(question) : Promise.resolve(window.confirm(question));
+          Promise.resolve(conf).then(function (oui) {
+            if (!oui) { b.disabled = false; return; }
+            postJson('/admin/api/leads/' + leadId + '/prendre', { force: true }).then(function (d2) {
+              if (d2 && d2.ok) { toast('Dossier repris'); setTimeout(refresh, 300); } else { b.disabled = false; toast((d2 && d2.error) || 'Erreur', 'error'); }
+            });
+          });
+          return;
+        }
+        b.disabled = false; toast((d && d.error) || 'Erreur', 'error');
+      }).catch(function () { b.disabled = false; toast('Erreur réseau', 'error'); });
+    });
+  });
+
+  /* ─ Gagné / Perdu / Rouvrir ─ */
+  document.querySelectorAll('.js-cloturer').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var leadId = b.getAttribute('data-lead-id');
+      var issue = b.getAttribute('data-issue');
+      var menu = b.closest('details'); if (menu) menu.removeAttribute('open');
+      var titre = issue === 'gagne' ? 'Marquer gagné' : issue === 'perdu' ? 'Marquer perdu' : 'Rouvrir le dossier';
+      openModal(titre);
+      var corps = issue === 'gagne'
+        ? '<p class="text-sm text-slate-600">Gagné = le client a <strong>payé</strong> (commande, acompte, virement ou espèces). Un simple « oui » au téléphone n’est pas encore gagné : dans ce cas, planifie « Vérifier le paiement ».</p>'
+          + '<label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="confirme"> Le client a payé ou versé un acompte</label>'
+          + '<select name="moyen" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white"><option value="">Comment ? (facultatif)</option><option>Carte / lien de paiement</option><option>Virement</option><option>Espèces</option><option>Acompte</option></select>'
+        : issue === 'perdu'
+          ? '<p class="text-sm text-slate-600">Pourquoi ce client est-il perdu ? Ça sert à comprendre ce qui fait perdre des ventes.</p>' + selectMotif()
+            + '<textarea name="note" rows="2" maxlength="1000" placeholder="Précision (facultatif)" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></textarea>'
+          : '<p class="text-sm text-slate-600">Le dossier redevient ouvert, avec un rappel dans l’heure.</p>';
+      content.innerHTML = '<form id="form-cloture" class="space-y-4">' + corps
+        + '<div class="flex items-center gap-3"><button type="submit" class="btn btn-primary">Valider</button><span class="js-res text-sm"></span></div></form>';
+      var form = document.getElementById('form-cloture');
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var verrou = verrouEnvoi(form);
+        if (!verrou) return;
+        var body = { issue: issue };
+        if (issue === 'gagne') { body.confirme = !!(form.confirme && form.confirme.checked); body.moyen = form.moyen ? form.moyen.value : ''; }
+        if (issue === 'perdu') { body.motif = form.motif.value; body.note = form.note ? form.note.value : ''; }
+        postJson('/admin/api/leads/' + leadId + '/cloturer', body)
+          .then(function (d) { finir(form, d, verrou); }).catch(function () { finir(form, null, verrou); });
+      });
+    });
+  });
+
+  /* Un seul menu « Autres » ouvert à la fois ; un clic ailleurs le ferme. */
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('details.lead-menu[open]').forEach(function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); });
+  });
+  /* Le menu se ferme dès qu'on choisit une action. */
+  document.querySelectorAll('details.lead-menu button, details.lead-menu a').forEach(function (el) {
+    el.addEventListener('click', function () { var d = el.closest('details'); if (d) d.removeAttribute('open'); });
+  });
 
   // ─ Action: email / sms / whatsapp ─
   document.querySelectorAll('.lead-action').forEach(function (btn) {

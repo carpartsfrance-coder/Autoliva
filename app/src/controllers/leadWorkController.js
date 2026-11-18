@@ -256,7 +256,8 @@ async function postCloturer(req, res, next) {
         return res.status(400).json({ ok: false, error: 'Coche « Le client a payé ou versé un acompte ».' });
       }
       Object.assign(set, { manualStatus: 'converted', manualStatusBy: moi.id, manualStatusByName: moi.nom, manualStatusAt: now, recoveredAt: now, lostReason: '' });
-      texte = '✅ Gagné — paiement confirmé par ' + moi.court;
+      const moyen = String(b.moyen || '').trim().slice(0, 60);
+      texte = '✅ Gagné — paiement confirmé par ' + moi.court + (moyen ? ' (' + moyen + ')' : '');
     } else if (choix === 'perdu') {
       if (!MOTIFS_PERTE[b.motif]) return res.status(400).json({ ok: false, error: 'Choisis le motif de perte.' });
       Object.assign(set, { manualStatus: 'lost', manualStatusBy: moi.id, manualStatusByName: moi.nom, manualStatusAt: now, lostReason: b.motif });
@@ -265,7 +266,8 @@ async function postCloturer(req, res, next) {
       if (lead.engineQuote && lead.engineQuote.status && !['won', 'acompte_recu'].includes(lead.engineQuote.status)) {
         set['engineQuote.status'] = 'lost';
       }
-      texte = `✖ Perdu — ${MOTIFS_PERTE[b.motif]}`;
+      const precision = String(b.note || '').trim().slice(0, 500);
+      texte = `✖ Perdu — ${MOTIFS_PERTE[b.motif]}${precision ? ' — ' + precision : ''}`;
     } else if (choix === 'rouvrir') {
       Object.assign(set, { manualStatus: 'contacted', manualStatusBy: moi.id, manualStatusByName: moi.nom, manualStatusAt: now, lostReason: '' });
       const commandeLiee = lead.recoveredOrder && (lead.recoveredOrder.orderId || lead.recoveredOrder.number);
