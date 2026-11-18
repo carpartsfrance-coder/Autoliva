@@ -183,6 +183,11 @@ async function postAppel(req, res, next) {
       set.manualStatusAt = now;
       set.lostReason = b.motif;
       set.nextAction = { type: '', dueAt: null, note: '', setByName: moi.court, setAt: now };
+      /* Même règle que « Perdu… » : le dossier devis suit, sinon il resterait
+         ouvert dans la page Devis moteurs. */
+      if (lead.engineQuote && lead.engineQuote.status && !['won', 'acompte_recu'].includes(lead.engineQuote.status)) {
+        set['engineQuote.status'] = 'lost';
+      }
       texte += ` → Perdu (${MOTIFS_PERTE[b.motif]})`;
     } else {
       set.nextAction = { type: suite, dueAt: quand, note, setByName: moi.court, setAt: now };

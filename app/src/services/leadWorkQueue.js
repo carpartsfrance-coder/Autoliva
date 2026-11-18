@@ -130,7 +130,7 @@ async function chargerFile(opts = {}) {
   const now = opts.now || new Date();
   const docs = await AbandonedCart.find(filtreBase(now))
     .select(CHAMPS)
-    .slice('notes', -1)
+    .slice('notes', -6)
     .limit(PLAFOND)
     .lean();
   if (docs.length >= PLAFOND) console.warn(`[leads] file de travail : plafond de ${PLAFOND} dossiers atteint`);
@@ -145,11 +145,13 @@ async function chargerFile(opts = {}) {
   /* Bandeau patron : sur TOUTE la file, avant les filtres rapides. */
   const parPersonne = {};
   let enRetard = 0;
+  let anciens = 0;
   let jamaisPris = 0;
   let duJour = 0;
   tous.forEach((x) => {
     const w = x.work;
     const retard = w.group === 'retard' || w.group === 'anciens' || (w.group === 'nouveaux' && w.overdue);
+    if (w.group === 'anciens') anciens += 1;
     if (retard) {
       enRetard += 1;
       const qui = x.lead.takenByName || 'Non pris';
@@ -186,6 +188,10 @@ async function chargerFile(opts = {}) {
     totalSansFiltre: tous.length,
     bandeau: {
       enRetard,
+      /* Les vieux retards (plus de 7 jours ouvrés) sont comptés à part : mêlés
+         aux retards du jour, ils donnaient l'impression d'une file sans fin. */
+      anciens,
+      enRetardRecents: enRetard - anciens,
       jamaisPris,
       duJour,
       parPersonne: Object.keys(parPersonne).sort((a, b) => (a === 'Non pris') - (b === 'Non pris') || a.localeCompare(b))

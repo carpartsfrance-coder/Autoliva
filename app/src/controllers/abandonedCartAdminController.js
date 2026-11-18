@@ -32,8 +32,9 @@ const { demandesFournisseur } = require('../services/supplierRequest');
 const { buildLeadSearchConditions } = require('../services/leadSearch');
 const { avecVerrouEnvoi } = require('../services/verrouEnvoiLead');
 const brand = require('../config/brand');
-const { computeWork, libelleUrgence, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
+const { computeWork, libelleUrgence, libelleUrgenceCourt, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
 const { chargerFile } = require('../services/leadWorkQueue');
+const { resumeDemande } = require('../services/leadResume');
 
 function escapeHtml(value) {
   return String(value || '')
@@ -302,9 +303,28 @@ function toCardModel(c, now = new Date()) {
   })();
 
   const work = computeWork(c, now);
+  const eqData = c.engineQuote || {};
+  const devisEnvoyes = Array.isArray(eqData.sentQuotes) ? eqData.sentQuotes.filter((q) => q && q.sentAt) : [];
+  const dernierDevis = devisEnvoyes.length
+    ? devisEnvoyes.reduce((a, b) => (new Date(b.sentAt) > new Date(a.sentAt) ? b : a)) : null;
+  const prixDevis = eqData.pricing && Number(eqData.pricing.sellPrice) > 0 ? Number(eqData.pricing.sellPrice) : 0;
   return {
     work,
     urgence: libelleUrgence(work, now),
+    urgenceCourte: libelleUrgenceCourt(work, now),
+    demande: resumeDemande(c),
+    /* Prix à montrer : celui du devis s'il existe, sinon le panier. */
+    prixAffiche: prixDevis ? { montant: formatEuro(Math.round(prixDevis * 100)), origine: 'devis' }
+      : (c.totalAmountCents > 0 ? { montant: formatEuro(c.totalAmountCents), origine: 'panier' } : null),
+    /* Ce que le client a fait du dernier devis : c'est LE signal pour relancer. */
+    devisSuivi: dernierDevis ? {
+      envoyeRel: formatRelative(dernierDevis.sentAt),
+      ouvert: !!dernierDevis.openedAt,
+      pdfVu: !!dernierDevis.pdfViewedAt,
+      paiementClique: !!dernierDevis.payClickedAt,
+      nombre: devisEnvoyes.length,
+    } : null,
+    dejaEssaye: !!(c.lastCallOutcome && ['pas_reponse', 'repondeur'].includes(c.lastCallOutcome.outcome)),
     takenByName: c.takenByName || '',
     takenAtRel: c.takenAt ? formatRelative(c.takenAt) : '',
     nextActionNote: (c.nextAction && c.nextAction.note) || '',
@@ -692,6 +712,15 @@ async function getAdminLeadDetail(req, res, next) {
     const cart = await AbandonedCart.findById(id).lean();
     if (!cart) return res.status(404).json({ ok: false, error: 'Lead non trouvé.' });
 
+    /* Ouvert dans le navigateur (lien Ringover, lien collé) : on montre la
+       fiche du client dans la page, pas le JSON brut. */
+    const accept = String(req.get('accept') || '');
+    if (accept.includes('text/html') && !accept.includes('application/json')) {
+      const cle = cart.email || cart.phone || '';
+      const qs = new URLSearchParams(Object.assign(cle ? { q: cle } : { view: 'all' }, { lead: String(cart._id) })).toString();
+      return res.redirect('/admin/activite-panier?' + qs);
+    }
+
     /* 360° client : commandes + SAV de ce client (email OU téléphone) */
     const historyMap = await buildClientHistoryMaps([{ id: String(cart._id), email: cart.email, phone: cart.phone }]);
     const hist = historyMap.get(String(cart._id)) || { orders: [], tickets: [] };
@@ -765,6 +794,7 @@ async function getAdminLeadDetail(req, res, next) {
           text: n.text,
           addedByName: n.addedByName || 'Admin',
           addedAt: formatDateTimeFR(n.addedAt),
+          addedAtIso: n.addedAt ? new Date(n.addedAt).toISOString() : '',
         })),
         /* Historique des messages : le journal des envois récents, complété par
            tout ce qui est reconstituable des traces antérieures. */

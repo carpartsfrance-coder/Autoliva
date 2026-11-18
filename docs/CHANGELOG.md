@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-11-18 (soir) — Leads à traiter : refonte en « boîte mail » (liste à gauche, client à droite)
+
+Maquette faite par ChatGPT après avoir refait lui-même le parcours de l'employé sur 7 captures du vrai écran. Ses reproches : pas de point de départ évident, 956 « en retard » mêlant les vieux dossiers, cartes trop grandes (3 ou 4 clients par écran), boutons éparpillés (le dossier devis caché dans « ⋯ »), deux fenêtres presque identiques (résultat d'appel, planifier), étiquettes mélangées, détail qui commence par les outils au lieu de l'historique.
+
+- **Liste à gauche** en lignes courtes : nom, urgence (« Retard 2 h », « Avant 10:15 », « 14:00 », « ven. 20/11 »), pièce et véhicule, qui s'en occupe et d'où vient la demande. Mêmes groupes et même ordre de travail qu'avant. ~10 clients visibles d'un coup au lieu de 3–4.
+- **Client sélectionné à droite** : qui et quoi (pièce, véhicule, plaque, VIN, dossier devis, prix), puis un grand encadré **« La prochaine action »** avec le bouton principal, « Copier le n° », « Appel terminé », « Planifier », qui s'en occupe, le dernier appel et ce que le client a fait du devis (ouvert, PDF consulté, clic sur « payer »). Dessous : Email, SMS, WhatsApp, Atelier devis, Fournisseur, Autres actions.
+- **Onglets** Suivi & notes (messages et notes sur une seule ligne du temps, la plus récente en haut, puis la note interne), Pièce & devis (demande, panier, demande de prix fournisseur), Client & parcours (commandes, SAV, provenance, pages vues). Ils remplacent la fenêtre « Détail ».
+- **Une seule fenêtre « suite »** pour « Appel terminé » et « Planifier » : 1. comment s'est passé l'appel, 2. la suite, 3. pour quand. Pas de réponse : « Le rappeler · dans 2 h » (le lendemain si déjà essayé) pré-rempli. « Perdu » demande le motif, aussi depuis « Planifier ».
+- **« Enregistrer et continuer → »** enregistre et ouvre le client suivant. « Client suivant → » et les touches J / K pour passer d'un client à l'autre. Gagné / Perdu enchaînent aussi sur le suivant.
+- **Bandeau sur une ligne** : les retards du jour d'un côté, les anciens dossiers (plus de 7 jours ouvrés) comptés à part ; retards par personne dans « Équipe ».
+- **Téléphone** : la liste, puis la fiche en plein écran avec « ← Liste ».
+- Le choix du client est gardé dans l'adresse (`?lead=…`) : un rechargement ou un lien ramène sur le même client.
+- Un lien `/admin/activite-panier/:id` ouvert dans le navigateur (lien Ringover) montre la fiche du client au lieu du JSON brut.
+- Simple panier ou newsletter (dans « Tous les leads ») : plus d'échéance ni de « retard » affichés, la fiche dit « Pas de demande en cours ».
+- « Appel terminé → client joint → perdu » passe aussi le dossier devis en perdu (comme « Perdu… »).
+- Code : `partials/lead-ligne.ejs` et `partials/lead-fiche.ejs` remplacent `partials/lead-card.ejs` ; `services/leadResume.js` (pièce / véhicule, quel que soit le formulaire) ; `libelleUrgenceCourt` dans `services/leadWork.js`. Aucune route ni règle de suivi changée.
+- Tests : `tests/unit/lead-resume.test.js`, libellé court dans `tests/unit/lead-work.test.js`, page + lien direct + perdu après appel dans `tests/integration/file-de-travail-leads.test.js`.
+
 ## 2026-11-18 (après mise en ligne) — Leads à traiter : page 400 fois plus rapide, file limitée aux demandes récentes ou suivies
 
 - À la mise en ligne, la file affichait 3 131 dossiers dont 2 901 « anciens à reprendre » : des demandes d'avril à juillet que personne n'avait jamais traitées (invisibles avant). Les compteurs « En retard » (3 101) et « Jamais contactés » (2 443) n'aidaient plus à piloter.
