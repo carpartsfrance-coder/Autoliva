@@ -1,0 +1,42 @@
+<%
+  /* Ligne compacte de la liste de gauche : QUI, QUAND, QUOI, et qui s'en occupe.
+     Un clic ouvre la fiche à droite (sur téléphone : en plein écran). */
+  var w = c.work || {};
+  var ferme = w.stage === 'gagne' || w.stage === 'perdu';
+  /* Simple passage (panier, newsletter) jamais travaillé : pas une demande, donc ni échéance ni retard. */
+  var faible = w.intent === 'weak' || w.intent === 'archived';
+  var ton = faible ? 'slate' : ferme ? (w.stage === 'gagne' ? 'green' : 'slate')
+    : w.overdue ? 'red'
+    : w.stage === 'nouveau' ? 'blue'
+    : (w.group === 'rappels' || w.group === 'devis') ? 'amber' : 'slate';
+  var couleurUrgence = { red: 'text-red-600', blue: 'text-blue-700', amber: 'text-amber-700', green: 'text-green-700', slate: 'text-slate-500' }[ton];
+  var barre = { red: 'bg-red-500', blue: 'bg-blue-500', amber: 'bg-amber-400', green: 'bg-green-500', slate: 'bg-slate-300' }[ton];
+  var nom = c.fullName || c.email || c.phone || 'Client sans nom';
+  var d = c.demande || {};
+  var quoi = [d.piece, d.vehicule || d.plaque].filter(Boolean).join(' · ');
+  var estAds = c.attribution && (c.attribution.gclid || ['cpc', 'ppc', 'paid'].indexOf(String(c.attribution.medium || '').toLowerCase()) !== -1);
+  var meta = [];
+  meta.push(c.takenByName ? c.takenByName : (ferme || faible ? '' : 'Non pris'));
+  if (estAds) meta.push('Google Ads');
+  meta.push(c.captureBadge ? c.captureBadge.label : '');
+  if (ferme) meta.unshift(w.stageLabel);
+%>
+<li>
+  <button type="button" class="lead-ligne relative w-full text-left pl-4 pr-3 py-2.5 border-b border-slate-100 hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50" data-lead-id="<%= c.id %>" aria-selected="false">
+    <span class="absolute left-0 top-2 bottom-2 w-1 rounded-r <%= barre %>" aria-hidden="true"></span>
+    <span class="flex items-baseline justify-between gap-2">
+      <span class="lead-ligne-nom truncate text-sm font-semibold text-slate-900"><%= nom %></span>
+      <% if (c.urgenceCourte && !ferme && !faible) { %>
+        <span class="shrink-0 text-[11px] font-bold <%= couleurUrgence %>"><%= c.urgenceCourte %></span>
+      <% } else if (c.prixAffiche) { %>
+        <span class="shrink-0 text-[11px] font-semibold text-slate-500"><%= c.prixAffiche.montant %></span>
+      <% } %>
+    </span>
+    <% if (quoi) { %><span class="mt-0.5 block truncate text-xs text-slate-600"><%= quoi %></span><% } %>
+    <span class="mt-0.5 flex items-center gap-1.5 truncate text-[11px] <%= c.takenByName || ferme ? 'text-slate-400' : 'text-slate-500' %>">
+      <% if (!c.takenByName && !ferme && !faible) { %><span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true"></span><% } %>
+      <span class="truncate"><%= meta.filter(Boolean).join(' · ') %></span>
+      <% if (!w.firstHumanAt && !ferme && !faible && w.group !== 'nouveaux') { %><span class="ml-auto shrink-0 font-semibold text-red-600">Jamais contacté</span><% } %>
+    </span>
+  </button>
+</li>

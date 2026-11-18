@@ -8,7 +8,7 @@
  */
 const test = require('node:test');
 const assert = require('node:assert');
-const { computeWork, comparer, libelleUrgence } = require('../../src/services/leadWork');
+const { computeWork, comparer, libelleUrgence, libelleUrgenceCourt } = require('../../src/services/leadWork');
 
 /* Mercredi 18/11/2026, 10 h 30 à Paris (UTC+1). */
 const NOW = new Date('2026-11-18T09:30:00Z');
@@ -120,4 +120,20 @@ test('tri : l’échéance la plus urgente d’abord, retards récents avant les
   const b = { id: 'b', work: { group: 'retard', dueAt: ago(3 * 24 * H), overdueMinutes: 3 * 420 } };
   const c = { id: 'c', work: { group: 'retard', dueAt: ago(H), overdueMinutes: 60 } };
   assert.deepEqual([b, c, a].sort(comparer).map((x) => x.id), ['a', 'c', 'b']);
+});
+
+test('libellé court pour la liste : retard, heure limite, heure du jour, date', () => {
+  const nouveau = computeWork({ captureSource: 'landing_ponts', phone: '+33608610148', abandonedAt: ago(25 * 60000) }, NOW);
+  assert.equal(libelleUrgenceCourt(nouveau, NOW), 'Avant 11:05');
+  const enRetard = computeWork({ captureSource: 'devis', phone: '0600000000', abandonedAt: ago(3 * H),
+    nextAction: { type: 'callback', dueAt: ago(2 * H) } }, NOW);
+  assert.match(libelleUrgenceCourt(enRetard, NOW), /^Retard \d+ (min|h)$/);
+  const deja = { outcome: 'pas_reponse', at: ago(29 * H) };
+  const cetAprem = computeWork({ captureSource: 'devis', phone: '0600000000', abandonedAt: ago(30 * H), lastCallOutcome: deja,
+    nextAction: { type: 'callback', dueAt: new Date('2026-11-18T14:00:00Z') } }, NOW);
+  assert.equal(libelleUrgenceCourt(cetAprem, NOW), '15:00');
+  const vendredi = computeWork({ captureSource: 'devis', phone: '0600000000', abandonedAt: ago(30 * H), lastCallOutcome: deja,
+    nextAction: { type: 'callback', dueAt: new Date('2026-11-20T08:30:00Z') } }, NOW);
+  assert.equal(libelleUrgenceCourt(vendredi, NOW), 'ven. 20/11');
+  assert.equal(libelleUrgenceCourt({}, NOW), '');
 });

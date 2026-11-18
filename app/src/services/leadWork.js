@@ -322,10 +322,28 @@ function libelleUrgence(work, now = new Date()) {
   return `Prévu ${jour} ${heure}`;
 }
 
+/**
+ * Version courte pour la liste de gauche (« Retard 2 h », « Avant 10:15 »,
+ * « 14:00 », « jeu. 20/11 ») : la ligne n'a la place que pour quelques mots.
+ */
+function libelleUrgenceCourt(work, now = new Date()) {
+  if (!work || !work.dueAt) return '';
+  const heure = work.dueAt.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+  if (work.overdue) {
+    const m = work.overdueMinutes;
+    if (m < 60) return `Retard ${Math.max(1, m)} min`;
+    if (m < MIN_JOUR_OUVRE) return `Retard ${Math.round(m / 60)} h`;
+    return `Retard ${Math.round(m / MIN_JOUR_OUVRE)} j`;
+  }
+  if (work.dueAt < finJour(now)) return work.stage === 'nouveau' ? `Avant ${heure}` : heure;
+  return work.dueAt.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', day: '2-digit', month: '2-digit' });
+}
+
 module.exports = {
   computeWork,
   comparer,
   libelleUrgence,
+  libelleUrgenceCourt,
   actionsHumaines,
   peutAppeler,
   intention,

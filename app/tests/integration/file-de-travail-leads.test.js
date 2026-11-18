@@ -114,6 +114,35 @@ test('file de travail : toutes les vraies demandes, une suite pour chacune', asy
     assert.ok(tous.includes('vieille-demande@example.com'), 'toujours retrouvable par la recherche');
   });
 
+  await t.test('vue boîte mail : une ligne et une fiche par client, avec la pièce et la prochaine action', async () => {
+    const html = await page('/admin/activite-panier');
+    const lignes = (html.match(/class="lead-ligne /g) || []).length;
+    const fiches = (html.match(/class="lead-fiche /g) || []).length;
+    assert.ok(lignes >= 3 && lignes === fiches, `autant de fiches que de lignes (${lignes}/${fiches})`);
+    assert.ok(html.includes(`id="fiche-${pont._id}"`), 'fiche du lead pont');
+    assert.ok(html.includes('La prochaine action'));
+    assert.ok(html.includes('Boîte de transfert'), 'pièce lue dans la demande de la landing');
+  });
+
+  await t.test('lien direct vers un lead ouvert dans le navigateur : la fiche, pas le JSON', async () => {
+    const r = await fetch(`${base}/admin/activite-panier/${devis._id}`, { headers: { cookie, Accept: 'text/html,application/xhtml+xml' }, redirect: 'manual' });
+    assert.equal(r.status, 302);
+    assert.match(r.headers.get('location'), new RegExp('lead=' + devis._id));
+    const j = await fetch(`${base}/admin/activite-panier/${devis._id}`, { headers: { cookie, Accept: 'application/json' } });
+    assert.equal((await j.json()).ok, true, 'le script de la page reçoit toujours le JSON');
+  });
+
+  await t.test('appel « client joint » puis perdu : le dossier devis passe aussi en perdu', async () => {
+    const l0 = await AbandonedCart.create({ sessionId: 's-appel-perdu', captureSource: 'landing_boites', email: 'appel-perdu@example.com',
+      phone: '+33612345678', abandonedAt: new Date(), lastActivityAt: new Date(), engineQuote: { status: 'analyzing' } });
+    const r = await post(`/admin/api/leads/${l0._id}/appel`, { resultat: 'joint', suite: 'perdu', motif: 'deja_achete' });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    const l = await AbandonedCart.findById(l0._id).lean();
+    assert.equal(l.manualStatus, 'lost');
+    assert.equal(l.engineQuote.status, 'lost');
+    await AbandonedCart.deleteOne({ _id: l0._id });
+  });
+
   await t.test('« J’ai appelé » exige un résultat et une suite', async () => {
     const r1 = await post(`/admin/api/leads/${devis._id}/appel`, {});
     assert.equal(r1.status, 400);

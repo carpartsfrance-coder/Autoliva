@@ -2,238 +2,237 @@
 
 <%- include('./partials/sidebar', { active: 'cart-activity' }) %>
 
+<style>
+  /* Vue « boîte mail » : la liste des clients à gauche, le client sélectionné
+     à droite. Écran étroit (téléphone, petite tablette) : la liste, puis la
+     fiche en plein écran avec « ← Liste ». Le seuil suit la largeur réelle de
+     la zone (barre latérale ouverte ou non), pas celle de l'écran. */
+  .file-split { container-type: inline-size; }
+  .file-cols { display: block; }
+  .file-fiche-col { display: none; }
+  .file-split[data-mode="fiche"] .file-liste-col,
+  .file-split[data-mode="fiche"] .masque-en-fiche { display: none; }
+  .file-split[data-mode="fiche"] .file-fiche-col { display: block; }
+  @container (min-width: 900px) {
+    .file-cols { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 1rem; align-items: start; }
+    .file-split .file-liste-col, .file-split .file-fiche-col { display: block !important; overflow-y: auto; overscroll-behavior: contain; }
+    .file-split .seul-mobile { display: none !important; }
+    .file-split .groupe-entete { position: sticky; top: 0; }
+  }
+  .lead-ligne[aria-selected="true"] { background: #fef2f2; }
+  .lead-ligne[aria-selected="true"] .lead-ligne-nom { color: #b91c1c; }
+  .fiche-onglet[aria-selected="true"] { border-color: #D32F2F; color: #0f172a; }
+  .lead-groupe > summary::-webkit-details-marker, .lead-menu > summary::-webkit-details-marker, .equipe-menu > summary::-webkit-details-marker { display: none; }
+  .lead-groupe[open] > summary .groupe-chevron { transform: rotate(180deg); }
+</style>
+
 <main class="flex-1 min-w-0">
-  <div class="px-4 sm:px-6 lg:px-10 py-6 lg:py-8 max-w-[1400px]">
-    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-      <div>
-        <%- include('./partials/breadcrumb', { breadcrumbs: [{label: 'Leads à traiter'}] }) %>
-        <h1 class="text-2xl md:text-3xl font-semibold text-slate-900">Leads à traiter</h1>
-        <p class="mt-1 text-sm text-slate-500">Toutes les demandes clients au même endroit. Traite de haut en bas : la page te dit quoi faire et quand.</p>
+  <div id="file-split" class="file-split px-3 sm:px-5 lg:px-6 py-4" data-mode="liste">
+
+    <!-- En-tête : titre, onglets, aide -->
+    <div class="masque-en-fiche flex flex-wrap items-center gap-x-3 gap-y-2">
+      <h1 class="text-xl md:text-2xl font-semibold text-slate-900 mr-1">Leads à traiter</h1>
+      <div class="inline-flex rounded-xl border border-slate-200 bg-white p-0.5 text-sm font-semibold">
+        <a href="<%= tabs.todoUrl %>" class="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 <%= view === 'todo' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50' %>" title="Les vraies demandes ouvertes, triées par urgence">
+          À traiter <span class="rounded-full px-1.5 text-[11px] font-bold <%= view === 'todo' ? 'bg-white/20' : 'bg-slate-100 text-slate-600' %>"><%= tabs.todoCount %></span>
+        </a>
+        <a href="<%= tabs.allUrl %>" class="rounded-lg px-3 py-1.5 <%= view === 'all' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50' %>" title="Tout l'historique : paniers, newsletter, gagnés, perdus, avec la recherche">Tous les leads</a>
       </div>
-      <div class="flex flex-wrap gap-2 shrink-0">
-        <button type="button" id="leads-help-btn" class="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50">
-          <span class="material-symbols-outlined text-base text-primary">school</span>Comment ça marche
+      <div class="ml-auto flex gap-2">
+        <button type="button" id="leads-help-btn" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+          <span class="material-symbols-outlined text-base text-primary">school</span><span class="hidden sm:inline">Comment ça marche</span>
         </button>
-        <a href="/admin/parametres/modeles-messages" class="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" title="Personnaliser les textes des SMS et emails">
-          <span class="material-symbols-outlined text-base text-primary">edit_note</span>Modèles de messages
+        <a href="/admin/parametres/modeles-messages" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50" title="Personnaliser les textes des SMS et emails">
+          <span class="material-symbols-outlined text-base text-primary">edit_note</span><span class="hidden sm:inline">Modèles de messages</span>
         </a>
       </div>
     </div>
 
     <% if (view === 'todo' && bandeau) { %>
-      <!-- Bandeau : l'état de la file en 4 chiffres (vue patron) -->
-      <div class="mt-5 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div class="rounded-2xl border <%= bandeau.enRetard ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white' %> p-4" title="Dossiers dont l'échéance est passée (y compris les anciens)">
-          <div class="text-[11px] uppercase tracking-widest font-semibold <%= bandeau.enRetard ? 'text-red-600' : 'text-slate-400' %>">En retard</div>
-          <div class="mt-1 text-2xl font-bold <%= bandeau.enRetard ? 'text-red-700' : 'text-slate-900' %>"><%= bandeau.enRetard %></div>
-        </div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-4" title="Demandes ouvertes sur lesquelles personne n'a encore appelé ni écrit (les messages automatiques ne comptent pas)">
-          <div class="text-[11px] uppercase tracking-widest font-semibold text-slate-400">Jamais contactés</div>
-          <div class="mt-1 text-2xl font-bold text-slate-900"><%= bandeau.jamaisPris %></div>
-        </div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-4" title="Nouvelles demandes, rappels et devis prévus aujourd'hui (hors retards)">
-          <div class="text-[11px] uppercase tracking-widest font-semibold text-slate-400">À faire aujourd'hui</div>
-          <div class="mt-1 text-2xl font-bold text-slate-900"><%= bandeau.duJour %></div>
-        </div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-4" title="Temps entre la demande du client et le premier appel ou message d'un commercial, en heures d'ouverture, sur les 30 derniers jours">
-          <div class="text-[11px] uppercase tracking-widest font-semibold text-slate-400">1re réponse (30 j)</div>
-          <% var dl = bandeau.delai || {}; var med = dl.mediane; %>
-          <div class="mt-1 text-2xl font-bold text-slate-900">
-            <% if (med === null || med === undefined) { %>—<% } else if (med < 60) { %><%= med %> min<% } else { %><%= Math.floor(med / 60) %> h <%= String(med % 60).padStart(2, '0') %><% } %>
-          </div>
-          <% if (dl.pctDansLHeure !== null && dl.pctDansLHeure !== undefined) { %><div class="text-xs text-slate-500"><%= dl.pctDansLHeure %> % rappelés dans l'heure</div><% } %>
-        </div>
+      <% var b = bandeau; var dl = b.delai || {}; var med = dl.mediane; %>
+      <!-- Les chiffres du patron, sur une ligne -->
+      <div class="masque-en-fiche mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
+        <span title="Dossiers dont l'heure prévue est passée, hors anciens dossiers (plus de 7 jours ouvrés de retard), comptés à part">
+          <strong class="text-base <%= b.enRetardRecents ? 'text-red-700' : 'text-slate-900' %>"><%= b.enRetardRecents %></strong> en retard<% if (b.anciens) { %> <span class="text-slate-400">· <%= b.anciens %> anciens à part</span><% } %>
+        </span>
+        <span title="Demandes ouvertes sur lesquelles personne n'a encore appelé ni écrit (les messages automatiques ne comptent pas)"><strong class="text-base text-slate-900"><%= b.jamaisPris %></strong> jamais contactés</span>
+        <span title="Nouvelles demandes, rappels et devis prévus aujourd'hui (hors retards)"><strong class="text-base text-slate-900"><%= b.duJour %></strong> à faire aujourd’hui</span>
+        <span title="Temps médian entre la demande du client et le premier appel ou message d'un commercial, en heures d'ouverture, sur les 30 derniers jours">
+          <strong class="text-base text-slate-900"><% if (med === null || med === undefined) { %>—<% } else if (med < 60) { %><%= med %> min<% } else { %><%= Math.floor(med / 60) %> h <%= String(med % 60).padStart(2, '0') %><% } %></strong> pour répondre<% if (dl.pctDansLHeure !== null && dl.pctDansLHeure !== undefined) { %> <span class="text-slate-400">· <%= dl.pctDansLHeure %> % dans l’heure</span><% } %>
+        </span>
+        <% if (b.parPersonne && b.parPersonne.length) { %>
+          <details class="equipe-menu relative ml-auto">
+            <summary class="list-none inline-flex cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+              <span class="material-symbols-outlined text-[16px]">group</span>Équipe<span class="material-symbols-outlined text-[16px]">expand_more</span>
+            </summary>
+            <div class="absolute right-0 z-30 mt-1 w-60 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl">
+              <div class="mb-2 font-semibold text-slate-500">Dossiers en retard par personne</div>
+              <% b.parPersonne.forEach(function (p) { %>
+                <div class="flex items-center justify-between py-1"><span class="text-slate-700"><%= p.nom %></span><strong class="text-slate-900"><%= p.n %></strong></div>
+              <% }) %>
+            </div>
+          </details>
+        <% } %>
       </div>
-      <% if (bandeau.parPersonne && bandeau.parPersonne.length) { %>
-        <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <span>Retards par personne :</span>
-          <% bandeau.parPersonne.forEach(function (p) { %>
-            <span class="inline-flex items-center rounded-full bg-white border border-slate-200 px-2 py-0.5"><strong class="text-slate-700 mr-1"><%= p.nom %></strong><%= p.n %></span>
-          <% }) %>
-        </div>
-      <% } %>
-    <% } else { %>
-      <!-- Chiffres des 30 derniers jours (hors dossiers devis et robots) -->
-      <div class="mt-5 grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <div class="rounded-2xl border border-slate-200 bg-white p-4"><div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">Leads (30 j)</div><div class="mt-1 text-2xl font-bold text-slate-900"><%= kpis.total %></div></div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-4"><div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">Jamais contactés</div><div class="mt-1 text-2xl font-bold text-slate-900"><%= kpis.uncontacted %></div></div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-4"><div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">Contactés</div><div class="mt-1 text-2xl font-bold text-slate-900"><%= kpis.contacted %></div></div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-4"><div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">Convertis</div><div class="mt-1 text-2xl font-bold text-green-700"><%= kpis.converted %> <span class="text-sm font-medium">(<%= kpis.recoveryRate %> %)</span></div></div>
-        <div class="rounded-2xl border border-slate-200 bg-white p-4" title="Somme des paniers non convertis — indicatif"><div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold">Paniers en attente</div><div class="mt-1 text-2xl font-bold text-slate-900"><%= kpis.pendingValue || '0,00 €' %></div></div>
+    <% } else if (view === 'all') { %>
+      <div class="masque-en-fiche mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600" title="30 derniers jours, hors dossiers devis moteurs, boîtes et ponts, hors robots">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">30 jours</span>
+        <span><strong class="text-base text-slate-900"><%= kpis.total %></strong> leads</span>
+        <span><strong class="text-base text-slate-900"><%= kpis.uncontacted %></strong> jamais contactés</span>
+        <span><strong class="text-base text-slate-900"><%= kpis.contacted %></strong> contactés</span>
+        <span><strong class="text-base text-green-700"><%= kpis.converted %></strong> convertis <span class="text-slate-400">(<%= kpis.recoveryRate %> %)</span></span>
+        <span title="Somme des paniers non convertis — indicatif"><strong class="text-base text-slate-900"><%= kpis.pendingValue || '0,00 €' %></strong> de paniers en attente</span>
       </div>
     <% } %>
 
-    <!-- Onglets -->
-    <div class="mt-5 flex flex-wrap items-center gap-2">
-      <a href="<%= tabs.todoUrl %>" class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border <%= view === 'todo' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' %>">
-        À traiter
-        <span class="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold <%= view === 'todo' ? 'bg-white/20 text-white' : 'bg-red-50 text-red-700' %>"><%= tabs.todoCount %></span>
-      </a>
-      <a href="<%= tabs.allUrl %>" class="inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border <%= view === 'all' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50' %>">
-        Tous les leads
-        <span class="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-bold <%= view === 'all' ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600' %>"><%= tabs.allCount %></span>
-      </a>
-      <span class="text-xs text-slate-400 hidden md:inline">
-        <% if (view === 'todo') { %>Les vraies demandes ouvertes, y compris les devis moteurs, boîtes et ponts. Les simples paniers et la newsletter sont dans « Tous les leads ».<% } else { %>Tout l'historique : paniers, newsletter, gagnés, perdus.<% } %>
-      </span>
-    </div>
-
     <% if (view === 'todo') { %>
-      <!-- Filtres rapides de la file -->
-      <form action="/admin/activite-panier" method="GET" class="mt-3 flex flex-col md:flex-row md:items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
-        <input type="text" name="q" value="" placeholder="Chercher un client : nom, tél, email, plaque, n° de commande…" class="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm" />
-        <div class="inline-flex shrink-0 rounded-xl border border-slate-200 p-0.5 text-xs font-semibold">
-          <% [['', 'Tous'], ['moi', 'Mes dossiers'], ['libre', 'Non pris']].forEach(function (o) { %>
+      <!-- Recherche et filtres rapides -->
+      <form action="/admin/activite-panier" method="GET" class="masque-en-fiche mt-3 flex flex-wrap items-center gap-2">
+        <label class="relative min-w-[220px] flex-1">
+          <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">search</span>
+          <input type="text" name="q" value="" placeholder="Chercher : nom, téléphone, email, plaque, n° de commande…" class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm" />
+        </label>
+        <div class="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-0.5 text-xs font-semibold">
+          <% [['', 'Toute l’équipe'], ['moi', 'Mes dossiers'], ['libre', 'Non pris']].forEach(function (o) { %>
             <% var qs = new URLSearchParams(Object.assign({}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, o[0] ? { qui: o[0] } : {})).toString(); %>
             <a href="/admin/activite-panier<%= qs ? '?' + qs : '' %>" class="whitespace-nowrap rounded-lg px-3 py-1.5 <%= todoFilters.qui === o[0] ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50' %>"><%= o[1] %></a>
           <% }) %>
         </div>
         <% if (todoFilters.qui) { %><input type="hidden" name="qui" value="<%= todoFilters.qui %>"><% } %>
-        <select name="piece" class="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white" onchange="this.form.q.value===''&&this.form.submit()">
+        <select name="piece" class="min-w-[140px] flex-1 sm:flex-none rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm" onchange="this.form.q.value===''&&this.form.submit()">
           <option value="">Toutes les pièces</option>
           <option value="pont" <%= todoFilters.piece === 'pont' ? 'selected' : '' %>>Ponts / transferts</option>
           <option value="boite" <%= todoFilters.piece === 'boite' ? 'selected' : '' %>>Boîtes / mécatroniques</option>
           <option value="moteur" <%= todoFilters.piece === 'moteur' ? 'selected' : '' %>>Moteurs</option>
           <option value="autre" <%= todoFilters.piece === 'autre' ? 'selected' : '' %>>Autres</option>
         </select>
-        <select name="source" class="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white" onchange="this.form.q.value===''&&this.form.submit()">
+        <select name="source" class="min-w-[140px] flex-1 sm:flex-none rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm" onchange="this.form.q.value===''&&this.form.submit()">
           <option value="">Toutes les sources</option>
           <% [['landing_ponts', 'Landing ponts / transferts'], ['landing_boites', 'Landing boîtes'], ['landing_moteurs', 'Landing moteurs'], ['devis', 'Demande de devis (fiche produit)'], ['contact', 'Formulaire contact'], ['appel_manque', 'Appel manqué'], ['blog_cta', 'Article de blog'], ['landing_5places', 'Transformation 2 → 5 places'], ['manual', 'Ajouté à la main']].forEach(function (o) { %>
             <option value="<%= o[0] %>" <%= todoFilters.source === o[0] ? 'selected' : '' %>><%= o[1] %></option>
           <% }) %>
         </select>
-        <button type="submit" class="btn btn-primary text-sm">OK</button>
-        <% if (todoFilters.qui || todoFilters.piece || todoFilters.source) { %><a href="/admin/activite-panier" class="text-xs font-semibold text-slate-500 hover:text-slate-800 px-2">Effacer</a><% } %>
+        <% if (todoFilters.qui || todoFilters.piece || todoFilters.source) { %><a href="/admin/activite-panier" class="px-2 text-xs font-semibold text-slate-500 hover:text-slate-800">Effacer les filtres</a><% } %>
       </form>
-
-      <!-- La file : groupes dans l'ordre où il faut les traiter -->
-      <% var totalFile = groupes.reduce(function (n, g) { return n + g.count; }, 0); %>
-      <% if (!totalFile) { %>
-        <div class="mt-6 rounded-2xl border border-slate-200 bg-white p-10 text-center">
-          <span class="material-symbols-outlined text-emerald-500" style="font-size:44px">task_alt</span>
-          <p class="mt-2 font-semibold text-slate-800">Rien à traiter pour l'instant.</p>
-          <p class="text-sm text-slate-500">Les nouvelles demandes apparaîtront ici automatiquement.</p>
-        </div>
-      <% } %>
-      <% var tons = { blue: 'text-blue-700 bg-blue-50 border-blue-200', red: 'text-red-700 bg-red-50 border-red-200', amber: 'text-amber-800 bg-amber-50 border-amber-200', orange: 'text-orange-800 bg-orange-50 border-orange-200', slate: 'text-slate-700 bg-slate-100 border-slate-200' }; %>
-      <% groupes.forEach(function (g) { if (!g.count) return; %>
-        <details class="lead-groupe mt-6" <%= g.collapsed ? '' : 'open' %> id="groupe-<%= g.key %>">
-          <summary class="list-none cursor-pointer flex flex-wrap items-center gap-2 select-none">
-            <span class="material-symbols-outlined text-slate-400 transition lead-groupe-chevron">expand_more</span>
-            <h2 class="text-base font-bold text-slate-900"><%= g.label %></h2>
-            <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-bold <%= tons[g.tone] || tons.slate %>"><%= g.count %></span>
-            <span class="text-xs text-slate-500"><%= g.hint %></span>
-          </summary>
-          <ul class="mt-3 space-y-3">
-            <% g.items.forEach(function (c) { %>
-              <%- include('./partials/lead-card', { c: c }) %>
-            <% }) %>
-          </ul>
-          <% if (g.reste > 0) { %>
-            <% var qsv = new URLSearchParams(Object.assign({}, todoFilters.qui ? { qui: todoFilters.qui } : {}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, { voir: g.key })).toString(); %>
-            <a href="/admin/activite-panier?<%= qsv %>#groupe-<%= g.key %>" class="mt-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Afficher les <%= g.reste %> suivants <span class="material-symbols-outlined text-base">expand_more</span></a>
-          <% } %>
-        </details>
-      <% }) %>
     <% } else { %>
-    <!-- Filtres -->
-    <form action="/admin/activite-panier" class="mt-4 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm" method="GET">
-      <input type="hidden" name="view" value="<%= view %>" />
-      <div class="grid grid-cols-2 lg:grid-cols-7 gap-3">
-
-        <input type="text" name="q" value="<%= filters.q || '' %>" placeholder="Email, nom, tél, n° commande, pièce…"
-          title="Email, nom, prénom, téléphone (toutes graphies), numéro de commande ou de facture, pièce du panier, plaque, VIN, référence"
-          class="col-span-2 lg:col-span-2 rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20" />
-
-        <select name="manual" class="rounded-xl border border-slate-200 pl-3 pr-8 py-2.5 text-sm bg-white">
-          <option value="">Statut manuel: tous</option>
+      <!-- Filtres de l'historique -->
+      <form action="/admin/activite-panier" class="masque-en-fiche mt-3 flex flex-wrap items-center gap-2" method="GET">
+        <input type="hidden" name="view" value="all" />
+        <label class="relative min-w-[220px] flex-1">
+          <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">search</span>
+          <input type="text" name="q" value="<%= filters.q || '' %>" placeholder="Email, nom, téléphone, n° de commande, pièce, plaque…" title="Email, nom, prénom, téléphone (toutes graphies), numéro de commande ou de facture, pièce du panier, plaque, VIN, référence" class="w-full rounded-xl border border-slate-200 bg-white py-2 pl-10 pr-3 text-sm" />
+        </label>
+        <select name="manual" class="rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm">
+          <option value="">Tous les statuts</option>
           <option value="none" <%= filters.manualStatus === 'none' ? 'selected' : '' %>>Non contacté</option>
           <option value="contacted" <%= filters.manualStatus === 'contacted' ? 'selected' : '' %>>Contacté</option>
-          <option value="converted" <%= filters.manualStatus === 'converted' ? 'selected' : '' %>>Converti</option>
+          <option value="converted" <%= filters.manualStatus === 'converted' ? 'selected' : '' %>>Gagné</option>
           <option value="lost" <%= filters.manualStatus === 'lost' ? 'selected' : '' %>>Perdu</option>
         </select>
-
-        <select name="source" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
-          <option value="">Source: toutes</option>
-          <option value="user" <%= filters.captureSource === 'user' ? 'selected' : '' %>>Compte client</option>
-          <option value="guest_checkout" <%= filters.captureSource === 'guest_checkout' ? 'selected' : '' %>>Guest checkout</option>
-          <option value="devis" <%= filters.captureSource === 'devis' ? 'selected' : '' %>>Demande devis</option>
-          <option value="landing_moteurs" <%= filters.captureSource === 'landing_moteurs' ? 'selected' : '' %>>Landing Moteurs occasion</option>
-          <option value="landing_boites" <%= filters.captureSource === 'landing_boites' ? 'selected' : '' %>>Landing Boîtes occasion</option>
-          <option value="landing_ponts" <%= filters.captureSource === 'landing_ponts' ? 'selected' : '' %>>Landing Ponts / Transfert</option>
-          <option value="landing_5places" <%= filters.captureSource === 'landing_5places' ? 'selected' : '' %>>Landing 2 → 5 places</option>
-          <option value="contact" <%= filters.captureSource === 'contact' ? 'selected' : '' %>>Contact</option>
-          <option value="newsletter" <%= filters.captureSource === 'newsletter' ? 'selected' : '' %>>Newsletter</option>
-          <option value="cart_activity" <%= filters.captureSource === 'cart_activity' ? 'selected' : '' %>>Panier</option>
-          <option value="blog_cta" <%= filters.captureSource === 'blog_cta' ? 'selected' : '' %>>Article blog</option>
+        <select name="source" class="rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm">
+          <option value="">Toutes les sources</option>
+          <% [['user', 'Compte client'], ['guest_checkout', 'Commande sans compte'], ['devis', 'Demande de devis'], ['landing_moteurs', 'Landing moteurs'], ['landing_boites', 'Landing boîtes'], ['landing_ponts', 'Landing ponts / transferts'], ['landing_5places', 'Landing 2 → 5 places'], ['contact', 'Contact'], ['appel_manque', 'Appel manqué'], ['newsletter', 'Newsletter'], ['cart_activity', 'Panier'], ['blog_cta', 'Article de blog'], ['manual', 'Ajouté à la main']].forEach(function (o) { %>
+            <option value="<%= o[0] %>" <%= filters.captureSource === o[0] ? 'selected' : '' %>><%= o[1] %></option>
+          <% }) %>
         </select>
-
-        <select name="channel" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
-          <option value="">Canal: tous</option>
-          <option value="email" <%= filters.channel === 'email' ? 'selected' : '' %>>Email dispo</option>
-          <option value="phone" <%= filters.channel === 'phone' ? 'selected' : '' %>>Tél dispo</option>
-          <option value="both" <%= filters.channel === 'both' ? 'selected' : '' %>>Email + Tél</option>
+        <select name="channel" class="rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm">
+          <option value="">Email ou tél.</option>
+          <option value="email" <%= filters.channel === 'email' ? 'selected' : '' %>>Avec email</option>
+          <option value="phone" <%= filters.channel === 'phone' ? 'selected' : '' %>>Avec téléphone</option>
+          <option value="both" <%= filters.channel === 'both' ? 'selected' : '' %>>Email + téléphone</option>
         </select>
-
-        <select name="period" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
+        <select name="period" class="rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm">
           <option value="7d" <%= filters.period === '7d' ? 'selected' : '' %>>7 jours</option>
           <option value="30d" <%= !filters.period || filters.period === '30d' ? 'selected' : '' %>>30 jours</option>
           <option value="90d" <%= filters.period === '90d' ? 'selected' : '' %>>90 jours</option>
         </select>
-
-        <select name="sort" class="rounded-xl border border-slate-200 px-3 py-2.5 text-sm bg-white">
-          <option value="recent" <%= !filters.sort || filters.sort === 'recent' ? 'selected' : '' %>>Récent ↓</option>
-          <option value="amount" <%= filters.sort === 'amount' ? 'selected' : '' %>>Montant ↓</option>
-          <option value="oldest" <%= filters.sort === 'oldest' ? 'selected' : '' %>>Ancien ↑</option>
+        <select name="sort" class="rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm">
+          <option value="recent" <%= !filters.sort || filters.sort === 'recent' ? 'selected' : '' %>>Plus récents</option>
+          <option value="amount" <%= filters.sort === 'amount' ? 'selected' : '' %>>Plus gros montant</option>
+          <option value="oldest" <%= filters.sort === 'oldest' ? 'selected' : '' %>>Plus anciens</option>
         </select>
-
-      </div>
-      <div class="mt-3 flex items-center gap-2">
-        <button class="btn btn-primary text-sm" type="submit">Appliquer</button>
-        <a href="/admin/activite-panier?view=all" class="btn btn-ghost text-sm">Réinitialiser</a>
-      </div>
-
+        <button class="btn btn-primary text-sm" type="submit">Chercher</button>
+        <a href="/admin/activite-panier?view=all" class="px-2 text-xs font-semibold text-slate-500 hover:text-slate-800">Effacer</a>
+      </form>
       <% if (filters.q) { %>
-        <div class="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
+        <div class="masque-en-fiche mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-900">
           <span class="material-symbols-outlined text-sm">search</span>
-          <span>Recherche « <strong><%= filters.q %></strong> » sur <strong>tout l'historique</strong>, tous statuts confondus — la période et la file « À traiter » ne s'appliquent pas.</span>
+          <span>Recherche « <strong><%= filters.q %></strong> » dans <strong>tout l'historique</strong>, tous statuts confondus.</span>
           <a href="/admin/activite-panier?view=all" class="ml-auto font-semibold underline">Effacer</a>
-        </div>
-      <% } %>
-    </form>
-
-
-      <!-- Tous les leads -->
-      <div class="mt-5 flex items-center justify-between text-sm">
-        <div class="font-semibold text-slate-900"><%= pagination.totalItems %> lead<%= pagination.totalItems > 1 ? 's' : '' %></div>
-        <% if (pagination.totalItems > 0) { %><div class="text-xs text-slate-500"><%= pagination.from %>–<%= pagination.to %></div><% } %>
-      </div>
-      <% if (leads && leads.length) { %>
-        <ul class="mt-3 space-y-3">
-          <% leads.forEach(function (c) { %>
-            <%- include('./partials/lead-card', { c: c }) %>
-          <% }) %>
-        </ul>
-      <% } else { %>
-        <div class="mt-3 rounded-2xl border border-slate-200 bg-white p-12 text-center">
-          <span class="material-symbols-outlined text-slate-300" style="font-size:48px">inbox</span>
-          <p class="mt-3 text-slate-500">Aucun lead ne correspond aux filtres.</p>
-          <a href="/admin/activite-panier?view=all" class="mt-2 inline-block text-sm text-primary hover:underline">Réinitialiser les filtres</a>
-        </div>
-      <% } %>
-      <% if (pagination.totalPages > 1) { %>
-        <div class="mt-4 flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
-          <div class="text-xs text-slate-500">Page <%= pagination.page %> / <%= pagination.totalPages %></div>
-          <div class="flex items-center gap-2">
-            <% if (pagination.hasPrev) { %><a href="?<%= filtersQS ? filtersQS + '&' : '' %>page=<%= pagination.prevPage %>" class="btn btn-ghost text-xs">← Précédent</a><% } %>
-            <% if (pagination.hasNext) { %><a href="?<%= filtersQS ? filtersQS + '&' : '' %>page=<%= pagination.nextPage %>" class="btn btn-ghost text-xs">Suivant →</a><% } %>
-          </div>
         </div>
       <% } %>
     <% } %>
 
+    <%
+      var nomsCourts = { nouveaux: 'Nouvelles demandes', retard: 'En retard', rappels: 'Rappels du jour', devis: 'Devis à préparer', plus_tard: 'Planifiés', anciens: 'Anciens dossiers' };
+      var tons = { blue: 'bg-blue-100 text-blue-800', red: 'bg-red-100 text-red-700', amber: 'bg-amber-100 text-amber-800', orange: 'bg-orange-100 text-orange-800', slate: 'bg-slate-200 text-slate-700' };
+      var affiches = view === 'todo' ? [].concat.apply([], groupes.map(function (g) { return g.items; })) : (leads || []);
+    %>
+    <div class="file-cols mt-3">
+      <!-- Liste des clients -->
+      <aside id="file-liste" class="file-liste-col rounded-2xl border border-slate-200 bg-white" aria-label="Liste des clients">
+        <% if (view === 'todo') { %>
+          <% if (!affiches.length) { %>
+            <div class="p-8 text-center">
+              <span class="material-symbols-outlined text-emerald-500" style="font-size:40px">task_alt</span>
+              <p class="mt-2 font-semibold text-slate-800">Rien à traiter pour l’instant.</p>
+              <p class="text-sm text-slate-500">Les nouvelles demandes arrivent ici toutes seules.</p>
+            </div>
+          <% } %>
+          <% groupes.forEach(function (g) { if (!g.count) return; %>
+            <details class="lead-groupe" id="groupe-<%= g.key %>" <%= g.collapsed ? '' : 'open' %>>
+              <summary class="groupe-entete z-10 flex cursor-pointer list-none select-none items-center gap-2 border-b border-slate-100 bg-slate-50/95 px-4 py-2" title="<%= g.hint %>">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-600"><%= nomsCourts[g.key] || g.label %></span>
+                <span class="rounded-full px-1.5 text-[11px] font-bold <%= tons[g.tone] || tons.slate %>"><%= g.count %></span>
+                <span class="groupe-chevron material-symbols-outlined ml-auto text-[18px] text-slate-400 transition">expand_more</span>
+              </summary>
+              <ul>
+                <% g.items.forEach(function (c) { %><%- include('./partials/lead-ligne', { c: c }) %><% }) %>
+              </ul>
+              <% if (g.reste > 0) { %>
+                <% var qsv = new URLSearchParams(Object.assign({}, todoFilters.qui ? { qui: todoFilters.qui } : {}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, { voir: g.key })).toString(); %>
+                <a href="/admin/activite-panier?<%= qsv %>#groupe-<%= g.key %>" class="flex items-center gap-1 border-b border-slate-100 px-4 py-2.5 text-xs font-semibold text-primary hover:bg-slate-50">Afficher les <%= g.reste %> suivants<span class="material-symbols-outlined text-[16px]">expand_more</span></a>
+              <% } %>
+            </details>
+          <% }) %>
+        <% } else { %>
+          <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs">
+            <span class="font-bold uppercase tracking-wider text-slate-600"><%= pagination.totalItems %> lead<%= pagination.totalItems > 1 ? 's' : '' %></span>
+            <% if (pagination.totalItems > 0) { %><span class="text-slate-500"><%= pagination.from %>–<%= pagination.to %></span><% } %>
+          </div>
+          <% if (affiches.length) { %>
+            <ul><% affiches.forEach(function (c) { %><%- include('./partials/lead-ligne', { c: c }) %><% }) %></ul>
+          <% } else { %>
+            <div class="p-8 text-center">
+              <span class="material-symbols-outlined text-slate-300" style="font-size:40px">inbox</span>
+              <p class="mt-2 text-sm text-slate-500">Aucun lead ne correspond.</p>
+              <a href="/admin/activite-panier?view=all" class="mt-1 inline-block text-sm text-primary hover:underline">Effacer les filtres</a>
+            </div>
+          <% } %>
+          <% if (pagination.totalPages > 1) { %>
+            <div class="flex items-center justify-between px-4 py-2.5 text-xs">
+              <span class="text-slate-500">Page <%= pagination.page %> / <%= pagination.totalPages %></span>
+              <span class="flex gap-2">
+                <% if (pagination.hasPrev) { %><a href="?<%= filtersQS ? filtersQS + '&' : '' %>page=<%= pagination.prevPage %>" class="font-semibold text-slate-700 hover:text-primary">← Précédents</a><% } %>
+                <% if (pagination.hasNext) { %><a href="?<%= filtersQS ? filtersQS + '&' : '' %>page=<%= pagination.nextPage %>" class="font-semibold text-slate-700 hover:text-primary">Suivants →</a><% } %>
+              </span>
+            </div>
+          <% } %>
+        <% } %>
+      </aside>
+
+      <!-- Client sélectionné -->
+      <section id="file-fiche" class="file-fiche-col rounded-2xl border border-slate-200 bg-white" aria-live="polite">
+        <div id="fiche-vide" class="p-10 text-center text-sm text-slate-500">
+          <span class="material-symbols-outlined text-slate-300" style="font-size:40px">touch_app</span>
+          <p class="mt-2"><%= affiches.length ? 'Choisis un client dans la liste.' : 'Aucun client à afficher.' %></p>
+        </div>
+        <% affiches.forEach(function (c) { %><%- include('./partials/lead-fiche', { c: c }) %><% }) %>
+      </section>
+    </div>
+
     <% if (!dbConnected) { %>
-      <div class="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+      <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
         <div class="font-bold">Mode démo</div>
         <div class="mt-1 text-sm">Base de données indisponible.</div>
       </div>
@@ -241,62 +240,65 @@
   </div>
 </main>
 
-<!-- Modal: guide « Comprendre cette page » (formation commercial) -->
+<!-- Guide « Comment ça marche » -->
 <div id="leads-help-modal" class="fixed inset-0 z-50 hidden">
   <div class="absolute inset-0 bg-black/50" id="leads-help-overlay"></div>
-  <div class="absolute right-0 top-0 h-full w-full max-w-2xl bg-white shadow-2xl overflow-y-auto">
+  <div class="absolute right-0 top-0 h-full w-full max-w-2xl overflow-y-auto bg-white shadow-2xl">
     <div class="p-6">
-      <div class="flex items-center justify-between mb-1">
-        <div class="text-lg font-bold text-slate-900">📖 Comment ça marche</div>
-        <button type="button" id="leads-help-close" class="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center"><span class="material-symbols-outlined">close</span></button>
+      <div class="mb-1 flex items-center justify-between">
+        <div class="text-lg font-bold text-slate-900">Comment ça marche</div>
+        <button type="button" id="leads-help-close" class="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <p class="text-sm text-slate-500 mb-5">La page te dit quoi faire et quand. Tu traites de haut en bas, tu ne te poses pas de question.</p>
+      <p class="mb-5 text-sm text-slate-500">À gauche la liste des clients, déjà triée. À droite le client choisi et ce qu’il faut faire.</p>
 
-      <div class="rounded-xl border-2 border-primary/30 bg-red-50/40 p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-primary mb-2">🎯 La méthode en 4 gestes</div>
-        <ol class="text-sm text-slate-800 space-y-2 list-decimal list-inside">
-          <li><strong>Commence en haut</strong> : « Nouvelles demandes », puis « En retard », puis « Rappels du jour » et « Devis à préparer ».</li>
-          <li><strong>Clique sur le gros bouton vert « Appeler »</strong> : le numéro est copié et l'appel se lance. Une fenêtre s'ouvre pour noter le résultat.</li>
-          <li><strong>Note toujours le résultat</strong> (joint, pas de réponse, messagerie, mauvais numéro) <strong>et la suite</strong> (devis, rappel le…, perdu). Sans suite, le client serait oublié : la page t'oblige à la choisir.</li>
-          <li><strong>Gagné</strong> seulement quand le client a payé. <strong>Perdu</strong> toujours avec le motif. Les deux sont dans « Autres ».</li>
+      <div class="mb-4 rounded-xl border-2 border-primary/30 bg-red-50/40 p-4">
+        <div class="mb-2 text-xs font-bold uppercase tracking-widest text-primary">La méthode en 4 gestes</div>
+        <ol class="list-inside list-decimal space-y-2 text-sm text-slate-800">
+          <li><strong>Prends le premier client de la liste</strong> : elle est dans l’ordre où il faut travailler (nouvelles demandes, puis retards, puis rappels du jour, puis devis à préparer).</li>
+          <li><strong>Regarde l’encadré « La prochaine action »</strong> à droite et clique sur son gros bouton : Appeler, Préparer le devis, Écrire au client…</li>
+          <li><strong>Après l’appel, clique « Appel terminé »</strong> : comment ça s’est passé, la suite, et pour quand. Sans suite, le client serait oublié : la fenêtre te la demande toujours.</li>
+          <li><strong>« Enregistrer et continuer »</strong> t’emmène tout seul au client suivant. <strong>Gagné</strong> seulement quand le client a payé, <strong>Perdu</strong> toujours avec le motif (dans « Autres actions »).</li>
         </ol>
       </div>
 
-      <div class="rounded-xl border border-slate-200 p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">🗂 Les groupes</div>
-        <div class="text-sm text-slate-700 space-y-1.5">
-          <div><strong>Nouvelles demandes</strong> — à rappeler dans l'heure (heures d'ouverture : 9 h–12 h, 14 h–18 h, du lundi au vendredi).</div>
-          <div><strong>En retard</strong> — l'heure prévue est passée. À faire juste après les nouvelles demandes.</div>
-          <div><strong>Rappels et relances du jour</strong> — les appels promis, les devis à relancer.</div>
-          <div><strong>Devis à préparer</strong> — identifier la pièce, trouver le prix, envoyer le devis (bouton orange → dossier devis).</div>
+      <div class="mb-4 rounded-xl border border-slate-200 p-4">
+        <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Les groupes de la liste</div>
+        <div class="space-y-1.5 text-sm text-slate-700">
+          <div><strong>Nouvelles demandes</strong> — à rappeler dans l’heure (heures d’ouverture : 9 h–12 h, 14 h–18 h, du lundi au vendredi).</div>
+          <div><strong>En retard</strong> — l’heure prévue est passée. À faire juste après les nouvelles demandes.</div>
+          <div><strong>Rappels du jour</strong> — les appels promis et les devis à relancer aujourd’hui.</div>
+          <div><strong>Devis à préparer</strong> — trouver la pièce et le prix, puis envoyer le devis (bouton « Atelier devis »).</div>
           <div><strong>Planifiés</strong> — prévus un autre jour : rien à faire maintenant.</div>
-          <div><strong>Anciens dossiers à reprendre</strong> — en retard depuis plus de 7 jours ouvrés. On les reprend quand le reste est fait : relire, rappeler ou clôturer.</div>
+          <div><strong>Anciens dossiers</strong> — en retard depuis plus de 7 jours ouvrés. On les reprend quand le reste est fait : relire, rappeler ou clôturer.</div>
         </div>
       </div>
 
-      <div class="rounded-xl border border-slate-200 p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">🏷 Les étiquettes</div>
-        <div class="text-sm text-slate-700 space-y-1.5">
-          <div><span class="rounded-full bg-red-600 text-white px-2 py-0.5 text-xs font-bold">En retard de 2 h</span> l'urgence · <span class="rounded-full bg-blue-100 text-blue-800 px-2 py-0.5 text-xs font-semibold">Nouveau</span> l'étape où en est le client.</div>
-          <div><strong>Étapes</strong> : Nouveau → En cours → Devis à préparer → Devis envoyé → Gagné ou Perdu.</div>
-          <div><strong>Pris par Faniry</strong> : qui s'occupe du client. « Non pris — je m'en occupe » pour le prendre.</div>
-          <div><strong>Google Ads</strong> : la demande vient d'une annonce payée. <strong>Déjà client</strong> / <strong>SAV en cours</strong> : à savoir avant d'appeler.</div>
+      <div class="mb-4 rounded-xl border border-slate-200 p-4">
+        <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Ce que dit une ligne</div>
+        <div class="space-y-1.5 text-sm text-slate-700">
+          <div>Le nom du client, et à droite <span class="font-bold text-red-600">Retard 2 h</span>, <span class="font-bold text-blue-700">Avant 10:15</span> ou l’heure prévue.</div>
+          <div>Dessous : la pièce et le véhicule, puis <strong>qui s’en occupe</strong> (« Non pris » si personne) et d’où vient la demande (Google Ads, landing…).</div>
+          <div>Dans la fiche : « Personne ne s’en occupe — je m’en occupe » pour prendre le client.</div>
         </div>
       </div>
 
-      <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-amber-700 mb-2">⚖️ Appeler un particulier</div>
-        <div class="text-sm text-amber-900">Depuis le 11 août 2026, on n'appelle un particulier que pour <strong>répondre à sa demande</strong> (devis, formulaire, appel manqué). C'est pour ça que le bouton « Appeler » n'apparaît pas sur un simple panier abandonné ou une inscription newsletter : ces contacts sont dans « Tous les leads ».</div>
+      <div class="mb-4 rounded-xl border border-slate-200 p-4">
+        <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Raccourcis clavier</div>
+        <div class="text-sm text-slate-700"><kbd class="rounded border border-slate-300 bg-slate-50 px-1.5 font-mono text-xs">J</kbd> client suivant · <kbd class="rounded border border-slate-300 bg-slate-50 px-1.5 font-mono text-xs">K</kbd> client précédent</div>
+      </div>
+
+      <div class="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <div class="mb-2 text-xs font-bold uppercase tracking-widest text-amber-700">Appeler un particulier</div>
+        <div class="text-sm text-amber-900">Depuis le 11 août 2026, on n’appelle un particulier que pour <strong>répondre à sa demande</strong> (devis, formulaire, appel manqué). C’est pour ça que le bouton « Appeler » n’apparaît pas sur un simple panier abandonné ou une inscription newsletter : on leur écrit.</div>
       </div>
 
       <div class="rounded-xl border border-slate-200 p-4">
-        <div class="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">❓ Et les autres onglets ?</div>
-        <div class="text-sm text-slate-700 space-y-1.5">
-          <div><strong>Tous les leads</strong> : l'historique complet (paniers, newsletter, gagnés, perdus) avec la recherche et les filtres.</div>
-          <div><strong>Devis moteurs &amp; boîtes</strong> : l'atelier pour construire un devis (identification, prix, marge, PDF). Les demandes y arrivent ET apparaissent ici : rien ne peut être oublié.</div>
+        <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Et les autres pages ?</div>
+        <div class="space-y-1.5 text-sm text-slate-700">
+          <div><strong>Tous les leads</strong> : l’historique complet (paniers, newsletter, gagnés, perdus) avec la recherche.</div>
+          <div><strong>Atelier devis</strong> : pour construire un devis moteur, boîte ou pont (pièce, prix, marge, PDF). Les demandes y arrivent ET apparaissent ici : rien ne peut être oublié.</div>
         </div>
       </div>
-
     </div>
   </div>
 </div>
@@ -328,7 +330,10 @@
   var title = document.getElementById('lead-modal-title');
 
   function openModal(t) { if (t) title.textContent = t; modal.classList.remove('hidden'); }
-  function closeModal() { modal.classList.add('hidden'); }
+  /* Si un envoi devait être suivi d'un rechargement (SMS après un appel),
+     fermer la fenêtre sans envoyer recharge quand même : la fiche affichée
+     doit refléter l'appel qui vient d'être enregistré. */
+  function closeModal() { modal.classList.add('hidden'); if (apresEnvoi) refresh(); }
   if (overlay) overlay.addEventListener('click', closeModal);
   if (closeBtn) closeBtn.addEventListener('click', closeModal);
 
@@ -366,7 +371,16 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
 
-  function refresh() { window.location.reload(); }
+  /* Après un envoi : on recharge en restant sur le même client (l'adresse
+     garde ?lead=…), sauf si on a demandé de passer au client suivant. */
+  var apresEnvoi = null;
+  function refresh() {
+    var a = apresEnvoi;
+    apresEnvoi = null;
+    if (a && a.mode === 'suivant') { allerA(idSuivant(a.id, 1) || a.id); return; }
+    if (a) { allerA(a.id); return; }
+    window.location.reload();
+  }
 
   // ─ Copier le numéro (le commercial appelle depuis son logiciel, pas le tel: du PC) ─
   function fallbackCopyText(text) {
@@ -389,435 +403,315 @@
     } else if (fallbackCopyText(num)) { ok(); }
   });
 
-  // ─ Statut manuel rapide ─
-  document.querySelectorAll('.lead-status-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var leadId = btn.dataset.leadId;
-      var status = btn.dataset.status;
-      var alreadyActive = btn.classList.contains('font-semibold');
-      var newStatus = alreadyActive ? null : status;
-      /* « Gagné » / « Perdu » sortent le lead de « À traiter » et coupent les relances :
-         on confirme (un clic à côté suffisait). « Contacté » et les annulations restent directs. */
-      var question = newStatus === 'converted'
-        ? 'Marquer ce lead « Gagné » ? Il sort de « À traiter » et les relances automatiques s’arrêtent.'
-        : (newStatus === 'lost' ? 'Marquer ce lead « Perdu » ? Il sort de « À traiter » et les relances automatiques s’arrêtent.' : '');
-      var confirmer = !question ? Promise.resolve(true)
-        : (window.adminConfirm ? window.adminConfirm(question) : Promise.resolve(window.confirm(question)));
-      Promise.resolve(confirmer).then(function (oui) {
-      if (!oui) return;
-      // Un seul changement à la fois pour ce lead (deux clics rapides pouvaient se croiser).
-      var boutonsLead = document.querySelectorAll('.lead-status-btn[data-lead-id="' + leadId + '"]');
-      if (btn.disabled) return;
-      Array.prototype.forEach.call(boutonsLead, function (b) { b.disabled = true; });
-      var relacherLead = function () { Array.prototype.forEach.call(boutonsLead, function (b) { b.disabled = false; }); };
-      fetch('/admin/api/leads/' + leadId + '/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data && data.ok) refresh();
-          else { relacherLead(); alert('Erreur: ' + (data && data.error ? data.error : 'inconnue')); }
-        })
-        .catch(function () { relacherLead(); alert('Erreur réseau'); });
+
+  /* ══ Onglets de la fiche : Suivi & notes · Pièce & devis · Client & parcours ══
+     Même source que l'ancien « Détail » (GET /admin/activite-panier/:id).
+     Tout est cherché DANS la fiche (data-role), jamais par id global : deux
+     fiches chargées ne peuvent pas se marcher dessus. */
+  var SOURCES_ATELIER = ['landing_moteurs', 'landing_boites', 'landing_ponts'];
+  var ICONES_CANAL = { email: 'mail', sms: 'sms', whatsapp: 'chat', appel: 'call' };
+
+  function titreBloc(t, droite) {
+    return '<div class="mb-2 flex flex-wrap items-baseline justify-between gap-2"><div class="text-[11px] font-bold uppercase tracking-widest text-slate-400">' + t + '</div>'
+      + (droite ? '<div class="text-xs text-slate-500">' + droite + '</div>' : '') + '</div>';
+  }
+
+  function iconeNote(texte) {
+    var t = String(texte || '');
+    if (/^📞/.test(t)) return ['call', 'text-emerald-600'];
+    if (/^🗓/.test(t)) return ['event', 'text-slate-500'];
+    if (/^✅/.test(t)) return ['verified', 'text-green-600'];
+    if (/^✖/.test(t)) return ['block', 'text-slate-500'];
+    if (/^↩/.test(t)) return ['undo', 'text-slate-500'];
+    if (/pris en charge/i.test(t)) return ['pan_tool', 'text-slate-500'];
+    return ['sticky_note_2', 'text-amber-500'];
+  }
+
+  /* Messages + notes sur UNE ligne du temps, la plus récente en haut. Les
+     notes « Email envoyé… » doublonnent le journal des messages : on les saute. */
+  function htmlSuivi(c) {
+    var items = [];
+    (c.communications || []).forEach(function (m) { items.push({ type: 'msg', iso: m.atIso || '', m: m }); });
+    (c.notes || []).forEach(function (n) {
+      if (/^(📧 Email envoyé|📱 SMS envoyé|📲 WhatsApp ouvert)/.test(String(n.text || ''))) return;
+      items.push({ type: 'note', iso: n.addedAtIso || '', n: n });
+    });
+    items.sort(function (a, b) { return a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : 0; });
+
+    var r = c.commResume || {};
+    var compteurs = [];
+    if (r.email) compteurs.push(r.email + ' email' + (r.email > 1 ? 's' : ''));
+    if (r.sms) compteurs.push(r.sms + ' SMS');
+    if (r.whatsapp) compteurs.push(r.whatsapp + ' WhatsApp');
+    var html = '<div class="space-y-4">';
+    html += '<div>' + titreBloc('Ce qui s’est passé (' + items.length + ')', escapeHtml(compteurs.join(' · ')));
+    if (r.echecs) {
+      html += '<div class="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700"><strong>' + r.echecs + ' message' + (r.echecs > 1 ? 's' : '')
+        + ' non délivré' + (r.echecs > 1 ? 's' : '') + '</strong> : le client ne les a jamais reçus.</div>';
+    }
+    if (!items.length) {
+      html += '<div class="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Rien pour l’instant : aucun message, aucune note.</div>';
+    } else {
+      html += '<ol class="relative space-y-0 border-l border-slate-200 ml-2">';
+      items.forEach(function (it) {
+        html += '<li class="relative pb-3 pl-5">';
+        if (it.type === 'msg') {
+          var m = it.m;
+          var entrant = !!m.entrant;
+          html += '<span class="material-symbols-outlined absolute -left-[11px] top-0 rounded-full bg-white text-[20px] ' + (m.echec ? 'text-red-500' : entrant ? 'text-emerald-600' : 'text-slate-400') + '">' + (ICONES_CANAL[m.canal] || 'mail') + '</span>';
+          html += '<div class="flex flex-wrap items-center gap-1.5">';
+          html += '<span class="text-xs font-semibold ' + (entrant ? 'text-emerald-700' : 'text-slate-700') + '">' + (entrant ? 'Reçu du client' : 'Envoyé') + ' · ' + escapeHtml(({ email: 'email', sms: 'SMS', whatsapp: 'WhatsApp', appel: 'appel' })[m.canal] || m.canal || '') + '</span>';
+          if (m.echec) html += '<span class="rounded bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-700">Non délivré</span>';
+          if (m.auto && !entrant) html += '<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">Automatique</span>';
+          if (m.reconstitue) html += '<span class="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700" title="Reconstitué depuis les anciennes traces : le texte exact n’a pas été gardé.">Reconstitué</span>';
+          if (m.meta && m.meta.envoiNonGaranti) html += '<span class="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700" title="Ouvert dans WhatsApp depuis le poste du commercial : rien ne prouve que le message est parti.">Envoi non confirmé</span>';
+          html += '</div>';
+          if (m.objet) {
+            html += '<div class="text-sm font-semibold text-slate-900">' + escapeHtml(m.objet);
+            if (m.meta && m.meta.montant) html += ' <span class="font-normal text-slate-500">· ' + escapeHtml(String(Math.round(m.meta.montant)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')) + ' €</span>';
+            html += '</div>';
+          }
+          if (m.corps) {
+            var corps = String(m.corps);
+            if (corps.length > 280) {
+              html += '<details class="text-sm text-slate-700"><summary class="cursor-pointer list-none whitespace-pre-line">' + escapeHtml(corps.slice(0, 260)) + '… <span class="font-semibold text-primary">Lire la suite</span></summary>'
+                + '<div class="whitespace-pre-line">' + escapeHtml(corps.slice(260)) + '</div></details>';
+            } else {
+              html += '<div class="whitespace-pre-line text-sm text-slate-700">' + escapeHtml(corps) + '</div>';
+            }
+          }
+          if (m.echec && m.motif) html += '<div class="text-xs text-red-600">Motif : ' + escapeHtml(m.motif) + '</div>';
+          var pied = [m.par || (m.auto ? 'Système' : ''), m.at].filter(Boolean).join(' · ');
+          if (m.gabarit) pied += ' · modèle « ' + m.gabarit + ' »';
+          html += '<div class="text-xs text-slate-400">' + escapeHtml(pied) + '</div>';
+        } else {
+          var n = it.n;
+          var ic = iconeNote(n.text);
+          html += '<span class="material-symbols-outlined absolute -left-[11px] top-0 rounded-full bg-white text-[20px] ' + ic[1] + '">' + ic[0] + '</span>';
+          html += '<div class="whitespace-pre-line text-sm text-slate-800">' + escapeHtml(String(n.text || '').replace(/^(📞|🗓|✅|✖|↩)\s*/, '')) + '</div>';
+          html += '<div class="text-xs text-slate-400">' + escapeHtml((n.addedByName || 'Admin') + ' · ' + (n.addedAt || '')) + '</div>';
+        }
+        html += '</li>';
       });
+      html += '</ol>';
+    }
+    html += '</div>';
+    html += '<form data-role="note-form" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3">'
+      + '<label class="mb-1 block text-[11px] font-bold uppercase tracking-widest text-slate-400">Note interne</label>'
+      + '<textarea name="text" rows="2" maxlength="2000" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" placeholder="Ce que le client a dit, la pièce, le prix évoqué… (le client ne la voit pas)"></textarea>'
+      + '<div class="mt-2 flex items-center gap-3"><button type="submit" class="btn btn-primary text-xs">Ajouter la note</button><span data-role="note-res" class="text-xs"></span></div></form>';
+    html += '</div>';
+    return html;
+  }
+
+  function ligneInfo(label, valeur, mono) {
+    if (!valeur) return '';
+    return '<div class="flex gap-2 text-sm"><span class="w-24 shrink-0 text-slate-500">' + label + '</span><span class="min-w-0 break-words ' + (mono ? 'font-mono ' : 'font-medium ') + 'text-slate-900">' + escapeHtml(valeur) + '</span></div>';
+  }
+
+  function htmlPiece(c, leadId) {
+    var html = '<div class="space-y-4">';
+    var rq = c.requested || {};
+    if (c.hasRequested) {
+      html += '<div class="rounded-xl border border-slate-200 p-4">' + titreBloc('La demande du client')
+        + ligneInfo('Référence', rq.ref) + ligneInfo('Véhicule', rq.vehicle) + ligneInfo('Plaque', rq.plate, true) + ligneInfo('VIN', rq.vin, true);
+      if (rq.message) html += '<div class="mt-2 whitespace-pre-line text-sm italic text-slate-700">« ' + escapeHtml(rq.message) + ' »</div>';
+      html += '</div>';
+    }
+    if (SOURCES_ATELIER.indexOf(c.captureSource) !== -1) {
+      html += '<a href="/admin/devis-moteurs/' + escapeHtml(leadId) + '" class="flex items-center gap-3 rounded-xl border border-orange-200 bg-orange-50 p-4 hover:bg-orange-100">'
+        + '<span class="material-symbols-outlined text-orange-600">request_quote</span><span class="flex-1 text-sm"><strong class="text-slate-900">Atelier devis</strong><span class="block text-slate-600">Identifier la pièce, calculer le prix et la marge, envoyer le devis PDF.</span></span>'
+        + '<span class="material-symbols-outlined text-orange-600">arrow_forward</span></a>';
+    }
+    if (c.items && c.items.length) {
+      html += '<div class="rounded-xl border border-slate-200 p-4">' + titreBloc('Panier (' + c.items.length + ')', escapeHtml(c.totalAmount || ''));
+      c.items.forEach(function (it) {
+        html += '<div class="flex items-start gap-3 border-b border-slate-100 py-2 last:border-0">';
+        html += it.image ? '<img src="' + escapeHtml(it.image) + '" alt="" class="h-11 w-11 shrink-0 rounded-lg object-cover" />' : '<div class="h-11 w-11 shrink-0 rounded-lg bg-slate-100"></div>';
+        html += '<div class="min-w-0 flex-1"><div class="text-sm font-semibold text-slate-900">' + escapeHtml(it.name) + '</div>';
+        if (it.sku) html += '<div class="text-xs text-slate-400">Réf. ' + escapeHtml(it.sku) + '</div>';
+        if (it.optionsSummary) html += '<div class="text-xs text-slate-500">' + escapeHtml(it.optionsSummary) + '</div>';
+        html += '<div class="text-xs text-slate-500">Qté ' + it.quantity + ' · ' + escapeHtml(it.price) + '</div></div></div>';
+      });
+      html += '</div>';
+    }
+    if (c.contextMessage) {
+      html += '<div class="rounded-xl border border-slate-200 p-4">' + titreBloc('Contexte') + '<div class="whitespace-pre-line text-sm text-slate-700">' + escapeHtml(c.contextMessage) + '</div></div>';
+    }
+
+    /* Demande fournisseur. RIEN N'EST PRÉSÉLECTIONNÉ : une version précédente
+       devinait le destinataire et s'est trompée deux fois en production. Le
+       commercial choisit, le code rédige. */
+    if (c.fournisseur && c.fournisseur.demandes) {
+      var F = c.fournisseur;
+      html += '<div class="rounded-xl border border-slate-200 p-4" data-bloc="fournisseur">' + titreBloc('Demander un prix au fournisseur');
+      html += '<div class="mb-2 flex flex-wrap items-center gap-2"><select data-role="fourn-cible" class="rounded-lg border border-slate-200 px-2 py-1.5 text-sm"><option value="" selected>— choisir le fournisseur —</option>';
+      ['moteurs', 'boites', 'injection', 'ponts'].forEach(function (k) {
+        var d = F.demandes[k];
+        if (d) html += '<option value="' + k + '">' + escapeHtml(d.libelle + ' — ' + d.contact) + '</option>';
+      });
+      html += '</select><span data-role="fourn-mail" class="text-xs text-slate-500"></span></div>';
+      html += '<div class="mb-2"><input data-role="fourn-piece" type="text" maxlength="200" placeholder="Pièce demandée (ex. culasse Mazda CX-5 2.2D)" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />';
+      if (F.suggestions && F.suggestions.length) {
+        html += '<div class="mt-1.5 flex flex-wrap items-start gap-2"><span class="pt-0.5 text-xs text-slate-400">Demandé par le client :</span>';
+        F.suggestions.forEach(function (s, i) {
+          html += '<button type="button" data-role="fourn-sugg" data-i="' + i + '" class="rounded-lg bg-slate-100 px-2 py-1 text-left text-xs text-slate-700 hover:bg-slate-200">' + escapeHtml(s.length > 70 ? s.slice(0, 69) + '…' : s) + '</button>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+      html += '<div data-role="fourn-vin-bloc" class="mb-2 hidden"><div class="flex flex-wrap items-center gap-2">'
+        + '<input data-role="fourn-vin" type="text" maxlength="20" placeholder="VIN (17 caractères)" class="rounded-lg border border-slate-200 px-2 py-1.5 font-mono text-sm uppercase" />'
+        + '<a href="' + escapeHtml(F.lienVin) + '" target="_blank" rel="noopener" class="text-xs text-primary hover:underline">convertir la plaque en VIN ↗</a></div>'
+        + '<div class="mt-1 text-xs text-slate-400">Ce fournisseur demande le VIN. Sans lui, la demande part incomplète.</div></div>';
+      html += '<div data-role="fourn-refs-bloc" class="mb-2 hidden"><input data-role="fourn-refs" type="text" maxlength="120" placeholder="Références pompe et/ou injecteurs" class="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm" />'
+        + '<div class="mt-1 text-xs text-slate-400">Ce fournisseur demande les références. Ne reprends pas celle du client sans l’avoir vérifiée.</div></div>';
+      html += '<textarea data-role="fourn-corps" rows="9" class="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm"></textarea>';
+      html += '<div class="mt-2 flex flex-wrap items-center gap-2"><button type="button" data-role="fourn-copier" class="btn btn-primary text-xs">Copier</button>'
+        + '<a data-role="fourn-mailto" class="btn btn-ghost text-xs">Ouvrir dans mon mail</a>'
+        + '<button type="button" data-role="fourn-fait" class="btn btn-ghost text-xs">Demande envoyée</button>'
+        + '<span data-role="fourn-retour" class="text-xs text-emerald-700"></span></div>';
+      html += '</div>';
+    }
+    if (html === '<div class="space-y-4">') html += '<div class="text-sm text-slate-500">Aucune information sur la pièce.</div>';
+    html += '</div>';
+    return html;
+  }
+
+  function htmlClient(c) {
+    var html = '<div class="space-y-4">';
+    var nom = ((c.firstName || '') + ' ' + (c.lastName || '')).trim();
+    html += '<div class="rounded-xl border border-slate-200 p-4">' + titreBloc('Coordonnées') + ligneInfo('Nom', nom) + ligneInfo('Email', c.email);
+    if (c.phone) html += '<div class="flex gap-2 text-sm"><span class="w-24 shrink-0 text-slate-500">Téléphone</span><button type="button" data-copy-phone="' + escapeHtml(c.phone) + '" class="inline-flex items-center gap-1 font-medium text-slate-900 hover:text-primary">' + escapeHtml(c.phone) + '<span class="material-symbols-outlined text-[14px] text-slate-400">content_copy</span></button></div>';
+    html += ligneInfo('Source', c.captureSourceLabel);
+    if (c.attribution && c.attribution.source) html += ligneInfo('Arrivé par', c.attribution.source + (c.attribution.medium ? ' / ' + c.attribution.medium : '') + (c.attribution.campaign ? ' · ' + c.attribution.campaign : ''));
+    html += ligneInfo('Reçu le', c.createdAt) + ligneInfo('Vu le', c.lastActivityAt);
+    html += '</div>';
+
+    if (c.clientOrders && c.clientOrders.length) {
+      html += '<div class="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4">' + titreBloc('Déjà client — ' + c.clientOrders.length + ' commande' + (c.clientOrders.length > 1 ? 's' : ''));
+      c.clientOrders.forEach(function (o) {
+        html += '<div class="border-b border-indigo-100 py-2 last:border-0"><div class="flex items-center justify-between gap-2 text-sm">'
+          + '<a href="' + escapeHtml(o.url) + '" class="font-semibold text-indigo-800 hover:underline">n°' + escapeHtml(o.number) + '</a><span class="font-bold text-slate-900">' + escapeHtml(o.totalEuro) + '</span></div>'
+          + '<div class="mt-0.5 text-xs text-slate-600">' + escapeHtml(o.date) + ' · <span class="font-medium">' + escapeHtml(o.status) + '</span></div>'
+          + (o.products ? '<div class="mt-0.5 text-xs text-slate-500">' + escapeHtml(o.products) + '</div>' : '') + '</div>';
+      });
+      html += '</div>';
+    } else if (c.clientOrders) {
+      html += '<div class="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">Jamais commandé chez nous (aucune commande avec cet email ou ce téléphone).</div>';
+    }
+    if (c.savTickets && c.savTickets.length) {
+      html += '<div class="rounded-xl border border-amber-200 bg-amber-50/40 p-4">' + titreBloc('Tickets SAV (' + c.savTickets.length + ')');
+      c.savTickets.forEach(function (t) {
+        html += '<div class="flex items-center justify-between gap-2 border-b border-amber-100 py-1.5 text-sm last:border-0">'
+          + '<a href="' + escapeHtml(t.url) + '" class="font-semibold text-amber-800 hover:underline">' + escapeHtml(t.numero) + '</a>'
+          + '<span class="text-xs ' + (t.open ? 'font-bold text-amber-700' : 'text-slate-500') + '">' + escapeHtml(t.statut) + (t.open ? ' · en cours' : '') + '</span>'
+          + '<span class="text-xs text-slate-400">' + escapeHtml(t.date) + '</span></div>';
+      });
+      html += '</div>';
+    }
+    if (c.sessionId) {
+      html += '<a href="/admin/visiteurs/' + escapeHtml(c.sessionId) + '" class="flex items-center gap-3 rounded-xl border border-slate-200 p-4 hover:bg-slate-50"><span class="material-symbols-outlined text-slate-500">route</span>'
+        + '<span class="flex-1 text-sm"><strong class="text-slate-900">Parcours sur le site</strong><span class="block text-slate-600">Les pages vues par le client avant sa demande.</span></span><span class="material-symbols-outlined text-slate-400">arrow_forward</span></a>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  /* Ajout d'une note : sans recharger la page, l'historique se met à jour. */
+  function brancherNote(zone, leadId, fiche) {
+    var form = zone.querySelector('[data-role="note-form"]');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var ta = form.querySelector('textarea');
+      var res = form.querySelector('[data-role="note-res"]');
+      if (!ta.value.trim()) { res.innerHTML = '<span class="text-amber-700">Écris d’abord la note.</span>'; return; }
+      var verrou = verrouEnvoi(form);
+      if (!verrou) return;
+      postJson('/admin/api/leads/' + leadId + '/note', { text: ta.value }).then(function (d) {
+        if (d && d.ok) { delete detailCache[leadId]; toast('Note ajoutée'); afficherOnglet(fiche, 'suivi'); }
+        else { verrou.echec(); res.innerHTML = '<span class="text-red-700">' + escapeHtml((d && d.error) || 'Erreur') + '</span>'; }
+      }).catch(function () { verrou.echec(); res.innerHTML = '<span class="text-red-700">Erreur réseau</span>'; });
     });
-  });
+  }
 
-  // ─ Detail ─
-  document.querySelectorAll('.lead-detail-btn').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      var leadId = btn.dataset.leadId;
-      openModal('Détail du lead');
-      content.innerHTML = '<div class="text-sm text-slate-500">Chargement...</div>';
-      fetch('/admin/activite-panier/' + leadId, { headers: { 'Accept': 'application/json' } })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (!data.ok || !data.cart) { content.innerHTML = '<div class="text-sm text-red-500">Erreur de chargement.</div>'; return; }
-          var c = data.cart;
-          var html = '<div class="space-y-4">';
-          html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Client</div>';
-          html += '<div class="font-semibold text-slate-900">' + escapeHtml(((c.firstName || '') + ' ' + (c.lastName || '')).trim() || c.email || '—') + '</div>';
-          if (c.email) html += '<div class="text-sm"><a href="mailto:' + escapeHtml(c.email) + '" class="text-primary hover:underline">' + escapeHtml(c.email) + '</a></div>';
-          if (c.phone) html += '<div class="text-sm"><button type="button" data-copy-phone="' + escapeHtml(c.phone) + '" class="inline-flex items-center gap-1 text-primary hover:underline cursor-pointer" title="Copier le numéro"><span class="material-symbols-outlined text-[13px]">content_copy</span>' + escapeHtml(c.phone) + '</button></div>';
-          html += '<div class="text-xs text-slate-500 mt-1">Source : ' + escapeHtml(c.captureSourceLabel || '—') + '</div>';
-          if (c.attribution && c.attribution.source) html += '<div class="text-xs text-slate-500">Attribution : ' + escapeHtml(c.attribution.source) + (c.attribution.medium ? ' / ' + escapeHtml(c.attribution.medium) : '') + '</div>';
-          html += '</div>';
+  /* Demande fournisseur : un seul texte, celui du serveur. Le front change de
+     destinataire et remplit les blancs (pièce, VIN, références). */
+  function brancherFournisseur(zone, c, leadId) {
+    var bloc = zone.querySelector('[data-bloc="fournisseur"]');
+    if (!bloc || !c.fournisseur) return;
+    var F = c.fournisseur;
+    function q(role) { return bloc.querySelector('[data-role="' + role + '"]'); }
+    var cible = q('fourn-cible'), corps = q('fourn-corps'), piece = q('fourn-piece'), vin = q('fourn-vin'),
+      vinBloc = q('fourn-vin-bloc'), refs = q('fourn-refs'), refsBloc = q('fourn-refs-bloc'),
+      mailto = q('fourn-mailto'), mail = q('fourn-mail'), retour = q('fourn-retour');
 
-          // ─ Demande explicite (devis/contact) ─
-          if (c.hasRequested) {
-            html += '<div class="rounded-xl border border-teal-200 bg-teal-50/40 p-4">';
-            html += '<div class="text-xs font-semibold uppercase tracking-widest text-teal-700 mb-2">📨 Demande explicite</div>';
-            if (c.requested.ref) html += '<div class="text-sm"><span class="text-slate-500">Référence : </span><span class="font-medium text-slate-900">' + escapeHtml(c.requested.ref) + '</span></div>';
-            if (c.requested.vehicle) html += '<div class="text-sm"><span class="text-slate-500">Véhicule : </span><span class="font-medium text-slate-900">' + escapeHtml(c.requested.vehicle) + '</span></div>';
-            if (c.requested.vin) html += '<div class="text-sm"><span class="text-slate-500">VIN : </span><span class="font-mono text-slate-900">' + escapeHtml(c.requested.vin) + '</span></div>';
-            if (c.requested.plate) html += '<div class="text-sm"><span class="text-slate-500">Immat : </span><span class="font-mono text-slate-900">' + escapeHtml(c.requested.plate) + '</span></div>';
-            if (c.requested.message) html += '<div class="mt-2 text-sm text-slate-700 italic">"' + escapeHtml(c.requested.message) + '"</div>';
-            html += '</div>';
-          }
-
-          // ─ 360° client : commandes passées ─
-          if (c.clientOrders && c.clientOrders.length) {
-            html += '<div class="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4">';
-            html += '<div class="text-xs font-semibold uppercase tracking-widest text-indigo-700 mb-3">🛍 Déjà client — ' + c.clientOrders.length + ' commande' + (c.clientOrders.length > 1 ? 's' : '') + '</div>';
-            c.clientOrders.forEach(function (o) {
-              html += '<div class="py-2 border-b border-indigo-100 last:border-0">';
-              html += '<div class="flex items-center justify-between gap-2 text-sm">';
-              html += '<a href="' + escapeHtml(o.url) + '" class="font-semibold text-indigo-800 hover:underline">n°' + escapeHtml(o.number) + '</a>';
-              html += '<span class="font-bold text-slate-900">' + escapeHtml(o.totalEuro) + '</span></div>';
-              html += '<div class="text-xs text-slate-600 mt-0.5">' + escapeHtml(o.date) + ' · <span class="font-medium">' + escapeHtml(o.status) + '</span></div>';
-              if (o.products) html += '<div class="text-xs text-slate-500 mt-0.5">' + escapeHtml(o.products) + '</div>';
-              html += '</div>';
-            });
-            html += '</div>';
-          } else if (c.clientOrders) {
-            html += '<div class="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">🆕 Jamais commandé chez nous (aucune commande trouvée avec cet email / ce téléphone).</div>';
-          }
-
-          // ─ 360° client : tickets SAV ─
-          if (c.savTickets && c.savTickets.length) {
-            html += '<div class="rounded-xl border border-amber-200 bg-amber-50/40 p-4">';
-            html += '<div class="text-xs font-semibold uppercase tracking-widest text-amber-700 mb-3">🛠 Tickets SAV (' + c.savTickets.length + ')</div>';
-            c.savTickets.forEach(function (t) {
-              html += '<div class="flex items-center justify-between gap-2 py-1.5 border-b border-amber-100 last:border-0 text-sm">';
-              html += '<a href="' + escapeHtml(t.url) + '" class="font-semibold text-amber-800 hover:underline">' + escapeHtml(t.numero) + '</a>';
-              html += '<span class="text-xs ' + (t.open ? 'font-bold text-amber-700' : 'text-slate-500') + '">' + escapeHtml(t.statut) + (t.open ? ' · en cours' : '') + '</span>';
-              html += '<span class="text-xs text-slate-400">' + escapeHtml(t.date) + '</span></div>';
-            });
-            html += '</div>';
-          }
-
-          if (c.contextMessage) {
-            html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Notes contextuelles</div>';
-            html += '<div class="text-sm text-slate-700 whitespace-pre-line">' + escapeHtml(c.contextMessage) + '</div></div>';
-          }
-
-          if (c.items && c.items.length) {
-            html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Articles (' + c.items.length + ')</div>';
-            c.items.forEach(function (it) {
-              html += '<div class="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">';
-              if (it.image) html += '<img src="' + escapeHtml(it.image) + '" alt="" class="w-12 h-12 rounded-lg object-cover flex-shrink-0" />';
-              else html += '<div class="w-12 h-12 rounded-lg bg-slate-100 flex-shrink-0"></div>';
-              html += '<div class="flex-1 min-w-0"><div class="font-semibold text-slate-900 text-sm">' + escapeHtml(it.name) + '</div>';
-              if (it.sku) html += '<div class="text-xs text-slate-400">Réf : ' + escapeHtml(it.sku) + '</div>';
-              if (it.optionsSummary) html += '<div class="text-xs text-slate-500">' + escapeHtml(it.optionsSummary) + '</div>';
-              html += '<div class="text-xs text-slate-500">Qté ' + it.quantity + ' · ' + escapeHtml(it.price) + '</div></div></div>';
-            });
-            html += '<div class="pt-3 flex justify-between items-center"><div class="font-semibold text-slate-900">Total</div><div class="font-bold text-slate-900">' + escapeHtml(c.totalAmount) + '</div></div></div>';
-          }
-
-          /* ── Demande fournisseur ────────────────────────────────────────
-             Le commercial doit interroger Asysum avant de chiffrer.
-
-             RIEN N'EST PRÉSÉLECTIONNÉ. Une version précédente devinait le
-             destinataire et le nom de la pièce : elle s'est trompée deux fois
-             en production. Le commercial choisit, le code rédige. Les libellés
-             connus (formulaire de devis, articles du panier) sont offerts en
-             raccourcis de saisie — proposer un texte qu'on lit avant de le
-             valider n'engage rien ; présélectionner un destinataire qu'on ne
-             relit pas envoie un e-mail au mauvais fournisseur. */
-          if (c.fournisseur && c.fournisseur.demandes) {
-            var F = c.fournisseur;
-            html += '<div class="rounded-xl border border-slate-200 p-4" id="lead-fournisseur">';
-            html += '<div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Demande fournisseur</div>';
-
-            html += '<div class="flex items-center gap-2 flex-wrap mb-2">';
-            html += '<select id="fourn-cible" class="rounded-lg border border-slate-200 px-2 py-1.5 text-sm">';
-            html += '<option value="" selected>— choisir le destinataire —</option>';
-            ['moteurs', 'boites', 'injection', 'ponts'].forEach(function (k) {
-              var d = F.demandes[k];
-              if (!d) return;
-              html += '<option value="' + k + '">'
-                + escapeHtml(d.libelle + ' — ' + d.contact) + '</option>';
-            });
-            html += '</select>';
-            html += '<span id="fourn-mail" class="text-xs text-slate-500"></span>';
-            html += '</div>';
-
-            /* Pièce saisie à la main. Les raccourcis en dessous remplissent le
-               champ d'un clic, mais restent modifiables : le libellé catalogue
-               n'est pas toujours ce qu'il faut écrire au fournisseur. */
-            html += '<div class="mb-2">';
-            html += '<input id="fourn-piece" type="text" maxlength="200" placeholder="Pièce demandée (ex. culasse Mazda CX-5 2.2D)" '
-              + 'class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />';
-            if (F.suggestions && F.suggestions.length) {
-              html += '<div class="flex items-start gap-2 flex-wrap mt-1.5">';
-              html += '<span class="text-xs text-slate-400 pt-0.5">Demandé par le client :</span>';
-              F.suggestions.forEach(function (s, i) {
-                html += '<button type="button" class="fourn-sugg rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs px-2 py-1 text-left" '
-                  + 'data-i="' + i + '">' + escapeHtml(s.length > 70 ? s.slice(0, 69) + '…' : s) + '</button>';
-              });
-              html += '</div>';
-            }
-            html += '</div>';
-
-            /* Le VIN n'est réclamé que par Jose Angel. On ne l'a quasiment
-               jamais : le commercial le convertit depuis la plaque. */
-            html += '<div id="fourn-vin-bloc" class="mb-2 hidden">';
-            html += '<div class="flex items-center gap-2 flex-wrap">';
-            html += '<input id="fourn-vin" type="text" maxlength="20" placeholder="VIN (17 caractères)" '
-              + 'class="rounded-lg border border-slate-200 px-2 py-1.5 text-sm font-mono uppercase" />';
-            html += '<a href="' + escapeHtml(F.lienVin) + '" target="_blank" rel="noopener" '
-              + 'class="text-xs text-primary hover:underline">convertir la plaque en VIN ↗</a>';
-            html += '</div>';
-            html += '<div class="text-xs text-slate-400 mt-1">Ce fournisseur demande le VIN. Sans lui, la demande part incomplète.</div>';
-            html += '</div>';
-
-            /* Références pompe / injecteurs : réclamées par Sergi seulement.
-               Saisie manuelle, jamais reprise du dossier — la référence citée
-               par le client est précisément celle dont il n'est pas sûr. */
-            html += '<div id="fourn-refs-bloc" class="mb-2 hidden">';
-            html += '<input id="fourn-refs" type="text" maxlength="120" placeholder="Références pompe et/ou injecteurs" '
-              + 'class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono" />';
-            html += '<div class="text-xs text-slate-400 mt-1">Ce fournisseur demande les références. Ne reprends pas celle du client sans l\'avoir vérifiée.</div>';
-            html += '</div>';
-
-            html += '<textarea id="fourn-corps" rows="10" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono"></textarea>';
-            html += '<div class="flex items-center gap-2 flex-wrap mt-2">';
-            html += '<button type="button" id="fourn-copier" class="btn btn-primary text-xs">Copier</button>';
-            html += '<a id="fourn-mailto" href="#" class="btn btn-ghost text-xs">Ouvrir dans mon mail</a>';
-            html += '<button type="button" id="fourn-fait" class="btn btn-ghost text-xs">Demande envoyée</button>';
-            html += '<span id="fourn-retour" class="text-xs text-emerald-700"></span>';
-            html += '</div>';
-            html += '</div>';
-          }
-
-          /* ── Messages échangés ──────────────────────────────────────────
-             Tous canaux, envois automatiques compris. Séparé des notes : une
-             note est ce qu'un commercial a ÉCRIT POUR LUI, un message est ce
-             que le CLIENT a reçu. Les mélanger empêchait de répondre à
-             « qu'est-ce qu'on lui a envoyé ». */
-          if (c.communications && c.communications.length) {
-            var r = c.commResume || {};
-            html += '<div class="rounded-xl border border-slate-200 p-4">';
-            html += '<div class="flex items-baseline justify-between mb-3 gap-2 flex-wrap">';
-            html += '<div class="text-xs font-semibold uppercase tracking-widest text-slate-400">Messages échangés (' + c.communications.length + ')</div>';
-            var compteurs = [];
-            if (r.email) compteurs.push(r.email + ' email' + (r.email > 1 ? 's' : ''));
-            if (r.sms) compteurs.push(r.sms + ' SMS');
-            if (r.whatsapp) compteurs.push(r.whatsapp + ' WhatsApp');
-            if (r.manuel) compteurs.push(r.manuel + ' manuel' + (r.manuel > 1 ? 's' : ''));
-            if (r.auto) compteurs.push(r.auto + ' auto');
-            html += '<div class="text-xs text-slate-500">' + escapeHtml(compteurs.join(' · ')) + '</div>';
-            html += '</div>';
-            /* Les échecs remontent en tête : un message non délivré explique un
-               silence client qu'on prendrait sinon pour un désintérêt. */
-            if (r.echecs) {
-              html += '<div class="rounded-lg bg-red-50 text-red-700 text-xs px-3 py-2 mb-3">'
-                + '<strong>' + r.echecs + ' message' + (r.echecs > 1 ? 's' : '') + ' non délivré' + (r.echecs > 1 ? 's' : '')
-                + '</strong> — le client ne les a jamais reçus.</div>';
-            }
-
-            var ICONES = { email: 'mail', sms: 'sms', whatsapp: 'chat', appel: 'call' };
-            c.communications.forEach(function (m) {
-              var entrant = !!m.entrant;
-              html += '<div class="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">';
-              html += '<span class="material-symbols-outlined text-base flex-shrink-0 '
-                + (m.echec ? 'text-red-500' : entrant ? 'text-emerald-600' : 'text-slate-400') + '">'
-                + (ICONES[m.canal] || 'mail') + '</span>';
-              html += '<div class="flex-1 min-w-0">';
-
-              html += '<div class="flex items-center gap-1.5 flex-wrap">';
-              if (entrant) html += '<span class="text-xs font-semibold text-emerald-700">Reçu du client</span>';
-              if (m.echec) html += '<span class="rounded bg-red-50 text-red-700 text-xs px-1.5 py-0.5 font-semibold">Non délivré</span>';
-              if (m.auto && !entrant) html += '<span class="rounded bg-slate-100 text-slate-500 text-xs px-1.5 py-0.5">Auto</span>';
-              if (m.reconstitue) {
-                html += '<span class="rounded bg-amber-50 text-amber-700 text-xs px-1.5 py-0.5" '
-                  + 'title="Reconstitué depuis les anciennes traces : le contenu exact n\'a pas été conservé à l\'époque.">Reconstitué</span>';
-              }
-              if (m.meta && m.meta.envoiNonGaranti) {
-                html += '<span class="rounded bg-amber-50 text-amber-700 text-xs px-1.5 py-0.5" '
-                  + 'title="Ouvert dans WhatsApp depuis le poste du commercial : rien ne prouve que le message a bien été envoyé.">Envoi non confirmé</span>';
-              }
-              html += '</div>';
-
-              if (m.objet) {
-                html += '<div class="text-sm font-semibold text-slate-900">' + escapeHtml(m.objet);
-                /* Le montant d'un devis fait partie de ce qu'on a envoyé : sans
-                   lui, deux révisions successives sont indiscernables. */
-                if (m.meta && m.meta.montant) {
-                  html += ' <span class="text-slate-500 font-normal">· '
-                    + escapeHtml(String(Math.round(m.meta.montant)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')) + ' €</span>';
-                }
-                html += '</div>';
-              }
-              if (m.corps) html += '<div class="text-sm text-slate-700 whitespace-pre-line">' + escapeHtml(m.corps) + '</div>';
-              if (m.echec && m.motif) html += '<div class="text-xs text-red-600">Motif : ' + escapeHtml(m.motif) + '</div>';
-
-              var pied = [m.par || (m.auto ? 'Système' : ''), m.at].filter(Boolean).join(' · ');
-              if (m.gabarit) pied += ' · modèle « ' + m.gabarit + ' »';
-              html += '<div class="text-xs text-slate-400">' + escapeHtml(pied) + '</div>';
-              html += '</div></div>';
-            });
-            html += '</div>';
-          } else {
-            html += '<div class="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">'
-              + 'Aucun message envoyé à ce contact.</div>';
-          }
-
-          if (c.notes && c.notes.length) {
-            html += '<div class="rounded-xl border border-slate-200 p-4"><div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-3">Notes internes (' + c.notes.length + ')</div>';
-            c.notes.slice().reverse().forEach(function (n) {
-              html += '<div class="text-sm text-slate-700 py-1.5 border-b border-slate-100 last:border-0">' + escapeHtml(n.text);
-              html += '<div class="text-xs text-slate-400">' + escapeHtml(n.addedByName || 'Admin') + ' · ' + escapeHtml(n.addedAt) + '</div></div>';
-            });
-            html += '</div>';
-          }
-
-          html += '<form id="lead-note-form" class="rounded-xl border border-slate-200 p-4">';
-          html += '<div class="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">Ajouter une note</div>';
-          html += '<textarea name="text" rows="3" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" placeholder="Note interne…"></textarea>';
-          html += '<button type="submit" class="btn btn-primary text-xs mt-2">Enregistrer</button></form>';
-
-          html += '</div>';
-          content.innerHTML = html;
-
-          /* Demande fournisseur : un seul texte, celui du serveur. Le front ne
-             fait qu'échanger de destinataire et remplir les blancs (pièce,
-             VIN) — réécrire la formulation ici créerait une seconde version à
-             maintenir, qui divergerait à la première retouche. */
-          (function () {
-            var bloc = document.getElementById('lead-fournisseur');
-            if (!bloc || !c.fournisseur) return;
-            var F = c.fournisseur;
-            var cible = document.getElementById('fourn-cible');
-            var corps = document.getElementById('fourn-corps');
-            var piece = document.getElementById('fourn-piece');
-            var vin = document.getElementById('fourn-vin');
-            var vinBloc = document.getElementById('fourn-vin-bloc');
-            var refs = document.getElementById('fourn-refs');
-            var refsBloc = document.getElementById('fourn-refs-bloc');
-            var mailto = document.getElementById('fourn-mailto');
-            var mail = document.getElementById('fourn-mail');
-            var retour = document.getElementById('fourn-retour');
-
-            function courant() { return F.demandes[cible.value]; }
-
-            /* Les blancs du message sont remplis ici, à l'identique de ce que
-               le serveur aurait écrit s'il avait connu les valeurs. */
-            function remplir(texte, d) {
-              var p = (piece.value || '').trim();
-              var v = (vin.value || '').trim().toUpperCase();
-              var r = (refs.value || '').trim();
-              if (p) texte = texte.split('Demande client : ' + F.aRemplir).join('Demande client : ' + p);
-              if (v) texte = texte.split('VIN : ' + F.aRemplir).join('VIN : ' + v);
-              if (r && d && d.refsLibelle) {
-                texte = texte.split(d.refsLibelle + ' : ' + F.aRemplir).join(d.refsLibelle + ' : ' + r);
-              }
-              return texte;
-            }
-
-            /* L'objet reprend la pièce saisie, sinon il annoncerait un blanc. */
-            function objetCourant(d) {
-              var p = (piece.value || '').trim();
-              if (!p) return d.objet;
-              var court = p.length > 60 ? p.slice(0, 59).trim() + '…' : p;
-              return d.objet.split(F.aRemplir).join(court);
-            }
-
-            function majMailto() {
-              var d = courant();
-              if (!d) { mailto.removeAttribute('href'); return; }
-              mailto.href = 'mailto:' + d.email
-                + '?subject=' + encodeURIComponent(objetCourant(d))
-                + '&body=' + encodeURIComponent(corps.value);
-            }
-
-            function rendre() {
-              var d = courant();
-              if (!d) {
-                /* Aucun destinataire choisi : pas de message tout prêt qu'on
-                   pourrait copier sans savoir à qui l'envoyer. */
-                corps.value = '';
-                corps.placeholder = 'Choisis d\'abord un destinataire ci-dessus.';
-                mail.textContent = '';
-                vinBloc.className = 'mb-2 hidden';
-                refsBloc.className = 'mb-2 hidden';
-                mailto.removeAttribute('href');
-                return;
-              }
-              corps.value = remplir(d.corps, d);
-              mail.textContent = d.email;
-              vinBloc.className = d.vinRequis ? 'mb-2' : 'mb-2 hidden';
-              refsBloc.className = d.refsRequises ? 'mb-2' : 'mb-2 hidden';
-              /* On reconstruit le mailto à partir du texte AFFICHÉ : sinon les
-                 retouches du commercial seraient perdues à l'ouverture du
-                 client de messagerie. */
-              majMailto();
-            }
-
-            cible.addEventListener('change', rendre);
-            piece.addEventListener('input', rendre);
-            vin.addEventListener('input', rendre);
-            refs.addEventListener('input', rendre);
-            /* Une retouche directe du message ne doit pas être écrasée : on ne
-               met à jour que le lien, pas le corps. */
-            corps.addEventListener('input', majMailto);
-
-            Array.prototype.forEach.call(bloc.querySelectorAll('.fourn-sugg'), function (b) {
-              b.addEventListener('click', function () {
-                piece.value = F.suggestions[Number(b.dataset.i)] || '';
-                rendre();
-                piece.focus();
-              });
-            });
-
-            document.getElementById('fourn-copier').addEventListener('click', function () {
-              if (!corps.value.trim()) {
-                retour.textContent = 'Choisis un destinataire';
-                setTimeout(function () { retour.textContent = ''; }, 2500);
-                return;
-              }
-              corps.select();
-              var ok = false;
-              try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
-              if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(corps.value).then(function () {
-                  retour.textContent = 'Copié';
-                }, function () { retour.textContent = ok ? 'Copié' : 'Copie impossible — Ctrl+C'; });
-              } else {
-                retour.textContent = ok ? 'Copié' : 'Copie impossible — Ctrl+C';
-              }
-              setTimeout(function () { retour.textContent = ''; }, 2500);
-            });
-
-            /* Trace la démarche sur la fiche : sans elle, personne ne sait si
-               le fournisseur a été relancé ou si le dossier dort. */
-            document.getElementById('fourn-fait').addEventListener('click', function () {
-              var d = courant();
-              if (!d) return;
-              fetch('/admin/api/leads/' + leadId + '/note', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: 'Demande de tarif envoyée à ' + d.contact + ' (' + d.email + ')' }),
-              }).then(function (r) { return r.json(); }).then(function (j) {
-                retour.textContent = j && j.ok ? 'Noté sur la fiche' : 'Échec de l\'enregistrement';
-                setTimeout(function () { retour.textContent = ''; }, 2500);
-              }).catch(function () { retour.textContent = 'Échec de l\'enregistrement'; });
-            });
-
-            rendre();
-          })();
-
-          var noteForm = document.getElementById('lead-note-form');
-          if (noteForm) {
-            noteForm.addEventListener('submit', function (e) {
-              e.preventDefault();
-              var text = noteForm.querySelector('textarea[name="text"]').value;
-              fetch('/admin/api/leads/' + leadId + '/note', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: text }),
-              })
-                .then(function (r) { return r.json(); })
-                .then(function (d) { if (d && d.ok) refresh(); else alert('Erreur: ' + (d && d.error ? d.error : '?')); });
-            });
-          }
-        })
-        .catch(function () { content.innerHTML = '<div class="text-sm text-red-500">Erreur de chargement.</div>'; });
+    function courantF() { return F.demandes[cible.value]; }
+    function remplir(texte, d) {
+      var p = (piece.value || '').trim();
+      var v = (vin.value || '').trim().toUpperCase();
+      var r = (refs.value || '').trim();
+      if (p) texte = texte.split('Demande client : ' + F.aRemplir).join('Demande client : ' + p);
+      if (v) texte = texte.split('VIN : ' + F.aRemplir).join('VIN : ' + v);
+      if (r && d && d.refsLibelle) texte = texte.split(d.refsLibelle + ' : ' + F.aRemplir).join(d.refsLibelle + ' : ' + r);
+      return texte;
+    }
+    function objetCourant(d) {
+      var p = (piece.value || '').trim();
+      if (!p) return d.objet;
+      return d.objet.split(F.aRemplir).join(p.length > 60 ? p.slice(0, 59).trim() + '…' : p);
+    }
+    function majMailto() {
+      var d = courantF();
+      if (!d) { mailto.removeAttribute('href'); return; }
+      mailto.href = 'mailto:' + d.email + '?subject=' + encodeURIComponent(objetCourant(d)) + '&body=' + encodeURIComponent(corps.value);
+    }
+    function rendre() {
+      var d = courantF();
+      if (!d) {
+        corps.value = '';
+        corps.placeholder = 'Choisis d’abord le fournisseur ci-dessus.';
+        mail.textContent = '';
+        vinBloc.classList.add('hidden');
+        refsBloc.classList.add('hidden');
+        mailto.removeAttribute('href');
+        return;
+      }
+      corps.value = remplir(d.corps, d);
+      mail.textContent = d.email;
+      vinBloc.classList.toggle('hidden', !d.vinRequis);
+      refsBloc.classList.toggle('hidden', !d.refsRequises);
+      majMailto();
+    }
+    cible.addEventListener('change', rendre);
+    piece.addEventListener('input', rendre);
+    vin.addEventListener('input', rendre);
+    refs.addEventListener('input', rendre);
+    corps.addEventListener('input', majMailto);
+    Array.prototype.forEach.call(bloc.querySelectorAll('[data-role="fourn-sugg"]'), function (b) {
+      b.addEventListener('click', function () { piece.value = F.suggestions[Number(b.dataset.i)] || ''; rendre(); piece.focus(); });
     });
-  });
+    function dire(t) { retour.textContent = t; setTimeout(function () { retour.textContent = ''; }, 2500); }
+    q('fourn-copier').addEventListener('click', function () {
+      if (!corps.value.trim()) { dire('Choisis un fournisseur'); return; }
+      corps.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(corps.value).then(function () { dire('Copié'); }, function () { dire(ok ? 'Copié' : 'Copie impossible — Ctrl+C'); });
+      } else dire(ok ? 'Copié' : 'Copie impossible — Ctrl+C');
+    });
+    /* Trace la démarche sur la fiche : sinon personne ne sait si le fournisseur a été relancé. */
+    q('fourn-fait').addEventListener('click', function () {
+      var d = courantF();
+      if (!d) { dire('Choisis un fournisseur'); return; }
+      postJson('/admin/api/leads/' + leadId + '/note', { text: 'Demande de tarif envoyée à ' + d.contact + ' (' + d.email + ')' })
+        .then(function (j) { if (j && j.ok) delete detailCache[leadId]; dire(j && j.ok ? 'Noté dans le suivi' : 'Échec de l’enregistrement'); })
+        .catch(function () { dire('Échec de l’enregistrement'); });
+    });
+    rendre();
+  }
 
   // ─ Relance auto manuelle : envoie tout de suite l'email n° suivant du cycle ─
   document.querySelectorAll('.lead-remind-btn').forEach(function (btn) {
@@ -1377,13 +1271,14 @@
     });
   }
 
-  /* ══ File de travail : appeler, noter le résultat, planifier, clôturer ══
+  /* ══ File de travail : appeler, noter, planifier, clôturer ══
      Chaque geste enregistre la SUITE (prochaine action datée) : c'est ce qui
      garantit qu'aucun client ouvert ne soit oublié. */
   var RESULTATS = <%- JSON.stringify(resultatsAppel || {}) %>;
-  var TYPES = <%- JSON.stringify(typesAction || {}) %>;
   var MOTIFS = <%- JSON.stringify(motifsPerte || {}) %>;
-  var QUAND = [['1h', 'Dans 1 h'], ['2h', 'Dans 2 h'], ['aprem', 'Cet après-midi'], ['demain', 'Demain matin'], ['2j', 'Dans 2 jours'], ['5j', 'Dans 1 semaine']];
+  var SUITES = [['quote', 'Préparer le devis'], ['callback', 'Le rappeler'], ['wait_client', 'Il doit m’envoyer des infos'],
+    ['follow_quote', 'Relancer le devis'], ['payment', 'Il va payer'], ['sourcing', 'Chercher la pièce'], ['other', 'Autre'], ['perdu', 'Perdu']];
+  var QUAND = [['2h', 'Dans 2 h'], ['aprem', 'Cet après-midi'], ['demain', 'Demain matin'], ['2j', 'Dans 2 jours'], ['5j', 'Dans 1 semaine'], ['autre', 'Choisir une date…']];
 
   function toast(msg, type) { if (window.showToast) window.showToast(msg, type || 'success'); }
 
@@ -1392,25 +1287,166 @@
       .then(function (r) { return r.json().then(function (d) { d.__status = r.status; return d; }); });
   }
 
+  /* ══ Vue boîte mail : choisir un client ══ */
+  var split = document.getElementById('file-split');
+  var listeCol = document.getElementById('file-liste');
+  var ficheCol = document.getElementById('file-fiche');
+  var courant = null;
+  var detailCache = {};
+
+  function lignes() { return Array.prototype.slice.call(document.querySelectorAll('.lead-ligne')); }
+  function estSplit() { return !!split && split.getBoundingClientRect().width >= 900; }
+
+  /* Écran large : les deux colonnes remplissent la fenêtre et défilent
+     chacune de leur côté, comme une boîte mail. */
+  function ajusterHauteurs() {
+    if (!listeCol || !ficheCol) return;
+    if (estSplit()) {
+      if (split.dataset.mode === 'fiche') split.dataset.mode = 'liste';
+      var haut = listeCol.getBoundingClientRect().top + window.scrollY;
+      var h = Math.max(420, window.innerHeight - haut - 16);
+      listeCol.style.height = h + 'px';
+      ficheCol.style.height = h + 'px';
+    } else {
+      listeCol.style.height = '';
+      ficheCol.style.height = '';
+    }
+  }
+  window.addEventListener('resize', ajusterHauteurs);
+
+  function idSuivant(id, sens) {
+    var l = lignes();
+    var i = -1;
+    for (var k = 0; k < l.length; k++) { if (l[k].dataset.leadId === id) { i = k; break; } }
+    var j = i + (sens || 1);
+    return (j >= 0 && j < l.length) ? l[j].dataset.leadId : '';
+  }
+
+  /* Recharge la page sur un client donné (l'adresse garde les filtres). */
+  function allerA(id) {
+    try {
+      var u = new URL(window.location.href);
+      if (id) u.searchParams.set('lead', id); else u.searchParams.delete('lead');
+      u.hash = '';
+      window.location.replace(u.toString());
+    } catch (_) { window.location.reload(); }
+  }
+
+  function selectionner(id, opts) {
+    opts = opts || {};
+    var ligne = document.querySelector('.lead-ligne[data-lead-id="' + id + '"]');
+    var fiche = document.getElementById('fiche-' + id);
+    if (!ligne || !fiche) return false;
+    lignes().forEach(function (l) { l.setAttribute('aria-selected', l === ligne ? 'true' : 'false'); });
+    Array.prototype.forEach.call(document.querySelectorAll('.lead-fiche'), function (f) { f.classList.toggle('hidden', f !== fiche); });
+    var vide = document.getElementById('fiche-vide');
+    if (vide) vide.classList.add('hidden');
+    courant = id;
+    var groupe = ligne.closest('details');
+    if (groupe && !groupe.open) groupe.open = true;
+    try {
+      var u = new URL(window.location.href);
+      u.searchParams.set('lead', id);
+      history.replaceState(null, '', u.toString());
+    } catch (_) {}
+    if (estSplit()) {
+      ficheCol.scrollTop = 0;
+      if (opts.defiler !== false) ligne.scrollIntoView({ block: 'nearest' });
+    } else if (opts.ouvrir !== false) {
+      split.dataset.mode = 'fiche';
+      window.scrollTo(0, 0);
+    }
+    afficherOnglet(fiche, 'suivi');
+    return true;
+  }
+
+  function chargerDetail(id) {
+    if (detailCache[id]) return Promise.resolve(detailCache[id]);
+    return fetchLeadDetail(id).then(function (d) {
+      if (!d || !d.ok || !d.cart) throw new Error('detail');
+      detailCache[id] = d.cart;
+      return d.cart;
+    });
+  }
+
+  function afficherOnglet(fiche, nom, opts) {
+    opts = opts || {};
+    var id = fiche.dataset.leadId;
+    Array.prototype.forEach.call(fiche.querySelectorAll('.fiche-onglet'), function (b) {
+      b.setAttribute('aria-selected', b.dataset.onglet === nom ? 'true' : 'false');
+    });
+    var zone = fiche.querySelector('.fiche-onglets');
+    if (!detailCache[id]) zone.innerHTML = '<div class="text-sm text-slate-400">Chargement…</div>';
+    chargerDetail(id).then(function (c) {
+      if (courant !== id) return;
+      zone.innerHTML = nom === 'piece' ? htmlPiece(c, id) : nom === 'client' ? htmlClient(c) : htmlSuivi(c);
+      if (nom === 'piece') brancherFournisseur(zone, c, id);
+      if (nom === 'suivi') brancherNote(zone, id, fiche);
+      var cible = opts.cible ? zone.querySelector('[data-bloc="' + opts.cible + '"]') : (opts.defiler ? fiche.querySelector('.fiche-onglets-bloc') : null);
+      if (cible) cible.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }).catch(function () {
+      if (courant !== id) return;
+      zone.innerHTML = '<div class="text-sm text-red-600">Impossible de charger l’historique. <button type="button" class="js-onglet font-semibold underline" data-onglet="' + nom + '">Réessayer</button></div>';
+    });
+  }
+
+  if (listeCol) listeCol.addEventListener('click', function (e) {
+    var l = e.target.closest ? e.target.closest('.lead-ligne') : null;
+    if (l) selectionner(l.dataset.leadId, { defiler: false });
+  });
+
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target : null;
+    if (!t) return;
+    var onglet = t.closest('.js-onglet');
+    if (onglet) {
+      var fiche = onglet.closest('.lead-fiche');
+      if (fiche) afficherOnglet(fiche, onglet.dataset.onglet, { cible: onglet.dataset.cible || '', defiler: !!(onglet.dataset.defiler || onglet.dataset.cible) });
+      return;
+    }
+    if (t.closest('.js-suivant')) { passer(1); return; }
+    if (t.closest('.js-retour-liste')) {
+      split.dataset.mode = 'liste';
+      var l = document.querySelector('.lead-ligne[data-lead-id="' + courant + '"]');
+      if (l) l.scrollIntoView({ block: 'center' });
+    }
+  });
+
+  function passer(sens) {
+    var id = idSuivant(courant, sens);
+    if (!id) { toast(sens > 0 ? 'C’était le dernier client de la liste.' : 'Tu es déjà en haut de la liste.', 'info'); return; }
+    selectionner(id);
+  }
+
+  /* J / K (ou flèches bas / haut) : client suivant / précédent. */
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    var tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(tag) || (document.activeElement && document.activeElement.isContentEditable)) return;
+    if (modal && !modal.classList.contains('hidden')) return;
+    if (!courant) return;
+    if (e.key === 'j' || e.key === 'J' || (e.key === 'ArrowDown' && estSplit())) { e.preventDefault(); passer(1); }
+    else if (e.key === 'k' || e.key === 'K' || (e.key === 'ArrowUp' && estSplit())) { e.preventDefault(); passer(-1); }
+    else if (e.key === 'Escape' && !estSplit() && split.dataset.mode === 'fiche') { split.dataset.mode = 'liste'; }
+  });
+
+  /* ─ Fenêtre unique « suite » : après un appel (avec le résultat) ou pour
+       planifier. Elle exige toujours la suite et sa date. ─ */
   function chips(name, options, selected) {
     return '<div class="flex flex-wrap gap-1.5">' + options.map(function (o) {
       var on = o[0] === selected;
       return '<label class="cursor-pointer"><input type="radio" class="peer sr-only" name="' + name + '" value="' + escapeHtml(o[0]) + '"' + (on ? ' checked' : '') + '>'
-        + '<span class="inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium border-slate-200 text-slate-700 hover:bg-slate-50 peer-checked:bg-slate-900 peer-checked:text-white peer-checked:border-slate-900">' + escapeHtml(o[1]) + '</span></label>';
+        + '<span class="inline-flex items-center rounded-full border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 peer-checked:border-slate-900 peer-checked:bg-slate-900 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40">' + escapeHtml(o[1]) + '</span></label>';
     }).join('') + '</div>';
   }
 
-  function blocQuand(defaut) {
-    return '<div class="space-y-2"><div class="text-xs font-semibold text-slate-500">Quand ?</div>'
-      + chips('quand', QUAND.concat([['autre', 'Choisir…']]), defaut || '')
-      + '<input type="datetime-local" name="quandLibre" class="hidden w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></div>';
+  function etape(num, titre, corps) {
+    return '<div class="space-y-2"><div class="text-sm font-bold text-slate-900"><span class="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-[11px] text-white">' + num + '</span>' + titre + '</div>' + corps + '</div>';
   }
 
-  function brancherQuand(form) {
-    var libre = form.querySelector('[name=quandLibre]');
-    form.querySelectorAll('[name=quand]').forEach(function (r) {
-      r.addEventListener('change', function () { if (libre) libre.classList.toggle('hidden', r.value !== 'autre' || !r.checked); });
-    });
+  function selectMotif() {
+    return '<select name="motif" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Choisis le motif…</option>'
+      + Object.keys(MOTIFS).map(function (k) { return '<option value="' + k + '">' + escapeHtml(MOTIFS[k]) + '</option>'; }).join('') + '</select>';
   }
 
   function lireQuand(form) {
@@ -1421,132 +1457,142 @@
     return v ? new Date(v).toISOString() : '';
   }
 
-  function selectMotif() {
-    return '<select name="motif" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white"><option value="">Choisis le motif…</option>'
-      + Object.keys(MOTIFS).map(function (k) { return '<option value="' + k + '">' + escapeHtml(MOTIFS[k]) + '</option>'; }).join('') + '</select>';
+  function cocher(form, name, value) {
+    var r = form.querySelector('[name=' + name + '][value="' + value + '"]');
+    if (r) r.checked = true;
   }
 
-  function finir(form, data, ok) {
-    var res = form.querySelector('.js-res');
-    if (data && data.ok) {
-      toast(data.message || 'Enregistré');
-      closeModal();
-      setTimeout(refresh, 400);
-    } else {
-      if (res) res.innerHTML = '<span class="text-red-700 font-semibold">' + escapeHtml((data && data.error) || 'Erreur, réessaie.') + '</span>';
-      if (ok) ok.echec();
+  function ouvrirSuite(leadId, nom, avecAppel) {
+    var fiche = document.getElementById('fiche-' + leadId);
+    var dejaEssaye = !!(fiche && fiche.dataset.dejaEssaye === '1');
+    openModal((avecAppel ? 'Noter l’appel' : 'Planifier la suite') + (nom ? ' — ' + nom : ''));
+    var n = 1;
+    var html = '<form id="form-suite" class="space-y-5">';
+    if (avecAppel) html += etape(n++, 'Comment s’est passé l’appel ?', chips('resultat', Object.keys(RESULTATS).map(function (k) { return [k, RESULTATS[k]]; }), ''));
+    html += '<div data-role="suite" class="' + (avecAppel ? 'hidden' : '') + '">' + etape(n++, 'Quelle est la suite ?', chips('suite', SUITES, avecAppel ? '' : 'callback')) + '</div>';
+    html += '<div data-role="motif" class="hidden space-y-2">' + selectMotif() + '</div>';
+    html += '<div data-role="quand" class="' + (avecAppel ? 'hidden' : '') + '">' + etape(n, 'Pour quand ?', chips('quand', QUAND, avecAppel ? '' : 'demain')
+      + '<input type="datetime-local" name="quandLibre" class="mt-2 hidden w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">') + '</div>';
+    if (avecAppel) {
+      html += '<div data-role="sms" class="hidden"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="sms" checked> Ensuite, lui envoyer le SMS « J’ai essayé de vous joindre »</label></div>';
+      html += '<p data-role="aide-numero" class="hidden rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Mauvais numéro : écris-lui par email pour avoir le bon numéro.</p>';
     }
-  }
+    html += '<textarea name="note" rows="2" maxlength="1000" placeholder="Note (facultatif) : ce qu’il a dit, la pièce, le prix évoqué…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></textarea>';
+    html += '<div class="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4">'
+      + '<button type="submit" data-apres="suivant" class="btn btn-primary">Enregistrer et continuer →</button>'
+      + '<button type="submit" data-apres="rester" class="btn btn-ghost text-sm">Enregistrer</button>'
+      + '<button type="button" data-role="annuler" class="btn btn-ghost text-sm">Annuler</button>'
+      + '<span class="js-res w-full text-sm"></span></div>';
+    html += '</form>';
+    content.innerHTML = html;
 
-  /* ─ Résultat d'un appel ─ */
-  function ouvrirResultat(leadId, nom) {
-    openModal('Résultat de l’appel' + (nom ? ' — ' + nom : ''));
-    content.innerHTML = '<form id="form-appel" class="space-y-4">'
-      + '<div class="space-y-2"><div class="text-xs font-semibold text-slate-500">Comment s’est passé l’appel ?</div>'
-      + chips('resultat', Object.keys(RESULTATS).map(function (k) { return [k, RESULTATS[k]]; }), '') + '</div>'
-      + '<div id="appel-joint" class="hidden space-y-2"><div class="text-xs font-semibold text-slate-500">Et maintenant ?</div>'
-      + chips('suite', [['quote', 'Préparer le devis'], ['callback', 'Le rappeler'], ['wait_client', 'Il doit me renvoyer des infos'], ['payment', 'Il va payer'], ['perdu', 'Perdu']], '')
-      + '</div>'
-      + '<div id="appel-motif" class="hidden">' + selectMotif() + '</div>'
-      + '<div id="appel-quand" class="hidden">' + blocQuand('') + '</div>'
-      + '<div id="appel-sms" class="hidden"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="sms" checked> Ensuite, envoyer le SMS « J’ai essayé de vous joindre »</label></div>'
-      + '<textarea name="note" rows="2" maxlength="1000" placeholder="Note (facultatif) : ce qu’il a dit, la pièce, le prix évoqué…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></textarea>'
-      + '<div class="flex items-center gap-3"><button type="submit" class="btn btn-primary">Enregistrer</button><span class="js-res text-sm"></span></div>'
-      + '<p class="text-xs text-slate-500">Pas de réponse : le rappel est prévu tout seul (dans 2 h, puis le lendemain). Tu peux changer la date.</p>'
-      + '</form>';
-    var form = document.getElementById('form-appel');
-    brancherQuand(form);
+    var form = document.getElementById('form-suite');
+    function bloc(role) { return form.querySelector('[data-role="' + role + '"]'); }
+    var apres = 'suivant';
+    Array.prototype.forEach.call(form.querySelectorAll('button[type=submit]'), function (b) {
+      b.addEventListener('click', function () { apres = b.dataset.apres || 'suivant'; });
+    });
+    bloc('annuler').addEventListener('click', closeModal);
+
+    function valeur(name) { return (form.querySelector('[name=' + name + ']:checked') || {}).value || ''; }
+    var dernierResultat = '';
     function maj() {
-      var r = (form.querySelector('[name=resultat]:checked') || {}).value || '';
-      var s = (form.querySelector('[name=suite]:checked') || {}).value || '';
-      document.getElementById('appel-joint').classList.toggle('hidden', r !== 'joint');
-      document.getElementById('appel-motif').classList.toggle('hidden', !(r === 'joint' && s === 'perdu'));
-      document.getElementById('appel-quand').classList.toggle('hidden', !r || (r === 'joint' && (!s || s === 'perdu')));
-      document.getElementById('appel-sms').classList.toggle('hidden', !(r === 'pas_reponse' || r === 'repondeur'));
+      var r = avecAppel ? valeur('resultat') : 'plan';
+      /* Pas joint : la suite est évidente, on la pré-remplit (modifiable). */
+      if (avecAppel && r && r !== dernierResultat) {
+        dernierResultat = r;
+        if (r === 'pas_reponse' || r === 'repondeur') { cocher(form, 'suite', 'callback'); cocher(form, 'quand', dejaEssaye ? 'demain' : '2h'); }
+        else if (r === 'mauvais_numero') { cocher(form, 'suite', 'other'); cocher(form, 'quand', '2h'); }
+      }
+      var s = valeur('suite');
+      bloc('suite').classList.toggle('hidden', !r);
+      bloc('motif').classList.toggle('hidden', s !== 'perdu');
+      bloc('quand').classList.toggle('hidden', !r || !s || s === 'perdu');
+      if (avecAppel) {
+        bloc('sms').classList.toggle('hidden', !(r === 'pas_reponse' || r === 'repondeur'));
+        bloc('aide-numero').classList.toggle('hidden', r !== 'mauvais_numero');
+      }
+      var libre = form.querySelector('[name=quandLibre]');
+      if (libre) libre.classList.toggle('hidden', valeur('quand') !== 'autre');
     }
     form.addEventListener('change', maj);
+    maj();
+
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      var res = form.querySelector('.js-res');
+      var resultat = avecAppel ? valeur('resultat') : '';
+      var suite = valeur('suite');
+      var quand = lireQuand(form);
+      var motif = (form.querySelector('[name=motif]') || {}).value || '';
+      var erreur = (avecAppel && !resultat) ? 'Choisis comment s’est passé l’appel.'
+        : !suite ? 'Choisis la suite.'
+          : suite === 'perdu' && !motif ? 'Choisis le motif de perte.'
+            : suite !== 'perdu' && !quand ? 'Choisis pour quand.' : '';
+      if (erreur) { res.innerHTML = '<span class="font-semibold text-red-700">' + erreur + '</span>'; return; }
       var verrou = verrouEnvoi(form);
       if (!verrou) return;
-      var resultat = (form.querySelector('[name=resultat]:checked') || {}).value || '';
-      var suite = (form.querySelector('[name=suite]:checked') || {}).value || '';
+      var url, body;
+      if (avecAppel) { url = '/appel'; body = { resultat: resultat, suite: suite, quand: suite === 'perdu' ? '' : quand, motif: motif, note: form.note.value }; }
+      else if (suite === 'perdu') { url = '/cloturer'; body = { issue: 'perdu', motif: motif, note: form.note.value }; }
+      else { url = '/prochaine-action'; body = { type: suite, quand: quand, note: form.note.value }; }
       var sms = form.querySelector('[name=sms]');
-      var envoyerSms = sms && sms.checked && (resultat === 'pas_reponse' || resultat === 'repondeur');
-      postJson('/admin/api/leads/' + leadId + '/appel', {
-        resultat: resultat,
-        suite: suite,
-        quand: lireQuand(form),
-        motif: (form.querySelector('[name=motif]') || {}).value || '',
-        note: form.note.value,
-      }).then(function (data) {
-        if (data && data.ok && envoyerSms) {
-          toast(data.message || 'Appel enregistré');
-          var b = document.querySelector('.lead-action[data-action="sms"][data-sms-template="sms_tried_to_call"][data-lead-id="' + leadId + '"]');
+      var envoyerSms = !!(sms && sms.checked && (resultat === 'pas_reponse' || resultat === 'repondeur'));
+      postJson('/admin/api/leads/' + leadId + url, body).then(function (data) {
+        if (!(data && data.ok)) {
+          verrou.echec();
+          res.innerHTML = '<span class="font-semibold text-red-700">' + escapeHtml((data && data.error) || 'Erreur, réessaie.') + '</span>';
+          return;
+        }
+        toast(data.message || 'Enregistré');
+        if (envoyerSms) {
+          /* Le SMS s'ouvre tout de suite ; une fois envoyé, on enchaîne comme demandé. */
+          apresEnvoi = { id: leadId, mode: apres };
+          var b = document.querySelector('#fiche-' + leadId + ' .lead-action[data-action="sms"][data-sms-template="sms_tried_to_call"]');
           if (b) { b.click(); return; }
         }
-        finir(form, data, verrou);
-      }).catch(function () { finir(form, null, verrou); });
+        closeModal();
+        if (apres === 'suivant') allerA(idSuivant(leadId, 1) || leadId); else allerA(leadId);
+      }).catch(function () { verrou.echec(); res.innerHTML = '<span class="font-semibold text-red-700">Erreur réseau, réessaie.</span>'; });
     });
   }
 
-  /* « Appeler » : copie le numéro, lance l'appel (tel:) et ouvre la fenêtre du résultat. */
-  document.querySelectorAll('.js-appeler').forEach(function (a) {
+  /* « Appeler » : copie le numéro, lance l'appel (tel:) puis ouvre la fenêtre du résultat. */
+  Array.prototype.forEach.call(document.querySelectorAll('.js-appeler'), function (a) {
     a.addEventListener('click', function () {
       var num = a.getAttribute('data-phone') || '';
       if (num && navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(num).catch(function () {});
       else if (num) fallbackCopyText(num);
-      toast('Numéro copié. Après l’appel, note le résultat.', 'info');
+      toast('Numéro copié. Après l’appel, note comment ça s’est passé.', 'info');
       var id = a.getAttribute('data-lead-id');
       var nom = a.getAttribute('data-name') || '';
-      setTimeout(function () { ouvrirResultat(id, nom); }, 700);
+      setTimeout(function () { ouvrirSuite(id, nom, true); }, 700);
     });
   });
-  document.querySelectorAll('.js-resultat').forEach(function (b) {
-    b.addEventListener('click', function () { ouvrirResultat(b.getAttribute('data-lead-id'), b.getAttribute('data-name') || ''); });
+  Array.prototype.forEach.call(document.querySelectorAll('.js-resultat'), function (b) {
+    b.addEventListener('click', function () { ouvrirSuite(b.getAttribute('data-lead-id'), b.getAttribute('data-name') || '', true); });
   });
-
-  /* ─ Planifier la prochaine action ─ */
-  document.querySelectorAll('.js-planifier').forEach(function (b) {
+  Array.prototype.forEach.call(document.querySelectorAll('.js-planifier'), function (b) {
     b.addEventListener('click', function () {
-      var leadId = b.getAttribute('data-lead-id');
-      openModal('Planifier la suite');
-      content.innerHTML = '<form id="form-plan" class="space-y-4">'
-        + '<div class="space-y-2"><div class="text-xs font-semibold text-slate-500">Que faut-il faire ?</div>'
-        + chips('type', Object.keys(TYPES).map(function (k) { return [k, TYPES[k]]; }), 'callback') + '</div>'
-        + blocQuand('demain')
-        + '<textarea name="note" rows="2" maxlength="1000" placeholder="Note (facultatif)" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></textarea>'
-        + '<div class="flex items-center gap-3"><button type="submit" class="btn btn-primary">Enregistrer</button><span class="js-res text-sm"></span></div>'
-        + '</form>';
-      var form = document.getElementById('form-plan');
-      brancherQuand(form);
-      form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var verrou = verrouEnvoi(form);
-        if (!verrou) return;
-        postJson('/admin/api/leads/' + leadId + '/prochaine-action', {
-          type: (form.querySelector('[name=type]:checked') || {}).value || '',
-          quand: lireQuand(form),
-          note: form.note.value,
-        }).then(function (d) { finir(form, d, verrou); }).catch(function () { finir(form, null, verrou); });
-      });
+      var fiche = b.closest('.lead-fiche');
+      ouvrirSuite(b.getAttribute('data-lead-id'), fiche ? fiche.dataset.name : '', false);
     });
   });
 
   /* ─ Prendre le dossier ─ */
-  document.querySelectorAll('.js-prendre').forEach(function (b) {
+  Array.prototype.forEach.call(document.querySelectorAll('.js-prendre'), function (b) {
     b.addEventListener('click', function () {
       var leadId = b.getAttribute('data-lead-id');
       b.disabled = true;
       postJson('/admin/api/leads/' + leadId + '/prendre', {}).then(function (d) {
-        if (d && d.ok) { toast('Dossier pris'); setTimeout(refresh, 300); return; }
+        if (d && d.ok) { toast('C’est noté : tu t’occupes de ce client.'); setTimeout(function () { allerA(leadId); }, 300); return; }
         if (d && d.__status === 409) {
           var question = (d.error || 'Déjà pris.') + ' Le reprendre quand même ?';
           var conf = window.adminConfirm ? window.adminConfirm(question) : Promise.resolve(window.confirm(question));
           Promise.resolve(conf).then(function (oui) {
             if (!oui) { b.disabled = false; return; }
             postJson('/admin/api/leads/' + leadId + '/prendre', { force: true }).then(function (d2) {
-              if (d2 && d2.ok) { toast('Dossier repris'); setTimeout(refresh, 300); } else { b.disabled = false; toast((d2 && d2.error) || 'Erreur', 'error'); }
+              if (d2 && d2.ok) { toast('Dossier repris'); setTimeout(function () { allerA(leadId); }, 300); } else { b.disabled = false; toast((d2 && d2.error) || 'Erreur', 'error'); }
             });
           });
           return;
@@ -1557,24 +1603,25 @@
   });
 
   /* ─ Gagné / Perdu / Rouvrir ─ */
-  document.querySelectorAll('.js-cloturer').forEach(function (b) {
+  Array.prototype.forEach.call(document.querySelectorAll('.js-cloturer'), function (b) {
     b.addEventListener('click', function () {
       var leadId = b.getAttribute('data-lead-id');
       var issue = b.getAttribute('data-issue');
       var menu = b.closest('details'); if (menu) menu.removeAttribute('open');
-      var titre = issue === 'gagne' ? 'Marquer gagné' : issue === 'perdu' ? 'Marquer perdu' : 'Rouvrir le dossier';
-      openModal(titre);
+      openModal(issue === 'gagne' ? 'Marquer gagné' : issue === 'perdu' ? 'Marquer perdu' : 'Rouvrir le dossier');
       var corps = issue === 'gagne'
-        ? '<p class="text-sm text-slate-600">Gagné = le client a <strong>payé</strong> (commande, acompte, virement ou espèces). Un simple « oui » au téléphone n’est pas encore gagné : dans ce cas, planifie « Vérifier le paiement ».</p>'
+        ? '<p class="text-sm text-slate-600">Gagné = le client a <strong>payé</strong> (commande, acompte, virement ou espèces). Un simple « oui » au téléphone n’est pas encore gagné : dans ce cas, planifie « Il va payer ».</p>'
           + '<label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="confirme"> Le client a payé ou versé un acompte</label>'
-          + '<select name="moyen" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm bg-white"><option value="">Comment ? (facultatif)</option><option>Carte / lien de paiement</option><option>Virement</option><option>Espèces</option><option>Acompte</option></select>'
+          + '<select name="moyen" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Comment ? (facultatif)</option><option>Carte / lien de paiement</option><option>Virement</option><option>Espèces</option><option>Acompte</option></select>'
         : issue === 'perdu'
           ? '<p class="text-sm text-slate-600">Pourquoi ce client est-il perdu ? Ça sert à comprendre ce qui fait perdre des ventes.</p>' + selectMotif()
             + '<textarea name="note" rows="2" maxlength="1000" placeholder="Précision (facultatif)" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"></textarea>'
           : '<p class="text-sm text-slate-600">Le dossier redevient ouvert, avec un rappel dans l’heure.</p>';
       content.innerHTML = '<form id="form-cloture" class="space-y-4">' + corps
-        + '<div class="flex items-center gap-3"><button type="submit" class="btn btn-primary">Valider</button><span class="js-res text-sm"></span></div></form>';
+        + '<div class="flex flex-wrap items-center gap-2"><button type="submit" class="btn btn-primary">' + (issue === 'rouvrir' ? 'Rouvrir' : 'Valider et continuer →') + '</button>'
+        + '<button type="button" data-role="annuler" class="btn btn-ghost text-sm">Annuler</button><span class="js-res w-full text-sm"></span></div></form>';
       var form = document.getElementById('form-cloture');
+      form.querySelector('[data-role="annuler"]').addEventListener('click', closeModal);
       form.addEventListener('submit', function (e) {
         e.preventDefault();
         var verrou = verrouEnvoi(form);
@@ -1582,11 +1629,37 @@
         var body = { issue: issue };
         if (issue === 'gagne') { body.confirme = !!(form.confirme && form.confirme.checked); body.moyen = form.moyen ? form.moyen.value : ''; }
         if (issue === 'perdu') { body.motif = form.motif.value; body.note = form.note ? form.note.value : ''; }
-        postJson('/admin/api/leads/' + leadId + '/cloturer', body)
-          .then(function (d) { finir(form, d, verrou); }).catch(function () { finir(form, null, verrou); });
+        postJson('/admin/api/leads/' + leadId + '/cloturer', body).then(function (d) {
+          if (d && d.ok) {
+            toast(d.message || 'Enregistré');
+            closeModal();
+            /* Un dossier clos quitte la file : on passe au client suivant. */
+            allerA(issue === 'rouvrir' ? leadId : (idSuivant(leadId, 1) || idSuivant(leadId, -1)));
+          } else {
+            verrou.echec();
+            form.querySelector('.js-res').innerHTML = '<span class="font-semibold text-red-700">' + escapeHtml((d && d.error) || 'Erreur, réessaie.') + '</span>';
+          }
+        }).catch(function () { verrou.echec(); form.querySelector('.js-res').innerHTML = '<span class="font-semibold text-red-700">Erreur réseau</span>'; });
       });
     });
   });
+
+  /* Le menu « Équipe » se ferme comme les autres. */
+  document.addEventListener('click', function (e) {
+    Array.prototype.forEach.call(document.querySelectorAll('details.equipe-menu[open]'), function (d) { if (!d.contains(e.target)) d.removeAttribute('open'); });
+  });
+
+  /* ─ Au chargement : le client demandé (?lead=…), sinon le premier de la
+       liste sur grand écran. Sur téléphone, on montre d'abord la liste. ─ */
+  (function demarrer() {
+    ajusterHauteurs();
+    var demande = '';
+    try { demande = new URL(window.location.href).searchParams.get('lead') || ''; } catch (_) {}
+    if (demande && selectionner(demande, { defiler: true })) { ajusterHauteurs(); return; }
+    if (!estSplit()) return;
+    var premiere = document.querySelector('details[open] .lead-ligne') || document.querySelector('.lead-ligne');
+    if (premiere) selectionner(premiere.dataset.leadId, { defiler: false, ouvrir: false });
+  })();
 
   /* Un seul menu « Autres » ouvert à la fois ; un clic ailleurs le ferme. */
   document.addEventListener('click', function (e) {
