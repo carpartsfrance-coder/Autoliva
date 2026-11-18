@@ -35,6 +35,7 @@ const brand = require('../config/brand');
 const { computeWork, libelleUrgence, libelleUrgenceCourt, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
 const { chargerFile } = require('../services/leadWorkQueue');
 const { resumeDemande } = require('../services/leadResume');
+const { infosHeure, fenetreOuvree } = require('../services/leadHeure');
 
 function escapeHtml(value) {
   return String(value || '')
@@ -303,6 +304,9 @@ function toCardModel(c, now = new Date()) {
   })();
 
   const work = computeWork(c, now);
+  /* Heure d'arrivée et temps d'attente — la liste n'affichait que l'échéance,
+     on ne savait pas si la demande venait d'arriver (services/leadHeure.js). */
+  const heure = infosHeure(work, now);
   const eqData = c.engineQuote || {};
   const devisEnvoyes = Array.isArray(eqData.sentQuotes) ? eqData.sentQuotes.filter((q) => q && q.sentAt) : [];
   const dernierDevis = devisEnvoyes.length
@@ -312,6 +316,16 @@ function toCardModel(c, now = new Date()) {
     work,
     urgence: libelleUrgence(work, now),
     urgenceCourte: libelleUrgenceCourt(work, now),
+    /* Quand la demande est arrivée, et depuis combien de temps elle attend. */
+    recuCourt: heure.recuCourt,
+    recuLong: heure.recuLong,
+    recuExact: heure.recuExact,
+    attenteMin: heure.attenteMin,
+    attenteCourte: heure.attenteCourte,
+    /* Repères bruts pour l'horloge du navigateur (public/js/leads-horloge.js). */
+    recuIso: heure.recuIso,
+    dueIso: work.dueAt ? work.dueAt.toISOString() : '',
+    retardMin: work.overdue ? work.overdueMinutes : 0,
     demande: resumeDemande(c),
     /* Prix à montrer : celui du devis s'il existe, sinon le panier. */
     prixAffiche: prixDevis ? { montant: formatEuro(Math.round(prixDevis * 100)), origine: 'devis' }
@@ -403,6 +417,7 @@ function toCardModel(c, now = new Date()) {
     notesCount: notesArr.length,
     lastNote: lastNoteRaw ? {
       text: String(lastNoteRaw.text || '').slice(0, 110),
+      tronque: String(lastNoteRaw.text || '').length > 110,
       by: lastNoteRaw.addedByName || 'Admin',
       atRel: lastNoteRaw.addedAt ? formatRelative(lastNoteRaw.addedAt) : '',
     } : null,
@@ -463,6 +478,10 @@ async function enrichirHistorique(leads) {
 async function getAdminLeadsPage(req, res, next) {
   try {
     const dbConnected = mongoose.connection.readyState === 1;
+    /* Un seul instant de référence pour la page : la file, les libellés
+       d'heure et la fenêtre d'ouverture envoyée au navigateur doivent parler
+       de la même seconde, sinon l'horloge corrige un décalage inexistant. */
+    const maintenant = new Date();
 
     const status = typeof req.query.status === 'string' ? req.query.status.trim() : '';
     const manualStatusFilter = typeof req.query.manual === 'string' ? req.query.manual.trim() : '';
@@ -522,6 +541,9 @@ async function getAdminLeadsPage(req, res, next) {
       pagination: { page: 1, perPage, totalItems: 0, totalPages: 1, from: 0, to: 0, hasPrev: false, hasNext: false, prevPage: 1, nextPage: 1 },
       emailTemplates: mergedTemplates.email,
       smsTemplates: mergedTemplates.sms,
+      /* Plages d'ouverture à venir : le navigateur garde « Retard 2 h » et
+         « attend 2 h 10 » à l'heure sans recharger la page. */
+      horloge: fenetreOuvree(maintenant),
       groupes: [],
       bandeau: null,
       todoFilters: { qui: '', piece: '', voir: '', source: captureSource },
@@ -626,14 +648,13 @@ async function getAdminLeadsPage(req, res, next) {
     const piece = ['pont', 'boite', 'moteur', 'autre'].includes(req.query.piece) ? req.query.piece : '';
     const voir = typeof req.query.voir === 'string' ? req.query.voir.trim().slice(0, 20) : '';
     const file = await chargerFile({
-      now: new Date(), qui, moi: admin.firstName || admin.name, piece,
+      now: maintenant, qui, moi: admin.firstName || admin.name, piece,
       source: view === 'todo' && allowedSources.has(captureSource) ? captureSource : '', voir,
     });
     const todoFilters = { qui, piece, voir, source: captureSource };
 
     if (view === 'todo') {
-      const nowTodo = new Date();
-      const groupes = file.groupes.map((g) => Object.assign({}, g, { items: g.items.map((x) => toCardModel(x.lead, nowTodo)) }));
+      const groupes = file.groupes.map((g) => Object.assign({}, g, { items: g.items.map((x) => toCardModel(x.lead, maintenant)) }));
       await enrichirHistorique([].concat(...groupes.map((g) => g.items)));
       return baseRender({
         leads: [],
@@ -662,8 +683,7 @@ async function getAdminLeadsPage(req, res, next) {
       .limit(perPage)
       .lean();
 
-    const now = new Date();
-    const leads = rawLeads.map((c) => toCardModel(c, now));
+    const leads = rawLeads.map((c) => toCardModel(c, maintenant));
 
     await enrichirHistorique(leads);
 
@@ -1266,6 +1286,9 @@ module.exports = {
   postLeadSetStatus,
   postLeadAddNote,
   getAdminLeadTemplates,
+  /* Exposé pour les tests : la liste et la fiche sont rendues à partir de cet
+     objet, c'est lui qu'il faut vérifier (tests/unit/leads-liste-ligne.test.js). */
+  toCardModel,
   // legacy aliases (pour rétro-compat des routes existantes)
   getAdminAbandonedCartsPage: getAdminLeadsPage,
   getAdminAbandonedCartDetail: getAdminLeadDetail,

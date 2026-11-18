@@ -277,7 +277,10 @@
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Ce que dit une ligne</div>
         <div class="space-y-1.5 text-sm text-slate-700">
           <div>Le nom du client, et à droite <span class="font-bold text-red-600">Retard 2 h</span>, <span class="font-bold text-blue-700">Avant 10:15</span> ou l’heure prévue.</div>
-          <div>Dessous : la pièce et le véhicule, puis <strong>qui s’en occupe</strong> (« Non pris » si personne) et d’où vient la demande (Google Ads, landing…).</div>
+          <div>Dessous : la pièce et le véhicule, et à droite le <strong>montant en jeu</strong> (le devis s’il est parti, sinon le panier).</div>
+          <div>Puis <strong>l’heure d’arrivée de la demande</strong> (« 09:12 » aujourd’hui, « hier 16:40 », « mar. 17/11 »), <strong>qui s’en occupe</strong> (« Non pris » si personne) et d’où elle vient (Google Ads, landing…).</div>
+          <div>À droite de cette ligne, <strong>depuis combien de temps elle attend</strong> : le temps compté en heures d’ouverture depuis la demande, tant que personne n’a appelé ni écrit. Il passe en <span class="font-bold text-red-600">rouge</span> au-delà d’une heure. Ces durées se remettent à jour toutes seules, sans recharger la page.</div>
+          <div>En bas, les pastilles qui changent la façon d’appeler : <span class="rounded bg-green-100 px-1.5 text-[11px] font-semibold text-green-800">A cliqué payer</span> <span class="rounded bg-violet-100 px-1.5 text-[11px] font-semibold text-violet-800">Devis vu</span> <span class="rounded bg-indigo-50 px-1.5 text-[11px] font-semibold text-indigo-700">Déjà client</span> <span class="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">SAV en cours</span>, et « note » quand un collègue a écrit quelque chose (passe la souris dessus pour la lire).</div>
           <div>Dans la fiche : « Personne ne s’en occupe — je m’en occupe » pour prendre le client.</div>
         </div>
       </div>
@@ -319,9 +322,14 @@
   </div>
 </div>
 
+<script src="/js/leads-horloge.js?v=<%= (typeof assetVersions !== 'undefined' && assetVersions.leadsHorlogeJs) || '' %>"></script>
 <script>
 (function () {
   var BRAND = <%- JSON.stringify(typeof brand !== 'undefined' ? brand.NAME : 'Autoliva') %>;
+  /* Fenêtre d'ouverture des prochains jours, calculée par le serveur
+     (services/leadHeure.js) : l'horloge ci-dessous ne refait ni les
+     week-ends, ni les fériés, ni les changements d'heure. */
+  var HORLOGE = <%- JSON.stringify(typeof horloge !== 'undefined' && horloge ? horloge : { nowIso: '', plages: [] }) %>;
 
   var modal = document.getElementById('lead-modal');
   var overlay = document.getElementById('lead-modal-overlay');
@@ -1693,6 +1701,75 @@
         });
     });
   });
+
+  /* ══ Horloge : les durées restent justes sans recharger la page ══
+     « Retard 2 h » et « attend 2 h 10 » sont écrits par le serveur au moment
+     du rendu. Un commercial garde cet écran ouvert toute la matinée : au bout
+     d'une heure ces chiffres étaient faux, et une ligne dont l'heure venait de
+     passer restait bleue au lieu de rougir. On ne recalcule ici que le temps
+     écoulé dans les plages d'ouverture envoyées par le serveur. */
+  (function horloge() {
+    var H = window.LeadsHorloge;
+    if (!H || !HORLOGE || !HORLOGE.nowIso) return;
+    var plages = H.preparer(HORLOGE.plages);
+    var rendu = Date.parse(HORLOGE.nowIso);
+    if (!plages.length || !rendu) return;
+
+    /* Teintes posées par le serveur, à retirer quand la ligne passe en retard. */
+    var TONS_TEXTE = ['text-blue-700', 'text-amber-700', 'text-green-700', 'text-slate-500'];
+    var TONS_BARRE = ['bg-blue-500', 'bg-amber-400', 'bg-green-500', 'bg-slate-300'];
+
+    function rougir(el, tons, rouge) {
+      if (!el || el.classList.contains(rouge)) return;
+      tons.forEach(function (t) { el.classList.remove(t); });
+      el.classList.add(rouge);
+    }
+
+    function majBloc(el, ecoule, maintenant) {
+      var due = el.getAttribute('data-due');
+      var retardRendu = Number(el.getAttribute('data-retard')) || 0;
+      var attenteRendu = Number(el.getAttribute('data-attente'));
+
+      /* Retard : celui du rendu qui grandit, ou celui d'une échéance qui vient
+         de passer sous les yeux du commercial. */
+      var retard = retardRendu > 0 ? retardRendu + ecoule
+        : (due && maintenant > Date.parse(due)) ? H.minutesOuvrees(plages, Date.parse(due), maintenant) : 0;
+      if (retard > 0) {
+        var court = el.querySelector('[data-role="urgence"]');
+        if (court) { court.textContent = H.retardCourt(retard); rougir(court, TONS_TEXTE, 'text-red-600'); }
+        var longue = el.querySelector('[data-role="urgence-longue"]');
+        if (longue) longue.textContent = H.retardLong(retard);
+        rougir(el.querySelector('[data-role="barre"]'), TONS_BARRE, 'bg-red-500');
+      }
+
+      /* Attente d'une demande que personne n'a prise : rouge passé l'heure. */
+      if (attenteRendu >= 0) {
+        var attente = attenteRendu + ecoule;
+        var libelle = H.dureeOuvree(attente);
+        var ligne = el.querySelector('[data-role="attente"]');
+        if (ligne) {
+          ligne.textContent = 'attend ' + libelle;
+          ligne.title = 'Personne n’a encore appelé ni écrit : ' + libelle + ' d’attente en heures d’ouverture.';
+          if (attente >= 60) rougir(ligne, ['text-slate-500'], 'text-red-600');
+        }
+        var fiche = el.querySelector('[data-role="attente-longue"]');
+        if (fiche) fiche.textContent = 'Jamais contacté · attend depuis ' + libelle;
+      }
+    }
+
+    function tic() {
+      if (document.visibilityState === 'hidden') return;
+      var maintenant = Date.now();
+      var ecoule = H.minutesOuvrees(plages, rendu, maintenant);
+      Array.prototype.forEach.call(document.querySelectorAll('.lead-ligne[data-attente], .lead-fiche[data-attente]'), function (el) {
+        majBloc(el, ecoule, maintenant);
+      });
+    }
+
+    setInterval(tic, 30000);
+    /* De retour sur l'onglet après une pause : on remet l'heure tout de suite. */
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') tic(); });
+  })();
 })();
 </script>
 
