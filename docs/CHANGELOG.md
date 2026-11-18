@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-11-18 — Leads : une seule file de travail, aucune demande oubliée
+
+Analyse menée en trois tours avec ChatGPT (audit, fonctionnement cible, plan final), puis réalisée ici.
+
+### Constat (18/11/2026)
+- « Leads à relancer » → « À traiter » excluait exprès les demandes des landings moteurs/boîtes/ponts. Dans « Devis moteurs & boîtes », 197 dossiers sur 200 étaient « Nouveau », dont 185 venus de Google Ads : personne ne les traitait.
+- La page Devis s'arrêtait à 200 dossiers (`limit(200)` sans page suivante) et ses compteurs étaient calculés sur ces 200 seulement.
+- 211 des 615 leads « À traiter » étaient un robot du formulaire de blog (numéro +1, aucun véhicule, message absurde), qui recevait en plus un email de confirmation.
+- « Contacté » faisait sortir un client de la file, même s'il n'avait encore rien décidé.
+- Le message type d'un devis pont / boîte de transfert parlait de « moteur ».
+
+### Leads à traiter (/admin/activite-panier)
+- **Une seule file** pour toutes les vraies demandes : devis fiche produit, landings moteurs/boîtes/ponts/2→5 places, contact, article de blog, appel manqué, lead manuel. Les simples passages (panier sans demande, newsletter, compte, popup) restent dans « Tous les leads » ; un panier entre dans la file dès qu'un commercial s'en occupe.
+- **Groupes, dans l'ordre de travail** : Nouvelles demandes (réponse dans l'heure ouvrée), En retard, Rappels et relances du jour, Devis à préparer, Planifiés (replié), Anciens dossiers à reprendre (retard > 7 jours ouvrés, replié). Échéances calculées AVANT découpage en pages.
+- **Chaque affaire ouverte a une prochaine action datée** (`nextAction`) : posée par le commercial, sinon déduite (60 min ouvrées pour une nouvelle demande, 2 jours ouvrés après le dernier contact, 3 jours ouvrés après l'envoi d'un devis). Heures ouvrées : lun–ven 9–12 h / 14–18 h, Paris, hors fériés (`services/heuresOuvrees.js`).
+- **Nouvelle carte** : urgence, étape, client, besoin, qui s'en occupe, dernier appel, prochaine action, et UN bouton principal (Appeler / Préparer le devis / Relancer…). Le reste est dans « Autres ».
+- **« Appeler »** copie le numéro, lance l'appel et ouvre « Résultat de l'appel » : joint / pas de réponse / messagerie / mauvais numéro, puis la suite obligatoire (devis, rappel le…, attend des infos, va payer, perdu + motif). Pas de réponse = rappel posé tout seul (2 h, puis le lendemain) + SMS « J'ai essayé de vous joindre » proposé.
+- **Prendre un dossier** (« Non pris — je m'en occupe ») : atomique ; reprendre le dossier d'un collègue demande confirmation.
+- **Gagné** exige la case « le client a payé » (carte, virement, espèces, acompte). **Perdu** exige un motif (9 motifs). Un dossier perdu passe aussi en perdu dans la page Devis.
+- **Bandeau** : en retard, jamais contactés, à faire aujourd'hui, délai médian de 1re réponse sur 30 jours (minutes ouvrées) et % rappelés dans l'heure, retards par personne.
+- Bouton « Appeler » proposé uniquement quand le client a fait une demande (règle du 11/08/2026 sur le démarchage téléphonique).
+- Les leads archivés (robots, dossiers archivés) sont hors liste et hors compteurs ; la recherche les retrouve toujours.
+- Menu : « Leads à relancer » devient « Leads à traiter » (même adresse).
+
+### Devis moteurs & boîtes (/admin/devis-moteurs)
+- Pagination 50 par page, plus de plafond ; compteurs calculés sur toute la base ; nouveau compteur « En retard ».
+- Tri par défaut = le plus urgent (même calcul et même ordre que la file) ; « les plus récents » reste disponible.
+- Colonne « Prochaine action » (urgence, action, qui) ; colonne « Étape » ; stock et marge regroupés pour tenir sur un écran 13 pouces.
+- Bouton « Supprimer » retiré de la liste (reste dans le dossier).
+- Message type du devis pont / différentiel / boîte de transfert : « la pièce », contrôle jeu/denture/étanchéité, au lieu de « le moteur », compression, endoscopie.
+
+### Anti-robots du formulaire de blog
+- `leadSpamFilter.signauxBlog` : numéro hors des pays desservis + aucun véhicule/VIN/plaque = robot (deux signaux, jamais un seul). Mesuré sur les 230 leads « Article blog » des 90 derniers jours : 209/209 robots, 0 vrai demandeur touché. Champ-piège `website` ajouté aux deux formulaires.
+- Un robot reçoit « ok » mais rien n'est créé et aucun email ne part.
+- Migration au démarrage `archiveBlogSpamLeads` (une seule fois) : range les robots déjà en base, jamais un lead sur lequel quelqu'un a travaillé. `scripts/archive-spam-leads.js` connaît aussi ce filtre.
+
+### Données
+- Nouveaux champs du lead : `nextAction {type, dueAt, note, setByName, setAt}`, `takenBy/takenByName/takenAt`, `lostReason`, `lastCallOutcome`. Aucune reprise de données : les anciens dossiers reçoivent une échéance calculée à la lecture.
+- Compatibilité : « J'ai appelé » pose toujours `manualStatus = contacted` (coupe les relances panier comme avant) ET une prochaine action. Crons, Ringover, webhooks Mollie et modèles de messages inchangés.
+
+### Tests
+- `tests/unit/lead-work.test.js`, `tests/unit/heures-ouvrees.test.js`, `tests/unit/lead-spam-blog.test.js`, `tests/integration/file-de-travail-leads.test.js` (file, appel, prise en charge, planification, perdu/gagné, pagination à 231 dossiers, robots du blog).
+- `tests/integration/lead-search.test.js` : un simple panier n'est plus dans « À traiter », il reste dans « Tous ».
+
+### À confirmer (non modifié)
+- Durée de garantie : le PDF et l'email disent 12 mois (reconditionné) / 6 mois (occasion), la landing « 6 mois à 2 ans selon la pièce ».
+
 ## 2026-11-12 — Admin : ajouter une photo à une fiche n'efface plus l'ancienne (PR #323)
 
 ### Backend

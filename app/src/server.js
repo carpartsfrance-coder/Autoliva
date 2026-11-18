@@ -46,6 +46,8 @@ async function appliquerMigrations() {
   await updateInfoBlocksContent(mongoose.connection);
   const { repairRefundedOrdersReopened } = require('./migrations/repairRefundedOrdersReopened');
   await repairRefundedOrdersReopened(mongoose.connection);
+  const { archiveBlogSpamLeads } = require('./migrations/archiveBlogSpamLeads');
+  await archiveBlogSpamLeads(mongoose.connection);
 }
 
 async function connecterBase(mongoUri, delai = RECONNEXION_DELAI_MS) {

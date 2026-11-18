@@ -18,6 +18,7 @@ const smsSettingsAdminController = require('../controllers/smsSettingsAdminContr
 const avisAdminController = require('../controllers/avisAdminController');
 const leadTemplatesAdminController = require('../controllers/leadTemplatesAdminController');
 const abandonedCartAdminController = require('../controllers/abandonedCartAdminController');
+const leadWorkController = require('../controllers/leadWorkController');
 const engineQuoteAdminController = require('../controllers/engineQuoteAdminController');
 const orderEmailAdminController = require('../controllers/orderEmailAdminController');
 const internalNoteAdminController = require('../controllers/internalNoteAdminController');
@@ -392,6 +393,11 @@ router.post('/api/leads/:id/sms', requireAdminAuth, abandonedCartAdminController
 router.post('/api/leads/:id/whatsapp', requireAdminAuth, abandonedCartAdminController.postLeadWhatsApp);
 router.post('/api/leads/:id/status', requireAdminAuth, abandonedCartAdminController.postLeadSetStatus);
 router.post('/api/leads/:id/note', requireAdminAuth, abandonedCartAdminController.postLeadAddNote);
+/* File de travail : prise en charge, résultat d'appel, prochaine action, clôture */
+router.post('/api/leads/:id/prendre', requireAdminAuth, leadWorkController.postPrendre);
+router.post('/api/leads/:id/appel', requireAdminAuth, leadWorkController.postAppel);
+router.post('/api/leads/:id/prochaine-action', requireAdminAuth, leadWorkController.postProchaineAction);
+router.post('/api/leads/:id/cloturer', requireAdminAuth, leadWorkController.postCloturer);
 
 /* ──────────────────────────────────────────────────────────────────────
  * /admin/devis-moteurs — workflow commercial dédié moteurs d'occasion

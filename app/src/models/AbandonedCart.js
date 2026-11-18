@@ -278,6 +278,33 @@ const abandonedCartSchema = new mongoose.Schema(
     manualStatusByName: { type: String, default: '', trim: true },
     manualStatusAt: { type: Date, default: null },
 
+    /* ── File de travail commerciale (11/2026) ─────────────────────────────
+     * « Contacté » ne clôt rien : une affaire reste ouverte jusqu'à Gagné ou
+     * Perdu, et porte toujours une PROCHAINE ACTION datée. Sans ces champs, un
+     * client appelé mais pas encore décidé sortait de la file « À traiter » et
+     * personne ne le rappelait. Le calcul de l'étape et du groupe affiché vit
+     * dans services/leadWork.js (fonction pure, testée). */
+    nextAction: {
+      /** callback | quote | follow_quote | wait_client | sourcing | payment | other */
+      type: { type: String, default: '', trim: true },
+      dueAt: { type: Date, default: null },
+      note: { type: String, default: '', trim: true },
+      setByName: { type: String, default: '', trim: true },
+      setAt: { type: Date, default: null },
+    },
+    /** Qui s'occupe du dossier (Killian, Faniry, Andy…) et depuis quand. */
+    takenBy: { type: mongoose.Schema.Types.ObjectId, default: null },
+    takenByName: { type: String, default: '', trim: true },
+    takenAt: { type: Date, default: null },
+    /** Motif de perte, obligatoire pour passer un dossier en « Perdu ». */
+    lostReason: { type: String, default: '', trim: true },
+    /** Dernier résultat d'appel saisi (« pas de réponse », « joint »…). */
+    lastCallOutcome: {
+      outcome: { type: String, default: '', trim: true },
+      at: { type: Date, default: null },
+      byName: { type: String, default: '', trim: true },
+    },
+
     /** Notes internes admin (chronologique) */
     notes: { type: [abandonedCartNoteSchema], default: [] },
 

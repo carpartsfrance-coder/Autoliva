@@ -171,7 +171,7 @@ function dt(v) {
           <div class="flex items-center justify-between mb-4">
             <div>
               <h2 class="text-lg font-semibold text-slate-900">Identification <%= lex.noun %></h2>
-              <p class="text-xs text-slate-500 mt-0.5">Renseigne <%= lex.leNoun %> exact<%= cart.isBoite ? 'e' : '' %> après analyse du dossier</p>
+              <p class="text-xs text-slate-500 mt-0.5">Renseigne <%= lex.leNoun %> exact<%= (cart.isBoite || cart.isPont) ? 'e' : '' %> après analyse du dossier</p>
             </div>
             <span data-save-indicator class="text-xs text-slate-400 transition-opacity opacity-0">Enregistré ✓</span>
           </div>
@@ -204,7 +204,7 @@ function dt(v) {
                   </label>
                 <% }) %>
               </div>
-              <p class="text-xs text-slate-400 mt-1.5">Reconditionné<%= cart.isBoite ? 'e' : '' %> = badge premium visible sur le PDF et l'email</p>
+              <p class="text-xs text-slate-400 mt-1.5">Reconditionné<%= (cart.isBoite || cart.isPont) ? 'e' : '' %> = badge premium visible sur le PDF et l'email</p>
             </div>
           </div>
         </form>
@@ -261,7 +261,7 @@ function dt(v) {
           <div class="mb-5 flex flex-wrap items-center gap-2">
             <span class="text-xs font-semibold text-slate-500">Régime TVA :</span>
             <span class="inline-flex items-center rounded-lg bg-slate-900 text-white px-3 py-1.5 text-xs font-semibold">Régime normal · TVA 20 %</span>
-            <span class="text-[11px] text-slate-400"><%= lex.nounCap %> reconditionné<%= cart.isBoite ? 'e' : '' %> — non éligible à la TVA sur marge. Prix saisi en HT, TVA 20 % ajoutée.</span>
+            <span class="text-[11px] text-slate-400"><%= lex.nounCap %> reconditionné<%= (cart.isBoite || cart.isPont) ? 'e' : '' %> — non éligible à la TVA sur marge. Prix saisi en HT, TVA 20 % ajoutée.</span>
           </div>
           <% } else { %>
           <div class="mb-5 flex flex-wrap items-center gap-2">
@@ -296,7 +296,7 @@ function dt(v) {
           <input type="hidden" data-ctrl-rate value="0">
           <input type="hidden" data-ctrl-hours value="0">
           <div class="mb-4 p-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/60">
-            <p class="text-[11px] text-slate-500"><strong><%= lex.nounCap %> reconditionné<%= cart.isBoite ? 'e' : '' %></strong> — aucun coût de <%= cart.isBoite ? 'contrôle' : 'banc d\'essai' %> déduit de la marge (la remise à neuf est intégrée au prix d'achat). Régime <strong>TVA normale 20 %</strong> (HT + TVA), marge cible <strong>25 %</strong>.</p>
+            <p class="text-[11px] text-slate-500"><strong><%= lex.nounCap %> reconditionné<%= (cart.isBoite || cart.isPont) ? 'e' : '' %></strong> — aucun coût de <%= (cart.isBoite || cart.isPont) ? 'contrôle' : 'banc d\'essai' %> déduit de la marge (la remise à neuf est intégrée au prix d'achat). Régime <strong>TVA normale 20 %</strong> (HT + TVA), marge cible <strong>25 %</strong>.</p>
           </div>
           <% } else { %>
           <!-- Coûts de contrôle (port de test + MO de test) — TOUJOURS inclus dans la marge -->
@@ -394,7 +394,7 @@ function dt(v) {
           </div>
 
           <% const photoCategories = [
-            { key: 'engine',    label: cart.isBoite ? 'Photos boîte' : 'Photos moteur', hint: cart.isBoite ? 'Carter, mécatronique, étiquettes, n° de série' : 'Bloc moteur, accessoires, étiquettes, banc d\'essai' },
+            { key: 'engine',    label: cart.isPont ? 'Photos pièce' : cart.isBoite ? 'Photos boîte' : 'Photos moteur', hint: cart.isPont ? 'Pièce, étiquettes, références, n° de série' : cart.isBoite ? 'Carter, mécatronique, étiquettes, n° de série' : 'Bloc moteur, accessoires, étiquettes, banc d\'essai' },
             { key: 'kmReading', label: 'Relevé kilométrique', hint: 'Photo du compteur du véhicule donneur' },
           ]; %>
 
@@ -481,16 +481,21 @@ function dt(v) {
             <% // Template commercial pré-rempli — le commercial peut éditer avant envoi.
               // Accordé au genre selon la catégorie du lead (boîte fém. / moteur masc.).
               const b = !!cart.isBoite;
+              // Ponts, différentiels et boîtes de transfert : « la pièce » (lexique
+              // partagé avec le PDF et l'email), jamais « le moteur ».
+              const p = !!cart.isPont;
               const tplFirstName = (cart.firstName && cart.lastName) ? cart.firstName : '';
               const tplPlate = cart.plate || 'votre véhicule';
-              const tplModel = engineQuote.identifiedEngine.model || (b ? 'la boîte demandée' : 'le moteur demandé');
+              const tplModel = engineQuote.identifiedEngine.model || (p ? 'la pièce demandée' : b ? 'la boîte demandée' : 'le moteur demandé');
               const tplCode = engineQuote.identifiedEngine.code ? ' (' + engineQuote.identifiedEngine.code + ')' : '';
               const tplMileage = engineQuote.identifiedEngine.mileage > 0
                 ? new Intl.NumberFormat('fr-FR').format(engineQuote.identifiedEngine.mileage) + ' km certifiés au compteur'
                 : '';
               const tplCondition = engineQuote.identifiedEngine.condition;
               const tplIsRecond = tplCondition === 'reconditionne_complet' || tplCondition === 'reconditionne_chemise_fonte';
-              const tplConditionLine = tplCondition === 'reconditionne_chemise_fonte'
+              const tplConditionLine = p
+                ? (tplIsRecond ? lex.recondDesc : tplCondition === 'occasion' ? lex.occasionDesc : '')
+                : tplCondition === 'reconditionne_chemise_fonte'
                 ? (b
                     ? 'Il s\'agit d\'une boîte reconditionnée haut de gamme dans notre atelier — la solution premium pour fiabiliser durablement votre transmission.'
                     : 'Il s\'agit d\'un moteur reconditionné avec chemisage fonte — la solution premium pour fiabiliser durablement votre bloc moteur.')
@@ -505,7 +510,15 @@ function dt(v) {
                     : '';
               // Garantie selon l'état (cohérent avec le devis PDF/email) : reconditionné 12 mois, occasion 6 mois
               const tplWarranty = (tplCondition === 'reconditionne_chemise_fonte' || tplCondition === 'reconditionne_complet') ? 12 : 6;
-              const tplStock = engineQuote.stock.location === 'atelier'
+              const tplStock = p
+                ? (engineQuote.stock.location === 'atelier'
+                    ? (tplIsRecond ? 'La pièce est en stock, reconditionnée et contrôlée.' : 'La pièce est en stock, déjà contrôlée (jeu, denture, étanchéité).')
+                    : engineQuote.stock.location === 'sourcing'
+                      ? (tplIsRecond
+                          ? 'La pièce est reconditionnée à la commande, puis contrôlée avant expédition.'
+                          : 'La pièce est sur commande sur notre réseau professionnel. Elle sera obligatoirement contrôlée avant expédition.')
+                      : '')
+                : engineQuote.stock.location === 'atelier'
                 ? (tplIsRecond
                     ? (b
                         ? 'La boîte est reconditionnée dans notre atelier (remplacement des pièces d\'usure, mécatronique contrôlée).'
@@ -527,7 +540,9 @@ function dt(v) {
               const tplShippingBullet = engineQuote.stock.location === 'atelier'
                 ? '• Expédition Europe en 48-72h après accord'
                 : engineQuote.stock.location === 'sourcing'
-                  ? (tplIsRecond
+                  ? (p
+                      ? '• Expédition Europe sous 48-72h une fois la pièce contrôlée'
+                      : tplIsRecond
                       ? (b
                           ? '• Expédition Europe sous 48-72h une fois la boîte reconditionnée et contrôlée'
                           : '• Expédition Europe sous 48-72h une fois le moteur reconditionné et contrôlé')
@@ -536,13 +551,21 @@ function dt(v) {
                           : '• Expédition Europe sous 48-72h une fois le moteur validé sur notre banc d\'essai'))
                   : '• Expédition sécurisée Europe (palette, scellés, attestation)';
               // Contrôle au banc — vocabulaire spécifique (compression/endoscopie pour
-              // un moteur ; passage des rapports/mécatronique pour une boîte).
-              const tplBenchObligatoire = b
+              // un moteur ; passage des rapports/mécatronique pour une boîte ; jeu,
+              // denture, étanchéité pour un pont ou une boîte de transfert).
+              const tplBenchObligatoire = p
+                ? '• ' + lex.benchTestOccasion
+                : b
                 ? '• Contrôle obligatoire (passage des rapports, étanchéité, mécatronique)'
                 : '• Banc d\'essai obligatoire (compression, étanchéité, endoscopie)';
-              const tplBenchRecond = b
+              const tplBenchRecond = p
+                ? '• ' + lex.benchTestRecond
+                : b
                 ? '• Banc d\'essai (passage des rapports, étanchéité, mécatronique)'
                 : '• Banc d\'essai (compression, étanchéité, endoscopie)';
+              const tplRecondBullet = p
+                ? '• Reconditionnement complet (roulements, joints et pièces d\'usure remplacés)'
+                : '• Reconditionnement complet en atelier (pièces d\'usure remplacées)';
               const defaultMessage = [
                 tplFirstName ? `Bonjour ${tplFirstName},` : 'Bonjour,',
                 ``,
@@ -551,10 +574,10 @@ function dt(v) {
                 tplMileage ? `\nKilométrage : ${tplMileage}.` : '',
                 tplStock ? `\n${tplStock}${tplDelay}` : '',
                 ``,
-                `Vous trouverez en pièces jointes le devis détaillé au format PDF et les photos ${b ? 'de la boîte' : 'du moteur'}.`,
+                `Vous trouverez en pièces jointes le devis détaillé au format PDF et les photos ${p ? 'de la pièce' : b ? 'de la boîte' : 'du moteur'}.`,
                 ``,
                 `Pour rappel, nos engagements :`,
-                tplIsRecond ? `• Reconditionnement complet en atelier (pièces d'usure remplacées)` : tplBenchObligatoire,
+                tplIsRecond ? tplRecondBullet : tplBenchObligatoire,
                 tplIsRecond ? tplBenchRecond : `• Kilométrage certifié et photo du compteur transmise`,
                 `• Garantie ${tplWarranty} mois sans franchise kilométrique`,
                 tplShippingBullet,
@@ -1049,7 +1072,7 @@ function dt(v) {
     const missing = [];
     if (!code && !model) missing.push('identification <%= lex.noun %> (code et modèle vides)');
     if (!mileage) missing.push('kilométrage');
-    if (!condition) missing.push('état <%= lex.duNoun %> (occasion / reconditionné<%= cart.isBoite ? "e" : "" %>)');
+    if (!condition) missing.push('état <%= lex.duNoun %> (occasion / reconditionné<%= (cart.isBoite || cart.isPont) ? "e" : "" %>)');
     if (!stock) missing.push('stock (atelier / sourcing)');
 
     if (canSend && missing.length > 0) {

@@ -91,9 +91,15 @@ test('la recherche de leads retrouve le client par tous ses identifiants', async
     });
 
     await t.test('sans recherche, la période et la file « À traiter » s\'appliquent toujours', async () => {
-      const result = await search({});
-      assert.equal(result.options.view, 'todo');
-      assert.deepEqual(emailsOf(result), [other.email]);
+      /* Depuis le 18/11/2026, « À traiter » ne contient que les vraies demandes
+         (devis, landings, contact, appel manqué…) : un simple panier abandonné
+         n'y entre pas (on ne démarche pas un particulier qui n'a rien demandé).
+         Il reste dans « Tous », où la période de 30 jours s'applique. */
+      const todo = await search({});
+      assert.equal(todo.options.view, 'todo');
+      const dansLaFile = (todo.options.groupes || []).reduce((acc, g) => acc.concat(g.items.map((l) => l.email)), []);
+      assert.deepEqual(dansLaFile, []);
+      assert.deepEqual(emailsOf(await search({ view: 'all' })), [other.email]);
     });
 
     await t.test('par email, même hors période et hors file', async () => {
