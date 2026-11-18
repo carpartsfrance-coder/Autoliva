@@ -398,6 +398,11 @@ router.post('/api/leads/:id/prendre', requireAdminAuth, leadWorkController.postP
 router.post('/api/leads/:id/appel', requireAdminAuth, leadWorkController.postAppel);
 router.post('/api/leads/:id/prochaine-action', requireAdminAuth, leadWorkController.postProchaineAction);
 router.post('/api/leads/:id/cloturer', requireAdminAuth, leadWorkController.postCloturer);
+/* File de travail : ce qui est arrivé depuis l'affichage, et les actions en
+   lot. Aucune route /api/leads/:id/ ne finit par « nouveautes », et « lot »
+   n'est pas un identifiant valide : pas de collision avec les routes ci-dessus. */
+router.get('/api/leads/file/nouveautes', requireAdminAuth, leadWorkController.getNouveautes);
+router.post('/api/leads/lot', requireAdminAuth, leadWorkController.postLot);
 
 /* ──────────────────────────────────────────────────────────────────────
  * /admin/devis-moteurs — workflow commercial dédié moteurs d'occasion

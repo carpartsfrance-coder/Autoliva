@@ -6,6 +6,8 @@
  *   POST /admin/api/leads/:id/appel           résultat d'un appel + suite
  *   POST /admin/api/leads/:id/prochaine-action planifier la suite
  *   POST /admin/api/leads/:id/cloturer        Gagné / Perdu (motif obligatoire)
+ *   GET  /admin/api/leads/file/nouveautes     ce qui est arrivé depuis l'affichage
+ *   POST /admin/api/leads/lot                 même action sur plusieurs dossiers
  *
  * Règle d'or : une affaire ouverte n'est JAMAIS laissée sans prochaine action.
  * Chaque action enregistre aussi une note lisible dans l'historique du lead.
@@ -16,7 +18,7 @@ const mongoose = require('mongoose');
 const AbandonedCart = require('../models/AbandonedCart');
 const ho = require('../services/heuresOuvrees');
 const { minuitParis } = require('../services/heureParis');
-const { TYPES_ACTION, MOTIFS_PERTE, RESULTATS_APPEL, computeWork, libelleUrgence } = require('../services/leadWork');
+const { TYPES_ACTION, MOTIFS_PERTE, RESULTATS_APPEL, computeWork, libelleUrgence, SOURCES_DEMANDE } = require('../services/leadWork');
 
 function admin(req) {
   const a = (req && req.session && req.session.admin) || {};
@@ -295,4 +297,120 @@ async function postCloturer(req, res, next) {
   }
 }
 
-module.exports = { postPrendre, postAppel, postProchaineAction, postCloturer, echeance };
+/**
+ * GET /admin/api/leads/file/nouveautes?depuis=ISO
+ *
+ * « Qu'est-ce qui est arrivé depuis que j'ai ouvert la page ? » La file est
+ * rendue par le serveur : un lead qui arrive pendant qu'un commercial
+ * travaille restait invisible jusqu'au prochain F5. Deux comptages, pas de
+ * données personnelles : la page affiche « 3 nouvelles demandes » et propose
+ * d'actualiser.
+ */
+async function getNouveautes(req, res, next) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'Base de données indisponible.' });
+    const depuis = new Date(String(req.query.depuis || ''));
+    if (Number.isNaN(depuis.getTime())) return res.status(400).json({ ok: false, error: 'Date de référence invalide.' });
+    /* Garde-fou : une page laissée ouverte un week-end ne doit pas compter
+       trois jours d'arrivées comme « nouveautés ». */
+    const plancher = new Date(Date.now() - 36 * 3600 * 1000);
+    const borne = depuis < plancher ? plancher : depuis;
+
+    const [nouvelles, reponses] = await Promise.all([
+      AbandonedCart.countDocuments({
+        archived: { $ne: true },
+        captureSource: { $in: SOURCES_DEMANDE },
+        createdAt: { $gte: borne },
+      }),
+      AbandonedCart.countDocuments({
+        archived: { $ne: true },
+        communications: { $elemMatch: { sens: 'entrant', at: { $gte: borne } } },
+      }),
+    ]);
+    return res.json({ ok: true, nouvelles, reponses, depuis: borne.toISOString() });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+/** Au-delà, c'est un ménage de masse : il se fait en plusieurs fois, à l'œil. */
+const LOT_MAX = 300;
+
+/**
+ * POST /admin/api/leads/lot  { ids: [], action: 'prendre'|'perdu', motif, note }
+ *
+ * « Anciens dossiers » compte des centaines de demandes mortes qu'il fallait
+ * clôturer une par une : personne ne le faisait, et le groupe ne désemplissait
+ * pas. Perdre en lot demande un motif, comme à l'unité — c'est ce qui permet
+ * de savoir ce qui fait perdre des ventes. Rien n'est supprimé : un dossier
+ * clôturé par erreur se rouvre depuis sa fiche.
+ */
+async function postLot(req, res, next) {
+  try {
+    if (mongoose.connection.readyState !== 1) return res.status(503).json({ ok: false, error: 'Base de données indisponible.' });
+    const b = req.body || {};
+    const action = String(b.action || '');
+    if (!['prendre', 'perdu'].includes(action)) return res.status(400).json({ ok: false, error: 'Action inconnue.' });
+
+    const bruts = Array.isArray(b.ids) ? b.ids : [];
+    const ids = [...new Set(bruts.map(String))].filter((x) => mongoose.Types.ObjectId.isValid(x));
+    if (!ids.length) return res.status(400).json({ ok: false, error: 'Aucun dossier sélectionné.' });
+    if (ids.length > LOT_MAX) return res.status(400).json({ ok: false, error: `Trop de dossiers d'un coup (${ids.length}, maximum ${LOT_MAX}).` });
+
+    const moi = admin(req);
+    const now = new Date();
+
+    if (action === 'prendre') {
+      /* Seulement les dossiers que personne ne suit : on ne prend pas ceux
+         d'un collègue sans le lui dire. */
+      const libre = { _id: { $in: ids }, $or: [{ takenByName: '' }, { takenByName: null }, { takenByName: { $exists: false } }] };
+      const r = await AbandonedCart.updateMany(libre, {
+        $set: { takenBy: moi.id, takenByName: moi.court, takenAt: now },
+        $push: { notes: { text: `Dossier pris en charge par ${moi.court}`, addedBy: moi.id, addedByName: moi.nom, addedAt: now } },
+      });
+      const n = r.modifiedCount || 0;
+      const ignores = ids.length - n;
+      return res.json({
+        ok: true,
+        modifies: n,
+        message: `${n} dossier${n > 1 ? 's' : ''} pris en charge`
+          + (ignores > 0 ? ` — ${ignores} déjà suivi${ignores > 1 ? 's' : ''} par quelqu'un` : ''),
+      });
+    }
+
+    if (!MOTIFS_PERTE[b.motif]) return res.status(400).json({ ok: false, error: 'Choisis le motif de perte.' });
+    const precision = String(b.note || '').trim().slice(0, 500);
+    const texte = `✖ Perdu — ${MOTIFS_PERTE[b.motif]}${precision ? ' — ' + precision : ''} (clôture en lot par ${moi.court})`;
+
+    /* Les dossiers déjà gagnés ne sont pas repassés en perdu par une sélection
+       trop large : une vente encaissée ne se perd pas d'un clic. */
+    const aClore = { _id: { $in: ids }, manualStatus: { $ne: 'converted' } };
+    const r = await AbandonedCart.updateMany(aClore, {
+      $set: {
+        manualStatus: 'lost', manualStatusBy: moi.id, manualStatusByName: moi.nom, manualStatusAt: now,
+        lostReason: b.motif,
+        nextAction: { type: '', dueAt: null, note: '', setByName: moi.court, setAt: now },
+      },
+      $push: { notes: { text: texte, addedBy: moi.id, addedByName: moi.nom, addedAt: now } },
+    });
+    /* Le dossier devis suit, sinon il resterait ouvert dans Devis moteurs. */
+    await AbandonedCart.updateMany({
+      _id: { $in: ids },
+      'engineQuote.status': { $nin: ['won', 'acompte_recu', 'lost'] },
+      manualStatus: 'lost',
+    }, { $set: { 'engineQuote.status': 'lost' } });
+
+    const n = r.modifiedCount || 0;
+    const ignores = ids.length - n;
+    return res.json({
+      ok: true,
+      modifies: n,
+      message: `${n} dossier${n > 1 ? 's' : ''} clôturé${n > 1 ? 's' : ''} en perdu (${MOTIFS_PERTE[b.motif]})`
+        + (ignores > 0 ? ` — ${ignores} ignoré${ignores > 1 ? 's' : ''} (déjà gagné${ignores > 1 ? 's' : ''})` : ''),
+    });
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { postPrendre, postAppel, postProchaineAction, postCloturer, getNouveautes, postLot, echeance, LOT_MAX };

@@ -352,6 +352,9 @@ function toCardModel(c, now = new Date()) {
     takenByName: c.takenByName || '',
     takenAtRel: c.takenAt ? formatRelative(c.takenAt) : '',
     nextActionNote: (c.nextAction && c.nextAction.note) || '',
+    /* Type de la prochaine action : un report rapide (« +2 h ») doit la
+       repousser, pas la remplacer par « Rappeler ». */
+    nextActionType: (c.nextAction && c.nextAction.type) || '',
     lastCallOutcome: c.lastCallOutcome && c.lastCallOutcome.outcome ? {
       label: RESULTATS_APPEL[c.lastCallOutcome.outcome] || c.lastCallOutcome.outcome,
       by: c.lastCallOutcome.byName || '',

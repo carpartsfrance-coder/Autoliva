@@ -177,6 +177,17 @@
         <% if (!ferme && pa !== 'plan') { %>
           <button type="button" class="js-planifier <%= btnSecond %>" data-lead-id="<%= c.id %>" title="Prévoir la suite et sa date"><span class="material-symbols-outlined text-[17px]">event</span>Planifier</button>
         <% } %>
+        <% if (!ferme && !faible) { %>
+          <%/* Report en un clic : rouvrir la fenêtre « Planifier » pour
+                repousser de deux heures faisait quatre clics, donc personne ne
+                le faisait et l'échéance restait fausse. */%>
+          <span class="inline-flex overflow-hidden rounded-xl border border-slate-300 bg-white">
+            <button type="button" class="js-reporter px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" data-lead-id="<%= c.id %>"
+                    data-quand="2h" data-type="<%= c.nextActionType || 'callback' %>" title="Repousser de 2 heures ouvrées et passer au client suivant">+2 h</button>
+            <button type="button" class="js-reporter border-l border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" data-lead-id="<%= c.id %>"
+                    data-quand="demain" data-type="<%= c.nextActionType || 'callback' %>" title="Repousser à demain 9 h 30 (prochain jour ouvré) et passer au client suivant">Demain</button>
+          </span>
+        <% } %>
       </div>
 
       <% if (!ferme && c.phone && !w.canCall) { %>
