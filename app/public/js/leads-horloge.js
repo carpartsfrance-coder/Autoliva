@@ -70,6 +70,29 @@
     return 'Retard ' + Math.round(m / MIN_JOUR_OUVRE) + ' j';
   }
 
+  /** « 45 min », « 3 h », « 4 jours ouvrés » — miroir de leadWork.duree. */
+  function duree(minutes, court) {
+    var m = Math.max(1, Math.round(Number(minutes) || 0));
+    if (m < 60) return m + ' min';
+    if (m < MIN_JOUR_OUVRE) return Math.round(m / 60) + ' h';
+    var j = Math.round(m / MIN_JOUR_OUVRE);
+    return court ? j + ' j' : j + ' jour' + (j > 1 ? 's' : '') + ' ouvré' + (j > 1 ? 's' : '');
+  }
+
+  /* Une échéance que personne n'a promise ne dit jamais « en retard » : elle
+     dit depuis combien de temps le client n'a plus de nouvelles. */
+
+  /** « Relancer · 4 j », « Devis · 2 j » — miroir de leadWork.libelleUrgenceCourt. */
+  function relanceCourt(minutes, devis) {
+    return (devis ? 'Devis' : 'Relancer') + ' · ' + duree(minutes, true);
+  }
+
+  /** « À relancer — sans nouvelles depuis 4 jours ouvrés » — miroir de leadWork.libelleUrgence. */
+  function relanceLong(minutes, devis, surEcheance) {
+    return (devis ? 'Devis à préparer' : 'À relancer')
+      + (surEcheance ? ' — échéance dépassée de ' : ' — sans nouvelles depuis ') + duree(minutes, false);
+  }
+
   /** « En retard de 2 h », « En retard de 3 jours ouvrés » — miroir de leadWork.libelleUrgence. */
   function retardLong(minutes) {
     var m = Math.max(0, Math.round(Number(minutes) || 0));
@@ -85,6 +108,9 @@
     minutesOuvrees: minutesOuvrees,
     dureeOuvree: dureeOuvree,
     retardCourt: retardCourt,
+    duree: duree,
+    relanceCourt: relanceCourt,
+    relanceLong: relanceLong,
     MIN_JOUR_OUVRE: MIN_JOUR_OUVRE,
   };
 }));

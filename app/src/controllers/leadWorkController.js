@@ -66,7 +66,10 @@ function echeance(raw, now = new Date()) {
     if (ho.jourOuvre(now) && now.getTime() < cetAprem.getTime()) return cetAprem;
     return aHeureParis(ho.ajouterJoursOuvres(now, 1), 14);
   }
-  const jours = { demain: 1, '2j': 2, '5j': 5 }[v];
+  /* Les longues attentes (« il me rappelle le mois prochain ») n'existaient
+     pas : faute de pouvoir le dire, le dossier repassait en retard tous les
+     deux jours ouvrés. Un mois ≈ 21 jours ouvrés. */
+  const jours = { demain: 1, '2j': 2, '5j': 5, '1sem': 5, '2sem': 10, '1mois': 21 }[v];
   if (jours) return aHeureParis(ho.ajouterJoursOuvres(now, jours), 9, 30);
   const date = new Date(v);
   if (Number.isNaN(date.getTime())) return null;

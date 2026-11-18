@@ -45,9 +45,13 @@ test('« Contacté » ne fait plus sortir le client de la file', () => {
   }, NOW);
   assert.equal(w.intent, 'opportunity');
   assert.equal(w.stage, 'en_cours');
-  /* Sans prochaine action posée : suivi à +2 jours ouvrés → en retard. */
+  /* Sans prochaine action posée : suivi à +2 jours ouvrés → échéance passée.
+     Mais PERSONNE n'a promis cette heure : le dossier va dans « À relancer »,
+     pas dans le rouge. C'est ce mélange qui avait fabriqué un mur de 168
+     lignes rouges que le commercial avait fini par ne plus lire. */
   assert.equal(w.overdue, true);
-  assert.equal(w.group, 'retard');
+  assert.equal(w.promesse, false);
+  assert.equal(w.group, 'relances');
 });
 
 test('un appel sans réponse avec rappel planifié tombe dans « Rappels du jour »', () => {
