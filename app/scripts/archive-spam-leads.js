@@ -11,7 +11,9 @@
  * Le classement utilise exactement le même filtre que le formulaire
  * (services/leadSpamFilter.js) : deux signaux concordants minimum. Mesuré sur
  * les 3 027 leads de production au moment de l'écriture : 72 spams détectés,
- * 0 lead légitime touché.
+ * 0 lead légitime touché. Depuis le 18/11/2026, les leads « Article blog »
+ * passent par le filtre de ce formulaire (signauxBlog) : 209 robots sur 230,
+ * 0 vrai demandeur touché.
  *
  * ── Archivé, pas supprimé ───────────────────────────────────────────────────
  * On pose `archived: true` et une trace `spamSignals`. Rien n'est effacé :
@@ -53,7 +55,13 @@ function champs(lead) {
 
   const spams = [];
   for (const l of leads) {
-    const sigs = filtre.signaux(champs(l));
+    /* Formulaire d'article de blog : son propre gabarit de robot (11/2026),
+       voir leadSpamFilter.signauxBlog. Les autres sources gardent le filtre
+       du formulaire de contact. */
+    const r = l.requested || {};
+    const sigs = l.captureSource === 'blog_cta'
+      ? filtre.signauxBlog({ phone: l.phone, vehicle: r.vehicle, vin: r.vin, plate: r.plate })
+      : filtre.signaux(champs(l));
     if (sigs.length >= 2) spams.push({ lead: l, sigs });
   }
 

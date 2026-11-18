@@ -25,6 +25,7 @@ const {
   phoneMatchVariants,
 } = require('../services/leadCapture');
 const brand = require('../config/brand');
+const leadSpamFilter = require('../services/leadSpamFilter');
 
 function trim(v) { return typeof v === 'string' ? v.trim() : ''; }
 
@@ -393,6 +394,17 @@ async function postBlogCta(req, res) {
 
     if (!email && !phone) return res.status(400).json({ ok: false, error: 'no_contact' });
     if (email && !email.includes('@')) return res.status(400).json({ ok: false, error: 'invalid_email' });
+
+    /* Robots : champ-piège rempli, ou deux signaux concordants (numéro hors
+       des pays desservis + aucun véhicule). On répond « ok » comme pour un
+       vrai envoi, sans créer de lead ni envoyer d'email de confirmation à une
+       adresse inventée (chaque envoi abîme la réputation du domaine). */
+    const piege = trim(req.body && req.body.website);
+    const signauxSpam = leadSpamFilter.signauxBlog({ phone, vehicle, vin, plate });
+    if (piege || signauxSpam.length >= 2) {
+      if (!piege) console.warn('[blog-cta] spam écarté —', signauxSpam.join('+'), '|', String(email || phone).slice(0, 60));
+      return res.json({ ok: true });
+    }
 
     const productItem = await buildItemFromProductId(productId);
 

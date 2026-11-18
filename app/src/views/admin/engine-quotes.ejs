@@ -235,6 +235,29 @@
             </tbody>
           </table>
         </div>
+        <% if (typeof pagination !== 'undefined' && pagination && pagination.totalPages > 1) { %>
+          <%
+            const pageQS = function (n) {
+              const p = new URLSearchParams();
+              if (view === 'archived') p.set('view', 'archived');
+              if (filters.status) p.set('status', filters.status);
+              if (filters.condition) p.set('condition', filters.condition);
+              if (filters.sourcing) p.set('sourcing', '1');
+              if (filters.q) p.set('q', filters.q);
+              if (n > 1) p.set('page', String(n));
+              const s = p.toString();
+              return '/admin/devis-moteurs' + (s ? '?' + s : '');
+            };
+          %>
+          <div class="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-100 text-sm">
+            <div class="text-slate-500"><%= pagination.from %>–<%= pagination.to %> sur <%= pagination.totalItems %> dossiers</div>
+            <div class="flex items-center gap-2">
+              <% if (pagination.hasPrev) { %><a href="<%= pageQS(pagination.page - 1) %>" class="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">← Précédent</a><% } %>
+              <span class="text-slate-500">Page <%= pagination.page %> / <%= pagination.totalPages %></span>
+              <% if (pagination.hasNext) { %><a href="<%= pageQS(pagination.page + 1) %>" class="rounded-lg border border-slate-200 px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">Suivant →</a><% } %>
+            </div>
+          </div>
+        <% } %>
       </div>
     <% } %>
   </div>

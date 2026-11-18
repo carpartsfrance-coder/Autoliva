@@ -335,9 +335,19 @@ async function getEngineQuotesList(req, res, next) {
       ];
     }
 
+    /* Pagination. Avant : .limit(200) sans page suivante — au-delà de 200
+       dossiers, les plus anciens disparaissaient sans prévenir et le compteur
+       « Total » restait bloqué à 200 (constaté le 18/11/2026). */
+    const perPage = 50;
+    const totalItems = await AbandonedCart.countDocuments(query);
+    const totalPages = Math.max(1, Math.ceil(totalItems / perPage));
+    const currentPage = Math.min(Math.max(1, parseInt(req.query.page, 10) || 1), totalPages);
+    const skip = (currentPage - 1) * perPage;
+
     const carts = await AbandonedCart.find(query)
       .sort({ lastActivityAt: -1 })
-      .limit(200)
+      .skip(skip)
+      .limit(perPage)
       .lean();
 
     const now = Date.now();
@@ -412,17 +422,57 @@ async function getEngineQuotesList(req, res, next) {
       return new Date(b.receivedAt) - new Date(a.receivedAt);
     });
 
-    // Aggrégats KPI
+    /* KPIs calculés sur TOUS les dossiers de la vue (actifs ou archivés),
+       indépendamment de la page affichée et des filtres — avant, ils étaient
+       comptés sur les 200 lignes chargées. */
+    const kpiBase = { captureSource: LEAD_SOURCE_FILTER, archived: query.archived };
+    const ADS_CONDITION = { $or: [
+      { 'attribution.gclid': { $nin: ['', null] } },
+      { 'attribution.medium': { $in: ['cpc', 'ppc', 'paid', 'CPC', 'PPC'] } },
+      { 'attribution.source': { $in: ['google_ads', 'Google_Ads', 'google-ads'] } },
+    ] };
+    const [kTotal, kNew, kAnalyzing, kQuoteSent, kWon, kSourcing, kAds, quoteSentLeads] = await Promise.all([
+      AbandonedCart.countDocuments(kpiBase),
+      /* « Nouveau » = statut absent OU 'new' (défaut du schéma) */
+      AbandonedCart.countDocuments(Object.assign({}, kpiBase, { $or: [{ 'engineQuote.status': 'new' }, { 'engineQuote.status': { $exists: false } }, { 'engineQuote.status': null }] })),
+      AbandonedCart.countDocuments(Object.assign({}, kpiBase, { 'engineQuote.status': 'analyzing' })),
+      AbandonedCart.countDocuments(Object.assign({}, kpiBase, { 'engineQuote.status': 'quote_sent' })),
+      AbandonedCart.countDocuments(Object.assign({}, kpiBase, { 'engineQuote.status': { $in: ['won', 'acompte_recu'] } })),
+      AbandonedCart.countDocuments(Object.assign({}, kpiBase, { 'engineQuote.autoDevis.status': 'sourcing' })),
+      AbandonedCart.countDocuments(Object.assign({}, kpiBase, ADS_CONDITION)),
+      AbandonedCart.find(Object.assign({}, kpiBase, { 'engineQuote.status': 'quote_sent' }))
+        .select('engineQuote.pricing engineQuote.identifiedEngine requested.vehicle captureSource')
+        .lean(),
+    ]);
+    let caExpected = 0;
+    let marginExpected = 0;
+    quoteSentLeads.forEach((c) => {
+      const eq = c.engineQuote || {};
+      caExpected += (eq.pricing && eq.pricing.sellPrice) || 0;
+      marginExpected += calcMargin(eq.pricing, leadIsReconditionne(eq, c)).marginEur || 0;
+    });
+
     const stats = {
-      total: items.length,
-      newCount: items.filter(i => i.status === 'new').length,
-      analyzing: items.filter(i => i.status === 'analyzing').length,
-      quoteSent: items.filter(i => i.status === 'quote_sent').length,
-      sourcing: items.filter(i => i.needsSourcing).length,
-      won: items.filter(i => i.status === 'won').length,
-      fromAds: items.filter(i => i.source && i.source.isAds).length,
-      caExpected: items.filter(i => i.status === 'quote_sent').reduce((s, i) => s + i.sellPrice, 0),
-      marginExpected: items.filter(i => i.status === 'quote_sent').reduce((s, i) => s + i.marginEur, 0),
+      total: kTotal,
+      newCount: kNew,
+      analyzing: kAnalyzing,
+      quoteSent: kQuoteSent,
+      sourcing: kSourcing,
+      won: kWon,
+      fromAds: kAds,
+      caExpected,
+      marginExpected,
+    };
+
+    const pagination = {
+      page: currentPage,
+      perPage,
+      totalItems,
+      totalPages,
+      from: totalItems ? skip + 1 : 0,
+      to: totalItems ? skip + items.length : 0,
+      hasPrev: currentPage > 1,
+      hasNext: currentPage < totalPages,
     };
 
     // Compteur d'archivés (pour le badge du toggle), indépendant des filtres.
@@ -439,6 +489,7 @@ async function getEngineQuotesList(req, res, next) {
       filters: { status: statusFilter, q, condition: conditionFilter, sourcing: sourcingFilter },
       view,
       archivedCount,
+      pagination,
       statusLabels: STATUS_LABELS,
       fmt,
     });

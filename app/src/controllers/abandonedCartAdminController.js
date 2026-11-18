@@ -331,6 +331,11 @@ async function getAdminLeadsPage(req, res, next) {
     /* Construction du filtre principal */
     const query = {};
 
+    /* Leads archivés (robots rangés par le filtre anti-spam, dossiers devis
+       archivés) : hors de la liste et des compteurs. La recherche les
+       retrouve quand même — un client qui appelle doit toujours être trouvé. */
+    if (!q) query.archived = { $ne: true };
+
     const allowedStatuses = new Set(['abandoned', 'reminded_1', 'reminded_2', 'reminded_3', 'recovered', 'expired']);
     if (status && allowedStatuses.has(status)) query.status = status;
 
@@ -386,7 +391,7 @@ async function getAdminLeadsPage(req, res, next) {
        gonflait « À contacter » avec des clients déjà en cours de devis. */
     const kpiSince = new Date();
     kpiSince.setDate(kpiSince.getDate() - 30);
-    const kpiBase = { lastActivityAt: { $gte: kpiSince }, captureSource: { $nin: ENGINE_PIPELINE_SOURCES } };
+    const kpiBase = { lastActivityAt: { $gte: kpiSince }, captureSource: { $nin: ENGINE_PIPELINE_SOURCES }, archived: { $ne: true } };
 
     const [totalAll, uncontactedAll, contactedAll, convertedAll, pendingAggregate, todoCount, allCount] = await Promise.all([
       AbandonedCart.countDocuments(Object.assign({}, kpiBase)),

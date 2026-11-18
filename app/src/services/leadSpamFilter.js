@@ -82,4 +82,47 @@ function estSpam(champs) {
   return signaux(champs).length >= 2;
 }
 
-module.exports = { estSpam, signaux, telephoneEtranger };
+/* ── Formulaire « Conseil expert » des articles de blog (11/2026) ───────────
+ *
+ * Deuxième robot, autre gabarit : 209 faux leads en 8 jours sur un seul
+ * article (boîte BMW GA6HP26Z), soit 91 % de la source « Article blog ».
+ * Prénom seul (« Lacey », « Tina »…), numéro américain au format
+ * international (+1…), email japonais ou américain, message en anglais sans
+ * rapport (« this product is tasty »), aucun véhicule, aucune plaque, aucun
+ * VIN. Le filtre du formulaire de contact ne le voyait pas : son numéro
+ * commence par « + », donc n'est pas une « suite de chiffres nue ».
+ *
+ * Même principe : DEUX signaux concordants. Mesuré le 18/11/2026 sur les 230
+ * leads « Article blog » des 90 derniers jours : 209/209 robots écartés, 0
+ * des 21 vrais demandeurs touché (tous en 06/07 ou sans téléphone, et 18 sur
+ * 21 décrivent leur véhicule).
+ */
+
+/** Indicatifs des pays où Autoliva a de vrais clients : toute l'Europe (+3x,
+    +4x), la Turquie, le Maghreb et l'outre-mer français. */
+const INDICATIFS_DESSERVIS = /^\+(3\d|4\d|90|212|213|216|262|269|508|590|594|596|681|687|689)/;
+
+/** Numéro au format international explicite, hors des pays desservis. */
+function telephoneHorsZone(brut) {
+  const s = String(brut || '').replace(/[\s.\-()]/g, '');
+  if (!/^\+\d{6,}$/.test(s)) return false;
+  return !INDICATIFS_DESSERVIS.test(s);
+}
+
+function signauxBlog({ phone, vehicle, vin, plate } = {}) {
+  const trouves = [];
+  if (telephoneHorsZone(phone)) trouves.push('telephone_hors_zone');
+  /* Le formulaire demande le véhicule et le VIN : un vrai demandeur en remplit
+     presque toujours un. Seul, ce n'est pas une preuve (le formulaire de la
+     colonne de droite ne demande que l'email). */
+  if (!String(vehicle || '').trim() && !String(vin || '').trim() && !String(plate || '').trim()) {
+    trouves.push('aucun_vehicule');
+  }
+  return trouves;
+}
+
+function estSpamBlog(champs) {
+  return signauxBlog(champs).length >= 2;
+}
+
+module.exports = { estSpam, signaux, telephoneEtranger, estSpamBlog, signauxBlog, telephoneHorsZone };
