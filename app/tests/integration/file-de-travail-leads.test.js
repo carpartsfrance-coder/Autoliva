@@ -60,6 +60,20 @@ test('file de travail : toutes les vraies demandes, une suite pour chacune', asy
     abandonedAt: new Date(maintenant - 3600000), lastActivityAt: new Date(maintenant - 3600000),
     requested: { ref: '02E 325 025', vin: 'VSSZZZ5FZGR076791' },
   });
+  /* Demande de juillet jamais traitée : perdue de fait, hors file (mise en
+     ligne du 18/11 : 2 901 dossiers de ce genre faussaient les compteurs). */
+  await AbandonedCart.create({
+    sessionId: 's-vieux', captureSource: 'devis', email: 'vieille-demande@example.com', phone: '0611111111',
+    abandonedAt: new Date(maintenant - 60 * 86400000), createdAt: new Date(maintenant - 60 * 86400000),
+    lastActivityAt: new Date(maintenant - 60 * 86400000),
+  });
+  /* Vieille demande mais suivie : une prochaine action est posée → dans la file. */
+  await AbandonedCart.create({
+    sessionId: 's-vieux-suivi', captureSource: 'devis', email: 'vieille-suivie@example.com', phone: '0622222222',
+    abandonedAt: new Date(maintenant - 60 * 86400000), createdAt: new Date(maintenant - 60 * 86400000),
+    lastActivityAt: new Date(maintenant - 60 * 86400000),
+    nextAction: { type: 'callback', dueAt: new Date(maintenant + 86400000) },
+  });
   await AbandonedCart.create({
     sessionId: 's-news', captureSource: 'newsletter', email: 'newsletter-seule@example.com',
     abandonedAt: new Date(maintenant - 3600000), lastActivityAt: new Date(maintenant - 3600000),
@@ -94,6 +108,10 @@ test('file de travail : toutes les vraies demandes, une suite pour chacune', asy
     assert.ok(!html.includes('newsletter-seule@example.com'), 'newsletter hors file');
     assert.ok(!html.includes('robot-archive@example.jp'), 'robot archivé hors file');
     assert.ok(html.includes('Nouvelles demandes'));
+    assert.ok(!html.includes('vieille-demande@example.com'), 'demande de plus de 45 jours jamais traitée : hors file');
+    assert.ok(html.includes('vieille-suivie@example.com'), 'vieille demande suivie (prochaine action) : dans la file');
+    const tous = await page('/admin/activite-panier?q=vieille-demande@example.com');
+    assert.ok(tous.includes('vieille-demande@example.com'), 'toujours retrouvable par la recherche');
   });
 
   await t.test('« J’ai appelé » exige un résultat et une suite', async () => {

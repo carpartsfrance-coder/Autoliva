@@ -15,8 +15,20 @@ const AbandonedCart = require('../models/AbandonedCart');
 const ho = require('./heuresOuvrees');
 const { computeWork, comparer, GROUPES, SOURCES_DEMANDE } = require('./leadWork');
 
-/** Fenêtre des dossiers repris dans la file (au-delà : onglet « Tous »). */
-const FENETRE_JOURS = 120;
+/**
+ * Fenêtres de la file (au-delà : onglet « Tous les leads », recherche).
+ *
+ * Mise en ligne du 18/11/2026 : sans limite d'âge, la file affichait 2 901
+ * « anciens dossiers » — des demandes d'avril à juillet que personne n'avait
+ * jamais traitées (elles étaient invisibles avant). Les compteurs « En retard »
+ * (3 101) ne voulaient plus rien dire. Une demande jamais rappelée depuis plus
+ * de 45 jours est perdue de fait : elle reste consultable, pas à traiter.
+ *  - demande jamais suivie : reçue depuis moins de 45 jours ;
+ *  - dossier suivi à l'ancienne (« Contacté » sans prochaine action) :
+ *    dernier contact depuis moins de 45 jours ;
+ *  - dossier avec une prochaine action datée (nouveau système) : toujours.
+ */
+const FENETRE_DEMANDE_JOURS = 45;
 const PLAFOND = 4000;
 /** Cartes affichées par groupe avant « Afficher les suivants ». */
 const PAR_GROUPE = 15;
@@ -49,25 +61,21 @@ function categorie(lead) {
 }
 
 function filtreBase(now) {
-  const depuis = new Date(now.getTime() - FENETRE_JOURS * 86400000);
+  const depuis = new Date(now.getTime() - FENETRE_DEMANDE_JOURS * 86400000);
   return {
     archived: { $ne: true },
     manualStatus: { $nin: ['converted', 'lost'] },
     'engineQuote.status': { $nin: ['won', 'lost', 'acompte_recu'] },
     status: { $ne: 'recovered' },
-    $and: [
-      { $or: [
-        { captureSource: { $in: SOURCES_DEMANDE } },
-        { takenByName: { $nin: ['', null] } },
-        { 'nextAction.dueAt': { $ne: null } },
-        { manualStatus: 'contacted' },
-      ] },
-      { $or: [
-        { abandonedAt: { $gte: depuis } },
-        { createdAt: { $gte: depuis } },
-        { lastActivityAt: { $gte: depuis } },
-        { 'nextAction.dueAt': { $ne: null } },
-      ] },
+    $or: [
+      /* Suivi avec le nouveau système : une prochaine action est posée. */
+      { 'nextAction.dueAt': { $ne: null } },
+      /* Vraie demande récente. */
+      { captureSource: { $in: SOURCES_DEMANDE }, $or: [{ abandonedAt: { $gte: depuis } }, { createdAt: { $gte: depuis } }] },
+      /* Dossier pris en main récemment (y compris « Contacté » d'avant). */
+      { takenAt: { $gte: depuis } },
+      { manualStatus: 'contacted', $or: [{ manualStatusAt: { $gte: depuis } }, { lastManualContactAt: { $gte: depuis } }] },
+      { 'lastCallOutcome.at': { $gte: depuis } },
     ],
   };
 }
@@ -187,4 +195,4 @@ async function chargerFile(opts = {}) {
   };
 }
 
-module.exports = { chargerFile, categorie, PAR_GROUPE };
+module.exports = { chargerFile, categorie, filtreBase, PAR_GROUPE };

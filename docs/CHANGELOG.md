@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-18 (après mise en ligne) — Leads à traiter : file limitée aux demandes récentes ou suivies
+
+- À la mise en ligne, la file affichait 3 131 dossiers dont 2 901 « anciens à reprendre » : des demandes d'avril à juillet que personne n'avait jamais traitées (invisibles avant). Les compteurs « En retard » (3 101) et « Jamais contactés » (2 443) n'aidaient plus à piloter.
+- La file contient maintenant : les demandes reçues depuis moins de 45 jours ; les dossiers pris en main ou contactés depuis moins de 45 jours ; tout dossier avec une prochaine action datée, quel que soit son âge. Les plus vieilles demandes restent dans « Tous les leads » et dans la recherche.
+- Le compteur « En retard » de la page Devis utilise le même périmètre.
+- Test : `tests/integration/file-de-travail-leads.test.js` (demande de 60 jours jamais traitée → hors file mais retrouvable ; vieille demande avec prochaine action → dans la file).
+
 ## 2026-11-18 — Leads : une seule file de travail, aucune demande oubliée
 
 Analyse menée en trois tours avec ChatGPT (audit, fonctionnement cible, plan final), puis réalisée ici.

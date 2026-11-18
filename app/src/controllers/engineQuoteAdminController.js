@@ -495,7 +495,11 @@ async function getEngineQuotesList(req, res, next) {
     });
 
     /* « En retard » : échéance passée sur les dossiers ouverts (même calcul que la file). */
-    const actifsPourRetard = await AbandonedCart.find(Object.assign({}, kpiBase, { 'engineQuote.status': { $nin: ['won', 'lost', 'acompte_recu'] }, manualStatus: { $nin: ['converted', 'lost'] } }))
+    /* Même périmètre que la file « Leads à traiter » (demandes récentes ou
+       dossiers suivis) : les vieilles demandes jamais traitées ne gonflent pas
+       ce compteur. */
+    const { filtreBase: filtreFile } = require('../services/leadWorkQueue');
+    const actifsPourRetard = await AbandonedCart.find({ $and: [kpiBase, filtreFile(nowDate)] })
       .select('captureSource status manualStatus manualStatusAt lastManualContactAt engineQuote.status engineQuote.sentQuotes.sentAt nextAction lastCallOutcome communications.sens communications.auto communications.statut communications.at recoveredOrder archived abandonedAt createdAt lastActivityAt takenByName')
       .limit(5000).lean();
     const kOverdue = actifsPourRetard.filter((c) => computeWork(c, nowDate).overdue).length;
