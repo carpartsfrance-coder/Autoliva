@@ -1,6 +1,11 @@
 <%
-  /* Ligne compacte de la liste de gauche : QUI, QUAND, QUOI, et qui s'en occupe.
-     Un clic ouvre la fiche à droite (sur téléphone : en plein écran). */
+  /* Ligne compacte de la liste de gauche : QUI, QUAND c'est arrivé, QUOI,
+     COMBIEN, qui s'en occupe et depuis combien de temps ça attend.
+     Un clic ouvre la fiche à droite (sur téléphone : en plein écran).
+
+     L'heure d'arrivée (« 09:12 », « hier 16:40 ») manquait : la ligne ne
+     montrait que l'échéance, donc on ne pouvait pas distinguer une demande
+     qui vient d'arriver d'un dossier qui traîne depuis trois jours. */
   var w = c.work || {};
   var ferme = w.stage === 'gagne' || w.stage === 'perdu';
   /* Simple passage (panier, newsletter) jamais travaillé : pas une demande, donc ni échéance ni retard. */
@@ -16,27 +21,70 @@
   var quoi = [d.piece, d.vehicule || d.plaque].filter(Boolean).join(' · ');
   var estAds = c.attribution && (c.attribution.gclid || ['cpc', 'ppc', 'paid'].indexOf(String(c.attribution.medium || '').toLowerCase()) !== -1);
   var meta = [];
+  /* L'heure d'arrivée d'abord : c'est la première question qu'on se pose. */
+  if (c.recuCourt) meta.push(c.recuCourt);
   meta.push(c.takenByName ? c.takenByName : (ferme || faible ? '' : 'Non pris'));
   if (estAds) meta.push('Google Ads');
   meta.push(c.captureBadge ? c.captureBadge.label : '');
   if (ferme) meta.unshift(w.stageLabel);
+
+  /* Attente = délai de première réponse en train de courir (heures ouvrées).
+     Rouge passé une heure : c'est la promesse faite dans « Nouvelles demandes ». */
+  var attente = c.attenteMin >= 0 ? c.attenteCourte : '';
+  var attenteChaude = c.attenteMin >= 60;
+
+  /* Pastilles : ce qui change la façon d'aborder le client, sans avoir à
+     ouvrir la fiche. Un seul signal de devis, le plus avancé. */
+  var pastilles = [];
+  var ds = c.devisSuivi;
+  if (ds && ds.paiementClique) pastilles.push(['A cliqué payer', 'bg-green-100 text-green-800', 'Le client a cliqué sur « payer » dans le devis : à rappeler tout de suite.']);
+  else if (ds && ds.pdfVu) pastilles.push(['Devis vu', 'bg-violet-100 text-violet-800', 'Le client a ouvert le PDF du devis.']);
+  else if (ds && ds.ouvert) pastilles.push(['Devis ouvert', 'bg-violet-50 text-violet-700', 'Le client a ouvert l’email du devis, sans aller voir le PDF.']);
+  if (c.clientHistory) pastilles.push(['Déjà client · ' + c.clientHistory.count, 'bg-indigo-50 text-indigo-700', c.clientHistory.title]);
+  if (c.savHistory) pastilles.push([c.savHistory.openCount ? 'SAV en cours' : 'SAV clos',
+    c.savHistory.openCount ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500', c.savHistory.title]);
 %>
 <li>
-  <button type="button" class="lead-ligne relative w-full text-left pl-4 pr-3 py-2.5 border-b border-slate-100 hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50" data-lead-id="<%= c.id %>" aria-selected="false">
-    <span class="absolute left-0 top-2 bottom-2 w-1 rounded-r <%= barre %>" aria-hidden="true"></span>
+  <button type="button" class="lead-ligne relative w-full text-left pl-4 pr-3 py-2.5 border-b border-slate-100 hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50"
+          data-lead-id="<%= c.id %>" aria-selected="false"
+          data-due="<%= c.dueIso || '' %>" data-retard="<%= c.retardMin || 0 %>" data-attente="<%= c.attenteMin >= 0 ? c.attenteMin : -1 %>">
+    <span class="absolute left-0 top-2 bottom-2 w-1 rounded-r <%= barre %>" data-role="barre" aria-hidden="true"></span>
     <span class="flex items-baseline justify-between gap-2">
       <span class="lead-ligne-nom truncate text-sm font-semibold text-slate-900"><%= nom %></span>
       <% if (c.urgenceCourte && !ferme && !faible) { %>
-        <span class="shrink-0 text-[11px] font-bold <%= couleurUrgence %>"><%= c.urgenceCourte %></span>
-      <% } else if (c.prixAffiche) { %>
-        <span class="shrink-0 text-[11px] font-semibold text-slate-500"><%= c.prixAffiche.montant %></span>
+        <span class="shrink-0 text-[11px] font-bold <%= couleurUrgence %>" data-role="urgence"><%= c.urgenceCourte %></span>
       <% } %>
     </span>
-    <% if (quoi) { %><span class="mt-0.5 block truncate text-xs text-slate-600"><%= quoi %></span><% } %>
+    <% if (quoi || c.prixAffiche) { %>
+      <span class="mt-0.5 flex items-baseline justify-between gap-2">
+        <span class="truncate text-xs text-slate-600"><%= quoi %></span>
+        <% if (c.prixAffiche) { %>
+          <span class="shrink-0 text-[11px] font-semibold text-slate-600" title="<%= c.prixAffiche.origine === 'devis' ? 'Prix du devis envoyé' : 'Montant du panier' %>"><%= c.prixAffiche.montant %></span>
+        <% } %>
+      </span>
+    <% } %>
     <span class="mt-0.5 flex items-center gap-1.5 truncate text-[11px] <%= c.takenByName || ferme ? 'text-slate-400' : 'text-slate-500' %>">
       <% if (!c.takenByName && !ferme && !faible) { %><span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true"></span><% } %>
-      <span class="truncate"><%= meta.filter(Boolean).join(' · ') %></span>
-      <% if (!w.firstHumanAt && !ferme && !faible && w.group !== 'nouveaux') { %><span class="ml-auto shrink-0 font-semibold text-red-600">Jamais contacté</span><% } %>
+      <span class="truncate" title="<%= c.recuExact ? 'Demande reçue le ' + c.recuExact : '' %>"><%= meta.filter(Boolean).join(' · ') %></span>
+      <% if (attente) { %>
+        <span class="ml-auto shrink-0 font-semibold <%= attenteChaude ? 'text-red-600' : 'text-slate-500' %>" data-role="attente"
+              title="Personne n’a encore appelé ni écrit : <%= attente %> d’attente en heures d’ouverture.">attend <%= attente %></span>
+      <% } %>
     </span>
+    <% if (pastilles.length || (c.lastNote && c.lastNote.text)) { %>
+      <span class="mt-1 flex flex-wrap items-center gap-1">
+        <% pastilles.forEach(function (p) { %>
+          <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold <%= p[1] %>" title="<%= p[2] || '' %>"><%= p[0] %></span>
+        <% }) %>
+        <% if (c.lastNote && c.lastNote.text) { %>
+          <%/* Pas de compteur : la file ne charge que les 6 dernières notes,
+                un nombre serait faux sur un dossier qui en compte vingt. */%>
+          <span class="inline-flex items-center gap-0.5 text-[10px] font-semibold text-slate-400"
+                title="Dernière note (<%= c.lastNote.by %><%= c.lastNote.atRel ? ', ' + c.lastNote.atRel : '' %>) : <%= c.lastNote.text %><%= c.lastNote.tronque ? '…' : '' %>">
+            <span class="material-symbols-outlined text-[13px]">sticky_note_2</span>note
+          </span>
+        <% } %>
+      </span>
+    <% } %>
   </button>
 </li>

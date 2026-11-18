@@ -128,6 +128,16 @@ function plagesN(n) {
   return PLAGES.map(([a, b]) => [m + a * MIN, m + b * MIN]);
 }
 
+/**
+ * Plages ouvrées [début, fin] (Date) du jour parisien de `date` — vide un
+ * week-end ou un jour férié. Sert à envoyer au navigateur la fenêtre
+ * d'ouverture des prochains jours (services/leadHeure.js) : l'horloge de la
+ * file des leads reste juste sans refaire ici le calcul des fériés.
+ */
+function plagesJour(date) {
+  return plagesN(jourParis(new Date(date).getTime())).map(([a, b]) => [new Date(a), new Date(b)]);
+}
+
 /** `date` tombe-t-elle pendant les heures d'ouverture ? */
 function estOuvert(date) {
   const t = new Date(date).getTime();
@@ -198,6 +208,7 @@ function prochaineOuverture(date) {
 module.exports = {
   estOuvert,
   jourOuvre,
+  plagesJour,
   ajouterMinutesOuvrees,
   ajouterJoursOuvres,
   minutesOuvreesEntre,

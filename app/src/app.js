@@ -622,6 +622,7 @@ const ASSET_VERSIONS = {
      l'équipe, qui a gardé sept jours le fichier en cache. Le mtime du fichier
      s'en charge désormais tout seul. */
   savAdminJs: _safeMtime('js/sav-admin.js'),
+  leadsHorlogeJs: _safeMtime('js/leads-horloge.js'),
   savCss: _safeMtime('css/sav.css'),
 };
 /* Polices servies depuis notre domaine (CSS inline + préchargements du
