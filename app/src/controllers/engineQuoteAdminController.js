@@ -368,11 +368,12 @@ async function getEngineQuotesList(req, res, next) {
         .select('-notes -items -communications.corps -communications.objet -communications.meta')
         .limit(5000)
         .lean();
-      /* Même ordre que la file « Leads à traiter » : nouvelles demandes, retards
-         récents, travail du jour, planifiés, vieux retards, puis les dossiers
-         clos (les plus récents d'abord). */
-      const RANG_GROUPE = { nouveaux: 0, retard: 1, rappels: 2, devis: 2, plus_tard: 3, anciens: 4 };
-      const rang = (w) => (w.group in RANG_GROUPE ? RANG_GROUPE[w.group] : 5);
+      /* Même ordre que la file « Leads à traiter » : les clients qui ont
+         répondu, les nouvelles demandes, les retards récents, le travail du
+         jour, les planifiés, les vieux retards, puis les dossiers clos (les
+         plus récents d'abord). */
+      const RANG_GROUPE = { repondu: 0, nouveaux: 1, retard: 2, rappels: 3, devis: 3, plus_tard: 4, anciens: 5 };
+      const rang = (w) => (w.group in RANG_GROUPE ? RANG_GROUPE[w.group] : 6);
       tous.forEach((c) => { c.__work = computeWork(c, nowDate); });
       tous.sort((a, b) => {
         const r = rang(a.__work) - rang(b.__work);

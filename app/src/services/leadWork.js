@@ -52,6 +52,7 @@ const ETAPES = {
 };
 
 const GROUPES = [
+  { key: 'repondu',    label: 'Le client a répondu',         hint: 'Il nous a écrit depuis notre dernier message : la balle est dans notre camp', tone: 'green', collapsed: false },
   { key: 'nouveaux',   label: 'Nouvelles demandes',          hint: 'Première réponse dans l’heure (heures d’ouverture)', tone: 'blue',  collapsed: false },
   { key: 'retard',     label: 'En retard',                   hint: 'L’échéance est passée : à faire juste après les nouvelles demandes', tone: 'red', collapsed: false },
   { key: 'rappels',    label: 'Rappels et relances du jour', hint: 'Appels promis, devis à relancer, clients à recontacter aujourd’hui', tone: 'amber', collapsed: false },
@@ -131,6 +132,30 @@ function actionsHumaines(lead) {
   return { premiere: minDate(dates), derniere: maxDate(dates), nombre: dates.length };
 }
 
+/**
+ * Demandes d'arrêt : « STOP », « désabonnement »… Une personne qui demande
+ * qu'on la laisse tranquille ne doit surtout pas remonter en tête de la file
+ * des gens à rappeler. Ce n'est pas une réponse commerciale.
+ */
+const ARRET = /^\s*(stop\s?(sms)?|arr[eê]t\w*|stopper|d[ée]sabonn\w*|unsubscribe|ne plus)\b/i;
+
+/**
+ * Dernier message REÇU du client (SMS Ringover aujourd'hui, un autre canal
+ * demain). C'est le signal le plus chaud de la file : quelqu'un qui écrit
+ * attend une réponse, et il a déjà dit ce qu'il veut.
+ */
+function derniereReponse(lead) {
+  const comms = Array.isArray(lead.communications) ? lead.communications : [];
+  let best = null;
+  comms.forEach((c) => {
+    if (!c || c.sens !== 'entrant') return;
+    if (ARRET.test(String(c.corps || ''))) return;
+    const t = d(c.at);
+    if (t && (!best || t > d(best.at))) best = c;
+  });
+  return best;
+}
+
 function dernierDevisEnvoye(lead) {
   const eq = lead.engineQuote || {};
   const list = Array.isArray(eq.sentQuotes) ? eq.sentQuotes : [];
@@ -171,8 +196,10 @@ function intention(lead) {
   if (lead.archived) return 'archived';
   if (issue(lead)) return 'closed';
   if (SOURCES_DEMANDE.includes(lead.captureSource || '')) return 'opportunity';
+  /* Un panier abandonné dont le client NOUS ÉCRIT n'est plus un simple
+     passage : il demande quelque chose. */
   const pris = !!(lead.takenByName || (lead.nextAction && lead.nextAction.dueAt) || lead.manualStatus === 'contacted'
-    || (lead.lastCallOutcome && lead.lastCallOutcome.at));
+    || (lead.lastCallOutcome && lead.lastCallOutcome.at) || derniereReponse(lead));
   return pris ? 'opportunity' : 'weak';
 }
 
@@ -211,6 +238,13 @@ function computeWork(lead, now = new Date()) {
   const hasWorkshop = SOURCES_ATELIER.includes(l.captureSource || '') || !!(l.engineQuote && l.engineQuote.status);
   const canCall = peutAppeler(l);
 
+  /* La balle est dans NOTRE camp : le client a écrit après notre dernier
+     geste (ou avant qu'on en fasse un). Tant qu'on ne lui a pas répondu, ce
+     dossier passe avant tout le reste, quelle que soit son échéance. */
+  const reponse = derniereReponse(l);
+  const reponseAt = reponse ? d(reponse.at) : null;
+  const aRepondu = !!(reponseAt && (!humain.derniere || reponseAt > humain.derniere));
+
   /* Échéance : celle du commercial, sinon déduite. */
   let dueAt = null;
   let dueSource = '';
@@ -229,13 +263,18 @@ function computeWork(lead, now = new Date()) {
 
   const overdue = !!(dueAt && dueAt.getTime() < now.getTime());
   const overdueMinutes = overdue ? ho.minutesOuvreesEntre(dueAt, now) : 0;
+  /* « Vieux retard » est un FAIT du dossier, pas une place dans la liste : le
+     bandeau du patron comptait les retards par groupe, donc un dossier sorti
+     de son groupe (parce que le client a répondu) disparaissait du compteur. */
+  const ancien = overdue && overdueMinutes > RETARD_ANCIEN_JOURS_OUVRES * MIN_JOUR_OUVRE;
 
   /* Groupe dans la file. */
   let group = '';
   if (intent === 'opportunity') {
     const age = recu ? ho.minutesOuvreesEntre(recu, now) : Infinity;
-    if (stage === 'nouveau' && age <= MIN_JOUR_OUVRE) group = 'nouveaux';
-    else if (overdue && overdueMinutes > RETARD_ANCIEN_JOURS_OUVRES * MIN_JOUR_OUVRE) group = 'anciens';
+    if (aRepondu) group = 'repondu';
+    else if (stage === 'nouveau' && age <= MIN_JOUR_OUVRE) group = 'nouveaux';
+    else if (ancien) group = 'anciens';
     else if (overdue) group = 'retard';
     else if (dueAt && dueAt < finJour(now) && dueAt >= debutJour(now)) group = stage === 'devis_a_faire' ? 'devis' : 'rappels';
     else if (dueAt && dueAt < debutJour(now)) group = 'retard';
@@ -262,7 +301,8 @@ function computeWork(lead, now = new Date()) {
   else if (canCall) { primaryAction = 'call'; primaryLabel = stage === 'devis_envoye' ? 'Relancer (appel)' : 'Rappeler'; }
   else if (l.email) { primaryAction = 'email'; primaryLabel = stage === 'devis_envoye' ? 'Relancer par email' : 'Écrire au client'; }
 
-  const nextActionLabel = naType ? (TYPES_ACTION[naType] || naType)
+  const nextActionLabel = aRepondu ? 'Répondre au client'
+    : naType ? (TYPES_ACTION[naType] || naType)
     : dueSource === 'premiere_reponse' ? 'Première réponse au client'
       : dueSource === 'relance_devis' ? 'Relancer le devis'
         : dueSource === 'suivi' ? (stage === 'devis_a_faire' ? 'Préparer le devis' : 'Faire le point avec le client')
@@ -279,6 +319,11 @@ function computeWork(lead, now = new Date()) {
     dueSource,
     overdue,
     overdueMinutes,
+    ancien,
+    aRepondu,
+    reponseAt,
+    reponseCanal: (reponse && reponse.canal) || '',
+    reponseTexte: (reponse && reponse.corps) || '',
     primaryAction,
     primaryLabel,
     canCall,
@@ -292,6 +337,14 @@ function computeWork(lead, now = new Date()) {
 
 /** Tri dans un groupe : l'échéance la plus urgente d'abord. */
 function comparer(a, b) {
+  /* Dans « Le client a répondu », l'échéance ne veut plus rien dire : ce qui
+     compte est depuis quand son message attend une réponse. */
+  if (a.work.group === 'repondu' && b.work.group === 'repondu') {
+    const ra = a.work.reponseAt ? a.work.reponseAt.getTime() : Infinity;
+    const rb = b.work.reponseAt ? b.work.reponseAt.getTime() : Infinity;
+    if (ra !== rb) return ra - rb;
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  }
   const ta = a.work.dueAt ? a.work.dueAt.getTime() : Infinity;
   const tb = b.work.dueAt ? b.work.dueAt.getTime() : Infinity;
   if (a.work.group === 'retard' && b.work.group === 'retard') {
@@ -341,6 +394,7 @@ function libelleUrgenceCourt(work, now = new Date()) {
 
 module.exports = {
   computeWork,
+  derniereReponse,
   comparer,
   libelleUrgence,
   libelleUrgenceCourt,

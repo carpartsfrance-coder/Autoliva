@@ -55,6 +55,9 @@
         <span title="Dossiers dont l'heure prévue est passée, hors anciens dossiers (plus de 7 jours ouvrés de retard), comptés à part">
           <strong class="text-base <%= b.enRetardRecents ? 'text-red-700' : 'text-slate-900' %>"><%= b.enRetardRecents %></strong> en retard<% if (b.anciens) { %> <span class="text-slate-400">· <%= b.anciens %> anciens à part</span><% } %>
         </span>
+        <% if (b.repondus) { %>
+          <span title="Clients qui nous ont écrit depuis notre dernier message : ils attendent une réponse"><strong class="text-base text-green-700"><%= b.repondus %></strong> ont répondu</span>
+        <% } %>
         <span title="Demandes ouvertes sur lesquelles personne n'a encore appelé ni écrit (les messages automatiques ne comptent pas)"><strong class="text-base text-slate-900"><%= b.jamaisPris %></strong> jamais contactés</span>
         <span title="Nouvelles demandes, rappels et devis prévus aujourd'hui (hors retards)"><strong class="text-base text-slate-900"><%= b.duJour %></strong> à faire aujourd’hui</span>
         <span title="Temps médian entre la demande du client et le premier appel ou message d'un commercial, en heures d'ouverture, sur les 30 derniers jours">
@@ -164,8 +167,8 @@
     <% } %>
 
     <%
-      var nomsCourts = { nouveaux: 'Nouvelles demandes', retard: 'En retard', rappels: 'Rappels du jour', devis: 'Devis à préparer', plus_tard: 'Planifiés', anciens: 'Anciens dossiers' };
-      var tons = { blue: 'bg-blue-100 text-blue-800', red: 'bg-red-100 text-red-700', amber: 'bg-amber-100 text-amber-800', orange: 'bg-orange-100 text-orange-800', slate: 'bg-slate-200 text-slate-700' };
+      var nomsCourts = { repondu: 'Le client a répondu', nouveaux: 'Nouvelles demandes', retard: 'En retard', rappels: 'Rappels du jour', devis: 'Devis à préparer', plus_tard: 'Planifiés', anciens: 'Anciens dossiers' };
+      var tons = { green: 'bg-green-100 text-green-800', blue: 'bg-blue-100 text-blue-800', red: 'bg-red-100 text-red-700', amber: 'bg-amber-100 text-amber-800', orange: 'bg-orange-100 text-orange-800', slate: 'bg-slate-200 text-slate-700' };
       var affiches = view === 'todo' ? [].concat.apply([], groupes.map(function (g) { return g.items; })) : (leads || []);
     %>
     <div class="file-cols mt-3">
@@ -254,7 +257,7 @@
       <div class="mb-4 rounded-xl border-2 border-primary/30 bg-red-50/40 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-primary">La méthode en 4 gestes</div>
         <ol class="list-inside list-decimal space-y-2 text-sm text-slate-800">
-          <li><strong>Prends le premier client de la liste</strong> : elle est dans l’ordre où il faut travailler (nouvelles demandes, puis retards, puis rappels du jour, puis devis à préparer).</li>
+          <li><strong>Prends le premier client de la liste</strong> : elle est dans l’ordre où il faut travailler (ceux qui ont répondu, puis les nouvelles demandes, puis les retards, puis les rappels du jour, puis les devis à préparer).</li>
           <li><strong>Regarde l’encadré « La prochaine action »</strong> à droite et clique sur son gros bouton : Appeler, Préparer le devis, Écrire au client…</li>
           <li><strong>Après l’appel, clique « Appel terminé »</strong> : comment ça s’est passé, la suite, et pour quand. Sans suite, le client serait oublié : la fenêtre te la demande toujours.</li>
           <li><strong>« Enregistrer et continuer »</strong> t’emmène tout seul au client suivant. <strong>Gagné</strong> seulement quand le client a payé, <strong>Perdu</strong> toujours avec le motif (dans « Autres actions »).</li>
@@ -264,6 +267,7 @@
       <div class="mb-4 rounded-xl border border-slate-200 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Les groupes de la liste</div>
         <div class="space-y-1.5 text-sm text-slate-700">
+          <div><strong>Le client a répondu</strong> — il nous a écrit depuis notre dernier message et attend une réponse. Son texte est sur la ligne et dans sa fiche : on sait déjà quoi lui dire. À faire avant tout le reste, même si l’heure prévue n’est pas arrivée.</div>
           <div><strong>Nouvelles demandes</strong> — à rappeler dans l’heure (heures d’ouverture : 9 h–12 h, 14 h–18 h, du lundi au vendredi).</div>
           <div><strong>En retard</strong> — l’heure prévue est passée. À faire juste après les nouvelles demandes.</div>
           <div><strong>Rappels du jour</strong> — les appels promis et les devis à relancer aujourd’hui.</div>
