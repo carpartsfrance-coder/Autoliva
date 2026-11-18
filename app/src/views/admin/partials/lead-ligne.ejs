@@ -11,6 +11,7 @@
   /* Simple passage (panier, newsletter) jamais travaillé : pas une demande, donc ni échéance ni retard. */
   var faible = w.intent === 'weak' || w.intent === 'archived';
   var ton = faible ? 'slate' : ferme ? (w.stage === 'gagne' ? 'green' : 'slate')
+    : c.aRepondu ? 'green'
     : w.overdue ? 'red'
     : w.stage === 'nouveau' ? 'blue'
     : (w.group === 'rappels' || w.group === 'devis') ? 'amber' : 'slate';
@@ -36,6 +37,10 @@
   /* Pastilles : ce qui change la façon d'aborder le client, sans avoir à
      ouvrir la fiche. Un seul signal de devis, le plus avancé. */
   var pastilles = [];
+  if (c.aRepondu && c.reponse) {
+    pastilles.push(['A répondu' + (c.reponse.rel ? ' · ' + c.reponse.rel : ''), 'bg-green-100 text-green-800',
+      'Le client nous a écrit' + (c.reponse.canal ? ' par ' + c.reponse.canal : '') + (c.reponse.exact ? ' le ' + c.reponse.exact : '') + ' : il attend une réponse.']);
+  }
   var ds = c.devisSuivi;
   if (ds && ds.paiementClique) pastilles.push(['A cliqué payer', 'bg-green-100 text-green-800', 'Le client a cliqué sur « payer » dans le devis : à rappeler tout de suite.']);
   else if (ds && ds.pdfVu) pastilles.push(['Devis vu', 'bg-violet-100 text-violet-800', 'Le client a ouvert le PDF du devis.']);
@@ -61,6 +66,12 @@
         <% if (c.prixAffiche) { %>
           <span class="shrink-0 text-[11px] font-semibold text-slate-600" title="<%= c.prixAffiche.origine === 'devis' ? 'Prix du devis envoyé' : 'Montant du panier' %>"><%= c.prixAffiche.montant %></span>
         <% } %>
+      </span>
+    <% } %>
+    <% if (c.aRepondu && c.reponse && c.reponse.texte) { %>
+      <span class="mt-0.5 flex items-start gap-1 text-xs italic text-green-800">
+        <span class="material-symbols-outlined shrink-0 text-[14px] not-italic">format_quote</span>
+        <span class="truncate"><%= c.reponse.texte %></span>
       </span>
     <% } %>
     <span class="mt-0.5 flex items-center gap-1.5 truncate text-[11px] <%= c.takenByName || ferme ? 'text-slate-400' : 'text-slate-500' %>">

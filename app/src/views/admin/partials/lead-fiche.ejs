@@ -11,6 +11,7 @@
   var d = c.demande || {};
   var estAds = c.attribution && (c.attribution.gclid || ['cpc', 'ppc', 'paid'].indexOf(String(c.attribution.medium || '').toLowerCase()) !== -1);
   var ton = faible ? 'slate' : ferme ? (w.stage === 'gagne' ? 'green' : 'slate')
+    : c.aRepondu ? 'green'
     : w.overdue ? 'red'
     : w.stage === 'nouveau' ? 'blue'
     : (w.group === 'rappels' || w.group === 'devis') ? 'amber' : 'slate';
@@ -19,6 +20,7 @@
   var pa = w.primaryAction;
   var titre = faible ? 'Pas de demande en cours'
     : ferme ? (w.stage === 'gagne' ? 'Dossier gagné' : 'Dossier perdu')
+    : c.aRepondu ? 'Répondre au client'
     : pa === 'review' ? 'Reprendre ce dossier'
     : w.stage === 'nouveau' ? 'Contacter ce client'
     : (w.nextActionLabel || w.primaryLabel || 'Planifier la suite');
@@ -96,6 +98,23 @@
         <p class="mt-3 whitespace-pre-line rounded-xl bg-slate-50 px-3 py-2 text-sm italic text-slate-700">« <%= c.requested.message.slice(0, 600) %><%= c.requested.message.length > 600 ? '…' : '' %> »</p>
       <% } %>
     </div>
+
+    <% if (c.aRepondu && c.reponse) { %>
+      <%/* Le message du client était enterré dans l'onglet « Suivi », chargé
+            après coup : on rappelait sans savoir ce qu'il venait de dire. */%>
+      <section class="rounded-2xl border-2 border-green-200 bg-green-50/70 p-4">
+        <div class="flex flex-wrap items-baseline gap-x-2">
+          <span class="text-[11px] font-bold uppercase tracking-widest text-green-700">Le client a répondu<%= c.reponse.canal ? ' par ' + c.reponse.canal : '' %></span>
+          <span class="text-xs text-green-800" title="<%= c.reponse.exact %>">· <%= c.reponse.rel %></span>
+        </div>
+        <% if (c.reponse.texte) { %>
+          <p class="mt-1 whitespace-pre-line text-sm italic text-slate-800">« <%= c.reponse.texte %><%= c.reponse.tronque ? '…' : '' %> »</p>
+        <% } else { %>
+          <p class="mt-1 text-sm text-slate-700">Son message est dans « Suivi &amp; notes ».</p>
+        <% } %>
+        <p class="mt-1 text-xs text-green-800">Il attend une réponse : ce dossier passe avant les autres.</p>
+      </section>
+    <% } %>
 
     <!-- 2. La prochaine action -->
     <section class="rounded-2xl border-2 <%= boite %> p-4">

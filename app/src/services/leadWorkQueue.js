@@ -42,6 +42,10 @@ const CHAMPS = [
   'engineQuote.identifiedEngine.model', 'engineQuote.identifiedEngine.code', 'engineQuote.pricing.sellPrice',
   'recoveredOrder', 'archived', 'nextAction', 'takenByName', 'takenAt', 'lastCallOutcome', 'lostReason',
   'communications.canal', 'communications.sens', 'communications.auto', 'communications.statut',
+  /* `corps` : uniquement pour lire la dernière réponse du client sur la ligne,
+     et pour écarter les « STOP » de la file. Le journal tronque à 600
+     caractères à l'écriture, et la file ne charge que les dossiers ouverts. */
+  'communications.corps',
   'communications.at', 'communications.par', 'abandonedAt', 'createdAt', 'lastActivityAt', 'lastRemindedAt',
   'recoveredAt', 'repurchaseReminder',
 ].join(' ');
@@ -72,6 +76,10 @@ function filtreBase(now) {
       { 'nextAction.dueAt': { $ne: null } },
       /* Vraie demande récente. */
       { captureSource: { $in: SOURCES_DEMANDE }, $or: [{ abandonedAt: { $gte: depuis } }, { createdAt: { $gte: depuis } }] },
+      /* Le client NOUS a écrit récemment : il attend une réponse, quelle que
+         soit la façon dont il était arrivé (un panier abandonné qui répond à
+         un SMS de relance est une vraie demande, pas un passage). */
+      { communications: { $elemMatch: { sens: 'entrant', at: { $gte: depuis } } } },
       /* Dossier pris en main récemment (y compris « Contacté » d'avant). */
       { takenAt: { $gte: depuis } },
       { manualStatus: 'contacted', $or: [{ manualStatusAt: { $gte: depuis } }, { lastManualContactAt: { $gte: depuis } }] },
@@ -148,17 +156,21 @@ async function chargerFile(opts = {}) {
   let anciens = 0;
   let jamaisPris = 0;
   let duJour = 0;
+  let repondus = 0;
   tous.forEach((x) => {
     const w = x.work;
-    const retard = w.group === 'retard' || w.group === 'anciens' || (w.group === 'nouveaux' && w.overdue);
-    if (w.group === 'anciens') anciens += 1;
-    if (retard) {
+    /* Le retard est lu sur le dossier lui-même : depuis que « Le client a
+       répondu » sort les dossiers de leur groupe, compter par groupe faisait
+       disparaître du bandeau des retards bien réels. */
+    if (w.ancien) anciens += 1;
+    if (w.overdue) {
       enRetard += 1;
       const qui = x.lead.takenByName || 'Non pris';
       parPersonne[qui] = (parPersonne[qui] || 0) + 1;
     }
+    if (w.aRepondu) repondus += 1;
     if (!w.firstHumanAt) jamaisPris += 1;
-    if (!w.overdue && ['nouveaux', 'rappels', 'devis'].includes(w.group)) duJour += 1;
+    if (!w.overdue && ['repondu', 'nouveaux', 'rappels', 'devis'].includes(w.group)) duJour += 1;
   });
 
   /* Filtres rapides. */
@@ -194,6 +206,8 @@ async function chargerFile(opts = {}) {
       enRetardRecents: enRetard - anciens,
       jamaisPris,
       duJour,
+      /* Des clients qui nous ont écrit et qui attendent encore une réponse. */
+      repondus,
       parPersonne: Object.keys(parPersonne).sort((a, b) => (a === 'Non pris') - (b === 'Non pris') || a.localeCompare(b))
         .map((nom) => ({ nom, n: parPersonne[nom] })),
       delai: await delaiPremiereAction(now),

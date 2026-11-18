@@ -35,7 +35,7 @@ const brand = require('../config/brand');
 const { computeWork, libelleUrgence, libelleUrgenceCourt, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
 const { chargerFile } = require('../services/leadWorkQueue');
 const { resumeDemande } = require('../services/leadResume');
-const { infosHeure, fenetreOuvree } = require('../services/leadHeure');
+const { infosHeure, fenetreOuvree, arriveeExacte } = require('../services/leadHeure');
 
 function escapeHtml(value) {
   return String(value || '')
@@ -316,6 +316,16 @@ function toCardModel(c, now = new Date()) {
     work,
     urgence: libelleUrgence(work, now),
     urgenceCourte: libelleUrgenceCourt(work, now),
+    /* Le client nous a écrit et attend une réponse : le signal le plus chaud
+       de la file. Son message vient du journal des communications. */
+    aRepondu: !!work.aRepondu,
+    reponse: work.aRepondu ? {
+      rel: formatRelative(work.reponseAt),
+      exact: arriveeExacte(work.reponseAt),
+      canal: { sms: 'SMS', whatsapp: 'WhatsApp', email: 'email', appel: 'appel' }[work.reponseCanal] || '',
+      texte: String(work.reponseTexte || '').slice(0, 220),
+      tronque: String(work.reponseTexte || '').length > 220,
+    } : null,
     /* Quand la demande est arrivée, et depuis combien de temps elle attend. */
     recuCourt: heure.recuCourt,
     recuLong: heure.recuLong,
