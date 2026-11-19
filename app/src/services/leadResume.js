@@ -49,12 +49,13 @@ function resumeDemande(c) {
   if (!piece && msg) piece = msg.split('\n')[0].slice(0, 80);
   if (!piece) piece = PIECE_PAR_SOURCE[c.captureSource] || '';
   /* Dernière note entrante (réponse SMS d'un appel manqué) : souvent la seule trace du besoin. */
+  let pieceDuSms = false;
   if (c.captureSource === 'appel_manque' && piece === PIECE_PAR_SOURCE.appel_manque) {
     const notes = Array.isArray(c.notes) ? c.notes : [];
     const sms = notes.slice().reverse().find((n) => /R[ÉE]PONSE SMS/i.test(String(n && n.text || '')));
     if (sms) {
       const t = String(sms.text).replace(/^.*?[«"]\s*/, '').replace(/\s*[»"]\s*$/, '');
-      if (t) piece = t.slice(0, 90);
+      if (t) { piece = t.slice(0, 90); pieceDuSms = true; }
     }
   }
   const morceaux = [];
@@ -62,6 +63,10 @@ function resumeDemande(c) {
   else if (vehiculeBrut && !vehiculeEstPiece && !VEHICULE_VIDE.test(vehiculeBrut)) morceaux.push(vehiculeBrut);
   return {
     piece,
+    /* La « pièce » n'est que le début du SMS du client : utile sur la ligne
+       de la liste, faute de mieux, mais la fiche l'affiche comme un message
+       et ne doit pas le répéter sous « Pièce ». */
+    pieceDuSms,
     vehicule: morceaux.join(' · '),
     plaque: String(r.plate || '').trim(),
     vin: String(r.vin || '').trim(),

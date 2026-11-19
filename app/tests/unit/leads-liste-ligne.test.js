@@ -122,7 +122,10 @@ test('les repères de l’horloge sont posés sur la ligne et sur la fiche', () 
 
   const fiche = rendre('lead-fiche', c);
   assert.ok(!fiche.includes('data-role="urgence-longue"'));
-  assert.ok(fiche.includes('data-role="attente-longue"'));
+  /* Fiche refaite le 20/11/2026 : plus de « attend depuis 1 h 04 » qui
+     tourne — l'heure de réception est dans l'en-tête, l'état dans la liste
+     des faits. Seule la LIGNE garde son attente à jour. */
+  assert.ok(!fiche.includes('data-role="attente-longue"'));
 });
 
 test('la fiche donne l’heure exacte de la demande, pas seulement « il y a 3 h »', () => {
@@ -130,7 +133,8 @@ test('la fiche donne l’heure exacte de la demande, pas seulement « il y a 3 h
   const html = rendre('lead-fiche', c);
   assert.ok(html.includes('aujourd’hui à 09:12'), 'la fiche dit l’heure en clair');
   assert.ok(html.includes('Demande reçue le 17/11/2026 à 09:12'), 'l’infobulle donne la date de la DEMANDE');
-  assert.ok(html.includes('attend depuis'), 'et depuis combien de temps personne n’a répondu');
+  assert.ok(html.includes('Jamais contacté'), 'et que personne ne l’a encore appelée');
+  assert.ok(!html.includes('attend depuis'), 'sans compte à rebours dans la fiche');
 });
 
 test('la fiche montre la dernière note sans attendre l’onglet « Suivi »', () => {

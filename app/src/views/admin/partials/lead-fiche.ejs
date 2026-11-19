@@ -1,283 +1,330 @@
 <%
   /* Fiche du client sélectionné (panneau de droite).
-     Ordre voulu : qui et quoi → LA prochaine action (un gros encadré) → les
-     autres outils → l'historique. Les onglets du bas sont remplis à la
-     demande par le script de la page (même source que l'ancien « Détail »). */
+
+     Refaite le 20/11/2026 : « ça ne fait pas site pro ». L'ancienne fiche
+     empilait un grand encadré rose, sept boutons de même poids sur deux
+     lignes, des titres en majuscules et le numéro répété trois fois.
+
+     Ordre : QUI (en-tête) → QUE FAIRE (une barre, une seule action
+     principale) → CE QU'IL A DIT (son message, avec le contexte) → LES FAITS
+     (une liste libellé / valeur) → L'HISTORIQUE (onglets remplis à la
+     demande par le script de la page).
+
+     Les classes js-* et data-* sont des branchements du script de la page
+     (boutons, raccourcis clavier, horloge) : ne pas les renommer. */
   var w = c.work || {};
   var ferme = w.stage === 'gagne' || w.stage === 'perdu';
   /* Simple passage (panier, newsletter) : pas de demande, donc pas d'échéance. */
   var faible = !ferme && (w.intent === 'weak' || w.intent === 'archived');
-  var nom = c.fullName || c.email || c.phone || 'Client sans nom';
+  var nom = c.fullName || c.email || c.telAffiche || c.phone || 'Client sans nom';
+  var initiales = String(c.fullName || '').trim().split(/\s+/).filter(Boolean).slice(0, 2)
+    .map(function (m) { return m.charAt(0); }).join('').toUpperCase();
   var d = c.demande || {};
   var estAds = c.attribution && (c.attribution.gclid || ['cpc', 'ppc', 'paid'].indexOf(String(c.attribution.medium || '').toLowerCase()) !== -1);
   /* Rouge = une heure qu'un humain a promise. Ambre = une relance que la
-     file déduit du dernier contact : ce n'est pas un reproche. */
+     file déduit du dernier contact : ce n'est pas un reproche. Ici la couleur
+     n'est plus qu'un point devant l'état du contact. */
   var ton = faible ? 'slate' : ferme ? (w.stage === 'gagne' ? 'green' : 'slate')
     : (w.overdue && w.promesse) ? 'red'
     : w.stage === 'nouveau' ? 'blue'
     : (w.overdue || w.group === 'rappels' || w.group === 'devis' || w.group === 'relances') ? 'amber' : 'slate';
-  var boite = { red: 'border-red-200 bg-red-50/70', blue: 'border-blue-200 bg-blue-50/70', amber: 'border-amber-200 bg-amber-50/70', green: 'border-green-200 bg-green-50/70', slate: 'border-slate-200 bg-slate-50' }[ton];
-  var texteTon = { red: 'text-red-700', blue: 'text-blue-700', amber: 'text-amber-800', green: 'text-green-700', slate: 'text-slate-600' }[ton];
+  var point = { red: 'bg-red-500', blue: 'bg-blue-500', amber: 'bg-amber-400', green: 'bg-green-500', slate: 'bg-slate-300' }[ton];
   var pa = w.primaryAction;
   var titre = faible ? 'Pas de demande en cours'
     : ferme ? (w.stage === 'gagne' ? 'Dossier gagné' : 'Dossier perdu')
     : pa === 'review' ? 'Reprendre ce dossier'
     : w.stage === 'nouveau' ? 'Contacter ce client'
     : (w.nextActionLabel || w.primaryLabel || 'Planifier la suite');
-  var btnPrincipal = 'inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white shadow-sm';
-  var btnSecond = 'inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50';
-  var outil = 'inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50';
+  var contact = c.lastCallOutcome
+    ? 'Dernier appel : ' + c.lastCallOutcome.label + (c.lastCallOutcome.by ? ' (' + c.lastCallOutcome.by + (c.lastCallOutcome.atRel ? ', ' + c.lastCallOutcome.atRel : '') + ')' : '')
+    : (!w.firstHumanAt && !ferme && !faible) ? 'Jamais contacté'
+    : c.lastManualContactRel ? 'Dernier contact ' + c.lastManualContactRel + (c.manualStatusByName ? ' (' + c.manualStatusByName + ')' : '')
+    : '';
+  /* Un message de formulaire qui ne fait que répéter la pièce n'en est pas un. */
+  var messageFormulaire = !c.messageClient && c.requested && c.requested.message
+    && !/^Pi[eè]ce demand[ée]e\s*:[^\n]*$/i.test(c.requested.message.trim()) ? c.requested.message : '';
+  /* Le contexte qui change la façon d'aborder l'appel : un SAV en cours, ou un
+     client déjà acheteur qui écrit ou appelle (souvent pour sa commande). */
+  var alerte = null;
+  if (c.savHistory && c.savHistory.openCount) {
+    alerte = { texte: 'SAV en cours pour ce client : vérifie s’il contacte pour son dossier avant de parler vente.', lien: c.savHistory.url, libelle: 'Voir le SAV' };
+  } else if (c.clientHistory && (c.captureSource === 'appel_manque' || c.messageClient)) {
+    alerte = { texte: 'Déjà client (' + c.clientHistory.count + ' commande' + (c.clientHistory.count > 1 ? 's' : '') + ') : il contacte peut-être pour le suivi d’une commande, pas pour un nouvel achat.', lien: c.clientHistory.lastUrl, libelle: 'Voir la commande' };
+  }
+  /* La note que Ringover écrit à chaque SMS reçu répète le message affiché
+     plus haut : inutile de l'afficher deux fois. */
+  var noteUtile = c.lastNote && c.lastNote.text && !(c.messageClient && c.lastNote.by === 'Ringover SMS');
+
+  /* Tous à 44 px, comme le reste de l'admin (cible tactile, voir
+     styles/admin.css) : la règle globale ne touche que les <button>, les
+     liens et les menus déroulants faisaient 36 à 42 px dans la même barre. */
+  var btnPrincipal = 'inline-flex min-h-[2.75rem] items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white hover:bg-slate-800';
+  var btn = 'inline-flex min-h-[2.75rem] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50';
+  var btnIcone = 'inline-flex h-11 w-11 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50';
+  /* Petits liens au fil du texte : la hauteur minimale des boutons
+     étirait les lignes de la liste des faits. */
+  var lienTexte = 'min-h-0 underline decoration-slate-300 underline-offset-2 hover:decoration-slate-500';
+  var menu = 'absolute z-30 mt-1 w-72 rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-lg';
+  var item = 'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50';
+  var icone = 'material-symbols-outlined text-[18px]';
 %>
 <article class="lead-fiche hidden" id="fiche-<%= c.id %>" data-lead-id="<%= c.id %>" data-name="<%= nom %>" data-deja-essaye="<%= c.dejaEssaye ? '1' : '' %>" data-stage="<%= w.stage %>"
          data-due="<%= c.dueIso || '' %>" data-retard="<%= c.retardMin || 0 %>" data-attente="<%= c.attenteMin >= 0 ? c.attenteMin : -1 %>"
          data-promesse="<%= w.promesse ? 1 : 0 %>">
-  <!-- Barre du haut -->
-  <div class="flex items-center gap-2 border-b border-slate-100 px-4 sm:px-5 py-2.5">
-    <button type="button" class="js-retour-liste seul-mobile inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+
+  <%/* Téléphone et petite tablette : retour à la liste. */%>
+  <div class="seul-mobile border-b border-slate-100 px-4 py-2">
+    <button type="button" class="js-retour-liste inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-slate-700 hover:bg-slate-100">
       <span class="material-symbols-outlined text-[18px]">arrow_back</span>Liste
-    </button>
-    <div class="min-w-0 truncate text-[11px] font-semibold uppercase tracking-widest text-slate-400">Client sélectionné · <%= c.captureBadge ? c.captureBadge.label : '' %></div>
-    <button type="button" class="js-suivant ml-auto inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" title="Passer au client suivant de la liste (touche J)">
-      Client suivant<span class="material-symbols-outlined text-[16px]">arrow_forward</span>
     </button>
   </div>
 
-  <div class="space-y-4 p-4 sm:p-5">
-    <!-- 1. Qui et quoi -->
-    <div>
-      <div class="flex flex-wrap items-center gap-2">
-        <h2 class="text-xl font-bold text-slate-900 break-words"><%= nom %></h2>
-        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold <%= w.stageClass %>" title="Étape du dossier"><%= w.stageLabel %></span>
-        <% if (estAds) { %><span class="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800" title="Demande venue d'une annonce Google Ads (payée)">Google Ads</span><% } %>
-        <% if (c.clientHistory) { %><a href="<%= c.clientHistory.lastUrl %>" title="<%= c.clientHistory.title %>" class="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-800 hover:bg-indigo-100"><span class="material-symbols-outlined text-[13px]">loyalty</span>Déjà client · <%= c.clientHistory.count %> cde</a><% } %>
-        <% if (c.savHistory) { %><a href="<%= c.savHistory.url %>" title="<%= c.savHistory.title %>" class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold <%= c.savHistory.openCount ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600' %>"><span class="material-symbols-outlined text-[13px]">build_circle</span><%= c.savHistory.openCount ? 'SAV en cours' : 'SAV clos' %></a><% } %>
-        <% if (c.recoveredOrderBadge) { %><a href="<%= c.recoveredOrderBadge.url %>" class="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-800 hover:bg-green-200"><span class="material-symbols-outlined text-[13px]">shopping_bag</span>A commandé<%= c.recoveredOrderBadge.number ? ' n°' + c.recoveredOrderBadge.number : '' %></a><% } %>
-      </div>
-      <div class="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <% if (c.phone) { %>
-          <button type="button" data-copy-phone="<%= c.phone %>" class="inline-flex items-center gap-1 font-semibold text-slate-800 hover:text-primary" title="Copier le numéro">
-            <span class="material-symbols-outlined text-[16px] text-emerald-600">call</span><%= c.phone %><% if (!c.phoneCallable) { %><span class="text-xs font-normal text-amber-600"> (numéro étranger ou incomplet)</span><% } %>
-          </button>
-        <% } %>
-        <% if (c.email) { %><span class="min-w-0 break-all text-slate-500"><%= c.email %></span><% } %>
-        <%/* L'heure exacte, pas seulement « il y a 3 h » : on doit pouvoir dire
-              au client « vous nous avez écrit ce matin à 9 h 12 ». L'infobulle
-              montrait la date de dernière activité, pas celle de la demande. */%>
-        <span class="text-xs text-slate-500" title="<%= c.recuExact ? (faible ? 'Dernière visite le ' : 'Demande reçue le ') + c.recuExact : c.lastActivityAbsolute %>">
-          <%= faible ? 'Vu' : 'Demande reçue' %> <%= c.recuLong || c.receivedRel %><% if (c.recuLong && c.receivedRel) { %> <span class="text-slate-400">(<%= c.receivedRel %>)</span><% } %>
-        </span>
-      </div>
-
-      <dl class="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
-        <div class="min-w-0">
-          <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-400"><%= faible && c.itemCount ? 'Dans son panier' : 'Pièce demandée' %></dt>
-          <dd class="font-medium text-slate-900"><%= d.piece || '—' %></dd>
-        </div>
-        <div class="min-w-0">
-          <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Véhicule</dt>
-          <dd class="text-slate-900">
-            <% if (d.vehicule) { %><span class="font-medium"><%= d.vehicule %></span><% } %>
-            <% if (d.plaque) { %><span class="ml-1 inline-block rounded border border-slate-300 bg-white px-1.5 font-mono text-xs"><%= d.plaque %></span><% } %>
-            <% if (d.vin) { %><span class="ml-1 inline-block break-all font-mono text-xs text-slate-600">VIN <%= d.vin %></span><% } %>
-            <% if (!d.vehicule && !d.plaque && !d.vin) { %><span class="font-semibold text-amber-700">Ni plaque ni VIN : à demander au client</span><% } %>
-          </dd>
-        </div>
-        <% if (c.engineQuoteUrl || c.engineRef) { %>
-          <div class="min-w-0">
-            <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Dossier devis</dt>
-            <dd><a href="/admin/devis-moteurs/<%= c.id %>" class="font-semibold text-primary hover:underline"><%= c.engineRef || 'Ouvrir le dossier' %></a></dd>
-          </div>
-        <% } %>
-        <% if (c.prixAffiche) { %>
-          <div class="min-w-0">
-            <dt class="text-[11px] font-semibold uppercase tracking-wider text-slate-400"><%= c.prixAffiche.origine === 'devis' ? 'Prix du devis' : 'Montant du panier' %></dt>
-            <dd class="font-bold text-slate-900"><%= c.prixAffiche.montant %></dd>
-          </div>
-        <% } %>
-      </dl>
-      <% if (c.requested && c.requested.message && !/^Pi[eè]ce demand[ée]e\s*:[^\n]*$/i.test(c.requested.message.trim())) { %>
-        <p class="mt-3 whitespace-pre-line rounded-xl bg-slate-50 px-3 py-2 text-sm italic text-slate-700">« <%= c.requested.message.slice(0, 600) %><%= c.requested.message.length > 600 ? '…' : '' %> »</p>
-      <% } %>
+  <!-- 1. Qui -->
+  <header class="flex flex-wrap items-start gap-3 border-b border-slate-100 px-5 py-4">
+    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600" aria-hidden="true">
+      <% if (initiales) { %><%= initiales %><% } else { %><span class="material-symbols-outlined text-[18px]">call</span><% } %>
     </div>
-
-
-    <!-- 2. La prochaine action -->
-    <section class="rounded-2xl border-2 <%= boite %> p-4">
-      <div class="text-[11px] font-bold uppercase tracking-widest <%= texteTon %>">La prochaine action</div>
-      <div class="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-        <div class="text-lg font-bold text-slate-900"><%= titre %></div>
-        <%/* Plus de « En retard de 9 min » ni de « À rappeler avant 14:00 » :
-              la couleur de l'encadré dit l'urgence. On garde l'heure d'un
-              rendez-vous que quelqu'un a POSÉ, tant qu'elle n'est pas passée :
-              c'est un fait, pas une alarme. */%>
-        <% if (c.prevu && !ferme && !faible) { %><div class="text-sm text-slate-500">Prévu <%= c.prevu %></div><% } %>
-        <% if (w.stage === 'perdu' && c.lostReasonLabel) { %><div class="text-sm text-slate-600">Motif : <%= c.lostReasonLabel %></div><% } %>
+    <%/* Largeur minimale : sans elle, sur téléphone, le nom se laissait
+          écraser à deux caractères au lieu de laisser passer les boutons à
+          la ligne. */%>
+    <div class="min-w-[12rem] flex-1">
+      <div class="flex flex-wrap items-center gap-2">
+        <h2 class="break-words text-lg font-semibold text-slate-900"><%= nom %></h2>
+        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium <%= w.stageClass %>" title="Étape du dossier"><%= w.stageLabel %></span>
+        <% if (estAds) { %><span class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700" title="Demande venue d'une annonce Google Ads (payée)">Google Ads</span><% } %>
+        <% if (c.clientHistory) { %><a href="<%= c.clientHistory.lastUrl %>" title="<%= c.clientHistory.title %>" class="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 hover:bg-slate-200">Déjà client · <%= c.clientHistory.count %> commande<%= c.clientHistory.count > 1 ? 's' : '' %></a><% } %>
+        <% if (c.savHistory) { %><a href="<%= c.savHistory.url %>" title="<%= c.savHistory.title %>" class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium <%= c.savHistory.openCount ? 'bg-amber-50 text-amber-800' : 'bg-slate-100 text-slate-600' %>"><%= c.savHistory.openCount ? 'SAV en cours' : 'SAV clos' %></a><% } %>
+        <% if (c.recoveredOrderBadge) { %><a href="<%= c.recoveredOrderBadge.url %>" class="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-xs font-medium text-green-800 hover:bg-green-100">A commandé<%= c.recoveredOrderBadge.number ? ' n°' + c.recoveredOrderBadge.number : '' %></a><% } %>
       </div>
-      <% if (faible) { %>
-        <p class="mt-1 text-sm text-slate-600">Ce contact n’a rien demandé (simple panier, inscription…). Il n’est pas dans la file « À traiter ». Tu peux lui écrire ou planifier une relance si c’est utile.</p>
+      <%/* L'heure exacte, pas seulement « il y a 3 h » : on doit pouvoir dire
+            au client « vous nous avez écrit ce matin à 9 h 12 ». */%>
+      <p class="mt-1 text-sm text-slate-500">
+        <%= c.captureBadge ? c.captureBadge.label : '' %><% if (c.captureBadge) { %> · <% } %><span title="<%= c.recuExact ? (faible ? 'Dernière visite le ' : 'Demande reçue le ') + c.recuExact + (c.receivedRel ? ' (' + c.receivedRel + ')' : '') : c.lastActivityAbsolute %>"><%= faible ? 'vu' : 'reçue' %> <%= c.recuLong || c.receivedRel %></span>
+        <% if (c.takenByName) { %> · suivie par <span class="font-medium text-slate-700"><%= c.takenByName %></span><% } else if (!ferme && !faible) { %> · <span class="text-slate-400">non attribuée</span><% } %>
+      </p>
+    </div>
+    <div class="ml-auto flex shrink-0 items-center gap-2">
+      <% if (!c.takenByName && !ferme && !faible) { %>
+        <button type="button" class="js-prendre <%= btn %>" data-lead-id="<%= c.id %>" title="Personne ne s’occupe de ce client : le prendre en charge">
+          <span class="<%= icone %> text-slate-500">person_add</span>M’attribuer
+        </button>
       <% } %>
-      <% if (pa === 'review') { %>
-        <p class="mt-1 text-sm text-slate-600">Ce dossier attend depuis longtemps. Relis l’historique en bas, puis rappelle le client ou clôture le dossier (« Perdu… » dans Autres actions).</p>
-      <% } %>
-      <% if (c.nextActionNote && !ferme) { %>
-        <p class="mt-1 text-sm text-slate-700"><span class="material-symbols-outlined align-[-3px] text-[15px] text-slate-400">sticky_note_2</span> <%= c.nextActionNote %></p>
-      <% } %>
+      <button type="button" class="js-suivant <%= btn %>" title="Passer au client suivant de la liste (touche J)">
+        Suivant<span class="material-symbols-outlined text-[18px] text-slate-500">arrow_forward</span>
+      </button>
+    </div>
+  </header>
 
-      <div class="mt-3 flex flex-wrap gap-2">
-        <% if (pa === 'call' && c.phone) { %>
-          <a href="tel:<%= c.phone %>" class="js-appeler <%= btnPrincipal %> bg-emerald-600 hover:bg-emerald-700" data-lead-id="<%= c.id %>" data-phone="<%= c.phone %>" data-name="<%= nom %>">
-            <span class="material-symbols-outlined text-[18px]">call</span><%= w.primaryLabel %> <%= c.phone %>
-          </a>
-        <% } else if (pa === 'email' && c.email) { %>
-          <button type="button" class="lead-action <%= btnPrincipal %> bg-primary hover:opacity-90" data-action="email" data-lead-id="<%= c.id %>">
-            <span class="material-symbols-outlined text-[18px]">mail</span><%= faible ? 'Écrire au client' : w.primaryLabel %>
-          </button>
-        <% } else if (pa === 'workshop') { %>
-          <a href="/admin/devis-moteurs/<%= c.id %>" class="<%= btnPrincipal %> bg-orange-600 hover:bg-orange-700">
-            <span class="material-symbols-outlined text-[18px]">request_quote</span><%= w.primaryLabel %> — atelier devis
-          </a>
-        <% } else if (pa === 'review') { %>
-          <button type="button" class="js-onglet <%= btnPrincipal %> bg-slate-900 hover:bg-slate-800" data-onglet="suivi" data-defiler="1">
-            <span class="material-symbols-outlined text-[18px]">history</span>Relire l’historique
-          </button>
-        <% } else if (pa === 'plan') { %>
-          <button type="button" class="js-planifier <%= btnPrincipal %> bg-slate-900 hover:bg-slate-800" data-lead-id="<%= c.id %>">
-            <span class="material-symbols-outlined text-[18px]">event</span><%= w.primaryLabel %>
-          </button>
-        <% } else if (ferme) { %>
-          <button type="button" class="js-cloturer <%= btnSecond %>" data-lead-id="<%= c.id %>" data-issue="rouvrir">
-            <span class="material-symbols-outlined text-[18px]">undo</span>Rouvrir le dossier
-          </button>
-        <% } else { %>
-          <button type="button" class="js-onglet <%= btnPrincipal %> bg-slate-900 hover:bg-slate-800" data-onglet="<%= w.primaryLabel === 'Vérifier le paiement' ? 'client' : 'suivi' %>" data-defiler="1">
-            <span class="material-symbols-outlined text-[18px]"><%= w.primaryLabel === 'Vérifier le paiement' ? 'payments' : 'visibility' %></span><%= w.primaryLabel || 'Voir le dossier' %>
-          </button>
-        <% } %>
-
-        <% if (!ferme && w.canCall && c.phone && pa !== 'call') { %>
-          <a href="tel:<%= c.phone %>" class="js-appeler <%= btnSecond %>" data-lead-id="<%= c.id %>" data-phone="<%= c.phone %>" data-name="<%= nom %>"><span class="material-symbols-outlined text-[17px] text-emerald-600">call</span>Appeler</a>
-        <% } %>
-        <% if (c.phone) { %>
-          <button type="button" data-copy-phone="<%= c.phone %>" class="<%= btnSecond %>"><span class="material-symbols-outlined text-[17px]">content_copy</span>Copier le n°</button>
-        <% } %>
-        <% if (!ferme && c.phone && (w.canCall || c.lastCallOutcome)) { %>
-          <button type="button" class="js-resultat <%= btnSecond %>" data-lead-id="<%= c.id %>" data-name="<%= nom %>" title="Noter comment s’est passé l’appel et la suite"><span class="material-symbols-outlined text-[17px] text-emerald-600">check_circle</span>Appel terminé</button>
-        <% } %>
-        <% if (!ferme && pa !== 'plan') { %>
-          <button type="button" class="js-planifier <%= btnSecond %>" data-lead-id="<%= c.id %>" title="Prévoir la suite et sa date"><span class="material-symbols-outlined text-[17px]">event</span>Planifier</button>
-        <% } %>
-        <% if (!ferme && !faible) { %>
-          <%/* Report en un clic : rouvrir la fenêtre « Planifier » pour
-                repousser de deux heures faisait quatre clics, donc personne ne
-                le faisait et l'échéance restait fausse. */%>
-          <span class="inline-flex overflow-hidden rounded-xl border border-slate-300 bg-white">
-            <button type="button" class="js-reporter px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" data-lead-id="<%= c.id %>"
-                    data-quand="2h" data-type="<%= c.nextActionType || 'callback' %>" title="Repousser de 2 heures ouvrées et passer au client suivant">+2 h</button>
-            <button type="button" class="js-reporter border-l border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50" data-lead-id="<%= c.id %>"
-                    data-quand="demain" data-type="<%= c.nextActionType || 'callback' %>" title="Repousser à demain 9 h 30 (prochain jour ouvré) et passer au client suivant">Demain</button>
-          </span>
-          <%/* « La balle est dans son camp. » Faute de pouvoir le dire en un
-                geste, le dossier repassait en file tous les deux jours ouvrés
-                jusqu'à la clôture — le client qui dit « rappelez-moi en
-                janvier » produisait une alerte par semaine. */%>
-          <details class="lead-menu relative">
-            <summary class="list-none cursor-pointer <%= btnSecond %>"><span class="material-symbols-outlined text-[17px] text-slate-500">hourglass_top</span>En attente du client<span class="material-symbols-outlined text-[16px] text-slate-400">expand_more</span></summary>
-            <div class="absolute left-0 z-30 mt-1 w-80 rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-xl">
-              <div class="px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-widest text-slate-400">Il doit revenir vers nous</div>
-              <% [['2j', 'Il me rappelle', 'dans 2 jours ouvrés'], ['1sem', 'Il réfléchit', 'relance dans une semaine'], ['2sem', 'Il attend son garagiste', 'relance dans deux semaines'], ['1mois', 'Ce n’est pas pour tout de suite', 'relance dans un mois']].forEach(function (o) { %>
-                <button type="button" class="js-reporter flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left hover:bg-slate-50" data-lead-id="<%= c.id %>"
-                        data-quand="<%= o[0] %>" data-type="wait_client">
-                  <span class="material-symbols-outlined mt-0.5 text-[17px] text-slate-400">schedule</span>
-                  <span><span class="font-semibold text-slate-800"><%= o[1] %></span><br><span class="text-xs text-slate-500"><%= o[2] %></span></span>
-                </button>
-              <% }) %>
-              <p class="px-3 pb-2 pt-1 text-xs text-slate-500">Le dossier part dans « Planifiés » et ne remonte qu’à la date choisie.</p>
-            </div>
-          </details>
-        <% } %>
-      </div>
-
-      <% if (!ferme && c.phone && !w.canCall) { %>
-        <p class="mt-2 text-xs text-slate-500"><span class="material-symbols-outlined align-[-3px] text-[14px]">info</span> Pas d’appel : ce client n’a pas fait de demande (simple panier). Depuis le 11 août 2026, on ne démarche plus par téléphone : écris-lui.</p>
-      <% } %>
-
-      <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-black/5 pt-3 text-xs text-slate-600">
-        <% if (c.takenByName) { %>
-          <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[15px] text-slate-400">person</span>Suivi par <strong class="text-slate-800"><%= c.takenByName %></strong><%= c.takenAtRel ? ' · ' + c.takenAtRel : '' %></span>
-        <% } else if (!ferme && !faible) { %>
-          <button type="button" class="js-prendre inline-flex items-center gap-1 rounded-full border border-dashed border-slate-400 bg-white px-2.5 py-1 font-semibold text-slate-700 hover:border-primary hover:text-primary" data-lead-id="<%= c.id %>">
-            <span class="material-symbols-outlined text-[15px]">pan_tool</span>Personne ne s’en occupe — je m’en occupe
-          </button>
-        <% } %>
-        <% if (c.lastCallOutcome) { %>
-          <span>Dernier appel : <strong class="text-slate-800"><%= c.lastCallOutcome.label %></strong><%= c.lastCallOutcome.by ? ' (' + c.lastCallOutcome.by + (c.lastCallOutcome.atRel ? ', ' + c.lastCallOutcome.atRel : '') + ')' : '' %></span>
-        <% } else if (!w.firstHumanAt && !ferme && !faible) { %>
-          <span class="font-semibold text-red-600" data-role="attente-longue"
-                title="Aucun appel ni message d’un commercial depuis la demande (temps compté en heures d’ouverture).">Jamais contacté<% if (c.attenteCourte) { %> · attend depuis <%= c.attenteCourte %><% } %></span>
-        <% } else if (c.lastManualContactRel) { %>
-          <span>Dernier contact <%= c.lastManualContactRel %><%= c.manualStatusByName ? ' (' + c.manualStatusByName + ')' : '' %></span>
-        <% } %>
-        <% if (c.devisSuivi) { var ds = c.devisSuivi; %>
-          <span class="inline-flex items-center gap-1"><span class="material-symbols-outlined text-[15px] text-violet-500">request_quote</span>Devis envoyé <%= ds.envoyeRel %><% if (ds.paiementClique) { %> · <strong class="text-green-700">a cliqué sur « payer »</strong><% } else if (ds.pdfVu) { %> · <strong class="text-violet-700">PDF consulté</strong><% } else if (ds.ouvert) { %> · <strong class="text-violet-700">email ouvert</strong><% } else { %> · pas encore ouvert<% } %></span>
-        <% } %>
-      </div>
-    </section>
-
-    <% if (c.lastNote && c.lastNote.text) { %>
-      <%/* La dernière note n'apparaissait que dans l'onglet « Suivi & notes »,
-            chargé après coup : on décrochait le téléphone sans savoir ce que le
-            collègue avait déjà dit au client. */%>
-      <div class="rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2">
-        <div class="text-[11px] font-bold uppercase tracking-widest text-amber-700">Dernière note</div>
-        <p class="mt-0.5 whitespace-pre-line text-sm text-slate-800"><%= c.lastNote.text %><%= c.lastNote.tronque ? '…' : '' %></p>
-        <div class="mt-0.5 flex items-center gap-2 text-xs text-slate-500">
-          <span><%= c.lastNote.by %><%= c.lastNote.atRel ? ' · ' + c.lastNote.atRel : '' %></span>
-          <button type="button" class="js-onglet font-semibold text-primary hover:underline" data-onglet="suivi" data-defiler="1">Tout le suivi</button>
-        </div>
-      </div>
+  <!-- 2. Que faire : une seule action principale, le reste à côté ou dans un menu -->
+  <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 px-5 py-3">
+    <% if (pa === 'call' && c.phone) { %>
+      <a href="tel:<%= c.phone %>" class="js-appeler <%= btnPrincipal %>" data-lead-id="<%= c.id %>" data-phone="<%= c.phone %>" data-name="<%= nom %>">
+        <span class="<%= icone %>">call</span><%= w.primaryLabel %>
+      </a>
+    <% } else if (pa === 'email' && c.email) { %>
+      <button type="button" class="lead-action <%= btnPrincipal %>" data-action="email" data-lead-id="<%= c.id %>">
+        <span class="<%= icone %>">mail</span><%= faible ? 'Écrire au client' : w.primaryLabel %>
+      </button>
+    <% } else if (pa === 'workshop') { %>
+      <a href="/admin/devis-moteurs/<%= c.id %>" class="<%= btnPrincipal %>">
+        <span class="<%= icone %>">request_quote</span><%= w.primaryLabel %>
+      </a>
+    <% } else if (pa === 'review') { %>
+      <button type="button" class="js-onglet <%= btnPrincipal %>" data-onglet="suivi" data-defiler="1">
+        <span class="<%= icone %>">history</span>Relire l’historique
+      </button>
+    <% } else if (pa === 'plan') { %>
+      <button type="button" class="js-planifier <%= btnPrincipal %>" data-lead-id="<%= c.id %>">
+        <span class="<%= icone %>">event</span><%= w.primaryLabel %>
+      </button>
+    <% } else if (ferme) { %>
+      <button type="button" class="js-cloturer <%= btn %>" data-lead-id="<%= c.id %>" data-issue="rouvrir">
+        <span class="<%= icone %> text-slate-500">undo</span>Rouvrir le dossier
+      </button>
+    <% } else { %>
+      <button type="button" class="js-onglet <%= btnPrincipal %>" data-onglet="<%= w.primaryLabel === 'Vérifier le paiement' ? 'client' : 'suivi' %>" data-defiler="1">
+        <span class="<%= icone %>"><%= w.primaryLabel === 'Vérifier le paiement' ? 'payments' : 'visibility' %></span><%= w.primaryLabel || 'Voir le dossier' %>
+      </button>
     <% } %>
 
-    <!-- 3. Les autres outils -->
-    <div class="flex flex-wrap gap-2">
-      <% if (c.email) { %><button type="button" class="lead-action <%= outil %>" data-action="email" data-lead-id="<%= c.id %>"><span class="material-symbols-outlined text-[16px] text-slate-500">mail</span>Email</button><% } %>
-      <% if (c.phone && c.phoneCallable) { %>
-        <button type="button" class="lead-action <%= outil %>" data-action="sms" data-lead-id="<%= c.id %>"><span class="material-symbols-outlined text-[16px] text-slate-500">sms</span>SMS</button>
-        <button type="button" class="lead-action <%= outil %>" data-action="whatsapp" data-lead-id="<%= c.id %>"><span class="material-symbols-outlined text-[16px] text-emerald-600">chat</span>WhatsApp</button>
-      <% } %>
-      <% if (w.hasWorkshop) { %><a href="/admin/devis-moteurs/<%= c.id %>" class="<%= outil %>"><span class="material-symbols-outlined text-[16px] text-orange-600">request_quote</span>Atelier devis</a><% } %>
-      <button type="button" class="js-onglet <%= outil %>" data-onglet="piece" data-cible="fournisseur"><span class="material-symbols-outlined text-[16px] text-slate-500">local_shipping</span>Fournisseur</button>
+    <% if (!ferme && w.canCall && c.phone && pa !== 'call') { %>
+      <a href="tel:<%= c.phone %>" class="js-appeler <%= btn %>" data-lead-id="<%= c.id %>" data-phone="<%= c.phone %>" data-name="<%= nom %>"><span class="<%= icone %> text-slate-500">call</span>Appeler</a>
+    <% } %>
+    <% if (!ferme && c.phone && (w.canCall || c.lastCallOutcome)) { %>
+      <button type="button" class="js-resultat <%= btn %>" data-lead-id="<%= c.id %>" data-name="<%= nom %>" title="Noter comment s’est passé l’appel et la suite (touche R)"><span class="<%= icone %> text-slate-500">check_circle</span>Noter l’appel</button>
+    <% } %>
+    <% if (!ferme) { %>
+      <%/* Planifier, +2 h, demain et « en attente du client » : quatre
+            boutons de même poids sur la barre, devenus un seul menu. */%>
       <details class="lead-menu relative">
-        <summary class="list-none cursor-pointer <%= outil %>"><span class="material-symbols-outlined text-[16px] text-slate-500">more_horiz</span>Autres actions</summary>
-        <div class="absolute left-0 z-30 mt-1 w-72 rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-xl">
+        <summary class="list-none cursor-pointer <%= btn %>"><span class="<%= icone %> text-slate-500">schedule</span>Reporter<span class="material-symbols-outlined text-[16px] text-slate-400">expand_more</span></summary>
+        <div class="<%= menu %> left-0">
+          <% if (pa !== 'plan') { %>
+            <button type="button" class="js-planifier <%= item %>" data-lead-id="<%= c.id %>" title="Prévoir la suite et sa date (touche P)"><span class="<%= icone %> text-slate-400">event</span>Planifier…</button>
+          <% } %>
+          <% if (!faible) { %>
+            <%/* Report en un clic : rouvrir « Planifier » pour repousser de deux
+                  heures faisait quatre clics, donc personne ne le faisait. */%>
+            <button type="button" class="js-reporter <%= item %>" data-lead-id="<%= c.id %>" data-quand="2h" data-type="<%= c.nextActionType || 'callback' %>" title="Repousser de 2 heures ouvrées et passer au client suivant"><span class="<%= icone %> text-slate-400">schedule</span>Dans 2 heures</button>
+            <button type="button" class="js-reporter <%= item %>" data-lead-id="<%= c.id %>" data-quand="demain" data-type="<%= c.nextActionType || 'callback' %>" title="Repousser à demain 9 h 30 (prochain jour ouvré) et passer au client suivant"><span class="<%= icone %> text-slate-400">schedule</span>Demain matin</button>
+            <%/* « La balle est dans son camp. » Sans ce choix, le dossier
+                  repassait en file tous les deux jours ouvrés jusqu'à la
+                  clôture. */%>
+            <div class="mx-3 mt-2 border-t border-slate-100 pt-2 text-xs text-slate-500">En attente du client</div>
+            <% [['2j', 'Il me rappelle', 'dans 2 jours ouvrés'], ['1sem', 'Il réfléchit', 'relance dans une semaine'], ['2sem', 'Il attend son garagiste', 'relance dans deux semaines'], ['1mois', 'Ce n’est pas pour tout de suite', 'relance dans un mois']].forEach(function (o) { %>
+              <button type="button" class="js-reporter <%= item %>" data-lead-id="<%= c.id %>" data-quand="<%= o[0] %>" data-type="wait_client">
+                <span class="min-w-0"><span class="text-slate-800"><%= o[1] %></span> <span class="text-slate-400">· <%= o[2] %></span></span>
+              </button>
+            <% }) %>
+            <p class="px-3 pb-2 pt-1 text-xs text-slate-400">Le dossier part dans « Planifiés » et ne remonte qu’à la date choisie.</p>
+          <% } %>
+        </div>
+      </details>
+    <% } %>
+
+    <div class="ml-auto flex items-center gap-1.5">
+      <% if (c.phone && c.phoneCallable) { %>
+        <button type="button" class="lead-action <%= btnIcone %>" data-action="sms" data-lead-id="<%= c.id %>" title="Envoyer un SMS (touche S)" aria-label="Envoyer un SMS"><span class="<%= icone %>">sms</span></button>
+        <button type="button" class="lead-action <%= btnIcone %>" data-action="whatsapp" data-lead-id="<%= c.id %>" title="Écrire sur WhatsApp" aria-label="Écrire sur WhatsApp"><span class="<%= icone %>">chat</span></button>
+      <% } %>
+      <% if (c.email) { %>
+        <button type="button" class="lead-action <%= btnIcone %>" data-action="email" data-lead-id="<%= c.id %>" title="Écrire un email (touche E)" aria-label="Écrire un email"><span class="<%= icone %>">mail</span></button>
+      <% } %>
+      <details class="lead-menu relative">
+        <summary class="list-none cursor-pointer <%= btnIcone %>" title="Autres actions" aria-label="Autres actions"><span class="<%= icone %>">more_horiz</span></summary>
+        <div class="<%= menu %> right-0">
+          <% if (w.hasWorkshop) { %>
+            <a href="/admin/devis-moteurs/<%= c.id %>" class="<%= item %>"><span class="<%= icone %> text-slate-400">request_quote</span>Atelier devis</a>
+          <% } %>
+          <button type="button" class="js-onglet <%= item %>" data-onglet="piece" data-cible="fournisseur"><span class="<%= icone %> text-slate-400">local_shipping</span>Fournisseur</button>
           <% if (c.phone && c.phoneCallable) { %>
-            <button type="button" class="lead-action flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-slate-50" data-action="sms" data-sms-template="sms_tried_to_call" data-lead-id="<%= c.id %>"><span class="material-symbols-outlined text-[17px] text-slate-400">sms</span>SMS « J’ai essayé de vous joindre »</button>
-            <button type="button" class="lead-action flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-slate-50" data-action="sms" data-sms-template="sms_compat_ok" data-lead-id="<%= c.id %>"><span class="material-symbols-outlined text-[17px] text-slate-400">check_circle</span>SMS « Compatibilité vérifiée »</button>
+            <button type="button" class="lead-action <%= item %>" data-action="sms" data-sms-template="sms_tried_to_call" data-lead-id="<%= c.id %>"><span class="<%= icone %> text-slate-400">sms</span>SMS « J’ai essayé de vous joindre »</button>
+            <button type="button" class="lead-action <%= item %>" data-action="sms" data-sms-template="sms_compat_ok" data-lead-id="<%= c.id %>"><span class="<%= icone %> text-slate-400">check_circle</span>SMS « Compatibilité vérifiée »</button>
           <% } %>
           <% if (c.canRemind) { %>
-            <button type="button" class="lead-remind-btn flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-slate-50" data-lead-id="<%= c.id %>" data-next="<%= c.nextReminderNumber %>"><span class="material-symbols-outlined text-[17px] text-slate-400">forward_to_inbox</span>Envoyer la relance panier n°<%= c.nextReminderNumber %></button>
+            <button type="button" class="lead-remind-btn <%= item %>" data-lead-id="<%= c.id %>" data-next="<%= c.nextReminderNumber %>"><span class="<%= icone %> text-slate-400">forward_to_inbox</span>Envoyer la relance panier n°<%= c.nextReminderNumber %></button>
           <% } %>
           <% if (c.sessionId) { %>
-            <a href="/admin/visiteurs/<%= c.sessionId %>" class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-slate-50"><span class="material-symbols-outlined text-[17px] text-slate-400">route</span>Parcours sur le site</a>
+            <a href="/admin/visiteurs/<%= c.sessionId %>" class="<%= item %>"><span class="<%= icone %> text-slate-400">route</span>Parcours sur le site</a>
           <% } %>
           <div class="my-1 border-t border-slate-100"></div>
           <% if (!ferme) { %>
-            <button type="button" class="js-cloturer flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-green-800 hover:bg-green-50" data-lead-id="<%= c.id %>" data-issue="gagne"><span class="material-symbols-outlined text-[17px]">verified</span>Gagné (le client a payé)</button>
-            <button type="button" class="js-cloturer flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-700 hover:bg-slate-100" data-lead-id="<%= c.id %>" data-issue="perdu"><span class="material-symbols-outlined text-[17px]">block</span>Perdu…</button>
+            <button type="button" class="js-cloturer <%= item %>" data-lead-id="<%= c.id %>" data-issue="gagne"><span class="<%= icone %> text-green-600">verified</span>Gagné (le client a payé)</button>
+            <button type="button" class="js-cloturer <%= item %>" data-lead-id="<%= c.id %>" data-issue="perdu"><span class="<%= icone %> text-slate-400">block</span>Perdu…</button>
           <% } else { %>
-            <button type="button" class="js-cloturer flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-slate-700 hover:bg-slate-50" data-lead-id="<%= c.id %>" data-issue="rouvrir"><span class="material-symbols-outlined text-[17px]">undo</span>Rouvrir le dossier</button>
+            <button type="button" class="js-cloturer <%= item %>" data-lead-id="<%= c.id %>" data-issue="rouvrir"><span class="<%= icone %> text-slate-400">undo</span>Rouvrir le dossier</button>
           <% } %>
         </div>
       </details>
     </div>
+  </div>
 
-    <!-- 4. Historique, pièce, client -->
-    <div class="fiche-onglets-bloc">
-      <div class="flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist">
-        <button type="button" role="tab" class="js-onglet fiche-onglet whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800" data-onglet="suivi">Suivi &amp; notes</button>
-        <button type="button" role="tab" class="js-onglet fiche-onglet whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800" data-onglet="piece">Pièce &amp; devis</button>
-        <button type="button" role="tab" class="js-onglet fiche-onglet whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-sm font-semibold text-slate-500 hover:text-slate-800" data-onglet="client">Client &amp; parcours</button>
-      </div>
-      <div class="fiche-onglets pt-4"><div class="text-sm text-slate-400">Chargement de l’historique…</div></div>
+  <% if (faible || pa === 'review' || (!ferme && c.phone && !w.canCall)) { %>
+    <div class="space-y-1 border-b border-slate-100 px-5 py-2.5 text-xs text-slate-500">
+      <% if (faible) { %><p>Ce contact n’a rien demandé (simple panier, inscription…) : il n’est pas dans la file. Tu peux lui écrire ou planifier une relance si c’est utile.</p><% } %>
+      <% if (pa === 'review') { %><p>Ce dossier attend depuis longtemps. Relis l’historique, puis rappelle le client ou clôture le dossier (« Perdu… » dans le menu ⋯).</p><% } %>
+      <% if (!ferme && c.phone && !w.canCall) { %><p>Pas d’appel : ce client n’a pas fait de demande. Depuis le 11 août 2026, on ne démarche plus un particulier par téléphone : écris-lui.</p><% } %>
     </div>
+  <% } %>
+
+  <!-- 3. Ce qu'il a dit -->
+  <% if (alerte || c.messageClient || messageFormulaire) { %>
+    <section class="border-b border-slate-100 px-5 py-4">
+      <% if (alerte) { %>
+        <div class="mb-3 flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+          <span class="material-symbols-outlined mt-px text-[18px] text-amber-600">info</span>
+          <p><%= alerte.texte %><% if (alerte.lien) { %> <a href="<%= alerte.lien %>" class="font-medium underline"><%= alerte.libelle %></a><% } %></p>
+        </div>
+      <% } %>
+      <% if (c.messageClient) { var mc = c.messageClient; %>
+        <div class="mb-1.5 text-xs text-slate-500" title="<%= mc.exact %>">Message du client<%= mc.canal ? ' · ' + mc.canal : '' %><%= mc.quand ? ' · ' + mc.quand : '' %></div>
+        <p class="whitespace-pre-line rounded-lg bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800"><%= mc.texte %><%= mc.tronque ? '…' : '' %></p>
+        <%/* Ce que l'outil savait du numéro à la réception : c'est ce qui
+              distingue un message de SAV d'une demande de vente. */%>
+        <% if (mc.contexte) { %><p class="mt-1.5 text-xs text-slate-500">À la réception : <%= mc.contexte %></p><% } %>
+      <% } else if (messageFormulaire) { %>
+        <div class="mb-1.5 text-xs text-slate-500">Message du client · formulaire</div>
+        <p class="whitespace-pre-line rounded-lg bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-800"><%= messageFormulaire.slice(0, 600) %><%= messageFormulaire.length > 600 ? '…' : '' %></p>
+      <% } %>
+    </section>
+  <% } %>
+
+  <!-- 4. Les faits -->
+  <%/* Alignées sur la ligne de base du texte : un bouton « Copier » ou
+        « Demander par SMS » dans la valeur décalait le libellé vers le haut. */%>
+  <dl class="grid items-baseline gap-x-4 gap-y-2.5 border-b border-slate-100 px-5 py-4 text-sm" style="grid-template-columns: 8.5rem minmax(0, 1fr);">
+    <% if (c.phone) { %>
+      <dt class="text-slate-500">Téléphone</dt>
+      <dd class="flex flex-wrap items-baseline gap-x-2 text-slate-900">
+        <span><%= c.telAffiche || c.phone %></span>
+        <button type="button" data-copy-phone="<%= c.phone %>" class="inline-flex min-h-0 items-center gap-1 self-center text-xs text-slate-500 hover:text-slate-800" title="Copier le numéro"><span class="material-symbols-outlined text-[15px]">content_copy</span>Copier</button>
+        <% if (!c.phoneCallable) { %><span class="text-xs text-amber-700">numéro étranger ou incomplet</span><% } %>
+      </dd>
+    <% } %>
+    <% if (c.email) { %>
+      <dt class="text-slate-500">Email</dt>
+      <dd class="min-w-0 break-all text-slate-900"><%= c.email %></dd>
+    <% } %>
+
+    <dt class="text-slate-500"><%= faible && c.itemCount ? 'Dans son panier' : 'Pièce' %></dt>
+    <dd class="text-slate-900"><% if (d.piece && !d.pieceDuSms) { %><%= d.piece %><% } else { %><span class="text-slate-400">Non précisée</span><% } %></dd>
+
+    <dt class="text-slate-500">Véhicule</dt>
+    <dd class="text-slate-900">
+      <% if (d.vehicule) { %><span><%= d.vehicule %></span><% } %>
+      <% if (d.plaque) { %><span class="ml-1 inline-block rounded border border-slate-300 bg-white px-1.5 font-mono text-xs"><%= d.plaque %></span><% } %>
+      <% if (d.vin) { %><span class="ml-1 inline-block break-all font-mono text-xs text-slate-600">VIN <%= d.vin %></span><% } %>
+      <% if (!d.vehicule && !d.plaque && !d.vin) { %>
+        <span class="text-slate-500">Plaque ou VIN manquant</span><% if (c.phone && c.phoneCallable && !ferme) { %> · <button type="button" class="lead-action <%= lienTexte %> text-slate-900" data-action="sms" data-lead-id="<%= c.id %>">Demander par SMS</button><% } %>
+      <% } %>
+    </dd>
+
+    <% if (c.prixAffiche) { %>
+      <dt class="text-slate-500"><%= c.prixAffiche.origine === 'devis' ? 'Prix du devis' : 'Montant du panier' %></dt>
+      <dd class="font-medium text-slate-900"><%= c.prixAffiche.montant %></dd>
+    <% } %>
+    <% if (c.engineQuoteUrl || c.engineRef) { %>
+      <dt class="text-slate-500">Dossier devis</dt>
+      <dd><a href="/admin/devis-moteurs/<%= c.id %>" class="text-slate-900 underline decoration-slate-300 underline-offset-2 hover:decoration-slate-500"><%= c.engineRef || 'Ouvrir le dossier' %></a></dd>
+    <% } %>
+    <% if (c.devisSuivi) { var ds = c.devisSuivi; %>
+      <dt class="text-slate-500">Devis</dt>
+      <dd class="text-slate-900">Envoyé <%= ds.envoyeRel %><% if (ds.paiementClique) { %> · <span class="font-medium text-green-700">a cliqué sur « payer »</span><% } else if (ds.pdfVu) { %> · PDF consulté<% } else if (ds.ouvert) { %> · email ouvert<% } else { %> · <span class="text-slate-500">pas encore ouvert</span><% } %></dd>
+    <% } %>
+
+    <% if (contact) { %>
+      <dt class="text-slate-500">Contact</dt>
+      <dd class="text-slate-900"><span class="mr-1.5 inline-block h-2 w-2 rounded-full align-[1px] <%= point %>" aria-hidden="true"></span><%= contact %></dd>
+    <% } %>
+
+    <dt class="text-slate-500">Prochaine action</dt>
+    <dd class="text-slate-900">
+      <%= titre %>
+      <%/* L'heure d'un rendez-vous que quelqu'un a POSÉ, tant qu'elle n'est pas
+            passée : un fait, pas un compte à rebours. */%>
+      <% if (c.prevu && !ferme && !faible) { %><div class="text-slate-500">Prévu <%= c.prevu %></div><% } %>
+      <% if (w.stage === 'perdu' && c.lostReasonLabel) { %><div class="text-slate-500">Motif : <%= c.lostReasonLabel %></div><% } %>
+      <% if (c.nextActionNote && !ferme) { %><div class="text-slate-500"><%= c.nextActionNote %></div><% } %>
+    </dd>
+
+    <% if (noteUtile) { %>
+      <%/* La dernière note n'apparaissait que dans l'onglet de suivi, chargé
+            après coup : on décrochait sans savoir ce que le collègue avait dit. */%>
+      <dt class="text-slate-500">Dernière note</dt>
+      <dd class="text-slate-900">
+        <p class="whitespace-pre-line"><%= c.lastNote.text %><%= c.lastNote.tronque ? '…' : '' %></p>
+        <p class="mt-0.5 text-xs text-slate-500"><%= c.lastNote.by %><%= c.lastNote.atRel ? ' · ' + c.lastNote.atRel : '' %> · <button type="button" class="js-onglet <%= lienTexte %> hover:text-slate-800" data-onglet="suivi" data-defiler="1">tout le suivi</button></p>
+      </dd>
+    <% } %>
+  </dl>
+
+  <!-- 5. L'historique, la pièce, le client -->
+  <div class="fiche-onglets-bloc">
+    <div class="flex gap-5 overflow-x-auto border-b border-slate-100 px-5" role="tablist">
+      <button type="button" role="tab" class="js-onglet fiche-onglet whitespace-nowrap border-b-2 border-transparent py-2.5 text-sm font-medium text-slate-500 hover:text-slate-800" data-onglet="suivi">Suivi et notes</button>
+      <button type="button" role="tab" class="js-onglet fiche-onglet whitespace-nowrap border-b-2 border-transparent py-2.5 text-sm font-medium text-slate-500 hover:text-slate-800" data-onglet="piece">Pièce et devis</button>
+      <button type="button" role="tab" class="js-onglet fiche-onglet whitespace-nowrap border-b-2 border-transparent py-2.5 text-sm font-medium text-slate-500 hover:text-slate-800" data-onglet="client">Client</button>
+    </div>
+    <div class="fiche-onglets px-5 py-4"><div class="text-sm text-slate-400">Chargement de l’historique…</div></div>
   </div>
 </article>
