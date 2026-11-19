@@ -372,7 +372,7 @@ async function getEngineQuotesList(req, res, next) {
          répondu, les nouvelles demandes, les retards récents, le travail du
          jour, les planifiés, les vieux retards, puis les dossiers clos (les
          plus récents d'abord). */
-      const RANG_GROUPE = { repondu: 0, nouveaux: 1, retard: 2, rappels: 3, devis: 3, relances: 4, plus_tard: 5, anciens: 6 };
+      const RANG_GROUPE = { repondu: 0, non_traites: 1, retard: 2, rappels: 3, devis: 3, relances: 4, plus_tard: 5, anciens: 6 };
       const rang = (w) => (w.group in RANG_GROUPE ? RANG_GROUPE[w.group] : 6);
       tous.forEach((c) => { c.__work = computeWork(c, nowDate); });
       tous.sort((a, b) => {

@@ -35,6 +35,19 @@
  *   - supposition (ambre, « À relancer ») : l'échéance déduite du dernier
  *     contact. Rien ne disparaît, mais le rouge redevient un signal.
  *
+ * ── Une seule pile de demandes à prendre (20/11/2026) ──────────────────────
+ *
+ * « Nouvelles demandes » et « En retard » séparaient deux piles que le
+ * commercial traite du même geste : décrocher le téléphone. Une demande de
+ * 9 h 05 et une de 8 h 40 ne demandent pas un travail différent — la seconde
+ * a juste passé l'heure. Elles sont réunies dans « Non traités » : TOUT ce
+ * que personne n'a encore appelé ni écrit, le plus récent en haut (un lead
+ * frais se transforme bien mieux qu'un lead de la veille), avec une bascule
+ * pour repartir des plus anciens.
+ *
+ * « En retard » redevient alors ce que son nom dit : les rendez-vous qu'on
+ * avait promis sur des dossiers DÉJÀ pris en main, et qu'on a ratés.
+ *
  * `computeWork()` est une fonction PURE : mêmes champs + même `now` = même
  * résultat. Elle ne lit pas la base et n'écrit rien. Les deux pages (file de
  * travail et devis moteurs) l'utilisent, donc elles disent la même chose.
@@ -67,8 +80,8 @@ const ETAPES = {
 
 const GROUPES = [
   { key: 'repondu',    label: 'Le client a répondu',         hint: 'Il nous a écrit depuis notre dernier message : la balle est dans notre camp', tone: 'green', collapsed: false },
-  { key: 'nouveaux',   label: 'Nouvelles demandes',          hint: 'Première réponse dans l’heure (heures d’ouverture)', tone: 'blue',  collapsed: false },
-  { key: 'retard',     label: 'En retard',                   hint: 'Une heure PROMISE est passée : un rappel que quelqu’un a planifié, ou une première réponse due dans l’heure', tone: 'red', collapsed: false },
+  { key: 'non_traites', label: 'Non traités',                hint: 'Personne n’a encore appelé ni écrit. Les plus récentes en haut : un lead frais se transforme bien mieux qu’un lead de la veille', tone: 'blue',  collapsed: false },
+  { key: 'retard',     label: 'En retard',                   hint: 'Un rendez-vous PROMIS est passé, sur un dossier déjà pris en main : rappel planifié non tenu', tone: 'red', collapsed: false },
   { key: 'rappels',    label: 'Prévus aujourd’hui',          hint: 'Les rappels et relances que quelqu’un a planifiés pour aujourd’hui', tone: 'amber', collapsed: false },
   { key: 'devis',      label: 'Devis à préparer',            hint: 'Identifier la pièce, trouver le prix, envoyer le devis — les plus en retard en haut', tone: 'orange', collapsed: false },
   { key: 'relances',   label: 'À relancer',                  hint: 'Sans nouvelles depuis plus de 2 jours ouvrés. Personne n’a promis cette date : c’est la file qui la propose', tone: 'amber', collapsed: false },
@@ -300,10 +313,13 @@ function computeWork(lead, now = new Date()) {
   /* Groupe dans la file. */
   let group = '';
   if (intent === 'opportunity') {
-    const age = recu ? ho.minutesOuvreesEntre(recu, now) : Infinity;
     if (aRepondu) group = 'repondu';
-    else if (stage === 'nouveau' && age <= MIN_JOUR_OUVRE) group = 'nouveaux';
+    /* Pas encore pris en main = une seule pile, quel que soit le retard :
+       c'est le même geste pour le commercial, décrocher le téléphone.
+       Au-delà de 7 jours ouvrés de retard, « Anciens dossiers » garde son
+       rôle de garde-fou : la file du jour ne doit pas se noyer dedans. */
     else if (ancien) group = 'anciens';
+    else if (!humain.premiere) group = 'non_traites';
     /* Un devis dû reste un devis dû, en retard ou non : le commercial veut
        les voir ensemble, les plus vieux en haut (voir comparer()). */
     else if (stage === 'devis_a_faire' && dueAt && dueAt < finJour(now)) group = 'devis';
@@ -371,6 +387,16 @@ function computeWork(lead, now = new Date()) {
 
 /** Tri dans un groupe : l'échéance la plus urgente d'abord. */
 function comparer(a, b) {
+  /* « Non traités » : l'échéance ne distingue rien, elles sont toutes à
+     « une heure après l'arrivée ». Ce qui compte est la FRAÎCHEUR — un lead
+     de 9 h 05 se transforme bien mieux qu'un lead d'hier soir. La file
+     renverse cet ordre quand on demande les plus anciens d'abord. */
+  if (a.work.group === 'non_traites' && b.work.group === 'non_traites') {
+    const ra = a.work.receivedAt ? a.work.receivedAt.getTime() : 0;
+    const rb = b.work.receivedAt ? b.work.receivedAt.getTime() : 0;
+    if (ra !== rb) return rb - ra;
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  }
   /* Dans « Le client a répondu », l'échéance ne veut plus rien dire : ce qui
      compte est depuis quand son message attend une réponse. */
   if (a.work.group === 'repondu' && b.work.group === 'repondu') {
