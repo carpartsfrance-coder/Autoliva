@@ -32,8 +32,7 @@
 %>
 <article class="lead-fiche hidden" id="fiche-<%= c.id %>" data-lead-id="<%= c.id %>" data-name="<%= nom %>" data-deja-essaye="<%= c.dejaEssaye ? '1' : '' %>" data-stage="<%= w.stage %>"
          data-due="<%= c.dueIso || '' %>" data-retard="<%= c.retardMin || 0 %>" data-attente="<%= c.attenteMin >= 0 ? c.attenteMin : -1 %>"
-         data-promesse="<%= w.promesse ? 1 : 0 %>" data-repondu="<%= c.aRepondu ? 1 : 0 %>" data-devis="<%= w.stage === 'devis_a_faire' ? 1 : 0 %>"
-         data-sansnouvelles="<%= c.suivi && c.suivi.sansNouvellesMin >= 0 ? c.suivi.sansNouvellesMin : -1 %>">
+         data-promesse="<%= w.promesse ? 1 : 0 %>" data-repondu="<%= c.aRepondu ? 1 : 0 %>">
   <!-- Barre du haut -->
   <div class="flex items-center gap-2 border-b border-slate-100 px-4 sm:px-5 py-2.5">
     <button type="button" class="js-retour-liste seul-mobile inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-100">
@@ -125,7 +124,11 @@
       <div class="text-[11px] font-bold uppercase tracking-widest <%= texteTon %>">La prochaine action</div>
       <div class="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
         <div class="text-lg font-bold text-slate-900"><%= titre %></div>
-        <% if (c.urgence && !ferme && !faible) { %><div class="text-sm font-semibold <%= texteTon %>" data-role="urgence-longue"><%= c.urgence %></div><% } %>
+        <%/* Plus de « En retard de 9 min » ni de « À rappeler avant 14:00 » :
+              la couleur de l'encadré dit l'urgence. On garde l'heure d'un
+              rendez-vous que quelqu'un a POSÉ, tant qu'elle n'est pas passée :
+              c'est un fait, pas une alarme. */%>
+        <% if (c.prevu && !ferme && !faible) { %><div class="text-sm text-slate-500">Prévu <%= c.prevu %></div><% } %>
         <% if (w.stage === 'perdu' && c.lostReasonLabel) { %><div class="text-sm text-slate-600">Motif : <%= c.lostReasonLabel %></div><% } %>
       </div>
       <% if (faible) { %>

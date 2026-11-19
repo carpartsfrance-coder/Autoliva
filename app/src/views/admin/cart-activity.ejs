@@ -368,7 +368,7 @@
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Les groupes de la liste</div>
         <div class="space-y-1.5 text-sm text-slate-700">
           <div><strong>Le client a répondu</strong> — il nous a écrit depuis notre dernier message et attend une réponse. Son texte est sur la ligne et dans sa fiche : on sait déjà quoi lui dire. À faire avant tout le reste, même si l’heure prévue n’est pas arrivée.</div>
-          <div><strong>Non traités</strong> — <strong>tout ce que personne n’a encore appelé ni écrit</strong>, en retard ou non : c’est le même geste pour toi, décrocher le téléphone. Les plus récentes en haut, parce qu’un lead frais se transforme bien mieux qu’un lead de la veille — le lien « Plus anciennes ↑ » en tête de liste repart du fond de la pile. La promesse reste d’appeler dans l’heure (9 h–12 h, 14 h–18 h, du lundi au vendredi) : passé ce délai la ligne vire au rouge, même si elle ne change pas d’onglet.</div>
+          <div><strong>Non traités</strong> — <strong>tout ce que personne n’a encore appelé ni écrit</strong>, en retard ou non : c’est le même geste pour toi, décrocher le téléphone. Les plus récentes en haut, parce qu’un lead frais se transforme bien mieux qu’un lead de la veille — le lien « Plus anciennes ↑ » en tête de liste repart du fond de la pile. La promesse reste d’appeler dans l’heure (9 h–12 h, 14 h–18 h, du lundi au vendredi) : passé ce délai la barre de la ligne vire au rouge, même si elle ne change pas d’onglet.</div>
           <div><strong>En retard</strong> — <strong>un rendez-vous promis</strong> est passé, sur un dossier <strong>déjà pris en main</strong> : tu avais prévu de rappeler à 14 h et il est 16 h. C’est le seul onglet rouge, et il doit rester petit.</div>
           <div><strong>Prévus aujourd’hui</strong> — les rappels et relances planifiés pour aujourd’hui.</div>
           <div><strong>Devis à préparer</strong> — trouver la pièce et le prix, puis envoyer le devis (bouton « Atelier devis »). Les plus vieux en haut.</div>
@@ -381,7 +381,7 @@
       <div class="mb-4 rounded-xl border border-slate-200 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Ce que dit une ligne</div>
         <div class="space-y-1.5 text-sm text-slate-700">
-          <div>Le nom du client, et à droite <span class="font-bold text-red-600">Retard 2 h</span> (une heure promise), <span class="font-bold text-amber-700">Relancer · 4 j</span> (sans nouvelles depuis 4 jours ouvrés, personne ne l’a promis), <span class="font-bold text-blue-700">Avant 10:15</span> ou l’heure prévue.</div>
+          <div><strong>La barre de couleur à gauche dit l’urgence</strong>, sans texte : <span class="font-bold text-red-600">rouge</span> pour une heure promise et passée, <span class="font-bold text-amber-700">ambre</span> pour une relance que la file propose, <span class="font-bold text-blue-700">bleu</span> pour une demande encore dans l’heure, <span class="font-bold text-green-700">vert</span> quand le client a répondu. Pas de compte à rebours sur les lignes : seule la date d’un rendez-vous fixé un autre jour s’affiche, dans « Planifiés ».</div>
           <div>Dessous : la pièce et le véhicule, et à droite le <strong>montant en jeu</strong> (le devis s’il est parti, sinon le panier).</div>
           <div>Puis <strong>l’heure d’arrivée de la demande</strong> (« 09:12 » aujourd’hui, « hier 16:40 », « mar. 17/11 »), <strong>qui s’en occupe</strong> (« Non pris » si personne) et d’où elle vient (Google Ads, landing…).</div>
           <div>À droite de cette ligne : soit <strong>depuis combien de temps elle attend</strong> (temps compté en heures d’ouverture depuis la demande, tant que personne n’a appelé ni écrit — <span class="font-bold text-red-600">rouge</span> au-delà d’une heure), soit <strong>« contacté 2× · 5 j »</strong> dès que quelqu’un s’en est occupé : combien de fois, et depuis combien de temps le client est sans nouvelles. Ces durées se remettent à jour toutes seules, sans recharger la page.</div>
@@ -2160,12 +2160,12 @@
     lotMajCompte();
   })();
 
-  /* ══ Horloge : les durées restent justes sans recharger la page ══
-     « Retard 2 h » et « attend 2 h 10 » sont écrits par le serveur au moment
-     du rendu. Un commercial garde cet écran ouvert toute la matinée : au bout
-     d'une heure ces chiffres étaient faux, et une ligne dont l'heure venait de
-     passer restait bleue au lieu de rougir. On ne recalcule ici que le temps
-     écoulé dans les plages d'ouverture envoyées par le serveur. */
+  /* ══ Horloge : l'attente et les couleurs restent justes sans recharger ══
+     « attend 2 h 10 » est écrit par le serveur au moment du rendu. Un
+     commercial garde cet écran ouvert toute la matinée : au bout d'une heure
+     le chiffre était faux, et une ligne dont l'heure venait de passer gardait
+     sa couleur. On ne recalcule ici que le temps écoulé dans les plages
+     d'ouverture envoyées par le serveur. */
   (function horloge() {
     var H = window.LeadsHorloge;
     if (!H || !HORLOGE || !HORLOGE.nowIso) return;
@@ -2173,8 +2173,7 @@
     var rendu = Date.parse(HORLOGE.nowIso);
     if (!plages.length || !rendu) return;
 
-    /* Teintes posées par le serveur, à retirer quand la ligne passe en retard. */
-    var TONS_TEXTE = ['text-blue-700', 'text-amber-700', 'text-green-700', 'text-slate-500', 'text-red-600'];
+    /* Teintes de la barre posées par le serveur, à changer quand l'heure passe. */
     var TONS_BARRE = ['bg-blue-500', 'bg-amber-400', 'bg-green-500', 'bg-slate-300', 'bg-red-500'];
 
     function rougir(el, tons, rouge) {
@@ -2188,8 +2187,6 @@
       var retardRendu = Number(el.getAttribute('data-retard')) || 0;
       var attenteRendu = Number(el.getAttribute('data-attente'));
       var promesse = el.getAttribute('data-promesse') === '1';
-      var devis = el.getAttribute('data-devis') === '1';
-      var sansRendu = Number(el.getAttribute('data-sansnouvelles'));
       /* Un client qui vient d'écrire reste vert, quoi qu'en dise l'échéance. */
       var repondu = el.getAttribute('data-repondu') === '1';
 
@@ -2197,21 +2194,12 @@
          de passer sous les yeux du commercial. */
       var retard = retardRendu > 0 ? retardRendu + ecoule
         : (due && maintenant > Date.parse(due)) ? H.minutesOuvrees(plages, Date.parse(due), maintenant) : 0;
-      if (retard > 0) {
-        var court = el.querySelector('[data-role="urgence"]');
-        var longue = el.querySelector('[data-role="urgence-longue"]');
-        if (promesse) {
-          if (court) { court.textContent = H.retardCourt(retard); if (!repondu) rougir(court, TONS_TEXTE, 'text-red-600'); }
-          if (longue) longue.textContent = H.retardLong(retard);
-          if (!repondu) rougir(el.querySelector('[data-role="barre"]'), TONS_BARRE, 'bg-red-500');
-        } else {
-          /* Personne n'a promis cette heure : on dit depuis quand le client
-             est sans nouvelles, pas qu'on est « en retard ». */
-          var sans = sansRendu >= 0 ? sansRendu + ecoule : retard;
-          if (court) { court.textContent = H.relanceCourt(sans, devis); if (!repondu) rougir(court, TONS_TEXTE, 'text-amber-700'); }
-          if (longue) longue.textContent = H.relanceLong(sans, devis, sansRendu < 0);
-          if (!repondu) rougir(el.querySelector('[data-role="barre"]'), TONS_BARRE, 'bg-amber-400');
-        }
+      /* Plus aucun texte réécrit (« Retard 9 min », « avant 14:00 ») : le
+         patron les trouvait polluants. Quand l'heure passe sous les yeux du
+         commercial, seule la barre change de couleur — rouge pour une heure
+         promise, ambre pour une relance que la file propose. */
+      if (retard > 0 && !repondu) {
+        rougir(el.querySelector('[data-role="barre"]'), TONS_BARRE, promesse ? 'bg-red-500' : 'bg-amber-400');
       }
 
       /* Attente d'une demande que personne n'a prise : rouge passé l'heure. */
