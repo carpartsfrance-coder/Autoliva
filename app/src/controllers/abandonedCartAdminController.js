@@ -33,7 +33,7 @@ const { buildLeadSearchConditions } = require('../services/leadSearch');
 const { avecVerrouEnvoi } = require('../services/verrouEnvoiLead');
 const brand = require('../config/brand');
 const { computeWork, derniereReponse, duree, libelleUrgence, libelleUrgenceCourt, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
-const { chargerFile } = require('../services/leadWorkQueue');
+const { chargerFile, lireTri, ecrireTri } = require('../services/leadWorkQueue');
 const { resumeDemande } = require('../services/leadResume');
 const { infosHeure, fenetreOuvree, arriveeExacte, arriveeLongue, dureeOuvree, prevuLe } = require('../services/leadHeure');
 
@@ -691,13 +691,15 @@ async function getAdminLeadsPage(req, res, next) {
     const piece = ['pont', 'boite', 'moteur', 'autre'].includes(req.query.piece) ? req.query.piece : '';
     const voir = typeof req.query.voir === 'string' ? req.query.voir.trim().slice(0, 20) : '';
     const suivi = ['vierges', 'encours'].includes(req.query.suivi) ? req.query.suivi : '';
-    /* Ordre de « Non traités » : les plus récentes d'abord par défaut. */
-    const tri = req.query.tri === 'ancien' ? 'ancien' : '';
+    /* Le tri choisi dans chaque onglet (par défaut : son ordre de travail),
+       remis au propre pour que les liens de la page le reportent tel quel. */
+    const triParOnglet = lireTri(req.query.tri);
+    const tri = ecrireTri(triParOnglet);
     const file = await chargerFile({
-      now: maintenant, qui, moi: admin.firstName || admin.name, piece, suivi, tri,
+      now: maintenant, qui, moi: admin.firstName || admin.name, piece, suivi, tri: triParOnglet,
       source: view === 'todo' && allowedSources.has(captureSource) ? captureSource : '', voir,
     });
-    const todoFilters = { qui, piece, voir, suivi, tri, source: captureSource };
+    const todoFilters = { qui, piece, voir, suivi, tri, triParOnglet, source: captureSource };
 
     if (view === 'todo') {
       const groupes = file.groupes.map((g) => Object.assign({}, g, { items: g.items.map((x) => toCardModel(x.lead, maintenant)) }));

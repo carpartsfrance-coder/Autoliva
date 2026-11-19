@@ -108,11 +108,12 @@ test('l’ordre porte sur TOUTE la pile, pas sur la page affichée', () => {
   assert.equal(ordonner(beaucoup, 'non_traites', '')[0].id, '39');
 });
 
-test('les autres onglets gardent leur tri par échéance', () => {
+test('par défaut, les autres onglets gardent leur tri par échéance', () => {
+  /* Le tri par date se choisit onglet par onglet (leads-tri-date.test.js). */
   const tard = (due, id) => ({ id, work: computeWork(jamaisPrise(h(9), {
     lastManualContactAt: h(10), nextAction: { type: 'callback', dueAt: due },
   }), MAINTENANT) });
-  const ordre = ordonner([tard(h(14), 'tard'), tard(h(11), 'tot')], 'retard', 'ancien');
+  const ordre = ordonner([tard(h(14), 'tard'), tard(h(11), 'tot')], 'retard', '');
   assert.deepEqual(ordre.map((x) => x.id), ['tot', 'tard'], 'l’échéance la plus ancienne d’abord');
 });
 
@@ -131,9 +132,10 @@ test('le bandeau et les onglets racontent la même histoire', () => {
 test('l’onglet s’appelle « Non traités » et porte la bascule de tri', () => {
   assert.ok(PAGE.includes("non_traites: 'Non traités'"), 'le nom de l’onglet');
   assert.ok(!PAGE.includes("nouveaux: 'Nouvelles demandes'"), 'l’ancien nom doit être parti');
-  assert.ok(PAGE.includes('Plus anciennes ↑'), 'la bascule vers les plus anciennes');
-  assert.ok(PAGE.includes('Plus récentes ↓'), 'et le retour aux plus récentes');
-  assert.ok(PAGE.includes("g.key === 'non_traites'"), 'la bascule ne vaut que pour cet onglet');
+  /* La bascule est devenue un menu de tri, présent dans chaque onglet. */
+  assert.ok(PAGE.includes('Plus anciennes d’abord'), 'le choix des plus anciennes');
+  assert.ok(PAGE.includes('Plus récentes d’abord'), 'et le retour aux plus récentes');
+  assert.ok(PAGE.includes("g.key === 'non_traites'"), 'un menu à deux choix pour cet onglet');
 });
 
 test('trier ne perd pas les filtres en cours', () => {

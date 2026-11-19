@@ -30,9 +30,11 @@
 
   /* En haut à droite : l'heure d'arrivée. Seule exception, la date d'un
      rendez-vous fixé un autre jour : dans « Planifiés », c'est elle qu'on
-     vient chercher. */
-  var coin = (w.group === 'plus_tard' && c.urgenceCourte && !ferme && !faible) ? c.urgenceCourte : c.recuCourt;
-  var coinTitre = (w.group === 'plus_tard' && !ferme && !faible) ? 'Rendez-vous prévu'
+     vient chercher — sauf quand l'onglet est trié par date de la demande :
+     le coin montre alors la date qui fait l'ordre. */
+  var rdv = w.group === 'plus_tard' && !ferme && !faible && !locals.triDate && !!c.urgenceCourte;
+  var coin = rdv ? c.urgenceCourte : c.recuCourt;
+  var coinTitre = rdv ? 'Rendez-vous prévu'
     : (c.recuExact ? (faible ? 'Dernière visite le ' : 'Demande reçue le ') + c.recuExact : '');
 
   var meta = [];

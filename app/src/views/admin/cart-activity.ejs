@@ -261,20 +261,47 @@
               <%/* Le sens du groupe, écrit en clair : l'info-bulle du titre
                     repliable ne se lisait qu'à la souris, et « En retard »
                     contre « À relancer » se joue justement sur ce mot. */%>
-              <div class="groupe-entete z-10 flex items-baseline gap-3 border-b border-slate-100 bg-white/95 px-3.5 py-2 text-xs text-slate-500">
+              <div class="groupe-entete z-10 flex items-center gap-3 border-b border-slate-100 bg-white/95 px-3.5 py-1.5 text-xs text-slate-500">
                 <p class="min-w-0 flex-1 truncate" title="<%= g.hint %>."><%= g.court || g.hint %></p>
-                <% if (g.key === 'non_traites') { %>
-                  <%/* Le patron voulait les plus fraîches en haut, sans perdre
-                        la possibilité de repartir du fond de la pile. */%>
-                  <% var qto = Object.assign({}, filtresEnCours); if (todoFilters.tri === 'ancien') { delete qto.tri; } else { qto.tri = 'ancien'; } var qst = new URLSearchParams(qto).toString(); %>
-                  <a href="/admin/activite-panier<%= qst ? '?' + qst : '' %>#groupe-non_traites" class="shrink-0 font-medium text-slate-700 hover:text-slate-900 hover:underline"
-                     title="<%= todoFilters.tri === 'ancien' ? 'Revenir aux demandes les plus récentes en haut' : 'Repartir des demandes les plus anciennes' %>">
-                    <%= todoFilters.tri === 'ancien' ? 'Plus anciennes ↑' : 'Plus récentes ↓' %>
-                  </a>
-                <% } %>
+                <%/* Trier l'onglet par date de la demande (19/11/2026 : « je
+                      voudrais pouvoir trier les leads par date »). Chaque
+                      onglet garde son propre choix : un « plus anciennes »
+                      pris dans « À relancer » ne retourne pas « Non traités ».
+                      Par défaut, l'ordre de travail de l'onglet. */%>
+                <%
+                  var ordres = g.key === 'non_traites'
+                    ? [['', 'Plus récentes d’abord', 'Plus récentes'], ['ancien', 'Plus anciennes d’abord', 'Plus anciennes']]
+                    : [['', 'Le plus urgent d’abord', 'Urgence'], ['recent', 'Demandes les plus récentes', 'Plus récentes'], ['ancien', 'Demandes les plus anciennes', 'Plus anciennes']];
+                  var ordreActif = ordres.filter(function (o) { return o[0] === g.tri; })[0] || ordres[0];
+                %>
+                <details class="lead-menu relative shrink-0">
+                  <summary class="list-none cursor-pointer inline-flex items-center gap-1 rounded-md px-1.5 py-1 font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900" title="Trier cet onglet" data-role="tri">
+                    <span class="material-symbols-outlined text-[16px] text-slate-400">sort</span><%= ordreActif[2] %><span class="material-symbols-outlined text-[16px] text-slate-400">expand_more</span>
+                  </summary>
+                  <div class="absolute right-0 z-30 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-lg border border-slate-200 bg-white p-1 text-sm shadow-lg">
+                    <p class="px-3 pb-1 pt-1.5 text-xs text-slate-400">Trier « <%= g.label %> »</p>
+                    <% ordres.forEach(function (o) {
+                         var actif = o === ordreActif;
+                         var triO = Object.assign({}, todoFilters.triParOnglet || {});
+                         if (o[0]) { triO[g.key] = o[0]; } else { delete triO[g.key]; }
+                         var triS = groupes.map(function (x) { return x.key; }).filter(function (k) { return triO[k]; })
+                           .map(function (k) { return k + '-' + triO[k]; }).join('.');
+                         var qso = Object.assign({}, filtresEnCours);
+                         if (triS) { qso.tri = triS; } else { delete qso.tri; }
+                         if (todoFilters.voir === g.key) { qso.voir = g.key; }
+                         var qs = new URLSearchParams(qso).toString(); %>
+                      <a href="/admin/activite-panier<%= qs ? '?' + qs : '' %>#groupe-<%= g.key %>"
+                         class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-slate-50 <%= actif ? 'font-medium text-slate-900' : 'text-slate-700' %>"<%- actif ? ' aria-current="true"' : '' %>>
+                        <span class="material-symbols-outlined w-[18px] shrink-0 text-[18px] <%= actif ? 'text-slate-900' : 'text-transparent' %>" aria-hidden="true">check</span>
+                        <span class="min-w-0 flex-1"><%= o[1] %></span>
+                        <% if (!o[0]) { %><span class="shrink-0 text-xs font-normal text-slate-400">conseillé</span><% } %>
+                      </a>
+                    <% }) %>
+                  </div>
+                </details>
               </div>
               <ul>
-                <% g.items.forEach(function (c) { %><%- include('./partials/lead-ligne', { c: c }) %><% }) %>
+                <% g.items.forEach(function (c) { %><%- include('./partials/lead-ligne', { c: c, triDate: !!g.tri }) %><% }) %>
               </ul>
               <% if (g.reste > 0) { %>
                 <% var qsv = new URLSearchParams(Object.assign({}, filtresEnCours, { voir: g.key })).toString(); %>
@@ -353,7 +380,7 @@
       <div class="mb-4 rounded-xl border-2 border-primary/30 bg-red-50/40 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-primary">La méthode en 4 gestes</div>
         <ol class="list-inside list-decimal space-y-2 text-sm text-slate-800">
-          <li><strong>Vide les onglets de gauche à droite</strong> : ils sont dans l’ordre où il faut travailler. Dans chaque onglet, prends le premier client : la liste est déjà triée.</li>
+          <li><strong>Vide les onglets de gauche à droite</strong> : ils sont dans l’ordre où il faut travailler. Dans chaque onglet, prends le premier client : la liste est déjà triée. Pour la voir dans l’ordre d’arrivée, le menu de tri en haut à droite de la liste range l’onglet par date de la demande, des plus récentes ou des plus anciennes ; chaque onglet garde son propre tri.</li>
           <li><strong>Regarde l’encadré « La prochaine action »</strong> à droite et clique sur son gros bouton : Appeler, Préparer le devis, Écrire au client…</li>
           <li><strong>Après l’appel, clique « Noter l’appel »</strong> : comment ça s’est passé, la suite, et pour quand. Sans suite, le client serait oublié : la fenêtre te la demande toujours.</li>
           <li><strong>« Enregistrer et continuer »</strong> t’emmène tout seul au client suivant. <strong>Gagné</strong> seulement quand le client a payé, <strong>Perdu</strong> toujours avec le motif (dans le menu ⋯ de la fiche).</li>
@@ -363,7 +390,7 @@
       <div class="mb-4 rounded-xl border border-slate-200 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Les groupes de la liste</div>
         <div class="space-y-1.5 text-sm text-slate-700">
-          <div><strong>Non traités</strong> — <strong>tout ce que personne n’a encore appelé ni écrit</strong>, en retard ou non : c’est le même geste pour toi, décrocher le téléphone. Les plus récentes en haut, parce qu’un lead frais se transforme bien mieux qu’un lead de la veille — le lien « Plus anciennes ↑ » en tête de liste repart du fond de la pile. La promesse reste d’appeler dans l’heure (9 h–12 h, 14 h–18 h, du lundi au vendredi) : passé ce délai la barre de la ligne vire au rouge, même si elle ne change pas d’onglet.</div>
+          <div><strong>Non traités</strong> — <strong>tout ce que personne n’a encore appelé ni écrit</strong>, en retard ou non : c’est le même geste pour toi, décrocher le téléphone. Les plus récentes en haut, parce qu’un lead frais se transforme bien mieux qu’un lead de la veille — le menu de tri en tête de liste repart du fond de la pile. La promesse reste d’appeler dans l’heure (9 h–12 h, 14 h–18 h, du lundi au vendredi) : passé ce délai la barre de la ligne vire au rouge, même si elle ne change pas d’onglet.</div>
           <div><strong>En retard</strong> — <strong>un rendez-vous promis</strong> est passé, sur un dossier <strong>déjà pris en main</strong> : tu avais prévu de rappeler à 14 h et il est 16 h. C’est le seul onglet rouge, et il doit rester petit.</div>
           <div><strong>Prévus aujourd’hui</strong> — les rappels et relances planifiés pour aujourd’hui.</div>
           <div><strong>Devis à préparer</strong> — trouver la pièce et le prix, puis envoyer le devis (bouton « Atelier devis »). Les plus vieux en haut.</div>

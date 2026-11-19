@@ -88,17 +88,72 @@ function filtreBase(now) {
   };
 }
 
+/** Ordres qu'on peut choisir dans un onglet, en plus de son ordre de travail. */
+const ORDRES = ['recent', 'ancien'];
+const CLES_GROUPES = GROUPES.map((g) => g.key);
+
+/**
+ * Le tri choisi, onglet par onglet, tel qu'il voyage dans l'adresse :
+ * « tri=relances-ancien.devis-recent ». Chaque onglet garde le sien — un
+ * « plus anciennes d'abord » choisi dans « À relancer » ne doit pas
+ * retourner « Non traités », où l'on veut les demandes fraîches en haut.
+ *
+ * L'ancienne adresse « tri=ancien » (bascule de « Non traités » seule)
+ * continue de marcher. Les valeurs inconnues sont ignorées, et l'ordre par
+ * défaut d'un onglet n'est jamais écrit : « Non traités » est déjà rangé
+ * des plus récentes aux plus anciennes.
+ */
+function lireTri(brut) {
+  const tri = {};
+  const texte = typeof brut === 'string' ? brut.trim().slice(0, 200) : '';
+  if (!texte) return tri;
+  if (texte === 'ancien') return { non_traites: 'ancien' };
+  texte.split('.').forEach((morceau) => {
+    const i = morceau.lastIndexOf('-');
+    if (i <= 0) return;
+    const cle = morceau.slice(0, i);
+    const ordre = morceau.slice(i + 1);
+    if (!CLES_GROUPES.includes(cle) || !ORDRES.includes(ordre)) return;
+    if (cle === 'non_traites' && ordre === 'recent') return;
+    tri[cle] = ordre;
+  });
+  return tri;
+}
+
+/** L'inverse de lireTri, dans l'ordre des onglets (une adresse stable). */
+function ecrireTri(tri) {
+  return CLES_GROUPES
+    .filter((cle) => tri && ORDRES.includes(tri[cle]) && !(cle === 'non_traites' && tri[cle] === 'recent'))
+    .map((cle) => `${cle}-${tri[cle]}`)
+    .join('.');
+}
+
 /**
  * Ordre d'affichage d'un groupe, sur la TOTALITÉ de ses dossiers.
  *
- * Appelée avant tout découpage en pages, à dessein : la bascule « plus
- * anciennes d'abord » de « Non traités » doit repartir du fond de la pile,
- * pas retourner les quinze lignes déjà à l'écran.
+ * Appelée avant tout découpage en pages, à dessein : « plus anciennes
+ * d'abord » doit repartir du fond de la pile, pas retourner les quinze
+ * lignes déjà à l'écran.
+ *
+ *  - ''       l'ordre de travail de l'onglet (leadWork.comparer) : les plus
+ *             récentes en haut pour « Non traités », l'échéance ailleurs ;
+ *  - 'recent' date de la demande, la plus récente en haut ;
+ *  - 'ancien' date de la demande, la plus ancienne en haut.
+ * Une demande sans date de réception passe en bas dans les deux sens ; à
+ * date égale, l'ordre de travail départage.
  */
 function ordonner(items, cle, tri) {
-  const ordre = items.slice().sort(comparer);
-  if (cle === 'non_traites' && tri === 'ancien') ordre.reverse();
-  return ordre;
+  if (!ORDRES.includes(tri)) return items.slice().sort(comparer);
+  const sens = tri === 'ancien' ? 1 : -1;
+  const date = (x) => (x.work && x.work.receivedAt ? x.work.receivedAt.getTime() : null);
+  return items.slice().sort((a, b) => {
+    const da = date(a);
+    const db = date(b);
+    if (da === null || db === null) {
+      if (da !== db) return da === null ? 1 : -1;
+    } else if (da !== db) return (da - db) * sens;
+    return comparer(a, b);
+  });
 }
 
 function mediane(arr) {
@@ -146,7 +201,8 @@ async function delaiPremiereAction(now) {
  * @param {string} [opts.piece]    '' | 'pont' | 'boite' | 'moteur' | 'autre'
  * @param {string} [opts.source]   captureSource exact
  * @param {string} [opts.suivi]    '' | 'vierges' (jamais contactés) | 'encours'
- * @param {string} [opts.tri]      '' (plus récents d'abord) | 'ancien'
+ * @param {object|string} [opts.tri] tri choisi par onglet (lireTri), ou
+ *                                  l'adresse brute « relances-ancien.… »
  * @param {string} [opts.voir]     clé du groupe à afficher en entier
  */
 async function chargerFile(opts = {}) {
@@ -211,10 +267,13 @@ async function chargerFile(opts = {}) {
     return true;
   });
 
+  const tri = typeof opts.tri === 'string' ? lireTri(opts.tri) : (opts.tri || {});
   const groupes = GROUPES.map((g) => {
-    const items = ordonner(filtres.filter((x) => x.work.group === g.key), g.key, opts.tri);
+    const items = ordonner(filtres.filter((x) => x.work.group === g.key), g.key, tri[g.key]);
     const toutVoir = opts.voir === g.key;
     return Object.assign({}, g, {
+      /* L'ordre choisi pour cet onglet ('' = son ordre de travail). */
+      tri: tri[g.key] || '',
       count: items.length,
       items: toutVoir ? items.slice(0, 300) : items.slice(0, PAR_GROUPE),
       reste: toutVoir ? Math.max(0, items.length - 300) : Math.max(0, items.length - PAR_GROUPE),
@@ -245,4 +304,4 @@ async function chargerFile(opts = {}) {
   };
 }
 
-module.exports = { chargerFile, ordonner, categorie, filtreBase, PAR_GROUPE };
+module.exports = { chargerFile, ordonner, lireTri, ecrireTri, categorie, filtreBase, PAR_GROUPE };
