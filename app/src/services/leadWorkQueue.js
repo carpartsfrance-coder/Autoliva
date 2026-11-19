@@ -88,6 +88,19 @@ function filtreBase(now) {
   };
 }
 
+/**
+ * Ordre d'affichage d'un groupe, sur la TOTALITÉ de ses dossiers.
+ *
+ * Appelée avant tout découpage en pages, à dessein : la bascule « plus
+ * anciennes d'abord » de « Non traités » doit repartir du fond de la pile,
+ * pas retourner les quinze lignes déjà à l'écran.
+ */
+function ordonner(items, cle, tri) {
+  const ordre = items.slice().sort(comparer);
+  if (cle === 'non_traites' && tri === 'ancien') ordre.reverse();
+  return ordre;
+}
+
 function mediane(arr) {
   if (!arr.length) return null;
   const s = arr.slice().sort((a, b) => a - b);
@@ -133,6 +146,7 @@ async function delaiPremiereAction(now) {
  * @param {string} [opts.piece]    '' | 'pont' | 'boite' | 'moteur' | 'autre'
  * @param {string} [opts.source]   captureSource exact
  * @param {string} [opts.suivi]    '' | 'vierges' (jamais contactés) | 'encours'
+ * @param {string} [opts.tri]      '' (plus récents d'abord) | 'ancien'
  * @param {string} [opts.voir]     clé du groupe à afficher en entier
  */
 async function chargerFile(opts = {}) {
@@ -161,23 +175,28 @@ async function chargerFile(opts = {}) {
   let repondus = 0;
   tous.forEach((x) => {
     const w = x.work;
-    /* Le retard est lu sur le dossier lui-même : depuis que « Le client a
-       répondu » sort les dossiers de leur groupe, compter par groupe faisait
-       disparaître du bandeau des retards bien réels.
+    /* Le bandeau et les onglets doivent raconter la MÊME histoire : chaque
+       compteur se lit sur le groupe, sinon le patron voit « 12 en retard »
+       au-dessus d'un onglet « En retard » qui en montre 3.
 
-       Et on ne compte comme RETARD que les heures qu'un humain a promises :
-       mêlées aux relances déduites, elles affichaient 168 « en retard » un
-       mardi matin, un chiffre que plus personne ne regardait. */
+       « En retard » ne compte donc que ce que l'onglet contient : des
+       rendez-vous promis et ratés sur des dossiers déjà pris en main. Une
+       demande que personne n'a touchée, elle, est comptée en « jamais
+       contactés » — c'est là qu'est son travail, pas dans un retard. */
     if (w.ancien) anciens += 1;
+    else if (w.group === 'retard') enRetard += 1;
     else if (w.overdue && !w.promesse) aRelancer += 1;
-    else if (w.overdue) enRetard += 1;
-    if (w.overdue && (w.promesse || w.ancien)) {
+    if (w.group === 'retard' || w.ancien) {
       const qui = x.lead.takenByName || 'Non pris';
       parPersonne[qui] = (parPersonne[qui] || 0) + 1;
     }
     if (w.aRepondu) repondus += 1;
     if (!w.firstHumanAt) jamaisPris += 1;
-    if (!w.overdue && ['repondu', 'nouveaux', 'rappels', 'devis'].includes(w.group)) duJour += 1;
+    /* « À faire aujourd'hui » : tout ce qui n'a jamais été pris compte, en
+       retard ou non — c'est le même coup de téléphone. Pour les rendez-vous
+       déjà posés, seuls ceux du jour (les ratés sont comptés en retard). */
+    if (['repondu', 'non_traites'].includes(w.group)
+      || (!w.overdue && ['rappels', 'devis'].includes(w.group))) duJour += 1;
   });
 
   /* Filtres rapides. */
@@ -195,7 +214,7 @@ async function chargerFile(opts = {}) {
   });
 
   const groupes = GROUPES.map((g) => {
-    const items = filtres.filter((x) => x.work.group === g.key).sort(comparer);
+    const items = ordonner(filtres.filter((x) => x.work.group === g.key), g.key, opts.tri);
     const toutVoir = opts.voir === g.key;
     return Object.assign({}, g, {
       count: items.length,
@@ -229,4 +248,4 @@ async function chargerFile(opts = {}) {
   };
 }
 
-module.exports = { chargerFile, categorie, filtreBase, PAR_GROUPE };
+module.exports = { chargerFile, ordonner, categorie, filtreBase, PAR_GROUPE };

@@ -671,11 +671,13 @@ async function getAdminLeadsPage(req, res, next) {
     const piece = ['pont', 'boite', 'moteur', 'autre'].includes(req.query.piece) ? req.query.piece : '';
     const voir = typeof req.query.voir === 'string' ? req.query.voir.trim().slice(0, 20) : '';
     const suivi = ['vierges', 'encours'].includes(req.query.suivi) ? req.query.suivi : '';
+    /* Ordre de « Non traités » : les plus récentes d'abord par défaut. */
+    const tri = req.query.tri === 'ancien' ? 'ancien' : '';
     const file = await chargerFile({
-      now: maintenant, qui, moi: admin.firstName || admin.name, piece, suivi,
+      now: maintenant, qui, moi: admin.firstName || admin.name, piece, suivi, tri,
       source: view === 'todo' && allowedSources.has(captureSource) ? captureSource : '', voir,
     });
-    const todoFilters = { qui, piece, voir, suivi, source: captureSource };
+    const todoFilters = { qui, piece, voir, suivi, tri, source: captureSource };
 
     if (view === 'todo') {
       const groupes = file.groupes.map((g) => Object.assign({}, g, { items: g.items.map((x) => toCardModel(x.lead, maintenant)) }));

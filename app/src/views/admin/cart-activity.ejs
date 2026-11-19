@@ -79,7 +79,7 @@
         <%/* « En retard » comptait aussi les relances que la file déduit du
               dernier contact : 168 un mardi matin, un chiffre que plus
               personne ne regardait. Ici, seules les heures PROMISES. */%>
-        <span title="Une heure que quelqu'un a promise est passée : un rappel planifié, ou une première réponse due dans l'heure. Hors anciens dossiers.">
+        <span title="Un rendez-vous promis est passé, sur un dossier déjà pris en main. Les demandes que personne n'a touchées sont comptées dans « jamais contactés », pas ici.">
           <strong class="text-base <%= b.enRetard ? 'text-red-700' : 'text-slate-900' %>"><%= b.enRetard %></strong> en retard
         </span>
         <% if (b.aRelancer) { %>
@@ -121,6 +121,16 @@
       </div>
     <% } %>
 
+    <%
+      /* Les filtres en cours, à reporter dans chaque lien de la page : sans
+         ça, trier ou déplier un groupe effaçait silencieusement le reste. */
+      var filtresEnCours = Object.assign({},
+        todoFilters.qui ? { qui: todoFilters.qui } : {},
+        todoFilters.piece ? { piece: todoFilters.piece } : {},
+        todoFilters.source ? { source: todoFilters.source } : {},
+        todoFilters.suivi ? { suivi: todoFilters.suivi } : {},
+        todoFilters.tri ? { tri: todoFilters.tri } : {});
+    %>
     <% if (view === 'todo') { %>
       <!-- Recherche et filtres rapides -->
       <form action="/admin/activite-panier" method="GET" class="masque-en-fiche mt-3 flex flex-wrap items-center gap-2">
@@ -130,11 +140,12 @@
         </label>
         <div class="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-0.5 text-xs font-semibold">
           <% [['', 'Toute l’équipe'], ['moi', 'Mes dossiers'], ['libre', 'Non pris']].forEach(function (o) { %>
-            <% var qs = new URLSearchParams(Object.assign({}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, todoFilters.suivi ? { suivi: todoFilters.suivi } : {}, o[0] ? { qui: o[0] } : {})).toString(); %>
+            <% var qso = Object.assign({}, filtresEnCours); if (o[0]) { qso.qui = o[0]; } else { delete qso.qui; } var qs = new URLSearchParams(qso).toString(); %>
             <a href="/admin/activite-panier<%= qs ? '?' + qs : '' %>" class="whitespace-nowrap rounded-lg px-3 py-1.5 <%= todoFilters.qui === o[0] ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50' %>"><%= o[1] %></a>
           <% }) %>
         </div>
         <% if (todoFilters.qui) { %><input type="hidden" name="qui" value="<%= todoFilters.qui %>"><% } %>
+        <% if (todoFilters.tri) { %><input type="hidden" name="tri" value="<%= todoFilters.tri %>"><% } %>
         <%/* La pile de demandes vierges, sans sortir les dossiers en cours de
               la file de tout le monde : c'est ce qui avait laissé 197 demandes
               mortes quand « Contacté » les rangeait dans un autre onglet. */%>
@@ -156,7 +167,7 @@
             <option value="<%= o[0] %>" <%= todoFilters.source === o[0] ? 'selected' : '' %>><%= o[1] %></option>
           <% }) %>
         </select>
-        <% if (todoFilters.qui || todoFilters.piece || todoFilters.source || todoFilters.suivi) { %><a href="/admin/activite-panier" class="px-2 text-xs font-semibold text-slate-500 hover:text-slate-800">Effacer les filtres</a><% } %>
+        <% if (todoFilters.qui || todoFilters.piece || todoFilters.source || todoFilters.suivi || todoFilters.tri) { %><a href="/admin/activite-panier" class="px-2 text-xs font-semibold text-slate-500 hover:text-slate-800">Effacer les filtres</a><% } %>
       </form>
     <% } else { %>
       <!-- Filtres de l'historique -->
@@ -208,7 +219,7 @@
     <% } %>
 
     <%
-      var nomsCourts = { repondu: 'A répondu', nouveaux: 'Nouvelles demandes', retard: 'En retard', rappels: 'Prévus aujourd’hui', devis: 'Devis à préparer', relances: 'À relancer', plus_tard: 'Planifiés', anciens: 'Anciens' };
+      var nomsCourts = { repondu: 'A répondu', non_traites: 'Non traités', retard: 'En retard', rappels: 'Prévus aujourd’hui', devis: 'Devis à préparer', relances: 'À relancer', plus_tard: 'Planifiés', anciens: 'Anciens' };
       var tons = { green: 'bg-green-100 text-green-800', blue: 'bg-blue-100 text-blue-800', red: 'bg-red-100 text-red-700', amber: 'bg-amber-100 text-amber-800', orange: 'bg-orange-100 text-orange-800', slate: 'bg-slate-200 text-slate-700' };
       var affiches = view === 'todo' ? [].concat.apply([], groupes.map(function (g) { return g.items; })) : (leads || []);
     %>
@@ -254,12 +265,23 @@
               <%/* Le sens du groupe, écrit en clair : l'info-bulle du titre
                     repliable ne se lisait qu'à la souris, et « En retard »
                     contre « À relancer » se joue justement sur ce mot. */%>
-              <p class="groupe-entete z-10 border-b border-slate-100 bg-slate-50/95 px-4 py-2 text-[11px] leading-snug text-slate-500"><%= g.hint %>.</p>
+              <div class="groupe-entete z-10 flex items-start gap-3 border-b border-slate-100 bg-slate-50/95 px-4 py-2 text-[11px] leading-snug text-slate-500">
+                <p class="min-w-0 flex-1"><%= g.hint %>.</p>
+                <% if (g.key === 'non_traites') { %>
+                  <%/* Le patron voulait les plus fraîches en haut, sans perdre
+                        la possibilité de repartir du fond de la pile. */%>
+                  <% var qto = Object.assign({}, filtresEnCours); if (todoFilters.tri === 'ancien') { delete qto.tri; } else { qto.tri = 'ancien'; } var qst = new URLSearchParams(qto).toString(); %>
+                  <a href="/admin/activite-panier<%= qst ? '?' + qst : '' %>#groupe-non_traites" class="shrink-0 font-semibold text-primary hover:underline"
+                     title="<%= todoFilters.tri === 'ancien' ? 'Revenir aux demandes les plus récentes en haut' : 'Repartir des demandes les plus anciennes' %>">
+                    <%= todoFilters.tri === 'ancien' ? 'Plus anciennes ↑' : 'Plus récentes ↓' %>
+                  </a>
+                <% } %>
+              </div>
               <ul>
                 <% g.items.forEach(function (c) { %><%- include('./partials/lead-ligne', { c: c }) %><% }) %>
               </ul>
               <% if (g.reste > 0) { %>
-                <% var qsv = new URLSearchParams(Object.assign({}, todoFilters.qui ? { qui: todoFilters.qui } : {}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, todoFilters.suivi ? { suivi: todoFilters.suivi } : {}, { voir: g.key })).toString(); %>
+                <% var qsv = new URLSearchParams(Object.assign({}, filtresEnCours, { voir: g.key })).toString(); %>
                 <a href="/admin/activite-panier?<%= qsv %>" class="flex items-center gap-1 border-b border-slate-100 px-4 py-2.5 text-xs font-semibold text-primary hover:bg-slate-50">Afficher les <%= g.reste %> suivants<span class="material-symbols-outlined text-[16px]">expand_more</span></a>
               <% } %>
             </div>
@@ -346,8 +368,8 @@
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Les groupes de la liste</div>
         <div class="space-y-1.5 text-sm text-slate-700">
           <div><strong>Le client a répondu</strong> — il nous a écrit depuis notre dernier message et attend une réponse. Son texte est sur la ligne et dans sa fiche : on sait déjà quoi lui dire. À faire avant tout le reste, même si l’heure prévue n’est pas arrivée.</div>
-          <div><strong>Nouvelles demandes</strong> — à rappeler dans l’heure (heures d’ouverture : 9 h–12 h, 14 h–18 h, du lundi au vendredi).</div>
-          <div><strong>En retard</strong> — <strong>une heure que quelqu’un a promise</strong> est passée : un rappel planifié, ou une première réponse due dans l’heure. C’est le seul onglet rouge, et il doit rester petit.</div>
+          <div><strong>Non traités</strong> — <strong>tout ce que personne n’a encore appelé ni écrit</strong>, en retard ou non : c’est le même geste pour toi, décrocher le téléphone. Les plus récentes en haut, parce qu’un lead frais se transforme bien mieux qu’un lead de la veille — le lien « Plus anciennes ↑ » en tête de liste repart du fond de la pile. La promesse reste d’appeler dans l’heure (9 h–12 h, 14 h–18 h, du lundi au vendredi) : passé ce délai la ligne vire au rouge, même si elle ne change pas d’onglet.</div>
+          <div><strong>En retard</strong> — <strong>un rendez-vous promis</strong> est passé, sur un dossier <strong>déjà pris en main</strong> : tu avais prévu de rappeler à 14 h et il est 16 h. C’est le seul onglet rouge, et il doit rester petit.</div>
           <div><strong>Prévus aujourd’hui</strong> — les rappels et relances planifiés pour aujourd’hui.</div>
           <div><strong>Devis à préparer</strong> — trouver la pièce et le prix, puis envoyer le devis (bouton « Atelier devis »). Les plus vieux en haut.</div>
           <div><strong>À relancer</strong> — sans nouvelles depuis plus de 2 jours ouvrés. <strong>Personne n’a promis cette date</strong> : c’est la file qui la propose. Ce n’est pas un reproche, c’est une suggestion — d’où l’ambre et pas le rouge.</div>

@@ -19,7 +19,7 @@ test('une demande de landing pont / transfert entre dans la file', () => {
   const w = computeWork({ captureSource: 'landing_ponts', phone: '+33608610148', abandonedAt: ago(25 * 60000) }, NOW);
   assert.equal(w.intent, 'opportunity');
   assert.equal(w.stage, 'nouveau');
-  assert.equal(w.group, 'nouveaux');
+  assert.equal(w.group, 'non_traites');
   assert.equal(w.primaryAction, 'call');
   assert.equal(w.canCall, true);
   /* Reçue à 10 h 05 → à rappeler avant 11 h 05. */
