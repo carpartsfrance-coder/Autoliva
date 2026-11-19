@@ -105,14 +105,17 @@ test('un vieux retard part toujours dans « Anciens dossiers », promesse ou pas
   assert.equal(w.group, 'anciens');
 });
 
-test('le client qui a répondu passe devant, échéance ou pas', () => {
+test('un SMS reçu ne change plus le groupe : le dossier suit son échéance', () => {
+  /* L'onglet « Le client a répondu » a été retiré le 20/11/2026 : rattaché
+     par le seul numéro de téléphone, un SMS de SAV y faisait remonter le
+     dossier de vente. */
   const w = computeWork(dejaAppele({
     communications: [
-      { canal: 'appel', sens: 'sortant', at: new Date('2026-11-13T09:00:00Z') },
+      { canal: 'appel', sens: 'sortant', at: new Date('2026-11-12T09:00:00Z') },
       { canal: 'sms', sens: 'entrant', at: new Date('2026-11-17T08:30:00Z'), corps: 'Toujours dispo ?' },
     ],
   }), MARDI_10H);
-  assert.equal(w.group, 'repondu');
+  assert.equal(w.group, 'relances');
 });
 
 /* ── Ce que la ligne en dit ──────────────────────────────────────────────── */

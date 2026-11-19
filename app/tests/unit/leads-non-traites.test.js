@@ -70,11 +70,10 @@ test('les vieux dossiers gardent leur garde-fou', () => {
   assert.equal(w.group, 'anciens');
 });
 
-test('« Nouvelles demandes » n’existe plus, « Non traités » vient en deuxième', () => {
+test('« Nouvelles demandes » n’existe plus, « Non traités » ouvre la file', () => {
   const cles = GROUPES.map((g) => g.key);
   assert.ok(!cles.includes('nouveaux'), 'l’ancien groupe doit avoir disparu');
-  assert.deepEqual(cles.slice(0, 3), ['repondu', 'non_traites', 'retard'],
-    'après les clients qui ont répondu, la pile à appeler');
+  assert.deepEqual(cles.slice(0, 2), ['non_traites', 'retard'], 'la pile à appeler d’abord');
 });
 
 /* ── L'ordre ─────────────────────────────────────────────────────────────── */

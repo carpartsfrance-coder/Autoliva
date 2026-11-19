@@ -14,7 +14,6 @@
      la file déduit du dernier contact passe en ambre : c'est ce mélange qui
      avait fabriqué un mur de 168 lignes rouges que plus personne ne lisait. */
   var ton = faible ? 'slate' : ferme ? (w.stage === 'gagne' ? 'green' : 'slate')
-    : c.aRepondu ? 'green'
     : (w.overdue && w.promesse) ? 'red'
     : w.stage === 'nouveau' ? 'blue'
     : (w.overdue || w.group === 'rappels' || w.group === 'devis' || w.group === 'relances') ? 'amber' : 'slate';
@@ -39,10 +38,6 @@
   /* Pastilles : ce qui change la façon d'aborder le client, sans avoir à
      ouvrir la fiche. Un seul signal de devis, le plus avancé. */
   var pastilles = [];
-  if (c.aRepondu && c.reponse) {
-    pastilles.push(['A répondu' + (c.reponse.rel ? ' · ' + c.reponse.rel : ''), 'bg-green-100 text-green-800',
-      'Le client nous a écrit' + (c.reponse.canal ? ' par ' + c.reponse.canal : '') + (c.reponse.exact ? ' le ' + c.reponse.exact : '') + ' : il attend une réponse.']);
-  }
   var ds = c.devisSuivi;
   if (ds && ds.paiementClique) pastilles.push(['A cliqué payer', 'bg-green-100 text-green-800', 'Le client a cliqué sur « payer » dans le devis : à rappeler tout de suite.']);
   else if (ds && ds.pdfVu) pastilles.push(['Devis vu', 'bg-violet-100 text-violet-800', 'Le client a ouvert le PDF du devis.']);
@@ -55,7 +50,7 @@
   <button type="button" class="lead-ligne relative w-full text-left pl-4 pr-3 py-2.5 border-b border-slate-100 hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50"
           data-lead-id="<%= c.id %>" aria-selected="false"
           data-due="<%= c.dueIso || '' %>" data-retard="<%= c.retardMin || 0 %>" data-attente="<%= c.attenteMin >= 0 ? c.attenteMin : -1 %>"
-          data-promesse="<%= w.promesse ? 1 : 0 %>" data-repondu="<%= c.aRepondu ? 1 : 0 %>">
+          data-promesse="<%= w.promesse ? 1 : 0 %>">
     <span class="absolute left-0 top-2 bottom-2 w-1 rounded-r <%= barre %>" data-role="barre" aria-hidden="true"></span>
     <%/* Case de sélection : visible seulement en mode « Sélectionner ». */%>
     <%/* Placement dans la feuille de style de la page, pas en classes
@@ -80,12 +75,6 @@
         <% if (c.prixAffiche) { %>
           <span class="shrink-0 text-[11px] font-semibold text-slate-600" title="<%= c.prixAffiche.origine === 'devis' ? 'Prix du devis envoyé' : 'Montant du panier' %>"><%= c.prixAffiche.montant %></span>
         <% } %>
-      </span>
-    <% } %>
-    <% if (c.aRepondu && c.reponse && c.reponse.texte) { %>
-      <span class="mt-0.5 flex items-start gap-1 text-xs italic text-green-800">
-        <span class="material-symbols-outlined shrink-0 text-[14px] not-italic">format_quote</span>
-        <span class="truncate"><%= c.reponse.texte %></span>
       </span>
     <% } %>
     <span class="mt-0.5 flex items-center gap-1.5 truncate text-[11px] <%= c.takenByName || ferme ? 'text-slate-400' : 'text-slate-500' %>">

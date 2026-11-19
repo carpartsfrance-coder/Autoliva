@@ -329,9 +329,13 @@ async function postCloturer(req, res, next) {
  *
  * « Qu'est-ce qui est arrivé depuis que j'ai ouvert la page ? » La file est
  * rendue par le serveur : un lead qui arrive pendant qu'un commercial
- * travaille restait invisible jusqu'au prochain F5. Deux comptages, pas de
+ * travaille restait invisible jusqu'au prochain F5. Un comptage, pas de
  * données personnelles : la page affiche « 3 nouvelles demandes » et propose
  * d'actualiser.
+ *
+ * Les SMS reçus ne sont plus comptés (20/11/2026) : rattachés au dossier par
+ * le seul numéro de téléphone, un message de SAV annonçait « 1 client a
+ * répondu » sur la file des ventes.
  */
 async function getNouveautes(req, res, next) {
   try {
@@ -343,18 +347,12 @@ async function getNouveautes(req, res, next) {
     const plancher = new Date(Date.now() - 36 * 3600 * 1000);
     const borne = depuis < plancher ? plancher : depuis;
 
-    const [nouvelles, reponses] = await Promise.all([
-      AbandonedCart.countDocuments({
-        archived: { $ne: true },
-        captureSource: { $in: SOURCES_DEMANDE },
-        createdAt: { $gte: borne },
-      }),
-      AbandonedCart.countDocuments({
-        archived: { $ne: true },
-        communications: { $elemMatch: { sens: 'entrant', at: { $gte: borne } } },
-      }),
-    ]);
-    return res.json({ ok: true, nouvelles, reponses, depuis: borne.toISOString() });
+    const nouvelles = await AbandonedCart.countDocuments({
+      archived: { $ne: true },
+      captureSource: { $in: SOURCES_DEMANDE },
+      createdAt: { $gte: borne },
+    });
+    return res.json({ ok: true, nouvelles, depuis: borne.toISOString() });
   } catch (err) {
     return next(err);
   }

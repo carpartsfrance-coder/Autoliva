@@ -172,7 +172,6 @@ async function chargerFile(opts = {}) {
   let anciens = 0;
   let jamaisPris = 0;
   let duJour = 0;
-  let repondus = 0;
   tous.forEach((x) => {
     const w = x.work;
     /* Le bandeau et les onglets doivent raconter la MÊME histoire : chaque
@@ -190,12 +189,11 @@ async function chargerFile(opts = {}) {
       const qui = x.lead.takenByName || 'Non pris';
       parPersonne[qui] = (parPersonne[qui] || 0) + 1;
     }
-    if (w.aRepondu) repondus += 1;
     if (!w.firstHumanAt) jamaisPris += 1;
     /* « À faire aujourd'hui » : tout ce qui n'a jamais été pris compte, en
        retard ou non — c'est le même coup de téléphone. Pour les rendez-vous
        déjà posés, seuls ceux du jour (les ratés sont comptés en retard). */
-    if (['repondu', 'non_traites'].includes(w.group)
+    if (w.group === 'non_traites'
       || (!w.overdue && ['rappels', 'devis'].includes(w.group))) duJour += 1;
   });
 
@@ -240,7 +238,6 @@ async function chargerFile(opts = {}) {
       jamaisPris,
       duJour,
       /* Des clients qui nous ont écrit et qui attendent encore une réponse. */
-      repondus,
       parPersonne: Object.keys(parPersonne).sort((a, b) => (a === 'Non pris') - (b === 'Non pris') || a.localeCompare(b))
         .map((nom) => ({ nom, n: parPersonne[nom] })),
       delai: await delaiPremiereAction(now),
