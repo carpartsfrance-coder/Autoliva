@@ -1800,8 +1800,12 @@ async function postSendQuote(req, res, next) {
  * pas de course entre deux envois. « Relancer le devis » n'est PAS soldée :
  * une relance posée à la main reste un rendez-vous voulu, même si une
  * nouvelle version du devis part entre-temps.
+ *
+ * « Attente fournisseur » et « À valider par Killian » (19/11/2026) le sont :
+ * un devis parti dit que le prix est arrivé et que la décision est prise.
+ * Sans ça, le dossier restait dans leur onglet après l'envoi.
  */
-const ACTIONS_SOLDEES_PAR_UN_DEVIS = ['quote', 'sourcing'];
+const ACTIONS_SOLDEES_PAR_UN_DEVIS = ['quote', 'sourcing', 'wait_supplier', 'to_validate'];
 async function solderActionDevis(cartId, parQui) {
   return AbandonedCart.updateOne(
     { _id: cartId, 'nextAction.type': { $in: ACTIONS_SOLDEES_PAR_UN_DEVIS } },

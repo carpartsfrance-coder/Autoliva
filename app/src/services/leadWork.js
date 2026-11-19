@@ -73,10 +73,21 @@ const ETAPES = {
   nouveau:      { label: 'Nouveau',          className: 'bg-blue-100 text-blue-800' },
   en_cours:     { label: 'En cours',         className: 'bg-indigo-100 text-indigo-800' },
   devis_a_faire: { label: 'Devis à préparer', className: 'bg-orange-100 text-orange-800' },
+  attente_fournisseur: { label: 'Attente fournisseur', className: 'bg-yellow-100 text-yellow-800' },
+  a_valider:    { label: 'À valider (Killian)', className: 'bg-rose-100 text-rose-800' },
   devis_envoye: { label: 'Devis envoyé',     className: 'bg-violet-100 text-violet-800' },
   gagne:        { label: 'Gagné',            className: 'bg-green-100 text-green-800' },
   perdu:        { label: 'Perdu',            className: 'bg-slate-200 text-slate-600' },
 };
+
+/**
+ * Deux attentes qui ne dépendent pas du client (19/11/2026, demande de
+ * Killian). Avant, « demande de prix envoyée au fournisseur » ou « Killian
+ * doit trancher » ne s'écrivaient que dans les notes : rien ne se voyait dans
+ * la liste, et le même prix était redemandé deux fois au même fournisseur.
+ * Posées comme prochaine action, elles ont chacune leur onglet.
+ */
+const ATTENTES = { wait_supplier: 'fournisseur', to_validate: 'a_valider' };
 
 /* `court` : l'intitulé affiché en tête de la liste (une ligne) ; `hint` :
    l'explication complète, en infobulle. Avant le 20/11/2026, la phrase
@@ -86,6 +97,8 @@ const GROUPES = [
   { key: 'retard',     label: 'En retard',                   court: 'Rendez-vous promis et passés', hint: 'Un rendez-vous PROMIS est passé, sur un dossier déjà pris en main : rappel planifié non tenu', tone: 'red', collapsed: false },
   { key: 'rappels',    label: 'Prévus aujourd’hui',          court: 'Rappels et relances prévus aujourd’hui', hint: 'Les rappels et relances que quelqu’un a planifiés pour aujourd’hui', tone: 'amber', collapsed: false },
   { key: 'devis',      label: 'Devis à préparer',            court: 'Devis promis, à préparer et envoyer', hint: 'Identifier la pièce, trouver le prix, envoyer le devis — les plus en retard en haut', tone: 'orange', collapsed: false },
+  { key: 'fournisseur', label: 'Attente fournisseur',        court: 'Prix demandé au fournisseur, réponse attendue', hint: 'La demande de prix est partie (WhatsApp ou mail) : ne pas la refaire. Lire la réponse du fournisseur, puis envoyer le devis au client', tone: 'yellow', collapsed: false },
+  { key: 'a_valider',  label: 'À valider (Killian)',         court: 'Dossiers qui attendent la décision de Killian', hint: 'Killian doit décider avant d’écrire au client : devis de plus de 4 000 € HT, pièce d’occasion à trouver, compatibilité à trancher, remise', tone: 'rose', collapsed: false },
   { key: 'relances',   label: 'À relancer',                  court: 'Sans nouvelles depuis plus de 2 jours ouvrés', hint: 'Sans nouvelles depuis plus de 2 jours ouvrés. Personne n’a promis cette date : c’est la file qui la propose', tone: 'amber', collapsed: false },
   { key: 'plus_tard',  label: 'Planifiés',                   court: 'Prévus un autre jour', hint: 'Prévus un autre jour — rien à faire maintenant', tone: 'slate', collapsed: true },
   { key: 'anciens',    label: 'Anciens dossiers à reprendre', court: 'Plus de 7 jours ouvrés de retard', hint: 'En retard depuis plus de 7 jours ouvrés : à reprendre quand la file du jour est vide', tone: 'slate', collapsed: true },
@@ -98,6 +111,8 @@ const TYPES_ACTION = {
   sourcing:     'Rechercher la pièce',
   follow_quote: 'Relancer le devis',
   wait_client:  'Attendre le client (infos, photos…)',
+  wait_supplier: 'Attendre la réponse du fournisseur',
+  to_validate:  'À valider par Killian',
   payment:      'Vérifier le paiement',
   other:        'Autre',
 };
@@ -242,9 +257,14 @@ function intention(lead) {
 function etape(lead, humain) {
   const fin = issue(lead);
   if (fin) return fin;
+  const na = (lead.nextAction && lead.nextAction.type) || '';
+  /* Une attente posée à la main dit mieux que l'historique où en est le
+     dossier : un devis déjà parti peut attendre une décision de Killian
+     (remise demandée), un dossier devis peut attendre un fournisseur. */
+  if (na === 'wait_supplier') return 'attente_fournisseur';
+  if (na === 'to_validate') return 'a_valider';
   const eqs = (lead.engineQuote && lead.engineQuote.status) || '';
   if (eqs === 'quote_sent' || dernierDevisEnvoye(lead)) return 'devis_envoye';
-  const na = (lead.nextAction && lead.nextAction.type) || '';
   if (eqs === 'analyzing' || na === 'quote' || na === 'sourcing') return 'devis_a_faire';
   if (!humain.premiere) return 'nouveau';
   return 'en_cours';
@@ -312,11 +332,17 @@ function computeWork(lead, now = new Date()) {
   /* Groupe dans la file. */
   let group = '';
   if (intent === 'opportunity') {
+    /* Attente fournisseur / validation de Killian : leur propre onglet, même
+       si personne n'a encore écrit au client (on lui répond avec le prix,
+       pas avant) et même si l'attente traîne. C'est tout leur intérêt : voir
+       d'un coup d'œil ce qui attend une réponse, au lieu de la redemander. */
+    const attente = ATTENTES[na.type || ''];
+    if (attente) group = attente;
     /* Pas encore pris en main = une seule pile, quel que soit le retard :
        c'est le même geste pour le commercial, décrocher le téléphone.
        Au-delà de 7 jours ouvrés de retard, « Anciens dossiers » garde son
        rôle de garde-fou : la file du jour ne doit pas se noyer dedans. */
-    if (ancien) group = 'anciens';
+    else if (ancien) group = 'anciens';
     else if (!humain.premiere) group = 'non_traites';
     /* Un devis dû reste un devis dû, en retard ou non : le commercial veut
        les voir ensemble, les plus vieux en haut (voir comparer()). */
@@ -336,6 +362,13 @@ function computeWork(lead, now = new Date()) {
        (rappeler ou clôturer) — pas d'appel à l'aveugle. */
     primaryAction = 'review'; primaryLabel = 'Reprendre le dossier';
   }
+  else if (naType === 'wait_supplier') {
+    /* Une fois la réponse du fournisseur arrivée, la suite est le devis. */
+    if (hasWorkshop) { primaryAction = 'workshop'; primaryLabel = 'Préparer le devis'; }
+    else if (l.email) { primaryAction = 'email'; primaryLabel = 'Envoyer le devis'; }
+    else if (canCall) { primaryAction = 'call'; primaryLabel = 'Appeler le client'; }
+  }
+  else if (naType === 'to_validate') { primaryAction = 'detail'; primaryLabel = 'Voir le dossier'; }
   else if (stage === 'nouveau') {
     if (canCall) { primaryAction = 'call'; primaryLabel = 'Appeler'; }
     else if (l.email) { primaryAction = 'email'; primaryLabel = 'Répondre par email'; }
@@ -473,6 +506,7 @@ module.exports = {
   SOURCES_DEMANDE,
   SOURCES_ATELIER,
   ETAPES,
+  ATTENTES,
   GROUPES,
   TYPES_ACTION,
   MOTIFS_PERTE,

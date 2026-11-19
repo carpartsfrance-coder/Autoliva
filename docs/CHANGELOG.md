@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-19 — Leads à traiter : « Attente fournisseur » et « À valider (Killian) »
+
+Demande de Killian : « est-ce que dans les leads à traiter, on devrait mettre de nouveaux statuts ? par exemple en attente devis fournisseur ». Le même jour, une demande de prix déjà envoyée par Lucas à Inter-matic avait été renvoyée une heure plus tard pour le même véhicule : l'attente n'était écrite que dans une note, rien ne se voyait dans la liste.
+
+- **Deux nouvelles prochaines actions** : `wait_supplier` (« Attendre la réponse du fournisseur ») et `to_validate` (« À valider par Killian »). La route `POST /admin/api/leads/:id/prochaine-action` les accepte comme les autres (`{ type, quand, note }`).
+- **Deux nouveaux onglets**, juste après « Devis à préparer » : « Attente fournisseur » (jaune) et « À valider » (rose), avec leur étape (« Attente fournisseur », « À valider (Killian) »). Un dossier y va dès que l'attente est posée, même si le client n'a pas encore été contacté (on lui répond avec le prix), et il y reste même si l'attente traîne (ni « En retard », ni « Anciens »).
+- **Bouton principal** : « Envoyer le devis » (ou « Préparer le devis » pour un dossier de l'atelier, « Appeler le client » sans email) quand le fournisseur est attendu ; « Voir le dossier » quand Killian doit valider.
+- **Fiche** : menu « Reporter » → « En attente chez nous » : « Prix demandé au fournisseur · réponse à voir demain » et « À valider par Killian · demain », en un clic. Les deux choix sont aussi dans la fenêtre « suite » (Noter l'appel / Planifier).
+- **Un devis envoyé depuis l'atelier termine ces deux attentes** (`ACTIONS_SOLDEES_PAR_UN_DEVIS`), comme « Préparer le devis ».
+- Guide « Comment ça marche » mis à jour.
+- Tests : `tests/unit/leads-attentes.test.js` ; liste des actions soldées dans `tests/unit/leads-devis-envoye.test.js` ; route + onglets dans `tests/integration/file-de-travail-leads.test.js`.
+
 ## 2026-11-18 (soir) — Leads à traiter : refonte en « boîte mail » (liste à gauche, client à droite)
 
 Maquette faite par ChatGPT après avoir refait lui-même le parcours de l'employé sur 7 captures du vrai écran. Ses reproches : pas de point de départ évident, 956 « en retard » mêlant les vieux dossiers, cartes trop grandes (3 ou 4 clients par écran), boutons éparpillés (le dossier devis caché dans « ⋯ »), deux fenêtres presque identiques (résultat d'appel, planifier), étiquettes mélangées, détail qui commence par les outils au lieu de l'historique.
