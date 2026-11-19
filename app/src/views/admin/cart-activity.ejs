@@ -88,9 +88,6 @@
         <% if (b.anciens) { %>
           <span title="En retard depuis plus de 7 jours ouvrés : à reprendre quand la file du jour est vide"><strong class="text-base text-slate-900"><%= b.anciens %></strong> ancien<%= b.anciens > 1 ? 's' : '' %></span>
         <% } %>
-        <% if (b.repondus) { %>
-          <span title="Clients qui nous ont écrit depuis notre dernier message : ils attendent une réponse"><strong class="text-base text-green-700"><%= b.repondus %></strong> ont répondu</span>
-        <% } %>
         <span title="Demandes ouvertes sur lesquelles personne n'a encore appelé ni écrit (les messages automatiques ne comptent pas)"><strong class="text-base text-slate-900"><%= b.jamaisPris %></strong> jamais contactés</span>
         <span title="Nouvelles demandes, rappels et devis prévus aujourd'hui (hors retards)"><strong class="text-base text-slate-900"><%= b.duJour %></strong> à faire aujourd’hui</span>
         <span title="Temps médian entre la demande du client et le premier appel ou message d'un commercial, en heures d'ouverture, sur les 30 derniers jours">
@@ -219,7 +216,7 @@
     <% } %>
 
     <%
-      var nomsCourts = { repondu: 'A répondu', non_traites: 'Non traités', retard: 'En retard', rappels: 'Prévus aujourd’hui', devis: 'Devis à préparer', relances: 'À relancer', plus_tard: 'Planifiés', anciens: 'Anciens' };
+      var nomsCourts = { non_traites: 'Non traités', retard: 'En retard', rappels: 'Prévus aujourd’hui', devis: 'Devis à préparer', relances: 'À relancer', plus_tard: 'Planifiés', anciens: 'Anciens' };
       var tons = { green: 'bg-green-100 text-green-800', blue: 'bg-blue-100 text-blue-800', red: 'bg-red-100 text-red-700', amber: 'bg-amber-100 text-amber-800', orange: 'bg-orange-100 text-orange-800', slate: 'bg-slate-200 text-slate-700' };
       var affiches = view === 'todo' ? [].concat.apply([], groupes.map(function (g) { return g.items; })) : (leads || []);
     %>
@@ -367,7 +364,6 @@
       <div class="mb-4 rounded-xl border border-slate-200 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Les groupes de la liste</div>
         <div class="space-y-1.5 text-sm text-slate-700">
-          <div><strong>Le client a répondu</strong> — il nous a écrit depuis notre dernier message et attend une réponse. Son texte est sur la ligne et dans sa fiche : on sait déjà quoi lui dire. À faire avant tout le reste, même si l’heure prévue n’est pas arrivée.</div>
           <div><strong>Non traités</strong> — <strong>tout ce que personne n’a encore appelé ni écrit</strong>, en retard ou non : c’est le même geste pour toi, décrocher le téléphone. Les plus récentes en haut, parce qu’un lead frais se transforme bien mieux qu’un lead de la veille — le lien « Plus anciennes ↑ » en tête de liste repart du fond de la pile. La promesse reste d’appeler dans l’heure (9 h–12 h, 14 h–18 h, du lundi au vendredi) : passé ce délai la barre de la ligne vire au rouge, même si elle ne change pas d’onglet.</div>
           <div><strong>En retard</strong> — <strong>un rendez-vous promis</strong> est passé, sur un dossier <strong>déjà pris en main</strong> : tu avais prévu de rappeler à 14 h et il est 16 h. C’est le seul onglet rouge, et il doit rester petit.</div>
           <div><strong>Prévus aujourd’hui</strong> — les rappels et relances planifiés pour aujourd’hui.</div>
@@ -381,7 +377,7 @@
       <div class="mb-4 rounded-xl border border-slate-200 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Ce que dit une ligne</div>
         <div class="space-y-1.5 text-sm text-slate-700">
-          <div><strong>La barre de couleur à gauche dit l’urgence</strong>, sans texte : <span class="font-bold text-red-600">rouge</span> pour une heure promise et passée, <span class="font-bold text-amber-700">ambre</span> pour une relance que la file propose, <span class="font-bold text-blue-700">bleu</span> pour une demande encore dans l’heure, <span class="font-bold text-green-700">vert</span> quand le client a répondu. Pas de compte à rebours sur les lignes : seule la date d’un rendez-vous fixé un autre jour s’affiche, dans « Planifiés ».</div>
+          <div><strong>La barre de couleur à gauche dit l’urgence</strong>, sans texte : <span class="font-bold text-red-600">rouge</span> pour une heure promise et passée, <span class="font-bold text-amber-700">ambre</span> pour une relance que la file propose, <span class="font-bold text-blue-700">bleu</span> pour une demande encore dans l’heure. Pas de compte à rebours sur les lignes : seule la date d’un rendez-vous fixé un autre jour s’affiche, dans « Planifiés ».</div>
           <div>Dessous : la pièce et le véhicule, et à droite le <strong>montant en jeu</strong> (le devis s’il est parti, sinon le panier).</div>
           <div>Puis <strong>l’heure d’arrivée de la demande</strong> (« 09:12 » aujourd’hui, « hier 16:40 », « mar. 17/11 »), <strong>qui s’en occupe</strong> (« Non pris » si personne) et d’où elle vient (Google Ads, landing…).</div>
           <div>À droite de cette ligne : soit <strong>depuis combien de temps elle attend</strong> (temps compté en heures d’ouverture depuis la demande, tant que personne n’a appelé ni écrit — <span class="font-bold text-red-600">rouge</span> au-delà d’une heure), soit <strong>« contacté 2× · 5 j »</strong> dès que quelqu’un s’en est occupé : combien de fois, et depuis combien de temps le client est sans nouvelles. Ces durées se remettent à jour toutes seules, sans recharger la page.</div>
@@ -2036,11 +2032,10 @@
         .then(function (r) { return r.json(); })
         .then(function (d) {
           if (!d || !d.ok) return;
-          var total = (d.nouvelles || 0) + (d.reponses || 0);
+          var total = d.nouvelles || 0;
           if (!total) return;
           var bouts = [];
           if (d.nouvelles) bouts.push(d.nouvelles + ' nouvelle' + (d.nouvelles > 1 ? 's' : '') + ' demande' + (d.nouvelles > 1 ? 's' : ''));
-          if (d.reponses) bouts.push(d.reponses + (d.reponses > 1 ? ' clients ont répondu' : ' client a répondu'));
           texte.textContent = bouts.join(' · ');
           zone.classList.remove('hidden');
           zone.classList.add('flex');
@@ -2187,8 +2182,6 @@
       var retardRendu = Number(el.getAttribute('data-retard')) || 0;
       var attenteRendu = Number(el.getAttribute('data-attente'));
       var promesse = el.getAttribute('data-promesse') === '1';
-      /* Un client qui vient d'écrire reste vert, quoi qu'en dise l'échéance. */
-      var repondu = el.getAttribute('data-repondu') === '1';
 
       /* Retard : celui du rendu qui grandit, ou celui d'une échéance qui vient
          de passer sous les yeux du commercial. */
@@ -2198,7 +2191,7 @@
          patron les trouvait polluants. Quand l'heure passe sous les yeux du
          commercial, seule la barre change de couleur — rouge pour une heure
          promise, ambre pour une relance que la file propose. */
-      if (retard > 0 && !repondu) {
+      if (retard > 0) {
         rougir(el.querySelector('[data-role="barre"]'), TONS_BARRE, promesse ? 'bg-red-500' : 'bg-amber-400');
       }
 

@@ -320,16 +320,6 @@ function toCardModel(c, now = new Date()) {
        que quelqu'un a POSÉ et qui n'est pas encore passé. Les comptes à
        rebours (« en retard de 9 min », « avant 14:00 ») ne s'affichent plus. */
     prevu: work.dueSource === 'planifiee' && !work.overdue && work.dueAt ? prevuLe(work.dueAt, now) : '',
-    /* Le client nous a écrit et attend une réponse : le signal le plus chaud
-       de la file. Son message vient du journal des communications. */
-    aRepondu: !!work.aRepondu,
-    reponse: work.aRepondu ? {
-      rel: formatRelative(work.reponseAt),
-      exact: arriveeExacte(work.reponseAt),
-      canal: { sms: 'SMS', whatsapp: 'WhatsApp', email: 'email', appel: 'appel' }[work.reponseCanal] || '',
-      texte: String(work.reponseTexte || '').slice(0, 220),
-      tronque: String(work.reponseTexte || '').length > 220,
-    } : null,
     /* Quand la demande est arrivée, et depuis combien de temps elle attend. */
     recuCourt: heure.recuCourt,
     recuLong: heure.recuLong,

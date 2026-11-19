@@ -79,7 +79,6 @@ const ETAPES = {
 };
 
 const GROUPES = [
-  { key: 'repondu',    label: 'Le client a répondu',         hint: 'Il nous a écrit depuis notre dernier message : la balle est dans notre camp', tone: 'green', collapsed: false },
   { key: 'non_traites', label: 'Non traités',                hint: 'Personne n’a encore appelé ni écrit. Les plus récentes en haut : un lead frais se transforme bien mieux qu’un lead de la veille', tone: 'blue',  collapsed: false },
   { key: 'retard',     label: 'En retard',                   hint: 'Un rendez-vous PROMIS est passé, sur un dossier déjà pris en main : rappel planifié non tenu', tone: 'red', collapsed: false },
   { key: 'rappels',    label: 'Prévus aujourd’hui',          hint: 'Les rappels et relances que quelqu’un a planifiés pour aujourd’hui', tone: 'amber', collapsed: false },
@@ -271,12 +270,11 @@ function computeWork(lead, now = new Date()) {
   const hasWorkshop = SOURCES_ATELIER.includes(l.captureSource || '') || !!(l.engineQuote && l.engineQuote.status);
   const canCall = peutAppeler(l);
 
-  /* La balle est dans NOTRE camp : le client a écrit après notre dernier
-     geste (ou avant qu'on en fasse un). Tant qu'on ne lui a pas répondu, ce
-     dossier passe avant tout le reste, quelle que soit son échéance. */
-  const reponse = derniereReponse(l);
-  const reponseAt = reponse ? d(reponse.at) : null;
-  const aRepondu = !!(reponseAt && (!humain.derniere || reponseAt > humain.derniere));
+  /* Plus de groupe « Le client a répondu » (retiré le 20/11/2026). L'outil
+     ne savait que QUI avait écrit, par le numéro de téléphone, pas DE QUOI :
+     un SMS de SAV ou un « où est mon colis ? » faisait remonter le dossier
+     de vente en tête de file. Le message reste au journal du dossier et dans
+     sa dernière note, avec le contexte (SAV ouvert, commande en cours). */
 
   /* Échéance : celle du commercial, sinon déduite. */
   let dueAt = null;
@@ -305,20 +303,17 @@ function computeWork(lead, now = new Date()) {
 
   const overdue = !!(dueAt && dueAt.getTime() < now.getTime());
   const overdueMinutes = overdue ? ho.minutesOuvreesEntre(dueAt, now) : 0;
-  /* « Vieux retard » est un FAIT du dossier, pas une place dans la liste : le
-     bandeau du patron comptait les retards par groupe, donc un dossier sorti
-     de son groupe (parce que le client a répondu) disparaissait du compteur. */
+  /* « Vieux retard » est un FAIT du dossier, pas une place dans la liste. */
   const ancien = overdue && overdueMinutes > RETARD_ANCIEN_JOURS_OUVRES * MIN_JOUR_OUVRE;
 
   /* Groupe dans la file. */
   let group = '';
   if (intent === 'opportunity') {
-    if (aRepondu) group = 'repondu';
     /* Pas encore pris en main = une seule pile, quel que soit le retard :
        c'est le même geste pour le commercial, décrocher le téléphone.
        Au-delà de 7 jours ouvrés de retard, « Anciens dossiers » garde son
        rôle de garde-fou : la file du jour ne doit pas se noyer dedans. */
-    else if (ancien) group = 'anciens';
+    if (ancien) group = 'anciens';
     else if (!humain.premiere) group = 'non_traites';
     /* Un devis dû reste un devis dû, en retard ou non : le commercial veut
        les voir ensemble, les plus vieux en haut (voir comparer()). */
@@ -348,8 +343,7 @@ function computeWork(lead, now = new Date()) {
   else if (canCall) { primaryAction = 'call'; primaryLabel = stage === 'devis_envoye' ? 'Relancer (appel)' : 'Rappeler'; }
   else if (l.email) { primaryAction = 'email'; primaryLabel = stage === 'devis_envoye' ? 'Relancer par email' : 'Écrire au client'; }
 
-  const nextActionLabel = aRepondu ? 'Répondre au client'
-    : naType ? (TYPES_ACTION[naType] || naType)
+  const nextActionLabel = naType ? (TYPES_ACTION[naType] || naType)
     : dueSource === 'premiere_reponse' ? 'Première réponse au client'
       : dueSource === 'relance_devis' ? 'Relancer le devis'
         : dueSource === 'suivi' ? (stage === 'devis_a_faire' ? 'Préparer le devis' : 'Faire le point avec le client')
@@ -369,10 +363,6 @@ function computeWork(lead, now = new Date()) {
     promesse,
     sansNouvellesMin,
     ancien,
-    aRepondu,
-    reponseAt,
-    reponseCanal: (reponse && reponse.canal) || '',
-    reponseTexte: (reponse && reponse.corps) || '',
     primaryAction,
     primaryLabel,
     canCall,
@@ -395,14 +385,6 @@ function comparer(a, b) {
     const ra = a.work.receivedAt ? a.work.receivedAt.getTime() : 0;
     const rb = b.work.receivedAt ? b.work.receivedAt.getTime() : 0;
     if (ra !== rb) return rb - ra;
-    return String(a.id || '').localeCompare(String(b.id || ''));
-  }
-  /* Dans « Le client a répondu », l'échéance ne veut plus rien dire : ce qui
-     compte est depuis quand son message attend une réponse. */
-  if (a.work.group === 'repondu' && b.work.group === 'repondu') {
-    const ra = a.work.reponseAt ? a.work.reponseAt.getTime() : Infinity;
-    const rb = b.work.reponseAt ? b.work.reponseAt.getTime() : Infinity;
-    if (ra !== rb) return ra - rb;
     return String(a.id || '').localeCompare(String(b.id || ''));
   }
   const ta = a.work.dueAt ? a.work.dueAt.getTime() : Infinity;

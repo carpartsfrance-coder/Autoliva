@@ -13,7 +13,6 @@
   /* Rouge = une heure qu'un humain a promise. Ambre = une relance que la
      file déduit du dernier contact : ce n'est pas un reproche. */
   var ton = faible ? 'slate' : ferme ? (w.stage === 'gagne' ? 'green' : 'slate')
-    : c.aRepondu ? 'green'
     : (w.overdue && w.promesse) ? 'red'
     : w.stage === 'nouveau' ? 'blue'
     : (w.overdue || w.group === 'rappels' || w.group === 'devis' || w.group === 'relances') ? 'amber' : 'slate';
@@ -22,7 +21,6 @@
   var pa = w.primaryAction;
   var titre = faible ? 'Pas de demande en cours'
     : ferme ? (w.stage === 'gagne' ? 'Dossier gagné' : 'Dossier perdu')
-    : c.aRepondu ? 'Répondre au client'
     : pa === 'review' ? 'Reprendre ce dossier'
     : w.stage === 'nouveau' ? 'Contacter ce client'
     : (w.nextActionLabel || w.primaryLabel || 'Planifier la suite');
@@ -32,7 +30,7 @@
 %>
 <article class="lead-fiche hidden" id="fiche-<%= c.id %>" data-lead-id="<%= c.id %>" data-name="<%= nom %>" data-deja-essaye="<%= c.dejaEssaye ? '1' : '' %>" data-stage="<%= w.stage %>"
          data-due="<%= c.dueIso || '' %>" data-retard="<%= c.retardMin || 0 %>" data-attente="<%= c.attenteMin >= 0 ? c.attenteMin : -1 %>"
-         data-promesse="<%= w.promesse ? 1 : 0 %>" data-repondu="<%= c.aRepondu ? 1 : 0 %>">
+         data-promesse="<%= w.promesse ? 1 : 0 %>">
   <!-- Barre du haut -->
   <div class="flex items-center gap-2 border-b border-slate-100 px-4 sm:px-5 py-2.5">
     <button type="button" class="js-retour-liste seul-mobile inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-slate-700 hover:bg-slate-100">
@@ -102,22 +100,6 @@
       <% } %>
     </div>
 
-    <% if (c.aRepondu && c.reponse) { %>
-      <%/* Le message du client était enterré dans l'onglet « Suivi », chargé
-            après coup : on rappelait sans savoir ce qu'il venait de dire. */%>
-      <section class="rounded-2xl border-2 border-green-200 bg-green-50/70 p-4">
-        <div class="flex flex-wrap items-baseline gap-x-2">
-          <span class="text-[11px] font-bold uppercase tracking-widest text-green-700">Le client a répondu<%= c.reponse.canal ? ' par ' + c.reponse.canal : '' %></span>
-          <span class="text-xs text-green-800" title="<%= c.reponse.exact %>">· <%= c.reponse.rel %></span>
-        </div>
-        <% if (c.reponse.texte) { %>
-          <p class="mt-1 whitespace-pre-line text-sm italic text-slate-800">« <%= c.reponse.texte %><%= c.reponse.tronque ? '…' : '' %> »</p>
-        <% } else { %>
-          <p class="mt-1 text-sm text-slate-700">Son message est dans « Suivi &amp; notes ».</p>
-        <% } %>
-        <p class="mt-1 text-xs text-green-800">Il attend une réponse : ce dossier passe avant les autres.</p>
-      </section>
-    <% } %>
 
     <!-- 2. La prochaine action -->
     <section class="rounded-2xl border-2 <%= boite %> p-4">

@@ -159,7 +159,10 @@ test('nouveautés : une page ouverte depuis trois jours ne compte pas trois jour
       const borne = new Date(res.corps.depuis).getTime();
       assert.ok(borne > Date.now() - 37 * 3600 * 1000, 'la borne est ramenée à 36 h');
       assert.ok(filtres[0].createdAt.$gte.getTime() === borne);
-      assert.equal(filtres[1].communications.$elemMatch.sens, 'entrant');
+      /* Les SMS reçus ne sont plus comptés (20/11/2026) : rattachés par le
+         seul numéro, un message de SAV annonçait « 1 client a répondu ». */
+      assert.equal(filtres.length, 1, 'un seul comptage : les nouvelles demandes');
+      assert.equal(res.corps.reponses, undefined);
     } finally { rendre(); }
   });
 });
