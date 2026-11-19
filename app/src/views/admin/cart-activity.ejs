@@ -27,7 +27,7 @@
   .lead-ligne[aria-checked="true"] { background: #eff6ff; }
   .lead-ligne[aria-checked="true"] .lead-case { color: #2563eb; }
   .lead-ligne[aria-selected="true"] .lead-ligne-nom { color: #b91c1c; }
-  .fiche-onglet[aria-selected="true"] { border-color: #D32F2F; color: #0f172a; }
+  .fiche-onglet[aria-selected="true"] { border-color: #0f172a; color: #0f172a; }
   .lead-menu > summary::-webkit-details-marker, .equipe-menu > summary::-webkit-details-marker { display: none; }
   /* Onglets de la file : huit groupes empilés faisaient une colonne de gauche
      interminable, où « Nouvelles demandes » se retrouvait sous 168 retards. */
@@ -356,8 +356,8 @@
         <ol class="list-inside list-decimal space-y-2 text-sm text-slate-800">
           <li><strong>Vide les onglets de gauche à droite</strong> : ils sont dans l’ordre où il faut travailler. Dans chaque onglet, prends le premier client : la liste est déjà triée.</li>
           <li><strong>Regarde l’encadré « La prochaine action »</strong> à droite et clique sur son gros bouton : Appeler, Préparer le devis, Écrire au client…</li>
-          <li><strong>Après l’appel, clique « Appel terminé »</strong> : comment ça s’est passé, la suite, et pour quand. Sans suite, le client serait oublié : la fenêtre te la demande toujours.</li>
-          <li><strong>« Enregistrer et continuer »</strong> t’emmène tout seul au client suivant. <strong>Gagné</strong> seulement quand le client a payé, <strong>Perdu</strong> toujours avec le motif (dans « Autres actions »).</li>
+          <li><strong>Après l’appel, clique « Noter l’appel »</strong> : comment ça s’est passé, la suite, et pour quand. Sans suite, le client serait oublié : la fenêtre te la demande toujours.</li>
+          <li><strong>« Enregistrer et continuer »</strong> t’emmène tout seul au client suivant. <strong>Gagné</strong> seulement quand le client a payé, <strong>Perdu</strong> toujours avec le motif (dans le menu ⋯ de la fiche).</li>
         </ol>
       </div>
 
@@ -382,7 +382,7 @@
           <div>Puis <strong>l’heure d’arrivée de la demande</strong> (« 09:12 » aujourd’hui, « hier 16:40 », « mar. 17/11 »), <strong>qui s’en occupe</strong> (« Non pris » si personne) et d’où elle vient (Google Ads, landing…).</div>
           <div>À droite de cette ligne : soit <strong>depuis combien de temps elle attend</strong> (temps compté en heures d’ouverture depuis la demande, tant que personne n’a appelé ni écrit — <span class="font-bold text-red-600">rouge</span> au-delà d’une heure), soit <strong>« contacté 2× · 5 j »</strong> dès que quelqu’un s’en est occupé : combien de fois, et depuis combien de temps le client est sans nouvelles. Ces durées se remettent à jour toutes seules, sans recharger la page.</div>
           <div>En bas, les pastilles qui changent la façon d’appeler : <span class="rounded bg-green-100 px-1.5 text-[11px] font-semibold text-green-800">A cliqué payer</span> <span class="rounded bg-violet-100 px-1.5 text-[11px] font-semibold text-violet-800">Devis vu</span> <span class="rounded bg-indigo-50 px-1.5 text-[11px] font-semibold text-indigo-700">Déjà client</span> <span class="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">SAV en cours</span>, et « note » quand un collègue a écrit quelque chose (passe la souris dessus pour la lire).</div>
-          <div>Dans la fiche : « Personne ne s’en occupe — je m’en occupe » pour prendre le client.</div>
+          <div>Dans la fiche : « M’attribuer », en haut à droite, pour prendre le client. Le menu ⋯ regroupe le reste (atelier devis, fournisseur, SMS types, gagné, perdu).</div>
         </div>
       </div>
 
@@ -399,9 +399,9 @@
       <div class="mb-4 rounded-xl border border-slate-200 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Gagner du temps</div>
         <div class="space-y-1.5 text-sm text-slate-700">
-          <div><strong>« +2 h » et « Demain »</strong>, à côté de « Planifier » : repoussent le dossier et passent au client suivant, en un clic.</div>
+          <div><strong>Le menu « Reporter »</strong>, dans la fiche : « Planifier… », « Dans 2 heures » et « Demain matin ». Les deux derniers repoussent le dossier et passent au client suivant, en un clic.</div>
           <div><strong>« Devis envoyé »</strong>, dans « Noter l’appel » : le seul choix qui ne demande pas d’heure. Le devis parti, ce qui suit c’est sa relance, et sa date se déduit toute seule (3 jours ouvrés, en ambre). Avant, il fallait inventer une heure pour un travail déjà fait — et cette heure faisait remonter le dossier en rouge l’après-midi même. Un devis envoyé depuis l’atelier solde aussi « Préparer le devis » tout seul.</div>
-          <div><strong>« En attente du client »</strong>, juste à côté : quand la balle est dans SON camp (il réfléchit, il attend son garagiste, il rappelle le mois prochain). Le dossier part dans « Planifiés » et ne remonte qu’à la date choisie. Sans ça, il revenait dans la file tous les deux jours ouvrés jusqu’à la clôture.</div>
+          <div><strong>« En attente du client »</strong>, dans le même menu « Reporter » : quand la balle est dans SON camp (il réfléchit, il attend son garagiste, il rappelle le mois prochain). Le dossier part dans « Planifiés » et ne remonte qu’à la date choisie. Sans ça, il revenait dans la file tous les deux jours ouvrés jusqu’à la clôture.</div>
           <div><strong>Le filtre « Jamais contactés »</strong>, en haut : la pile de demandes que personne n’a encore touchées. Les dossiers en cours restent dans la file de tout le monde — c’est volontaire, un client appelé une fois qui n’a pas dit oui n’est pas un dossier fini.</div>
           <div><strong>« Sélectionner »</strong>, en haut : coche plusieurs clients d’un coup pour les prendre en charge ou les clôturer en perdu avec un motif commun. C’est fait pour vider « Anciens dossiers ». Rien n’est supprimé : un dossier clôturé par erreur se rouvre depuis sa fiche.</div>
           <div><strong>Quand une demande arrive</strong> pendant que la page est ouverte, un bandeau vert le dit en haut de la liste et le titre de l’onglet compte. La cloche, en haut, ajoute un bip.</div>
@@ -530,7 +530,7 @@
   });
 
 
-  /* ══ Onglets de la fiche : Suivi & notes · Pièce & devis · Client & parcours ══
+  /* ══ Onglets de la fiche : Suivi et notes · Pièce et devis · Client ══
      Même source que l'ancien « Détail » (GET /admin/activite-panier/:id).
      Tout est cherché DANS la fiche (data-role), jamais par id global : deux
      fiches chargées ne peuvent pas se marcher dessus. */
@@ -2205,8 +2205,6 @@
           ligne.title = 'Personne n’a encore appelé ni écrit : ' + libelle + ' d’attente en heures d’ouverture.';
           if (attente >= 60) rougir(ligne, ['text-slate-500'], 'text-red-600');
         }
-        var fiche = el.querySelector('[data-role="attente-longue"]');
-        if (fiche) fiche.textContent = 'Jamais contacté · attend depuis ' + libelle;
       }
     }
 

@@ -32,10 +32,10 @@ const { demandesFournisseur } = require('../services/supplierRequest');
 const { buildLeadSearchConditions } = require('../services/leadSearch');
 const { avecVerrouEnvoi } = require('../services/verrouEnvoiLead');
 const brand = require('../config/brand');
-const { computeWork, duree, libelleUrgence, libelleUrgenceCourt, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
+const { computeWork, derniereReponse, duree, libelleUrgence, libelleUrgenceCourt, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
 const { chargerFile } = require('../services/leadWorkQueue');
 const { resumeDemande } = require('../services/leadResume');
-const { infosHeure, fenetreOuvree, arriveeExacte, dureeOuvree, prevuLe } = require('../services/leadHeure');
+const { infosHeure, fenetreOuvree, arriveeExacte, arriveeLongue, dureeOuvree, prevuLe } = require('../services/leadHeure');
 
 function escapeHtml(value) {
   return String(value || '')
@@ -372,6 +372,32 @@ function toCardModel(c, now = new Date()) {
     email: c.email || '',
     phone: c.phone || '',
     phoneCallable: !!phoneFR,
+    /* « 06 34 23 76 51 » plutôt que « +33634237651 » : le numéro se lit et
+       se dicte. normalizePhoneFR rend la forme +33… ; numéro étranger ou
+       incomplet : laissé tel quel. */
+    telAffiche: phoneFR ? ('0' + phoneFR.slice(3)).replace(/(\d{2})(?=\d)/g, '$1 ') : (c.phone || ''),
+    /* Le dernier message ÉCRIT par le client (SMS aujourd'hui), affiché comme
+       un message dans la fiche — il était coupé à 90 caractères sous
+       « Pièce demandée », où il n'avait rien à faire. « STOP » écarté. */
+    messageClient: (() => {
+      const m = derniereReponse(c);
+      if (!m || !m.corps) return null;
+      const texte = String(m.corps);
+      /* Ce que l'outil savait du numéro À LA RÉCEPTION (« SAV-2026-0114
+         ouvert », « commande … NON LIVRÉE ») : Ringover l'accole à la note
+         qu'il écrit (ringoverCalls.recordSmsReply). C'est ce qui dit, d'un
+         coup d'œil, si le message parle d'un SAV plutôt que d'une vente. */
+      const noteSms = notesArr.slice().reverse().find((n) => /^R[ÉE]PONSE SMS du client/i.test(String((n && n.text) || '')));
+      const contexte = noteSms ? (String(noteSms.text).split(/\s»\s—\s/)[1] || '').trim() : '';
+      return {
+        texte: texte.slice(0, 600),
+        tronque: texte.length > 600,
+        canal: { sms: 'SMS', whatsapp: 'WhatsApp', email: 'email' }[m.canal] || '',
+        quand: arriveeLongue(m.at, now),
+        exact: arriveeExacte(m.at),
+        contexte,
+      };
+    })(),
     firstName: c.firstName || '',
     lastName: c.lastName || '',
     fullName: fullName || '',

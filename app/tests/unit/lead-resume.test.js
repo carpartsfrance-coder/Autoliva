@@ -28,7 +28,7 @@ test('landing moteur : « Occasion » n’est pas un véhicule ; le moteur ident
 
 test('demande de devis depuis une fiche produit : la référence, le véhicule et le VIN', () => {
   const r = resumeDemande({ captureSource: 'devis', requested: { ref: '02E 325 025', vehicle: 'Seat Cupra ST', vin: 'VSSZZZ5FZGR076791' } });
-  assert.deepEqual(r, { piece: '02E 325 025', vehicule: 'Seat Cupra ST', plaque: '', vin: 'VSSZZZ5FZGR076791' });
+  assert.deepEqual(r, { piece: '02E 325 025', pieceDuSms: false, vehicule: 'Seat Cupra ST', plaque: '', vin: 'VSSZZZ5FZGR076791' });
 });
 
 test('appel manqué : la réponse SMS du client dit ce qu’il cherche', () => {
@@ -37,6 +37,9 @@ test('appel manqué : la réponse SMS du client dit ce qu’il cherche', () => {
     { text: 'Dossier pris en charge par Killian' },
   ] });
   assert.equal(r.piece, 'Je cherche un moteur Dacia Duster 1.2 TCe');
+  /* Ce n'est que le début du SMS : la liste l'affiche faute de mieux, la
+     fiche le montre comme un message et écrit « Non précisée » sous Pièce. */
+  assert.equal(r.pieceDuSms, true);
 });
 
 test('panier : le premier article ; rien du tout : la pièce du formulaire', () => {

@@ -77,12 +77,17 @@ test('la ligne n’affiche plus ni pastille « A répondu » ni vert', () => {
   assert.ok(!ligne.includes('format_quote'), 'plus de citation du message sur la ligne');
 });
 
-test('le message reste lisible, AVEC son contexte, comme dernière note', () => {
+test('le message reste lisible, AVEC son contexte', () => {
+  /* Depuis la refonte de la fiche (20/11/2026), il s'affiche comme un
+     message, avec ce que l'outil savait du numéro à la réception — et la
+     note que Ringover écrit n'est plus répétée en « Dernière note ». */
   const c = toCardModel(clientSavQuiEcrit(), NOW);
   const fiche = rendre('lead-fiche', c);
   assert.ok(!fiche.includes('Le client a répondu'), 'plus d’encadré vert');
-  assert.ok(fiche.includes('RÉPONSE SMS du client'), 'le message est dans « Dernière note »');
+  assert.ok(fiche.includes('Message du client'));
+  assert.ok(fiche.includes('Ma boîte fait toujours du bruit au passage de la 3e'), 'le texte du client');
   assert.ok(fiche.includes('SAV-2026-0114 ouvert'), 'et on voit tout de suite que c’est du SAV');
+  assert.ok(!fiche.includes('RÉPONSE SMS du client'), 'le même texte n’est pas affiché deux fois');
 });
 
 test('un panier abandonné dont le client écrit devient une vraie demande', () => {
