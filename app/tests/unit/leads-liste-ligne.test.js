@@ -48,11 +48,16 @@ test('la ligne dit à quelle heure la demande est arrivée', () => {
   assert.ok(html.includes('Demande reçue le 17/11/2026 à 09:12'), 'l’infobulle donne la date complète');
 });
 
-test('la ligne dit depuis combien de temps la demande attend, heures fermées exclues', () => {
+test('l’attente se compte en heures ouvrées, heures fermées exclues', () => {
+  /* Le calcul reste (il colore le point et nourrit le bandeau) ; la ligne,
+     elle, n'écrit plus « attend 48 min » depuis le 20/11/2026 : l'heure
+     d'arrivée en haut à droite dit la même chose sans tourner. */
   /* Reçue à 9 h 12, il est 10 h : 48 minutes d'attente. */
   const c = toCardModel(demandeDuMatin(), MARDI_10H);
   assert.equal(c.attenteMin, 48);
-  assert.ok(rendre('lead-ligne', c).includes('attend 48 min'));
+  const ligne = rendre('lead-ligne', c);
+  assert.ok(!ligne.includes('attend '), 'plus de compte à rebours sur la ligne');
+  assert.ok(ligne.includes('>09:12<'), 'l’heure d’arrivée à la place');
 
   /* Reçue hier à 17 h 50, il est 9 h 10 ce matin : 10 min hier soir + 10 min
      ce matin, pas quinze heures. */
@@ -60,17 +65,17 @@ test('la ligne dit depuis combien de temps la demande attend, heures fermées ex
     abandonedAt: new Date('2026-11-16T16:50:00Z'), createdAt: new Date('2026-11-16T16:50:00Z'),
   }), new Date('2026-11-17T08:10:00Z'));
   assert.equal(nuit.attenteMin, 20);
-  assert.ok(rendre('lead-ligne', nuit).includes('attend 20 min'));
 });
 
-test('attente : sous l’heure c’est gris, au-delà ça passe en rouge', () => {
+test('attente : sous l’heure le point est bleu, au-delà il passe au rouge', () => {
   const tot = toCardModel(demandeDuMatin(), new Date('2026-11-17T08:50:00Z'));
   assert.equal(tot.attenteMin, 38);
-  assert.ok(!rendre('lead-ligne', tot).includes('text-red-600'), 'sous l’heure, l’attente n’est pas alarmante');
+  const ligneTot = rendre('lead-ligne', tot);
+  assert.ok(ligneTot.includes('bg-blue-500') && !ligneTot.includes('bg-red-500'), 'sous l’heure, rien d’alarmant');
 
   const tard = toCardModel(demandeDuMatin(), new Date('2026-11-17T10:30:00Z'));
   assert.ok(tard.attenteMin > 60);
-  assert.ok(rendre('lead-ligne', tard).includes('text-red-600'), 'passé l’heure promise, l’attente est rouge');
+  assert.ok(rendre('lead-ligne', tard).includes('bg-red-500'), 'passé l’heure promise, le point est rouge');
 });
 
 test('la ligne montre le montant en jeu', () => {
@@ -98,7 +103,9 @@ test('la ligne signale un ancien client et un SAV en cours', () => {
   c.clientHistory = { count: 3, lastRel: 'il y a 2 j', lastUrl: '/admin/commandes/x', title: 'n°1042' };
   c.savHistory = { count: 1, openCount: 1, lastStatut: 'en cours', url: '/admin/sav/tickets/T1', title: 'T1' };
   const html = rendre('lead-ligne', c);
-  assert.ok(html.includes('Déjà client · 3'));
+  /* Pastille courte ; le nombre de commandes est dans l'infobulle. */
+  assert.ok(html.includes('>Déjà client<'));
+  assert.ok(html.includes('3 commandes · n°1042'));
   assert.ok(html.includes('SAV en cours'));
 });
 
