@@ -1773,11 +1773,40 @@ async function postSendQuote(req, res, next) {
         },
       }
     );
+    await solderActionDevis(cart._id, admin.name);
 
     return res.redirect('/admin/devis-moteurs/' + cart._id + '#history');
   } catch (err) {
     return next(err);
   }
+}
+
+/**
+ * Un devis qui part SOLDE l'action qu'il accomplit.
+ *
+ * Constaté le 19/11/2026. Le commercial note l'appel AVANT d'envoyer
+ * (« Client joint → Préparer le devis → Cet après-midi »), puis prépare et
+ * envoie le devis dans la foulée. L'heure tapée restait posée, et
+ * `computeWork` lit `nextAction.dueAt` AVANT tout le reste : le dossier
+ * remontait à 14 h, en ROUGE, avec la consigne « Préparer le devis » — un
+ * devis parti depuis trois heures. Depuis le 19/11/2026, le rouge veut dire
+ * « quelqu'un a promis une heure et ne l'a pas tenue » : ce faux retard
+ * salissait précisément ce compteur-là.
+ *
+ * Effacée, l'action laisse la place à la règle automatique — relance du devis
+ * à +3 jours ouvrés, en ambre, puisque personne n'a promis cette date.
+ *
+ * Le tri se fait côté base, dans le filtre : pas de lecture préalable, donc
+ * pas de course entre deux envois. « Relancer le devis » n'est PAS soldée :
+ * une relance posée à la main reste un rendez-vous voulu, même si une
+ * nouvelle version du devis part entre-temps.
+ */
+const ACTIONS_SOLDEES_PAR_UN_DEVIS = ['quote', 'sourcing'];
+async function solderActionDevis(cartId, parQui) {
+  return AbandonedCart.updateOne(
+    { _id: cartId, 'nextAction.type': { $in: ACTIONS_SOLDEES_PAR_UN_DEVIS } },
+    { $set: { nextAction: { type: '', dueAt: null, note: '', setByName: parQui || '', setAt: new Date() } } },
+  );
 }
 
 /* ─── ENVOI AUTOMATIQUE DU DEVIS (devis instantané plaque) ───────────────
@@ -1920,6 +1949,7 @@ async function sendInstantDevis(cart, opts = {}) {
     { _id: cart._id },
     { $push: { 'engineQuote.sentQuotes': { $each: sentDocs } }, $set: { 'engineQuote.status': 'quote_sent', 'engineQuote.updatedAt': new Date(), 'engineQuote.updatedByName': sentByName } }
   );
+  await solderActionDevis(cart._id, sentByName);
 
   return { ok: true, count: prepared.length, devis: prepared.map((p) => ({ kind: p.kind, sellTtc: p.sellTtc })), emailOk: !!(sendResult && sendResult.ok !== false), smsStatus: devisSmsResult && devisSmsResult.status };
 }
@@ -2120,6 +2150,10 @@ async function sendAvailabilityHook(cart, opts = {}) {
 
 module.exports = {
   sendInstantDevis,
+  /* Exportés pour les tests : la règle « un devis solde l'action » se vérifie,
+     elle ne se relit pas à la main dans deux endroits du fichier. */
+  ACTIONS_SOLDEES_PAR_UN_DEVIS,
+  solderActionDevis,
   sendAvailabilityHook,
   // Réutilisés par googleAdsConversionSync (valeur de conversion = marge nette).
   calcMargin,

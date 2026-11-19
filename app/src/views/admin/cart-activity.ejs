@@ -382,6 +382,7 @@
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Gagner du temps</div>
         <div class="space-y-1.5 text-sm text-slate-700">
           <div><strong>« +2 h » et « Demain »</strong>, à côté de « Planifier » : repoussent le dossier et passent au client suivant, en un clic.</div>
+          <div><strong>« Devis envoyé »</strong>, dans « Noter l’appel » : le seul choix qui ne demande pas d’heure. Le devis parti, ce qui suit c’est sa relance, et sa date se déduit toute seule (3 jours ouvrés, en ambre). Avant, il fallait inventer une heure pour un travail déjà fait — et cette heure faisait remonter le dossier en rouge l’après-midi même. Un devis envoyé depuis l’atelier solde aussi « Préparer le devis » tout seul.</div>
           <div><strong>« En attente du client »</strong>, juste à côté : quand la balle est dans SON camp (il réfléchit, il attend son garagiste, il rappelle le mois prochain). Le dossier part dans « Planifiés » et ne remonte qu’à la date choisie. Sans ça, il revenait dans la file tous les deux jours ouvrés jusqu’à la clôture.</div>
           <div><strong>Le filtre « Jamais contactés »</strong>, en haut : la pile de demandes que personne n’a encore touchées. Les dossiers en cours restent dans la file de tout le monde — c’est volontaire, un client appelé une fois qui n’a pas dit oui n’est pas un dossier fini.</div>
           <div><strong>« Sélectionner »</strong>, en haut : coche plusieurs clients d’un coup pour les prendre en charge ou les clôturer en perdu avec un motif commun. C’est fait pour vider « Anciens dossiers ». Rien n’est supprimé : un dossier clôturé par erreur se rouvre depuis sa fiche.</div>
@@ -1383,8 +1384,11 @@
      garantit qu'aucun client ouvert ne soit oublié. */
   var RESULTATS = <%- JSON.stringify(resultatsAppel || {}) %>;
   var MOTIFS = <%- JSON.stringify(motifsPerte || {}) %>;
-  var SUITES = [['quote', 'Préparer le devis'], ['callback', 'Le rappeler'], ['wait_client', 'Il doit m’envoyer des infos'],
-    ['follow_quote', 'Relancer le devis'], ['payment', 'Il va payer'], ['sourcing', 'Chercher la pièce'], ['other', 'Autre'], ['perdu', 'Perdu']];
+  /* « Devis envoyé » n'est pas une action à venir, c'est une action faite :
+     c'est le seul choix qui ne demande pas d'heure (voir maj()). */
+  var SUITES = [['quote', 'Préparer le devis'], ['devis_envoye', 'Devis envoyé'], ['callback', 'Le rappeler'],
+    ['wait_client', 'Il doit m’envoyer des infos'], ['follow_quote', 'Relancer le devis'], ['payment', 'Il va payer'],
+    ['sourcing', 'Chercher la pièce'], ['other', 'Autre'], ['perdu', 'Perdu']];
   var QUAND = [['2h', 'Dans 2 h'], ['aprem', 'Cet après-midi'], ['demain', 'Demain matin'], ['2j', 'Dans 2 jours'], ['5j', 'Dans 1 semaine'], ['autre', 'Choisir une date…']];
 
   function toast(msg, type) { if (window.showToast) window.showToast(msg, type || 'success'); }
@@ -1698,6 +1702,11 @@
     html += '<div data-role="motif" class="hidden space-y-2">' + selectMotif() + '</div>';
     html += '<div data-role="quand" class="' + (avecAppel ? 'hidden' : '') + '">' + etape(n, 'Pour quand ?', chips('quand', QUAND, avecAppel ? '' : 'demain')
       + '<input type="datetime-local" name="quandLibre" class="mt-2 hidden w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">') + '</div>';
+    /* Sans ça, il fallait inventer une heure pour un travail déjà fait — et
+       cette heure inventée faisait remonter le dossier en rouge. */
+    html += '<p data-role="aide-devis" class="hidden rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">'
+      + 'Rien à prévoir : <strong>la relance du devis sera proposée toute seule dans 3 jours ouvrés</strong>, en ambre, dans « À relancer ». '
+      + 'Prends « Relancer le devis » si tu veux fixer une heure précise.</p>';
     if (avecAppel) {
       html += '<div data-role="sms" class="hidden"><label class="flex items-center gap-2 text-sm"><input type="checkbox" name="sms" checked> Ensuite, lui envoyer le SMS « J’ai essayé de vous joindre »</label></div>';
       html += '<p data-role="aide-numero" class="hidden rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">Mauvais numéro : écris-lui par email pour avoir le bon numéro.</p>';
@@ -1732,7 +1741,8 @@
       var s = valeur('suite');
       bloc('suite').classList.toggle('hidden', !r);
       bloc('motif').classList.toggle('hidden', s !== 'perdu');
-      bloc('quand').classList.toggle('hidden', !r || !s || s === 'perdu');
+      bloc('quand').classList.toggle('hidden', !r || !s || s === 'perdu' || s === 'devis_envoye');
+      bloc('aide-devis').classList.toggle('hidden', s !== 'devis_envoye');
       if (avecAppel) {
         bloc('sms').classList.toggle('hidden', !(r === 'pas_reponse' || r === 'repondeur'));
         bloc('aide-numero').classList.toggle('hidden', r !== 'mauvais_numero');
@@ -1753,12 +1763,13 @@
       var erreur = (avecAppel && !resultat) ? 'Choisis comment s’est passé l’appel.'
         : !suite ? 'Choisis la suite.'
           : suite === 'perdu' && !motif ? 'Choisis le motif de perte.'
-            : suite !== 'perdu' && !quand ? 'Choisis pour quand.' : '';
+            : suite !== 'perdu' && suite !== 'devis_envoye' && !quand ? 'Choisis pour quand.' : '';
       if (erreur) { res.innerHTML = '<span class="font-semibold text-red-700">' + erreur + '</span>'; return; }
       var verrou = verrouEnvoi(form);
       if (!verrou) return;
       var url, body;
-      if (avecAppel) { url = '/appel'; body = { resultat: resultat, suite: suite, quand: suite === 'perdu' ? '' : quand, motif: motif, note: form.note.value }; }
+      var sansHeure = suite === 'perdu' || suite === 'devis_envoye';
+      if (avecAppel) { url = '/appel'; body = { resultat: resultat, suite: suite, quand: sansHeure ? '' : quand, motif: motif, note: form.note.value }; }
       else if (suite === 'perdu') { url = '/cloturer'; body = { issue: 'perdu', motif: motif, note: form.note.value }; }
       else { url = '/prochaine-action'; body = { type: suite, quand: quand, note: form.note.value }; }
       var sms = form.querySelector('[name=sms]');
