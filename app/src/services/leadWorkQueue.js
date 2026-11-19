@@ -13,6 +13,7 @@
 
 const AbandonedCart = require('../models/AbandonedCart');
 const ho = require('./heuresOuvrees');
+const { cleJourParis } = require('./heureParis');
 const { computeWork, comparer, GROUPES, SOURCES_DEMANDE } = require('./leadWork');
 
 /**
@@ -156,6 +157,32 @@ function ordonner(items, cle, tri) {
   });
 }
 
+/**
+ * Quelle date découpe l'onglet en jours (« Aujourd’hui », « Hier »,
+ * « Samedi 28 novembre ») :
+ *  - 'demande' quand la liste suit la date de la demande — « Non traités »
+ *    toujours, les autres onglets triés par plus récentes / plus anciennes ;
+ *  - 'rdv' pour « Planifiés » dans son ordre à lui, celui des rendez-vous ;
+ *  - '' sinon : rangée par urgence, la liste n'a pas d'ordre de jours.
+ */
+function parJourDe(cle, tri) {
+  if (cle === 'non_traites' || ORDRES.includes(tri)) return 'demande';
+  if (cle === 'plus_tard') return 'rdv';
+  return '';
+}
+
+/** Nombre de dossiers par jour de Paris, sur TOUT l'onglet (pas la page). */
+function compterJours(items, mode) {
+  const jours = {};
+  if (!mode) return jours;
+  items.forEach((x) => {
+    const d = mode === 'rdv' ? x.work.dueAt : x.work.receivedAt;
+    const k = d ? cleJourParis(d) : '';
+    jours[k] = (jours[k] || 0) + 1;
+  });
+  return jours;
+}
+
 function mediane(arr) {
   if (!arr.length) return null;
   const s = arr.slice().sort((a, b) => a - b);
@@ -271,9 +298,12 @@ async function chargerFile(opts = {}) {
   const groupes = GROUPES.map((g) => {
     const items = ordonner(filtres.filter((x) => x.work.group === g.key), g.key, tri[g.key]);
     const toutVoir = opts.voir === g.key;
+    const parJour = parJourDe(g.key, tri[g.key]);
     return Object.assign({}, g, {
       /* L'ordre choisi pour cet onglet ('' = son ordre de travail). */
       tri: tri[g.key] || '',
+      parJour,
+      jours: compterJours(items, parJour),
       count: items.length,
       items: toutVoir ? items.slice(0, 300) : items.slice(0, PAR_GROUPE),
       reste: toutVoir ? Math.max(0, items.length - 300) : Math.max(0, items.length - PAR_GROUPE),
@@ -304,4 +334,4 @@ async function chargerFile(opts = {}) {
   };
 }
 
-module.exports = { chargerFile, ordonner, lireTri, ecrireTri, categorie, filtreBase, PAR_GROUPE };
+module.exports = { chargerFile, ordonner, lireTri, ecrireTri, parJourDe, compterJours, categorie, filtreBase, PAR_GROUPE };

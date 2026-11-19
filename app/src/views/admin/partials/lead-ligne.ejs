@@ -36,6 +36,10 @@
   var coin = rdv ? c.urgenceCourte : c.recuCourt;
   var coinTitre = rdv ? 'Rendez-vous prévu'
     : (c.recuExact ? (faible ? 'Dernière visite le ' : 'Demande reçue le ') + c.recuExact : '');
+  /* Sous un intertitre de jour (« Hier », « Samedi 28 novembre »), le coin
+     ne garde que l'heure : le jour est déjà écrit au-dessus. */
+  if (locals.jour === 'demande' && c.recuHeure) coin = c.recuHeure;
+  if (locals.jour === 'rdv' && rdv && c.prevuHeure) { coin = c.prevuHeure; coinTitre = ('Rendez-vous prévu ' + (c.prevu || '')).trim(); }
 
   var meta = [];
   if (ferme) meta.push(w.stageLabel);
