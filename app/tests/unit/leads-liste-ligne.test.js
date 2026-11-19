@@ -116,10 +116,12 @@ test('les repères de l’horloge sont posés sur la ligne et sur la fiche', () 
   const ligne = rendre('lead-ligne', c);
   assert.ok(ligne.includes('data-attente="' + c.attenteMin + '"'));
   assert.ok(/data-due="20\d\d-/.test(ligne), 'l’échéance est transmise au navigateur');
-  assert.ok(ligne.includes('data-role="urgence"') && ligne.includes('data-role="barre"'));
+  assert.ok(ligne.includes('data-role="barre"'), 'la barre que l’horloge recolore');
+  /* Plus de compte à rebours (20/11/2026) : rien à réécrire. */
+  assert.ok(!ligne.includes('data-role="urgence"'));
 
   const fiche = rendre('lead-fiche', c);
-  assert.ok(fiche.includes('data-role="urgence-longue"'));
+  assert.ok(!fiche.includes('data-role="urgence-longue"'));
   assert.ok(fiche.includes('data-role="attente-longue"'));
 });
 

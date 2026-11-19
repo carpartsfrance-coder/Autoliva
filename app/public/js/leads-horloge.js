@@ -1,12 +1,15 @@
 /**
  * Horloge de la file des leads (/admin/activite-panier).
  *
- * Les libellés « Retard 2 h » et « attend 2 h 10 » sont calculés par le
- * serveur à l'affichage de la page. Un commercial laisse cette page ouverte
- * toute la matinée : au bout d'une heure, « Retard 2 h » en affichait encore
- * 2 alors qu'il y en avait 3, et une ligne dont l'heure venait de passer
- * restait bleue. Ce fichier remet ces libellés à l'heure toutes les 30
- * secondes.
+ * « attend 2 h 10 » est calculé par le serveur à l'affichage de la page. Un
+ * commercial laisse cette page ouverte toute la matinée : au bout d'une
+ * heure le chiffre était faux, et une ligne dont l'heure venait de passer
+ * gardait sa couleur. Ce fichier remet l'attente à l'heure et recolore la
+ * barre toutes les 30 secondes.
+ *
+ * Les comptes à rebours (« Retard 9 min », « avant 14:00 ») ont été retirés
+ * le 20/11/2026 : le patron les trouvait polluants. Leurs miroirs navigateur
+ * sont partis avec eux.
  *
  * Il ne refait PAS le calendrier : les week-ends, les jours fériés et les
  * changements d'heure restent l'affaire du serveur, qui envoie la fenêtre
@@ -62,55 +65,10 @@
     return j + ' j ouvré' + (j > 1 ? 's' : '');
   }
 
-  /** « Retard 25 min », « Retard 2 h », « Retard 3 j » — miroir de leadWork.libelleUrgenceCourt. */
-  function retardCourt(minutes) {
-    var m = Math.max(0, Math.round(Number(minutes) || 0));
-    if (m < 60) return 'Retard ' + Math.max(1, m) + ' min';
-    if (m < MIN_JOUR_OUVRE) return 'Retard ' + Math.round(m / 60) + ' h';
-    return 'Retard ' + Math.round(m / MIN_JOUR_OUVRE) + ' j';
-  }
-
-  /** « 45 min », « 3 h », « 4 jours ouvrés » — miroir de leadWork.duree. */
-  function duree(minutes, court) {
-    var m = Math.max(1, Math.round(Number(minutes) || 0));
-    if (m < 60) return m + ' min';
-    if (m < MIN_JOUR_OUVRE) return Math.round(m / 60) + ' h';
-    var j = Math.round(m / MIN_JOUR_OUVRE);
-    return court ? j + ' j' : j + ' jour' + (j > 1 ? 's' : '') + ' ouvré' + (j > 1 ? 's' : '');
-  }
-
-  /* Une échéance que personne n'a promise ne dit jamais « en retard » : elle
-     dit depuis combien de temps le client n'a plus de nouvelles. */
-
-  /** « Relancer · 4 j », « Devis · 2 j » — miroir de leadWork.libelleUrgenceCourt. */
-  function relanceCourt(minutes, devis) {
-    return (devis ? 'Devis' : 'Relancer') + ' · ' + duree(minutes, true);
-  }
-
-  /** « À relancer — sans nouvelles depuis 4 jours ouvrés » — miroir de leadWork.libelleUrgence. */
-  function relanceLong(minutes, devis, surEcheance) {
-    return (devis ? 'Devis à préparer' : 'À relancer')
-      + (surEcheance ? ' — échéance dépassée de ' : ' — sans nouvelles depuis ') + duree(minutes, false);
-  }
-
-  /** « En retard de 2 h », « En retard de 3 jours ouvrés » — miroir de leadWork.libelleUrgence. */
-  function retardLong(minutes) {
-    var m = Math.max(0, Math.round(Number(minutes) || 0));
-    if (m < 60) return 'En retard de ' + Math.max(1, m) + ' min';
-    if (m < MIN_JOUR_OUVRE) return 'En retard de ' + Math.round(m / 60) + ' h';
-    var j = Math.round(m / MIN_JOUR_OUVRE);
-    return 'En retard de ' + j + ' jour' + (j > 1 ? 's' : '') + ' ouvré' + (j > 1 ? 's' : '');
-  }
-
   return {
     preparer: preparer,
-    retardLong: retardLong,
     minutesOuvrees: minutesOuvrees,
     dureeOuvree: dureeOuvree,
-    retardCourt: retardCourt,
-    duree: duree,
-    relanceCourt: relanceCourt,
-    relanceLong: relanceLong,
     MIN_JOUR_OUVRE: MIN_JOUR_OUVRE,
   };
 }));

@@ -81,6 +81,27 @@ function arriveeLongue(date, now = new Date()) {
   return `${FMT_DATE_EXACTE.format(d)} à ${heure}`;
 }
 
+/**
+ * L'heure d'un rendez-vous POSÉ par quelqu'un, dite comme une date et non
+ * comme un compte à rebours : « aujourd'hui à 14:00 », « demain à 09:30 »,
+ * « jeudi 26 nov. à 09:30 ».
+ *
+ * Le patron ne voulait plus lire « en retard de 9 min » ni « avant 14:00 »
+ * partout (20/11/2026) : ces libellés changeaient chaque minute et
+ * polluaient la liste. Seule reste l'heure d'un rendez-vous que quelqu'un a
+ * fixé — c'est un fait, pas une alarme.
+ */
+function prevuLe(date, now = new Date()) {
+  const d = versDate(date);
+  if (!d) return '';
+  const heure = FMT_HEURE.format(d);
+  const cle = cleJourParis(d);
+  if (cle === cleJourParis(now)) return `aujourd’hui à ${heure}`;
+  if (cle === cleJourParis(minuitParis(now, 1))) return `demain à ${heure}`;
+  if (FMT_ANNEE.format(d) === FMT_ANNEE.format(now)) return `${FMT_JOUR_LONG.format(d)} à ${heure}`;
+  return `${FMT_DATE_EXACTE.format(d)} à ${heure}`;
+}
+
 /** Date complète pour l'infobulle : « 17/11/2026 à 09:12 » (heure de Paris). */
 function arriveeExacte(date) {
   const d = versDate(date);
@@ -146,6 +167,7 @@ function fenetreOuvree(now = new Date(), jours = 4) {
 }
 
 module.exports = {
+  prevuLe,
   arriveeCourte,
   arriveeLongue,
   arriveeExacte,

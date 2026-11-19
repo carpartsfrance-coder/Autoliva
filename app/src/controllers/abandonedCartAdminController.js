@@ -35,7 +35,7 @@ const brand = require('../config/brand');
 const { computeWork, duree, libelleUrgence, libelleUrgenceCourt, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
 const { chargerFile } = require('../services/leadWorkQueue');
 const { resumeDemande } = require('../services/leadResume');
-const { infosHeure, fenetreOuvree, arriveeExacte, dureeOuvree } = require('../services/leadHeure');
+const { infosHeure, fenetreOuvree, arriveeExacte, dureeOuvree, prevuLe } = require('../services/leadHeure');
 
 function escapeHtml(value) {
   return String(value || '')
@@ -316,6 +316,10 @@ function toCardModel(c, now = new Date()) {
     work,
     urgence: libelleUrgence(work, now),
     urgenceCourte: libelleUrgenceCourt(work, now),
+    /* Seule indication horaire gardée sur la page : l'heure d'un rendez-vous
+       que quelqu'un a POSÉ et qui n'est pas encore passé. Les comptes à
+       rebours (« en retard de 9 min », « avant 14:00 ») ne s'affichent plus. */
+    prevu: work.dueSource === 'planifiee' && !work.overdue && work.dueAt ? prevuLe(work.dueAt, now) : '',
     /* Le client nous a écrit et attend une réponse : le signal le plus chaud
        de la file. Son message vient du journal des communications. */
     aRepondu: !!work.aRepondu,

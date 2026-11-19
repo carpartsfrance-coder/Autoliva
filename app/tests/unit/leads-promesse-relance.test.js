@@ -120,15 +120,17 @@ test('le client qui a répondu passe devant, échéance ou pas', () => {
 test('la ligne d’une relance est ambre, pas rouge', () => {
   const c = toCardModel(dejaAppele(), MARDI_10H);
   const html = rendre('lead-ligne', c);
-  assert.ok(html.includes('text-amber-700'), 'le libellé d’urgence doit être ambre');
-  assert.ok(!html.includes('text-red-600'), 'aucun rouge sur une relance que personne n’a promise');
+  /* C'est la barre qui porte la couleur : les libellés de compte à rebours
+     ont été retirés le 20/11/2026. */
+  assert.ok(html.includes('bg-amber-400'), 'la barre d’une relance est ambre');
+  assert.ok(!html.includes('bg-red-500'), 'aucun rouge sur une relance que personne n’a promise');
   assert.ok(html.includes('data-promesse="0"'), 'l’horloge du navigateur doit savoir que ce n’est pas une promesse');
 
   const promis = toCardModel(dejaAppele({
     nextAction: { type: 'callback', dueAt: new Date(MARDI_10H.getTime() - 2 * H) },
   }), MARDI_10H);
   const rouge = rendre('lead-ligne', promis);
-  assert.ok(rouge.includes('text-red-600'), 'une heure promise et passée, elle, reste rouge');
+  assert.ok(rouge.includes('bg-red-500'), 'une heure promise et passée, elle, reste rouge');
   assert.ok(rouge.includes('data-promesse="1"'));
 });
 

@@ -18,7 +18,6 @@
     : (w.overdue && w.promesse) ? 'red'
     : w.stage === 'nouveau' ? 'blue'
     : (w.overdue || w.group === 'rappels' || w.group === 'devis' || w.group === 'relances') ? 'amber' : 'slate';
-  var couleurUrgence = { red: 'text-red-600', blue: 'text-blue-700', amber: 'text-amber-700', green: 'text-green-700', slate: 'text-slate-500' }[ton];
   var barre = { red: 'bg-red-500', blue: 'bg-blue-500', amber: 'bg-amber-400', green: 'bg-green-500', slate: 'bg-slate-300' }[ton];
   var nom = c.fullName || c.email || c.phone || 'Client sans nom';
   var d = c.demande || {};
@@ -56,8 +55,7 @@
   <button type="button" class="lead-ligne relative w-full text-left pl-4 pr-3 py-2.5 border-b border-slate-100 hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50"
           data-lead-id="<%= c.id %>" aria-selected="false"
           data-due="<%= c.dueIso || '' %>" data-retard="<%= c.retardMin || 0 %>" data-attente="<%= c.attenteMin >= 0 ? c.attenteMin : -1 %>"
-          data-promesse="<%= w.promesse ? 1 : 0 %>" data-repondu="<%= c.aRepondu ? 1 : 0 %>" data-devis="<%= w.stage === 'devis_a_faire' ? 1 : 0 %>"
-          data-sansnouvelles="<%= c.suivi && c.suivi.sansNouvellesMin >= 0 ? c.suivi.sansNouvellesMin : -1 %>">
+          data-promesse="<%= w.promesse ? 1 : 0 %>" data-repondu="<%= c.aRepondu ? 1 : 0 %>">
     <span class="absolute left-0 top-2 bottom-2 w-1 rounded-r <%= barre %>" data-role="barre" aria-hidden="true"></span>
     <%/* Case de sélection : visible seulement en mode « Sélectionner ». */%>
     <%/* Placement dans la feuille de style de la page, pas en classes
@@ -67,8 +65,13 @@
     </span>
     <span class="flex items-baseline justify-between gap-2">
       <span class="lead-ligne-nom truncate text-sm font-semibold text-slate-900"><%= nom %></span>
-      <% if (c.urgenceCourte && !ferme && !faible) { %>
-        <span class="shrink-0 text-[11px] font-bold <%= couleurUrgence %>" data-role="urgence"><%= c.urgenceCourte %></span>
+      <%/* Plus de compte à rebours ici (« Retard 9 min », « Avant 14:00 »,
+            « Relancer · 3 j ») : répété sur chaque ligne, il polluait la
+            liste, et la couleur de la barre dit déjà l'urgence. Seule
+            exception, la date d'un rendez-vous fixé un autre jour : dans
+            « Planifiés », c'est l'information qu'on vient chercher. */%>
+      <% if (w.group === 'plus_tard' && c.urgenceCourte && !ferme && !faible) { %>
+        <span class="shrink-0 text-[11px] font-semibold text-slate-500"><%= c.urgenceCourte %></span>
       <% } %>
     </span>
     <% if (quoi || c.prixAffiche) { %>
