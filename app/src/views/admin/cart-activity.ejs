@@ -19,14 +19,13 @@
     .file-split .seul-mobile { display: none !important; }
     .file-split .groupe-entete { position: sticky; top: 0; }
   }
-  .lead-ligne[aria-selected="true"] { background: #fef2f2; }
+  .lead-ligne[aria-selected="true"] { background: #f1f5f9; }
   /* Mode « Sélectionner » : la case prend la place du trait de couleur. */
   .lead-case { position: absolute; left: .5rem; top: .55rem; display: none; color: #cbd5e1; }
   .file-split[data-selection="1"] .lead-ligne { padding-left: 2.25rem; }
   .file-split[data-selection="1"] .lead-case { display: block; }
   .lead-ligne[aria-checked="true"] { background: #eff6ff; }
   .lead-ligne[aria-checked="true"] .lead-case { color: #2563eb; }
-  .lead-ligne[aria-selected="true"] .lead-ligne-nom { color: #b91c1c; }
   .fiche-onglet[aria-selected="true"] { border-color: #0f172a; color: #0f172a; }
   .lead-menu > summary::-webkit-details-marker, .equipe-menu > summary::-webkit-details-marker { display: none; }
   /* Onglets de la file : huit groupes empilés faisaient une colonne de gauche
@@ -262,13 +261,13 @@
               <%/* Le sens du groupe, écrit en clair : l'info-bulle du titre
                     repliable ne se lisait qu'à la souris, et « En retard »
                     contre « À relancer » se joue justement sur ce mot. */%>
-              <div class="groupe-entete z-10 flex items-start gap-3 border-b border-slate-100 bg-slate-50/95 px-4 py-2 text-[11px] leading-snug text-slate-500">
-                <p class="min-w-0 flex-1"><%= g.hint %>.</p>
+              <div class="groupe-entete z-10 flex items-baseline gap-3 border-b border-slate-100 bg-white/95 px-3.5 py-2 text-xs text-slate-500">
+                <p class="min-w-0 flex-1 truncate" title="<%= g.hint %>."><%= g.court || g.hint %></p>
                 <% if (g.key === 'non_traites') { %>
                   <%/* Le patron voulait les plus fraîches en haut, sans perdre
                         la possibilité de repartir du fond de la pile. */%>
                   <% var qto = Object.assign({}, filtresEnCours); if (todoFilters.tri === 'ancien') { delete qto.tri; } else { qto.tri = 'ancien'; } var qst = new URLSearchParams(qto).toString(); %>
-                  <a href="/admin/activite-panier<%= qst ? '?' + qst : '' %>#groupe-non_traites" class="shrink-0 font-semibold text-primary hover:underline"
+                  <a href="/admin/activite-panier<%= qst ? '?' + qst : '' %>#groupe-non_traites" class="shrink-0 font-medium text-slate-700 hover:text-slate-900 hover:underline"
                      title="<%= todoFilters.tri === 'ancien' ? 'Revenir aux demandes les plus récentes en haut' : 'Repartir des demandes les plus anciennes' %>">
                     <%= todoFilters.tri === 'ancien' ? 'Plus anciennes ↑' : 'Plus récentes ↓' %>
                   </a>
@@ -542,91 +541,146 @@
       + (droite ? '<div class="text-xs text-slate-500">' + droite + '</div>' : '') + '</div>';
   }
 
-  function iconeNote(texte) {
-    var t = String(texte || '');
-    if (/^📞/.test(t)) return ['call', 'text-emerald-600'];
-    if (/^🗓/.test(t)) return ['event', 'text-slate-500'];
-    if (/^✅/.test(t)) return ['verified', 'text-green-600'];
-    if (/^✖/.test(t)) return ['block', 'text-slate-500'];
-    if (/^↩/.test(t)) return ['undo', 'text-slate-500'];
-    if (/pris en charge/i.test(t)) return ['pan_tool', 'text-slate-500'];
-    return ['sticky_note_2', 'text-amber-500'];
-  }
 
   /* Messages + notes sur UNE ligne du temps, la plus récente en haut. Les
      notes « Email envoyé… » doublonnent le journal des messages : on les saute. */
+  /* ══ Onglet « Suivi et notes » ══
+     Refait le 20/11/2026 dans le style de la fiche. Le champ de note passe EN
+     HAUT (c'est le geste qu'on fait après chaque appel ; il était sous tout
+     l'historique), et l'historique se lit comme un fil : groupé par jour, le
+     plus récent en haut, l'heure à droite. Les messages du client ressortent
+     en bleu ; envois automatiques, appels et notes restent en gris. */
+  var FMT_JOUR_CLE = new Intl.DateTimeFormat('fr-CA', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit' });
+  var FMT_JOUR_NOM = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', day: 'numeric', month: 'short' });
+  var FMT_JOUR_NOM_AN = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  var FMT_HEURE_PARIS = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+
+  /** Jour (heure de Paris) d'un ISO : clé de regroupement et intitulé. */
+  function jourDe(iso) {
+    var d = new Date(iso);
+    if (!iso || isNaN(d.getTime())) return { cle: '', nom: 'Date inconnue' };
+    var cle = FMT_JOUR_CLE.format(d);
+    var maintenant = new Date();
+    if (cle === FMT_JOUR_CLE.format(maintenant)) return { cle: cle, nom: 'Aujourd’hui' };
+    if (cle === FMT_JOUR_CLE.format(new Date(maintenant.getTime() - 86400000))) return { cle: cle, nom: 'Hier' };
+    var memeAnnee = cle.slice(0, 4) === FMT_JOUR_CLE.format(maintenant).slice(0, 4);
+    var nom = (memeAnnee ? FMT_JOUR_NOM : FMT_JOUR_NOM_AN).format(d);
+    return { cle: cle, nom: nom.charAt(0).toUpperCase() + nom.slice(1) };
+  }
+  function heureDe(iso) {
+    var d = new Date(iso);
+    return (!iso || isNaN(d.getTime())) ? '' : FMT_HEURE_PARIS.format(d);
+  }
+
+  /* Pastilles d'un événement : petites, et colorées seulement quand c'est une
+     information à ne pas rater (non délivré, envoi non confirmé…). */
+  function pastilleHisto(texte, ton, titre) {
+    var c = { rouge: 'bg-red-50 text-red-700', ambre: 'bg-amber-50 text-amber-800', gris: 'bg-slate-100 text-slate-600' }[ton] || 'bg-slate-100 text-slate-600';
+    return ' <span class="ml-1 rounded-full px-1.5 py-px text-[11px] font-normal ' + c + '"' + (titre ? ' title="' + escapeHtml(titre) + '"' : '') + '>' + texte + '</span>';
+  }
+
+  /* Ce que dit une note qui n'est pas une note libre (appel noté, suite
+     planifiée…), d'après le pictogramme posé par le serveur en tête du texte. */
+  function genreNote(texte) {
+    var t = String(texte || '');
+    if (/^📞/.test(t)) return { icone: 'call', genre: 'appel noté' };
+    if (/^🗓/.test(t)) return { icone: 'event', genre: 'suite planifiée' };
+    if (/^✅/.test(t)) return { icone: 'verified', genre: 'gagné' };
+    if (/^✖/.test(t)) return { icone: 'block', genre: 'perdu' };
+    if (/^↩/.test(t)) return { icone: 'undo', genre: 'rouvert' };
+    if (/pris en charge/i.test(t)) return { icone: 'pan_tool', genre: 'prise en charge' };
+    return { icone: 'sticky_note_2', genre: '' };
+  }
+
   function htmlSuivi(c) {
+    var comms = c.communications || [];
+    var aRecu = comms.some(function (m) { return m.entrant; });
     var items = [];
-    (c.communications || []).forEach(function (m) { items.push({ type: 'msg', iso: m.atIso || '', m: m }); });
+    comms.forEach(function (m) { items.push({ type: 'msg', iso: m.atIso || '', m: m }); });
     (c.notes || []).forEach(function (n) {
-      if (/^(📧 Email envoyé|📱 SMS envoyé|📲 WhatsApp ouvert)/.test(String(n.text || ''))) return;
+      var t = String(n.text || '');
+      /* Doublons du journal des messages : l'envoi est déjà au fil. */
+      if (/^(📧 Email envoyé|📱 SMS envoyé|📲 WhatsApp ouvert)/.test(t)) return;
+      /* Ringover écrit une note à chaque SMS reçu ; le SMS lui-même est déjà
+         au fil (et son contexte dans la fiche). Gardée seulement pour les
+         vieux dossiers dont le message n'a pas été journalisé. */
+      if (aRecu && /^R[ÉE]PONSE SMS du client/i.test(t)) return;
       items.push({ type: 'note', iso: n.addedAtIso || '', n: n });
     });
     items.sort(function (a, b) { return a.iso < b.iso ? 1 : a.iso > b.iso ? -1 : 0; });
 
+    var html = '<form data-role="note-form" class="mb-6">'
+      + '<textarea name="text" rows="2" maxlength="2000" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400" placeholder="Ajouter une note pour l’équipe : ce que le client a dit, la pièce, le prix évoqué…"></textarea>'
+      + '<div class="mt-2 flex flex-wrap items-center gap-3">'
+      + '<button type="submit" class="inline-flex min-h-[2.75rem] items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Enregistrer la note</button>'
+      + '<span class="text-xs text-slate-400">Le client ne voit pas les notes.</span>'
+      + '<span data-role="note-res" class="text-xs"></span></div></form>';
+
     var r = c.commResume || {};
-    var compteurs = [];
-    if (r.email) compteurs.push(r.email + ' email' + (r.email > 1 ? 's' : ''));
-    if (r.sms) compteurs.push(r.sms + ' SMS');
-    if (r.whatsapp) compteurs.push(r.whatsapp + ' WhatsApp');
-    var html = '<div class="space-y-4">';
-    html += '<div>' + titreBloc('Ce qui s’est passé (' + items.length + ')', escapeHtml(compteurs.join(' · ')));
     if (r.echecs) {
-      html += '<div class="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700"><strong>' + r.echecs + ' message' + (r.echecs > 1 ? 's' : '')
-        + ' non délivré' + (r.echecs > 1 ? 's' : '') + '</strong> : le client ne les a jamais reçus.</div>';
+      html += '<div class="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">' + r.echecs + ' message' + (r.echecs > 1 ? 's' : '')
+        + ' non délivré' + (r.echecs > 1 ? 's' : '') + ' : le client ne les a jamais reçus.</div>';
     }
-    if (!items.length) {
-      html += '<div class="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Rien pour l’instant : aucun message, aucune note.</div>';
-    } else {
-      html += '<ol class="relative space-y-0 border-l border-slate-200 ml-2">';
-      items.forEach(function (it) {
-        html += '<li class="relative pb-3 pl-5">';
-        if (it.type === 'msg') {
-          var m = it.m;
-          var entrant = !!m.entrant;
-          html += '<span class="material-symbols-outlined absolute -left-[11px] top-0 rounded-full bg-white text-[20px] ' + (m.echec ? 'text-red-500' : entrant ? 'text-emerald-600' : 'text-slate-400') + '">' + (ICONES_CANAL[m.canal] || 'mail') + '</span>';
-          html += '<div class="flex flex-wrap items-center gap-1.5">';
-          html += '<span class="text-xs font-semibold ' + (entrant ? 'text-emerald-700' : 'text-slate-700') + '">' + (entrant ? 'Reçu du client' : 'Envoyé') + ' · ' + escapeHtml(({ email: 'email', sms: 'SMS', whatsapp: 'WhatsApp', appel: 'appel' })[m.canal] || m.canal || '') + '</span>';
-          if (m.echec) html += '<span class="rounded bg-red-50 px-1.5 py-0.5 text-[11px] font-semibold text-red-700">Non délivré</span>';
-          if (m.auto && !entrant) html += '<span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">Automatique</span>';
-          if (m.reconstitue) html += '<span class="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700" title="Reconstitué depuis les anciennes traces : le texte exact n’a pas été gardé.">Reconstitué</span>';
-          if (m.meta && m.meta.envoiNonGaranti) html += '<span class="rounded bg-amber-50 px-1.5 py-0.5 text-[11px] text-amber-700" title="Ouvert dans WhatsApp depuis le poste du commercial : rien ne prouve que le message est parti.">Envoi non confirmé</span>';
-          html += '</div>';
-          if (m.objet) {
-            html += '<div class="text-sm font-semibold text-slate-900">' + escapeHtml(m.objet);
-            if (m.meta && m.meta.montant) html += ' <span class="font-normal text-slate-500">· ' + escapeHtml(String(Math.round(m.meta.montant)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')) + ' €</span>';
-            html += '</div>';
-          }
-          if (m.corps) {
-            var corps = String(m.corps);
-            if (corps.length > 280) {
-              html += '<details class="text-sm text-slate-700"><summary class="cursor-pointer list-none whitespace-pre-line">' + escapeHtml(corps.slice(0, 260)) + '… <span class="font-semibold text-primary">Lire la suite</span></summary>'
-                + '<div class="whitespace-pre-line">' + escapeHtml(corps.slice(260)) + '</div></details>';
-            } else {
-              html += '<div class="whitespace-pre-line text-sm text-slate-700">' + escapeHtml(corps) + '</div>';
-            }
-          }
-          if (m.echec && m.motif) html += '<div class="text-xs text-red-600">Motif : ' + escapeHtml(m.motif) + '</div>';
-          var pied = [m.par || (m.auto ? 'Système' : ''), m.at].filter(Boolean).join(' · ');
-          if (m.gabarit) pied += ' · modèle « ' + m.gabarit + ' »';
-          html += '<div class="text-xs text-slate-400">' + escapeHtml(pied) + '</div>';
-        } else {
-          var n = it.n;
-          var ic = iconeNote(n.text);
-          html += '<span class="material-symbols-outlined absolute -left-[11px] top-0 rounded-full bg-white text-[20px] ' + ic[1] + '">' + ic[0] + '</span>';
-          html += '<div class="whitespace-pre-line text-sm text-slate-800">' + escapeHtml(String(n.text || '').replace(/^(📞|🗓|✅|✖|↩)\s*/, '')) + '</div>';
-          html += '<div class="text-xs text-slate-400">' + escapeHtml((n.addedByName || 'Admin') + ' · ' + (n.addedAt || '')) + '</div>';
+    if (!items.length) return html + '<p class="text-sm text-slate-500">Rien pour l’instant : aucun message, aucune note.</p>';
+
+    var jourEnCours = null;
+    items.forEach(function (it) {
+      var jour = jourDe(it.iso);
+      if (!jourEnCours || jour.cle !== jourEnCours) {
+        if (jourEnCours !== null) html += '</ol></section>';
+        jourEnCours = jour.cle;
+        html += '<section class="mb-5"><h3 class="mb-3 text-xs font-medium text-slate-400">' + escapeHtml(jour.nom) + '</h3><ol class="space-y-4">';
+      }
+
+      var icone, rond, titre, corps = '', pied = '';
+      if (it.type === 'msg') {
+        var m = it.m;
+        var canal = ({ email: 'Email', sms: 'SMS', whatsapp: 'WhatsApp', appel: 'Appel' })[m.canal] || (m.canal || 'Message');
+        icone = ICONES_CANAL[m.canal] || 'mail';
+        rond = m.echec ? 'bg-red-50 text-red-600' : m.entrant ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500';
+        titre = m.entrant ? (m.canal === 'appel' ? 'Appel du client' : canal + ' reçu du client')
+          : (m.canal === 'appel' ? 'Appel' : m.canal === 'whatsapp' ? 'Message WhatsApp' : canal + ' envoyé');
+        titre = escapeHtml(titre);
+        if (m.auto && !m.entrant) titre += ' <span class="font-normal text-slate-400">· automatique</span>';
+        if (m.echec) titre += pastilleHisto('Non délivré', 'rouge');
+        if (m.reconstitue) titre += pastilleHisto('Reconstitué', 'ambre', 'Reconstitué depuis les anciennes traces : le texte exact n’a pas été gardé.');
+        if (m.meta && m.meta.envoiNonGaranti) titre += pastilleHisto('Envoi non confirmé', 'ambre', 'Ouvert dans WhatsApp depuis le poste du commercial : rien ne prouve que le message est parti.');
+        if (m.objet) {
+          corps += '<div class="text-sm text-slate-800">' + escapeHtml(m.objet);
+          if (m.meta && m.meta.montant) corps += ' <span class="text-slate-500">· ' + escapeHtml(String(Math.round(m.meta.montant)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')) + ' €</span>';
+          corps += '</div>';
         }
-        html += '</li>';
-      });
-      html += '</ol>';
-    }
-    html += '</div>';
-    html += '<form data-role="note-form" class="rounded-xl border border-slate-200 bg-slate-50/60 p-3">'
-      + '<label class="mb-1 block text-[11px] font-bold uppercase tracking-widest text-slate-400">Note interne</label>'
-      + '<textarea name="text" rows="2" maxlength="2000" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" placeholder="Ce que le client a dit, la pièce, le prix évoqué… (le client ne la voit pas)"></textarea>'
-      + '<div class="mt-2 flex items-center gap-3"><button type="submit" class="btn btn-primary text-xs">Ajouter la note</button><span data-role="note-res" class="text-xs"></span></div></form>';
-    html += '</div>';
+        if (m.corps) {
+          var texte = String(m.corps);
+          if (texte.length > 280) {
+            corps += '<details class="text-sm leading-relaxed text-slate-600"><summary class="cursor-pointer list-none whitespace-pre-line">' + escapeHtml(texte.slice(0, 260)) + '… <span class="font-medium text-slate-800 underline decoration-slate-300 underline-offset-2">Lire la suite</span></summary>'
+              + '<div class="whitespace-pre-line">' + escapeHtml(texte.slice(260)) + '</div></details>';
+          } else {
+            corps += '<div class="whitespace-pre-line text-sm leading-relaxed text-slate-600">' + escapeHtml(texte) + '</div>';
+          }
+        }
+        if (m.echec && m.motif) corps += '<div class="text-xs text-red-600">Motif : ' + escapeHtml(m.motif) + '</div>';
+        var auteur = m.entrant ? '' : (m.par || (m.auto ? 'Système' : ''));
+        pied = [auteur, m.gabarit ? 'modèle « ' + m.gabarit + ' »' : ''].filter(Boolean).join(' · ');
+      } else {
+        var n = it.n;
+        var g = genreNote(n.text);
+        icone = g.icone;
+        rond = g.icone === 'verified' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500';
+        titre = escapeHtml(n.addedByName || 'Admin') + (g.genre ? ' <span class="font-normal text-slate-400">· ' + g.genre + '</span>' : '');
+        corps = '<div class="whitespace-pre-line text-sm leading-relaxed text-slate-600">' + escapeHtml(String(n.text || '').replace(/^(📞|🗓|✅|✖|↩)\s*/, '')) + '</div>';
+      }
+
+      html += '<li class="grid gap-x-3" style="grid-template-columns: 1.75rem minmax(0, 1fr);">'
+        + '<span class="flex h-7 w-7 items-center justify-center rounded-full ' + rond + '"><span class="material-symbols-outlined text-[16px]">' + icone + '</span></span>'
+        + '<div class="min-w-0">'
+        + '<div class="flex items-baseline gap-2 text-sm"><span class="min-w-0 flex-1 font-medium text-slate-900">' + titre + '</span>'
+        + '<span class="shrink-0 text-xs text-slate-400" title="' + escapeHtml((it.type === 'msg' ? it.m.at : it.n.addedAt) || '') + '">' + heureDe(it.iso) + '</span></div>'
+        + (corps ? '<div class="mt-0.5">' + corps + '</div>' : '')
+        + (pied ? '<div class="mt-0.5 text-xs text-slate-400">' + escapeHtml(pied) + '</div>' : '')
+        + '</div></li>';
+    });
+    html += '</ol></section>';
     return html;
   }
 
@@ -2155,12 +2209,13 @@
     lotMajCompte();
   })();
 
-  /* ══ Horloge : l'attente et les couleurs restent justes sans recharger ══
-     « attend 2 h 10 » est écrit par le serveur au moment du rendu. Un
-     commercial garde cet écran ouvert toute la matinée : au bout d'une heure
-     le chiffre était faux, et une ligne dont l'heure venait de passer gardait
-     sa couleur. On ne recalcule ici que le temps écoulé dans les plages
-     d'ouverture envoyées par le serveur. */
+  /* ══ Horloge : les couleurs restent justes sans recharger ══
+     Un commercial garde cet écran ouvert toute la matinée : une ligne dont
+     l'heure venait de passer gardait sa couleur du rendu. Toutes les 30 s, on
+     recolore le point des lignes dont l'échéance est passée. Plus aucun texte
+     n'est réécrit (comptes à rebours et « attend 2 h 10 » retirés les 19 et
+     20/11/2026). Le temps écoulé se compte dans les plages d'ouverture
+     envoyées par le serveur. */
   (function horloge() {
     var H = window.LeadsHorloge;
     if (!H || !HORLOGE || !HORLOGE.nowIso) return;
@@ -2180,7 +2235,6 @@
     function majBloc(el, ecoule, maintenant) {
       var due = el.getAttribute('data-due');
       var retardRendu = Number(el.getAttribute('data-retard')) || 0;
-      var attenteRendu = Number(el.getAttribute('data-attente'));
       var promesse = el.getAttribute('data-promesse') === '1';
 
       /* Retard : celui du rendu qui grandit, ou celui d'une échéance qui vient
@@ -2195,17 +2249,6 @@
         rougir(el.querySelector('[data-role="barre"]'), TONS_BARRE, promesse ? 'bg-red-500' : 'bg-amber-400');
       }
 
-      /* Attente d'une demande que personne n'a prise : rouge passé l'heure. */
-      if (attenteRendu >= 0) {
-        var attente = attenteRendu + ecoule;
-        var libelle = H.dureeOuvree(attente);
-        var ligne = el.querySelector('[data-role="attente"]');
-        if (ligne) {
-          ligne.textContent = 'attend ' + libelle;
-          ligne.title = 'Personne n’a encore appelé ni écrit : ' + libelle + ' d’attente en heures d’ouverture.';
-          if (attente >= 60) rougir(ligne, ['text-slate-500'], 'text-red-600');
-        }
-      }
     }
 
     function tic() {

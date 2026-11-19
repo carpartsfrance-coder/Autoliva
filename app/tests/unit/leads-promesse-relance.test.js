@@ -152,14 +152,15 @@ test('la ligne dit qu’on a DÉJÀ contacté ce client, et depuis quand il atte
   assert.ok(!html.includes('attend '), '« attend » ne concerne que les demandes que personne n’a prises');
 });
 
-test('une demande que personne n’a prise dit « attend », pas « contacté »', () => {
+test('une demande que personne n’a prise ne dit pas « contacté »', () => {
   const c = toCardModel({
     _id: '6afc7c9fd251d246e160832c', captureSource: 'devis', phone: '0612345678',
     abandonedAt: new Date('2026-11-17T08:12:00Z'), createdAt: new Date('2026-11-17T08:12:00Z'),
   }, MARDI_10H);
   assert.equal(c.suivi, null);
   const html = rendre('lead-ligne', c);
-  assert.ok(html.includes('attend 48 min'));
+  assert.ok(html.includes('>09:12<'), 'l’heure d’arrivée, depuis que « attend 48 min » a été retiré');
+  assert.ok(html.includes('non attribuée'));
   assert.ok(!html.includes('contacté'));
 });
 
