@@ -131,6 +131,23 @@ async function postPrendre(req, res, next) {
  * « J'ai appelé » ne peut PAS être enregistré sans résultat ni suite : c'est
  * ce qui empêchait le suivi (« Contacté » faisait sortir le client de la file).
  */
+/**
+ * « Devis envoyé » : une action FAITE, pas une action à venir.
+ *
+ * Le commercial envoie le devis dans la foulée de l'appel. La fenêtre
+ * « Noter l'appel » l'obligeait à choisir une heure pour « Préparer le
+ * devis » — une heure inventée, pour un travail déjà fait, qui faisait
+ * remonter le dossier en rouge l'après-midi même.
+ *
+ * Ce qui suit un devis, c'est sa relance ; sa date se DÉDUIT (3 jours ouvrés
+ * après l'envoi, en ambre), elle ne se promet pas. On pose donc l'intention
+ * sans date : `computeWork` reprend la main.
+ */
+const DEVIS_ENVOYE = 'devis_envoye';
+function actionApresDevis(moi, now, note) {
+  return { type: 'follow_quote', dueAt: null, note, setByName: moi.court, setAt: now };
+}
+
 async function postAppel(req, res, next) {
   try {
     const id = idValide(req, res);
@@ -158,9 +175,10 @@ async function postAppel(req, res, next) {
     }
 
     const perdu = suite === 'perdu';
+    const devisEnvoye = suite === DEVIS_ENVOYE;
     if (perdu && !MOTIFS_PERTE[b.motif]) return res.status(400).json({ ok: false, error: 'Choisis le motif de perte.' });
-    if (!perdu && !TYPES_ACTION[suite]) return res.status(400).json({ ok: false, error: 'Choisis la suite à donner.' });
-    if (!perdu && !quand) return res.status(400).json({ ok: false, error: 'Choisis quand faire la suite.' });
+    if (!perdu && !devisEnvoye && !TYPES_ACTION[suite]) return res.status(400).json({ ok: false, error: 'Choisis la suite à donner.' });
+    if (!perdu && !devisEnvoye && !quand) return res.status(400).json({ ok: false, error: 'Choisis quand faire la suite.' });
 
     const lead = await AbandonedCart.findById(id).select('_id manualStatus takenByName captureSource engineQuote.status').lean();
     if (!lead) return res.status(404).json({ ok: false, error: 'Dossier introuvable.' });
@@ -194,6 +212,9 @@ async function postAppel(req, res, next) {
         set['engineQuote.status'] = 'lost';
       }
       texte += ` → Perdu (${MOTIFS_PERTE[b.motif]})`;
+    } else if (devisEnvoye) {
+      set.nextAction = actionApresDevis(moi, now, note);
+      texte += ' → Devis envoyé — relance proposée dans 3 jours ouvrés';
     } else {
       set.nextAction = { type: suite, dueAt: quand, note, setByName: moi.court, setAt: now };
       texte += ` → ${TYPES_ACTION[suite]} ${fmtQuand(quand)}`;
@@ -217,19 +238,22 @@ async function postProchaineAction(req, res, next) {
     if (!id) return undefined;
     const b = req.body || {};
     const type = String(b.type || '');
-    if (!TYPES_ACTION[type]) return res.status(400).json({ ok: false, error: 'Choisis l’action à faire.' });
+    const devisEnvoye = type === DEVIS_ENVOYE;
+    if (!devisEnvoye && !TYPES_ACTION[type]) return res.status(400).json({ ok: false, error: 'Choisis l’action à faire.' });
     const now = new Date();
-    const quand = echeance(b.quand, now);
-    if (!quand) return res.status(400).json({ ok: false, error: 'Choisis quand (date à venir).' });
+    const quand = devisEnvoye ? null : echeance(b.quand, now);
+    if (!devisEnvoye && !quand) return res.status(400).json({ ok: false, error: 'Choisis quand (date à venir).' });
     const note = String(b.note || '').trim().slice(0, 1000);
     const moi = admin(req);
 
     const lead = await AbandonedCart.findById(id).select('_id takenByName').lean();
     if (!lead) return res.status(404).json({ ok: false, error: 'Dossier introuvable.' });
-    const set = { nextAction: { type, dueAt: quand, note, setByName: moi.court, setAt: now } };
+    const set = { nextAction: devisEnvoye ? actionApresDevis(moi, now, note) : { type, dueAt: quand, note, setByName: moi.court, setAt: now } };
     if (!lead.takenByName) { set.takenBy = moi.id; set.takenByName = moi.court; set.takenAt = now; }
 
-    const texte = `🗓 Prochaine action : ${TYPES_ACTION[type]} — ${fmtQuand(quand)}${note ? ' — ' + note : ''}`;
+    const texte = devisEnvoye
+      ? `🗓 Devis envoyé — relance proposée dans 3 jours ouvrés${note ? ' — ' + note : ''}`
+      : `🗓 Prochaine action : ${TYPES_ACTION[type]} — ${fmtQuand(quand)}${note ? ' — ' + note : ''}`;
     await AbandonedCart.updateOne({ _id: id }, {
       $set: set,
       $push: { notes: { text: texte, addedBy: moi.id, addedByName: moi.nom, addedAt: now } },
@@ -416,4 +440,4 @@ async function postLot(req, res, next) {
   }
 }
 
-module.exports = { postPrendre, postAppel, postProchaineAction, postCloturer, getNouveautes, postLot, echeance, LOT_MAX };
+module.exports = { postPrendre, postAppel, postProchaineAction, postCloturer, getNouveautes, postLot, echeance, actionApresDevis, DEVIS_ENVOYE, LOT_MAX };
