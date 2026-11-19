@@ -1,6 +1,6 @@
 # Connecteur MCP — Car Parts France / Autoliva
 
-Serveur MCP (Model Context Protocol) qui expose à un client MCP comme Claude les données business du site **et, depuis octobre 2026, le SAV et les commandes**. Lecture seule, monté sur le même Express que le site, partage la connexion Mongo.
+Serveur MCP (Model Context Protocol) qui expose à un client MCP comme Claude les données business du site, **depuis octobre 2026 le SAV et les commandes, et depuis le 19/11/2026 les leads**. Lecture seule, sauf deux écritures internes sur les leads (une note, la prochaine action). Monté sur le même Express que le site, partage la connexion Mongo.
 
 ## Endpoint
 
@@ -48,6 +48,24 @@ Ce que ces outils ne font **pas** :
 - ⚠ Les **textes libres** sont rendus tels quels : messages des clients et de l'équipe, notes internes des tickets, note interne de la commande, notes d'approvisionnement, d'envoi et de statut. Ce que quelqu'un y a tapé (un numéro de téléphone, un prix d'achat) sortira donc.
 - `getSavAttachment` ne sert que les fichiers **rattachés au ticket nommé** dans l'appel : jamais un fichier d'un autre ticket ni un fichier interne (procédures, devis moteur).
 - Le **texte d'un PDF n'est jamais lu**. Un PDF généré par un logiciel (facture, devis) est annoncé illisible, logo compris : l'outil ne rend rien. Seules les pages scannées en JPEG sont rendues ; pour un PDF mixte, le champ `warning` dit ce qui n'est pas montré. Les scans noir et blanc (CCITT, JBIG2) ne sont pas rendus non plus. Lire ces documents demanderait un moteur de rendu PDF, donc une dépendance de plus.
+
+### Leads (19/11/2026)
+
+Demande de Killian : traiter les leads par le connecteur plutôt qu'en pilotant le back-office dans un navigateur.
+
+| Outil | Question type | Écrit ? |
+|---|---|---|
+| `listLeads` | « qu'y a-t-il à traiter ? » : la file « À traiter », onglet par onglet (mêmes onglets, même ordre, mêmes compteurs que le back-office, dont « Attente fournisseur » et « À valider ») ; ou `search` : « ce client a-t-il déjà été traité ? » par plaque (toutes écritures, notes comprises), VIN, e-mail, nom, pièce, référence, n° de commande | non |
+| `getLead` | « où en est ce dossier ? » : demande, étape, prochaine action, toutes les notes, journal des messages, dossier devis | non |
+| `addLeadNote` | « note que la demande de prix est partie » : note interne signée « Claude (connecteur) » | **oui** (note) |
+| `setLeadNextAction` | « passe-le en attente fournisseur / à valider / devis envoyé » : comme le bouton « Planifier » (même contrôle, même note dans l'historique) | **oui** (prochaine action) |
+
+Ce que les outils leads ne font **pas** :
+
+- **Rien n'est envoyé au client** : pas d'e-mail, pas de SMS, pas de WhatsApp. Ces envois restent dans le back-office.
+- Ne gagnent ni ne perdent un dossier, n'attribuent pas un dossier (il reste à celui qui le suit), et `setLeadNextAction` refuse un dossier gagné ou perdu.
+- **Pas de numéro de téléphone** dans les réponses (`has_phone`, `can_call` seulement).
+- Les mails envoyés directement depuis la boîte contact@autoliva.com (hors back-office) ne sont pas dans le journal du lead : les chercher dans la boîte avant de redemander un prix.
 
 #### Fichiers piégés
 
@@ -103,7 +121,7 @@ curl -s -X POST http://localhost:3000/mcp \
 
 ## Sécurité
 
-- Lecture seule : aucun outil n'écrit en base.
+- Lecture seule, sauf `addLeadNote` et `setLeadNextAction`, qui n'écrivent que dans la fiche du lead (note interne, prochaine action) et jamais vers le client. Leurs annotations MCP (`readOnlyHint: false`) le disent au client.
 - Depuis l'ajout du SAV, le jeton donne accès à des **données personnelles de clients** (noms, e-mails, messages, pièces jointes). Le garder secret compte davantage qu'avant : préférer la connexion OAuth ou l'en-tête `Authorization` à la variante « jeton dans l'URL » (`/mcp/<token>`), qui laisse le jeton dans les journaux d'accès.
 - Auth Bearer obligatoire, fail closed si le token n'est pas configuré.
 - Pas de session MCP. Les autorisations OAuth données à Claude (codes, jetons d'accès et de rafraîchissement) sont gardées dans MongoDB (modèle `McpOAuthToken`), sous forme d'empreinte SHA-256 seulement, avec expiration automatique : elles survivent aux redéploiements. Si la base ne répond pas, le connecteur répond 503 (réessayer), pas 401.
@@ -122,8 +140,13 @@ app/src/mcp/
 │   ├── listSavTickets.js  # file SAV — réutilise services/savAgentService.js
 │   ├── getSavTicket.js    # dossier complet + résumé de la commande liée
 │   ├── getSavAttachment.js # image / pages d'un PDF scanné, avec garde-fous
-│   └── getOrder.js        # commande par numéro ou n° de facture
+│   ├── getOrder.js        # commande par numéro ou n° de facture
+│   ├── listLeads.js       # file « À traiter » (services/leadWorkQueue.js) ou recherche
+│   ├── getLead.js         # lead complet : notes, journal des messages, dossier devis
+│   ├── addLeadNote.js     # note interne (écrit)
+│   └── setLeadNextAction.js # prochaine action, via leadWorkController.poserProchaineAction (écrit)
 └── util/
+    ├── leads.js           # vue courte d'un lead (sans téléphone), auteur « Claude (connecteur) »
     ├── period.js          # parsing période + range période précédente
     ├── format.js          # cents→euros, %, deltas, jsonResult helper
     ├── sav.js             # numéro de ticket, dates, identifiant de fichier
