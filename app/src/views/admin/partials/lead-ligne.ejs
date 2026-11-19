@@ -10,11 +10,14 @@
   var ferme = w.stage === 'gagne' || w.stage === 'perdu';
   /* Simple passage (panier, newsletter) jamais travaillé : pas une demande, donc ni échéance ni retard. */
   var faible = w.intent === 'weak' || w.intent === 'archived';
+  /* Le rouge est réservé aux heures qu'un humain a promises. Une relance que
+     la file déduit du dernier contact passe en ambre : c'est ce mélange qui
+     avait fabriqué un mur de 168 lignes rouges que plus personne ne lisait. */
   var ton = faible ? 'slate' : ferme ? (w.stage === 'gagne' ? 'green' : 'slate')
     : c.aRepondu ? 'green'
-    : w.overdue ? 'red'
+    : (w.overdue && w.promesse) ? 'red'
     : w.stage === 'nouveau' ? 'blue'
-    : (w.group === 'rappels' || w.group === 'devis') ? 'amber' : 'slate';
+    : (w.overdue || w.group === 'rappels' || w.group === 'devis' || w.group === 'relances') ? 'amber' : 'slate';
   var couleurUrgence = { red: 'text-red-600', blue: 'text-blue-700', amber: 'text-amber-700', green: 'text-green-700', slate: 'text-slate-500' }[ton];
   var barre = { red: 'bg-red-500', blue: 'bg-blue-500', amber: 'bg-amber-400', green: 'bg-green-500', slate: 'bg-slate-300' }[ton];
   var nom = c.fullName || c.email || c.phone || 'Client sans nom';
@@ -52,7 +55,9 @@
 <li>
   <button type="button" class="lead-ligne relative w-full text-left pl-4 pr-3 py-2.5 border-b border-slate-100 hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-50"
           data-lead-id="<%= c.id %>" aria-selected="false"
-          data-due="<%= c.dueIso || '' %>" data-retard="<%= c.retardMin || 0 %>" data-attente="<%= c.attenteMin >= 0 ? c.attenteMin : -1 %>">
+          data-due="<%= c.dueIso || '' %>" data-retard="<%= c.retardMin || 0 %>" data-attente="<%= c.attenteMin >= 0 ? c.attenteMin : -1 %>"
+          data-promesse="<%= w.promesse ? 1 : 0 %>" data-repondu="<%= c.aRepondu ? 1 : 0 %>" data-devis="<%= w.stage === 'devis_a_faire' ? 1 : 0 %>"
+          data-sansnouvelles="<%= c.suivi && c.suivi.sansNouvellesMin >= 0 ? c.suivi.sansNouvellesMin : -1 %>">
     <span class="absolute left-0 top-2 bottom-2 w-1 rounded-r <%= barre %>" data-role="barre" aria-hidden="true"></span>
     <%/* Case de sélection : visible seulement en mode « Sélectionner ». */%>
     <%/* Placement dans la feuille de style de la page, pas en classes
@@ -86,6 +91,11 @@
       <% if (attente) { %>
         <span class="ml-auto shrink-0 font-semibold <%= attenteChaude ? 'text-red-600' : 'text-slate-500' %>" data-role="attente"
               title="Personne n’a encore appelé ni écrit : <%= attente %> d’attente en heures d’ouverture.">attend <%= attente %></span>
+      <% } else if (c.suivi && !ferme && !faible) { %>
+        <%/* Sans ça, un dossier appelé trois fois ressemblait mot pour mot à
+              une demande fraîche — d'où « il remonte alors que je l'ai fait ». */%>
+        <span class="ml-auto shrink-0 font-semibold text-slate-500" data-role="suivi"
+              title="Dernier geste de notre côté<%= c.suivi.dernierExact ? ' le ' + c.suivi.dernierExact : '' %><%= c.suivi.sansNouvelles ? ' — le client est sans nouvelles depuis ' + c.suivi.sansNouvelles : '' %>.">contacté<%= c.suivi.nombre > 1 ? ' ' + c.suivi.nombre + '×' : '' %><%= c.suivi.sansNouvellesCourt ? ' · ' + c.suivi.sansNouvellesCourt : '' %></span>
       <% } %>
     </span>
     <% if (pastilles.length || (c.lastNote && c.lastNote.text)) { %>

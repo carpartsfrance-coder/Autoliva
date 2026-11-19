@@ -21,6 +21,20 @@
  * nouvelle demande, 2 jours ouvrés après le dernier contact, 3 jours ouvrés
  * après l'envoi d'un devis). Le groupe affiché découle de cette échéance.
  *
+ * ── Ce que la file a de nouveau appris (20/11/2026) ─────────────────────────
+ *
+ * Un dossier déjà appelé ressortait en ROUGE « En retard » deux jours ouvrés
+ * plus tard, sans que personne ait décidé de cette date : c'est la file qui
+ * la déduisait. Le commercial lisait un reproche sur un dossier qu'il avait
+ * fait, et comme ça arrivait des centaines de fois (168 « en retard » un
+ * mardi matin), il a cessé de lire le rouge — qui ne voulait plus rien dire.
+ *
+ * D'où la règle : une ÉCHÉANCE N'EST PAS UNE PROMESSE.
+ *   - promesse (rouge, « En retard ») : une heure qu'un humain a posée
+ *     (`nextAction.dueAt`), ou la première réponse due dans l'heure ;
+ *   - supposition (ambre, « À relancer ») : l'échéance déduite du dernier
+ *     contact. Rien ne disparaît, mais le rouge redevient un signal.
+ *
  * `computeWork()` est une fonction PURE : mêmes champs + même `now` = même
  * résultat. Elle ne lit pas la base et n'écrit rien. Les deux pages (file de
  * travail et devis moteurs) l'utilisent, donc elles disent la même chose.
@@ -54,9 +68,10 @@ const ETAPES = {
 const GROUPES = [
   { key: 'repondu',    label: 'Le client a répondu',         hint: 'Il nous a écrit depuis notre dernier message : la balle est dans notre camp', tone: 'green', collapsed: false },
   { key: 'nouveaux',   label: 'Nouvelles demandes',          hint: 'Première réponse dans l’heure (heures d’ouverture)', tone: 'blue',  collapsed: false },
-  { key: 'retard',     label: 'En retard',                   hint: 'L’échéance est passée : à faire juste après les nouvelles demandes', tone: 'red', collapsed: false },
-  { key: 'rappels',    label: 'Rappels et relances du jour', hint: 'Appels promis, devis à relancer, clients à recontacter aujourd’hui', tone: 'amber', collapsed: false },
-  { key: 'devis',      label: 'Devis à préparer aujourd’hui', hint: 'Identifier la pièce, trouver le prix, envoyer le devis', tone: 'orange', collapsed: false },
+  { key: 'retard',     label: 'En retard',                   hint: 'Une heure PROMISE est passée : un rappel que quelqu’un a planifié, ou une première réponse due dans l’heure', tone: 'red', collapsed: false },
+  { key: 'rappels',    label: 'Prévus aujourd’hui',          hint: 'Les rappels et relances que quelqu’un a planifiés pour aujourd’hui', tone: 'amber', collapsed: false },
+  { key: 'devis',      label: 'Devis à préparer',            hint: 'Identifier la pièce, trouver le prix, envoyer le devis — les plus en retard en haut', tone: 'orange', collapsed: false },
+  { key: 'relances',   label: 'À relancer',                  hint: 'Sans nouvelles depuis plus de 2 jours ouvrés. Personne n’a promis cette date : c’est la file qui la propose', tone: 'amber', collapsed: false },
   { key: 'plus_tard',  label: 'Planifiés',                   hint: 'Prévus un autre jour — rien à faire maintenant', tone: 'slate', collapsed: true },
   { key: 'anciens',    label: 'Anciens dossiers à reprendre', hint: 'En retard depuis plus de 7 jours ouvrés : à reprendre quand la file du jour est vide', tone: 'slate', collapsed: true },
 ];
@@ -129,7 +144,12 @@ function actionsHumaines(lead) {
   if (lead.manualStatus === 'contacted' && lead.manualStatusAt) dates.push(lead.manualStatusAt);
   const eq = lead.engineQuote || {};
   (Array.isArray(eq.sentQuotes) ? eq.sentQuotes : []).forEach((q) => { if (q && q.sentAt) dates.push(q.sentAt); });
-  return { premiere: minDate(dates), derniere: maxDate(dates), nombre: dates.length };
+  /* Un même geste est souvent inscrit deux fois (`lastManualContactAt` et
+     `manualStatusAt` portent la même minute) : sans ce dédoublonnage, deux
+     appels s'affichaient « contacté 4× » sur la ligne. */
+  const minutes = new Set();
+  dates.forEach((v) => { const x = d(v); if (x) minutes.add(Math.floor(x.getTime() / 60000)); });
+  return { premiere: minDate(dates), derniere: maxDate(dates), nombre: minutes.size };
 }
 
 /**
@@ -261,6 +281,15 @@ function computeWork(lead, now = new Date()) {
     }
   }
 
+  /* L'heure a-t-elle été POSÉE par quelqu'un, ou devinée par la file ?
+     Seule une heure posée (ou la première réponse due dans l'heure, qui est
+     la promesse commerciale de la maison) peut être « en retard ». */
+  const promesse = dueSource === 'planifiee' || dueSource === 'premiere_reponse';
+  /* Depuis combien de temps le client n'a plus de nouvelles de nous : c'est
+     CE chiffre qui justifie une relance, pas le retard sur une heure que
+     personne n'a choisie. */
+  const sansNouvellesMin = humain.derniere ? ho.minutesOuvreesEntre(humain.derniere, now) : -1;
+
   const overdue = !!(dueAt && dueAt.getTime() < now.getTime());
   const overdueMinutes = overdue ? ho.minutesOuvreesEntre(dueAt, now) : 0;
   /* « Vieux retard » est un FAIT du dossier, pas une place dans la liste : le
@@ -275,9 +304,11 @@ function computeWork(lead, now = new Date()) {
     if (aRepondu) group = 'repondu';
     else if (stage === 'nouveau' && age <= MIN_JOUR_OUVRE) group = 'nouveaux';
     else if (ancien) group = 'anciens';
-    else if (overdue) group = 'retard';
-    else if (dueAt && dueAt < finJour(now) && dueAt >= debutJour(now)) group = stage === 'devis_a_faire' ? 'devis' : 'rappels';
-    else if (dueAt && dueAt < debutJour(now)) group = 'retard';
+    /* Un devis dû reste un devis dû, en retard ou non : le commercial veut
+       les voir ensemble, les plus vieux en haut (voir comparer()). */
+    else if (stage === 'devis_a_faire' && dueAt && dueAt < finJour(now)) group = 'devis';
+    else if (overdue) group = promesse ? 'retard' : 'relances';
+    else if (dueAt && dueAt < finJour(now) && dueAt >= debutJour(now)) group = 'rappels';
     else group = 'plus_tard';
   }
 
@@ -319,6 +350,8 @@ function computeWork(lead, now = new Date()) {
     dueSource,
     overdue,
     overdueMinutes,
+    promesse,
+    sansNouvellesMin,
     ancien,
     aRepondu,
     reponseAt,
@@ -330,6 +363,7 @@ function computeWork(lead, now = new Date()) {
     hasWorkshop,
     firstHumanAt: humain.premiere,
     lastHumanAt: humain.derniere,
+    nombreHumain: humain.nombre,
     receivedAt: recu,
     nextActionLabel,
   };
@@ -359,10 +393,29 @@ function comparer(a, b) {
   return String(a.id || '').localeCompare(String(b.id || ''));
 }
 
-/** Libellé d'urgence affiché en tête de carte (« En retard de 2 h », « Avant 10:15 »…). */
+/** Durée ouvrée en toutes lettres : « 45 min », « 3 h », « 4 jours ouvrés ». */
+function duree(minutes, court = false) {
+  const m = Math.max(1, Math.round(Number(minutes) || 0));
+  if (m < 60) return `${m} min`;
+  if (m < MIN_JOUR_OUVRE) return `${Math.round(m / 60)} h`;
+  const j = Math.round(m / MIN_JOUR_OUVRE);
+  return court ? `${j} j` : `${j} jour${j > 1 ? 's' : ''} ouvré${j > 1 ? 's' : ''}`;
+}
+
+/**
+ * Libellé d'urgence affiché en tête de carte. Une heure que personne n'a
+ * promise ne produit JAMAIS un « en retard » : elle dit depuis combien de
+ * temps le client n'a plus de nouvelles, ce qui est le vrai motif de relance.
+ */
 function libelleUrgence(work, now = new Date()) {
   if (!work || !work.dueAt) return '';
   const heure = work.dueAt.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+  if (work.overdue && !work.promesse) {
+    const quoi = work.stage === 'devis_a_faire' ? 'Devis à préparer' : 'À relancer';
+    return work.sansNouvellesMin >= 0
+      ? `${quoi} — sans nouvelles depuis ${duree(work.sansNouvellesMin)}`
+      : `${quoi} — échéance dépassée de ${duree(work.overdueMinutes)}`;
+  }
   if (work.overdue) {
     const m = work.overdueMinutes;
     if (m < 60) return `En retard de ${Math.max(1, m)} min`;
@@ -382,6 +435,10 @@ function libelleUrgence(work, now = new Date()) {
 function libelleUrgenceCourt(work, now = new Date()) {
   if (!work || !work.dueAt) return '';
   const heure = work.dueAt.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit' });
+  if (work.overdue && !work.promesse) {
+    const quoi = work.stage === 'devis_a_faire' ? 'Devis' : 'Relancer';
+    return `${quoi} · ${duree(work.sansNouvellesMin >= 0 ? work.sansNouvellesMin : work.overdueMinutes, true)}`;
+  }
   if (work.overdue) {
     const m = work.overdueMinutes;
     if (m < 60) return `Retard ${Math.max(1, m)} min`;
@@ -394,6 +451,7 @@ function libelleUrgenceCourt(work, now = new Date()) {
 
 module.exports = {
   computeWork,
+  duree,
   derniereReponse,
   comparer,
   libelleUrgence,

@@ -132,6 +132,7 @@ async function delaiPremiereAction(now) {
  * @param {string} [opts.moi]      prénom de l'admin connecté (takenByName)
  * @param {string} [opts.piece]    '' | 'pont' | 'boite' | 'moteur' | 'autre'
  * @param {string} [opts.source]   captureSource exact
+ * @param {string} [opts.suivi]    '' | 'vierges' (jamais contactés) | 'encours'
  * @param {string} [opts.voir]     clé du groupe à afficher en entier
  */
 async function chargerFile(opts = {}) {
@@ -153,6 +154,7 @@ async function chargerFile(opts = {}) {
   /* Bandeau patron : sur TOUTE la file, avant les filtres rapides. */
   const parPersonne = {};
   let enRetard = 0;
+  let aRelancer = 0;
   let anciens = 0;
   let jamaisPris = 0;
   let duJour = 0;
@@ -161,10 +163,15 @@ async function chargerFile(opts = {}) {
     const w = x.work;
     /* Le retard est lu sur le dossier lui-même : depuis que « Le client a
        répondu » sort les dossiers de leur groupe, compter par groupe faisait
-       disparaître du bandeau des retards bien réels. */
+       disparaître du bandeau des retards bien réels.
+
+       Et on ne compte comme RETARD que les heures qu'un humain a promises :
+       mêlées aux relances déduites, elles affichaient 168 « en retard » un
+       mardi matin, un chiffre que plus personne ne regardait. */
     if (w.ancien) anciens += 1;
-    if (w.overdue) {
-      enRetard += 1;
+    else if (w.overdue && !w.promesse) aRelancer += 1;
+    else if (w.overdue) enRetard += 1;
+    if (w.overdue && (w.promesse || w.ancien)) {
       const qui = x.lead.takenByName || 'Non pris';
       parPersonne[qui] = (parPersonne[qui] || 0) + 1;
     }
@@ -177,6 +184,11 @@ async function chargerFile(opts = {}) {
   const filtres = tous.filter((x) => {
     if (opts.qui === 'moi' && (x.lead.takenByName || '') !== (opts.moi || '')) return false;
     if (opts.qui === 'libre' && x.lead.takenByName) return false;
+    /* « Jamais contactés » : la pile de demandes vierges, que l'employé veut
+       voir seule sans qu'on sorte pour autant les dossiers en cours de la
+       file de tout le monde (c'est ce qui avait laissé 197 demandes mortes). */
+    if (opts.suivi === 'vierges' && x.work.firstHumanAt) return false;
+    if (opts.suivi === 'encours' && !x.work.firstHumanAt) return false;
     if (opts.piece && x.categorie !== opts.piece) return false;
     if (opts.source && (x.lead.captureSource || '') !== opts.source) return false;
     return true;
@@ -199,11 +211,13 @@ async function chargerFile(opts = {}) {
     total: filtres.length,
     totalSansFiltre: tous.length,
     bandeau: {
+      /* Heures PROMISES et non tenues, hors anciens dossiers. */
       enRetard,
+      /* Relances que la file propose : personne n'a promis cette date. */
+      aRelancer,
       /* Les vieux retards (plus de 7 jours ouvrés) sont comptés à part : mêlés
          aux retards du jour, ils donnaient l'impression d'une file sans fin. */
       anciens,
-      enRetardRecents: enRetard - anciens,
       jamaisPris,
       duJour,
       /* Des clients qui nous ont écrit et qui attendent encore une réponse. */

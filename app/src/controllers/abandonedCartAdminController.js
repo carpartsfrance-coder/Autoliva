@@ -32,10 +32,10 @@ const { demandesFournisseur } = require('../services/supplierRequest');
 const { buildLeadSearchConditions } = require('../services/leadSearch');
 const { avecVerrouEnvoi } = require('../services/verrouEnvoiLead');
 const brand = require('../config/brand');
-const { computeWork, libelleUrgence, libelleUrgenceCourt, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
+const { computeWork, duree, libelleUrgence, libelleUrgenceCourt, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
 const { chargerFile } = require('../services/leadWorkQueue');
 const { resumeDemande } = require('../services/leadResume');
-const { infosHeure, fenetreOuvree, arriveeExacte } = require('../services/leadHeure');
+const { infosHeure, fenetreOuvree, arriveeExacte, dureeOuvree } = require('../services/leadHeure');
 
 function escapeHtml(value) {
   return String(value || '')
@@ -349,6 +349,16 @@ function toCardModel(c, now = new Date()) {
       nombre: devisEnvoyes.length,
     } : null,
     dejaEssaye: !!(c.lastCallOutcome && ['pas_reponse', 'repondeur'].includes(c.lastCallOutcome.outcome)),
+    /* « Je l'ai déjà contacté » : rien sur la ligne ne le disait, un dossier
+       travaillé trois fois ressemblait mot pour mot à une demande fraîche. */
+    suivi: work.firstHumanAt ? {
+      nombre: work.nombreHumain,
+      dernierRel: formatRelative(work.lastHumanAt),
+      dernierExact: arriveeExacte(work.lastHumanAt),
+      sansNouvelles: work.sansNouvellesMin >= 0 ? dureeOuvree(work.sansNouvellesMin) : '',
+      sansNouvellesCourt: work.sansNouvellesMin >= 0 ? duree(work.sansNouvellesMin, true) : '',
+      sansNouvellesMin: work.sansNouvellesMin,
+    } : null,
     takenByName: c.takenByName || '',
     takenAtRel: c.takenAt ? formatRelative(c.takenAt) : '',
     nextActionNote: (c.nextAction && c.nextAction.note) || '',
@@ -660,11 +670,12 @@ async function getAdminLeadsPage(req, res, next) {
     const qui = ['moi', 'libre'].includes(req.query.qui) ? req.query.qui : '';
     const piece = ['pont', 'boite', 'moteur', 'autre'].includes(req.query.piece) ? req.query.piece : '';
     const voir = typeof req.query.voir === 'string' ? req.query.voir.trim().slice(0, 20) : '';
+    const suivi = ['vierges', 'encours'].includes(req.query.suivi) ? req.query.suivi : '';
     const file = await chargerFile({
-      now: maintenant, qui, moi: admin.firstName || admin.name, piece,
+      now: maintenant, qui, moi: admin.firstName || admin.name, piece, suivi,
       source: view === 'todo' && allowedSources.has(captureSource) ? captureSource : '', voir,
     });
-    const todoFilters = { qui, piece, voir, source: captureSource };
+    const todoFilters = { qui, piece, voir, suivi, source: captureSource };
 
     if (view === 'todo') {
       const groupes = file.groupes.map((g) => Object.assign({}, g, { items: g.items.map((x) => toCardModel(x.lead, maintenant)) }));

@@ -28,8 +28,18 @@
   .lead-ligne[aria-checked="true"] .lead-case { color: #2563eb; }
   .lead-ligne[aria-selected="true"] .lead-ligne-nom { color: #b91c1c; }
   .fiche-onglet[aria-selected="true"] { border-color: #D32F2F; color: #0f172a; }
-  .lead-groupe > summary::-webkit-details-marker, .lead-menu > summary::-webkit-details-marker, .equipe-menu > summary::-webkit-details-marker { display: none; }
-  .lead-groupe[open] > summary .groupe-chevron { transform: rotate(180deg); }
+  .lead-menu > summary::-webkit-details-marker, .equipe-menu > summary::-webkit-details-marker { display: none; }
+  /* Onglets de la file : huit groupes empilés faisaient une colonne de gauche
+     interminable, où « Nouvelles demandes » se retrouvait sous 168 retards. */
+  .leads-onglet { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap;
+    border-bottom: 2px solid transparent; padding: .55rem .7rem; font-size: .8125rem; font-weight: 600; color: #64748b; }
+  .leads-onglet:hover { color: #0f172a; background: #f8fafc; }
+  .leads-onglet[aria-selected="true"] { color: #0f172a; border-bottom-color: #64748b; }
+  .leads-onglet[aria-selected="true"][data-ton="red"] { border-bottom-color: #dc2626; }
+  .leads-onglet[aria-selected="true"][data-ton="amber"] { border-bottom-color: #f59e0b; }
+  .leads-onglet[aria-selected="true"][data-ton="orange"] { border-bottom-color: #ea580c; }
+  .leads-onglet[aria-selected="true"][data-ton="green"] { border-bottom-color: #16a34a; }
+  .leads-onglet[aria-selected="true"][data-ton="blue"] { border-bottom-color: #2563eb; }
 </style>
 
 <main class="flex-1 min-w-0">
@@ -66,9 +76,18 @@
       <% var b = bandeau; var dl = b.delai || {}; var med = dl.mediane; %>
       <!-- Les chiffres du patron, sur une ligne -->
       <div class="masque-en-fiche mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600">
-        <span title="Dossiers dont l'heure prévue est passée, hors anciens dossiers (plus de 7 jours ouvrés de retard), comptés à part">
-          <strong class="text-base <%= b.enRetardRecents ? 'text-red-700' : 'text-slate-900' %>"><%= b.enRetardRecents %></strong> en retard<% if (b.anciens) { %> <span class="text-slate-400">· <%= b.anciens %> anciens à part</span><% } %>
+        <%/* « En retard » comptait aussi les relances que la file déduit du
+              dernier contact : 168 un mardi matin, un chiffre que plus
+              personne ne regardait. Ici, seules les heures PROMISES. */%>
+        <span title="Une heure que quelqu'un a promise est passée : un rappel planifié, ou une première réponse due dans l'heure. Hors anciens dossiers.">
+          <strong class="text-base <%= b.enRetard ? 'text-red-700' : 'text-slate-900' %>"><%= b.enRetard %></strong> en retard
         </span>
+        <% if (b.aRelancer) { %>
+          <span title="Sans nouvelles depuis plus de 2 jours ouvrés. Personne n'a promis cette date : c'est la file qui la propose."><strong class="text-base text-amber-700"><%= b.aRelancer %></strong> à relancer</span>
+        <% } %>
+        <% if (b.anciens) { %>
+          <span title="En retard depuis plus de 7 jours ouvrés : à reprendre quand la file du jour est vide"><strong class="text-base text-slate-900"><%= b.anciens %></strong> ancien<%= b.anciens > 1 ? 's' : '' %></span>
+        <% } %>
         <% if (b.repondus) { %>
           <span title="Clients qui nous ont écrit depuis notre dernier message : ils attendent une réponse"><strong class="text-base text-green-700"><%= b.repondus %></strong> ont répondu</span>
         <% } %>
@@ -111,11 +130,19 @@
         </label>
         <div class="inline-flex shrink-0 rounded-xl border border-slate-200 bg-white p-0.5 text-xs font-semibold">
           <% [['', 'Toute l’équipe'], ['moi', 'Mes dossiers'], ['libre', 'Non pris']].forEach(function (o) { %>
-            <% var qs = new URLSearchParams(Object.assign({}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, o[0] ? { qui: o[0] } : {})).toString(); %>
+            <% var qs = new URLSearchParams(Object.assign({}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, todoFilters.suivi ? { suivi: todoFilters.suivi } : {}, o[0] ? { qui: o[0] } : {})).toString(); %>
             <a href="/admin/activite-panier<%= qs ? '?' + qs : '' %>" class="whitespace-nowrap rounded-lg px-3 py-1.5 <%= todoFilters.qui === o[0] ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50' %>"><%= o[1] %></a>
           <% }) %>
         </div>
         <% if (todoFilters.qui) { %><input type="hidden" name="qui" value="<%= todoFilters.qui %>"><% } %>
+        <%/* La pile de demandes vierges, sans sortir les dossiers en cours de
+              la file de tout le monde : c'est ce qui avait laissé 197 demandes
+              mortes quand « Contacté » les rangeait dans un autre onglet. */%>
+        <select name="suivi" class="min-w-[150px] flex-1 sm:flex-none rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm" onchange="this.form.q.value===''&&this.form.submit()">
+          <option value="">Tous les dossiers</option>
+          <option value="vierges" <%= todoFilters.suivi === 'vierges' ? 'selected' : '' %>>Jamais contactés</option>
+          <option value="encours" <%= todoFilters.suivi === 'encours' ? 'selected' : '' %>>Déjà contactés</option>
+        </select>
         <select name="piece" class="min-w-[140px] flex-1 sm:flex-none rounded-xl border border-slate-200 bg-white py-2 pl-3 pr-8 text-sm" onchange="this.form.q.value===''&&this.form.submit()">
           <option value="">Toutes les pièces</option>
           <option value="pont" <%= todoFilters.piece === 'pont' ? 'selected' : '' %>>Ponts / transferts</option>
@@ -129,7 +156,7 @@
             <option value="<%= o[0] %>" <%= todoFilters.source === o[0] ? 'selected' : '' %>><%= o[1] %></option>
           <% }) %>
         </select>
-        <% if (todoFilters.qui || todoFilters.piece || todoFilters.source) { %><a href="/admin/activite-panier" class="px-2 text-xs font-semibold text-slate-500 hover:text-slate-800">Effacer les filtres</a><% } %>
+        <% if (todoFilters.qui || todoFilters.piece || todoFilters.source || todoFilters.suivi) { %><a href="/admin/activite-panier" class="px-2 text-xs font-semibold text-slate-500 hover:text-slate-800">Effacer les filtres</a><% } %>
       </form>
     <% } else { %>
       <!-- Filtres de l'historique -->
@@ -181,7 +208,7 @@
     <% } %>
 
     <%
-      var nomsCourts = { repondu: 'Le client a répondu', nouveaux: 'Nouvelles demandes', retard: 'En retard', rappels: 'Rappels du jour', devis: 'Devis à préparer', plus_tard: 'Planifiés', anciens: 'Anciens dossiers' };
+      var nomsCourts = { repondu: 'A répondu', nouveaux: 'Nouvelles demandes', retard: 'En retard', rappels: 'Prévus aujourd’hui', devis: 'Devis à préparer', relances: 'À relancer', plus_tard: 'Planifiés', anciens: 'Anciens' };
       var tons = { green: 'bg-green-100 text-green-800', blue: 'bg-blue-100 text-blue-800', red: 'bg-red-100 text-red-700', amber: 'bg-amber-100 text-amber-800', orange: 'bg-orange-100 text-orange-800', slate: 'bg-slate-200 text-slate-700' };
       var affiches = view === 'todo' ? [].concat.apply([], groupes.map(function (g) { return g.items; })) : (leads || []);
     %>
@@ -195,6 +222,22 @@
       <span class="ml-auto underline">Actualiser</span>
     </a>
 
+    <% if (view === 'todo' && affiches.length) { %>
+      <%/* Les groupes étaient empilés dans la colonne de gauche : avec huit
+            d'entre eux, « Nouvelles demandes » se retrouvait sous 168 lignes
+            rouges. À l'horizontale, les compteurs se lisent d'un coup d'œil
+            et la colonne ne montre qu'une file à la fois. */%>
+      <nav id="leads-onglets" class="masque-en-fiche mt-3 flex gap-1 overflow-x-auto border-b border-slate-200" role="tablist" aria-label="Files de travail">
+        <% groupes.forEach(function (g) { if (!g.count) return; %>
+          <button type="button" role="tab" aria-selected="false" class="leads-onglet shrink-0 rounded-t-lg"
+                  data-groupe="<%= g.key %>" data-ton="<%= g.tone %>" title="<%= g.hint %>">
+            <%= nomsCourts[g.key] || g.label %>
+            <span class="rounded-full px-1.5 text-[11px] font-bold <%= tons[g.tone] || tons.slate %>"><%= g.count %></span>
+          </button>
+        <% }) %>
+      </nav>
+    <% } %>
+
     <div class="file-cols mt-3">
       <!-- Liste des clients -->
       <aside id="file-liste" class="file-liste-col rounded-2xl border border-slate-200 bg-white" aria-label="Liste des clients">
@@ -207,20 +250,19 @@
             </div>
           <% } %>
           <% groupes.forEach(function (g) { if (!g.count) return; %>
-            <details class="lead-groupe" id="groupe-<%= g.key %>" <%= g.collapsed ? '' : 'open' %>>
-              <summary class="groupe-entete z-10 flex cursor-pointer list-none select-none items-center gap-2 border-b border-slate-100 bg-slate-50/95 px-4 py-2" title="<%= g.hint %>">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-600"><%= nomsCourts[g.key] || g.label %></span>
-                <span class="rounded-full px-1.5 text-[11px] font-bold <%= tons[g.tone] || tons.slate %>"><%= g.count %></span>
-                <span class="groupe-chevron material-symbols-outlined ml-auto text-[18px] text-slate-400 transition">expand_more</span>
-              </summary>
+            <div class="lead-panneau hidden" id="groupe-<%= g.key %>" data-groupe="<%= g.key %>">
+              <%/* Le sens du groupe, écrit en clair : l'info-bulle du titre
+                    repliable ne se lisait qu'à la souris, et « En retard »
+                    contre « À relancer » se joue justement sur ce mot. */%>
+              <p class="groupe-entete z-10 border-b border-slate-100 bg-slate-50/95 px-4 py-2 text-[11px] leading-snug text-slate-500"><%= g.hint %>.</p>
               <ul>
                 <% g.items.forEach(function (c) { %><%- include('./partials/lead-ligne', { c: c }) %><% }) %>
               </ul>
               <% if (g.reste > 0) { %>
-                <% var qsv = new URLSearchParams(Object.assign({}, todoFilters.qui ? { qui: todoFilters.qui } : {}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, { voir: g.key })).toString(); %>
-                <a href="/admin/activite-panier?<%= qsv %>#groupe-<%= g.key %>" class="flex items-center gap-1 border-b border-slate-100 px-4 py-2.5 text-xs font-semibold text-primary hover:bg-slate-50">Afficher les <%= g.reste %> suivants<span class="material-symbols-outlined text-[16px]">expand_more</span></a>
+                <% var qsv = new URLSearchParams(Object.assign({}, todoFilters.qui ? { qui: todoFilters.qui } : {}, todoFilters.piece ? { piece: todoFilters.piece } : {}, todoFilters.source ? { source: todoFilters.source } : {}, todoFilters.suivi ? { suivi: todoFilters.suivi } : {}, { voir: g.key })).toString(); %>
+                <a href="/admin/activite-panier?<%= qsv %>" class="flex items-center gap-1 border-b border-slate-100 px-4 py-2.5 text-xs font-semibold text-primary hover:bg-slate-50">Afficher les <%= g.reste %> suivants<span class="material-symbols-outlined text-[16px]">expand_more</span></a>
               <% } %>
-            </details>
+            </div>
           <% }) %>
         <% } else { %>
           <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs">
@@ -288,12 +330,12 @@
         <div class="text-lg font-bold text-slate-900">Comment ça marche</div>
         <button type="button" id="leads-help-close" class="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-slate-100"><span class="material-symbols-outlined">close</span></button>
       </div>
-      <p class="mb-5 text-sm text-slate-500">À gauche la liste des clients, déjà triée. À droite le client choisi et ce qu’il faut faire.</p>
+      <p class="mb-5 text-sm text-slate-500">En haut les onglets, un par file de travail. À gauche la liste de l’onglet ouvert, déjà triée. À droite le client choisi et ce qu’il faut faire.</p>
 
       <div class="mb-4 rounded-xl border-2 border-primary/30 bg-red-50/40 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-primary">La méthode en 4 gestes</div>
         <ol class="list-inside list-decimal space-y-2 text-sm text-slate-800">
-          <li><strong>Prends le premier client de la liste</strong> : elle est dans l’ordre où il faut travailler (ceux qui ont répondu, puis les nouvelles demandes, puis les retards, puis les rappels du jour, puis les devis à préparer).</li>
+          <li><strong>Vide les onglets de gauche à droite</strong> : ils sont dans l’ordre où il faut travailler. Dans chaque onglet, prends le premier client : la liste est déjà triée.</li>
           <li><strong>Regarde l’encadré « La prochaine action »</strong> à droite et clique sur son gros bouton : Appeler, Préparer le devis, Écrire au client…</li>
           <li><strong>Après l’appel, clique « Appel terminé »</strong> : comment ça s’est passé, la suite, et pour quand. Sans suite, le client serait oublié : la fenêtre te la demande toujours.</li>
           <li><strong>« Enregistrer et continuer »</strong> t’emmène tout seul au client suivant. <strong>Gagné</strong> seulement quand le client a payé, <strong>Perdu</strong> toujours avec le motif (dans « Autres actions »).</li>
@@ -305,10 +347,11 @@
         <div class="space-y-1.5 text-sm text-slate-700">
           <div><strong>Le client a répondu</strong> — il nous a écrit depuis notre dernier message et attend une réponse. Son texte est sur la ligne et dans sa fiche : on sait déjà quoi lui dire. À faire avant tout le reste, même si l’heure prévue n’est pas arrivée.</div>
           <div><strong>Nouvelles demandes</strong> — à rappeler dans l’heure (heures d’ouverture : 9 h–12 h, 14 h–18 h, du lundi au vendredi).</div>
-          <div><strong>En retard</strong> — l’heure prévue est passée. À faire juste après les nouvelles demandes.</div>
-          <div><strong>Rappels du jour</strong> — les appels promis et les devis à relancer aujourd’hui.</div>
-          <div><strong>Devis à préparer</strong> — trouver la pièce et le prix, puis envoyer le devis (bouton « Atelier devis »).</div>
-          <div><strong>Planifiés</strong> — prévus un autre jour : rien à faire maintenant.</div>
+          <div><strong>En retard</strong> — <strong>une heure que quelqu’un a promise</strong> est passée : un rappel planifié, ou une première réponse due dans l’heure. C’est le seul onglet rouge, et il doit rester petit.</div>
+          <div><strong>Prévus aujourd’hui</strong> — les rappels et relances planifiés pour aujourd’hui.</div>
+          <div><strong>Devis à préparer</strong> — trouver la pièce et le prix, puis envoyer le devis (bouton « Atelier devis »). Les plus vieux en haut.</div>
+          <div><strong>À relancer</strong> — sans nouvelles depuis plus de 2 jours ouvrés. <strong>Personne n’a promis cette date</strong> : c’est la file qui la propose. Ce n’est pas un reproche, c’est une suggestion — d’où l’ambre et pas le rouge.</div>
+          <div><strong>Planifiés</strong> — prévus un autre jour : rien à faire maintenant. C’est là que partent les dossiers mis « En attente du client ».</div>
           <div><strong>Anciens dossiers</strong> — en retard depuis plus de 7 jours ouvrés. On les reprend quand le reste est fait : relire, rappeler ou clôturer.</div>
         </div>
       </div>
@@ -316,10 +359,10 @@
       <div class="mb-4 rounded-xl border border-slate-200 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Ce que dit une ligne</div>
         <div class="space-y-1.5 text-sm text-slate-700">
-          <div>Le nom du client, et à droite <span class="font-bold text-red-600">Retard 2 h</span>, <span class="font-bold text-blue-700">Avant 10:15</span> ou l’heure prévue.</div>
+          <div>Le nom du client, et à droite <span class="font-bold text-red-600">Retard 2 h</span> (une heure promise), <span class="font-bold text-amber-700">Relancer · 4 j</span> (sans nouvelles depuis 4 jours ouvrés, personne ne l’a promis), <span class="font-bold text-blue-700">Avant 10:15</span> ou l’heure prévue.</div>
           <div>Dessous : la pièce et le véhicule, et à droite le <strong>montant en jeu</strong> (le devis s’il est parti, sinon le panier).</div>
           <div>Puis <strong>l’heure d’arrivée de la demande</strong> (« 09:12 » aujourd’hui, « hier 16:40 », « mar. 17/11 »), <strong>qui s’en occupe</strong> (« Non pris » si personne) et d’où elle vient (Google Ads, landing…).</div>
-          <div>À droite de cette ligne, <strong>depuis combien de temps elle attend</strong> : le temps compté en heures d’ouverture depuis la demande, tant que personne n’a appelé ni écrit. Il passe en <span class="font-bold text-red-600">rouge</span> au-delà d’une heure. Ces durées se remettent à jour toutes seules, sans recharger la page.</div>
+          <div>À droite de cette ligne : soit <strong>depuis combien de temps elle attend</strong> (temps compté en heures d’ouverture depuis la demande, tant que personne n’a appelé ni écrit — <span class="font-bold text-red-600">rouge</span> au-delà d’une heure), soit <strong>« contacté 2× · 5 j »</strong> dès que quelqu’un s’en est occupé : combien de fois, et depuis combien de temps le client est sans nouvelles. Ces durées se remettent à jour toutes seules, sans recharger la page.</div>
           <div>En bas, les pastilles qui changent la façon d’appeler : <span class="rounded bg-green-100 px-1.5 text-[11px] font-semibold text-green-800">A cliqué payer</span> <span class="rounded bg-violet-100 px-1.5 text-[11px] font-semibold text-violet-800">Devis vu</span> <span class="rounded bg-indigo-50 px-1.5 text-[11px] font-semibold text-indigo-700">Déjà client</span> <span class="rounded bg-amber-100 px-1.5 text-[11px] font-semibold text-amber-800">SAV en cours</span>, et « note » quand un collègue a écrit quelque chose (passe la souris dessus pour la lire).</div>
           <div>Dans la fiche : « Personne ne s’en occupe — je m’en occupe » pour prendre le client.</div>
         </div>
@@ -339,6 +382,8 @@
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-slate-400">Gagner du temps</div>
         <div class="space-y-1.5 text-sm text-slate-700">
           <div><strong>« +2 h » et « Demain »</strong>, à côté de « Planifier » : repoussent le dossier et passent au client suivant, en un clic.</div>
+          <div><strong>« En attente du client »</strong>, juste à côté : quand la balle est dans SON camp (il réfléchit, il attend son garagiste, il rappelle le mois prochain). Le dossier part dans « Planifiés » et ne remonte qu’à la date choisie. Sans ça, il revenait dans la file tous les deux jours ouvrés jusqu’à la clôture.</div>
+          <div><strong>Le filtre « Jamais contactés »</strong>, en haut : la pile de demandes que personne n’a encore touchées. Les dossiers en cours restent dans la file de tout le monde — c’est volontaire, un client appelé une fois qui n’a pas dit oui n’est pas un dossier fini.</div>
           <div><strong>« Sélectionner »</strong>, en haut : coche plusieurs clients d’un coup pour les prendre en charge ou les clôturer en perdu avec un motif commun. C’est fait pour vider « Anciens dossiers ». Rien n’est supprimé : un dossier clôturé par erreur se rouvre depuis sa fiche.</div>
           <div><strong>Quand une demande arrive</strong> pendant que la page est ouverte, un bandeau vert le dit en haut de la liste et le titre de l’onglet compte. La cloche, en haut, ajoute un bip.</div>
         </div>
@@ -1356,7 +1401,76 @@
   var courant = null;
   var detailCache = {};
 
-  function lignes() { return Array.prototype.slice.call(document.querySelectorAll('.lead-ligne')); }
+  function toutesLignes() { return Array.prototype.slice.call(document.querySelectorAll('.lead-ligne')); }
+  /* Seulement l'onglet affiché : « J » ne doit pas sauter dans une file qu'on
+     ne voit pas, et « Tout cocher » ne coche que ce qui est à l'écran. */
+  function lignes() {
+    var sel = document.querySelector('.lead-panneau') ? '.lead-panneau:not(.hidden) .lead-ligne' : '.lead-ligne';
+    return Array.prototype.slice.call(document.querySelectorAll(sel));
+  }
+
+  /* ══ Onglets de la file ══
+     Les groupes étaient empilés dans la colonne de gauche : avec huit d'entre
+     eux, « Nouvelles demandes » se retrouvait sous 168 lignes rouges. Un
+     onglet par file, à l'horizontale, et la colonne n'en montre qu'une. */
+  var onglets = document.getElementById('leads-onglets');
+  var panneaux = Array.prototype.slice.call(document.querySelectorAll('.lead-panneau'));
+  var groupeActif = '';
+
+  function groupeDe(id) {
+    var l = id ? document.querySelector('.lead-ligne[data-lead-id="' + id + '"]') : null;
+    var p = l && l.closest ? l.closest('.lead-panneau') : null;
+    return p ? p.dataset.groupe : '';
+  }
+
+  function montrerGroupe(cle, opts) {
+    opts = opts || {};
+    if (!cle) return false;
+    if (cle === groupeActif) return true;
+    if (!panneaux.some(function (p) { return p.dataset.groupe === cle; })) return false;
+    panneaux.forEach(function (p) { p.classList.toggle('hidden', p.dataset.groupe !== cle); });
+    if (onglets) Array.prototype.forEach.call(onglets.querySelectorAll('.leads-onglet'), function (b) {
+      b.setAttribute('aria-selected', b.dataset.groupe === cle ? 'true' : 'false');
+    });
+    groupeActif = cle;
+    /* L'adresse garde l'onglet ouvert : un F5, un « Actualiser » ou un retour
+       depuis une fiche y reviennent. */
+    if (opts.url !== false) {
+      try {
+        var u = new URL(window.location.href);
+        u.searchParams.set('voir', cle);
+        u.hash = '';
+        history.replaceState(null, '', u.toString());
+      } catch (_) {}
+    }
+    /* Une sélection en cours porterait sur des lignes qu'on ne voit plus. */
+    if (split && split.dataset.selection === '1') {
+      lotSelection = {};
+      toutesLignes().forEach(function (l) { l.setAttribute('aria-checked', 'false'); lotMajCase(l); });
+      lotMajCompte();
+    }
+    if (listeCol) listeCol.scrollTop = 0;
+    return true;
+  }
+
+  if (onglets) onglets.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('.leads-onglet') : null;
+    if (!b || !montrerGroupe(b.dataset.groupe)) return;
+    /* Comme une boîte mail : l'onglet ouvert montre son premier client, quand
+       il y a la place pour les deux colonnes. */
+    var premiere = lignes()[0];
+    if (premiere && estSplit()) selectionner(premiere.dataset.leadId, { defiler: false });
+  });
+
+  if (panneaux.length) {
+    var params = null;
+    try { params = new URLSearchParams(window.location.search); } catch (_) {}
+    var hash = window.location.hash.indexOf('#groupe-') === 0 ? window.location.hash.slice(8) : '';
+    /* Le client demandé dans l'adresse décide de l'onglet : sans ça, un lien
+       « ?lead=… » ouvrait une fiche dont la ligne était cachée. */
+    var vise = groupeDe(params ? params.get('lead') : '') || (params ? params.get('voir') : '') || hash;
+    if (!montrerGroupe(vise, { url: false })) montrerGroupe(panneaux[0].dataset.groupe, { url: false });
+  }
   function estSplit() { return !!split && split.getBoundingClientRect().width >= 900; }
 
   /* Écran large : les deux colonnes remplissent la fenêtre et défilent
@@ -1404,8 +1518,8 @@
     var vide = document.getElementById('fiche-vide');
     if (vide) vide.classList.add('hidden');
     courant = id;
-    var groupe = ligne.closest('details');
-    if (groupe && !groupe.open) groupe.open = true;
+    var panneau = ligne.closest ? ligne.closest('.lead-panneau') : null;
+    if (panneau && panneau.classList.contains('hidden')) montrerGroupe(panneau.dataset.groupe);
     try {
       var u = new URL(window.location.href);
       u.searchParams.set('lead', id);
@@ -1955,7 +2069,7 @@
       btn.classList.toggle('text-white', on);
       if (!on) {
         lotSelection = {};
-        lignes().forEach(function (l) { l.setAttribute('aria-checked', 'false'); lotMajCase(l); });
+        toutesLignes().forEach(function (l) { l.setAttribute('aria-checked', 'false'); lotMajCase(l); });
       }
       lotMajCompte();
     }
@@ -2027,8 +2141,8 @@
     if (!plages.length || !rendu) return;
 
     /* Teintes posées par le serveur, à retirer quand la ligne passe en retard. */
-    var TONS_TEXTE = ['text-blue-700', 'text-amber-700', 'text-green-700', 'text-slate-500'];
-    var TONS_BARRE = ['bg-blue-500', 'bg-amber-400', 'bg-green-500', 'bg-slate-300'];
+    var TONS_TEXTE = ['text-blue-700', 'text-amber-700', 'text-green-700', 'text-slate-500', 'text-red-600'];
+    var TONS_BARRE = ['bg-blue-500', 'bg-amber-400', 'bg-green-500', 'bg-slate-300', 'bg-red-500'];
 
     function rougir(el, tons, rouge) {
       if (!el || el.classList.contains(rouge)) return;
@@ -2040,6 +2154,11 @@
       var due = el.getAttribute('data-due');
       var retardRendu = Number(el.getAttribute('data-retard')) || 0;
       var attenteRendu = Number(el.getAttribute('data-attente'));
+      var promesse = el.getAttribute('data-promesse') === '1';
+      var devis = el.getAttribute('data-devis') === '1';
+      var sansRendu = Number(el.getAttribute('data-sansnouvelles'));
+      /* Un client qui vient d'écrire reste vert, quoi qu'en dise l'échéance. */
+      var repondu = el.getAttribute('data-repondu') === '1';
 
       /* Retard : celui du rendu qui grandit, ou celui d'une échéance qui vient
          de passer sous les yeux du commercial. */
@@ -2047,10 +2166,19 @@
         : (due && maintenant > Date.parse(due)) ? H.minutesOuvrees(plages, Date.parse(due), maintenant) : 0;
       if (retard > 0) {
         var court = el.querySelector('[data-role="urgence"]');
-        if (court) { court.textContent = H.retardCourt(retard); rougir(court, TONS_TEXTE, 'text-red-600'); }
         var longue = el.querySelector('[data-role="urgence-longue"]');
-        if (longue) longue.textContent = H.retardLong(retard);
-        rougir(el.querySelector('[data-role="barre"]'), TONS_BARRE, 'bg-red-500');
+        if (promesse) {
+          if (court) { court.textContent = H.retardCourt(retard); if (!repondu) rougir(court, TONS_TEXTE, 'text-red-600'); }
+          if (longue) longue.textContent = H.retardLong(retard);
+          if (!repondu) rougir(el.querySelector('[data-role="barre"]'), TONS_BARRE, 'bg-red-500');
+        } else {
+          /* Personne n'a promis cette heure : on dit depuis quand le client
+             est sans nouvelles, pas qu'on est « en retard ». */
+          var sans = sansRendu >= 0 ? sansRendu + ecoule : retard;
+          if (court) { court.textContent = H.relanceCourt(sans, devis); if (!repondu) rougir(court, TONS_TEXTE, 'text-amber-700'); }
+          if (longue) longue.textContent = H.relanceLong(sans, devis, sansRendu < 0);
+          if (!repondu) rougir(el.querySelector('[data-role="barre"]'), TONS_BARRE, 'bg-amber-400');
+        }
       }
 
       /* Attente d'une demande que personne n'a prise : rouge passé l'heure. */

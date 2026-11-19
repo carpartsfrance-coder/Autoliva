@@ -71,11 +71,28 @@ test('durées : « 25 min », « 2 h 10 », « 2 h » pile, « 3 j ouvrés »', 
 });
 
 test('le navigateur écrit EXACTEMENT les mêmes durées que le serveur', () => {
+  const SANS = 840; /* 2 jours ouvrés de silence avant l'échéance déduite. */
   for (let m = 0; m <= 3000; m += 1) {
     assert.equal(H.dureeOuvree(m), lh.dureeOuvree(m), `durée divergente à ${m} min`);
-    const work = { dueAt: MARDI_10H, overdue: true, overdueMinutes: m };
-    assert.equal(H.retardCourt(m), libelleUrgenceCourt(work, MARDI_10H), `libellé de retard divergent à ${m} min`);
-    assert.equal(H.retardLong(m), libelleUrgence(work, MARDI_10H), `libellé long divergent à ${m} min`);
+    /* Une heure PROMISE : « Retard 2 h ». */
+    const promis = { dueAt: MARDI_10H, overdue: true, overdueMinutes: m, promesse: true };
+    assert.equal(H.retardCourt(m), libelleUrgenceCourt(promis, MARDI_10H), `libellé de retard divergent à ${m} min`);
+    assert.equal(H.retardLong(m), libelleUrgence(promis, MARDI_10H), `libellé long divergent à ${m} min`);
+
+    /* Une heure DEVINÉE par la file : « Relancer · 4 j », jamais « en retard ».
+       Le navigateur réécrit ces libellés toutes les 30 s : s'il disait « en
+       retard » là où le serveur dit « à relancer », la distinction qui vide
+       le rouge disparaîtrait au bout d'une demi-minute. */
+    [false, true].forEach((devis) => {
+      const stage = devis ? 'devis_a_faire' : 'en_cours';
+      const suppose = { dueAt: MARDI_10H, overdue: true, overdueMinutes: m, promesse: false, stage, sansNouvellesMin: m + SANS };
+      assert.equal(H.relanceCourt(m + SANS, devis), libelleUrgenceCourt(suppose, MARDI_10H), `relance courte divergente à ${m} min (devis ${devis})`);
+      assert.equal(H.relanceLong(m + SANS, devis, false), libelleUrgence(suppose, MARDI_10H), `relance longue divergente à ${m} min (devis ${devis})`);
+      /* Dossier sans dernier contact daté : les deux retombent sur l'échéance. */
+      const sansRepere = Object.assign({}, suppose, { sansNouvellesMin: -1 });
+      assert.equal(H.relanceCourt(m, devis), libelleUrgenceCourt(sansRepere, MARDI_10H), `repli court divergent à ${m} min (devis ${devis})`);
+      assert.equal(H.relanceLong(m, devis, true), libelleUrgence(sansRepere, MARDI_10H), `repli long divergent à ${m} min (devis ${devis})`);
+    });
   }
 });
 
