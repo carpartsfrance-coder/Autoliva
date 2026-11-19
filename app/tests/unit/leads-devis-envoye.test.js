@@ -61,7 +61,10 @@ test('l’heure notée avant l’envoi faisait remonter le dossier en rouge', ()
 });
 
 test('un devis solde « Préparer le devis » et « Chercher la pièce », pas une relance voulue', () => {
-  assert.deepEqual(ACTIONS_SOLDEES_PAR_UN_DEVIS, ['quote', 'sourcing']);
+  /* Depuis le 19/11/2026, il solde aussi « Attente fournisseur » et « À
+     valider par Killian » : un devis parti dit que le prix est arrivé et que
+     la décision est prise. */
+  assert.deepEqual(ACTIONS_SOLDEES_PAR_UN_DEVIS, ['quote', 'sourcing', 'wait_supplier', 'to_validate']);
   /* Une relance posée à la main reste un rendez-vous voulu, même si une
      nouvelle version du devis part entre-temps. */
   ['follow_quote', 'callback', 'payment', 'wait_client'].forEach((t) => {
@@ -78,7 +81,7 @@ test('le solde se fait côté base, dans le filtre : pas de course entre deux en
   assert.equal(appels.length, 1);
   /* Le type est DANS le filtre : aucune lecture préalable, donc aucun écart
      possible entre ce qu'on a lu et ce qu'on écrase. */
-  assert.deepEqual(appels[0].filtre['nextAction.type'], { $in: ['quote', 'sourcing'] });
+  assert.deepEqual(appels[0].filtre['nextAction.type'], { $in: ['quote', 'sourcing', 'wait_supplier', 'to_validate'] });
   const posee = appels[0].maj.$set.nextAction;
   assert.equal(posee.type, '');
   assert.equal(posee.dueAt, null);

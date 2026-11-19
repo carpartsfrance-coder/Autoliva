@@ -183,6 +183,29 @@ test('file de travail : toutes les vraies demandes, une suite pour chacune', asy
     assert.equal(passe.status, 400, 'date passée refusée');
   });
 
+  await t.test('attente fournisseur et validation de Killian : chacune son onglet (19/11/2026)', async () => {
+    const l0 = await AbandonedCart.create({ sessionId: 's-attente-fournisseur', captureSource: 'devis', email: 'attente-fournisseur@example.com',
+      phone: '0633333333', abandonedAt: new Date(), lastActivityAt: new Date(), requested: { plate: 'FL776JS', ref: 'Moteur GBVAJQJ' } });
+    const r = await post(`/admin/api/leads/${l0._id}/prochaine-action`, { type: 'wait_supplier', quand: 'demain', note: 'Demande de prix envoyée à Asysum' });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.etat.group, 'fournisseur', 'onglet Attente fournisseur, même sans contact client');
+    assert.equal(r.data.etat.stageLabel, 'Attente fournisseur');
+    const l = await AbandonedCart.findById(l0._id).lean();
+    assert.equal(l.nextAction.type, 'wait_supplier');
+    assert.match(l.notes[l.notes.length - 1].text, /Attendre la réponse du fournisseur.*Asysum/);
+    const html = await page('/admin/activite-panier');
+    assert.ok(html.includes('id="groupe-fournisseur"'), 'onglet « Attente fournisseur » affiché');
+    assert.ok(html.includes('data-type="wait_supplier"'), 'report en un clic proposé dans la fiche');
+
+    const r2 = await post(`/admin/api/leads/${l0._id}/prochaine-action`, { type: 'to_validate', quand: 'demain', note: 'Devis > 4 000 € HT' });
+    assert.equal(r2.status, 200, JSON.stringify(r2.data));
+    assert.equal(r2.data.etat.group, 'a_valider');
+    assert.equal(r2.data.etat.stageLabel, 'À valider (Killian)');
+    const html2 = await page('/admin/activite-panier');
+    assert.ok(html2.includes('id="groupe-a_valider"'), 'onglet « À valider » affiché');
+    await AbandonedCart.deleteOne({ _id: l0._id });
+  });
+
   await t.test('perdu exige un motif ; le dossier devis passe aussi en perdu', async () => {
     await AbandonedCart.updateOne({ _id: pont._id }, { $set: { engineQuote: { status: 'new' } } });
     const r1 = await post(`/admin/api/leads/${pont._id}/cloturer`, { issue: 'perdu' });

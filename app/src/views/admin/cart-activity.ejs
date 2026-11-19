@@ -39,6 +39,8 @@
   .leads-onglet[aria-selected="true"][data-ton="orange"] { border-bottom-color: #ea580c; }
   .leads-onglet[aria-selected="true"][data-ton="green"] { border-bottom-color: #16a34a; }
   .leads-onglet[aria-selected="true"][data-ton="blue"] { border-bottom-color: #2563eb; }
+  .leads-onglet[aria-selected="true"][data-ton="yellow"] { border-bottom-color: #ca8a04; }
+  .leads-onglet[aria-selected="true"][data-ton="rose"] { border-bottom-color: #e11d48; }
 </style>
 
 <main class="flex-1 min-w-0">
@@ -215,8 +217,8 @@
     <% } %>
 
     <%
-      var nomsCourts = { non_traites: 'Non traités', retard: 'En retard', rappels: 'Prévus aujourd’hui', devis: 'Devis à préparer', relances: 'À relancer', plus_tard: 'Planifiés', anciens: 'Anciens' };
-      var tons = { green: 'bg-green-100 text-green-800', blue: 'bg-blue-100 text-blue-800', red: 'bg-red-100 text-red-700', amber: 'bg-amber-100 text-amber-800', orange: 'bg-orange-100 text-orange-800', slate: 'bg-slate-200 text-slate-700' };
+      var nomsCourts = { non_traites: 'Non traités', retard: 'En retard', rappels: 'Prévus aujourd’hui', devis: 'Devis à préparer', fournisseur: 'Attente fournisseur', a_valider: 'À valider', relances: 'À relancer', plus_tard: 'Planifiés', anciens: 'Anciens' };
+      var tons = { green: 'bg-green-100 text-green-800', blue: 'bg-blue-100 text-blue-800', red: 'bg-red-100 text-red-700', amber: 'bg-amber-100 text-amber-800', orange: 'bg-orange-100 text-orange-800', yellow: 'bg-yellow-100 text-yellow-800', rose: 'bg-rose-100 text-rose-800', slate: 'bg-slate-200 text-slate-700' };
       var affiches = view === 'todo' ? [].concat.apply([], groupes.map(function (g) { return g.items; })) : (leads || []);
     %>
     <%/* Ce qui arrive pendant qu'on travaille. La file est rendue par le
@@ -409,6 +411,8 @@
           <div><strong>En retard</strong> — <strong>un rendez-vous promis</strong> est passé, sur un dossier <strong>déjà pris en main</strong> : tu avais prévu de rappeler à 14 h et il est 16 h. C’est le seul onglet rouge, et il doit rester petit.</div>
           <div><strong>Prévus aujourd’hui</strong> — les rappels et relances planifiés pour aujourd’hui.</div>
           <div><strong>Devis à préparer</strong> — trouver la pièce et le prix, puis envoyer le devis (bouton « Atelier devis »). Les plus vieux en haut.</div>
+          <div><strong>Attente fournisseur</strong> — le prix est demandé au fournisseur (WhatsApp ou mail) : <strong>ne le redemande pas</strong>. Regarde sa réponse, puis envoie le devis au client.</div>
+          <div><strong>À valider</strong> — Killian doit décider avant qu’on écrive au client : devis de plus de 4 000 € HT, pièce d’occasion à trouver, compatibilité à trancher, remise.</div>
           <div><strong>À relancer</strong> — sans nouvelles depuis plus de 2 jours ouvrés. <strong>Personne n’a promis cette date</strong> : c’est la file qui la propose. Ce n’est pas un reproche, c’est une suggestion — d’où l’ambre et pas le rouge.</div>
           <div><strong>Planifiés</strong> — prévus un autre jour : rien à faire maintenant. C’est là que partent les dossiers mis « En attente du client ».</div>
           <div><strong>Anciens dossiers</strong> — en retard depuis plus de 7 jours ouvrés. On les reprend quand le reste est fait : relire, rappeler ou clôturer.</div>
@@ -443,6 +447,7 @@
           <div><strong>Le menu « Reporter »</strong>, dans la fiche : « Planifier… », « Dans 2 heures » et « Demain matin ». Les deux derniers repoussent le dossier et passent au client suivant, en un clic.</div>
           <div><strong>« Devis envoyé »</strong>, dans « Noter l’appel » : le seul choix qui ne demande pas d’heure. Le devis parti, ce qui suit c’est sa relance, et sa date se déduit toute seule (3 jours ouvrés, en ambre). Avant, il fallait inventer une heure pour un travail déjà fait — et cette heure faisait remonter le dossier en rouge l’après-midi même. Un devis envoyé depuis l’atelier solde aussi « Préparer le devis » tout seul.</div>
           <div><strong>« En attente du client »</strong>, dans le même menu « Reporter » : quand la balle est dans SON camp (il réfléchit, il attend son garagiste, il rappelle le mois prochain). Le dossier part dans « Planifiés » et ne remonte qu’à la date choisie. Sans ça, il revenait dans la file tous les deux jours ouvrés jusqu’à la clôture.</div>
+          <div><strong>« En attente chez nous »</strong>, toujours dans « Reporter » : « Prix demandé au fournisseur » dès que la demande de prix est partie, et « À valider par Killian » quand il doit trancher. Le dossier part dans l’onglet du même nom. Un devis envoyé depuis l’atelier termine ces deux attentes tout seul.</div>
           <div><strong>Le filtre « Jamais contactés »</strong>, en haut : la pile de demandes que personne n’a encore touchées. Les dossiers en cours restent dans la file de tout le monde — c’est volontaire, un client appelé une fois qui n’a pas dit oui n’est pas un dossier fini.</div>
           <div><strong>« Sélectionner »</strong>, en haut : coche plusieurs clients d’un coup pour les prendre en charge ou les clôturer en perdu avec un motif commun. C’est fait pour vider « Anciens dossiers ». Rien n’est supprimé : un dossier clôturé par erreur se rouvre depuis sa fiche.</div>
           <div><strong>Quand une demande arrive</strong> pendant que la page est ouverte, un bandeau vert le dit en haut de la liste et le titre de l’onglet compte. La cloche, en haut, ajoute un bip.</div>
@@ -1502,7 +1507,8 @@
      c'est le seul choix qui ne demande pas d'heure (voir maj()). */
   var SUITES = [['quote', 'Préparer le devis'], ['devis_envoye', 'Devis envoyé'], ['callback', 'Le rappeler'],
     ['wait_client', 'Il doit m’envoyer des infos'], ['follow_quote', 'Relancer le devis'], ['payment', 'Il va payer'],
-    ['sourcing', 'Chercher la pièce'], ['other', 'Autre'], ['perdu', 'Perdu']];
+    ['sourcing', 'Chercher la pièce'], ['wait_supplier', 'Attente fournisseur'], ['to_validate', 'À valider par Killian'],
+    ['other', 'Autre'], ['perdu', 'Perdu']];
   var QUAND = [['2h', 'Dans 2 h'], ['aprem', 'Cet après-midi'], ['demain', 'Demain matin'], ['2j', 'Dans 2 jours'], ['5j', 'Dans 1 semaine'], ['autre', 'Choisir une date…']];
 
   function toast(msg, type) { if (window.showToast) window.showToast(msg, type || 'success'); }
