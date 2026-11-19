@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-19 (soir) — Connecteur MCP : les leads (lire, chercher, noter, planifier)
+
+Demande de Killian : « pour récupérer les leads ou traiter, tu voudrais pas utiliser le connecteur ? ». Le connecteur ne voyait que les ventes, le SAV et les commandes : les leads se lisaient en pilotant le back-office dans un navigateur.
+
+- **`listLeads`** : la file « À traiter », onglet par onglet, calculée par `services/leadWorkQueue.js` (mêmes onglets, même ordre, mêmes compteurs que le back-office). Avec `search` : tous les leads, ouverts ou clos ; une plaque ou un VIN est trouvé quelle que soit son écriture (« FL-776-JS », « FL776JS », « HF.713.EA »), y compris dans les notes — c'est ce qui permet de voir qu'un client a déjà été traité avant de redemander un prix.
+- **`getLead`** : un lead complet — demande, étape, prochaine action, toutes les notes, journal des messages (`services/leadCommunications.js`), dossier devis.
+- **`addLeadNote`** : note interne signée « Claude (connecteur) ». Ne fait pas remonter le lead.
+- **`setLeadNextAction`** : la prochaine action, exactement comme « Planifier » — la route et l'outil passent par la même fonction, `leadWorkController.poserProchaineAction`. N'attribue pas le dossier, refuse un dossier gagné ou perdu.
+- Rien n'est jamais envoyé au client par le connecteur. Pas de numéro de téléphone dans les réponses. Les outils déclarent leurs annotations MCP (`readOnlyHint`).
+- Tests : `tests/integration/mcp-leads.test.js` (file, recherche, écritures, refus, aucun téléphone, aucune autre collection touchée).
+
 ## 2026-11-19 — Leads à traiter : « Attente fournisseur » et « À valider (Killian) »
 
 Demande de Killian : « est-ce que dans les leads à traiter, on devrait mettre de nouveaux statuts ? par exemple en attente devis fournisseur ». Le même jour, une demande de prix déjà envoyée par Lucas à Inter-matic avait été renvoyée une heure plus tard pour le même véhicule : l'attente n'était écrite que dans une note, rien ne se voyait dans la liste.

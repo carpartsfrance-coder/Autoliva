@@ -231,34 +231,59 @@ async function postAppel(req, res, next) {
   }
 }
 
+/**
+ * Pose la prochaine action d'un dossier — partagée par la route du
+ * back-office et par le connecteur MCP (outil setLeadNextAction), pour que
+ * les deux écrivent exactement la même chose : même contrôle, même échéance,
+ * même note dans l'historique.
+ *
+ * @param {string} id     identifiant du dossier (déjà validé)
+ * @param {object} b      { type, quand, note }
+ * @param {object} moi    { id, court, nom } — qui pose l'action
+ * @param {object} [opts]
+ * @param {boolean} [opts.prendre=true]     attribuer le dossier s'il n'est à personne
+ * @param {boolean} [opts.refuserClos=false] refuser un dossier gagné ou perdu
+ * @returns {Promise<{status: number, body: object}>}
+ */
+async function poserProchaineAction(id, b, moi, { prendre = true, refuserClos = false, now = new Date() } = {}) {
+  const corps = b || {};
+  const type = String(corps.type || '');
+  const devisEnvoye = type === DEVIS_ENVOYE;
+  if (!devisEnvoye && !TYPES_ACTION[type]) return { status: 400, body: { ok: false, error: 'Choisis l’action à faire.' } };
+  const quand = devisEnvoye ? null : echeance(corps.quand, now);
+  if (!devisEnvoye && !quand) return { status: 400, body: { ok: false, error: 'Choisis quand (date à venir).' } };
+  const note = String(corps.note || '').trim().slice(0, 1000);
+
+  const lead = await AbandonedCart.findById(id)
+    .select('_id takenByName manualStatus status recoveredOrder engineQuote.status')
+    .lean();
+  if (!lead) return { status: 404, body: { ok: false, error: 'Dossier introuvable.' } };
+  if (refuserClos) {
+    const etape = computeWork(lead, now).stage;
+    if (etape === 'gagne' || etape === 'perdu') {
+      return { status: 409, body: { ok: false, error: `Dossier clos (${etape === 'gagne' ? 'gagné' : 'perdu'}) : à rouvrir d’abord dans le back-office.` } };
+    }
+  }
+  const set = { nextAction: devisEnvoye ? actionApresDevis(moi, now, note) : { type, dueAt: quand, note, setByName: moi.court, setAt: now } };
+  if (prendre && !lead.takenByName) { set.takenBy = moi.id; set.takenByName = moi.court; set.takenAt = now; }
+
+  const texte = devisEnvoye
+    ? `🗓 Devis envoyé — relance proposée dans 3 jours ouvrés${note ? ' — ' + note : ''}`
+    : `🗓 Prochaine action : ${TYPES_ACTION[type]} — ${fmtQuand(quand)}${note ? ' — ' + note : ''}`;
+  await AbandonedCart.updateOne({ _id: id }, {
+    $set: set,
+    $push: { notes: { text: texte, addedBy: moi.id, addedByName: moi.nom, addedAt: now } },
+  });
+  return { status: 200, body: { ok: true, message: texte.replace(/^🗓 /, ''), etat: await etatApres(id) } };
+}
+
 /** POST /admin/api/leads/:id/prochaine-action  { type, quand, note } */
 async function postProchaineAction(req, res, next) {
   try {
     const id = idValide(req, res);
     if (!id) return undefined;
-    const b = req.body || {};
-    const type = String(b.type || '');
-    const devisEnvoye = type === DEVIS_ENVOYE;
-    if (!devisEnvoye && !TYPES_ACTION[type]) return res.status(400).json({ ok: false, error: 'Choisis l’action à faire.' });
-    const now = new Date();
-    const quand = devisEnvoye ? null : echeance(b.quand, now);
-    if (!devisEnvoye && !quand) return res.status(400).json({ ok: false, error: 'Choisis quand (date à venir).' });
-    const note = String(b.note || '').trim().slice(0, 1000);
-    const moi = admin(req);
-
-    const lead = await AbandonedCart.findById(id).select('_id takenByName').lean();
-    if (!lead) return res.status(404).json({ ok: false, error: 'Dossier introuvable.' });
-    const set = { nextAction: devisEnvoye ? actionApresDevis(moi, now, note) : { type, dueAt: quand, note, setByName: moi.court, setAt: now } };
-    if (!lead.takenByName) { set.takenBy = moi.id; set.takenByName = moi.court; set.takenAt = now; }
-
-    const texte = devisEnvoye
-      ? `🗓 Devis envoyé — relance proposée dans 3 jours ouvrés${note ? ' — ' + note : ''}`
-      : `🗓 Prochaine action : ${TYPES_ACTION[type]} — ${fmtQuand(quand)}${note ? ' — ' + note : ''}`;
-    await AbandonedCart.updateOne({ _id: id }, {
-      $set: set,
-      $push: { notes: { text: texte, addedBy: moi.id, addedByName: moi.nom, addedAt: now } },
-    });
-    return res.json({ ok: true, message: texte.replace(/^🗓 /, ''), etat: await etatApres(id) });
+    const r = await poserProchaineAction(id, req.body || {}, admin(req));
+    return res.status(r.status).json(r.body);
   } catch (err) {
     return next(err);
   }
@@ -438,4 +463,4 @@ async function postLot(req, res, next) {
   }
 }
 
-module.exports = { postPrendre, postAppel, postProchaineAction, postCloturer, getNouveautes, postLot, echeance, actionApresDevis, DEVIS_ENVOYE, LOT_MAX };
+module.exports = { postPrendre, postAppel, postProchaineAction, poserProchaineAction, postCloturer, getNouveautes, postLot, echeance, actionApresDevis, etatApres, DEVIS_ENVOYE, LOT_MAX };

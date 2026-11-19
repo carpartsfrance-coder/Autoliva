@@ -1343,6 +1343,9 @@ module.exports = {
   /* Exposé pour les tests : la liste et la fiche sont rendues à partir de cet
      objet, c'est lui qu'il faut vérifier (tests/unit/leads-liste-ligne.test.js). */
   toCardModel,
+  /* Libellé de la source (« Devis », « Appel manqué »…) : le connecteur MCP
+     (outils leads) affiche les mêmes mots que le back-office. */
+  getCaptureSourceLabel,
   // legacy aliases (pour rétro-compat des routes existantes)
   getAdminAbandonedCartsPage: getAdminLeadsPage,
   getAdminAbandonedCartDetail: getAdminLeadDetail,
