@@ -35,7 +35,7 @@ const brand = require('../config/brand');
 const { computeWork, derniereReponse, duree, libelleUrgence, libelleUrgenceCourt, RESULTATS_APPEL, MOTIFS_PERTE, TYPES_ACTION } = require('../services/leadWork');
 const { chargerFile, lireTri, ecrireTri } = require('../services/leadWorkQueue');
 const { resumeDemande } = require('../services/leadResume');
-const { infosHeure, fenetreOuvree, arriveeExacte, arriveeLongue, dureeOuvree, prevuLe } = require('../services/leadHeure');
+const { infosHeure, fenetreOuvree, arriveeExacte, arriveeLongue, dureeOuvree, prevuLe, jourDe, heureSeule } = require('../services/leadHeure');
 
 function escapeHtml(value) {
   return String(value || '')
@@ -324,6 +324,12 @@ function toCardModel(c, now = new Date()) {
     recuCourt: heure.recuCourt,
     recuLong: heure.recuLong,
     recuExact: heure.recuExact,
+    /* Intertitres de jour de la liste rangée par date : le jour de la
+       demande, ou celui du rendez-vous dans « Planifiés ». */
+    recuJour: heure.recuJour,
+    recuHeure: heure.recuHeure,
+    prevuJour: work.dueAt ? jourDe(work.dueAt, now) : null,
+    prevuHeure: work.dueAt ? heureSeule(work.dueAt) : '',
     attenteMin: heure.attenteMin,
     attenteCourte: heure.attenteCourte,
     /* Repères bruts pour l'horloge du navigateur (public/js/leads-horloge.js). */

@@ -36,6 +36,8 @@ const FMT_JOUR_ANNEE = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS, day: 
 const FMT_JOUR_LONG = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS, weekday: 'long', day: 'numeric', month: 'short' });
 const FMT_DATE_EXACTE = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS, day: '2-digit', month: '2-digit', year: 'numeric' });
 const FMT_ANNEE = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS, year: 'numeric' });
+const FMT_JOUR_TITRE = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS, weekday: 'long', day: 'numeric', month: 'long' });
+const FMT_JOUR_TITRE_ANNEE = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 function versDate(v) {
   if (!v) return null;
@@ -102,6 +104,37 @@ function prevuLe(date, now = new Date()) {
   return `${FMT_DATE_EXACTE.format(d)} à ${heure}`;
 }
 
+/**
+ * Le jour, pour les intertitres de la liste rangée par date :
+ * « Aujourd’hui », « Hier », « Demain », « Samedi 28 novembre »,
+ * « Mardi 18 novembre 2025 » (une autre année). `cle` (« 2026-11-28 ») sert
+ * à regrouper : deux dossiers du même jour de Paris ont la même.
+ *
+ * Demandé le 19/11/2026 (« on peut pas trier hier, aujourd'hui, le 28
+ * novembre ? ») : triée par date, la liste n'était qu'une suite d'heures et
+ * il fallait lire chaque ligne pour savoir où commençait la veille.
+ */
+function jourDe(date, now = new Date()) {
+  const d = versDate(date);
+  if (!d) return null;
+  const cle = cleJourParis(d);
+  let libelle;
+  if (cle === cleJourParis(now)) libelle = 'Aujourd’hui';
+  else if (cle === cleJourParis(minuitParis(now, -1))) libelle = 'Hier';
+  else if (cle === cleJourParis(minuitParis(now, 1))) libelle = 'Demain';
+  else {
+    const texte = (FMT_ANNEE.format(d) === FMT_ANNEE.format(now) ? FMT_JOUR_TITRE : FMT_JOUR_TITRE_ANNEE).format(d);
+    libelle = texte.charAt(0).toUpperCase() + texte.slice(1);
+  }
+  return { cle, libelle };
+}
+
+/** L'heure seule, « 09:12 » (Paris) : sous un intertitre de jour, le reste est dit. */
+function heureSeule(date) {
+  const d = versDate(date);
+  return d ? FMT_HEURE.format(d) : '';
+}
+
 /** Date complète pour l'infobulle : « 17/11/2026 à 09:12 » (heure de Paris). */
 function arriveeExacte(date) {
   const d = versDate(date);
@@ -143,6 +176,8 @@ function infosHeure(work, now = new Date()) {
     recuLong: arriveeLongue(recu, now),
     recuExact: arriveeExacte(recu),
     recuIso: recu ? recu.toISOString() : '',
+    recuJour: jourDe(recu, now),
+    recuHeure: heureSeule(recu),
     attenteMin,
     attenteCourte: attenteMin >= 0 ? dureeOuvree(attenteMin) : '',
   };
@@ -168,6 +203,8 @@ function fenetreOuvree(now = new Date(), jours = 4) {
 
 module.exports = {
   prevuLe,
+  jourDe,
+  heureSeule,
   arriveeCourte,
   arriveeLongue,
   arriveeExacte,

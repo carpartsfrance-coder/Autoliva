@@ -301,7 +301,22 @@
                 </details>
               </div>
               <ul>
-                <% g.items.forEach(function (c) { %><%- include('./partials/lead-ligne', { c: c, triDate: !!g.tri }) %><% }) %>
+                <%/* Rangée par date, la liste est coupée par jour : « Aujourd’hui
+                      · 3 », « Hier · 2 », « Samedi 28 novembre · 1 ». Le compte
+                      porte sur tout l'onglet, pas sur les lignes affichées. */%>
+                <% var jourPrecedent = null; %>
+                <% g.items.forEach(function (c) { %>
+                  <% if (g.parJour) {
+                       var jr = g.parJour === 'rdv' ? c.prevuJour : c.recuJour;
+                       var cleJour = jr ? jr.cle : '';
+                       if (cleJour !== jourPrecedent) { jourPrecedent = cleJour;
+                         var nJour = (g.jours || {})[cleJour] || 0; %>
+                    <li class="lead-jour flex items-baseline gap-1.5 border-b border-slate-100 bg-slate-50 px-3.5 py-1.5 text-xs font-semibold text-slate-600" data-jour="<%= cleJour %>">
+                      <%= jr ? jr.libelle : 'Date inconnue' %><% if (nJour) { %><span class="font-normal text-slate-400">· <%= nJour %></span><% } %>
+                    </li>
+                  <% } } %>
+                  <%- include('./partials/lead-ligne', { c: c, triDate: !!g.tri, jour: g.parJour || '' }) %>
+                <% }) %>
               </ul>
               <% if (g.reste > 0) { %>
                 <% var qsv = new URLSearchParams(Object.assign({}, filtresEnCours, { voir: g.key })).toString(); %>
@@ -380,7 +395,7 @@
       <div class="mb-4 rounded-xl border-2 border-primary/30 bg-red-50/40 p-4">
         <div class="mb-2 text-xs font-bold uppercase tracking-widest text-primary">La méthode en 4 gestes</div>
         <ol class="list-inside list-decimal space-y-2 text-sm text-slate-800">
-          <li><strong>Vide les onglets de gauche à droite</strong> : ils sont dans l’ordre où il faut travailler. Dans chaque onglet, prends le premier client : la liste est déjà triée. Pour la voir dans l’ordre d’arrivée, le menu de tri en haut à droite de la liste range l’onglet par date de la demande, des plus récentes ou des plus anciennes ; chaque onglet garde son propre tri.</li>
+          <li><strong>Vide les onglets de gauche à droite</strong> : ils sont dans l’ordre où il faut travailler. Dans chaque onglet, prends le premier client : la liste est déjà triée. Pour la voir dans l’ordre d’arrivée, le menu de tri en haut à droite de la liste range l’onglet par date de la demande, des plus récentes ou des plus anciennes ; chaque onglet garde son propre tri. Rangée par date, la liste est coupée par jour (« Aujourd’hui », « Hier », « Samedi 28 novembre »), avec le nombre de dossiers du jour ; dans « Planifiés », c’est le jour du rendez-vous.</li>
           <li><strong>Regarde l’encadré « La prochaine action »</strong> à droite et clique sur son gros bouton : Appeler, Préparer le devis, Écrire au client…</li>
           <li><strong>Après l’appel, clique « Noter l’appel »</strong> : comment ça s’est passé, la suite, et pour quand. Sans suite, le client serait oublié : la fenêtre te la demande toujours.</li>
           <li><strong>« Enregistrer et continuer »</strong> t’emmène tout seul au client suivant. <strong>Gagné</strong> seulement quand le client a payé, <strong>Perdu</strong> toujours avec le motif (dans le menu ⋯ de la fiche).</li>
