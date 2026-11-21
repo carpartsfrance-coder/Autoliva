@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-21 — Pied de page : lien vers LEDVROOM
+
+ledvroom.com (éclairage LED auto et moto, ouvert le 8 novembre 2026) n'a aucun lien entrant : le 21 novembre, Search Console y comptait 384 pages indexées et 33 502 « détectées, actuellement non indexées ». Un lien depuis autoliva.com donne à Google une raison de plus de l'explorer.
+
+- **Lien « LEDVROOM — éclairage LED auto et moto »** en bas de la colonne « Informations » du pied de page (`views/partials/footer.ejs`), vers `https://ledvroom.com/`, dans un nouvel onglet. Suivi par les robots (pas de `nofollow`), et sans `noreferrer` pour que les visites venues d'ici restent visibles dans les statistiques de LEDVROOM.
+- **Pages françaises seulement** : LEDVROOM n'existe qu'en français, le lien n'apparaît ni sur `/de/…` ni dans le tunnel allemand. La clé `footer.sisterSiteLedvroom` existe quand même dans `de.json`, les deux fichiers de langue devant garder les mêmes clés.
+- **Référence de `politique-indexation.test.js` réenregistrée** (`SEO_REFERENCE_ECRIRE=1`), ce test comparant chaque lien des pages témoins. Diff relu : sur 53 pages témoins, 29 pages françaises gagnent ce lien et rien d'autre ; les 24 autres (pages allemandes, sitemaps, redirections) sont identiques.
+
 ## 2026-11-19 (soir) — Connecteur MCP : les leads (lire, chercher, noter, planifier)
 
 Demande de Killian : « pour récupérer les leads ou traiter, tu voudrais pas utiliser le connecteur ? ». Le connecteur ne voyait que les ventes, le SAV et les commandes : les leads se lisaient en pilotant le back-office dans un navigateur.
