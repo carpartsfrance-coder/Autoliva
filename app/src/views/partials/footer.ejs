@@ -50,6 +50,11 @@
 <li><span class="block"><%= t('footer.address') %></span></li>
 <li><a class="hover:text-white transition-colors flex items-center gap-2" href="mailto:<%= brand.EMAIL_CONTACT %>"><span class="material-symbols-outlined text-sm">mail</span> <%= brand.EMAIL_CONTACT %></a></li>
 <% if (!(typeof hidePhone !== 'undefined' && hidePhone)) { %><li><a class="hover:text-white transition-colors flex items-center gap-2" href="tel:<%= brand.PHONE_INTL %>"><span class="material-symbols-outlined text-sm">call</span> <%= brand.PHONE %></a></li><% } %>
+<%# Boutique sœur. ledvroom.com n'existe qu'en français : le lien n'apparaît
+    donc que sur les pages françaises. Pas de `nofollow` — c'est par ce lien que
+    Google découvre et explore le site ; pas de `noreferrer` non plus, pour que
+    les visites venues d'ici restent visibles dans ses statistiques. %>
+<% if (typeof lang === 'undefined' || lang === 'fr') { %><li><a class="hover:text-white transition-colors" href="https://ledvroom.com/" target="_blank" rel="noopener"><%= t('footer.sisterSiteLedvroom') %></a></li><% } %>
 </ul>
 </div>
 <div>
