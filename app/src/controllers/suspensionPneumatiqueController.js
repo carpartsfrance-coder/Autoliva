@@ -51,25 +51,25 @@ const VARIANTS = {
     path: LANDING_PATH,
     view: 'suspension-pneumatique/index',
     conditionLabel: 'Suspension pneumatique',
-    title: `Suspension pneumatique en échange standard : jambes, compresseurs — ${brand.NAME}`,
+    title: `Suspension pneumatique reconditionnée, garantie 2 ans — ${brand.NAME}`,
     metaDescription:
-      'Jambes de force et amortisseurs pneumatiques, compresseurs et blocs de valves en échange standard pour Porsche, Mercedes Airmatic, Audi, BMW, Range Rover. Compatibilité vérifiée par plaque ou VIN, devis sous 24h.',
+      'Jambes de force et amortisseurs pneumatiques, compresseurs et blocs de valves reconditionnés par un atelier partenaire certifié ISO 9001, en échange standard, garantie 2 ans. Porsche, Mercedes Airmatic, Audi, BMW, Range Rover. Devis sous 24h.',
     jsonLdServiceType: 'Vente de pièces de suspension pneumatique en échange standard',
     jsonLdDescription:
-      'Jambes de force pneumatiques, amortisseurs pilotés, compresseurs et blocs de valves pour véhicules haut de gamme, en échange standard. Compatibilité vérifiée par plaque ou VIN. Devis personnalisé sous 24h.',
+      'Jambes de force pneumatiques, amortisseurs pilotés, compresseurs et blocs de valves reconditionnés par un atelier partenaire certifié ISO 9001, testés avant expédition, garantie 2 ans. Échange standard. Devis personnalisé sous 24h.',
     copy: {
       formAction: '/suspension-pneumatique/devis',
       funnelName: 'suspension-pneumatique',
       leadCategory: 'suspension',
       defaultPartType: '',
       eyebrow: 'Suspension pneumatique',
-      h1Html: 'Suspension pneumatique<br>en échange standard,<br><span class="text-brand-red">contrôlée et garantie.</span>',
-      sub: 'Jambes de force, amortisseurs pneumatiques, compresseurs et blocs de valves pour Porsche, Mercedes Airmatic, Audi, BMW et Range Rover. Compatibilité vérifiée avec votre plaque ou votre VIN.',
-      warrantyLabel: 'Garantie incluse',
-      qualitySubtitle: 'La bonne pièce, contrôlée, avec la bonne procédure de montage.',
+      h1Html: 'Suspension pneumatique<br>reconditionnée,<br><span class="text-brand-red">garantie 2 ans.</span>',
+      sub: 'Jambes de force, amortisseurs pneumatiques, compresseurs et blocs de valves reconditionnés par un atelier partenaire certifié ISO 9001, en échange standard. Pour Porsche, Mercedes Airmatic, Audi, BMW et Range Rover, compatibilité vérifiée avec votre plaque ou votre VIN.',
+      warrantyLabel: 'Garantie 2 ans',
+      qualitySubtitle: 'Une pièce reconditionnée en atelier partenaire certifié ISO 9001, suivie de l’identification à l’expédition.',
       steps: [
         { n: '01', icon: 'doc', title: 'Identification', desc: 'Plaque ou VIN → référence d’origine exacte (PASM, ADS, CDC…)' },
-        { n: '02', icon: 'wrench', title: 'Sourcing', desc: 'Pièce d’origine reconditionnée ou équivalente' },
+        { n: '02', icon: 'wrench', title: 'Reconditionnement', desc: 'Par un atelier partenaire certifié ISO 9001' },
         { n: '03', icon: 'clean', title: 'Contrôle', desc: 'Étanchéité et fonctionnement vérifiés avant expédition' },
         { n: '04', icon: 'gear', title: 'Diagnostic du système', desc: 'On vous aide à trouver la cause : fuite, relais, compresseur', highlight: true },
         { n: '05', icon: 'shield', title: 'Procédure de montage', desc: 'Mise en pression et calibrage expliqués' },
@@ -226,7 +226,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, partTypeLabel, brandObj
       <!-- TRUST STRIP : une ligne discrète au lieu d'un gros bloc -->
       <tr><td style="padding:24px 32px 8px;">
         <p style="margin:0;padding:14px 18px;background:#fafbfc;border:1px solid #eef0f3;border-radius:8px;font-size:13px;color:#475569;text-align:center;line-height:1.5;">
-          Contrôle complet · Échange standard · Garantie incluse sans franchise
+          Reconditionné en atelier partenaire certifié ISO 9001 · Échange standard · Garantie 2 ans
         </p>
       </td></tr>
 

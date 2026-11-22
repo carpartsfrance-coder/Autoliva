@@ -37,8 +37,8 @@
 <div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
 <svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
-<h3 class="font-bold text-sm mb-0.5 md:mb-1">Compatibilité vérifiée</h3>
-<p class="text-xs text-brand-textgray">Par votre plaque ou votre VIN</p>
+<h3 class="font-bold text-sm mb-0.5 md:mb-1">Reconditionné ISO 9001</h3>
+<p class="text-xs text-brand-textgray">Atelier partenaire certifié</p>
 </div>
 </div>
 <div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
@@ -52,7 +52,7 @@
 <svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
 <h3 class="font-bold text-sm mb-0.5 md:mb-1"><%= copy.warrantyLabel %></h3>
-<p class="text-xs text-brand-textgray">Durée confirmée sur votre devis</p>
+<p class="text-xs text-brand-textgray">Sur chaque pièce reconditionnée</p>
 </div>
 </div>
 </div>
@@ -382,7 +382,7 @@ Envoyer ma demande
 </div>
 <div>
 <h4 class="font-bold mb-1"><%= copy.warrantyLabel %></h4>
-<p class="text-xs text-gray-400">Pièce complète, prête à monter.</p>
+<p class="text-xs text-gray-400">Sur chaque pièce reconditionnée, prête à monter.</p>
 </div>
 </div>
 <div class="flex items-start gap-4">
@@ -390,8 +390,8 @@ Envoyer ma demande
 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </div>
 <div>
-<h4 class="font-bold mb-1">Haut de gamme</h4>
-<p class="text-xs text-gray-400">Porsche, Mercedes-AMG, Audi, BMW, Range Rover.</p>
+<h4 class="font-bold mb-1">Qualité ISO 9001</h4>
+<p class="text-xs text-gray-400">Reconditionnement par un atelier partenaire certifié.</p>
 </div>
 </div>
 <div class="flex items-start gap-4">
@@ -491,6 +491,13 @@ Demander mon devis gratuit
 <div class="space-y-4">
 <details class="border-b border-gray-100 pb-4 group">
 <summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
+<span class="text-sm font-semibold text-gray-700">Qui reconditionne les pièces ?</span>
+<svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</summary>
+<p class="text-xs text-gray-500 mt-3">Un atelier partenaire certifié ISO 9001 : démontage, remplacement des pièces d'usure, puis test d'étanchéité et de fonctionnement avant expédition. Chaque pièce est garantie 2 ans.</p>
+</details>
+<details class="border-b border-gray-100 pb-4 group">
+<summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
 <span class="text-sm font-semibold text-gray-700">Comment fonctionne l'échange standard ?</span>
 <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </summary>
@@ -519,10 +526,10 @@ Demander mon devis gratuit
 </details>
 <details class="border-b border-gray-100 pb-4 group">
 <summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
-<span class="text-sm font-semibold text-gray-700">La garantie est-elle incluse ?</span>
+<span class="text-sm font-semibold text-gray-700">Quelle est la garantie ?</span>
 <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </summary>
-<p class="text-xs text-gray-500 mt-3">Oui. La durée exacte dépend de la pièce et est indiquée sur votre devis. Elle suppose un montage conforme : mise en pression et calibrage du système après remplacement.</p>
+<p class="text-xs text-gray-500 mt-3">2 ans sur chaque pièce reconditionnée. Elle suppose un montage conforme : mise en pression et calibrage du système après remplacement.</p>
 </details>
 <details class="group">
 <summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">

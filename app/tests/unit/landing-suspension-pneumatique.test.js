@@ -45,3 +45,14 @@ test('la page ne reprend pas les promesses propres aux ponts (denture, 48-72 h, 
   assert.ok(!/denture|48 à 72|48-72|Bench Video/i.test(view));
   assert.ok(view.includes("lead_category: '<%= copy.leadCategory %>'"));
 });
+
+test('ISO 9001 toujours attribué à l’atelier partenaire, garantie 2 ans affichée', () => {
+  const view = lire('views/suspension-pneumatique/index.ejs');
+  const ctrlSrc = lire('controllers/suspensionPneumatiqueController.js');
+  for (const txt of [view, ctrlSrc]) {
+    const isoSansPartenaire = txt.split('\n').filter((l) => /ISO 9001/.test(l) && !/partenaire|Reconditionné ISO 9001|Qualité ISO 9001/.test(l));
+    assert.deepStrictEqual(isoSansPartenaire, []);
+  }
+  assert.strictEqual(ctrl._internal.CAPTURE_SOURCE, 'landing_suspension');
+  assert.ok(ctrlSrc.includes("warrantyLabel: 'Garantie 2 ans'"));
+});
