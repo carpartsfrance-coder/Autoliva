@@ -29,6 +29,7 @@ const { getLandingArticles } = require('../services/landingArticles');
 const brand = require('../config/brand');
 
 const LANDING_PATH = '/suspension-pneumatique';
+const CAMPING_PATH = '/suspension-pneumatique-camping-car';
 const CAPTURE_SOURCE = 'landing_suspension';
 
 /* Types de pièce proposés dans le formulaire.
@@ -42,15 +43,36 @@ const PART_TYPES = {
   autre: 'Autre / je ne sais pas',
 };
 
-function getVariant() {
-  return 'suspension';
+/* Camping-car / utilitaire : kits NEUFS de suspension pneumatique (assistance),
+ * envoyés seuls (montage par le garage du client). */
+const PART_TYPES_CAMPING = {
+  kit_arriere: 'Kit essieu arrière',
+  kit_complet: 'Kit 4 roues (full air)',
+  commande: 'Compresseur / commande cabine',
+  autre: 'Autre / je ne sais pas',
+};
+
+/* Deux landings partagent le même contrôleur (message match Google Ads) :
+ *  - /suspension-pneumatique             → haut de gamme, reconditionné, échange standard
+ *  - /suspension-pneumatique-camping-car → camping-car / utilitaire, kit neuf envoyé seul */
+function getVariant(req) {
+  const p = String((req && (req.path || req.originalUrl)) || '');
+  return p.indexOf('camping') !== -1 ? 'camping' : 'suspension';
 }
 
 const VARIANTS = {
   suspension: {
     path: LANDING_PATH,
     view: 'suspension-pneumatique/index',
+    partTypes: PART_TYPES,
     conditionLabel: 'Suspension pneumatique',
+    conditionSuffix: 'reconditionné(e) — échange standard',
+    subjectTag: 'Suspension',
+    email: {
+      controle: 'Étanchéité et fonctionnement vérifiés — même quand on doit sourcer la pièce pour vous.',
+      trust: 'Reconditionné en atelier partenaire certifié ISO 9001 · Échange standard · Garantie 2 ans',
+      footer: 'Autoliva — Suspension pneumatique en échange standard : jambes, compresseurs et blocs de valves.',
+    },
     title: `Suspension pneumatique reconditionnée, garantie 2 ans — ${brand.NAME}`,
     metaDescription:
       'Jambes de force et amortisseurs pneumatiques, compresseurs et blocs de valves reconditionnés par un atelier partenaire certifié ISO 9001, en échange standard, garantie 2 ans. Porsche, Mercedes Airmatic, Audi, BMW, Range Rover. Devis sous 24h.',
@@ -77,6 +99,43 @@ const VARIANTS = {
       ],
     },
   },
+  camping: {
+    path: CAMPING_PATH,
+    view: 'suspension-pneumatique/camping-car',
+    partTypes: PART_TYPES_CAMPING,
+    conditionLabel: 'Kit suspension pneumatique camping-car',
+    conditionSuffix: 'kit neuf — envoi seul',
+    subjectTag: 'Suspension camping-car',
+    email: {
+      controle: 'Kit choisi pour votre châssis exact — même quand on doit le commander pour vous.',
+      trust: 'Kit neuf · Adapté à votre châssis · Livraison partout en France',
+      footer: 'Autoliva — Kits de suspension pneumatique pour camping-cars et utilitaires.',
+    },
+    title: `Kit suspension pneumatique camping-car Fiat Ducato, AL-KO — ${brand.NAME}`,
+    metaDescription:
+      'Kits de suspension pneumatique neufs pour camping-car et utilitaire : Fiat Ducato, châssis AL-KO, Ford Transit, Iveco Daily, Renault Master. Kit adapté à votre châssis, livré partout en France. Devis sous 24h.',
+    jsonLdServiceType: 'Vente de kits de suspension pneumatique pour camping-cars',
+    jsonLdDescription:
+      'Kits de suspension pneumatique neufs (essieu arrière, 4 roues, commande cabine) pour camping-cars et utilitaires, choisis selon le châssis du véhicule et livrés partout en France. Devis personnalisé sous 24h.',
+    copy: {
+      formAction: '/suspension-pneumatique-camping-car/devis',
+      funnelName: 'suspension-camping-car',
+      leadCategory: 'suspension_camping',
+      defaultPartType: '',
+      eyebrow: 'Suspension pneumatique camping-car',
+      h1Html: 'Kit suspension pneumatique<br>pour camping-car,<br><span class="text-brand-red">adapté à votre châssis.</span>',
+      sub: 'Kits neufs pour Fiat Ducato, châssis AL-KO, Ford Transit, Iveco Daily et Renault Master. Fini le camping-car qui s’affaisse à l’arrière : plus de stabilité et de confort sur la route. Le bon kit trouvé avec votre plaque, livré chez vous.',
+      warrantyLabel: 'Kit neuf garanti',
+      qualitySubtitle: 'Le bon kit pour votre châssis, livré prêt à monter.',
+      steps: [
+        { n: '01', icon: 'doc', title: 'Identification', desc: 'Plaque ou VIN → châssis exact (Ducato, AL-KO, Transit…)' },
+        { n: '02', icon: 'cog', title: 'Choix du kit', desc: 'Essieu arrière, 4 roues ou commande cabine selon votre usage', highlight: true },
+        { n: '03', icon: 'doc', title: 'Devis sous 24 h', desc: 'Prix, délai et contenu du kit' },
+        { n: '04', icon: 'truck', title: 'Livraison', desc: 'Kit neuf livré partout en France' },
+        { n: '05', icon: 'wrench', title: 'Montage', desc: 'Par votre garage, avec la notice du fabricant' },
+      ],
+    },
+  },
 };
 
 /* Génère un numéro de devis unique au format AUT-2026-05-A1B2C3
@@ -91,7 +150,8 @@ function generateQuoteRef() {
 
 /* Template HTML brandé pour l'accusé réception client.
  * Utilise des tables inline (compat email client maximale). */
-function buildAckEmailHtml({ firstName, quoteRef, plate, partTypeLabel, brandObj }) {
+function buildAckEmailHtml({ firstName, quoteRef, plate, partTypeLabel, brandObj, texts }) {
+  const tx = texts || VARIANTS.suspension.email;
   const safeFirstName = firstName ? String(firstName).replace(/[<>&"]/g, '') : '';
   const safePlate = plate ? String(plate).replace(/[<>&"]/g, '') : '';
   const safePartType = partTypeLabel || '—';
@@ -217,7 +277,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, partTypeLabel, brandObj
               <div style="width:24px;height:24px;border-radius:50%;background:#0f172a;color:#ffffff;text-align:center;line-height:24px;font-weight:700;font-size:12px;">3</div>
             </td>
             <td valign="top">
-              <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.6;"><strong style="color:#0f172a;">Aucune pièce n'est expédiée sans contrôle.</strong> Étanchéité et fonctionnement vérifiés — même quand on doit sourcer la pièce pour vous.</p>
+              <p style="margin:0;font-size:14px;color:#1f2937;line-height:1.6;"><strong style="color:#0f172a;">Aucune pièce n'est expédiée sans contrôle.</strong> ${tx.controle}</p>
             </td>
           </tr>
         </table>
@@ -226,7 +286,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, partTypeLabel, brandObj
       <!-- TRUST STRIP : une ligne discrète au lieu d'un gros bloc -->
       <tr><td style="padding:24px 32px 8px;">
         <p style="margin:0;padding:14px 18px;background:#fafbfc;border:1px solid #eef0f3;border-radius:8px;font-size:13px;color:#475569;text-align:center;line-height:1.5;">
-          Reconditionné en atelier partenaire certifié ISO 9001 · Échange standard · Garantie 2 ans
+          ${tx.trust}
         </p>
       </td></tr>
 
@@ -245,7 +305,7 @@ function buildAckEmailHtml({ firstName, quoteRef, plate, partTypeLabel, brandObj
       <!-- FOOTER -->
       <tr><td style="padding:18px 32px 28px;">
         <p style="margin:0;font-size:11px;color:#94a3b8;line-height:1.5;">
-          Autoliva — Suspension pneumatique en échange standard : jambes, compresseurs et blocs de valves.<br>
+          ${tx.footer}<br>
           <a href="mailto:contact@autoliva.com" style="color:#94a3b8;text-decoration:underline;">contact@autoliva.com</a> · <a href="tel:${phoneIntl}" style="color:#94a3b8;text-decoration:none;">${phoneDisplay}</a> · <a href="${publicSite}" style="color:#94a3b8;text-decoration:underline;">autoliva.com</a><br>
           Vos données sont confidentielles et traitées conformément au RGPD. Référence à conserver : <strong style="color:#475569;font-family:'SF Mono',monospace;">${quoteRef}</strong>
         </p>
@@ -365,7 +425,7 @@ function buildInitialForm(req, variant) {
     email: trim(q.email),
     phone: trim(q.phone),
     message: '',
-    partType: PART_TYPES[partTypeRaw] ? partTypeRaw : (v.copy.defaultPartType || ''),
+    partType: v.partTypes[partTypeRaw] ? partTypeRaw : (v.copy.defaultPartType || ''),
     website: '', // honeypot
   };
 }
@@ -398,7 +458,7 @@ async function renderPage(res, req, opts) {
     jsonLd: buildServiceJsonLd({ baseUrl, v }),
     landing: LANDING_DATA,
     copy: v.copy,
-    partTypes: PART_TYPES,
+    partTypes: v.partTypes,
     form: opts.form,
     errorMessage: opts.errorMessage || null,
     successMessage: opts.successMessage || null,
@@ -427,13 +487,13 @@ async function postDevis(req, res, next) {
 
     // Type de pièce (jambe avant/arrière, compresseur, bloc de valves, autre).
     const partTypeRaw = trim(body.partType).toLowerCase();
-    const partType = PART_TYPES[partTypeRaw] ? partTypeRaw : '';
-    const partTypeLabel = partType ? PART_TYPES[partType] : '';
+    const partType = v.partTypes[partTypeRaw] ? partTypeRaw : '';
+    const partTypeLabel = partType ? v.partTypes[partType] : '';
 
-    // On ne propose QUE du reconditionné en échange standard → condition figée
+    // Condition figée par variante (reconditionné échange standard, ou kit neuf)
     // (pas de champ « état » côté client). → requested.vehicle → deriveCondition.
     const baseLabel = partTypeLabel || v.conditionLabel;
-    const conditionLabel = `${baseLabel} reconditionné(e) — échange standard`;
+    const conditionLabel = `${baseLabel} — ${v.conditionSuffix}`;
 
     const composedMessage = partTypeLabel ? `Pièce demandée : ${partTypeLabel}` : '';
 
@@ -513,7 +573,7 @@ async function postDevis(req, res, next) {
     const quoteRef = generateQuoteRef();
 
     // 1) Email interne (notification commercial)
-    const internalSubject = `[Suspension] ${quoteRef} — ${displayName}${form.plate ? ` — ${form.plate}` : ''}`.slice(0, 180);
+    const internalSubject = `[${v.subjectTag}] ${quoteRef} — ${displayName}${form.plate ? ` — ${form.plate}` : ''}`.slice(0, 180);
     const internalHtml = `
       <div style="font-family:Arial,sans-serif;line-height:1.5;color:#111827;">
         <h2 style="margin:0 0 8px 0;">Nouveau lead — Suspension pneumatique (${escapeHtml(conditionLabel)})</h2>
@@ -561,6 +621,7 @@ async function postDevis(req, res, next) {
           plate: form.plate,
           partTypeLabel,
           brandObj: brand,
+          texts: v.email,
         });
         const ackText = [
           `Votre demande de devis Autoliva est bien reçue.`,
@@ -669,5 +730,5 @@ module.exports = {
   getLanding,
   postDevis,
   buildAckEmailHtml,
-  _internal: { LANDING_DATA, CAPTURE_SOURCE, LANDING_PATH, PART_TYPES },
+  _internal: { LANDING_DATA, CAPTURE_SOURCE, LANDING_PATH, CAMPING_PATH, PART_TYPES, PART_TYPES_CAMPING, VARIANTS, getVariant },
 };

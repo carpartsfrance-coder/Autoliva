@@ -56,3 +56,20 @@ test('ISO 9001 toujours attribué à l’atelier partenaire, garantie 2 ans affi
   assert.strictEqual(ctrl._internal.CAPTURE_SOURCE, 'landing_suspension');
   assert.ok(ctrlSrc.includes("warrantyLabel: 'Garantie 2 ans'"));
 });
+
+test('variante camping-car : URL, kits neufs, aucune promesse de reconditionné ISO 9001 ni d’échange standard', () => {
+  const { CAMPING_PATH, PART_TYPES_CAMPING, VARIANTS, getVariant } = ctrl._internal;
+  assert.strictEqual(CAMPING_PATH, '/suspension-pneumatique-camping-car');
+  assert.strictEqual(getVariant({ path: '/suspension-pneumatique-camping-car/devis' }), 'camping');
+  assert.strictEqual(getVariant({ path: '/suspension-pneumatique/devis' }), 'suspension');
+  assert.deepStrictEqual(Object.keys(PART_TYPES_CAMPING), ['kit_arriere', 'kit_complet', 'commande', 'autre']);
+  const routes = lire('routes/index.js');
+  assert.ok(routes.includes("router.post('/suspension-pneumatique-camping-car/devis'"));
+  const view = lire('views/suspension-pneumatique/camping-car.ejs');
+  const copy = JSON.stringify(VARIANTS.camping);
+  for (const txt of [view, copy]) {
+    assert.ok(!/ISO 9001|reconditionn|échange standard|consigne/i.test(txt), 'pas de promesse propre au reconditionné');
+  }
+  const html = ctrl.buildAckEmailHtml({ quoteRef: 'AUT-2026-11-ABC123', plate: 'AB123CD', partTypeLabel: 'Kit essieu arrière', brandObj: {}, texts: VARIANTS.camping.email });
+  assert.ok(!/ISO 9001|Échange standard/.test(html), 'e-mail client camping-car sans ISO ni échange standard');
+});

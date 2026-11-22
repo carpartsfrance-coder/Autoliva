@@ -95,6 +95,9 @@ router.post('/boites-de-transfert/devis', pontTransfertController.postDevis);
 // /ponts-differentiels, captureSource = 'landing_suspension'.
 router.get('/suspension-pneumatique', suspensionPneumatiqueController.getLanding);
 router.post('/suspension-pneumatique/devis', suspensionPneumatiqueController.postDevis);
+// Variante camping-car / utilitaire : kits neufs envoyés seuls (même tunnel, message match Ads).
+router.get('/suspension-pneumatique-camping-car', suspensionPneumatiqueController.getLanding);
+router.post('/suspension-pneumatique-camping-car/devis', suspensionPneumatiqueController.postDevis);
 
 // Landing « Transformation 2 → 5 places » (test commercial nov. 2026) :
 // captureSource = 'landing_5places', contact WhatsApp uniquement (pas de téléphone).
