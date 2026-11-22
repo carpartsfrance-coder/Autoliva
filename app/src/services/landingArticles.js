@@ -28,6 +28,9 @@ const CATEGORY_SLUGS = {
   pont: ['transmission-pont-differentiel'],
   // Boîtes de transfert (3 slugs doublons en base)
   transfert: ['transmission-boite-de-transfert', 'transmission-boite-transfert', 'boite-de-transfert'],
+  // Suspension pneumatique (landing test nov. 2026) : pas encore d'articles dédiés en base →
+  // le repli complète avec les familles transmission/moteur.
+  suspension: ['suspension-pneumatique', 'suspension', 'liaison-au-sol'],
 };
 
 /**

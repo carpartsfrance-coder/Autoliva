@@ -105,6 +105,7 @@ function getCaptureSourceLabel(captureSource) {
     landing_boites: { label: 'Boîte occasion', className: 'bg-red-50 text-red-700' },
     landing_ponts: { label: 'Pont / Transfert', className: 'bg-amber-50 text-amber-700' },
     landing_5places: { label: 'Transfo 2→5 places', className: 'bg-sky-50 text-sky-700' },
+    landing_suspension: { label: 'Suspension pneumatique', className: 'bg-violet-50 text-violet-700' },
     cart_activity: { label: 'Panier', className: 'bg-slate-100 text-slate-700' },
     blog_cta: { label: 'Article blog', className: 'bg-emerald-50 text-emerald-700' },
     appel_manque: { label: 'Appel manqué', className: 'bg-orange-50 text-orange-700' },
@@ -127,7 +128,7 @@ const ENGINE_PIPELINE_SOURCES = ['landing_moteurs', 'landing_boites', 'landing_p
  * demandes de devis/contact, déjà suivies par leur propre canal.
  * Doit rester aligné avec l'exclusion du cron (sendAbandonedCartReminders).
  */
-const NON_CART_SOURCES = ['landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_5places', 'contact', 'devis', 'blog_cta'];
+const NON_CART_SOURCES = ['landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_5places', 'landing_suspension', 'contact', 'devis', 'blog_cta'];
 
 /** Statuts de commande = vraie vente (exclut brouillons/annulées/remboursées). */
 const SALE_STATUSES = ['paid', 'processing', 'label_created', 'shipped', 'delivered', 'completed'];
@@ -273,7 +274,7 @@ function toCardModel(c, now = new Date()) {
   /* Demande explicite = formulaires devis/contact ET tunnels moteur/boîte
      (leur `requested` est l'info primaire ; sans ça un lead moteur sans
      panier affichait « 0,00 € » au lieu de sa demande) */
-  const isExplicitRequest = ['devis', 'contact', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_5places', 'blog_cta', 'manual'].includes(c.captureSource || '');
+  const isExplicitRequest = ['devis', 'contact', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_5places', 'landing_suspension', 'blog_cta', 'manual'].includes(c.captureSource || '');
   const hasRequested = !!(requested.vehicle || requested.vin || requested.plate || requested.ref || requested.message);
 
   /* ── Données « suivi commercial » (timeline de la carte) ── */
@@ -617,7 +618,7 @@ async function getAdminLeadsPage(req, res, next) {
     if (manualStatusFilter === 'none') query.manualStatus = null;
     else if (['contacted', 'converted', 'lost'].includes(manualStatusFilter)) query.manualStatus = manualStatusFilter;
 
-    const allowedSources = new Set(['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_5places', 'cart_activity', 'blog_cta', 'appel_manque', 'manual']);
+    const allowedSources = new Set(['user', 'guest_checkout', 'newsletter', 'contact', 'devis', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_5places', 'landing_suspension', 'cart_activity', 'blog_cta', 'appel_manque', 'manual']);
     if (captureSource && allowedSources.has(captureSource)) query.captureSource = captureSource;
 
     if (channel === 'email') query.email = { $ne: '' };
