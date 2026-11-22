@@ -13,6 +13,7 @@ const transformation5PlacesController = require('../controllers/transformation5P
 const moteurOccasionController = require('../controllers/moteurOccasionController');
 const boiteOccasionController = require('../controllers/boiteOccasionController');
 const pontTransfertController = require('../controllers/pontTransfertController');
+const suspensionPneumatiqueController = require('../controllers/suspensionPneumatiqueController');
 const avisPublicController = require('../controllers/avisPublicController');
 const { getSiteUrlFromReq } = require('../services/siteUrl');
 const brand = require('../config/brand');
@@ -89,6 +90,11 @@ router.get('/ponts-differentiels', pontTransfertController.getLanding);
 router.post('/ponts-differentiels/devis', pontTransfertController.postDevis);
 router.get('/boites-de-transfert', pontTransfertController.getLanding);
 router.post('/boites-de-transfert/devis', pontTransfertController.postDevis);
+
+// Landing « Suspension pneumatique » (test marché nov. 2026) : même machine que
+// /ponts-differentiels, captureSource = 'landing_suspension'.
+router.get('/suspension-pneumatique', suspensionPneumatiqueController.getLanding);
+router.post('/suspension-pneumatique/devis', suspensionPneumatiqueController.postDevis);
 
 // Landing « Transformation 2 → 5 places » (test commercial nov. 2026) :
 // captureSource = 'landing_5places', contact WhatsApp uniquement (pas de téléphone).

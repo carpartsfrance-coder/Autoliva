@@ -57,7 +57,7 @@ const ho = require('./heuresOuvrees');
 const { minuitParis } = require('./heureParis');
 
 /** Le client a fait une DEMANDE (et non un simple passage sur le site). */
-const SOURCES_DEMANDE = ['devis', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_5places',
+const SOURCES_DEMANDE = ['devis', 'landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_5places', 'landing_suspension',
   'contact', 'blog_cta', 'appel_manque', 'manual'];
 /** Dossiers qui ont un atelier devis (/admin/devis-moteurs/:id). */
 const SOURCES_ATELIER = ['landing_moteurs', 'landing_boites', 'landing_ponts'];

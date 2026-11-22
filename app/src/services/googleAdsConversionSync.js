@@ -32,7 +32,7 @@ const { margeCommande, tauxMargeParDefaut, CHAMPS_MARGE } = require('./margeComm
 const { normalizePhone } = require('./enhancedConversionData');
 
 const LEAD_WINDOW_DAYS = 80;            // marge sous la fenêtre gclid de 90 j
-const LEAD_SOURCES = ['landing_moteurs', 'landing_boites', 'landing_ponts'];
+const LEAD_SOURCES = ['landing_moteurs', 'landing_boites', 'landing_ponts', 'landing_suspension'];
 const SALE_STATUSES = ['won', 'acompte_recu'];
 // Un devis a été envoyé : statut courant OU trace d'envoi dans l'historique
 // (les statuts avals 'acompte_recu'/'won' impliquent que le lead a été qualifié).

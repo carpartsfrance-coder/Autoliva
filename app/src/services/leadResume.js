@@ -17,6 +17,7 @@ const PIECE_PAR_SOURCE = {
   landing_boites: 'Boîte de vitesses',
   landing_ponts: 'Pont / boîte de transfert',
   landing_5places: 'Transformation 2 → 5 places',
+  landing_suspension: 'Suspension pneumatique',
   appel_manque: 'Appel manqué',
 };
 
