@@ -214,7 +214,12 @@ function motifSansAccent(mot) {
  */
 const REF_LONGUEUR_MIN = 5;
 
-function motifReference(mot) {
+/* Référence tout en chiffres (BMW « 33107602984 », Bosch « 0470504033 ») :
+   acceptée seulement à partir de 8 chiffres, et seulement quand l'appelant le
+   demande. En dessous, un nombre ressemble trop à un prix ou à un kilométrage. */
+const REF_CHIFFRES_SEULS_MIN = 8;
+
+function motifReference(mot, { chiffresSeuls = false } = {}) {
   /* Volontairement sans `motifSansAccent` : celui-ci remplace chaque lettre
      par une classe accentuée, qu'on ne peut plus découper caractère par
      caractère. Une référence constructeur est de l'ASCII pur, donc un simple
@@ -226,7 +231,9 @@ function motifReference(mot) {
     .replace(/[^a-z0-9]/g, '');
 
   if (base.length < REF_LONGUEUR_MIN) return '';
-  if (!/[a-z]/.test(base) || !/\d/.test(base)) return '';
+  if (/^\d+$/.test(base)) {
+    if (!chiffresSeuls || base.length < REF_CHIFFRES_SEULS_MIN) return '';
+  } else if (!/[a-z]/.test(base) || !/\d/.test(base)) return '';
 
   const premier = base[0] === '0' || base[0] === 'o' ? '[0o]' : base[0];
   const reste = base.slice(1).split('').join('[^a-z0-9]*');
@@ -351,6 +358,41 @@ function rechercheParReference(searchQuery) {
   return (/[A-Za-z]/.test(q) && /\d/.test(q)) || /\d{3,}/.test(q);
 }
 
+/**
+ * Dernière chance pour une référence qu'Atlas n'a pas reconnue.
+ *
+ * Analytics du 22/11/2026 : « 0am325025d », « oam325065 », « 33107602984 »
+ * sortaient « aucun résultat » alors que la pièce est au catalogue. Atlas
+ * découpe « 0AM 325 025 D » en morceaux et ne le rapproche jamais de
+ * « 0am325025d » collé ; il ne sait pas non plus que le client tape la
+ * lettre O à la place du zéro.
+ *
+ * Ici, une simple regex MongoDB (`motifReference`) qui ignore espaces,
+ * tirets et points et accepte O pour 0 en tête. Elle ne tourne que si :
+ *   — la saisie ressemble à une référence (`rechercheParReference`) ;
+ *   — Atlas n'a RIEN trouvé (cas rare, la voie normale reste Atlas).
+ * Champs courts seulement (REF_CHAMPS, sans `description`) : l'autocomplétion
+ * appelle cette fonction à chaque frappe, un balayage des descriptions
+ * (~80 Mo) y serait ruineux. Une référence absente de ces champs doit donc
+ * être ajoutée dans « références compatibles » de la fiche.
+ * Une erreur ou un délai dépassé ne casse rien : on garde le « 0 résultat ».
+ */
+async function passeReferenceTolerante(q, construire, lire) {
+  if (!rechercheParReference(q)) return null;
+  const recollee = String(q).split(/[^\p{L}\p{N}]+/u).filter(Boolean).join('');
+  const motif = motifReference(recollee, { chiffresSeuls: true });
+  if (!motif) return null;
+  const rx = { $regex: motif, $options: 'i' };
+  const etape = { $match: { $or: REF_CHAMPS.map((champ) => ({ [champ]: rx })) } };
+  try {
+    const r = lire(await Product.aggregate(construire(etape)).option({ maxTimeMS: ATLAS_TIMEOUT_MS }));
+    return r.totalCount > 0 ? r : null;
+  } catch (err) {
+    console.warn('[search] passe « référence tolérante » ignorée :', err && err.message);
+    return null;
+  }
+}
+
 async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, perPage }) {
   const q = String(searchQuery || '').trim();
   if (!q) return null;
@@ -441,6 +483,10 @@ async function searchProductsViaAtlas({ baseFilter, searchQuery, sort, page, per
     const out = await Product.aggregate(pipeline).option({ maxTimeMS: ATLAS_TIMEOUT_MS });
     const { products, totalCount } = lire(out);
     signalerSuccesAtlas();
+    if (totalCount === 0) {
+      const tolerant = await passeReferenceTolerante(q, construire, lire);
+      if (tolerant) return tolerant;
+    }
     return { products, totalCount };
   } catch (err) {
     console.warn('[search] Atlas Search indisponible, repli moteur JS :', err && err.message);

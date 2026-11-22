@@ -107,3 +107,70 @@ test('recherche par référence : le véhicule mémorisé ne s’applique pas', 
     assert.equal(svc.rechercheParReference(q), false, q);
   }
 });
+
+/* Analytics du 22/11/2026 : « oam325065 », « 0am325025d », « 33107602984 »
+   ne trouvaient rien alors que les pièces sont au catalogue. Quand Atlas
+   répond 0, une passe regex tolérante (espaces, tirets, O pour 0) est tentée
+   sur les champs courts. */
+test('passe « référence tolérante » quand Atlas ne trouve rien', async (t) => {
+  svc.reinitialiserDisjoncteur();
+
+  await t.test('« oam325065 » (lettre O) : retrouve la fiche 0AM325065', async () => {
+    const stub = remplacerAggregate([{ products: [], total: 0 }, { products: [{ _id: 'dq200' }], total: 1 }]);
+    try {
+      const r = await svc.searchProductsViaAtlas({ baseFilter: { isPublished: { $ne: false } }, searchQuery: 'oam325065', sort: '', page: 1, perPage: 24 });
+      assert.deepEqual(r, { products: [{ _id: 'dq200' }], totalCount: 1 });
+      assert.equal(stub.appels.length, 2);
+      const match = stub.appels[1][0].$match;
+      assert.ok(match && Array.isArray(match.$or), 'seconde requête = $match regex');
+      const rx = new RegExp(match.$or[0].name.$regex, 'i');
+      assert.ok(rx.test('Mécatronique DQ200 - 0AM325065'));
+      assert.ok(rx.test('0AM 325 065'));
+      assert.ok(!match.$or.some((c) => c.description), 'jamais sur la description');
+      assert.deepEqual(stub.appels[1][1], { $match: { isPublished: { $ne: false } } }, 'le filtre de base reste appliqué');
+    } finally { stub.restaurer(); }
+  });
+
+  await t.test('« 33107602984 » (tout chiffres, BMW) : motif accepté', async () => {
+    const stub = remplacerAggregate([{ products: [], total: 0 }, { products: [{ _id: 'pont' }], total: 1 }]);
+    try {
+      const r = await svc.searchProductsViaAtlas({ baseFilter: {}, searchQuery: '33107602984', sort: '', page: 1, perPage: 24 });
+      assert.equal(r.totalCount, 1);
+      const rx = new RegExp(stub.appels[1][0].$match.$or[0].name.$regex, 'i');
+      assert.ok(rx.test('33 10 7 602 984'));
+      assert.ok(!rx.test('331075602984'), 'une faute de frappe sur la fiche reste introuvable');
+    } finally { stub.restaurer(); }
+  });
+
+  await t.test('rien non plus en passe tolérante → 0 résultat, sans erreur', async () => {
+    const stub = remplacerAggregate([{ products: [], total: 0 }, { products: [], total: 0 }]);
+    try {
+      const r = await svc.searchProductsViaAtlas({ baseFilter: {}, searchQuery: '0hk927156b', sort: '', page: 1, perPage: 24 });
+      assert.deepEqual(r, { products: [], totalCount: 0 });
+    } finally { stub.restaurer(); }
+  });
+
+  await t.test('erreur en passe tolérante → 0 résultat, disjoncteur intact', async () => {
+    const stub = remplacerAggregate([{ products: [], total: 0 }, new Error('timeout')]);
+    try {
+      const r = await svc.searchProductsViaAtlas({ baseFilter: {}, searchQuery: '0gc325025e', sort: '', page: 1, perPage: 24 });
+      assert.deepEqual(r, { products: [], totalCount: 0 });
+    } finally { stub.restaurer(); }
+  });
+
+  await t.test('phrase ordinaire sans résultat : pas de passe tolérante', async () => {
+    const stub = remplacerAggregate([{ products: [], total: 0 }]);
+    try {
+      await svc.searchProductsViaAtlas({ baseFilter: {}, searchQuery: 'retroviseur', sort: '', page: 1, perPage: 24 });
+      assert.equal(stub.appels.length, 1);
+    } finally { stub.restaurer(); }
+  });
+
+  await t.test('petit nombre (prix, km) : pas de passe tolérante', async () => {
+    const stub = remplacerAggregate([{ products: [], total: 0 }]);
+    try {
+      await svc.searchProductsViaAtlas({ baseFilter: {}, searchQuery: '1500', sort: '', page: 1, perPage: 24 });
+      assert.equal(stub.appels.length, 1);
+    } finally { stub.restaurer(); }
+  });
+});
