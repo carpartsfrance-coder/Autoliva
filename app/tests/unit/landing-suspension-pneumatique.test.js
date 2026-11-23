@@ -22,8 +22,37 @@ test('URL et source du lead', () => {
   assert.ok(routes.includes("router.post('/suspension-pneumatique/devis'"), 'route POST');
 });
 
-test('types de pièce : jambes avant/arrière, compresseur, bloc de valves, autre', () => {
-  assert.deepStrictEqual(Object.keys(PART_TYPES), ['jambe_avant', 'jambe_arriere', 'compresseur', 'bloc_valves', 'autre']);
+test('types de pièce : ressort, jambe, compresseur, bloc de valves, je ne sais pas', () => {
+  assert.deepStrictEqual(Object.keys(PART_TYPES), ['ressort', 'jambe', 'compresseur', 'bloc_valves', 'autre']);
+  const { normalizePartType } = ctrl._internal;
+  // Anciennes valeurs (pages en cache) toujours acceptées
+  assert.strictEqual(normalizePartType('jambe_avant', PART_TYPES), 'jambe');
+  assert.strictEqual(normalizePartType('JAMBE_ARRIERE', PART_TYPES), 'jambe');
+  assert.strictEqual(normalizePartType('<script>', PART_TYPES), '');
+});
+
+test('haut de page adapté à l’annonce : listes fermées, rien de recopié tel quel', () => {
+  const { buildHero, HERO_VEHICULES } = ctrl._internal;
+  assert.strictEqual(buildHero({}), null);
+  const h = buildHero({ piece: 'ressort', vehicule: 'serie-5-f11' });
+  assert.strictEqual(h.title, 'Ressort pneumatique pour BMW Série 5 F11');
+  assert.ok(/^Neuf ou reconditionné, garantie 2 ans/.test(h.accent));
+  assert.ok(/^Neuve ou reconditionnée/.test(buildHero({ piece: 'jambe' }).accent));
+  assert.strictEqual(buildHero({ vehicule: '<b>pirate</b>' }), null);
+  assert.strictEqual(buildHero({ piece: 'x', vehicule: 'y' }), null);
+  assert.ok(Object.keys(HERO_VEHICULES).length >= 20);
+});
+
+test('page de pub : en-tête réduit, sans popup promo, sans logos constructeurs ni chiffres invérifiables', () => {
+  const view = lire('views/suspension-pneumatique/index.ejs');
+  assert.ok(!/placehold\.co|1 000 clients|logo-porsche|newsletter/i.test(view));
+  assert.ok(view.includes('Illustration'), 'les images générées sont présentées comme des illustrations');
+  const ctrlSrc = lire('controllers/suspensionPneumatiqueController.js');
+  for (const flag of ['landingHeader:', 'hideMobileNav:', 'hideContactWidget:', 'hideExitIntent: true']) assert.ok(ctrlSrc.includes(flag), flag);
+  assert.ok(lire('views/partials/exit-intent.ejs').includes('hideExitIntent'));
+  for (const img of ['gamme-1600', 'gamme-960', 'ressort-600', 'jambe-600', 'compresseur-600', 'valves-600', 'banc-900', 'etancheite-900', 'emballage-900']) {
+    assert.ok(fs.existsSync(path.join(__dirname, '../../public/images/suspension', img + '.webp')), img);
+  }
 });
 
 test('source déclarée dans le modèle, le back-office, les relances et la remontée Google Ads', () => {
