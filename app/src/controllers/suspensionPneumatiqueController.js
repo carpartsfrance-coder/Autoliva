@@ -66,32 +66,34 @@ const VARIANTS = {
     view: 'suspension-pneumatique/index',
     partTypes: PART_TYPES,
     conditionLabel: 'Suspension pneumatique',
-    conditionSuffix: 'reconditionné(e) — échange standard',
+    // Nov. 2026 : la page vend aussi des pièces NEUVES (modèles anciens : L322, ML W164,
+    // Airmatic W211/W221…) en plus du reconditionné en échange standard.
+    conditionSuffix: 'neuf ou reconditionné (à proposer sur le devis)',
     subjectTag: 'Suspension',
     email: {
       controle: 'Étanchéité et fonctionnement vérifiés — même quand on doit sourcer la pièce pour vous.',
-      trust: 'Reconditionné en atelier partenaire certifié ISO 9001 · Échange standard · Garantie 2 ans',
-      footer: 'Autoliva — Suspension pneumatique en échange standard : jambes, compresseurs et blocs de valves.',
+      trust: 'Pièce neuve, ou reconditionnée en atelier partenaire certifié ISO 9001 · Garantie 2 ans',
+      footer: 'Autoliva — Suspension pneumatique neuve ou en échange standard : jambes, compresseurs et blocs de valves.',
     },
-    title: `Suspension pneumatique reconditionnée, garantie 2 ans — ${brand.NAME}`,
+    title: `Suspension pneumatique neuve ou reconditionnée, garantie 2 ans — ${brand.NAME}`,
     metaDescription:
-      'Jambes de force et amortisseurs pneumatiques, compresseurs et blocs de valves reconditionnés par un atelier partenaire certifié ISO 9001, en échange standard, garantie 2 ans. Porsche, Mercedes Airmatic, Audi, BMW, Range Rover. Devis sous 24h.',
-    jsonLdServiceType: 'Vente de pièces de suspension pneumatique en échange standard',
+      'Jambes de force et amortisseurs pneumatiques, compresseurs et blocs de valves neufs, ou reconditionnés par un atelier partenaire certifié ISO 9001 en échange standard. Garantie 2 ans. Range Rover, Mercedes Airmatic, Porsche, Audi, VW, BMW. Devis sous 24h.',
+    jsonLdServiceType: 'Vente de pièces de suspension pneumatique neuves et en échange standard',
     jsonLdDescription:
-      'Jambes de force pneumatiques, amortisseurs pilotés, compresseurs et blocs de valves reconditionnés par un atelier partenaire certifié ISO 9001, testés avant expédition, garantie 2 ans. Échange standard. Devis personnalisé sous 24h.',
+      'Jambes de force pneumatiques, amortisseurs pilotés, compresseurs et blocs de valves neufs, ou reconditionnés par un atelier partenaire certifié ISO 9001 et testés avant expédition. Garantie 2 ans. Devis personnalisé sous 24h.',
     copy: {
       formAction: '/suspension-pneumatique/devis',
       funnelName: 'suspension-pneumatique',
       leadCategory: 'suspension',
       defaultPartType: '',
       eyebrow: 'Suspension pneumatique',
-      h1Html: 'Suspension pneumatique<br>reconditionnée,<br><span class="text-brand-red">garantie 2 ans.</span>',
-      sub: 'Jambes de force, amortisseurs pneumatiques, compresseurs et blocs de valves reconditionnés par un atelier partenaire certifié ISO 9001, en échange standard. Pour Porsche, Mercedes Airmatic, Audi, BMW et Range Rover, compatibilité vérifiée avec votre plaque ou votre VIN.',
+      h1Html: 'Suspension pneumatique<br>neuve ou reconditionnée,<br><span class="text-brand-red">garantie 2 ans.</span>',
+      sub: 'Jambes de force, amortisseurs pneumatiques, compresseurs et blocs de valves : en pièce neuve, ou reconditionnée par un atelier partenaire certifié ISO 9001 en échange standard. Range Rover, Mercedes Airmatic, Porsche, Audi, VW et BMW : compatibilité vérifiée avec votre plaque ou votre VIN.',
       warrantyLabel: 'Garantie 2 ans',
-      qualitySubtitle: 'Une pièce reconditionnée en atelier partenaire certifié ISO 9001, suivie de l’identification à l’expédition.',
+      qualitySubtitle: 'Une pièce neuve, ou reconditionnée en atelier partenaire certifié ISO 9001, suivie de l’identification à l’expédition.',
       steps: [
         { n: '01', icon: 'doc', title: 'Identification', desc: 'Plaque ou VIN → référence d’origine exacte (PASM, ADS, CDC…)' },
-        { n: '02', icon: 'wrench', title: 'Reconditionnement', desc: 'Par un atelier partenaire certifié ISO 9001' },
+        { n: '02', icon: 'wrench', title: 'Neuf ou reconditionné', desc: 'Pièce neuve, ou reconditionnée par un atelier partenaire certifié ISO 9001' },
         { n: '03', icon: 'clean', title: 'Contrôle', desc: 'Étanchéité et fonctionnement vérifiés avant expédition' },
         { n: '04', icon: 'gear', title: 'Diagnostic du système', desc: 'On vous aide à trouver la cause : fuite, relais, compresseur', highlight: true },
         { n: '05', icon: 'shield', title: 'Procédure de montage', desc: 'Mise en pression et calibrage expliqués' },
@@ -443,9 +445,13 @@ async function renderPage(res, req, opts) {
   const canonicalUrl = baseUrl ? `${baseUrl}${langPrefix}${v.path}` : `${langPrefix}${v.path}`;
 
   // Vrais articles blog pertinents (ne throw jamais → [] en repli).
+  // Catégorie stricte : pas d'articles mécatronique/moteur en repli sur une page suspension.
   const articles = await getLandingArticles('suspension', 3);
 
   return res.status(opts.statusCode || 200).render(v.view, {
+    // Un seul numéro sur la landing : la ligne commerciale (celle des boutons) remplace
+    // le standard dans l'en-tête, le pied de page et le bouton d'aide.
+    brand: Object.assign({}, brand, { PHONE: brand.PHONE_MOTEUR, PHONE_INTL: brand.PHONE_MOTEUR_INTL }),
     articles,
     title,
     metaDescription,

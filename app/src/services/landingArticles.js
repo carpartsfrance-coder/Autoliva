@@ -33,6 +33,9 @@ const CATEGORY_SLUGS = {
   suspension: ['suspension-pneumatique', 'suspension', 'liaison-au-sol'],
 };
 
+// Catégories sans repli vers les articles transmission/moteur.
+const NO_FALLBACK = new Set(['suspension']);
+
 /**
  * @param {string} category  moteur | boite | pont | transfert
  * @param {number} [limit=3]
@@ -59,6 +62,9 @@ async function getLandingArticles(category, limit = 3) {
       .lean();
 
     let out = map(await query(primary, limit));
+    // Pas de repli pour les catégories hors transmission/moteur (ex. suspension) :
+    // mieux vaut aucun bloc « Derniers articles » que des articles DSG hors sujet.
+    if (NO_FALLBACK.has(category)) return out;
     // Repli si la catégorie ciblée n'a pas assez d'articles : complète avec les
     // autres familles transmission/moteur, sans doublon.
     if (out.length < limit) {

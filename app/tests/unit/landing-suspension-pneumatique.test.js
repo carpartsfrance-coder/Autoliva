@@ -57,6 +57,17 @@ test('ISO 9001 toujours attribué à l’atelier partenaire, garantie 2 ans affi
   assert.ok(ctrlSrc.includes("warrantyLabel: 'Garantie 2 ans'"));
 });
 
+test('page voitures : pièces neuves ET reconditionnées, un seul numéro, pas d’articles hors sujet', () => {
+  const { VARIANTS } = ctrl._internal;
+  assert.ok(/neuve ou reconditionnée/.test(VARIANTS.suspension.copy.h1Html));
+  const view = lire('views/suspension-pneumatique/index.ejs');
+  assert.ok(view.includes('Vendez-vous aussi des pièces neuves ?'));
+  const ctrlSrc = lire('controllers/suspensionPneumatiqueController.js');
+  assert.ok(ctrlSrc.includes('PHONE: brand.PHONE_MOTEUR, PHONE_INTL: brand.PHONE_MOTEUR_INTL'), 'numéro commercial partout');
+  const articlesSrc = lire('services/landingArticles.js');
+  assert.ok(articlesSrc.includes("NO_FALLBACK = new Set(['suspension'])"), 'pas de repli DSG/moteur');
+});
+
 test('variante camping-car : URL, kits neufs, aucune promesse de reconditionné ISO 9001 ni d’échange standard', () => {
   const { CAMPING_PATH, PART_TYPES_CAMPING, VARIANTS, getVariant } = ctrl._internal;
   assert.strictEqual(CAMPING_PATH, '/suspension-pneumatique-camping-car');
