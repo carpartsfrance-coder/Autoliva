@@ -37,22 +37,22 @@
 <div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
 <svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
-<h3 class="font-bold text-sm mb-0.5 md:mb-1">Reconditionné ISO 9001</h3>
-<p class="text-xs text-brand-textgray">Atelier partenaire certifié</p>
+<h3 class="font-bold text-sm mb-0.5 md:mb-1">Neuf ou reconditionné</h3>
+<p class="text-xs text-brand-textgray">Reconditionné par un atelier partenaire ISO 9001</p>
 </div>
 </div>
 <div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
 <svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
 <h3 class="font-bold text-sm mb-0.5 md:mb-1">Échange standard simple</h3>
-<p class="text-xs text-brand-textgray">Consigne remboursée au retour de l'ancienne pièce</p>
+<p class="text-xs text-brand-textgray">Sur le reconditionné : consigne remboursée au retour de l'ancienne pièce</p>
 </div>
 </div>
 <div class="flex items-center gap-4 py-4 md:flex-col md:items-start md:py-0 md:gap-0">
 <svg class="w-7 h-7 md:w-8 md:h-8 text-brand-red md:text-white shrink-0 md:mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"></path></svg>
 <div>
 <h3 class="font-bold text-sm mb-0.5 md:mb-1"><%= copy.warrantyLabel %></h3>
-<p class="text-xs text-brand-textgray">Sur chaque pièce reconditionnée</p>
+<p class="text-xs text-brand-textgray">Sur chaque pièce, neuve ou reconditionnée</p>
 </div>
 </div>
 </div>
@@ -382,7 +382,7 @@ Envoyer ma demande
 </div>
 <div>
 <h4 class="font-bold mb-1"><%= copy.warrantyLabel %></h4>
-<p class="text-xs text-gray-400">Sur chaque pièce reconditionnée, prête à monter.</p>
+<p class="text-xs text-gray-400">Sur chaque pièce, neuve ou reconditionnée, prête à monter.</p>
 </div>
 </div>
 <div class="flex items-start gap-4">
@@ -491,6 +491,13 @@ Demander mon devis gratuit
 <div class="space-y-4">
 <details class="border-b border-gray-100 pb-4 group">
 <summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
+<span class="text-sm font-semibold text-gray-700">Vendez-vous aussi des pièces neuves ?</span>
+<svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</summary>
+<p class="text-xs text-gray-500 mt-3">Oui. Selon votre véhicule, on vous propose une pièce neuve (par exemple pour Range Rover L322, Mercedes ML W164 ou Airmatic W211 et W221) ou une pièce reconditionnée en échange standard. Le devis indique clairement laquelle, avec son prix et son délai.</p>
+</details>
+<details class="border-b border-gray-100 pb-4 group">
+<summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
 <span class="text-sm font-semibold text-gray-700">Qui reconditionne les pièces ?</span>
 <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </summary>
@@ -529,7 +536,7 @@ Demander mon devis gratuit
 <span class="text-sm font-semibold text-gray-700">Quelle est la garantie ?</span>
 <svg class="w-4 h-4 text-gray-400 transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
 </summary>
-<p class="text-xs text-gray-500 mt-3">2 ans sur chaque pièce reconditionnée. Elle suppose un montage conforme : mise en pression et calibrage du système après remplacement.</p>
+<p class="text-xs text-gray-500 mt-3">2 ans sur chaque pièce, neuve ou reconditionnée. Elle suppose un montage conforme : mise en pression et calibrage du système après remplacement.</p>
 </details>
 <details class="group">
 <summary class="flex justify-between items-center cursor-pointer hover:text-brand-red transition list-none">
