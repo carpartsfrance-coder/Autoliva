@@ -34,14 +34,92 @@ const CAPTURE_SOURCE = 'landing_suspension';
 
 /* Types de pièce proposés dans le formulaire.
  * La valeur remonte dans requested.vehicle → visible directement par le commercial,
- * et sert à mesurer quelle pièce est la plus demandée pendant le test. */
+ * et sert à mesurer quelle pièce est la plus demandée pendant le test.
+ * Nov. 2026 : « ressort / coussin » ajouté (premières ventes du marché : ressorts
+ * arrière F11, Classe E break, ML W164…) ; avant/arrière est demandé au rappel. */
 const PART_TYPES = {
-  jambe_avant: 'Jambe / amortisseur avant',
-  jambe_arriere: 'Jambe / amortisseur arrière',
+  ressort: 'Ressort / coussin pneumatique',
+  jambe: 'Jambe / amortisseur pneumatique',
   compresseur: 'Compresseur',
   bloc_valves: 'Bloc de valves',
-  autre: 'Autre / je ne sais pas',
+  autre: 'Je ne sais pas',
 };
+
+/* Anciennes valeurs (page en cache, liens déjà partagés) → nouvelles. */
+const LEGACY_PART_TYPES = {
+  jambe_avant: 'jambe',
+  jambe_arriere: 'jambe',
+  coussin: 'ressort',
+  valves: 'bloc_valves',
+};
+
+/* Page adaptée à l'annonce (message match Google Ads) : ?piece=…&vehicule=…
+ * Liste fermée : rien de ce que tape le visiteur n'est recopié dans la page. */
+const HERO_PIECES = {
+  ressort: { label: 'Ressort pneumatique', fem: false, image: 'ressort' },
+  jambe: { label: 'Jambe de suspension pneumatique', fem: true, image: 'jambe' },
+  compresseur: { label: 'Compresseur de suspension', fem: false, image: 'compresseur' },
+  bloc_valves: { label: 'Bloc de valves de suspension', fem: false, image: 'valves' },
+};
+
+const HERO_VEHICULES = {
+  'ml-w164': 'Mercedes ML W164',
+  'gl-x164': 'Mercedes GL X164',
+  'gle-w166': 'Mercedes GLE W166',
+  'classe-e-w211': 'Mercedes Classe E W211',
+  'classe-e-w212': 'Mercedes Classe E W212',
+  'classe-s-w220': 'Mercedes Classe S W220',
+  'classe-s-w221': 'Mercedes Classe S W221',
+  'classe-r-w251': 'Mercedes Classe R W251',
+  'serie-5-f11': 'BMW Série 5 F11',
+  'serie-5-e61': 'BMW Série 5 E61',
+  'serie-7-f01': 'BMW Série 7 F01',
+  'x5-e70': 'BMW X5 E70',
+  'x5-e53': 'BMW X5 E53',
+  'x5-f15': 'BMW X5 F15',
+  'a6-allroad': 'Audi A6 Allroad',
+  'a6-c6': 'Audi A6 C6',
+  'a8-d3': 'Audi A8 D3',
+  'q7': 'Audi Q7',
+  'touareg': 'Volkswagen Touareg',
+  'cayenne': 'Porsche Cayenne',
+  'panamera': 'Porsche Panamera',
+  'range-rover-l322': 'Range Rover L322',
+  'range-rover-sport': 'Range Rover Sport L320',
+  'discovery-3': 'Land Rover Discovery 3',
+  'discovery-4': 'Land Rover Discovery 4',
+};
+
+/* Modèles affichés dans la page (les plus demandés sur le marché, nov. 2026). */
+const VEHICULES_AFFICHES = [
+  'ml-w164', 'classe-e-w211', 'classe-e-w212', 'classe-s-w221', 'serie-5-f11', 'x5-e70',
+  'a6-allroad', 'q7', 'touareg', 'cayenne', 'range-rover-l322', 'range-rover-sport',
+].map((k) => HERO_VEHICULES[k]);
+
+function normalizePartType(raw, partTypes) {
+  const k = trim(raw).toLowerCase();
+  if (partTypes[k]) return k;
+  const legacy = LEGACY_PART_TYPES[k];
+  return legacy && partTypes[legacy] ? legacy : '';
+}
+
+/* Titre du haut de page selon l'annonce. Sans paramètre : titre générique. */
+function buildHero(query) {
+  const q = (query && typeof query === 'object') ? query : {};
+  const pieceKey = normalizePartType(q.piece || q.partType, HERO_PIECES);
+  const piece = pieceKey ? HERO_PIECES[pieceKey] : null;
+  const vehicule = HERO_VEHICULES[trim(q.vehicule).toLowerCase()] || '';
+  if (!piece && !vehicule) return null;
+  const nom = piece ? piece.label : 'Suspension pneumatique';
+  const fem = piece ? piece.fem : true;
+  return {
+    pieceKey,
+    image: piece ? piece.image : '',
+    title: vehicule ? `${nom} pour ${vehicule}` : nom,
+    accent: `${fem ? 'Neuve ou reconditionnée' : 'Neuf ou reconditionné'}, garantie 2 ans.`,
+    vehicule,
+  };
+}
 
 /* Camping-car / utilitaire : kits NEUFS de suspension pneumatique (assistance),
  * envoyés seuls (montage par le garage du client). */
@@ -87,8 +165,8 @@ const VARIANTS = {
       leadCategory: 'suspension',
       defaultPartType: '',
       eyebrow: 'Suspension pneumatique',
-      h1Html: 'Suspension pneumatique<br>neuve ou reconditionnée,<br><span class="text-brand-red">garantie 2 ans.</span>',
-      sub: 'Jambes de force, amortisseurs pneumatiques, compresseurs et blocs de valves : en pièce neuve, ou reconditionnée par un atelier partenaire certifié ISO 9001 en échange standard. Range Rover, Mercedes Airmatic, Porsche, Audi, VW et BMW : compatibilité vérifiée avec votre plaque ou votre VIN.',
+      h1Html: 'Suspension pneumatique neuve ou reconditionnée, <span class="text-brand-red">garantie 2 ans.</span>',
+      sub: 'Ressorts, jambes, compresseurs et blocs de valves. On vérifie la bonne référence avec votre plaque ou votre VIN avant toute commande.',
       warrantyLabel: 'Garantie 2 ans',
       qualitySubtitle: 'Une pièce neuve, ou reconditionnée en atelier partenaire certifié ISO 9001, suivie de l’identification à l’expédition.',
       steps: [
@@ -420,14 +498,14 @@ function buildServiceJsonLd({ baseUrl, v }) {
 function buildInitialForm(req, variant) {
   const q = (req && req.query && typeof req.query === 'object') ? req.query : {};
   const v = VARIANTS[variant] || VARIANTS.suspension;
-  const partTypeRaw = trim(q.partType).toLowerCase();
+  const partType = normalizePartType(q.partType || q.piece, v.partTypes);
   return {
     plate: trim(q.plate || q.immat),
     fullName: trim(q.fullName),
     email: trim(q.email),
     phone: trim(q.phone),
     message: '',
-    partType: v.partTypes[partTypeRaw] ? partTypeRaw : (v.copy.defaultPartType || ''),
+    partType: partType || v.copy.defaultPartType || '',
     website: '', // honeypot
   };
 }
@@ -465,6 +543,15 @@ async function renderPage(res, req, opts) {
     landing: LANDING_DATA,
     copy: v.copy,
     partTypes: v.partTypes,
+    hero: variant === 'suspension' ? buildHero(req.query) : null,
+    vehicules: VEHICULES_AFFICHES,
+    // Page de pub : en-tête réduit (logo + appel + devis), sans menu du bas,
+    // sans bulle de contact (elle chevauchait le bouton devis) ni popup promo.
+    landingHeader: variant === 'suspension',
+    landingPhone: variant === 'suspension',
+    hideMobileNav: variant === 'suspension',
+    hideContactWidget: variant === 'suspension',
+    hideExitIntent: true,
     form: opts.form,
     errorMessage: opts.errorMessage || null,
     successMessage: opts.successMessage || null,
@@ -492,8 +579,7 @@ async function postDevis(req, res, next) {
     const body = (req.body && typeof req.body === 'object') ? req.body : {};
 
     // Type de pièce (jambe avant/arrière, compresseur, bloc de valves, autre).
-    const partTypeRaw = trim(body.partType).toLowerCase();
-    const partType = v.partTypes[partTypeRaw] ? partTypeRaw : '';
+    const partType = normalizePartType(body.partType, v.partTypes);
     const partTypeLabel = partType ? v.partTypes[partType] : '';
 
     // Condition figée par variante (reconditionné échange standard, ou kit neuf)
@@ -736,5 +822,5 @@ module.exports = {
   getLanding,
   postDevis,
   buildAckEmailHtml,
-  _internal: { LANDING_DATA, CAPTURE_SOURCE, LANDING_PATH, CAMPING_PATH, PART_TYPES, PART_TYPES_CAMPING, VARIANTS, getVariant },
+  _internal: { LANDING_DATA, CAPTURE_SOURCE, LANDING_PATH, CAMPING_PATH, PART_TYPES, PART_TYPES_CAMPING, VARIANTS, getVariant, buildHero, normalizePartType, HERO_VEHICULES },
 };
