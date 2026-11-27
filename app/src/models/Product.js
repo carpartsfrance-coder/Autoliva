@@ -71,6 +71,11 @@ const productSchema = new mongoose.Schema(
     // dans compatibleReferences. Indexé pour la recherche + SEO (schema.org mpn).
     engineCode: { type: String, default: '', trim: true, index: true },
     slug: { type: String, default: '', trim: true, lowercase: true },
+    /* Slugs que la fiche a DÉJÀ portés. Une adresse qui n'existe plus se
+     * retrouve ici et part en 301 vers le slug courant : sans ça un renommage
+     * envoie la page vers /produits?q=… (noindex) et l'équité du lien est
+     * perdue. Alimenté au renommage, jamais lu pour servir une fiche en ligne. */
+    slugHistory: { type: [String], default: [] },
     serviceType: {
       type: String,
       enum: ['', 'standalone_cloning'],
@@ -316,6 +321,8 @@ const productSchema = new mongoose.Schema(
 /* Servir + lister les fiches traduites (route /de/produits + sitemap DE). */
 productSchema.index({ 'localizations.de.translatedAt': 1 });
 productSchema.index({ 'localizations.de.slug': 1 }, { sparse: true });
+/* Retrouver une fiche par une de ses anciennes adresses (redirection 301). */
+productSchema.index({ slugHistory: 1 }, { sparse: true });
 /* Filtre catalogue par état (occasion / reconditionné / neuf), champ texte libre. */
 productSchema.index({ 'badges.condition': 1 });
 /* Listing public : « publié » + tri nouveautés (le défaut), et « publié » +
