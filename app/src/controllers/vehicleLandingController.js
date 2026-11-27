@@ -18,6 +18,7 @@
 
 const mongoose = require('mongoose');
 const titreSeo = require('../services/titreSeo');
+const { avecRequete } = require('../services/redirection');
 const brand = require('../config/brand');
 const vehicleService = require('../services/vehicleLandingService');
 const VehicleLanding = require('../models/VehicleLanding');
@@ -190,13 +191,16 @@ async function renderLanding(req, res, { makeName, modelName, makeSlug, modelSlu
    *   - /pieces-auto/:make                   →  /pieces-auto
    * Bénéfice : préserve le PageRank, supprime les 42 pages 4XX. */
   if (data.totalCount === 0) {
+    /* La requête suit : ces pages sont des pages d'arrivée d'annonces, et le
+       visiteur dont la combinaison est vide repart vers le parent qui, lui, a
+       des produits — son gclid doit faire le saut avec lui. */
     if (partTypeSlug && modelSlug) {
-      return res.redirect(301, `/pieces-auto/${makeSlug}/${modelSlug}`);
+      return res.redirect(301, avecRequete(req, `/pieces-auto/${makeSlug}/${modelSlug}`));
     }
     if (modelSlug) {
-      return res.redirect(301, `/pieces-auto/${makeSlug}`);
+      return res.redirect(301, avecRequete(req, `/pieces-auto/${makeSlug}`));
     }
-    return res.redirect(301, '/pieces-auto');
+    return res.redirect(301, avecRequete(req, '/pieces-auto'));
   }
 
   const baseUrl = getPublicBaseUrlFromReq(req);
@@ -479,11 +483,10 @@ async function getModelCategoryLanding(req, res, next) {
          même véhicule dans la catégorie qui la remplace (audit SEO
          11/11/2026). Sinon, la landing modèle qui existe. */
       const cible = await require('../services/redirectionsCategories').resoudre(categorySlug);
-      const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
       if (cible) {
-        return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}/${encodeURIComponent(cible)}${qs}`);
+        return res.redirect(301, avecRequete(req, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}/${encodeURIComponent(cible)}`));
       }
-      return res.redirect(301, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}${qs}`);
+      return res.redirect(301, avecRequete(req, `/pieces-auto/${resolved.make.slug}/${resolved.model.slug}`));
     }
     /* Le partTypeName affiché à l'utilisateur est le dernier segment de la
      * catégorie (ex: "Transmission > Mécatronique" → "Mécatronique") pour un

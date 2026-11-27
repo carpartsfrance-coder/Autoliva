@@ -1,5 +1,7 @@
 'use strict';
 
+const { avecRequete } = require('../services/redirection');
+
 /**
  * WordPress -> Node.js 301 redirect middleware.
  *
@@ -297,11 +299,16 @@ function wpRedirectsMiddleware(req, res, next) {
   // Skip /en/ URLs entirely — they are handled by the i18n system
   if (/^\/en(\/|$)/i.test(url)) return next();
 
-  // 1. Exact static redirects
+  /* 1. Exact static redirects
+     La chaîne de requête suit (voir services/redirection.js). Ces 80 entrées
+     sont les anciennes adresses WordPress : elles reçoivent encore des clics
+     depuis des newsletters, des partages et des annonces, et le paramètre qui
+     disait d'où venait la visite se perdait ici. */
   const exactTarget = EXACT_REDIRECTS[url] || EXACT_REDIRECTS[url.toLowerCase()];
   if (exactTarget) {
-    console.log(`[301] ${url} -> ${exactTarget}`);
-    return res.redirect(301, exactTarget);
+    const cible = avecRequete(req, exactTarget);
+    console.log(`[301] ${req.originalUrl} -> ${cible}`);
+    return res.redirect(301, cible);
   }
 
   // 2. WordPress artifacts -> 410 Gone
@@ -313,22 +320,20 @@ function wpRedirectsMiddleware(req, res, next) {
   }
 
   /* 3. Dynamic pattern redirects
-     Ces règles ne réécrivent QUE le chemin : la chaîne de requête doit suivre.
-     Sans ça /product/<slug> (sans slash final) partait en 301 vers
-     /product/<slug>/ en perdant le ?gclid= — le clic Google Ads arrivait sur la
-     fiche sans son identifiant de clic, donc la conversion n'était plus
-     rattachée à l'annonce. L'étape 4 ci-dessous, elle, CONSOMME la requête
-     (?p=, ?add-to-cart=) : elle ne doit pas la recopier. */
-  const requete = req.originalUrl.includes('?')
-    ? req.originalUrl.slice(req.originalUrl.indexOf('?'))
-    : '';
+     Ces règles ne réécrivent QUE le chemin : la chaîne de requête doit suivre
+     (voir services/redirection.js). Certaines cibles portent déjà un paramètre
+     (/tag/<slug> → /produits?q=<slug>) : avecRequete complète avec « & » au
+     lieu d'un second « ? », qui aurait fini DANS la valeur de q. L'étape 4
+     ci-dessous, elle, CONSOMME la requête (?p=, ?add-to-cart=) : elle ne doit
+     pas la recopier. */
   for (const rule of DYNAMIC_REDIRECTS) {
     const match = url.match(rule.pattern);
     if (match) {
       const target = rule.target(match);
       if (target !== url) {
-        console.log(`[301] ${req.originalUrl} -> ${target}${requete}`);
-        return res.redirect(301, target + requete);
+        const cible = avecRequete(req, target);
+        console.log(`[301] ${req.originalUrl} -> ${cible}`);
+        return res.redirect(301, cible);
       }
     }
   }

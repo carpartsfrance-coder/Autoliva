@@ -18,6 +18,7 @@ const productI18n = require('../services/productI18n');
 const { filtreAuDelaDuPreset } = require('../services/facettesListing');
 const titreSeo = require('../services/titreSeo');
 const redirectionsCategories = require('../services/redirectionsCategories');
+const { avecRequete } = require('../services/redirection');
 const pagesFamilles = require('../services/pagesFamilles');
 
 function getTrimmedString(value) {
@@ -235,8 +236,7 @@ async function getCategory(req, res, next) {
           const prefixe = req.lang === 'de' ? '/de' : '';
           /* Les paramètres suivent (gclid, utm…) : une annonce ou un lien
              suivi qui vise l'ancienne adresse garde son attribution. */
-          const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
-          return res.redirect(301, (cible ? `${prefixe}/categorie/${encodeURIComponent(cible)}` : `${prefixe}/categorie`) + qs);
+          return res.redirect(301, avecRequete(req, cible ? `${prefixe}/categorie/${encodeURIComponent(cible)}` : `${prefixe}/categorie`));
         }
       }
       return res.status(404).render('errors/404', { title: `Page introuvable - ${brand.NAME}` });
@@ -255,14 +255,13 @@ async function getCategory(req, res, next) {
     if (isDe && !(deLoc && deLoc.translatedAt)) {
       /* Même règle que la fiche : la page française d'arrivée ne doit pas
          remettre la session — donc la commande et les e-mails — en français. */
-      return res.redirect(301, redirectionFrGardantLaLangue(req, '/categorie/' + encodeURIComponent(category.slug)));
+      return res.redirect(301, avecRequete(req, redirectionFrGardantLaLangue(req, '/categorie/' + encodeURIComponent(category.slug))));
     }
     const deCatSlug = (isDe && deLoc && deLoc.slug && deLoc.slug.trim()) ? deLoc.slug.trim() : category.slug;
     /* Une catégorie allemande = UNE URL. Arrivé par le slug français sous /de,
        on renvoie vers le slug allemand, celui que déclare le canonical. */
     if (isDe && deCatSlug !== slug) {
-      const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
-      return res.redirect(301, '/de/categorie/' + encodeURIComponent(deCatSlug) + qs);
+      return res.redirect(301, avecRequete(req, '/de/categorie/' + encodeURIComponent(deCatSlug)));
     }
 
     const { prepareProductListingData } = require('../services/productListingService');
