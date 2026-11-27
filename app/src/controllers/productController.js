@@ -37,6 +37,7 @@ const { etatDepuisTexte } = require('../services/etatPiece');
 const { promesseLivraisonJours } = require('../services/fluxMerchant');
 const scalapay = require('../services/scalapay');
 const produitsDisparus = require('../services/produitsDisparus');
+const { avecRequete } = require('../services/redirection');
 const seoIndexPolicy = require('../services/seoIndexPolicy');
 
 function escapeRegex(value) {
@@ -471,8 +472,7 @@ async function getProductBySlug(req, res, next) {
       const renommee = await Product.findOne({ slugHistory: { $in: candidats } })
         .select('_id slug name').lean();
       if (renommee && renommee._id) {
-        const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
-        return res.redirect(301, buildProductPublicPath(renommee) + qs);
+        return res.redirect(301, avecRequete(req, buildProductPublicPath(renommee)));
       }
       /* Fiche disparue (plan de reprise SEO du 14/09/2026, action A4.8) :
          /product/wc-NNNN retrouve sa fiche par le SKU, et les 19 slugs morts
@@ -483,10 +483,11 @@ async function getProductBySlug(req, res, next) {
          changement d'adresse (31/10). */
       const cible = await produitsDisparus.redirectionPourSlugInconnu(slug);
       if (cible) {
-        const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
-        return res.redirect(301, cible + qs);
+        return res.redirect(301, avecRequete(req, cible));
       }
-      return res.redirect(301, `/produits?q=${encodeURIComponent(raw)}`);
+      /* Repli : la recherche. La requête suit aussi, sinon un clic Ads sur un
+         slug mort perdait son attribution avant même d'atteindre la liste. */
+      return res.redirect(301, avecRequete(req, `/produits?q=${encodeURIComponent(raw)}`));
     }
 
     req.params.id = String(hit._id);
@@ -728,7 +729,7 @@ async function getProduct(req, res, next) {
         /* → fiche FR, sans perdre l'allemand : le catalogue /de liste aussi les
            fiches non traduites, et ce 301 renvoyait le visiteur sur une page
            française dont le GET remettait la session en « fr ». */
-        return res.redirect(301, redirectionFrGardantLaLangue(req, buildProductPublicPath(product)));
+        return res.redirect(301, avecRequete(req, redirectionFrGardantLaLangue(req, buildProductPublicPath(product))));
       }
       product = productI18n.localizeProduct(product, 'de'); // calque DE non destructif
       /* La catégorie n'est PAS un champ traduisible de la fiche : elle est
@@ -768,7 +769,10 @@ async function getProduct(req, res, next) {
     const canonicalPath = buildProductPublicPath(product);
     const requestedPath = `${req.baseUrl || ''}${req.path || ''}`;
     if (!isLocalized && hasRealSlug && canonicalPath && requestedPath && canonicalPath !== requestedPath) {
-      return res.redirect(301, canonicalPath);
+      /* La requête suit : ce 301 est celui qu'emprunte une fiche atteinte par
+         son _id (lien d'admin, ancienne annonce) ou par une graphie de slug
+         voisine. Sans ça le gclid tombait ici, à un saut de la fiche. */
+      return res.redirect(301, avecRequete(req, canonicalPath));
     }
 
     /* En allemand, l'URL porte l'_id : n'IMPORTE quel slug devant lui renvoyait
@@ -780,8 +784,7 @@ async function getProduct(req, res, next) {
       const attendu = `/de/produits/${encodeURIComponent(product._localizedSlug)}-${id}`;
       const demande = `${req.baseUrl || ''}${req.path || ''}`.replace(/\/+$/, '');
       if (demande && demande !== attendu) {
-        const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
-        return res.redirect(301, attendu + qs);
+        return res.redirect(301, avecRequete(req, attendu));
       }
     }
 
