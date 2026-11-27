@@ -312,14 +312,23 @@ function wpRedirectsMiddleware(req, res, next) {
     }
   }
 
-  // 3. Dynamic pattern redirects
+  /* 3. Dynamic pattern redirects
+     Ces règles ne réécrivent QUE le chemin : la chaîne de requête doit suivre.
+     Sans ça /product/<slug> (sans slash final) partait en 301 vers
+     /product/<slug>/ en perdant le ?gclid= — le clic Google Ads arrivait sur la
+     fiche sans son identifiant de clic, donc la conversion n'était plus
+     rattachée à l'annonce. L'étape 4 ci-dessous, elle, CONSOMME la requête
+     (?p=, ?add-to-cart=) : elle ne doit pas la recopier. */
+  const requete = req.originalUrl.includes('?')
+    ? req.originalUrl.slice(req.originalUrl.indexOf('?'))
+    : '';
   for (const rule of DYNAMIC_REDIRECTS) {
     const match = url.match(rule.pattern);
     if (match) {
       const target = rule.target(match);
       if (target !== url) {
-        console.log(`[301] ${url} -> ${target}`);
-        return res.redirect(301, target);
+        console.log(`[301] ${req.originalUrl} -> ${target}${requete}`);
+        return res.redirect(301, target + requete);
       }
     }
   }

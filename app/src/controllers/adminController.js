@@ -9436,6 +9436,13 @@ async function postAdminUpdateProduct(req, res, next) {
           engineCode: form.engineCode,
           brand: form.brand,
           slug: stableSlug,
+          /* Renommer une fiche depuis l'admin garde l'ancienne adresse servie
+             en 301 (même principe que slugAliases sur les catégories). */
+          slugHistory: anciensSlugsApres(
+            existing.slugHistory,
+            typeof existing.slug === 'string' ? existing.slug.trim() : '',
+            stableSlug
+          ),
           category: form.category || 'Autre',
           shippingClassId,
           shippingDelayText: form.shippingDelayText,

@@ -461,6 +461,19 @@ async function getProductBySlug(req, res, next) {
           return getProduct(req, res, next);
         }
       }
+      /* Slug renommé : l'ancienne adresse part en 301 vers la nouvelle.
+         slugHistory garde la trace des slugs qu'une fiche a portés (27/11/2026 :
+         retrait des noms de fournisseurs des URLs). Sans ça le renommage envoie
+         la page vers la recherche, noindex : Google perd la page et le client
+         voit une liste au lieu de sa pièce. La chaîne de requête suit, pour que
+         le gclid d'un clic Ads arrive jusqu'à la fiche. */
+      const candidats = raw !== slug ? [raw, slug] : [slug];
+      const renommee = await Product.findOne({ slugHistory: { $in: candidats } })
+        .select('_id slug name').lean();
+      if (renommee && renommee._id) {
+        const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+        return res.redirect(301, buildProductPublicPath(renommee) + qs);
+      }
       /* Fiche disparue (plan de reprise SEO du 14/09/2026, action A4.8) :
          /product/wc-NNNN retrouve sa fiche par le SKU, et les 19 slugs morts
          qui recevaient encore du trafic — dont 16 pages d'arrivée Ads — vont
